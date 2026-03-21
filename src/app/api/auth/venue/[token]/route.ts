@@ -1,12 +1,21 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
+function getBaseUrl(request: NextRequest): string {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (appUrl) return appUrl;
+
+  const host = request.headers.get('x-forwarded-host') || request.headers.get('host');
+  const proto = request.headers.get('x-forwarded-proto') || 'https';
+  return host ? `${proto}://${host}` : 'https://storypay.io';
+}
+
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params;
-  const url = new URL(request.url);
+  const base = getBaseUrl(request);
 
   try {
     const { data: venueToken, error: tokenError } = await supabaseAdmin
@@ -16,7 +25,7 @@ export async function GET(
       .single();
 
     if (tokenError || !venueToken) {
-      return NextResponse.redirect(new URL('/login/invalid', url.origin));
+      return NextResponse.redirect(`${base}/login/invalid`);
     }
 
     const { data: venue } = await supabaseAdmin
@@ -26,7 +35,7 @@ export async function GET(
       .single();
 
     const destination = venue?.setup_completed ? '/dashboard' : '/setup';
-    const response = NextResponse.redirect(new URL(destination, url.origin));
+    const response = NextResponse.redirect(`${base}${destination}`);
 
     response.cookies.set('venue_id', venueToken.venue_id, {
       path: '/',
@@ -40,7 +49,7 @@ export async function GET(
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     return NextResponse.redirect(
-      new URL(`/login/error?msg=${encodeURIComponent(msg)}`, url.origin)
+      `${base}/login/error?msg=${encodeURIComponent(msg)}`
     );
   }
 }
