@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { createCustomer } from '@/lib/lunarpay';
-import { sendSms } from '@/lib/ghl';
+import { ghlRequest, sendSms } from '@/lib/ghl';
 import { generateToken } from '@/lib/utils';
 
 export async function GET(request: NextRequest) {
@@ -124,9 +124,34 @@ export async function POST(request: NextRequest) {
     customerPhone
   ) {
     try {
-      const proposalUrl = `${request.nextUrl.origin}/proposal/${publicToken}`;
-      const message = `Hi ${customerName}, ${venue.name} has sent you a proposal. View and sign here: ${proposalUrl}`;
-      await sendSms(venue.ghl_access_token, venue.ghl_location_id, customerPhone, message);
+      const searchRes = await ghlRequest(
+        `/contacts/search/duplicate?locationId=${venue.ghl_location_id}&phone=${encodeURIComponent(customerPhone)}`,
+        venue.ghl_access_token,
+        { locationId: venue.ghl_location_id }
+      );
+
+      let contactId = searchRes.contact?.id;
+
+      if (!contactId) {
+        const createRes = await ghlRequest('/contacts/', venue.ghl_access_token, {
+          method: 'POST',
+          body: {
+            locationId: venue.ghl_location_id,
+            firstName: customerName.split(' ')[0],
+            lastName: customerName.split(' ').slice(1).join(' ') || '',
+            email: customerEmail,
+            phone: customerPhone,
+          },
+          locationId: venue.ghl_location_id,
+        });
+        contactId = createRes.contact?.id;
+      }
+
+      if (contactId) {
+        const proposalUrl = `${request.nextUrl.origin}/proposal/${publicToken}`;
+        const message = `Hi ${customerName}, ${venue.name} has sent you a proposal. View and sign here: ${proposalUrl}`;
+        await sendSms(venue.ghl_access_token, venue.ghl_location_id, contactId, message);
+      }
     } catch (err) {
       console.error('GHL SMS send failed:', err);
     }

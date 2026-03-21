@@ -24,6 +24,7 @@ export async function GET(request: Request) {
         ghl_access_token: tokens.access_token,
         ghl_refresh_token: tokens.refresh_token,
         ghl_location_id: tokens.locationId,
+        ghl_location_token: tokens.access_token,
         ghl_connected: true,
       })
       .eq('id', venueId);

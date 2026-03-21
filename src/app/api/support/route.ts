@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { ghlRequest } from '@/lib/ghl';
+import { agencyGhlRequest } from '@/lib/ghl';
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
@@ -22,67 +22,47 @@ export async function POST(request: NextRequest) {
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('name, ghl_connected, ghl_access_token, ghl_location_id')
+    .select('name')
     .eq('id', venueId)
     .single();
 
-  if (venue?.ghl_connected && venue.ghl_access_token && venue.ghl_location_id) {
-    try {
-      const searchRes = await ghlRequest(
-        `/contacts/search/duplicate?locationId=${venue.ghl_location_id}&email=${encodeURIComponent(email)}`,
-        venue.ghl_access_token,
-        { locationId: venue.ghl_location_id }
-      );
+  try {
+    const agencyLocationId = process.env.GHL_AGENCY_LOCATION_ID;
 
-      let contactId = searchRes.contact?.id;
+    const searchRes = await agencyGhlRequest(
+      `/contacts/search/duplicate?locationId=${agencyLocationId}&email=${encodeURIComponent(email)}`
+    );
 
-      if (!contactId) {
-        const createRes = await ghlRequest('/contacts/', venue.ghl_access_token, {
-          method: 'POST',
-          body: {
-            locationId: venue.ghl_location_id,
-            email,
-            tags: ['storypay-support'],
-          },
-          locationId: venue.ghl_location_id,
-        });
-        contactId = createRes.contact?.id;
-      }
+    let contactId = searchRes.contact?.id;
 
-      if (contactId) {
-        await ghlRequest('/conversations/messages', venue.ghl_access_token, {
-          method: 'POST',
-          body: {
-            type: 'Email',
-            contactId,
-            subject: `[Support] ${subject}`,
-            message: `Category: ${category || 'General'}\nVenue: ${venue.name}\n\n${message}`,
-          },
-          locationId: venue.ghl_location_id,
-        });
-      }
-
-      return NextResponse.json({ success: true, method: 'ghl' });
-    } catch (err) {
-      console.error('GHL support ticket failed:', err);
+    if (!contactId) {
+      const createRes = await agencyGhlRequest('/contacts/', {
+        method: 'POST',
+        body: {
+          locationId: agencyLocationId,
+          email,
+          name: venue?.name || 'Unknown Venue',
+          tags: ['storypay-support', 'venue-support'],
+        },
+      });
+      contactId = createRes.contact?.id;
     }
-  }
 
-  const { error: dbError } = await supabaseAdmin
-    .from('support_tickets')
-    .insert({
-      venue_id: venueId,
-      subject,
-      category: category || 'general',
-      message,
-      email,
-      status: 'open',
-    });
+    if (contactId) {
+      await agencyGhlRequest('/conversations/messages', {
+        method: 'POST',
+        body: {
+          type: 'Email',
+          contactId,
+          subject: `[StoryPay Support] ${subject}`,
+          message: `Category: ${category || 'General'}\nVenue: ${venue?.name || 'Unknown'}\nEmail: ${email}\n\n${message}`,
+        },
+      });
+    }
 
-  if (dbError) {
-    console.error('Support ticket DB insert failed:', dbError);
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error('GHL agency support ticket failed:', err);
     return NextResponse.json({ success: true, method: 'queued' });
   }
-
-  return NextResponse.json({ success: true, method: 'database' });
 }
