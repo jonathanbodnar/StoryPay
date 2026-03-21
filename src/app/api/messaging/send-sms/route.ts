@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
 
   if (!venue?.ghl_connected || !venue.ghl_access_token || !venue.ghl_location_id) {
     return NextResponse.json(
-      { error: 'GHL is not connected for this venue' },
+      { error: 'Messaging is not connected for this venue' },
       { status: 400 }
     );
   }
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
 
     if (!resolvedContactId) {
       return NextResponse.json(
-        { error: 'Could not resolve or create GHL contact' },
+        { error: 'Could not resolve or create contact' },
         { status: 500 }
       );
     }
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, data: result });
   } catch (err) {
-    console.error('GHL SMS send failed:', err);
+    console.error('SMS send failed:', err);
     return NextResponse.json(
       { error: 'Failed to send SMS' },
       { status: 500 }

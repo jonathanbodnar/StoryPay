@@ -13,7 +13,7 @@ export async function GET(request: Request) {
 
   const clientId = process.env.GHL_CLIENT_ID!;
   const clientSecret = process.env.GHL_CLIENT_SECRET!;
-  const redirectUri = `${url.origin}/api/ghl/callback`;
+  const redirectUri = `${url.origin}/api/messaging/callback`;
 
   try {
     const tokens = await exchangeCode(code, clientId, clientSecret, redirectUri);
@@ -31,7 +31,7 @@ export async function GET(request: Request) {
 
     return NextResponse.redirect(new URL('/setup', request.url));
   } catch (err) {
-    console.error('GHL OAuth callback error:', err);
+    console.error('OAuth callback error:', err);
     return NextResponse.redirect(new URL('/setup?error=oauth_failed', request.url));
   }
 }

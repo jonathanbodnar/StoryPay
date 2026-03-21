@@ -185,7 +185,7 @@ export default function SetupPage() {
                 </div>
               ) : (
                 <a
-                  href="/api/ghl/oauth"
+                  href="/api/messaging/connect"
                   className="block w-full text-center bg-navy-800 hover:bg-navy-900 text-white font-medium py-3 px-6 rounded-xl transition-colors"
                 >
                   Connect Messaging

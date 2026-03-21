@@ -12,11 +12,11 @@ export async function GET(request: Request) {
 
   const clientId = process.env.GHL_CLIENT_ID;
   if (!clientId) {
-    return NextResponse.json({ error: 'GHL client ID not configured' }, { status: 500 });
+    return NextResponse.json({ error: 'Messaging client ID not configured' }, { status: 500 });
   }
 
   const { origin } = new URL(request.url);
-  const redirectUri = `${origin}/api/ghl/callback`;
+  const redirectUri = `${origin}/api/messaging/callback`;
   const oauthUrl = getOAuthUrl(clientId, redirectUri, venueId);
 
   return NextResponse.redirect(oauthUrl);

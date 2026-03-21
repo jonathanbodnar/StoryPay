@@ -61,7 +61,7 @@ export default function SmsPage() {
     setSendResult(null);
 
     try {
-      const res = await fetch('/api/ghl/send-sms', {
+      const res = await fetch('/api/messaging/send-sms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: customer.phone, message: message.trim() }),
