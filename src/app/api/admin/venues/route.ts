@@ -10,30 +10,36 @@ async function verifyAdmin() {
 }
 
 export async function GET() {
-  if (!(await verifyAdmin())) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  try {
+    if (!(await verifyAdmin())) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { data: venues, error } = await supabaseAdmin
+      .from('venues')
+      .select('*, venue_tokens(token)')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Supabase venues query error:', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
+    const venuesWithLinks = (venues || []).map((venue: Record<string, unknown>) => {
+      const tokens = venue.venue_tokens as { token: string }[] | null;
+      const token = tokens?.[0]?.token;
+      return {
+        ...venue,
+        login_url: token ? `${appUrl}/login/${token}` : null,
+      };
+    });
+
+    return NextResponse.json({ venues: venuesWithLinks });
+  } catch (err) {
+    console.error('Admin venues GET error:', err);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-
-  const { data: venues, error } = await supabaseAdmin
-    .from('venues')
-    .select('*, venue_tokens(token)')
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
-  const venuesWithLinks = venues.map((venue: Record<string, unknown>) => {
-    const tokens = venue.venue_tokens as { token: string }[] | null;
-    const token = tokens?.[0]?.token;
-    return {
-      ...venue,
-      login_url: token ? `${appUrl}/login/${token}` : null,
-    };
-  });
-
-  return NextResponse.json({ venues: venuesWithLinks });
 }
 
 export async function POST(request: Request) {

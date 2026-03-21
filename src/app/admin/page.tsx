@@ -31,15 +31,32 @@ export default function AdminPage() {
     phone: '',
   });
 
+  const [serverError, setServerError] = useState('');
+
   const fetchVenues = useCallback(async () => {
-    const res = await fetch('/api/admin/venues');
-    if (res.status === 401) {
+    try {
+      const res = await fetch('/api/admin/venues');
+      if (res.status === 401) {
+        setAuthState('unauthenticated');
+        return;
+      }
+      if (!res.ok) {
+        const text = await res.text();
+        let msg = 'Server error';
+        try { msg = JSON.parse(text).error || msg; } catch { /* empty */ }
+        setServerError(msg);
+        setAuthState('authenticated');
+        return;
+      }
+      const data = await res.json();
+      setVenues(data.venues || []);
+      setServerError('');
+      setAuthState('authenticated');
+    } catch (err) {
+      console.error('fetchVenues error:', err);
+      setServerError('Failed to connect to server');
       setAuthState('unauthenticated');
-      return;
     }
-    const data = await res.json();
-    setVenues(data.venues || []);
-    setAuthState('authenticated');
   }, []);
 
   useEffect(() => {
@@ -141,6 +158,12 @@ export default function AdminPage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      {serverError && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+          <strong>Error:</strong> {serverError}
+          <button onClick={fetchVenues} className="ml-3 underline">Retry</button>
+        </div>
+      )}
       <div className="flex items-center justify-between mb-6">
         <h2 className="font-heading text-2xl text-navy-900">Wedding Venues</h2>
         <button
