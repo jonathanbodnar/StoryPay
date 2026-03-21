@@ -24,7 +24,7 @@ export async function POST(
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('lunarpay_publishable_key, lunarpay_location_id')
+    .select('lunarpay_publishable_key')
     .eq('id', proposal.venue_id)
     .single();
 
@@ -33,12 +33,12 @@ export async function POST(
   }
 
   try {
-    const intention = await createIntention(venue.lunarpay_publishable_key);
+    const intentionResult = await createIntention(venue.lunarpay_publishable_key);
+    const intention = intentionResult.data || intentionResult;
 
     return NextResponse.json({
       clientToken: intention.clientToken,
       environment: intention.environment ?? 'production',
-      locationId: venue.lunarpay_location_id,
     });
   } catch (err) {
     console.error('Payment intent error:', err);

@@ -79,11 +79,14 @@ export async function POST(request: NextRequest) {
 
   if (venue?.lunarpay_secret_key && !customerLunarpayId) {
     try {
-      const lpCustomer = await createCustomer(venue.lunarpay_secret_key, {
-        name: customerName,
+      const nameParts = customerName.split(' ');
+      const lpResult = await createCustomer(venue.lunarpay_secret_key, {
+        firstName: nameParts[0] || customerName,
+        lastName: nameParts.slice(1).join(' ') || '',
         email: customerEmail,
         phone: customerPhone || undefined,
       });
+      const lpCustomer = lpResult.data || lpResult;
       customerLunarpayId = lpCustomer.id;
     } catch (err) {
       console.error('LunarPay customer creation failed:', err);
@@ -148,7 +151,8 @@ export async function POST(request: NextRequest) {
       }
 
       if (contactId) {
-        const proposalUrl = `${request.nextUrl.origin}/proposal/${publicToken}`;
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+        const proposalUrl = `${appUrl}/proposal/${publicToken}`;
         const message = `Hi ${customerName}, ${venue.name} has sent you a proposal. View and sign here: ${proposalUrl}`;
         await sendSms(venue.ghl_access_token, venue.ghl_location_id, contactId, message);
       }

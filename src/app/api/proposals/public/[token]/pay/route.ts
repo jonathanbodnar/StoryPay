@@ -42,14 +42,19 @@ export async function POST(
     return NextResponse.json({ error: 'Venue payment not configured' }, { status: 500 });
   }
 
+  const customerId = proposal.customer_lunarpay_id;
+  if (!customerId) {
+    return NextResponse.json({ error: 'Customer not linked to payment system' }, { status: 400 });
+  }
+
   try {
-    const pm = await savePaymentMethod(
+    const pmResult = await savePaymentMethod(
       venue.lunarpay_secret_key,
-      proposal.lunarpay_customer_id,
+      customerId,
       ticketId,
       nameHolder || proposal.customer_name
     );
-
+    const pm = pmResult.data || pmResult;
     const paymentMethodId = pm.id;
     const updateData: Record<string, unknown> = {
       status: 'paid',
@@ -58,41 +63,44 @@ export async function POST(
     };
 
     if (proposal.payment_type === 'full') {
-      const charge = await createCharge(venue.lunarpay_secret_key, {
-        customerId: proposal.lunarpay_customer_id,
+      const chargeResult = await createCharge(venue.lunarpay_secret_key, {
+        customerId,
         paymentMethodId,
         amount: proposal.price,
         description: `Proposal payment – ${proposal.customer_name}`,
       });
+      const charge = chargeResult.data || chargeResult;
       updateData.charge_id = charge.id;
     } else if (proposal.payment_type === 'installment') {
-      const config = proposal.payment_config as { payments: Array<{ amount: number; date: string }> };
-      const schedule = await createPaymentSchedule(venue.lunarpay_secret_key, {
-        customerId: proposal.lunarpay_customer_id,
+      const config = proposal.payment_config as {
+        installments: Array<{ amount: number; date: string }>;
+      };
+      const scheduleResult = await createPaymentSchedule(venue.lunarpay_secret_key, {
+        customerId,
         paymentMethodId,
         description: `Installment plan – ${proposal.customer_name}`,
-        payments: config.payments.map((p: { amount: number; date: string }) => ({
+        payments: (config.installments || []).map((p) => ({
           amount: p.amount,
-          scheduledDate: p.date,
+          date: p.date,
         })),
       });
+      const schedule = scheduleResult.data || scheduleResult;
       updateData.payment_schedule_id = schedule.id;
     } else if (proposal.payment_type === 'subscription') {
       const config = proposal.payment_config as {
         amount: number;
-        interval: string;
-        intervalCount: number;
-        startDate: string;
+        frequency: string;
+        start_date: string;
       };
-      const sub = await createSubscription(venue.lunarpay_secret_key, {
-        customerId: proposal.lunarpay_customer_id,
+      const subResult = await createSubscription(venue.lunarpay_secret_key, {
+        customerId,
         paymentMethodId,
         amount: config.amount,
-        interval: config.interval,
-        intervalCount: config.intervalCount,
-        startDate: config.startDate,
+        frequency: config.frequency,
+        startOn: config.start_date,
         description: `Subscription – ${proposal.customer_name}`,
       });
+      const sub = subResult.data || subResult;
       updateData.subscription_id = sub.id;
     }
 
@@ -107,6 +115,7 @@ export async function POST(
     });
   } catch (err) {
     console.error('Payment error:', err);
-    return NextResponse.json({ error: 'Payment failed' }, { status: 500 });
+    const msg = err instanceof Error ? err.message : 'Payment failed';
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
