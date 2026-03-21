@@ -82,15 +82,23 @@ export default function AdminPage() {
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     setCreating(true);
-    const res = await fetch('/api/admin/venues', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(formData),
-    });
-    if (res.ok) {
-      setFormData({ name: '', email: '', firstName: '', lastName: '', phone: '' });
-      setShowCreateForm(false);
-      fetchVenues();
+    setServerError('');
+    try {
+      const res = await fetch('/api/admin/venues', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+      if (res.ok) {
+        setFormData({ name: '', email: '', firstName: '', lastName: '', phone: '' });
+        setShowCreateForm(false);
+        fetchVenues();
+      } else {
+        const data = await res.json().catch(() => ({ error: 'Unknown error' }));
+        setServerError(data.error || `Create failed (${res.status})`);
+      }
+    } catch (err) {
+      setServerError(err instanceof Error ? err.message : 'Request failed');
     }
     setCreating(false);
   }
