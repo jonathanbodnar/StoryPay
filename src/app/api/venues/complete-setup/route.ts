@@ -29,7 +29,7 @@ export async function POST() {
 
   if (!venue.ghl_connected) {
     return NextResponse.json(
-      { error: 'Go High Level is not connected' },
+      { error: 'Messaging is not connected' },
       { status: 400 }
     );
   }

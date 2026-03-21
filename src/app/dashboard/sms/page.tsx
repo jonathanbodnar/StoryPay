@@ -102,9 +102,9 @@ export default function SmsPage() {
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-teal-500/15">
             <LinkIcon size={24} className="text-teal-600" />
           </div>
-          <h2 className="font-heading text-lg font-semibold text-gray-900">Connect GoHighLevel</h2>
+          <h2 className="font-heading text-lg font-semibold text-gray-900">Connect Messaging</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-gray-500">
-            Connect your GoHighLevel account to send SMS messages to your customers directly from
+            Connect your messaging account to send SMS messages to your customers directly from
             StoryPay.
           </p>
           <a
@@ -195,7 +195,7 @@ export default function SmsPage() {
                   <p className="text-sm font-medium text-gray-900">Proposal Notifications</p>
                   <p className="mt-1 text-sm text-gray-500">
                     When you create a proposal for a customer with a phone number, an SMS with the
-                    proposal link is automatically sent via GoHighLevel.
+                    proposal link is automatically sent via your connected messaging account.
                   </p>
                 </div>
               </div>
@@ -212,7 +212,7 @@ export default function SmsPage() {
               </div>
 
               <p className="text-xs text-gray-400">
-                All SMS messages are sent through your connected GoHighLevel account.
+                All SMS messages are sent through your connected messaging account.
               </p>
             </div>
           </div>

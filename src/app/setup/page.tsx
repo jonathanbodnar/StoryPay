@@ -171,24 +171,24 @@ export default function SetupPage() {
           {step === 2 && (
             <StepCard
               number={2}
-              title="Connect Go High Level"
+              title="Connect Messaging"
               active
             >
               <p className="text-gray-600 mb-6">
-                Link your Go High Level account to enable automated messaging and contact management.
+                Link your messaging account to enable automated SMS and contact management.
               </p>
 
               {ghlReady ? (
                 <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl">
                   <CheckCircle />
-                  <span className="text-green-800 font-medium">Go High Level connected</span>
+                  <span className="text-green-800 font-medium">Messaging connected</span>
                 </div>
               ) : (
                 <a
                   href="/api/ghl/oauth"
                   className="block w-full text-center bg-navy-800 hover:bg-navy-900 text-white font-medium py-3 px-6 rounded-xl transition-colors"
                 >
-                  Connect Go High Level
+                  Connect Messaging
                 </a>
               )}
 
@@ -222,7 +222,7 @@ export default function SetupPage() {
 
               <div className="space-y-3 mb-8">
                 <SummaryRow label="Payment Processor" ready={paymentReady} />
-                <SummaryRow label="Go High Level" ready={ghlReady} />
+                <SummaryRow label="Messaging" ready={ghlReady} />
               </div>
 
               {error && (

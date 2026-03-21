@@ -99,7 +99,7 @@ export function getOAuthUrl(clientId: string, redirectUri: string, state: string
     scope: 'conversations.message.write conversations.message.readonly conversations.readonly contacts.write contacts.readonly locations.readonly',
     state,
   });
-  return `https://marketplace.gohighlevel.com/oauth/chooselocation?${params}`;
+  return `https://marketplace.leadconnectorhq.com/oauth/chooselocation?${params}`;
 }
 
 export async function agencyGhlRequest(
