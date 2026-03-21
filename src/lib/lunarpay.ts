@@ -35,7 +35,7 @@ export function agencyCreateMerchant(data: {
   phone: string;
   businessName: string;
 }) {
-  return lpFetch('/api/v1/agency/merchants', {
+  return lpFetch('/api/agency/merchants', {
     method: 'POST',
     body: data as unknown as Record<string, unknown>,
     key: LP_AGENCY_KEY,
@@ -43,7 +43,7 @@ export function agencyCreateMerchant(data: {
 }
 
 export function agencyOnboardMerchant(merchantId: number, data: Record<string, unknown>) {
-  return lpFetch(`/api/v1/agency/merchants/${merchantId}/onboard`, {
+  return lpFetch(`/api/agency/merchants/${merchantId}/onboard`, {
     method: 'POST',
     body: data,
     key: LP_AGENCY_KEY,
@@ -51,7 +51,7 @@ export function agencyOnboardMerchant(merchantId: number, data: Record<string, u
 }
 
 export function agencyGetMerchant(merchantId: number) {
-  return lpFetch(`/api/v1/agency/merchants/${merchantId}`, {
+  return lpFetch(`/api/agency/merchants/${merchantId}`, {
     key: LP_AGENCY_KEY,
   });
 }
