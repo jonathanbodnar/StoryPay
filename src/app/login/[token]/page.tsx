@@ -43,6 +43,7 @@ export default async function LoginPage({
   cookieStore.set('venue_id', venueToken.venue_id, {
     path: '/',
     httpOnly: true,
+    secure: true,
     sameSite: 'lax',
     maxAge: 60 * 60 * 24 * 30,
   });

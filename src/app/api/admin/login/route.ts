@@ -1,4 +1,3 @@
-import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
@@ -8,14 +7,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid secret' }, { status: 401 });
   }
 
-  const cookieStore = await cookies();
-  cookieStore.set('admin_token', secret, {
+  const response = NextResponse.json({ success: true });
+
+  response.cookies.set('admin_token', secret, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: true,
     sameSite: 'lax',
     path: '/',
     maxAge: 60 * 60 * 24 * 7,
   });
 
-  return NextResponse.json({ success: true });
+  return response;
 }
