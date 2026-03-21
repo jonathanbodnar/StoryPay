@@ -38,7 +38,7 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { name, content, price, payment_type, payment_config, fields } = body;
+  const { name, content, fields } = body;
 
   if (!name) {
     return NextResponse.json({ error: 'Name is required' }, { status: 400 });
@@ -50,9 +50,6 @@ export async function POST(request: Request) {
       venue_id: venueId,
       name,
       content: content ?? '',
-      price: price ?? 0,
-      payment_type: payment_type ?? 'full',
-      payment_config: payment_config ?? {},
     })
     .select()
     .single();

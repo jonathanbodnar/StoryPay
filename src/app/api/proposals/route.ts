@@ -43,13 +43,20 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { templateId, customerName, customerEmail, customerPhone, customerId } = body;
+  const {
+    templateId, customerName, customerEmail, customerPhone, customerId,
+    price, paymentType, paymentConfig,
+  } = body;
 
   if (!templateId || !customerName || !customerEmail) {
     return NextResponse.json(
       { error: 'templateId, customerName, and customerEmail are required' },
       { status: 400 }
     );
+  }
+
+  if (!price || price <= 0) {
+    return NextResponse.json({ error: 'A valid price is required' }, { status: 400 });
   }
 
   const { data: venue } = await supabaseAdmin
@@ -60,7 +67,7 @@ export async function POST(request: NextRequest) {
 
   const { data: template, error: templateError } = await supabaseAdmin
     .from('proposal_templates')
-    .select('content, price, payment_type, payment_config')
+    .select('content')
     .eq('id', templateId)
     .eq('venue_id', venueId)
     .single();
@@ -105,9 +112,9 @@ export async function POST(request: NextRequest) {
       customer_phone: customerPhone || null,
       customer_lunarpay_id: customerLunarpayId,
       content: template.content,
-      price: template.price,
-      payment_type: template.payment_type,
-      payment_config: template.payment_config,
+      price,
+      payment_type: paymentType || 'full',
+      payment_config: paymentConfig || {},
       signature_fields: sigFields ?? [],
       public_token: publicToken,
       status: 'sent',
