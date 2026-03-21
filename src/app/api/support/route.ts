@@ -1,7 +1,6 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { agencyGhlRequest } from '@/lib/ghl';
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
@@ -20,49 +19,21 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { data: venue } = await supabaseAdmin
-    .from('venues')
-    .select('name')
-    .eq('id', venueId)
-    .single();
+  const { error } = await supabaseAdmin
+    .from('support_tickets')
+    .insert({
+      venue_id: venueId,
+      subject,
+      category: category || 'general',
+      message,
+      email,
+      status: 'open',
+    });
 
-  try {
-    const agencyLocationId = process.env.GHL_AGENCY_LOCATION_ID;
-
-    const searchRes = await agencyGhlRequest(
-      `/contacts/search/duplicate?locationId=${agencyLocationId}&email=${encodeURIComponent(email)}`
-    );
-
-    let contactId = searchRes.contact?.id;
-
-    if (!contactId) {
-      const createRes = await agencyGhlRequest('/contacts/', {
-        method: 'POST',
-        body: {
-          locationId: agencyLocationId,
-          email,
-          name: venue?.name || 'Unknown Venue',
-          tags: ['storypay-support', 'venue-support'],
-        },
-      });
-      contactId = createRes.contact?.id;
-    }
-
-    if (contactId) {
-      await agencyGhlRequest('/conversations/messages', {
-        method: 'POST',
-        body: {
-          type: 'Email',
-          contactId,
-          subject: `[StoryPay Support] ${subject}`,
-          message: `Category: ${category || 'General'}\nVenue: ${venue?.name || 'Unknown'}\nEmail: ${email}\n\n${message}`,
-        },
-      });
-    }
-
-    return NextResponse.json({ success: true });
-  } catch (err) {
-    console.error('GHL agency support ticket failed:', err);
-    return NextResponse.json({ success: true, method: 'queued' });
+  if (error) {
+    console.error('Support ticket insert failed:', error);
+    return NextResponse.json({ error: 'Failed to submit ticket' }, { status: 500 });
   }
+
+  return NextResponse.json({ success: true });
 }

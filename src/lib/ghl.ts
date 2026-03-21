@@ -102,18 +102,6 @@ export function getOAuthUrl(clientId: string, redirectUri: string, state: string
   return `https://marketplace.leadconnectorhq.com/oauth/chooselocation?${params}`;
 }
 
-export async function agencyGhlRequest(
-  path: string,
-  options: { method?: string; body?: Record<string, unknown> } = {}
-) {
-  const apiKey = process.env.GHL_AGENCY_API_KEY;
-  const locationId = process.env.GHL_AGENCY_LOCATION_ID;
-  if (!apiKey || !locationId) {
-    throw new Error('GHL agency API key or location ID not configured');
-  }
-  return ghlRequest(path, apiKey, { ...options, locationId });
-}
-
 export async function refreshAccessToken(refreshToken: string) {
   const res = await fetch('https://services.leadconnectorhq.com/oauth/token', {
     method: 'POST',
