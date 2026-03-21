@@ -12,7 +12,7 @@ export async function GET() {
 
   const { data: venue, error } = await supabaseAdmin
     .from('venues')
-    .select('id, name, onboarding_status, ghl_connected, setup_completed')
+    .select('id, name, onboarding_status, ghl_connected, setup_completed, lunarpay_merchant_id')
     .eq('id', venueId)
     .single();
 

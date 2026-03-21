@@ -26,9 +26,9 @@ export default function AdminPage() {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    lunarpay_secret_key: '',
-    lunarpay_publishable_key: '',
-    lunarpay_org_token: '',
+    firstName: '',
+    lastName: '',
+    phone: '',
   });
 
   const fetchVenues = useCallback(async () => {
@@ -71,7 +71,7 @@ export default function AdminPage() {
       body: JSON.stringify(formData),
     });
     if (res.ok) {
-      setFormData({ name: '', email: '', lunarpay_secret_key: '', lunarpay_publishable_key: '', lunarpay_org_token: '' });
+      setFormData({ name: '', email: '', firstName: '', lastName: '', phone: '' });
       setShowCreateForm(false);
       fetchVenues();
     }
@@ -155,8 +155,8 @@ export default function AdminPage() {
         <form onSubmit={handleCreate} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
           <h3 className="font-heading text-lg text-navy-900 mb-4">New Venue</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Venue Name *</label>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Business Name *</label>
               <input
                 type="text"
                 value={formData.name}
@@ -166,38 +166,41 @@ export default function AdminPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Owner First Name *</label>
+              <input
+                type="text"
+                value={formData.firstName}
+                onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-navy-600 focus:border-navy-600 outline-none"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Owner Last Name *</label>
+              <input
+                type="text"
+                value={formData.lastName}
+                onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-navy-600 focus:border-navy-600 outline-none"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
               <input
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-navy-600 focus:border-navy-600 outline-none"
+                required
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">LunarPay Secret Key</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
               <input
-                type="text"
-                value={formData.lunarpay_secret_key}
-                onChange={(e) => setFormData({ ...formData, lunarpay_secret_key: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-navy-600 focus:border-navy-600 outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">LunarPay Publishable Key</label>
-              <input
-                type="text"
-                value={formData.lunarpay_publishable_key}
-                onChange={(e) => setFormData({ ...formData, lunarpay_publishable_key: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-navy-600 focus:border-navy-600 outline-none"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">LunarPay Org Token</label>
-              <input
-                type="text"
-                value={formData.lunarpay_org_token}
-                onChange={(e) => setFormData({ ...formData, lunarpay_org_token: e.target.value })}
+                type="tel"
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-navy-600 focus:border-navy-600 outline-none"
               />
             </div>
