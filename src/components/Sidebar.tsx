@@ -10,6 +10,7 @@ import {
   MessageSquare,
   CreditCard,
   HelpCircle,
+  Settings,
   ArrowLeft,
   ChevronDown,
   ChevronRight,
@@ -40,6 +41,7 @@ const menuItems = [
   { label: 'SMS', href: '/dashboard/sms', icon: MessageSquare },
   { label: 'Transactions', href: '/dashboard/transactions', icon: CreditCard },
   { label: 'Support', href: '/dashboard/support', icon: HelpCircle },
+  { label: 'Settings', href: '/dashboard/settings', icon: Settings },
 ];
 
 export default function Sidebar({ venue }: SidebarProps) {

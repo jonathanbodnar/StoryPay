@@ -15,8 +15,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Messaging client ID not configured' }, { status: 500 });
   }
 
-  const { origin } = new URL(request.url);
-  const redirectUri = `${origin}/api/messaging/callback`;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
+  const redirectUri = `${appUrl}/api/messaging/callback`;
   const oauthUrl = getOAuthUrl(clientId, redirectUri, venueId);
 
   return NextResponse.redirect(oauthUrl);
