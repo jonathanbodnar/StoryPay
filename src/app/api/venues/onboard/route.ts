@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('lunarpay_merchant_id')
+    .select('lunarpay_merchant_id, onboarding_status')
     .eq('id', venueId)
     .single();
 
@@ -21,6 +21,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { error: 'Venue does not have a LunarPay merchant account' },
       { status: 400 }
+    );
+  }
+
+  if (venue.onboarding_status && venue.onboarding_status !== 'pending') {
+    return NextResponse.json(
+      { error: 'Application has already been submitted' },
+      { status: 409 }
     );
   }
 

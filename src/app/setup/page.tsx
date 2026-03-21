@@ -14,6 +14,7 @@ interface VenueInfo {
   id: string;
   name: string;
   onboarding_status: string | null;
+  onboarding_mpa_url: string | null;
   ghl_connected: boolean;
   lunarpay_merchant_id: number | null;
 }
@@ -77,6 +78,7 @@ export default function SetupPage() {
         } else if (status === 'bank_information_sent') {
           setOnboardingPhase(data.mpaEmbedUrl ? 'mpa' : 'review');
         }
+        // For any other status, keep the current phase — never regress to 'form'
       }
     } finally {
       setPolling(false);
@@ -97,10 +99,15 @@ export default function SetupPage() {
         setStep(2);
         setOnboardingPhase('active');
       } else if (status === 'bank_information_sent') {
-        setOnboardingPhase('mpa');
+        setOnboardingPhase(venueData.onboarding_mpa_url ? 'mpa' : 'review');
+      } else if (status === 'pending' && venueData.lunarpay_merchant_id) {
+        // Merchant was created but hasn't submitted onboarding yet — show form
+        setOnboardingPhase('form');
       }
 
-      await checkOnboarding();
+      if (venueData.lunarpay_merchant_id) {
+        await checkOnboarding();
+      }
       setLoading(false);
     }
     init();
