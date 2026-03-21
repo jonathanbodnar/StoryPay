@@ -1,0 +1,265 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { Loader2 } from 'lucide-react';
+import { formatCents, formatDate, getStatusColor, classNames } from '@/lib/utils';
+
+type TabKey = 'charges' | 'schedules' | 'subscriptions';
+
+interface Charge {
+  id: string;
+  description: string;
+  amount: number;
+  status: string;
+  date: string;
+}
+
+interface Schedule {
+  id: number;
+  description?: string;
+  totalAmount?: number;
+  amount?: number;
+  paymentsCount?: number;
+  numberOfPayments?: number;
+  status: string;
+}
+
+interface Subscription {
+  id: string;
+  description: string;
+  amount: number;
+  frequency: string;
+  status: string;
+  nextPayment: string | null;
+}
+
+const tabs: { key: TabKey; label: string }[] = [
+  { key: 'charges', label: 'Charges' },
+  { key: 'schedules', label: 'Payment Schedules' },
+  { key: 'subscriptions', label: 'Subscriptions' },
+];
+
+export default function TransactionsPage() {
+  const [activeTab, setActiveTab] = useState<TabKey>('charges');
+  const [charges, setCharges] = useState<Charge[]>([]);
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/transactions?type=${activeTab}`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        const items = Array.isArray(data) ? data : data.data ?? [];
+        if (activeTab === 'charges') setCharges(items);
+        else if (activeTab === 'schedules') setSchedules(items);
+        else setSubscriptions(items);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [activeTab]);
+
+  return (
+    <div>
+      <div className="mb-8">
+        <h1 className="font-heading text-2xl font-semibold text-gray-900">Transactions</h1>
+        <p className="mt-1 text-sm text-gray-500">Payment history and schedules</p>
+      </div>
+
+      {/* Tabs */}
+      <div className="mb-6 flex gap-1 rounded-lg bg-gray-100 p-1 w-fit">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={classNames(
+              'rounded-md px-4 py-2 text-sm font-medium transition-colors',
+              activeTab === tab.key
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="animate-spin text-gray-400" size={24} />
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-gray-200">
+          {activeTab === 'charges' && (
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50/60">
+                  <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                    Description
+                  </th>
+                  <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                    Amount
+                  </th>
+                  <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                    Status
+                  </th>
+                  <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                    Date
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {charges.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-5 py-8 text-center text-gray-400">
+                      No charges yet
+                    </td>
+                  </tr>
+                ) : (
+                  charges.map((c) => {
+                    const color = getStatusColor(c.status);
+                    return (
+                      <tr key={c.id} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="px-5 py-3.5 font-medium text-gray-900">{c.description}</td>
+                        <td className="px-5 py-3.5 text-gray-700">{formatCents(c.amount)}</td>
+                        <td className="px-5 py-3.5">
+                          <span
+                            className={classNames(
+                              'inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize',
+                              color.bg,
+                              color.text
+                            )}
+                          >
+                            {c.status}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3.5 text-gray-500">{formatDate(c.date)}</td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          )}
+
+          {activeTab === 'schedules' && (
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50/60">
+                  <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                    Description
+                  </th>
+                  <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                    Total Amount
+                  </th>
+                  <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                    Payments
+                  </th>
+                  <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                    Status
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {schedules.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-5 py-8 text-center text-gray-400">
+                      No payment schedules yet
+                    </td>
+                  </tr>
+                ) : (
+                  schedules.map((s) => {
+                    const color = getStatusColor(s.status);
+                    return (
+                      <tr key={s.id} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="px-5 py-3.5 font-medium text-gray-900">
+                          {s.description || `Schedule #${s.id}`}
+                        </td>
+                        <td className="px-5 py-3.5 text-gray-700">
+                          {formatCents(s.totalAmount ?? s.amount ?? 0)}
+                        </td>
+                        <td className="px-5 py-3.5 text-gray-700">
+                          {s.paymentsCount ?? s.numberOfPayments ?? '—'}
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <span
+                            className={classNames(
+                              'inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize',
+                              color.bg,
+                              color.text
+                            )}
+                          >
+                            {s.status}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          )}
+
+          {activeTab === 'subscriptions' && (
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50/60">
+                  <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                    Description
+                  </th>
+                  <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                    Amount / Period
+                  </th>
+                  <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                    Frequency
+                  </th>
+                  <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                    Next Payment
+                  </th>
+                  <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                    Status
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {subscriptions.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-5 py-8 text-center text-gray-400">
+                      No subscriptions yet
+                    </td>
+                  </tr>
+                ) : (
+                  subscriptions.map((s) => {
+                    const color = getStatusColor(s.status);
+                    return (
+                      <tr key={s.id} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="px-5 py-3.5 font-medium text-gray-900">{s.description}</td>
+                        <td className="px-5 py-3.5 text-gray-700">{formatCents(s.amount)}</td>
+                        <td className="px-5 py-3.5 text-gray-700 capitalize">{s.frequency}</td>
+                        <td className="px-5 py-3.5 text-gray-500">
+                          {s.nextPayment ? formatDate(s.nextPayment) : '—'}
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <span
+                            className={classNames(
+                              'inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize',
+                              color.bg,
+                              color.text
+                            )}
+                          >
+                            {s.status}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

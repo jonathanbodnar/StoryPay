@@ -1,0 +1,136 @@
+import { cookies } from 'next/headers';
+import { NextRequest, NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/lib/supabase';
+import { createCustomer } from '@/lib/lunarpay';
+import { sendSms } from '@/lib/ghl';
+import { generateToken } from '@/lib/utils';
+
+export async function GET(request: NextRequest) {
+  const cookieStore = await cookies();
+  const venueId = cookieStore.get('venue_id')?.value;
+
+  if (!venueId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const limit = request.nextUrl.searchParams.get('limit');
+
+  let query = supabaseAdmin
+    .from('proposals')
+    .select('*')
+    .eq('venue_id', venueId)
+    .order('created_at', { ascending: false });
+
+  if (limit) {
+    query = query.limit(parseInt(limit, 10));
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json(data);
+}
+
+export async function POST(request: NextRequest) {
+  const cookieStore = await cookies();
+  const venueId = cookieStore.get('venue_id')?.value;
+
+  if (!venueId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const body = await request.json();
+  const { templateId, customerName, customerEmail, customerPhone, customerId } = body;
+
+  if (!templateId || !customerName || !customerEmail) {
+    return NextResponse.json(
+      { error: 'templateId, customerName, and customerEmail are required' },
+      { status: 400 }
+    );
+  }
+
+  const { data: venue } = await supabaseAdmin
+    .from('venues')
+    .select('lunarpay_secret_key, ghl_connected, ghl_access_token, ghl_location_id, name')
+    .eq('id', venueId)
+    .single();
+
+  const { data: template, error: templateError } = await supabaseAdmin
+    .from('proposal_templates')
+    .select('content, price, payment_type, payment_config')
+    .eq('id', templateId)
+    .eq('venue_id', venueId)
+    .single();
+
+  if (templateError || !template) {
+    return NextResponse.json({ error: 'Template not found' }, { status: 404 });
+  }
+
+  const { data: sigFields } = await supabaseAdmin
+    .from('proposal_template_fields')
+    .select('*')
+    .eq('template_id', templateId)
+    .order('sort_order', { ascending: true });
+
+  let customerLunarpayId = customerId || null;
+
+  if (venue?.lunarpay_secret_key && !customerLunarpayId) {
+    try {
+      const lpCustomer = await createCustomer(venue.lunarpay_secret_key, {
+        name: customerName,
+        email: customerEmail,
+        phone: customerPhone || undefined,
+      });
+      customerLunarpayId = lpCustomer.id;
+    } catch (err) {
+      console.error('LunarPay customer creation failed:', err);
+    }
+  }
+
+  const publicToken = generateToken();
+
+  const { data: proposal, error: insertError } = await supabaseAdmin
+    .from('proposals')
+    .insert({
+      venue_id: venueId,
+      template_id: templateId,
+      customer_name: customerName,
+      customer_email: customerEmail,
+      customer_phone: customerPhone || null,
+      customer_lunarpay_id: customerLunarpayId,
+      content: template.content,
+      price: template.price,
+      payment_type: template.payment_type,
+      payment_config: template.payment_config,
+      signature_fields: sigFields ?? [],
+      public_token: publicToken,
+      status: 'sent',
+      sent_at: new Date().toISOString(),
+    })
+    .select()
+    .single();
+
+  if (insertError) {
+    return NextResponse.json({ error: insertError.message }, { status: 500 });
+  }
+
+  if (
+    venue?.ghl_connected &&
+    venue.ghl_access_token &&
+    venue.ghl_location_id &&
+    customerPhone
+  ) {
+    try {
+      const proposalUrl = `${request.nextUrl.origin}/proposal/${publicToken}`;
+      const message = `Hi ${customerName}, ${venue.name} has sent you a proposal. View and sign here: ${proposalUrl}`;
+      await sendSms(venue.ghl_access_token, venue.ghl_location_id, customerPhone, message);
+    } catch (err) {
+      console.error('GHL SMS send failed:', err);
+    }
+  }
+
+  return NextResponse.json(proposal, { status: 201 });
+}
