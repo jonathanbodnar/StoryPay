@@ -75,12 +75,12 @@ export default function SetupPage() {
 
         if (data.isActive || status === 'active') {
           setOnboardingPhase('active');
+          setStep((prev) => (prev === 1 ? 2 : prev));
         } else if (status === 'denied') {
           setOnboardingPhase('denied');
         } else if (status === 'bank_information_sent' || status === 'under_review') {
           setOnboardingPhase(data.mpaEmbedUrl ? 'mpa' : 'review');
         }
-        // For any other status, keep the current phase — never regress to 'form'
       }
     } finally {
       setPolling(false);
@@ -94,24 +94,24 @@ export default function SetupPage() {
       if (!venueData) return;
 
       const status = venueData.onboarding_status;
-      if (status === 'active' && venueData.ghl_connected) {
-        setStep(3);
+
+      if (status === 'active') {
         setOnboardingPhase('active');
-      } else if (status === 'active') {
-        setStep(2);
-        setOnboardingPhase('active');
+        if (venueData.ghl_connected) {
+          setStep(3);
+        } else {
+          setStep(2);
+        }
       } else if (status === 'denied') {
         setOnboardingPhase('denied');
       } else if (status === 'bank_information_sent' || status === 'under_review') {
         setOnboardingPhase(venueData.onboarding_mpa_url ? 'mpa' : 'review');
-      } else if (status === 'pending' && venueData.lunarpay_merchant_id) {
-        // Merchant was created but hasn't submitted onboarding yet — show form
-        setOnboardingPhase('form');
       }
 
-      if (venueData.lunarpay_merchant_id) {
+      if (venueData.lunarpay_merchant_id && status !== 'active') {
         await checkOnboarding();
       }
+
       setLoading(false);
     }
     init();
@@ -187,10 +187,20 @@ export default function SetupPage() {
           {step === 1 && (
             <StepCard number={1} title="Payment Processing Setup" active>
               {onboardingPhase === 'active' ? (
-                <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl">
-                  <CheckCircle />
-                  <span className="text-green-800 font-medium">Payment processor active — approved by Fortis</span>
-                </div>
+                <>
+                  <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl">
+                    <CheckCircle />
+                    <span className="text-green-800 font-medium">Payment processor active — approved by Fortis</span>
+                  </div>
+                  <div className="mt-6 flex justify-end">
+                    <button
+                      onClick={() => setStep(2)}
+                      className="bg-navy-800 hover:bg-navy-900 text-white font-medium py-2.5 px-8 rounded-xl transition-colors"
+                    >
+                      Continue
+                    </button>
+                  </div>
+                </>
               ) : onboardingPhase === 'denied' ? (
                 <div className="space-y-4">
                   <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
@@ -319,24 +329,13 @@ export default function SetupPage() {
                   </button>
                 </form>
               )}
-
-              {paymentReady && (
-                <div className="mt-6 flex justify-end">
-                  <button
-                    onClick={() => setStep(2)}
-                    className="bg-navy-800 hover:bg-navy-900 text-white font-medium py-2.5 px-8 rounded-xl transition-colors"
-                  >
-                    Continue
-                  </button>
-                </div>
-              )}
             </StepCard>
           )}
 
           {step === 2 && (
             <StepCard number={2} title="Connect Messaging" active>
               <p className="text-gray-600 mb-6">
-                Link your messaging account to enable automated SMS and contact management.
+                Link your messaging account to enable automated SMS notifications when proposals are sent.
               </p>
 
               {ghlReady ? (
@@ -345,12 +344,17 @@ export default function SetupPage() {
                   <span className="text-green-800 font-medium">Messaging connected</span>
                 </div>
               ) : (
-                <a
-                  href="/api/messaging/connect"
-                  className="block w-full text-center bg-navy-800 hover:bg-navy-900 text-white font-medium py-3 px-6 rounded-xl transition-colors"
-                >
-                  Connect Messaging
-                </a>
+                <>
+                  <a
+                    href="/api/messaging/connect"
+                    className="block w-full text-center bg-navy-800 hover:bg-navy-900 text-white font-medium py-3 px-6 rounded-xl transition-colors"
+                  >
+                    Connect Messaging
+                  </a>
+                  <p className="mt-3 text-xs text-gray-400 text-center">
+                    You can also connect messaging later from Settings.
+                  </p>
+                </>
               )}
 
               <div className="mt-6 flex justify-between">
@@ -360,13 +364,27 @@ export default function SetupPage() {
                 >
                   Back
                 </button>
-                <button
-                  onClick={() => setStep(3)}
-                  disabled={!ghlReady}
-                  className="bg-navy-800 hover:bg-navy-900 text-white font-medium py-2.5 px-8 rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Continue
-                </button>
+                <div className="flex items-center gap-3">
+                  {!ghlReady && (
+                    <button
+                      onClick={() => setStep(3)}
+                      className="text-gray-500 hover:text-gray-700 font-medium py-2.5 px-4 transition-colors text-sm"
+                    >
+                      Skip for now
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setStep(3)}
+                    disabled={!ghlReady}
+                    className={`font-medium py-2.5 px-8 rounded-xl transition-colors ${
+                      ghlReady
+                        ? 'bg-navy-800 hover:bg-navy-900 text-white'
+                        : 'hidden'
+                    }`}
+                  >
+                    Continue
+                  </button>
+                </div>
               </div>
             </StepCard>
           )}
@@ -379,7 +397,7 @@ export default function SetupPage() {
 
               <div className="space-y-3 mb-8">
                 <SummaryRow label="Payment Processing" ready={!!paymentReady} />
-                <SummaryRow label="Messaging" ready={ghlReady} />
+                <SummaryRow label="Messaging" ready={ghlReady} optional={!ghlReady} />
               </div>
 
               {error && (
@@ -388,10 +406,10 @@ export default function SetupPage() {
 
               <button
                 onClick={handleCompleteSetup}
-                disabled={!paymentReady || !ghlReady || completing}
+                disabled={!paymentReady || completing}
                 className="w-full bg-teal-500 hover:bg-teal-600 text-white font-semibold py-3.5 px-6 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-lg"
               >
-                {completing ? 'Completing Setup…' : 'Complete Setup'}
+                {completing ? 'Completing Setup…' : 'Launch Dashboard'}
               </button>
 
               <div className="mt-4 flex justify-start">
@@ -460,10 +478,12 @@ function StepIndicator({ currentStep, paymentReady, ghlReady }: { currentStep: n
                   ? 'bg-teal-500 text-white'
                   : currentStep === s.number
                     ? 'bg-navy-800 text-white'
-                    : 'bg-gray-200 text-gray-500'
+                    : currentStep > s.number
+                      ? 'bg-teal-500 text-white'
+                      : 'bg-gray-200 text-gray-500'
               }`}
             >
-              {s.done ? (
+              {s.done || currentStep > s.number ? (
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
@@ -474,7 +494,7 @@ function StepIndicator({ currentStep, paymentReady, ghlReady }: { currentStep: n
             <span className="text-xs mt-1.5 text-gray-500 font-medium">{s.label}</span>
           </div>
           {i < steps.length - 1 && (
-            <div className={`w-20 h-0.5 mx-2 mb-5 transition-colors ${s.done ? 'bg-teal-500' : 'bg-gray-200'}`} />
+            <div className={`w-20 h-0.5 mx-2 mb-5 transition-colors ${s.done || currentStep > s.number ? 'bg-teal-500' : 'bg-gray-200'}`} />
           )}
         </div>
       ))}
@@ -494,7 +514,7 @@ function StepCard({ number, title, active, children }: { number: number; title: 
   );
 }
 
-function SummaryRow({ label, ready }: { label: string; ready: boolean }) {
+function SummaryRow({ label, ready, optional }: { label: string; ready: boolean; optional?: boolean }) {
   return (
     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
       <span className="text-gray-700 font-medium">{label}</span>
@@ -503,6 +523,8 @@ function SummaryRow({ label, ready }: { label: string; ready: boolean }) {
           <CheckCircle />
           Connected
         </span>
+      ) : optional ? (
+        <span className="text-gray-400 text-sm">Skipped — connect later in Settings</span>
       ) : (
         <span className="flex items-center gap-2 text-amber-600 font-medium text-sm">
           <ClockIcon />

@@ -30,11 +30,22 @@ export async function GET(
 
     const { data: venue } = await supabaseAdmin
       .from('venues')
-      .select('setup_completed')
+      .select('setup_completed, onboarding_status')
       .eq('id', venueToken.venue_id)
       .single();
 
-    const destination = venue?.setup_completed ? '/dashboard' : '/setup';
+    const destination = venue?.setup_completed
+      ? '/dashboard'
+      : venue?.onboarding_status === 'active'
+        ? '/dashboard'
+        : '/setup';
+
+    if (!venue?.setup_completed && venue?.onboarding_status === 'active') {
+      await supabaseAdmin
+        .from('venues')
+        .update({ setup_completed: true })
+        .eq('id', venueToken.venue_id);
+    }
     const response = NextResponse.redirect(`${base}${destination}`);
 
     response.cookies.set('venue_id', venueToken.venue_id, {
