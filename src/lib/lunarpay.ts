@@ -140,3 +140,21 @@ export function getSubscription(secretKey: string, id: number) {
 export function refundCharge(secretKey: string, chargeId: number) {
   return lpFetch(`/api/v1/charges/${chargeId}/refund`, { method: 'POST', key: secretKey });
 }
+
+// ── Agency webhook management ───────────────────────────────────────
+
+export function getAgencyWebhook() {
+  return lpFetch('/api/v1/agency/webhook', { key: LP_AGENCY_KEY });
+}
+
+export function setAgencyWebhook(webhookUrl: string) {
+  return lpFetch('/api/v1/agency/webhook', {
+    method: 'PUT',
+    body: { webhookUrl },
+    key: LP_AGENCY_KEY,
+  });
+}
+
+export function deleteAgencyWebhook() {
+  return lpFetch('/api/v1/agency/webhook', { method: 'DELETE', key: LP_AGENCY_KEY });
+}

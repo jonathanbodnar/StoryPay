@@ -49,7 +49,7 @@ export async function GET() {
       status = rawStatus.toLowerCase().replace(/\s+/g, '_');
     }
 
-    const allowedStatuses = ['pending', 'bank_information_sent', 'under_review', 'active'];
+    const allowedStatuses = ['pending', 'bank_information_sent', 'under_review', 'active', 'denied'];
     if (!allowedStatuses.includes(status)) {
       // Normalize unknown statuses: if it was previously submitted, keep it as under_review
       status = venue.onboarding_status === 'pending' ? 'pending' : 'under_review';

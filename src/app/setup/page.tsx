@@ -19,7 +19,7 @@ interface VenueInfo {
   lunarpay_merchant_id: number | null;
 }
 
-type OnboardingPhase = 'form' | 'mpa' | 'review' | 'active';
+type OnboardingPhase = 'form' | 'mpa' | 'review' | 'active' | 'denied';
 
 export default function SetupPage() {
   const router = useRouter();
@@ -75,6 +75,8 @@ export default function SetupPage() {
 
         if (data.isActive || status === 'active') {
           setOnboardingPhase('active');
+        } else if (status === 'denied') {
+          setOnboardingPhase('denied');
         } else if (status === 'bank_information_sent' || status === 'under_review') {
           setOnboardingPhase(data.mpaEmbedUrl ? 'mpa' : 'review');
         }
@@ -98,6 +100,8 @@ export default function SetupPage() {
       } else if (status === 'active') {
         setStep(2);
         setOnboardingPhase('active');
+      } else if (status === 'denied') {
+        setOnboardingPhase('denied');
       } else if (status === 'bank_information_sent' || status === 'under_review') {
         setOnboardingPhase(venueData.onboarding_mpa_url ? 'mpa' : 'review');
       } else if (status === 'pending' && venueData.lunarpay_merchant_id) {
@@ -186,6 +190,18 @@ export default function SetupPage() {
                 <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl">
                   <CheckCircle />
                   <span className="text-green-800 font-medium">Payment processor active — approved by Fortis</span>
+                </div>
+              ) : onboardingPhase === 'denied' ? (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
+                    <svg className="w-5 h-5 text-red-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                    </svg>
+                    <div>
+                      <span className="text-red-800 font-medium block">Application Denied</span>
+                      <span className="text-red-700 text-sm">Your merchant application was not approved. Please contact support for assistance.</span>
+                    </div>
+                  </div>
                 </div>
               ) : onboardingPhase === 'review' ? (
                 <div className="space-y-4">
