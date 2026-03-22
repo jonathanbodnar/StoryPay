@@ -75,7 +75,7 @@ export default function SetupPage() {
 
         if (data.isActive || status === 'active') {
           setOnboardingPhase('active');
-        } else if (status === 'bank_information_sent') {
+        } else if (status === 'bank_information_sent' || status === 'under_review') {
           setOnboardingPhase(data.mpaEmbedUrl ? 'mpa' : 'review');
         }
         // For any other status, keep the current phase — never regress to 'form'
@@ -98,7 +98,7 @@ export default function SetupPage() {
       } else if (status === 'active') {
         setStep(2);
         setOnboardingPhase('active');
-      } else if (status === 'bank_information_sent') {
+      } else if (status === 'bank_information_sent' || status === 'under_review') {
         setOnboardingPhase(venueData.onboarding_mpa_url ? 'mpa' : 'review');
       } else if (status === 'pending' && venueData.lunarpay_merchant_id) {
         // Merchant was created but hasn't submitted onboarding yet — show form

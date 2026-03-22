@@ -27,30 +27,60 @@ export async function GET() {
   try {
     const result = await agencyGetMerchant(venue.lunarpay_merchant_id);
     const merchant = result.data || result;
-    const onboarding = merchant.onboarding || merchant;
 
-    const isActive = onboarding.isActive === true;
-    const status = isActive
-      ? 'active'
-      : (onboarding.status || venue.onboarding_status || 'pending').toLowerCase();
+    // LunarPay may nest onboarding data differently — check multiple paths
+    const onboarding = merchant.onboarding || {};
+    const isActive =
+      onboarding.isActive === true ||
+      merchant.isActive === true ||
+      merchant.onboardingStatus === 'ACTIVE' ||
+      onboarding.status === 'ACTIVE';
+
+    let status: string;
+    if (isActive) {
+      status = 'active';
+    } else {
+      const rawStatus =
+        onboarding.status ||
+        merchant.onboardingStatus ||
+        merchant.status ||
+        venue.onboarding_status ||
+        'pending';
+      status = rawStatus.toLowerCase().replace(/\s+/g, '_');
+    }
+
+    const allowedStatuses = ['pending', 'bank_information_sent', 'under_review', 'active'];
+    if (!allowedStatuses.includes(status)) {
+      // Normalize unknown statuses: if it was previously submitted, keep it as under_review
+      status = venue.onboarding_status === 'pending' ? 'pending' : 'under_review';
+    }
+
+    const mpaUrl =
+      onboarding.mpaEmbedUrl ||
+      merchant.mpaEmbedUrl ||
+      venue.onboarding_mpa_url ||
+      null;
 
     await supabaseAdmin
       .from('venues')
       .update({
         onboarding_status: status,
-        onboarding_mpa_url: onboarding.mpaEmbedUrl || venue.onboarding_mpa_url || null,
+        onboarding_mpa_url: mpaUrl,
       })
       .eq('id', venueId);
+
+    console.log(`[onboarding-status] venue=${venueId} merchantId=${venue.lunarpay_merchant_id} status=${status} isActive=${isActive}`);
 
     return NextResponse.json({
       status,
       isActive,
-      mpaEmbedUrl: onboarding.mpaEmbedUrl || venue.onboarding_mpa_url || null,
-      mpaLink: onboarding.mpaLink || null,
-      stepCompleted: onboarding.stepCompleted || null,
+      mpaEmbedUrl: mpaUrl,
+      mpaLink: onboarding.mpaLink || merchant.mpaLink || null,
+      stepCompleted: onboarding.stepCompleted || merchant.stepCompleted || null,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to fetch onboarding status';
+    console.error(`[onboarding-status] error for venue=${venueId}:`, message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
