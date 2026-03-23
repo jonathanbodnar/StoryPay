@@ -14,12 +14,17 @@ export async function GET(request: NextRequest) {
   }
 
   const limit = request.nextUrl.searchParams.get('limit');
+  const status = request.nextUrl.searchParams.get('status');
 
   let query = supabaseAdmin
     .from('proposals')
     .select('*')
     .eq('venue_id', venueId)
     .order('created_at', { ascending: false });
+
+  if (status) {
+    query = query.eq('status', status);
+  }
 
   if (limit) {
     query = query.limit(parseInt(limit, 10));
@@ -46,17 +51,25 @@ export async function POST(request: NextRequest) {
   const {
     templateId, customerName, customerEmail, customerPhone, customerId,
     price, paymentType, paymentConfig,
+    asDraft,
   } = body;
 
-  if (!templateId || !customerName || !customerEmail) {
-    return NextResponse.json(
-      { error: 'templateId, customerName, and customerEmail are required' },
-      { status: 400 }
-    );
+  if (!templateId) {
+    return NextResponse.json({ error: 'templateId is required' }, { status: 400 });
   }
 
-  if (!price || price <= 0) {
-    return NextResponse.json({ error: 'A valid price is required' }, { status: 400 });
+  const isDraft = !!asDraft;
+
+  if (!isDraft) {
+    if (!customerName || !customerEmail) {
+      return NextResponse.json(
+        { error: 'customerName and customerEmail are required to send' },
+        { status: 400 }
+      );
+    }
+    if (!price || price <= 0) {
+      return NextResponse.json({ error: 'A valid price is required' }, { status: 400 });
+    }
   }
 
   const { data: venue } = await supabaseAdmin
@@ -82,6 +95,35 @@ export async function POST(request: NextRequest) {
     .eq('template_id', templateId)
     .order('sort_order', { ascending: true });
 
+  const publicToken = generateToken();
+
+  if (isDraft) {
+    const { data: proposal, error: insertError } = await supabaseAdmin
+      .from('proposals')
+      .insert({
+        venue_id: venueId,
+        template_id: templateId,
+        customer_name: customerName || null,
+        customer_email: customerEmail || null,
+        customer_phone: customerPhone || null,
+        content: template.content,
+        price: price || 0,
+        payment_type: paymentType || 'full',
+        payment_config: paymentConfig || {},
+        signature_fields: sigFields ?? [],
+        public_token: publicToken,
+        status: 'draft',
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      return NextResponse.json({ error: insertError.message }, { status: 500 });
+    }
+
+    return NextResponse.json(proposal, { status: 201 });
+  }
+
   let customerLunarpayId = customerId || null;
 
   if (venue?.lunarpay_secret_key && !customerLunarpayId) {
@@ -99,8 +141,6 @@ export async function POST(request: NextRequest) {
       console.error('LunarPay customer creation failed:', err);
     }
   }
-
-  const publicToken = generateToken();
 
   const { data: proposal, error: insertError } = await supabaseAdmin
     .from('proposals')
