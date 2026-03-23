@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Send, FileText, Plus, Trash2, Save } from 'lucide-react';
+import { Send, FileText, Plus, Trash2, Save, Search, UserPlus, X } from 'lucide-react';
 import { formatCents } from '@/lib/utils';
 
 interface Template {
@@ -16,8 +16,22 @@ interface Installment {
   date: string;
 }
 
+interface LPCustomer {
+  id: number;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+}
+
 function uid() {
   return Math.random().toString(36).slice(2, 10);
+}
+
+function displayName(c: LPCustomer) {
+  if (c.name) return c.name;
+  return [c.firstName, c.lastName].filter(Boolean).join(' ') || c.email || `Customer #${c.id}`;
 }
 
 export default function NewProposalPage() {
@@ -29,6 +43,16 @@ export default function NewProposalPage() {
   const [error, setError] = useState('');
 
   const [templateId, setTemplateId] = useState('');
+
+  // Customer selection
+  const [customerMode, setCustomerMode] = useState<'search' | 'new'>('search');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<LPCustomer[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<LPCustomer | null>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
+
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -51,6 +75,73 @@ export default function NewProposalPage() {
       .catch(() => setTemplates([]))
       .finally(() => setLoadingTemplates(false));
   }, []);
+
+  const searchCustomers = useCallback(async (q: string) => {
+    if (!q || q.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    setSearchLoading(true);
+    try {
+      const res = await fetch(`/api/customers?search=${encodeURIComponent(q)}&limit=8`);
+      if (res.ok) {
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : data.data ?? [];
+        setSearchResults(list);
+      }
+    } catch {
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (customerMode !== 'search' || selectedCustomer) return;
+    const t = setTimeout(() => searchCustomers(searchQuery), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery, customerMode, selectedCustomer, searchCustomers]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  function selectCustomer(c: LPCustomer) {
+    setSelectedCustomer(c);
+    const name = displayName(c);
+    setCustomerName(name);
+    setCustomerEmail(c.email || '');
+    setCustomerPhone(c.phone || '');
+    setSearchQuery(name);
+    setShowDropdown(false);
+  }
+
+  function clearCustomer() {
+    setSelectedCustomer(null);
+    setCustomerName('');
+    setCustomerEmail('');
+    setCustomerPhone('');
+    setSearchQuery('');
+  }
+
+  function switchToNew() {
+    setCustomerMode('new');
+    setSelectedCustomer(null);
+    setSearchQuery('');
+    setSearchResults([]);
+    setShowDropdown(false);
+  }
+
+  function switchToSearch() {
+    setCustomerMode('search');
+    clearCustomer();
+  }
 
   function buildPaymentConfig() {
     if (paymentType === 'installment') {
@@ -78,6 +169,7 @@ export default function NewProposalPage() {
       customerName: customerName || undefined,
       customerEmail: customerEmail || undefined,
       customerPhone: customerPhone || undefined,
+      customerId: selectedCustomer?.id || undefined,
       price,
       paymentType,
       paymentConfig: buildPaymentConfig(),
@@ -191,52 +283,160 @@ export default function NewProposalPage() {
           )}
         </div>
 
-        {/* Customer info */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="sm:col-span-2">
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1.5">
-              Customer Name <span className="text-red-400">*</span>
+        {/* Customer section */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="block text-sm font-medium text-gray-700">
+              Customer <span className="text-red-400">*</span>
             </label>
-            <input
-              id="name"
-              type="text"
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              placeholder="Jane Smith"
-              className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-            />
+            <div className="flex gap-1">
+              <button
+                type="button"
+                onClick={switchToSearch}
+                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                  customerMode === 'search'
+                    ? 'bg-teal-50 text-teal-700'
+                    : 'text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                <Search size={12} className="inline mr-1" />
+                Existing
+              </button>
+              <button
+                type="button"
+                onClick={switchToNew}
+                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                  customerMode === 'new'
+                    ? 'bg-teal-50 text-teal-700'
+                    : 'text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                <UserPlus size={12} className="inline mr-1" />
+                New
+              </button>
+            </div>
           </div>
 
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">
-              Email <span className="text-red-400">*</span>
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={customerEmail}
-              onChange={(e) => setCustomerEmail(e.target.value)}
-              placeholder="jane@example.com"
-              className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-            />
-          </div>
+          {customerMode === 'search' ? (
+            <div ref={searchRef} className="relative">
+              {selectedCustomer ? (
+                <div className="flex items-center justify-between rounded-lg border border-teal-200 bg-teal-50/50 px-4 py-3">
+                  <div>
+                    <span className="text-sm font-medium text-gray-900">{customerName}</span>
+                    <span className="ml-2 text-xs text-gray-500">{customerEmail}</span>
+                    {customerPhone && (
+                      <span className="ml-2 text-xs text-gray-400">{customerPhone}</span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={clearCustomer}
+                    className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="relative">
+                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setShowDropdown(true);
+                      }}
+                      onFocus={() => searchQuery.length >= 2 && setShowDropdown(true)}
+                      placeholder="Search by name, email, or phone…"
+                      className="w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                    />
+                    {searchLoading && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-teal-500" />
+                      </div>
+                    )}
+                  </div>
 
-          <div>
-            <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1.5">
-              Phone
-            </label>
-            <input
-              id="phone"
-              type="tel"
-              value={customerPhone}
-              onChange={(e) => setCustomerPhone(e.target.value)}
-              placeholder="+1 (555) 000-0000"
-              className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-            />
-            <p className="mt-1 text-xs text-gray-400">
-              If provided and messaging is connected, an SMS will be sent with the proposal link.
-            </p>
-          </div>
+                  {showDropdown && searchQuery.length >= 2 && (
+                    <div className="absolute z-20 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg max-h-60 overflow-y-auto">
+                      {searchResults.length > 0 ? (
+                        searchResults.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => selectCustomer(c)}
+                            className="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-gray-50 transition-colors"
+                          >
+                            <div>
+                              <span className="font-medium text-gray-900">{displayName(c)}</span>
+                              {c.email && (
+                                <span className="ml-2 text-xs text-gray-400">{c.email}</span>
+                              )}
+                            </div>
+                            {c.phone && (
+                              <span className="text-xs text-gray-400">{c.phone}</span>
+                            )}
+                          </button>
+                        ))
+                      ) : !searchLoading ? (
+                        <div className="px-4 py-3 text-sm text-gray-500">
+                          No customers found.{' '}
+                          <button
+                            type="button"
+                            onClick={switchToNew}
+                            className="text-teal-600 font-medium hover:underline"
+                          >
+                            Create new customer
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg border border-gray-200 p-4">
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-medium text-gray-500 mb-1">
+                  Full Name <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  placeholder="Jane Smith"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">
+                  Email <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="email"
+                  value={customerEmail}
+                  onChange={(e) => setCustomerEmail(e.target.value)}
+                  placeholder="jane@example.com"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Phone</label>
+                <input
+                  type="tel"
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  placeholder="+1 (555) 000-0000"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                />
+              </div>
+              <p className="sm:col-span-2 text-xs text-gray-400">
+                A new customer will be created in LunarPay when the proposal is sent. If messaging is connected, a GHL contact will also be created for SMS.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Price */}

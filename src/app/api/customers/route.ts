@@ -27,7 +27,17 @@ export async function GET(request: NextRequest) {
 
   try {
     const result = await listCustomers(venue.lunarpay_secret_key, search, page, limit);
-    return NextResponse.json(result);
+    const raw = result.data || result;
+    const list = Array.isArray(raw) ? raw : [];
+    const customers = list.map((c: Record<string, unknown>) => ({
+      id: c.id,
+      name: c.name || [c.firstName, c.lastName].filter(Boolean).join(' ') || c.email,
+      firstName: c.firstName,
+      lastName: c.lastName,
+      email: c.email,
+      phone: c.phone,
+    }));
+    return NextResponse.json(customers);
   } catch (err) {
     console.error('Customer list error:', err);
     return NextResponse.json({ error: 'Failed to fetch customers' }, { status: 500 });
