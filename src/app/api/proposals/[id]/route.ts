@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { createCustomer } from '@/lib/lunarpay';
-import { ghlRequest, sendSms } from '@/lib/ghl';
+import { findOrCreateContact, sendSms, sendEmail } from '@/lib/ghl';
 
 export async function GET(
   _request: NextRequest,
@@ -122,44 +122,64 @@ export async function PATCH(
     updateData.customer_email = email;
     updateData.customer_phone = phone || null;
 
-    if (
-      venue?.ghl_connected &&
-      venue.ghl_access_token &&
-      venue.ghl_location_id &&
-      phone
-    ) {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+    const proposalUrl = `${appUrl}/proposal/${existing.public_token}`;
+
+    if (venue?.ghl_connected && venue.ghl_access_token && venue.ghl_location_id) {
       try {
-        const searchRes = await ghlRequest(
-          `/contacts/search/duplicate?locationId=${venue.ghl_location_id}&phone=${encodeURIComponent(phone)}`,
+        const contactId = await findOrCreateContact(
           venue.ghl_access_token,
-          { locationId: venue.ghl_location_id }
+          venue.ghl_location_id,
+          {
+            email,
+            phone: phone || undefined,
+            firstName: name.split(' ')[0],
+            lastName: name.split(' ').slice(1).join(' ') || undefined,
+          }
         );
 
-        let contactId = searchRes.contact?.id;
-
-        if (!contactId) {
-          const createRes = await ghlRequest('/contacts/', venue.ghl_access_token, {
-            method: 'POST',
-            body: {
-              locationId: venue.ghl_location_id,
-              firstName: name.split(' ')[0],
-              lastName: name.split(' ').slice(1).join(' ') || '',
-              email,
-              phone,
-            },
-            locationId: venue.ghl_location_id,
-          });
-          contactId = createRes.contact?.id;
-        }
-
         if (contactId) {
-          const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
-          const proposalUrl = `${appUrl}/proposal/${existing.public_token}`;
-          const message = `Hi ${name}, ${venue.name} has sent you a proposal. View and sign here: ${proposalUrl}`;
-          await sendSms(venue.ghl_access_token, venue.ghl_location_id, contactId, message);
+          if (phone) {
+            try {
+              await sendSms(
+                venue.ghl_access_token,
+                venue.ghl_location_id,
+                contactId,
+                `Hi ${name.split(' ')[0]}, ${venue.name} has sent you a proposal. View and sign here: ${proposalUrl}`
+              );
+            } catch (smsErr) {
+              console.error('[proposal-send-draft] SMS failed:', smsErr);
+            }
+          }
+
+          try {
+            await sendEmail(venue.ghl_access_token, venue.ghl_location_id, {
+              contactId,
+              subject: `Proposal from ${venue.name}`,
+              html: `
+                <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+                  <h2 style="color: #1a1a2e;">You have a new proposal from ${venue.name}</h2>
+                  <p style="color: #555; font-size: 16px; line-height: 1.6;">
+                    Hi ${name.split(' ')[0]},<br><br>
+                    ${venue.name} has prepared a proposal for you. Click the button below to review, sign, and complete your payment.
+                  </p>
+                  <div style="text-align: center; margin: 32px 0;">
+                    <a href="${proposalUrl}" style="display: inline-block; background-color: #14b8a6; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
+                      View Proposal
+                    </a>
+                  </div>
+                  <p style="color: #999; font-size: 13px;">
+                    If the button doesn't work, copy and paste this link: ${proposalUrl}
+                  </p>
+                </div>
+              `,
+            });
+          } catch (emailErr) {
+            console.error('[proposal-send-draft] Email failed:', emailErr);
+          }
         }
       } catch (err) {
-        console.error('GHL SMS send failed:', err);
+        console.error('[proposal-send-draft] GHL contact lookup failed:', err);
       }
     }
   }

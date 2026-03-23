@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { createCustomer } from '@/lib/lunarpay';
-import { ghlRequest, sendSms } from '@/lib/ghl';
+import { ghlRequest, sendSms, sendEmail, findOrCreateContact } from '@/lib/ghl';
 import { generateToken } from '@/lib/utils';
 
 export async function GET(request: NextRequest) {
@@ -49,7 +49,8 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json();
   const {
-    templateId, customerName, customerEmail, customerPhone, customerId,
+    templateId, customerName, customerEmail, customerPhone,
+    ghlContactId, customerId,
     price, paymentType, paymentConfig,
     asDraft,
   } = body;
@@ -124,6 +125,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(proposal, { status: 201 });
   }
 
+  // --- Sending flow ---
+
+  // 1. Create LunarPay customer for payment processing
   let customerLunarpayId = customerId || null;
 
   if (venue?.lunarpay_secret_key && !customerLunarpayId) {
@@ -138,10 +142,11 @@ export async function POST(request: NextRequest) {
       const lpCustomer = lpResult.data || lpResult;
       customerLunarpayId = lpCustomer.id;
     } catch (err) {
-      console.error('LunarPay customer creation failed:', err);
+      console.error('[proposal-send] LunarPay customer creation failed:', err);
     }
   }
 
+  // 2. Insert proposal
   const { data: proposal, error: insertError } = await supabaseAdmin
     .from('proposals')
     .insert({
@@ -167,45 +172,87 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: insertError.message }, { status: 500 });
   }
 
-  if (
-    venue?.ghl_connected &&
-    venue.ghl_access_token &&
-    venue.ghl_location_id &&
-    customerPhone
-  ) {
-    try {
-      const searchRes = await ghlRequest(
-        `/contacts/search/duplicate?locationId=${venue.ghl_location_id}&phone=${encodeURIComponent(customerPhone)}`,
-        venue.ghl_access_token,
-        { locationId: venue.ghl_location_id }
-      );
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+  const proposalUrl = `${appUrl}/proposal/${publicToken}`;
 
-      let contactId = searchRes.contact?.id;
+  // 3. Send via GHL (SMS + Email)
+  if (venue?.ghl_connected && venue.ghl_access_token && venue.ghl_location_id) {
+    try {
+      // Find or use existing GHL contact
+      let contactId = ghlContactId || null;
 
       if (!contactId) {
-        const createRes = await ghlRequest('/contacts/', venue.ghl_access_token, {
-          method: 'POST',
-          body: {
-            locationId: venue.ghl_location_id,
-            firstName: customerName.split(' ')[0],
-            lastName: customerName.split(' ').slice(1).join(' ') || '',
+        contactId = await findOrCreateContact(
+          venue.ghl_access_token,
+          venue.ghl_location_id,
+          {
             email: customerEmail,
-            phone: customerPhone,
-          },
-          locationId: venue.ghl_location_id,
-        });
-        contactId = createRes.contact?.id;
+            phone: customerPhone || undefined,
+            firstName: customerName.split(' ')[0],
+            lastName: customerName.split(' ').slice(1).join(' ') || undefined,
+          }
+        );
       }
 
       if (contactId) {
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
-        const proposalUrl = `${appUrl}/proposal/${publicToken}`;
-        const message = `Hi ${customerName}, ${venue.name} has sent you a proposal. View and sign here: ${proposalUrl}`;
-        await sendSms(venue.ghl_access_token, venue.ghl_location_id, contactId, message);
+        // Send SMS if customer has a phone number
+        if (customerPhone) {
+          try {
+            await sendSms(
+              venue.ghl_access_token,
+              venue.ghl_location_id,
+              contactId,
+              `Hi ${customerName.split(' ')[0]}, ${venue.name} has sent you a proposal. View and sign here: ${proposalUrl}`
+            );
+            console.log(`[proposal-send] SMS sent to contact ${contactId}`);
+          } catch (smsErr) {
+            console.error('[proposal-send] SMS failed:', smsErr);
+          }
+        }
+
+        // Send email
+        try {
+          await sendEmail(
+            venue.ghl_access_token,
+            venue.ghl_location_id,
+            {
+              contactId,
+              subject: `Proposal from ${venue.name}`,
+              html: `
+                <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+                  <h2 style="color: #1a1a2e;">You have a new proposal from ${venue.name}</h2>
+                  <p style="color: #555; font-size: 16px; line-height: 1.6;">
+                    Hi ${customerName.split(' ')[0]},<br><br>
+                    ${venue.name} has prepared a proposal for you. Click the button below to review, sign, and complete your payment.
+                  </p>
+                  <div style="text-align: center; margin: 32px 0;">
+                    <a href="${proposalUrl}" style="display: inline-block; background-color: #14b8a6; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
+                      View Proposal
+                    </a>
+                  </div>
+                  <p style="color: #999; font-size: 13px;">
+                    If the button doesn't work, copy and paste this link: ${proposalUrl}
+                  </p>
+                  <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
+                  <p style="color: #bbb; font-size: 12px; text-align: center;">
+                    Sent via StoryPay on behalf of ${venue.name}
+                  </p>
+                </div>
+              `,
+            }
+          );
+          console.log(`[proposal-send] Email sent to contact ${contactId}`);
+        } catch (emailErr) {
+          console.error('[proposal-send] Email failed:', emailErr);
+        }
+      } else {
+        console.error('[proposal-send] Could not find or create GHL contact for', customerEmail);
       }
     } catch (err) {
-      console.error('GHL SMS send failed:', err);
+      console.error('[proposal-send] GHL contact lookup failed:', err);
     }
+  } else {
+    console.log('[proposal-send] GHL not connected for venue, skipping SMS/email');
   }
 
   return NextResponse.json(proposal, { status: 201 });

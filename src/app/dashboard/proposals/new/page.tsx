@@ -16,8 +16,8 @@ interface Installment {
   date: string;
 }
 
-interface LPCustomer {
-  id: number;
+interface GHLContact {
+  id: string;
   name?: string;
   firstName?: string;
   lastName?: string;
@@ -29,9 +29,9 @@ function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
-function displayName(c: LPCustomer) {
+function displayName(c: GHLContact) {
   if (c.name) return c.name;
-  return [c.firstName, c.lastName].filter(Boolean).join(' ') || c.email || `Customer #${c.id}`;
+  return [c.firstName, c.lastName].filter(Boolean).join(' ') || c.email || 'Unknown';
 }
 
 export default function NewProposalPage() {
@@ -47,10 +47,11 @@ export default function NewProposalPage() {
   // Customer selection
   const [customerMode, setCustomerMode] = useState<'search' | 'new'>('search');
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<LPCustomer[]>([]);
+  const [searchResults, setSearchResults] = useState<GHLContact[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] = useState<LPCustomer | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<GHLContact | null>(null);
+  const [ghlConnected, setGhlConnected] = useState<boolean | null>(null);
   const searchRef = useRef<HTMLDivElement>(null);
 
   const [customerName, setCustomerName] = useState('');
@@ -74,20 +75,29 @@ export default function NewProposalPage() {
       .then((data) => setTemplates(Array.isArray(data) ? data : []))
       .catch(() => setTemplates([]))
       .finally(() => setLoadingTemplates(false));
+
+    fetch('/api/contacts?search=&limit=1')
+      .then((r) => {
+        setGhlConnected(r.ok);
+        if (!r.ok) setCustomerMode('new');
+      })
+      .catch(() => {
+        setGhlConnected(false);
+        setCustomerMode('new');
+      });
   }, []);
 
-  const searchCustomers = useCallback(async (q: string) => {
+  const searchContacts = useCallback(async (q: string) => {
     if (!q || q.length < 2) {
       setSearchResults([]);
       return;
     }
     setSearchLoading(true);
     try {
-      const res = await fetch(`/api/customers?search=${encodeURIComponent(q)}&limit=8`);
+      const res = await fetch(`/api/contacts?search=${encodeURIComponent(q)}&limit=10`);
       if (res.ok) {
         const data = await res.json();
-        const list = Array.isArray(data) ? data : data.data ?? [];
-        setSearchResults(list);
+        setSearchResults(Array.isArray(data) ? data : []);
       }
     } catch {
       setSearchResults([]);
@@ -98,9 +108,9 @@ export default function NewProposalPage() {
 
   useEffect(() => {
     if (customerMode !== 'search' || selectedCustomer) return;
-    const t = setTimeout(() => searchCustomers(searchQuery), 300);
+    const t = setTimeout(() => searchContacts(searchQuery), 300);
     return () => clearTimeout(t);
-  }, [searchQuery, customerMode, selectedCustomer, searchCustomers]);
+  }, [searchQuery, customerMode, selectedCustomer, searchContacts]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -112,7 +122,7 @@ export default function NewProposalPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  function selectCustomer(c: LPCustomer) {
+  function selectCustomer(c: GHLContact) {
     setSelectedCustomer(c);
     const name = displayName(c);
     setCustomerName(name);
@@ -169,7 +179,7 @@ export default function NewProposalPage() {
       customerName: customerName || undefined,
       customerEmail: customerEmail || undefined,
       customerPhone: customerPhone || undefined,
-      customerId: selectedCustomer?.id || undefined,
+      ghlContactId: selectedCustomer?.id || undefined,
       price,
       paymentType,
       paymentConfig: buildPaymentConfig(),
@@ -290,18 +300,20 @@ export default function NewProposalPage() {
               Customer <span className="text-red-400">*</span>
             </label>
             <div className="flex gap-1">
-              <button
-                type="button"
-                onClick={switchToSearch}
-                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                  customerMode === 'search'
-                    ? 'bg-teal-50 text-teal-700'
-                    : 'text-gray-500 hover:bg-gray-100'
-                }`}
-              >
-                <Search size={12} className="inline mr-1" />
-                Existing
-              </button>
+              {ghlConnected && (
+                <button
+                  type="button"
+                  onClick={switchToSearch}
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                    customerMode === 'search'
+                      ? 'bg-teal-50 text-teal-700'
+                      : 'text-gray-500 hover:bg-gray-100'
+                  }`}
+                >
+                  <Search size={12} className="inline mr-1" />
+                  Existing
+                </button>
+              )}
               <button
                 type="button"
                 onClick={switchToNew}
