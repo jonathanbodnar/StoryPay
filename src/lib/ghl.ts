@@ -96,7 +96,7 @@ export function getOAuthUrl(clientId: string, redirectUri: string, state: string
     response_type: 'code',
     redirect_uri: redirectUri,
     client_id: clientId,
-    scope: 'conversations.message.write conversations.message.readonly conversations.readonly contacts.write contacts.readonly locations.readonly',
+    scope: 'conversations/message.write conversations/message.readonly conversations.readonly conversations.write contacts.write contacts.readonly locations.readonly',
     state,
   });
   return `https://marketplace.leadconnectorhq.com/oauth/chooselocation?${params}`;
