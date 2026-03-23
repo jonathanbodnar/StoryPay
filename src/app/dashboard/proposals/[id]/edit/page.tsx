@@ -27,6 +27,16 @@ function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
+function toDateValue(d?: string) {
+  if (!d) return '';
+  return d.slice(0, 10);
+}
+
+function today() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 export default function EditProposalPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
@@ -76,14 +86,14 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
             (config.installments as { amount: number; date: string }[]).map((i) => ({
               id: uid(),
               amount: (i.amount / 100).toString(),
-              date: i.date,
+              date: toDateValue(i.date),
             }))
           );
         }
         if (data.payment_type === 'subscription') {
           setSubAmount(config.amount ? ((config.amount as number) / 100).toString() : '');
           setSubFrequency((config.frequency as 'monthly' | 'weekly') || 'monthly');
-          setSubStartDate((config.start_date as string) || '');
+          setSubStartDate(toDateValue((config.start_date as string) || ''));
         }
       } catch {
         setError('Proposal not found');
@@ -344,7 +354,8 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
                   </div>
                   <input
                     type="date"
-                    value={inst.date}
+                    min={today()}
+                    value={toDateValue(inst.date)}
                     onChange={(e) =>
                       setInstallments((prev) =>
                         prev.map((i) => (i.id === inst.id ? { ...i, date: e.target.value } : i))
@@ -408,7 +419,8 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
                 <label className="block text-xs font-medium text-gray-500 mb-1">Start Date</label>
                 <input
                   type="date"
-                  value={subStartDate}
+                  min={today()}
+                  value={toDateValue(subStartDate)}
                   onChange={(e) => setSubStartDate(e.target.value)}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition"
                 />

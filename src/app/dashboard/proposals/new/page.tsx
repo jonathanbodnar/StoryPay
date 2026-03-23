@@ -29,6 +29,16 @@ function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
+function toDateValue(d?: string) {
+  if (!d) return '';
+  return d.slice(0, 10);
+}
+
+function today() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function displayName(c: GHLContact) {
   if (c.name) return c.name;
   return [c.firstName, c.lastName].filter(Boolean).join(' ') || c.email || 'Unknown';
@@ -519,7 +529,8 @@ export default function NewProposalPage() {
                   </div>
                   <input
                     type="date"
-                    value={inst.date}
+                    min={today()}
+                    value={toDateValue(inst.date)}
                     onChange={(e) =>
                       setInstallments((prev) =>
                         prev.map((i) => (i.id === inst.id ? { ...i, date: e.target.value } : i))
@@ -583,7 +594,8 @@ export default function NewProposalPage() {
                 <label className="block text-xs font-medium text-gray-500 mb-1">Start Date</label>
                 <input
                   type="date"
-                  value={subStartDate}
+                  min={today()}
+                  value={toDateValue(subStartDate)}
                   onChange={(e) => setSubStartDate(e.target.value)}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition"
                 />
