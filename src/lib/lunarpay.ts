@@ -150,16 +150,26 @@ export function createCheckoutSession(
   data: {
     amount: number;
     description: string;
-    customer_email: string;
-    customer_name: string;
     success_url: string;
-    cancel_url: string;
+    cancel_url?: string;
+    customer_email?: string;
+    customer_name?: string;
     metadata?: Record<string, string>;
   }
 ) {
+  const body: Record<string, unknown> = {
+    amount: data.amount,
+    description: data.description,
+    success_url: data.success_url,
+  };
+  if (data.cancel_url) body.cancel_url = data.cancel_url;
+  if (data.customer_email) body.customer_email = data.customer_email;
+  if (data.customer_name) body.customer_name = data.customer_name;
+  if (data.metadata) body.metadata = data.metadata;
+
   return lpFetch('/api/v1/checkout/sessions', {
     method: 'POST',
-    body: data as unknown as Record<string, unknown>,
+    body,
     key: secretKey,
   });
 }

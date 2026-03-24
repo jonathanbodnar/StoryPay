@@ -37,20 +37,26 @@ export async function POST(
   try {
     const amountInDollars = proposal.price / 100;
 
-    const result = await createCheckoutSession(venue.lunarpay_secret_key, {
+    const checkoutData = {
       amount: amountInDollars,
-      description: `${venue.name} — Proposal Payment`,
+      description: `${venue.name} - Proposal Payment`,
       customer_email: proposal.customer_email,
       customer_name: proposal.customer_name,
       success_url: `${APP_URL}/proposal/${token}/success`,
       cancel_url: `${APP_URL}/proposal/${token}`,
-      metadata: {
-        proposal_id: proposal.id,
-        proposal_token: token,
-      },
-    });
+    };
 
+    console.log('Creating checkout session:', JSON.stringify(checkoutData));
+
+    const result = await createCheckoutSession(venue.lunarpay_secret_key, checkoutData);
     const session = result.data || result;
+
+    console.log('Checkout session created:', JSON.stringify(session));
+
+    if (!session.url) {
+      console.error('No URL in checkout session response:', JSON.stringify(result));
+      return NextResponse.json({ error: 'No payment URL returned' }, { status: 500 });
+    }
 
     return NextResponse.json({ url: session.url });
   } catch (err) {
