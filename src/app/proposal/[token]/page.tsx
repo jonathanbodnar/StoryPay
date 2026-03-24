@@ -196,7 +196,25 @@ export default function ProposalPage() {
       try {
         const res = await fetch(`/api/proposals/public/${token}`);
         if (!res.ok) throw new Error('Proposal not found');
-        setProposal(await res.json());
+        const data = await res.json();
+        setProposal(data);
+
+        const sigFields: SigningField[] = data.signature_fields?.length
+          ? data.signature_fields
+          : [
+              { field_type: 'signature', label: 'Client Signature', required: true, sort_order: 0 },
+              { field_type: 'name', label: 'Printed Name', required: true, sort_order: 1 },
+              { field_type: 'date', label: 'Date', required: true, sort_order: 2 },
+            ];
+        const dateDefaults: Record<string, string> = {};
+        for (const f of sigFields) {
+          if (f.field_type === 'date') {
+            dateDefaults[`${f.field_type}_${f.sort_order}`] = new Date().toISOString().split('T')[0];
+          }
+        }
+        if (Object.keys(dateDefaults).length) {
+          setFieldValues((prev) => ({ ...dateDefaults, ...prev }));
+        }
       } catch {
         setError('This proposal could not be found or has expired.');
       } finally {
