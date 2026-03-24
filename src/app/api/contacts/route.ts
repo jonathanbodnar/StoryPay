@@ -2,6 +2,17 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { ghlRequest } from '@/lib/ghl';
+import { listCustomers } from '@/lib/lunarpay';
+
+interface NormalizedContact {
+  id: string;
+  source: 'ghl' | 'lunarpay';
+  firstName: string;
+  lastName: string;
+  name: string;
+  email: string;
+  phone: string;
+}
 
 export async function GET(request: NextRequest) {
   const cookieStore = await cookies();
@@ -13,36 +24,80 @@ export async function GET(request: NextRequest) {
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('ghl_connected, ghl_access_token, ghl_location_id')
+    .select('ghl_connected, ghl_access_token, ghl_location_id, lunarpay_secret_key')
     .eq('id', venueId)
     .single();
 
-  if (!venue?.ghl_connected || !venue.ghl_access_token || !venue.ghl_location_id) {
-    return NextResponse.json({ error: 'Messaging not connected' }, { status: 400 });
+  if (!venue) {
+    return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
   }
 
   const search = request.nextUrl.searchParams.get('search') || '';
   const limit = request.nextUrl.searchParams.get('limit') || '15';
 
-  try {
-    const result = await ghlRequest(
-      `/contacts/?locationId=${venue.ghl_location_id}&query=${encodeURIComponent(search)}&limit=${limit}`,
-      venue.ghl_access_token,
-      { locationId: venue.ghl_location_id }
-    );
+  const results: NormalizedContact[] = [];
+  const seenEmails = new Set<string>();
 
-    const contacts = (result.contacts || []).map((c: Record<string, unknown>) => ({
-      id: c.id,
-      firstName: c.firstName || '',
-      lastName: c.lastName || '',
-      name: [c.firstName, c.lastName].filter(Boolean).join(' ') || c.email || 'Unknown',
-      email: c.email || '',
-      phone: c.phone || '',
-    }));
+  // Query GHL contacts
+  if (venue.ghl_connected && venue.ghl_access_token && venue.ghl_location_id) {
+    try {
+      const ghlResult = await ghlRequest(
+        `/contacts/?locationId=${venue.ghl_location_id}&query=${encodeURIComponent(search)}&limit=${limit}`,
+        venue.ghl_access_token,
+        { locationId: venue.ghl_location_id }
+      );
 
-    return NextResponse.json(contacts);
-  } catch (err) {
-    console.error('[contacts] GHL search error:', err);
-    return NextResponse.json({ error: 'Failed to search contacts' }, { status: 500 });
+      for (const c of ghlResult.contacts || []) {
+        const email = (c.email as string) || '';
+        const contact: NormalizedContact = {
+          id: c.id as string,
+          source: 'ghl',
+          firstName: (c.firstName as string) || '',
+          lastName: (c.lastName as string) || '',
+          name: [c.firstName, c.lastName].filter(Boolean).join(' ') || email || 'Unknown',
+          email,
+          phone: (c.phone as string) || '',
+        };
+        results.push(contact);
+        if (email) seenEmails.add(email.toLowerCase());
+      }
+    } catch (err) {
+      console.error('[contacts] GHL search error:', err);
+    }
   }
+
+  // Query LunarPay customers and merge (deduplicate by email)
+  if (venue.lunarpay_secret_key) {
+    try {
+      const lpResult = await listCustomers(venue.lunarpay_secret_key, search, 1, parseInt(limit));
+      const raw = lpResult.data || lpResult;
+      const list = Array.isArray(raw) ? raw : [];
+
+      for (const c of list) {
+        const email = (c.email as string) || '';
+        if (email && seenEmails.has(email.toLowerCase())) continue;
+
+        const firstName = (c.firstName as string) || '';
+        const lastName = (c.lastName as string) || '';
+        results.push({
+          id: `lp_${c.id}`,
+          source: 'lunarpay',
+          firstName,
+          lastName,
+          name: (c.name as string) || [firstName, lastName].filter(Boolean).join(' ') || email || 'Unknown',
+          email,
+          phone: (c.phone as string) || '',
+        });
+        if (email) seenEmails.add(email.toLowerCase());
+      }
+    } catch (err) {
+      console.error('[contacts] LunarPay search error:', err);
+    }
+  }
+
+  if (results.length === 0 && !venue.ghl_connected && !venue.lunarpay_secret_key) {
+    return NextResponse.json({ error: 'No customer sources configured' }, { status: 400 });
+  }
+
+  return NextResponse.json(results);
 }

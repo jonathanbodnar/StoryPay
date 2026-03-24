@@ -44,6 +44,15 @@ function displayName(c: GHLContact) {
   return [c.firstName, c.lastName].filter(Boolean).join(' ') || c.email || 'Unknown';
 }
 
+function formatPhoneNumber(value: string): string {
+  const digits = value.replace(/\D/g, '');
+  if (digits.length === 0) return '';
+  if (digits.length <= 3) return `(${digits}`;
+  if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+  if (digits.length <= 10) return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  return `+${digits.slice(0, digits.length - 10)} (${digits.slice(-10, -7)}) ${digits.slice(-7, -4)}-${digits.slice(-4)}`;
+}
+
 export default function NewProposalPage() {
   const router = useRouter();
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -87,9 +96,18 @@ export default function NewProposalPage() {
       .finally(() => setLoadingTemplates(false));
 
     fetch('/api/contacts?search=&limit=1')
-      .then((r) => {
-        setGhlConnected(r.ok);
-        if (!r.ok) setCustomerMode('new');
+      .then(async (r) => {
+        if (r.ok) {
+          setGhlConnected(true);
+        } else {
+          const body = await r.json().catch(() => ({}));
+          if (body.error === 'No customer sources configured') {
+            setGhlConnected(false);
+            setCustomerMode('new');
+          } else {
+            setGhlConnected(true);
+          }
+        }
       })
       .catch(() => {
         setGhlConnected(false);
@@ -449,8 +467,8 @@ export default function NewProposalPage() {
                 <input
                   type="tel"
                   value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
-                  placeholder="+1 (555) 000-0000"
+                  onChange={(e) => setCustomerPhone(formatPhoneNumber(e.target.value))}
+                  placeholder="(555) 000-0000"
                   className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
                 />
               </div>
