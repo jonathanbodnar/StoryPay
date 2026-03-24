@@ -379,7 +379,7 @@ export default function ProposalPage() {
           <div className="mx-8 mb-8 rounded-xl bg-gradient-to-r from-gray-50 to-gray-50/50 border border-gray-100 p-6">
             <div className="flex items-end justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">Total Investment</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">Total Due</p>
                 <p className="text-4xl font-bold text-gray-900 tracking-tight">{formatCents(proposal.price)}</p>
               </div>
               <div className="text-right">
