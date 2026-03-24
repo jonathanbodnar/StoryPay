@@ -6,6 +6,7 @@ interface Venue {
   id: string;
   name: string;
   email: string | null;
+  ghl_location_id: string | null;
   onboarding_status: string;
   setup_completed: boolean;
   created_at: string;
@@ -23,12 +24,14 @@ export default function AdminPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [creating, setCreating] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copiedGhl, setCopiedGhl] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     firstName: '',
     lastName: '',
     phone: '',
+    ghlLocationId: '',
   });
 
   const [serverError, setServerError] = useState('');
@@ -90,7 +93,7 @@ export default function AdminPage() {
         body: JSON.stringify(formData),
       });
       if (res.ok) {
-        setFormData({ name: '', email: '', firstName: '', lastName: '', phone: '' });
+        setFormData({ name: '', email: '', firstName: '', lastName: '', phone: '', ghlLocationId: '' });
         setShowCreateForm(false);
         fetchVenues();
       } else {
@@ -235,6 +238,19 @@ export default function AdminPage() {
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-navy-600 focus:border-navy-600 outline-none"
               />
             </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">GHL Location ID</label>
+              <input
+                type="text"
+                value={formData.ghlLocationId}
+                onChange={(e) => setFormData({ ...formData, ghlLocationId: e.target.value })}
+                placeholder="e.g. abc123XYZ..."
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-navy-600 focus:border-navy-600 outline-none"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Optional. Enables auto-login from GHL dashboard via the universal link.
+              </p>
+            </div>
           </div>
           <div className="mt-4 flex justify-end">
             <button
@@ -248,6 +264,26 @@ export default function AdminPage() {
         </form>
       )}
 
+      <div className="mb-4 flex items-center justify-between rounded-lg border border-teal-200 bg-teal-50 px-4 py-3">
+        <div>
+          <p className="text-sm font-medium text-teal-800">Universal GHL Login Link</p>
+          <p className="text-xs text-teal-600 mt-0.5">
+            Add this single link to GHL for all venues. It auto-detects the venue from the referring location.
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            const appUrl = venues[0]?.login_url?.split('/login/')[0] || 'https://www.storypay.io';
+            navigator.clipboard.writeText(`${appUrl}/login/ghl`);
+            setCopiedGhl(true);
+            setTimeout(() => setCopiedGhl(false), 2000);
+          }}
+          className="shrink-0 ml-4 text-xs font-medium px-3 py-1.5 rounded-md bg-teal-600 text-white hover:bg-teal-700 transition-colors"
+        >
+          {copiedGhl ? 'Copied!' : 'Copy Link'}
+        </button>
+      </div>
+
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -255,6 +291,7 @@ export default function AdminPage() {
               <tr className="border-b border-gray-200 bg-gray-50">
                 <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-3">Name</th>
                 <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-3">Email</th>
+                <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-3">GHL Location</th>
                 <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-3">Status</th>
                 <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-3">Setup</th>
                 <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-3">Created</th>
@@ -264,7 +301,7 @@ export default function AdminPage() {
             <tbody className="divide-y divide-gray-100">
               {venues.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center text-gray-400 py-12 text-sm">
+                  <td colSpan={7} className="text-center text-gray-400 py-12 text-sm">
                     No venues yet. Create one to get started.
                   </td>
                 </tr>
@@ -273,6 +310,11 @@ export default function AdminPage() {
                   <tr key={venue.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">{venue.name}</td>
                     <td className="px-4 py-3 text-sm text-gray-600">{venue.email || '—'}</td>
+                    <td className="px-4 py-3 text-xs text-gray-500 font-mono">
+                      {venue.ghl_location_id
+                        ? `${venue.ghl_location_id.slice(0, 12)}…`
+                        : <span className="text-gray-300">—</span>}
+                    </td>
                     <td className="px-4 py-3">{statusBadge(venue.onboarding_status)}</td>
                     <td className="px-4 py-3">
                       {venue.setup_completed ? (

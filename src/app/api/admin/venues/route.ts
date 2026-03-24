@@ -54,7 +54,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { name, email, firstName, lastName, phone } = body;
+    const { name, email, firstName, lastName, phone, ghlLocationId } = body;
 
     if (!name || !email || !firstName || !lastName) {
       return NextResponse.json(
@@ -95,6 +95,7 @@ export async function POST(request: Request) {
         name,
         email,
         phone: phone || null,
+        ghl_location_id: ghlLocationId || null,
         onboarding_status: 'pending',
         ...merchantData,
       })
