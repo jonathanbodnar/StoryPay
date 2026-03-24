@@ -10,6 +10,35 @@ function getBaseUrl(request: NextRequest): string {
   return host ? `${proto}://${host}` : 'https://storypay.io';
 }
 
+async function provisionVenue(locationId: string) {
+  const { data: venue, error: venueError } = await supabaseAdmin
+    .from('venues')
+    .insert({
+      name: 'New Venue',
+      ghl_location_id: locationId,
+      onboarding_status: 'pending',
+      setup_completed: false,
+    })
+    .select()
+    .single();
+
+  if (venueError || !venue) {
+    throw new Error(`Failed to create venue: ${venueError?.message}`);
+  }
+
+  const { data: tokenData, error: tokenError } = await supabaseAdmin
+    .from('venue_tokens')
+    .insert({ venue_id: venue.id })
+    .select()
+    .single();
+
+  if (tokenError || !tokenData) {
+    throw new Error(`Failed to create login token: ${tokenError?.message}`);
+  }
+
+  return venue;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ locationId: string }> }
@@ -18,30 +47,13 @@ export async function GET(
   const base = getBaseUrl(request);
 
   try {
-    const { data: venue, error: venueError } = await supabaseAdmin
+    const { data: existing } = await supabaseAdmin
       .from('venues')
       .select('id, setup_completed, onboarding_status')
       .eq('ghl_location_id', locationId)
       .single();
 
-    if (venueError || !venue) {
-      return NextResponse.redirect(
-        `${base}/login/error?msg=${encodeURIComponent('No venue is linked to this location. Please contact your administrator.')}`
-      );
-    }
-
-    const { data: venueToken } = await supabaseAdmin
-      .from('venue_tokens')
-      .select('token')
-      .eq('venue_id', venue.id)
-      .limit(1)
-      .single();
-
-    if (!venueToken) {
-      return NextResponse.redirect(
-        `${base}/login/error?msg=${encodeURIComponent('Login token not found for this venue. Please contact your administrator.')}`
-      );
-    }
+    const venue = existing ?? await provisionVenue(locationId);
 
     const destination = venue.setup_completed
       ? '/dashboard'
