@@ -498,12 +498,30 @@ export default function ProposalPage() {
                 </p>
               </div>
 
-              <div className="rounded-xl bg-gray-50 border border-gray-100 p-6 mb-6">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm text-gray-500">Amount due</span>
-                  <span className="text-2xl font-bold text-gray-900">{formatCents(proposal.price)}</span>
+              {proposal.payment_type === 'installment' && installments && installments.length > 1 ? (
+                <div className="rounded-xl bg-gray-50 border border-gray-100 p-6 mb-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm text-gray-500">Due today (Payment 1 of {installments.length})</span>
+                    <span className="text-2xl font-bold text-gray-900">{formatCents(installments[0].amount)}</span>
+                  </div>
+                  <div className="border-t border-gray-200 pt-3 space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">Remaining payments</p>
+                    {installments.slice(1).map((p, i) => (
+                      <div key={i} className="flex items-center justify-between text-sm">
+                        <span className="text-gray-500">{formatDate(p.date)}</span>
+                        <span className="font-medium text-gray-700">{formatCents(p.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="rounded-xl bg-gray-50 border border-gray-100 p-6 mb-6">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm text-gray-500">Amount due</span>
+                    <span className="text-2xl font-bold text-gray-900">{formatCents(proposal.price)}</span>
+                  </div>
+                </div>
+              )}
 
               <PaymentButton token={token} />
             </div>

@@ -4,6 +4,21 @@ import { createCheckoutSession } from '@/lib/lunarpay';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.storypay.io';
 
+interface Installment {
+  amount: number;
+  date: string;
+}
+
+interface InstallmentConfig {
+  installments: Installment[];
+}
+
+interface SubscriptionConfig {
+  amount: number;
+  frequency: string;
+  start_date: string;
+}
+
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ token: string }> }
@@ -12,7 +27,7 @@ export async function POST(
 
   const { data: proposal, error } = await supabaseAdmin
     .from('proposals')
-    .select('id, venue_id, status, price, customer_name, customer_email, payment_type')
+    .select('id, venue_id, status, price, customer_name, customer_email, payment_type, payment_config')
     .eq('public_token', token)
     .single();
 
@@ -35,11 +50,29 @@ export async function POST(
   }
 
   try {
-    const amountInDollars = proposal.price / 100;
+    let chargeAmountCents = proposal.price;
+    let description = `${venue.name} - Proposal Payment`;
+
+    if (proposal.payment_type === 'installment' && proposal.payment_config) {
+      const config = proposal.payment_config as InstallmentConfig;
+      const installments = config.installments || [];
+      if (installments.length > 0) {
+        chargeAmountCents = installments[0].amount;
+        description = `${venue.name} - Payment 1 of ${installments.length}`;
+      }
+    } else if (proposal.payment_type === 'subscription' && proposal.payment_config) {
+      const config = proposal.payment_config as SubscriptionConfig;
+      if (config.amount) {
+        chargeAmountCents = config.amount;
+        description = `${venue.name} - First ${config.frequency} payment`;
+      }
+    }
+
+    const amountInDollars = chargeAmountCents / 100;
 
     const checkoutData = {
       amount: amountInDollars,
-      description: `${venue.name} - Proposal Payment`,
+      description,
       customer_email: proposal.customer_email,
       customer_name: proposal.customer_name,
       success_url: `${APP_URL}/proposal/${token}/success`,
