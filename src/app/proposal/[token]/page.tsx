@@ -27,14 +27,16 @@ interface ProposalData {
   proposal_id: string;
 }
 
+interface CommerceInstance {
+  mount(el: HTMLElement): void;
+  on(event: string, cb: (data: Record<string, unknown>) => void): void;
+  destroy?(): void;
+}
+
 declare global {
   interface Window {
     Commerce?: {
-      new (clientToken: string, options: Record<string, unknown>): {
-        mount(el: HTMLElement): void;
-        on(event: string, cb: (data: Record<string, unknown>) => void): void;
-        destroy?(): void;
-      };
+      elements(clientToken: string, options?: Record<string, unknown>): CommerceInstance;
     };
   }
 }
@@ -132,8 +134,9 @@ function PaymentForm({ token, onSuccess }: { token: string; onSuccess: (invoiceU
         const script = document.createElement('script');
         script.src = 'https://js.fortis.tech/commercejs-v1.0.0.min.js';
         script.onload = () => {
-          if (destroyed || !window.Commerce || !containerRef.current) return;
-          const commerce = new window.Commerce(clientToken, {
+          if (destroyed || !window.Commerce?.elements || !containerRef.current) return;
+
+          const commerce = window.Commerce.elements(clientToken, {
             environment,
             container: '#fortis-payment-element',
             showSubmitButton: false,

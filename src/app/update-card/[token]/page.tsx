@@ -11,14 +11,16 @@ interface CardUpdateData {
   venue_logo_url: string | null;
 }
 
+interface CommerceInstance {
+  mount(el: HTMLElement): void;
+  on(event: string, cb: (data: Record<string, unknown>) => void): void;
+  destroy?(): void;
+}
+
 declare global {
   interface Window {
     Commerce?: {
-      new (clientToken: string, options: Record<string, unknown>): {
-        mount(el: HTMLElement): void;
-        on(event: string, cb: (data: Record<string, unknown>) => void): void;
-        destroy?(): void;
-      };
+      elements(clientToken: string, options?: Record<string, unknown>): CommerceInstance;
     };
   }
 }
@@ -95,8 +97,9 @@ export default function UpdateCardPage() {
       const script = document.createElement('script');
       script.src = 'https://js.fortis.tech/commercejs-v1.0.0.min.js';
       script.onload = () => {
-        if (isDestroyed || !window.Commerce || !containerRef.current) return;
-        const commerce = new window.Commerce(clientToken, {
+        if (isDestroyed || !window.Commerce?.elements || !containerRef.current) return;
+
+        const commerce = window.Commerce.elements(clientToken, {
           environment,
           container: '#card-update-element',
           showSubmitButton: false,

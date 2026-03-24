@@ -10,7 +10,7 @@ export async function POST(
 
   const { data: proposal, error } = await supabaseAdmin
     .from('proposals')
-    .select('id, venue_id, status')
+    .select('id, venue_id, status, price')
     .eq('public_token', token)
     .single();
 
@@ -33,7 +33,7 @@ export async function POST(
   }
 
   try {
-    const intentionResult = await createIntention(venue.lunarpay_publishable_key);
+    const intentionResult = await createIntention(venue.lunarpay_publishable_key, proposal.price || undefined);
     const intention = intentionResult.data || intentionResult;
 
     return NextResponse.json({
