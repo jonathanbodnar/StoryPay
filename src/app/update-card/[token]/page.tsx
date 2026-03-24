@@ -20,7 +20,7 @@ interface CommerceInstance {
 declare global {
   interface Window {
     Commerce?: {
-      elements(clientToken: string, options?: Record<string, unknown>): CommerceInstance;
+      elements: new (clientToken: string, options?: Record<string, unknown>) => CommerceInstance;
     };
   }
 }
@@ -99,7 +99,7 @@ export default function UpdateCardPage() {
       script.onload = () => {
         if (isDestroyed || !window.Commerce?.elements || !containerRef.current) return;
 
-        const commerce = window.Commerce.elements(clientToken, {
+        const commerce = new window.Commerce.elements(clientToken, {
           environment,
           container: '#card-update-element',
           showSubmitButton: false,
