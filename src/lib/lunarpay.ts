@@ -143,6 +143,31 @@ export function refundCharge(secretKey: string, chargeId: number) {
   return lpFetch(`/api/v1/charges/${chargeId}/refund`, { method: 'POST', key: secretKey });
 }
 
+// ── Checkout Sessions ────────────────────────────────────────────────
+
+export function createCheckoutSession(
+  secretKey: string,
+  data: {
+    amount: number;
+    description: string;
+    customer_email: string;
+    customer_name: string;
+    success_url: string;
+    cancel_url: string;
+    metadata?: Record<string, string>;
+  }
+) {
+  return lpFetch('/api/v1/checkout/sessions', {
+    method: 'POST',
+    body: data as unknown as Record<string, unknown>,
+    key: secretKey,
+  });
+}
+
+export function getCheckoutSession(secretKey: string, sessionId: string) {
+  return lpFetch(`/api/v1/checkout/sessions/${sessionId}`, { key: secretKey });
+}
+
 // ── Agency webhook management ───────────────────────────────────────
 
 export function getAgencyWebhook() {

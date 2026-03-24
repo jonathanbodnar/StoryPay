@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { formatCents, formatDate } from '@/lib/utils';
 
@@ -25,20 +25,6 @@ interface ProposalData {
   venue_name: string;
   venue_logo_url: string | null;
   proposal_id: string;
-}
-
-interface CommerceInstance {
-  mount(el: HTMLElement): void;
-  on(event: string, cb: (data: Record<string, unknown>) => void): void;
-  destroy?(): void;
-}
-
-declare global {
-  interface Window {
-    Commerce?: {
-      elements: new (clientToken: string, options?: Record<string, unknown>) => CommerceInstance;
-    };
-  }
 }
 
 function SignatureCanvas({ onSignatureChange }: { onSignatureChange: (dataUrl: string | null) => void }) {
@@ -115,94 +101,52 @@ function SignatureCanvas({ onSignatureChange }: { onSignatureChange: (dataUrl: s
   );
 }
 
-function PaymentForm({ token, onSuccess }: { token: string; onSuccess: (invoiceUrl: string) => void }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [loading, setLoading] = useState(true);
+function PaymentButton({ token }: { token: string }) {
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [processing, setProcessing] = useState(false);
 
-  useEffect(() => {
-    let destroyed = false;
-
-    async function init() {
-      try {
-        const res = await fetch(`/api/proposals/public/${token}/payment-intent`, { method: 'POST' });
-        if (!res.ok) throw new Error('Failed to create payment intent');
-        const { clientToken, environment } = await res.json();
-        if (destroyed) return;
-
-        const script = document.createElement('script');
-        script.src = 'https://js.fortis.tech/commercejs-v1.0.0.min.js';
-        script.onload = () => {
-          if (destroyed || !window.Commerce?.elements || !containerRef.current) return;
-
-          const commerce = new window.Commerce.elements(clientToken, {
-            environment,
-            container: '#fortis-payment-element',
-            showSubmitButton: false,
-          });
-
-          commerce.on('ready', () => { if (!destroyed) setLoading(false); });
-
-          commerce.on('token', async (data: Record<string, unknown>) => {
-            if (destroyed) return;
-            setProcessing(true);
-            try {
-              const payRes = await fetch(`/api/proposals/public/${token}/pay`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ticketId: data.id || data.ticketId, nameHolder: data.nameHolder || '' }),
-              });
-              const result = await payRes.json();
-              if (!payRes.ok) throw new Error(result.error || 'Payment failed');
-              onSuccess(result.invoiceUrl);
-            } catch (err) {
-              setError(err instanceof Error ? err.message : 'Payment failed');
-              setProcessing(false);
-            }
-          });
-
-          commerce.on('error', (data: Record<string, unknown>) => {
-            if (!destroyed) setError((data.message as string) || 'Payment error');
-          });
-
-          commerce.mount(containerRef.current!);
-        };
-        document.body.appendChild(script);
-      } catch (err) {
-        if (!destroyed) {
-          setError(err instanceof Error ? err.message : 'Failed to load payment form');
-          setLoading(false);
-        }
-      }
+  const handlePay = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/proposals/public/${token}/checkout`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to start payment');
+      window.location.href = data.url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start payment');
+      setLoading(false);
     }
-
-    init();
-    return () => { destroyed = true; };
-  }, [token, onSuccess]);
+  };
 
   return (
     <div>
-      {loading && (
-        <div className="flex items-center justify-center py-12 text-gray-400">
-          <svg className="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-          </svg>
-          Loading secure payment form…
-        </div>
-      )}
       {error && <div className="mb-4 rounded-xl bg-red-50 border border-red-100 p-4 text-sm text-red-700">{error}</div>}
-      <div id="fortis-payment-element" ref={containerRef} />
-      {processing && (
-        <div className="mt-6 flex items-center justify-center gap-3 text-teal-600 font-medium">
-          <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-          </svg>
-          Processing your payment…
-        </div>
-      )}
+      <button
+        onClick={handlePay}
+        disabled={loading}
+        className="w-full rounded-xl bg-gradient-to-r from-teal-600 to-teal-500 px-6 py-4 text-sm font-semibold text-white shadow-lg shadow-teal-500/25 hover:from-teal-700 hover:to-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 disabled:opacity-50 transition-all flex items-center justify-center gap-3"
+      >
+        {loading ? (
+          <>
+            <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+            </svg>
+            Redirecting to payment…
+          </>
+        ) : (
+          <>
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+            </svg>
+            Pay Now
+          </>
+        )}
+      </button>
+      <p className="mt-3 text-center text-xs text-gray-400">
+        You&apos;ll be redirected to a secure payment page
+      </p>
     </div>
   );
 }
@@ -246,7 +190,6 @@ export default function ProposalPage() {
   const [error, setError] = useState<string | null>(null);
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [signing, setSigning] = useState(false);
-  const [invoiceUrl, setInvoiceUrl] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -294,11 +237,6 @@ export default function ProposalPage() {
       setSigning(false);
     }
   };
-
-  const handlePaymentSuccess = useCallback((url: string) => {
-    setInvoiceUrl(url);
-    setProposal((prev) => prev ? { ...prev, status: 'paid', paid_at: new Date().toISOString() } : prev);
-  }, []);
 
   if (loading) {
     return (
@@ -549,12 +487,12 @@ export default function ProposalPage() {
                 </div>
               </div>
 
-              <PaymentForm token={token} onSuccess={handlePaymentSuccess} />
+              <PaymentButton token={token} />
             </div>
           )}
 
           {/* Paid success */}
-          {(isPaid || invoiceUrl) && (
+          {isPaid && (
             <div className="border-t border-gray-100 px-8 py-12 text-center">
               <div className="w-20 h-20 bg-emerald-50 rounded-3xl flex items-center justify-center mx-auto mb-6">
                 <svg className="w-10 h-10 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -566,7 +504,7 @@ export default function ProposalPage() {
                 Thank you, {proposal.customer_name}. Your payment has been processed successfully.
               </p>
               <button
-                onClick={() => router.push(invoiceUrl || `/invoice/${proposal.proposal_id}`)}
+                onClick={() => router.push(`/invoice/${proposal.proposal_id}`)}
                 className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-teal-600 to-teal-500 px-8 py-3.5 text-sm font-semibold text-white shadow-lg shadow-teal-500/25 hover:from-teal-700 hover:to-teal-600 transition-all"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
