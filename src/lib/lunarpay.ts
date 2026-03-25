@@ -7,7 +7,7 @@ interface LPRequestOptions {
   key: string;
 }
 
-async function lpFetch(path: string, { method = 'GET', body, key }: LPRequestOptions) {
+export async function lpFetch(path: string, { method = 'GET', body, key }: LPRequestOptions) {
   const res = await fetch(`${LP_BASE_URL}${path}`, {
     method,
     headers: {

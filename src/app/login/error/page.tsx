@@ -15,7 +15,7 @@ function ErrorContent() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
-        <h1 className="font-heading text-2xl text-navy-900 mb-3">Something Went Wrong</h1>
+        <h1 className="font-heading text-2xl text-brand-900 mb-3">Something Went Wrong</h1>
         <p className="text-gray-500 text-sm">{msg}</p>
       </div>
     </div>

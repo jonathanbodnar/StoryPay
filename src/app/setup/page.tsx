@@ -166,8 +166,8 @@ export default function SetupPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="animate-pulse flex flex-col items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-navy-800/10" />
-          <div className="h-4 w-32 rounded bg-navy-800/10" />
+          <div className="w-12 h-12 rounded-full bg-brand-800/10" />
+          <div className="h-4 w-32 rounded bg-brand-800/10" />
         </div>
       </div>
     );
@@ -177,7 +177,7 @@ export default function SetupPage() {
     <div className="min-h-screen bg-gray-50 py-12 px-4">
       <div className="max-w-2xl mx-auto">
         <div className="text-center mb-10">
-          <h1 className="font-heading text-3xl text-navy-900 mb-2">Set Up {venue?.name || 'Your Venue'}</h1>
+          <h1 className="font-heading text-3xl text-brand-900 mb-2">Set Up {venue?.name || 'Your Venue'}</h1>
           <p className="text-gray-500">Complete these steps to start accepting payments</p>
         </div>
 
@@ -195,7 +195,7 @@ export default function SetupPage() {
                   <div className="mt-6 flex justify-end">
                     <button
                       onClick={() => setStep(2)}
-                      className="bg-navy-800 hover:bg-navy-900 text-white font-medium py-2.5 px-8 rounded-xl transition-colors"
+                      className="bg-brand-800 hover:bg-brand-900 text-white font-medium py-2.5 px-8 rounded-xl transition-colors"
                     >
                       Continue
                     </button>
@@ -225,7 +225,7 @@ export default function SetupPage() {
                   <button
                     onClick={checkOnboarding}
                     disabled={polling}
-                    className="w-full border-2 border-navy-800 text-navy-800 hover:bg-navy-800/5 font-medium py-3 px-6 rounded-xl transition-colors disabled:opacity-50"
+                    className="w-full border-2 border-brand-800 text-brand-800 hover:bg-brand-800/5 font-medium py-3 px-6 rounded-xl transition-colors disabled:opacity-50"
                   >
                     {polling ? 'Checking…' : 'Check Status'}
                   </button>
@@ -240,7 +240,7 @@ export default function SetupPage() {
                       href={onboarding.mpaEmbedUrl || onboarding.mpaLink}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="block w-full text-center bg-navy-800 hover:bg-navy-900 text-white font-medium py-3 px-6 rounded-xl transition-colors"
+                      className="block w-full text-center bg-brand-800 hover:bg-brand-900 text-white font-medium py-3 px-6 rounded-xl transition-colors"
                     >
                       Complete Merchant Processing Agreement
                     </a>
@@ -248,7 +248,7 @@ export default function SetupPage() {
                   <button
                     onClick={checkOnboarding}
                     disabled={polling}
-                    className="w-full border-2 border-navy-800 text-navy-800 hover:bg-navy-800/5 font-medium py-3 px-6 rounded-xl transition-colors disabled:opacity-50"
+                    className="w-full border-2 border-brand-800 text-brand-800 hover:bg-brand-800/5 font-medium py-3 px-6 rounded-xl transition-colors disabled:opacity-50"
                   >
                     {polling ? 'Checking…' : 'Check Status'}
                   </button>
@@ -260,7 +260,7 @@ export default function SetupPage() {
                   </p>
 
                   <fieldset className="space-y-4">
-                    <legend className="text-sm font-semibold text-navy-900 uppercase tracking-wider">Owner Information</legend>
+                    <legend className="text-sm font-semibold text-brand-900 uppercase tracking-wider">Owner Information</legend>
                     <div className="grid grid-cols-2 gap-4">
                       <FormInput label="First Name" value={bizForm.firstName} onChange={(v) => setBizForm({ ...bizForm, firstName: v })} required />
                       <FormInput label="Last Name" value={bizForm.lastName} onChange={(v) => setBizForm({ ...bizForm, lastName: v })} required />
@@ -272,7 +272,7 @@ export default function SetupPage() {
                   </fieldset>
 
                   <fieldset className="space-y-4">
-                    <legend className="text-sm font-semibold text-navy-900 uppercase tracking-wider">Business Details</legend>
+                    <legend className="text-sm font-semibold text-brand-900 uppercase tracking-wider">Business Details</legend>
                     <div className="grid grid-cols-2 gap-4">
                       <FormInput label="DBA Name" value={bizForm.dbaName} onChange={(v) => setBizForm({ ...bizForm, dbaName: v })} required />
                       <FormInput label="Legal Name" value={bizForm.legalName} onChange={(v) => setBizForm({ ...bizForm, legalName: v })} required />
@@ -286,7 +286,7 @@ export default function SetupPage() {
                       <select
                         value={bizForm.ownershipType}
                         onChange={(e) => setBizForm({ ...bizForm, ownershipType: e.target.value })}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-navy-600 focus:border-navy-600 outline-none bg-white"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-900 focus:border-brand-900 outline-none bg-white"
                       >
                         <option value="sole_proprietorship">Sole Proprietorship</option>
                         <option value="llc">LLC</option>
@@ -298,7 +298,7 @@ export default function SetupPage() {
                   </fieldset>
 
                   <fieldset className="space-y-4">
-                    <legend className="text-sm font-semibold text-navy-900 uppercase tracking-wider">Business Address</legend>
+                    <legend className="text-sm font-semibold text-brand-900 uppercase tracking-wider">Business Address</legend>
                     <FormInput label="Street Address" value={bizForm.addressLine1} onChange={(v) => setBizForm({ ...bizForm, addressLine1: v })} required />
                     <div className="grid grid-cols-3 gap-4">
                       <FormInput label="City" value={bizForm.city} onChange={(v) => setBizForm({ ...bizForm, city: v })} required />
@@ -308,7 +308,7 @@ export default function SetupPage() {
                   </fieldset>
 
                   <fieldset className="space-y-4">
-                    <legend className="text-sm font-semibold text-navy-900 uppercase tracking-wider">Bank Account</legend>
+                    <legend className="text-sm font-semibold text-brand-900 uppercase tracking-wider">Bank Account</legend>
                     <FormInput label="Account Holder Name" value={bizForm.accountHolderName} onChange={(v) => setBizForm({ ...bizForm, accountHolderName: v })} required />
                     <div className="grid grid-cols-2 gap-4">
                       <FormInput label="Routing Number" value={bizForm.routingNumber} onChange={(v) => setBizForm({ ...bizForm, routingNumber: v })} required />
@@ -323,7 +323,7 @@ export default function SetupPage() {
                   <button
                     type="submit"
                     disabled={submittingOnboarding}
-                    className="w-full bg-navy-800 hover:bg-navy-900 text-white font-medium py-3 px-6 rounded-xl transition-colors disabled:opacity-50"
+                    className="w-full bg-brand-800 hover:bg-brand-900 text-white font-medium py-3 px-6 rounded-xl transition-colors disabled:opacity-50"
                   >
                     {submittingOnboarding ? 'Submitting…' : 'Submit Application'}
                   </button>
@@ -347,7 +347,7 @@ export default function SetupPage() {
                 <>
                   <a
                     href="/api/messaging/connect"
-                    className="block w-full text-center bg-navy-800 hover:bg-navy-900 text-white font-medium py-3 px-6 rounded-xl transition-colors"
+                    className="block w-full text-center bg-brand-800 hover:bg-brand-900 text-white font-medium py-3 px-6 rounded-xl transition-colors"
                   >
                     Connect Messaging
                   </a>
@@ -360,7 +360,7 @@ export default function SetupPage() {
               <div className="mt-6 flex justify-between">
                 <button
                   onClick={() => setStep(1)}
-                  className="text-navy-800 hover:text-navy-900 font-medium py-2.5 px-6 transition-colors"
+                  className="text-brand-800 hover:text-brand-900 font-medium py-2.5 px-6 transition-colors"
                 >
                   Back
                 </button>
@@ -378,7 +378,7 @@ export default function SetupPage() {
                     disabled={!ghlReady}
                     className={`font-medium py-2.5 px-8 rounded-xl transition-colors ${
                       ghlReady
-                        ? 'bg-navy-800 hover:bg-navy-900 text-white'
+                        ? 'bg-brand-800 hover:bg-brand-900 text-white'
                         : 'hidden'
                     }`}
                   >
@@ -407,7 +407,7 @@ export default function SetupPage() {
               <button
                 onClick={handleCompleteSetup}
                 disabled={!paymentReady || completing}
-                className="w-full bg-teal-500 hover:bg-teal-600 text-white font-semibold py-3.5 px-6 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-lg"
+                className="w-full bg-brand-900 hover:bg-brand-700 text-white font-semibold py-3.5 px-6 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-lg"
               >
                 {completing ? 'Completing Setup…' : 'Launch Dashboard'}
               </button>
@@ -415,7 +415,7 @@ export default function SetupPage() {
               <div className="mt-4 flex justify-start">
                 <button
                   onClick={() => setStep(2)}
-                  className="text-navy-800 hover:text-navy-900 font-medium py-2.5 px-6 transition-colors"
+                  className="text-brand-800 hover:text-brand-900 font-medium py-2.5 px-6 transition-colors"
                 >
                   Back
                 </button>
@@ -454,7 +454,7 @@ function FormInput({
         onChange={(e) => onChange(e.target.value)}
         required={required}
         placeholder={placeholder}
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-navy-600 focus:border-navy-600 outline-none"
+        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-900 focus:border-brand-900 outline-none"
       />
     </div>
   );
@@ -475,11 +475,11 @@ function StepIndicator({ currentStep, paymentReady, ghlReady }: { currentStep: n
             <div
               className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold transition-colors ${
                 s.done
-                  ? 'bg-teal-500 text-white'
+                  ? 'bg-brand-900 text-white'
                   : currentStep === s.number
-                    ? 'bg-navy-800 text-white'
+                    ? 'bg-brand-800 text-white'
                     : currentStep > s.number
-                      ? 'bg-teal-500 text-white'
+                      ? 'bg-brand-900 text-white'
                       : 'bg-gray-200 text-gray-500'
               }`}
             >
@@ -494,7 +494,7 @@ function StepIndicator({ currentStep, paymentReady, ghlReady }: { currentStep: n
             <span className="text-xs mt-1.5 text-gray-500 font-medium">{s.label}</span>
           </div>
           {i < steps.length - 1 && (
-            <div className={`w-20 h-0.5 mx-2 mb-5 transition-colors ${s.done || currentStep > s.number ? 'bg-teal-500' : 'bg-gray-200'}`} />
+            <div className={`w-20 h-0.5 mx-2 mb-5 transition-colors ${s.done || currentStep > s.number ? 'bg-brand-900' : 'bg-gray-200'}`} />
           )}
         </div>
       ))}
@@ -504,10 +504,10 @@ function StepIndicator({ currentStep, paymentReady, ghlReady }: { currentStep: n
 
 function StepCard({ number, title, active, children }: { number: number; title: string; active?: boolean; children: React.ReactNode }) {
   return (
-    <div className={`bg-white rounded-2xl shadow-sm border p-8 transition-all ${active ? 'border-navy-800/20 shadow-lg' : 'border-gray-100'}`}>
+    <div className={`bg-white rounded-2xl shadow-sm border p-8 transition-all ${active ? 'border-brand-800/20 shadow-lg' : 'border-gray-100'}`}>
       <div className="flex items-center gap-3 mb-6">
-        <span className="text-sm font-semibold text-navy-800 bg-navy-800/5 rounded-full w-8 h-8 flex items-center justify-center">{number}</span>
-        <h2 className="font-heading text-xl text-navy-900">{title}</h2>
+        <span className="text-sm font-semibold text-brand-800 bg-brand-800/5 rounded-full w-8 h-8 flex items-center justify-center">{number}</span>
+        <h2 className="font-heading text-xl text-brand-900">{title}</h2>
       </div>
       {children}
     </div>

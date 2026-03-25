@@ -125,7 +125,7 @@ function PaymentButton({ token }: { token: string }) {
       <button
         onClick={handlePay}
         disabled={loading}
-        className="w-full rounded-xl bg-gradient-to-r from-teal-600 to-teal-500 px-6 py-4 text-sm font-semibold text-white shadow-lg shadow-teal-500/25 hover:from-teal-700 hover:to-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 disabled:opacity-50 transition-all flex items-center justify-center gap-3"
+        className="w-full rounded-xl bg-gradient-to-r from-brand-900 to-brand-700 px-6 py-4 text-sm font-semibold text-white shadow-lg shadow-brand-900/15 hover:from-brand-700 hover:to-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-900 focus:ring-offset-2 disabled:opacity-50 transition-all flex items-center justify-center gap-3"
       >
         {loading ? (
           <>
@@ -171,7 +171,7 @@ function StepIndicator({ step, currentStep }: { step: number; currentStep: numbe
   const active = currentStep === step;
   return (
     <div className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold transition-all ${
-      done ? 'bg-emerald-500 text-white' : active ? 'bg-teal-600 text-white ring-4 ring-teal-100' : 'bg-gray-100 text-gray-400'
+      done ? 'bg-emerald-500 text-white' : active ? 'bg-brand-700 text-white ring-4 ring-brand-900/20' : 'bg-gray-100 text-gray-400'
     }`}>
       {done ? (
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
@@ -313,13 +313,16 @@ export default function ProposalPage() {
             {proposal.venue_logo_url ? (
               <img src={proposal.venue_logo_url} alt={proposal.venue_name} className="h-8 object-contain" />
             ) : (
-              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center text-white text-sm font-bold">
+              <div className="h-8 w-8 rounded-lg flex items-center justify-center text-white text-sm font-bold" style={{ backgroundColor: '#293745' }}>
                 {proposal.venue_name.charAt(0)}
               </div>
             )}
             <span className="font-semibold text-gray-900">{proposal.venue_name}</span>
           </div>
-          <StatusBadge status={proposal.status} />
+          <div className="flex items-center gap-4">
+            <StatusBadge status={proposal.status} />
+            <img src="/storypay-logo.png" alt="StoryPay" className="h-6 opacity-40" />
+          </div>
         </div>
       </header>
 
@@ -332,7 +335,7 @@ export default function ProposalPage() {
             { step: 3, label: 'Pay' },
           ].map((s, i) => (
             <div key={s.step} className="flex items-center">
-              {i > 0 && <div className={`w-16 h-0.5 mx-1 ${currentStep > s.step ? 'bg-emerald-400' : currentStep === s.step ? 'bg-teal-300' : 'bg-gray-200'}`} />}
+              {i > 0 && <div className={`w-16 h-0.5 mx-1 ${currentStep > s.step ? 'bg-emerald-400' : currentStep === s.step ? 'bg-brand-400' : 'bg-gray-200'}`} />}
               <div className="flex flex-col items-center gap-1.5">
                 <StepIndicator step={s.step} currentStep={currentStep} />
                 <span className={`text-[11px] font-medium ${currentStep >= s.step ? 'text-gray-700' : 'text-gray-400'}`}>{s.label}</span>
@@ -345,10 +348,9 @@ export default function ProposalPage() {
         <div className="bg-white rounded-2xl shadow-xl shadow-gray-200/50 border border-gray-100 overflow-hidden">
           {/* Proposal header */}
           <div className="px-8 pt-8 pb-6 border-b border-gray-100">
-            <p className="text-xs font-semibold uppercase tracking-widest text-teal-600 mb-1">Proposal</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-brand-900 mb-1">Proposal</p>
             <h1
-              className="text-3xl font-bold text-gray-900 mb-1"
-              style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}
+              className="text-3xl font-bold text-gray-900 mb-1 font-heading"
             >
               {proposal.venue_name}
             </h1>
@@ -368,9 +370,9 @@ export default function ProposalPage() {
                 prose-p:text-gray-600 prose-p:leading-relaxed
                 prose-li:text-gray-600
                 prose-strong:text-gray-900
-                prose-blockquote:border-teal-300 prose-blockquote:text-gray-500
+                prose-blockquote:border-brand-400 prose-blockquote:text-gray-500
                 prose-hr:border-gray-200
-                prose-a:text-teal-600 prose-a:no-underline hover:prose-a:underline"
+                prose-a:text-brand-900 prose-a:no-underline hover:prose-a:underline"
               dangerouslySetInnerHTML={{ __html: proposal.content }}
             />
           </div>
@@ -453,14 +455,14 @@ export default function ProposalPage() {
                           type="date"
                           defaultValue={new Date().toISOString().split('T')[0]}
                           onChange={(e) => setFieldValues((prev) => ({ ...prev, [key]: e.target.value }))}
-                          className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition"
+                          className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
                         />
                       ) : (
                         <input
                           type="text"
                           placeholder={field.label}
                           onChange={(e) => setFieldValues((prev) => ({ ...prev, [key]: e.target.value }))}
-                          className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition"
+                          className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
                         />
                       )}
                     </div>
@@ -471,7 +473,7 @@ export default function ProposalPage() {
               <button
                 onClick={handleSign}
                 disabled={signing}
-                className="mt-8 w-full rounded-xl bg-gradient-to-r from-teal-600 to-teal-500 px-6 py-4 text-sm font-semibold text-white shadow-lg shadow-teal-500/25 hover:from-teal-700 hover:to-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 disabled:opacity-50 transition-all"
+                className="mt-8 w-full rounded-xl bg-gradient-to-r from-brand-900 to-brand-700 px-6 py-4 text-sm font-semibold text-white shadow-lg shadow-brand-900/15 hover:from-brand-700 hover:to-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-900 focus:ring-offset-2 disabled:opacity-50 transition-all"
               >
                 {signing ? 'Signing…' : 'Sign Proposal'}
               </button>
@@ -541,7 +543,7 @@ export default function ProposalPage() {
               </p>
               <button
                 onClick={() => router.push(`/invoice/${proposal.proposal_id}`)}
-                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-teal-600 to-teal-500 px-8 py-3.5 text-sm font-semibold text-white shadow-lg shadow-teal-500/25 hover:from-teal-700 hover:to-teal-600 transition-all"
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-900 to-brand-700 px-8 py-3.5 text-sm font-semibold text-white shadow-lg shadow-brand-900/15 hover:from-brand-700 hover:to-brand-700 transition-all"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
@@ -553,9 +555,12 @@ export default function ProposalPage() {
         </div>
 
         {/* Footer */}
-        <p className="mt-8 text-center text-xs text-gray-300">
-          Secured by <span className="font-medium text-gray-400">StoryPay</span>
-        </p>
+        <div className="mt-8 flex flex-col items-center gap-2">
+          <img src="/storypay-logo.png" alt="StoryPay" className="h-5 opacity-30" />
+          <p className="text-xs text-gray-300">
+            Payments powered by <span className="font-medium text-gray-400">LunarPay</span>
+          </p>
+        </div>
       </div>
     </div>
   );

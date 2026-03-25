@@ -259,7 +259,7 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
               placeholder="Jane Smith"
-              className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
             />
           </div>
           <div>
@@ -271,7 +271,7 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
               value={customerEmail}
               onChange={(e) => setCustomerEmail(e.target.value)}
               placeholder="jane@example.com"
-              className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
             />
           </div>
           <div>
@@ -281,7 +281,7 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
               value={customerPhone}
               onChange={(e) => setCustomerPhone(e.target.value)}
               placeholder="+1 (555) 000-0000"
-              className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
             />
           </div>
         </div>
@@ -300,7 +300,7 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
               value={priceDollars}
               onChange={(e) => setPriceDollars(e.target.value)}
               placeholder="0.00"
-              className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition"
+              className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
             />
           </div>
           {pricePreview > 0 && (
@@ -319,7 +319,7 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
                 onClick={() => setPaymentType(type)}
                 className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
                   paymentType === type
-                    ? 'border-teal-500 bg-teal-50 text-teal-700'
+                    ? 'border-brand-900 bg-brand-900/5 text-brand-900'
                     : 'border-gray-200 text-gray-600 hover:bg-gray-50'
                 }`}
               >
@@ -349,7 +349,7 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
                         )
                       }
                       placeholder="0.00"
-                      className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition"
+                      className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
                     />
                   </div>
                   <input
@@ -361,7 +361,7 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
                         prev.map((i) => (i.id === inst.id ? { ...i, date: e.target.value } : i))
                       )
                     }
-                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition"
+                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
                   />
                   <button
                     type="button"
@@ -376,7 +376,7 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
             <button
               type="button"
               onClick={() => setInstallments((prev) => [...prev, { id: uid(), amount: '', date: '' }])}
-              className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-teal-600 hover:text-teal-700 transition-colors"
+              className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-brand-900 hover:text-brand-900 transition-colors"
             >
               <Plus size={14} />
               Add Payment
@@ -400,7 +400,7 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
                     value={subAmount}
                     onChange={(e) => setSubAmount(e.target.value)}
                     placeholder="0.00"
-                    className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition"
+                    className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
                   />
                 </div>
               </div>
@@ -409,7 +409,7 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
                 <select
                   value={subFrequency}
                   onChange={(e) => setSubFrequency(e.target.value as 'monthly' | 'weekly')}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
                 >
                   <option value="monthly">Monthly</option>
                   <option value="weekly">Weekly</option>
@@ -422,7 +422,7 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
                   min={today()}
                   value={toDateValue(subStartDate)}
                   onChange={(e) => setSubStartDate(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
                 />
               </div>
             </div>
@@ -460,7 +460,7 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
               type="button"
               onClick={handleSend}
               disabled={submitting || saving}
-              className="inline-flex items-center gap-2 rounded-lg bg-teal-500 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-teal-600 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:opacity-50"
             >
               <Send size={16} />
               {submitting ? 'Sending…' : 'Send Proposal'}

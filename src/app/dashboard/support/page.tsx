@@ -91,7 +91,7 @@ export default function SupportPage() {
                     onChange={(e) => setSubject(e.target.value)}
                     required
                     placeholder="Brief description of your issue"
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none"
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none"
                   />
                 </div>
 
@@ -102,7 +102,7 @@ export default function SupportPage() {
                   <select
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none"
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none"
                   >
                     {categories.map((c) => (
                       <option key={c} value={c}>
@@ -122,7 +122,7 @@ export default function SupportPage() {
                     required
                     rows={5}
                     placeholder="Describe your issue in detail…"
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none resize-none"
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none resize-none"
                   />
                 </div>
 
@@ -136,7 +136,7 @@ export default function SupportPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     placeholder="your@email.com"
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none"
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none"
                   />
                 </div>
 
@@ -149,7 +149,7 @@ export default function SupportPage() {
                 <button
                   type="submit"
                   disabled={submitting || !subject || !message || !email}
-                  className="flex items-center gap-2 rounded-lg bg-teal-500 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-teal-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 rounded-lg bg-brand-900 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {submitting ? (
                     <Loader2 size={16} className="animate-spin" />
@@ -169,14 +169,14 @@ export default function SupportPage() {
 
           <div className="space-y-4">
             <div className="flex items-start gap-3 rounded-lg bg-gray-50 p-4">
-              <Mail size={20} className="mt-0.5 shrink-0 text-teal-600" />
+              <Mail size={20} className="mt-0.5 shrink-0 text-brand-900" />
               <div>
                 <p className="text-sm font-medium text-gray-900">Email Support</p>
                 <a
-                  href="mailto:support@storyvenuemarketing.com"
-                  className="mt-1 text-sm text-teal-600 hover:underline"
+                  href="mailto:clients@storyvenuemarketing.com"
+                  className="mt-1 text-sm text-brand-900 hover:underline"
                 >
-                  support@storyvenuemarketing.com
+                  clients@storyvenuemarketing.com
                 </a>
               </div>
             </div>

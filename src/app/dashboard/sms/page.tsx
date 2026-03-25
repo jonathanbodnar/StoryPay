@@ -99,8 +99,8 @@ export default function SmsPage() {
 
       {!venue?.ghl_connected ? (
         <div className="rounded-xl border border-gray-200 bg-white p-10 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-teal-500/15">
-            <LinkIcon size={24} className="text-teal-600" />
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-900/10">
+            <LinkIcon size={24} className="text-brand-900" />
           </div>
           <h2 className="font-heading text-lg font-semibold text-gray-900">Connect Messaging</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-gray-500">
@@ -109,7 +109,7 @@ export default function SmsPage() {
           </p>
           <a
             href="/dashboard/settings"
-            className="mt-6 inline-flex items-center gap-2 rounded-lg bg-teal-500 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-teal-600"
+            className="mt-6 inline-flex items-center gap-2 rounded-lg bg-brand-900 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-700"
           >
             <LinkIcon size={16} />
             Go to Settings
@@ -131,7 +131,7 @@ export default function SmsPage() {
                 <select
                   value={selectedCustomer}
                   onChange={(e) => setSelectedCustomer(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none"
                 >
                   <option value="">Select a customer…</option>
                   {customers.map((c) => (
@@ -151,7 +151,7 @@ export default function SmsPage() {
                   onChange={(e) => setMessage(e.target.value)}
                   rows={4}
                   placeholder="Type your message…"
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none resize-none"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none resize-none"
                 />
               </div>
 
@@ -170,7 +170,7 @@ export default function SmsPage() {
               <button
                 type="submit"
                 disabled={sending || !selectedCustomer || !message.trim()}
-                className="flex items-center gap-2 rounded-lg bg-teal-500 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-teal-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 rounded-lg bg-brand-900 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {sending ? (
                   <Loader2 size={16} className="animate-spin" />
@@ -190,7 +190,7 @@ export default function SmsPage() {
 
             <div className="space-y-4">
               <div className="flex items-start gap-3 rounded-lg bg-gray-50 p-4">
-                <MessageSquare size={20} className="mt-0.5 shrink-0 text-teal-600" />
+                <MessageSquare size={20} className="mt-0.5 shrink-0 text-brand-900" />
                 <div>
                   <p className="text-sm font-medium text-gray-900">Proposal Notifications</p>
                   <p className="mt-1 text-sm text-gray-500">
@@ -201,7 +201,7 @@ export default function SmsPage() {
               </div>
 
               <div className="flex items-start gap-3 rounded-lg bg-gray-50 p-4">
-                <MessageSquare size={20} className="mt-0.5 shrink-0 text-teal-600" />
+                <MessageSquare size={20} className="mt-0.5 shrink-0 text-brand-900" />
                 <div>
                   <p className="text-sm font-medium text-gray-900">Payment Reminders</p>
                   <p className="mt-1 text-sm text-gray-500">

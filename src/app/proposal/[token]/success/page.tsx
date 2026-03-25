@@ -58,7 +58,7 @@ export default function ProposalSuccessPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-gray-100">
         <div className="text-center">
-          <svg className="animate-spin h-8 w-8 text-teal-600 mx-auto mb-4" viewBox="0 0 24 24">
+          <svg className="animate-spin h-8 w-8 text-brand-900 mx-auto mb-4" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
           </svg>
@@ -105,7 +105,7 @@ export default function ProposalSuccessPage() {
         {proposalId && (
           <button
             onClick={() => router.push(`/invoice/${proposalId}`)}
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-teal-600 to-teal-500 px-8 py-3.5 text-sm font-semibold text-white shadow-lg shadow-teal-500/25 hover:from-teal-700 hover:to-teal-600 transition-all"
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-900 to-brand-700 px-8 py-3.5 text-sm font-semibold text-white shadow-lg shadow-brand-900/15 hover:from-brand-700 hover:to-brand-700 transition-all"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />

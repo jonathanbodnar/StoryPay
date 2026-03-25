@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
 import { Search, UserPlus, X, Loader2 } from 'lucide-react';
-import { classNames } from '@/lib/utils';
 
 interface Customer {
   id: number;
@@ -98,7 +98,7 @@ export default function CustomersPage() {
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 rounded-lg bg-teal-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-teal-600"
+          className="flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-700"
         >
           <UserPlus size={16} />
           Add Customer
@@ -113,7 +113,7 @@ export default function CustomersPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search customers…"
-          className="w-full rounded-lg border border-gray-200 py-2.5 pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none"
+          className="w-full rounded-lg border border-gray-200 py-2.5 pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none"
         />
       </div>
 
@@ -149,9 +149,16 @@ export default function CustomersPage() {
             ) : (
               customers.map((c) => (
                 <tr key={c.id} className="hover:bg-gray-50/50 transition-colors">
-                  <td className="px-5 py-3.5 font-medium text-gray-900">{c.name}</td>
-                  <td className="px-5 py-3.5 text-gray-700">{c.email || '—'}</td>
-                  <td className="px-5 py-3.5 text-gray-700">{c.phone || '—'}</td>
+                  <td className="px-5 py-3.5">
+                    <Link
+                      href={`/dashboard/customers/${c.id}`}
+                      className="font-medium text-gray-900 hover:text-brand-900 hover:underline"
+                    >
+                      {c.name}
+                    </Link>
+                  </td>
+                  <td className="px-5 py-3.5 text-gray-700">{c.email || '---'}</td>
+                  <td className="px-5 py-3.5 text-gray-700">{c.phone || '---'}</td>
                 </tr>
               ))
             )}
@@ -189,7 +196,7 @@ export default function CustomersPage() {
                     value={form.firstName}
                     onChange={handleFormChange}
                     required
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none"
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none"
                   />
                 </div>
                 <div>
@@ -201,7 +208,7 @@ export default function CustomersPage() {
                     value={form.lastName}
                     onChange={handleFormChange}
                     required
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none"
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none"
                   />
                 </div>
               </div>
@@ -216,7 +223,7 @@ export default function CustomersPage() {
                   value={form.email}
                   onChange={handleFormChange}
                   required
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none"
                 />
               </div>
 
@@ -229,7 +236,7 @@ export default function CustomersPage() {
                   type="tel"
                   value={form.phone}
                   onChange={handleFormChange}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none"
                 />
               </div>
 
@@ -241,7 +248,7 @@ export default function CustomersPage() {
                   name="address"
                   value={form.address}
                   onChange={handleFormChange}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none"
                 />
               </div>
 
@@ -254,7 +261,7 @@ export default function CustomersPage() {
                     name="city"
                     value={form.city}
                     onChange={handleFormChange}
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none"
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none"
                   />
                 </div>
                 <div>
@@ -265,7 +272,7 @@ export default function CustomersPage() {
                     name="state"
                     value={form.state}
                     onChange={handleFormChange}
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none"
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none"
                   />
                 </div>
                 <div>
@@ -276,7 +283,7 @@ export default function CustomersPage() {
                     name="zip"
                     value={form.zip}
                     onChange={handleFormChange}
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none"
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none"
                   />
                 </div>
               </div>
@@ -300,7 +307,7 @@ export default function CustomersPage() {
                 <button
                   type="submit"
                   disabled={creating}
-                  className="flex items-center gap-2 rounded-lg bg-teal-500 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-teal-600 disabled:opacity-50"
+                  className="flex items-center gap-2 rounded-lg bg-brand-900 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:opacity-50"
                 >
                   {creating && <Loader2 size={16} className="animate-spin" />}
                   {creating ? 'Creating…' : 'Create Customer'}

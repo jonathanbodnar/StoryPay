@@ -309,7 +309,7 @@ export default function NewProposalPage() {
               id="template"
               value={templateId}
               onChange={(e) => setTemplateId(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 transition-colors focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 transition-colors focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
             >
               <option value="">Select a template…</option>
               {templates.map((t) => (
@@ -334,7 +334,7 @@ export default function NewProposalPage() {
                   onClick={switchToSearch}
                   className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                     customerMode === 'search'
-                      ? 'bg-teal-50 text-teal-700'
+                      ? 'bg-brand-900/5 text-brand-900'
                       : 'text-gray-500 hover:bg-gray-100'
                   }`}
                 >
@@ -347,7 +347,7 @@ export default function NewProposalPage() {
                 onClick={switchToNew}
                 className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                   customerMode === 'new'
-                    ? 'bg-teal-50 text-teal-700'
+                    ? 'bg-brand-900/5 text-brand-900'
                     : 'text-gray-500 hover:bg-gray-100'
                 }`}
               >
@@ -360,7 +360,7 @@ export default function NewProposalPage() {
           {customerMode === 'search' ? (
             <div ref={searchRef} className="relative">
               {selectedCustomer ? (
-                <div className="flex items-center justify-between rounded-lg border border-teal-200 bg-teal-50/50 px-4 py-3">
+                <div className="flex items-center justify-between rounded-lg border border-brand-900/20 bg-brand-900/5 px-4 py-3">
                   <div>
                     <span className="text-sm font-medium text-gray-900">{customerName}</span>
                     <span className="ml-2 text-xs text-gray-500">{customerEmail}</span>
@@ -389,11 +389,11 @@ export default function NewProposalPage() {
                       }}
                       onFocus={() => searchQuery.length >= 2 && setShowDropdown(true)}
                       placeholder="Search by name, email, or phone…"
-                      className="w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                      className="w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
                     />
                     {searchLoading && (
                       <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-teal-500" />
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-brand-900" />
                       </div>
                     )}
                   </div>
@@ -425,7 +425,7 @@ export default function NewProposalPage() {
                           <button
                             type="button"
                             onClick={switchToNew}
-                            className="text-teal-600 font-medium hover:underline"
+                            className="text-brand-900 font-medium hover:underline"
                           >
                             Create new customer
                           </button>
@@ -447,7 +447,7 @@ export default function NewProposalPage() {
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
                   placeholder="Jane Smith"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
                 />
               </div>
               <div>
@@ -459,7 +459,7 @@ export default function NewProposalPage() {
                   value={customerEmail}
                   onChange={(e) => setCustomerEmail(e.target.value)}
                   placeholder="jane@example.com"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
                 />
               </div>
               <div>
@@ -469,7 +469,7 @@ export default function NewProposalPage() {
                   value={customerPhone}
                   onChange={(e) => setCustomerPhone(formatPhoneNumber(e.target.value))}
                   placeholder="(555) 000-0000"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
                 />
               </div>
               <p className="sm:col-span-2 text-xs text-gray-400">
@@ -493,7 +493,7 @@ export default function NewProposalPage() {
               value={priceDollars}
               onChange={(e) => setPriceDollars(e.target.value)}
               placeholder="0.00"
-              className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition"
+              className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
             />
           </div>
           {pricePreview > 0 && (
@@ -512,7 +512,7 @@ export default function NewProposalPage() {
                 onClick={() => setPaymentType(type)}
                 className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
                   paymentType === type
-                    ? 'border-teal-500 bg-teal-50 text-teal-700'
+                    ? 'border-brand-900 bg-brand-900/5 text-brand-900'
                     : 'border-gray-200 text-gray-600 hover:bg-gray-50'
                 }`}
               >
@@ -542,7 +542,7 @@ export default function NewProposalPage() {
                         )
                       }
                       placeholder="0.00"
-                      className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition"
+                      className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
                     />
                   </div>
                   <input
@@ -554,7 +554,7 @@ export default function NewProposalPage() {
                         prev.map((i) => (i.id === inst.id ? { ...i, date: e.target.value } : i))
                       )
                     }
-                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition"
+                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
                   />
                   <button
                     type="button"
@@ -569,7 +569,7 @@ export default function NewProposalPage() {
             <button
               type="button"
               onClick={() => setInstallments((prev) => [...prev, { id: uid(), amount: '', date: '' }])}
-              className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-teal-600 hover:text-teal-700 transition-colors"
+              className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-brand-900 hover:text-brand-900 transition-colors"
             >
               <Plus size={14} />
               Add Payment
@@ -593,7 +593,7 @@ export default function NewProposalPage() {
                     value={subAmount}
                     onChange={(e) => setSubAmount(e.target.value)}
                     placeholder="0.00"
-                    className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition"
+                    className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
                   />
                 </div>
               </div>
@@ -602,7 +602,7 @@ export default function NewProposalPage() {
                 <select
                   value={subFrequency}
                   onChange={(e) => setSubFrequency(e.target.value as 'monthly' | 'weekly')}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
                 >
                   <option value="monthly">Monthly</option>
                   <option value="weekly">Weekly</option>
@@ -615,7 +615,7 @@ export default function NewProposalPage() {
                   min={today()}
                   value={toDateValue(subStartDate)}
                   onChange={(e) => setSubStartDate(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
                 />
               </div>
             </div>
@@ -634,7 +634,7 @@ export default function NewProposalPage() {
           <button
             type="submit"
             disabled={submitting || saving || !templateId || !customerName || !customerEmail}
-            className="inline-flex items-center gap-2 rounded-lg bg-teal-500 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Send size={16} />
             {submitting ? 'Sending…' : 'Send Proposal'}

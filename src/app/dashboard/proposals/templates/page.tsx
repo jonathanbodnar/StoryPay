@@ -30,7 +30,7 @@ export default function TemplatesPage() {
         <h1 className="font-heading text-2xl font-semibold text-gray-900">Templates</h1>
         <Link
           href="/dashboard/proposals/templates/new"
-          className="inline-flex items-center gap-2 rounded-lg bg-teal-500 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-teal-600 transition-colors"
+          className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-brand-700 transition-colors"
         >
           <Plus size={16} />
           Create Template

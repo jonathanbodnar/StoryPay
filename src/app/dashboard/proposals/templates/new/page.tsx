@@ -120,7 +120,7 @@ export default function NewTemplatePage() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. Premium Wedding Package"
-            className="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition"
+            className="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
           />
         </div>
 
@@ -211,7 +211,7 @@ export default function NewTemplatePage() {
                     type="text"
                     value={field.label}
                     onChange={(e) => updateField(field.id, { label: e.target.value })}
-                    className="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition"
+                    className="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
                   />
                   <span className="text-xs text-gray-400 capitalize">{field.field_type}</span>
                   <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
@@ -219,7 +219,7 @@ export default function NewTemplatePage() {
                       type="checkbox"
                       checked={field.required}
                       onChange={(e) => updateField(field.id, { required: e.target.checked })}
-                      className="rounded border-gray-300 text-teal-500 focus:ring-teal-500/20"
+                      className="rounded border-gray-300 text-brand-900 focus:ring-brand-900/20"
                     />
                     Required
                   </label>
@@ -242,7 +242,7 @@ export default function NewTemplatePage() {
             type="button"
             onClick={handleSave}
             disabled={saving || !name.trim()}
-            className="rounded-lg bg-teal-500 px-6 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-teal-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="rounded-lg bg-brand-900 px-6 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {saving ? 'Saving…' : 'Save Template'}
           </button>

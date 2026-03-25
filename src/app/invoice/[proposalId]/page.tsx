@@ -111,12 +111,13 @@ export default function InvoicePage() {
                     className="h-12 mb-3 object-contain"
                   />
                 )}
-                <p className="text-sm font-semibold uppercase tracking-wider text-teal-600">
+                <p className="text-sm font-semibold uppercase tracking-wider text-brand-900">
                   {invoice.venue_name}
                 </p>
               </div>
               <div className="text-right">
-                <h1 className="text-3xl font-bold text-gray-900">INVOICE</h1>
+                <img src="/storypay-logo.png" alt="StoryPay" className="h-5 opacity-30 ml-auto mb-3 print:hidden" />
+                <h1 className="text-3xl font-bold text-gray-900 font-heading">INVOICE</h1>
                 <p className="mt-1 text-sm text-gray-500">
                   #{invoiceNumber}
                 </p>
@@ -272,9 +273,17 @@ export default function InvoicePage() {
           {/* Footer */}
           <div className="px-8 py-6 text-center">
             <p className="text-xs text-gray-400">
-              Thank you for your business • Powered by StoryPay
+              Thank you for your business
             </p>
           </div>
+        </div>
+
+        {/* Branding footer */}
+        <div className="mt-6 flex flex-col items-center gap-2 print:hidden">
+          <img src="/storypay-logo.png" alt="StoryPay" className="h-5 opacity-30" />
+          <p className="text-xs text-gray-300">
+            Payments powered by <span className="font-medium text-gray-400">LunarPay</span>
+          </p>
         </div>
       </div>
     </div>

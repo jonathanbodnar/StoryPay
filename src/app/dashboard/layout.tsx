@@ -18,10 +18,10 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-white">
       <Sidebar venue={{ id: venue.id, name: venue.name, ghl_location_id: venue.ghl_location_id }} />
       <main className="ml-[240px] min-h-screen p-8">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 min-h-[calc(100vh-4rem)]">
+        <div className="bg-white rounded-xl border border-gray-100 p-6 min-h-[calc(100vh-4rem)]">
           {children}
         </div>
       </main>

@@ -27,19 +27,21 @@ export async function GET(request: NextRequest) {
     if (type === 'charges') {
       const { data: proposals } = await supabaseAdmin
         .from('proposals')
-        .select('id, customer_name, price, status, charge_id, created_at')
+        .select('id, customer_name, price, status, charge_id, checkout_session_id, transaction_id, paid_at, created_at')
         .eq('venue_id', venueId)
-        .not('charge_id', 'is', null)
-        .order('created_at', { ascending: false });
+        .eq('status', 'paid')
+        .order('paid_at', { ascending: false });
 
       return NextResponse.json(
         (proposals ?? []).map((p) => ({
           id: p.id,
-          description: `Proposal — ${p.customer_name}`,
+          description: `Proposal - ${p.customer_name}`,
           amount: p.price,
           status: p.status,
-          date: p.created_at,
+          date: p.paid_at || p.created_at,
           chargeId: p.charge_id,
+          transactionId: p.transaction_id,
+          sessionId: p.checkout_session_id,
         }))
       );
     }
@@ -64,7 +66,7 @@ export async function GET(request: NextRequest) {
             const sub = await getSubscription(venue.lunarpay_secret_key, p.subscription_id);
             return {
               id: p.id,
-              description: `Proposal — ${p.customer_name}`,
+              description: `Proposal - ${p.customer_name}`,
               amount: sub.amount ?? p.price,
               frequency: sub.frequency ?? p.payment_config?.frequency ?? 'monthly',
               status: sub.status ?? p.status,
@@ -74,7 +76,7 @@ export async function GET(request: NextRequest) {
           } catch {
             return {
               id: p.id,
-              description: `Proposal — ${p.customer_name}`,
+              description: `Proposal - ${p.customer_name}`,
               amount: p.price,
               frequency: p.payment_config?.frequency ?? 'monthly',
               status: p.status,

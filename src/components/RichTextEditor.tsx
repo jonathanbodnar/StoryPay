@@ -50,7 +50,7 @@ function ToolbarButton({
       title={title}
       className={`p-1.5 rounded transition-colors ${
         active
-          ? 'bg-teal-100 text-teal-700'
+          ? 'bg-brand-900/10 text-brand-900'
           : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
       }`}
     >
@@ -98,7 +98,7 @@ export default function RichTextEditor({ content, onChange, placeholder }: RichT
   const s = 15;
 
   return (
-    <div className="rounded-lg border border-gray-300 overflow-hidden focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-500/20 transition">
+    <div className="rounded-lg border border-gray-300 overflow-hidden focus-within:border-brand-900 focus-within:ring-2 focus-within:ring-brand-900/20 transition">
       <div className="flex flex-wrap items-center gap-0.5 px-2 py-1.5 border-b border-gray-200 bg-gray-50">
         <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')} title="Bold">
           <Bold size={s} />

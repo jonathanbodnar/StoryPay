@@ -266,7 +266,7 @@ export default function EditTemplatePage({
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. Premium Wedding Package"
-            className="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition"
+            className="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
           />
         </div>
 
@@ -283,7 +283,7 @@ export default function EditTemplatePage({
             onChange={(e) => setContent(e.target.value)}
             rows={8}
             placeholder="Enter proposal body, terms & conditions…"
-            className="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition resize-y"
+            className="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition resize-y"
           />
         </div>
 
@@ -299,7 +299,7 @@ export default function EditTemplatePage({
               value={priceDollars}
               onChange={(e) => setPriceDollars(e.target.value)}
               placeholder="0.00"
-              className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition"
+              className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
             />
           </div>
         </div>
@@ -315,7 +315,7 @@ export default function EditTemplatePage({
                 onClick={() => setPaymentType(type)}
                 className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
                   paymentType === type
-                    ? 'border-teal-500 bg-teal-50 text-teal-700'
+                    ? 'border-brand-900 bg-brand-900/5 text-brand-900'
                     : 'border-gray-200 text-gray-600 hover:bg-gray-50'
                 }`}
               >
@@ -341,14 +341,14 @@ export default function EditTemplatePage({
                       value={inst.amount}
                       onChange={(e) => updateInstallment(inst.id, { amount: e.target.value })}
                       placeholder="0.00"
-                      className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition"
+                      className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
                     />
                   </div>
                   <input
                     type="date"
                     value={inst.date}
                     onChange={(e) => updateInstallment(inst.id, { date: e.target.value })}
-                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition"
+                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
                   />
                   <button
                     type="button"
@@ -363,7 +363,7 @@ export default function EditTemplatePage({
             <button
               type="button"
               onClick={addInstallment}
-              className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-teal-600 hover:text-teal-700 transition-colors"
+              className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-brand-900 hover:text-brand-900 transition-colors"
             >
               <Plus size={14} />
               Add Payment
@@ -387,7 +387,7 @@ export default function EditTemplatePage({
                     value={subAmount}
                     onChange={(e) => setSubAmount(e.target.value)}
                     placeholder="0.00"
-                    className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition"
+                    className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
                   />
                 </div>
               </div>
@@ -396,7 +396,7 @@ export default function EditTemplatePage({
                 <select
                   value={subFrequency}
                   onChange={(e) => setSubFrequency(e.target.value as 'monthly' | 'weekly')}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
                 >
                   <option value="monthly">Monthly</option>
                   <option value="weekly">Weekly</option>
@@ -408,7 +408,7 @@ export default function EditTemplatePage({
                   type="date"
                   value={subStartDate}
                   onChange={(e) => setSubStartDate(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
                 />
               </div>
             </div>
@@ -487,14 +487,14 @@ export default function EditTemplatePage({
                       type="text"
                       value={field.label}
                       onChange={(e) => updateField(field.id, { label: e.target.value })}
-                      className="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition"
+                      className="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
                     />
                     <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
                       <input
                         type="checkbox"
                         checked={field.required}
                         onChange={(e) => updateField(field.id, { required: e.target.checked })}
-                        className="rounded border-gray-300 text-teal-500 focus:ring-teal-500/20"
+                        className="rounded border-gray-300 text-brand-900 focus:ring-brand-900/20"
                       />
                       Required
                     </label>
@@ -518,7 +518,7 @@ export default function EditTemplatePage({
             type="button"
             onClick={handleSave}
             disabled={saving || !name.trim()}
-            className="rounded-lg bg-teal-500 px-6 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-teal-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="rounded-lg bg-brand-900 px-6 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {saving ? 'Saving…' : 'Save Template'}
           </button>

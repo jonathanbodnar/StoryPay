@@ -207,7 +207,7 @@ export default function UpdateCardPage() {
               className="h-16 mx-auto mb-4 object-contain"
             />
           )}
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-600">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-900">
             {data.venue_name}
           </h2>
         </div>
@@ -245,7 +245,7 @@ export default function UpdateCardPage() {
             )}
             <div id="card-update-element" ref={containerRef} />
             {processing && (
-              <div className="mt-4 flex items-center justify-center text-teal-600 text-sm font-medium">
+              <div className="mt-4 flex items-center justify-center text-brand-900 text-sm font-medium">
                 <svg className="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />

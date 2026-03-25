@@ -162,8 +162,8 @@ export default function SettingsPage() {
               </div>
             ) : (
               <div className="text-center py-4">
-                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-teal-500/10">
-                  <LinkIcon size={20} className="text-teal-600" />
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-brand-900/10">
+                  <LinkIcon size={20} className="text-brand-900" />
                 </div>
                 <p className="text-sm font-medium text-gray-900">Connect Messaging</p>
                 <p className="mx-auto mt-1 max-w-sm text-sm text-gray-500">
@@ -172,7 +172,7 @@ export default function SettingsPage() {
                 </p>
                 <a
                   href="/api/messaging/connect"
-                  className="mt-4 inline-flex items-center gap-2 rounded-lg bg-teal-500 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-teal-600"
+                  className="mt-4 inline-flex items-center gap-2 rounded-lg bg-brand-900 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-700"
                 >
                   <ExternalLink size={16} />
                   Connect Account

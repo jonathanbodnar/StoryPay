@@ -7,7 +7,7 @@ export default function InvalidTokenPage() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </div>
-        <h1 className="font-heading text-2xl text-navy-900 mb-3">Invalid or Expired Link</h1>
+        <h1 className="font-heading text-2xl text-brand-900 mb-3">Invalid or Expired Link</h1>
         <p className="text-gray-500">
           This login link is no longer valid. Please contact support to receive a new one.
         </p>

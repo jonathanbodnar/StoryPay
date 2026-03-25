@@ -134,7 +134,7 @@ export default function AdminPage() {
   if (authState === 'loading') {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin h-8 w-8 border-4 border-navy-800 border-t-transparent rounded-full" />
+        <div className="animate-spin h-8 w-8 border-4 border-brand-800 border-t-transparent rounded-full" />
       </div>
     );
   }
@@ -143,7 +143,7 @@ export default function AdminPage() {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <form onSubmit={handleLogin} className="bg-white rounded-xl shadow-lg p-8 w-full max-w-sm">
-          <h2 className="font-heading text-2xl text-navy-900 mb-6 text-center">Admin Login</h2>
+          <h2 className="font-heading text-2xl text-brand-900 mb-6 text-center">Admin Login</h2>
           {loginError && (
             <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-2 mb-4">{loginError}</div>
           )}
@@ -152,13 +152,13 @@ export default function AdminPage() {
             type="password"
             value={secret}
             onChange={(e) => setSecret(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-navy-600 focus:border-navy-600 outline-none mb-4"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-900 focus:border-brand-900 outline-none mb-4"
             placeholder="Enter admin secret..."
             required
           />
           <button
             type="submit"
-            className="w-full bg-navy-900 hover:bg-navy-800 text-white font-medium py-2.5 rounded-lg transition-colors"
+            className="w-full bg-brand-900 hover:bg-brand-700 text-white font-medium py-2.5 rounded-lg transition-colors"
           >
             Login
           </button>
@@ -176,10 +176,10 @@ export default function AdminPage() {
         </div>
       )}
       <div className="flex items-center justify-between mb-6">
-        <h2 className="font-heading text-2xl text-navy-900">Wedding Venues</h2>
+        <h2 className="font-heading text-2xl text-brand-900">Wedding Venues</h2>
         <button
           onClick={() => setShowCreateForm(!showCreateForm)}
-          className="bg-navy-900 hover:bg-navy-800 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          className="bg-brand-900 hover:bg-brand-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
         >
           {showCreateForm ? 'Cancel' : '+ Create Venue'}
         </button>
@@ -187,7 +187,7 @@ export default function AdminPage() {
 
       {showCreateForm && (
         <form onSubmit={handleCreate} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-          <h3 className="font-heading text-lg text-navy-900 mb-4">New Venue</h3>
+          <h3 className="font-heading text-lg text-brand-900 mb-4">New Venue</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">Business Name *</label>
@@ -195,7 +195,7 @@ export default function AdminPage() {
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-navy-600 focus:border-navy-600 outline-none"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-900 focus:border-brand-900 outline-none"
                 required
               />
             </div>
@@ -205,7 +205,7 @@ export default function AdminPage() {
                 type="text"
                 value={formData.firstName}
                 onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-navy-600 focus:border-navy-600 outline-none"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-900 focus:border-brand-900 outline-none"
                 required
               />
             </div>
@@ -215,7 +215,7 @@ export default function AdminPage() {
                 type="text"
                 value={formData.lastName}
                 onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-navy-600 focus:border-navy-600 outline-none"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-900 focus:border-brand-900 outline-none"
                 required
               />
             </div>
@@ -225,7 +225,7 @@ export default function AdminPage() {
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-navy-600 focus:border-navy-600 outline-none"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-900 focus:border-brand-900 outline-none"
                 required
               />
             </div>
@@ -235,7 +235,7 @@ export default function AdminPage() {
                 type="tel"
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-navy-600 focus:border-navy-600 outline-none"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-900 focus:border-brand-900 outline-none"
               />
             </div>
             <div className="md:col-span-2">
@@ -245,7 +245,7 @@ export default function AdminPage() {
                 value={formData.ghlLocationId}
                 onChange={(e) => setFormData({ ...formData, ghlLocationId: e.target.value })}
                 placeholder="e.g. abc123XYZ..."
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-navy-600 focus:border-navy-600 outline-none"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-900 focus:border-brand-900 outline-none"
               />
               <p className="text-xs text-gray-400 mt-1">
                 Optional. Enables auto-login from GHL dashboard via the universal link.
@@ -256,7 +256,7 @@ export default function AdminPage() {
             <button
               type="submit"
               disabled={creating}
-              className="bg-teal-500 hover:bg-teal-600 text-white font-medium px-5 py-2 rounded-lg transition-colors disabled:opacity-50"
+              className="bg-brand-900 hover:bg-brand-700 text-white font-medium px-5 py-2 rounded-lg transition-colors disabled:opacity-50"
             >
               {creating ? 'Creating...' : 'Create Venue'}
             </button>
@@ -264,10 +264,10 @@ export default function AdminPage() {
         </form>
       )}
 
-      <div className="mb-4 flex items-center justify-between rounded-lg border border-teal-200 bg-teal-50 px-4 py-3">
+      <div className="mb-4 flex items-center justify-between rounded-lg border border-brand-900/20 bg-brand-900/5 px-4 py-3">
         <div>
-          <p className="text-sm font-medium text-teal-800">Universal GHL Login Link</p>
-          <p className="text-xs text-teal-600 mt-0.5">
+          <p className="text-sm font-medium text-brand-900">Universal GHL Login Link</p>
+          <p className="text-xs text-brand-900 mt-0.5">
             Add this single link to GHL for all venues. It auto-detects the venue from the referring location.
           </p>
         </div>
@@ -278,7 +278,7 @@ export default function AdminPage() {
             setCopiedGhl(true);
             setTimeout(() => setCopiedGhl(false), 2000);
           }}
-          className="shrink-0 ml-4 text-xs font-medium px-3 py-1.5 rounded-md bg-teal-600 text-white hover:bg-teal-700 transition-colors"
+          className="shrink-0 ml-4 text-xs font-medium px-3 py-1.5 rounded-md bg-brand-700 text-white hover:bg-brand-700 transition-colors"
         >
           {copiedGhl ? 'Copied!' : 'Copy Link'}
         </button>
