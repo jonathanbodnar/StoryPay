@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { DollarSign, FileText, Users, Clock, TrendingUp, ArrowUpRight } from 'lucide-react';
+import { DollarSign, FileText, Users, Clock, TrendingUp, ArrowUpRight, Receipt, TrendingDown } from 'lucide-react';
 import { formatCents, formatDate, getStatusColor, classNames } from '@/lib/utils';
 import Link from 'next/link';
 import {
@@ -27,6 +27,14 @@ interface Stats {
   pendingPayments: number;
   statusBreakdown: Record<string, number>;
   monthlyChart: { month: string; label: string; revenue: number; proposals: number }[];
+  trends: {
+    revenueChange: number;
+    proposalChange: number;
+    thisMonthRevenue: number;
+    lastMonthRevenue: number;
+    thisMonthProposals: number;
+    lastMonthProposals: number;
+  };
 }
 
 interface Proposal {
@@ -114,16 +122,25 @@ export default function DashboardOverview() {
           <h1 className="font-heading text-2xl text-gray-900">Overview</h1>
           <p className="mt-1 text-sm text-gray-500">Your venue payment dashboard</p>
         </div>
-        <Link
-          href="/dashboard/proposals/new"
-          className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-colors"
-          style={{ backgroundColor: '#293745' }}
-          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#2f3e4e')}
-          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#293745')}
-        >
-          <FileText size={16} />
-          New Proposal
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/dashboard/invoices/new"
+            className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+          >
+            <Receipt size={16} />
+            Create Invoice
+          </Link>
+          <Link
+            href="/dashboard/proposals/new"
+            className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-colors"
+            style={{ backgroundColor: '#293745' }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#2f3e4e')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#293745')}
+          >
+            <FileText size={16} />
+            New Proposal
+          </Link>
+        </div>
       </div>
 
       {/* Metric cards */}
@@ -131,6 +148,11 @@ export default function DashboardOverview() {
         {metricCards.map((card) => {
           const Icon = card.icon;
           const value = stats?.[card.key];
+          const trend = card.key === 'totalRevenue' ? stats?.trends?.revenueChange
+            : card.key === 'activeProposals' ? stats?.trends?.proposalChange
+            : null;
+          const trendUp = trend !== null && trend !== undefined && trend > 0;
+          const trendDown = trend !== null && trend !== undefined && trend < 0;
           return (
             <div
               key={card.key}
@@ -144,17 +166,28 @@ export default function DashboardOverview() {
                 >
                   <Icon size={20} style={{ color: card.accent }} />
                 </div>
-                <div>
+                <div className="flex-1">
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                     {card.label}
                   </p>
-                  <p className="mt-0.5 text-xl font-bold text-gray-900">
-                    {loading
-                      ? '—'
-                      : card.isCurrency
-                        ? formatCents(value ?? 0)
-                        : (value ?? 0).toLocaleString()}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="mt-0.5 text-xl font-bold text-gray-900">
+                      {loading
+                        ? '—'
+                        : card.isCurrency
+                          ? formatCents(value ?? 0)
+                          : (value ?? 0).toLocaleString()}
+                    </p>
+                    {trend !== null && trend !== undefined && trend !== 0 && !loading && (
+                      <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${trendUp ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
+                        {trendUp ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+                        {Math.abs(Math.round(trend))}%
+                      </span>
+                    )}
+                  </div>
+                  {trend !== null && trend !== undefined && !loading && (
+                    <p className="text-[10px] text-gray-400 mt-0.5">vs last month</p>
+                  )}
                 </div>
               </div>
             </div>

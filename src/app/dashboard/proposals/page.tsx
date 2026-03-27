@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { FileText, Copy, ExternalLink, Plus, Pencil, Trash2, Send, FileStack, RefreshCw } from 'lucide-react';
+import { FileText, Copy, ExternalLink, Plus, Pencil, Trash2, Send, FileStack, RefreshCw, Receipt } from 'lucide-react';
 import { formatCents, formatDate, getStatusColor, classNames } from '@/lib/utils';
 
 interface Proposal {
@@ -132,6 +132,13 @@ export default function ProposalsPage() {
           >
             <FileStack size={16} />
             Templates
+          </Link>
+          <Link
+            href="/dashboard/invoices/new"
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+          >
+            <Receipt size={16} />
+            Create Invoice
           </Link>
           <Link
             href="/dashboard/proposals/new"

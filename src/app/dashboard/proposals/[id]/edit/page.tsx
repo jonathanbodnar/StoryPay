@@ -2,8 +2,9 @@
 
 import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
-import { Send, Save, Trash2, Plus, ArrowLeft } from 'lucide-react';
-import { formatCents } from '@/lib/utils';
+import Link from 'next/link';
+import { Send, Save, Trash2, Plus, ArrowLeft, ExternalLink, Copy, RefreshCw, FileText, Receipt } from 'lucide-react';
+import { formatCents, formatDate, getStatusColor, classNames } from '@/lib/utils';
 
 interface Installment {
   id: string;
@@ -21,6 +22,14 @@ interface Proposal {
   payment_type: string;
   payment_config: Record<string, unknown>;
   template_id: string;
+  public_token: string;
+  sent_at: string | null;
+  signed_at: string | null;
+  paid_at: string | null;
+  created_at: string;
+  content: string | null;
+  checkout_session_id: string | null;
+  transaction_id: string | null;
 }
 
 function uid() {
@@ -47,6 +56,7 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
 
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
@@ -67,11 +77,6 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
         const res = await fetch(`/api/proposals/${id}`);
         if (!res.ok) throw new Error('Not found');
         const data: Proposal = await res.json();
-
-        if (data.status !== 'draft') {
-          router.replace('/dashboard/proposals');
-          return;
-        }
 
         setProposal(data);
         setCustomerName(data.customer_name || '');
@@ -102,7 +107,11 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
       }
     }
     load();
-  }, [id, router]);
+  }, [id]);
+
+  const isDraft = proposal?.status === 'draft';
+  const isPaid = proposal?.status === 'paid';
+  const canEdit = isDraft;
 
   function buildPaymentConfig() {
     if (paymentType === 'installment') {
@@ -148,7 +157,10 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
         const data = await res.json();
         throw new Error(data.error || 'Failed to save');
       }
-      router.push('/dashboard/proposals');
+      const updated = await res.json();
+      setProposal(updated);
+      setError('');
+      alert('Saved successfully.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
@@ -179,7 +191,9 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
         const data = await res.json();
         throw new Error(data.error || 'Failed to send');
       }
-      router.push('/dashboard/proposals');
+      const updated = await res.json();
+      setProposal(updated);
+      alert('Proposal sent successfully!');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
@@ -204,6 +218,14 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
     }
   }
 
+  function copyLink() {
+    if (!proposal) return;
+    const url = `${window.location.origin}/proposal/${proposal.public_token}`;
+    navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   const pricePreview = Math.round(parseFloat(priceDollars || '0') * 100);
 
   if (loading) {
@@ -221,10 +243,13 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
   if (!proposal) {
     return (
       <div className="mx-auto max-w-2xl text-center py-16">
-        <p className="text-gray-500">Proposal not found or is no longer a draft.</p>
+        <p className="text-gray-500">{error || 'Proposal not found.'}</p>
+        <button onClick={() => router.back()} className="mt-4 text-sm text-brand-900 hover:underline">Go back</button>
       </div>
     );
   }
+
+  const statusColor = getStatusColor(proposal.status);
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -238,40 +263,100 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
         </button>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="font-heading text-2xl font-semibold text-gray-900">Edit Draft</h1>
-            <p className="mt-1 text-sm text-gray-500">Update this draft and send it when ready</p>
+            <h1 className="font-heading text-2xl text-gray-900">
+              {isDraft ? 'Edit Draft' : 'Proposal Details'}
+            </h1>
+            <p className="mt-1 text-sm text-gray-500">
+              {isDraft ? 'Update this draft and send it when ready' : `For ${proposal.customer_name || 'Unknown'}`}
+            </p>
           </div>
-          <span className="inline-block rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
-            Draft
+          <span className={classNames('inline-block rounded-full px-3 py-1 text-xs font-medium capitalize', statusColor.bg, statusColor.text)}>
+            {proposal.status}
           </span>
         </div>
       </div>
+
+      {/* Quick actions for non-draft proposals */}
+      {!isDraft && (
+        <div className="mb-6 rounded-xl border border-gray-100 bg-gray-50/50 p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={copyLink}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50"
+            >
+              <Copy size={14} />
+              {copied ? 'Copied!' : 'Copy Link'}
+            </button>
+            <Link
+              href={`/proposal/${proposal.public_token}`}
+              target="_blank"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50"
+            >
+              <ExternalLink size={14} />
+              View Proposal
+            </Link>
+            {isPaid && (
+              <Link
+                href={`/invoice/${proposal.id}`}
+                target="_blank"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50"
+              >
+                <Receipt size={14} />
+                View Invoice
+              </Link>
+            )}
+            {!isPaid && (
+              <button
+                onClick={handleSend}
+                disabled={submitting}
+                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-white transition-colors disabled:opacity-50"
+                style={{ backgroundColor: '#293745' }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#2f3e4e')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#293745')}
+              >
+                <RefreshCw size={14} className={submitting ? 'animate-spin' : ''} />
+                {submitting ? 'Resending...' : 'Resend'}
+              </button>
+            )}
+          </div>
+
+          {/* Timeline */}
+          <div className="mt-4 flex flex-wrap gap-6 text-xs text-gray-500">
+            <span>Created: {formatDate(proposal.created_at)}</span>
+            {proposal.sent_at && <span>Sent: {formatDate(proposal.sent_at)}</span>}
+            {proposal.signed_at && <span>Signed: {formatDate(proposal.signed_at)}</span>}
+            {proposal.paid_at && <span>Paid: {formatDate(proposal.paid_at)}</span>}
+          </div>
+        </div>
+      )}
 
       <div className="space-y-6">
         {/* Customer info */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Customer Name <span className="text-red-400">*</span>
+              Customer Name {canEdit && <span className="text-red-400">*</span>}
             </label>
             <input
               type="text"
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
               placeholder="Jane Smith"
-              className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
+              disabled={!canEdit}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900 disabled:bg-gray-50 disabled:text-gray-600"
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Email <span className="text-red-400">*</span>
+              Email {canEdit && <span className="text-red-400">*</span>}
             </label>
             <input
               type="email"
               value={customerEmail}
               onChange={(e) => setCustomerEmail(e.target.value)}
               placeholder="jane@example.com"
-              className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
+              disabled={!canEdit}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900 disabled:bg-gray-50 disabled:text-gray-600"
             />
           </div>
           <div>
@@ -281,7 +366,8 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
               value={customerPhone}
               onChange={(e) => setCustomerPhone(e.target.value)}
               placeholder="+1 (555) 000-0000"
-              className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
+              disabled={!canEdit}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900 disabled:bg-gray-50 disabled:text-gray-600"
             />
           </div>
         </div>
@@ -289,7 +375,7 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
         {/* Price */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Total Price <span className="text-red-400">*</span>
+            Total Price {canEdit && <span className="text-red-400">*</span>}
           </label>
           <div className="relative w-48">
             <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
@@ -300,7 +386,8 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
               value={priceDollars}
               onChange={(e) => setPriceDollars(e.target.value)}
               placeholder="0.00"
-              className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
+              disabled={!canEdit}
+              className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition disabled:bg-gray-50 disabled:text-gray-600"
             />
           </div>
           {pricePreview > 0 && (
@@ -316,12 +403,13 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
               <button
                 key={type}
                 type="button"
-                onClick={() => setPaymentType(type)}
+                onClick={() => canEdit && setPaymentType(type)}
+                disabled={!canEdit}
                 className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
                   paymentType === type
                     ? 'border-brand-900 bg-brand-900/5 text-brand-900'
                     : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-                }`}
+                } disabled:cursor-default`}
               >
                 {type === 'full' ? 'Full Payment' : type === 'installment' ? 'Installment Plan' : 'Subscription'}
               </button>
@@ -349,7 +437,8 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
                         )
                       }
                       placeholder="0.00"
-                      className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
+                      disabled={!canEdit}
+                      className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition disabled:bg-gray-50"
                     />
                   </div>
                   <input
@@ -361,26 +450,31 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
                         prev.map((i) => (i.id === inst.id ? { ...i, date: e.target.value } : i))
                       )
                     }
-                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
+                    disabled={!canEdit}
+                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition disabled:bg-gray-50"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setInstallments((prev) => prev.filter((i) => i.id !== inst.id))}
-                    className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => setInstallments((prev) => prev.filter((i) => i.id !== inst.id))}
+                      className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
-            <button
-              type="button"
-              onClick={() => setInstallments((prev) => [...prev, { id: uid(), amount: '', date: '' }])}
-              className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-brand-900 hover:text-brand-900 transition-colors"
-            >
-              <Plus size={14} />
-              Add Payment
-            </button>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => setInstallments((prev) => [...prev, { id: uid(), amount: '', date: '' }])}
+                className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-brand-900 hover:text-brand-900 transition-colors"
+              >
+                <Plus size={14} />
+                Add Payment
+              </button>
+            )}
           </div>
         )}
 
@@ -400,7 +494,8 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
                     value={subAmount}
                     onChange={(e) => setSubAmount(e.target.value)}
                     placeholder="0.00"
-                    className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
+                    disabled={!canEdit}
+                    className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition disabled:bg-gray-50"
                   />
                 </div>
               </div>
@@ -409,7 +504,8 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
                 <select
                   value={subFrequency}
                   onChange={(e) => setSubFrequency(e.target.value as 'monthly' | 'weekly')}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
+                  disabled={!canEdit}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition disabled:bg-gray-50"
                 >
                   <option value="monthly">Monthly</option>
                   <option value="weekly">Weekly</option>
@@ -422,50 +518,66 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
                   min={today()}
                   value={toDateValue(subStartDate)}
                   onChange={(e) => setSubStartDate(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
+                  disabled={!canEdit}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition disabled:bg-gray-50"
                 />
               </div>
             </div>
           </div>
         )}
 
-        {/* Error */}
         {error && (
           <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
         )}
 
         {/* Actions */}
         <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={deleting}
-            className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
-          >
-            <Trash2 size={15} />
-            {deleting ? 'Deleting…' : 'Delete Draft'}
-          </button>
+          {isDraft ? (
+            <>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={deleting}
+                className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+              >
+                <Trash2 size={15} />
+                {deleting ? 'Deleting...' : 'Delete Draft'}
+              </button>
 
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving || submitting}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-5 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
-            >
-              <Save size={16} />
-              {saving ? 'Saving…' : 'Save Draft'}
-            </button>
-            <button
-              type="button"
-              onClick={handleSend}
-              disabled={submitting || saving}
-              className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:opacity-50"
-            >
-              <Send size={16} />
-              {submitting ? 'Sending…' : 'Send Proposal'}
-            </button>
-          </div>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={saving || submitting}
+                  className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-5 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+                >
+                  <Save size={16} />
+                  {saving ? 'Saving...' : 'Save Draft'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSend}
+                  disabled={submitting || saving}
+                  className="inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium text-white transition-colors disabled:opacity-50"
+                  style={{ backgroundColor: '#293745' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#2f3e4e')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#293745')}
+                >
+                  <Send size={16} />
+                  {submitting ? 'Sending...' : 'Send Proposal'}
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center gap-3 ml-auto">
+              <button
+                onClick={() => router.push('/dashboard/proposals')}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-5 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+              >
+                Back to Proposals
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

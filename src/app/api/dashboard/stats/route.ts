@@ -87,6 +87,15 @@ export async function GET() {
     proposals: data.proposals,
   }));
 
+  const thisMonth = now.toISOString().slice(0, 7);
+  const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const lastMonth = lastMonthDate.toISOString().slice(0, 7);
+
+  const thisMonthRevenue = monthlyData[thisMonth]?.revenue || 0;
+  const lastMonthRevenue = monthlyData[lastMonth]?.revenue || 0;
+  const thisMonthProposals = monthlyData[thisMonth]?.proposals || 0;
+  const lastMonthProposals = monthlyData[lastMonth]?.proposals || 0;
+
   return NextResponse.json({
     totalRevenue,
     activeProposals,
@@ -94,5 +103,13 @@ export async function GET() {
     pendingPayments,
     statusBreakdown,
     monthlyChart,
+    trends: {
+      revenueChange: lastMonthRevenue > 0 ? ((thisMonthRevenue - lastMonthRevenue) / lastMonthRevenue) * 100 : 0,
+      proposalChange: lastMonthProposals > 0 ? ((thisMonthProposals - lastMonthProposals) / lastMonthProposals) * 100 : 0,
+      thisMonthRevenue,
+      lastMonthRevenue,
+      thisMonthProposals,
+      lastMonthProposals,
+    },
   });
 }
