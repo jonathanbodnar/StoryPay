@@ -98,7 +98,8 @@ export default function Sidebar({ venue }: SidebarProps) {
       </nav>
 
       <div className="px-5 py-4 border-t border-white/10">
-        <p className="text-xs text-gray-500 truncate">{venue.name}</p>
+        <p className="text-xs text-gray-400 truncate mb-1">{venue.name}</p>
+        <p className="text-[10px] text-gray-600">&copy; StoryVenue 2026</p>
       </div>
     </aside>
   );
