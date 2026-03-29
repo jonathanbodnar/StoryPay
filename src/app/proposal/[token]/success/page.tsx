@@ -114,7 +114,7 @@ export default function ProposalSuccessPage() {
           </button>
         )}
         <p className="mt-8 text-xs text-gray-300">
-          Secured by <span className="font-medium text-gray-400">StoryPay</span>
+&copy; StoryVenue 2026
         </p>
       </div>
     </div>

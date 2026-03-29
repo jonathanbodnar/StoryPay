@@ -281,9 +281,7 @@ export default function InvoicePage() {
         {/* Branding footer */}
         <div className="mt-6 flex flex-col items-center gap-2 print:hidden">
           <img src="/storypay-logo.png" alt="StoryPay" className="h-5 opacity-30" />
-          <p className="text-xs text-gray-300">
-            Payments powered by <span className="font-medium text-gray-400">LunarPay</span>
-          </p>
+          <p className="text-xs text-gray-300">&copy; StoryVenue 2026</p>
         </div>
       </div>
     </div>
