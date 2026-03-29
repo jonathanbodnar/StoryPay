@@ -57,11 +57,10 @@ export default function Sidebar({ venue }: SidebarProps) {
         </a>
         <Link href="/dashboard" className="block">
           <Image
-            src="/storypay-logo.png"
+            src="/storypay-logo-white.png"
             alt="StoryPay"
             width={160}
             height={40}
-            className="brightness-0 invert"
             priority
           />
         </Link>
