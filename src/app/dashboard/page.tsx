@@ -138,7 +138,7 @@ export default function DashboardOverview() {
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#293745')}
           >
             <FileText size={16} />
-            New Proposal
+            Create Proposal
           </Link>
         </div>
       </div>
