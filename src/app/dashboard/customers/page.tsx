@@ -171,14 +171,14 @@ export default function CustomersPage() {
                   <td className="px-5 py-3.5 text-gray-700">{c.email || '---'}</td>
                   <td className="px-5 py-3.5 text-gray-700">{c.phone || '---'}</td>
                   <td className="px-5 py-3.5 text-right">
-                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center justify-end gap-1">
                       <Link
                         href={`/dashboard/proposals/new?email=${encodeURIComponent(c.email || '')}&name=${encodeURIComponent(c.name || '')}`}
                         className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
-                        title="New Proposal"
+                        title="Create Proposal"
                       >
                         <FileText size={13} />
-                        Proposal
+                        Create Proposal
                       </Link>
                       <Link
                         href={`/dashboard/invoices/new?email=${encodeURIComponent(c.email || '')}&name=${encodeURIComponent(c.name || '')}`}
@@ -186,7 +186,7 @@ export default function CustomersPage() {
                         title="Create Invoice"
                       >
                         <Receipt size={13} />
-                        Invoice
+                        Create Invoice
                       </Link>
                     </div>
                   </td>
