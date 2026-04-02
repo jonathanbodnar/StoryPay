@@ -148,7 +148,7 @@ export default function ProposalsPage() {
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#293745')}
           >
             <Plus size={16} />
-            New Proposal
+            Create Proposal
           </Link>
         </div>
       </div>
