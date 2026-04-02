@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Eye, X } from 'lucide-react';
 import { formatCents, formatDate, getStatusColor, classNames } from '@/lib/utils';
 
 type TabKey = 'charges' | 'schedules' | 'subscriptions';
@@ -12,6 +12,9 @@ interface Charge {
   amount: number;
   status: string;
   date: string;
+  chargeId?: string;
+  transactionId?: string;
+  sessionId?: string;
 }
 
 interface Schedule {
@@ -45,6 +48,7 @@ export default function TransactionsPage() {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedCharge, setSelectedCharge] = useState<Charge | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -107,12 +111,15 @@ export default function TransactionsPage() {
                   <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                     Date
                   </th>
+                  <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400 text-right">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {charges.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-5 py-8 text-center text-gray-400">
+                    <td colSpan={5} className="px-5 py-8 text-center text-gray-400">
                       No charges yet
                     </td>
                   </tr>
@@ -135,6 +142,15 @@ export default function TransactionsPage() {
                           </span>
                         </td>
                         <td className="px-5 py-3.5 text-gray-500">{formatDate(c.date)}</td>
+                        <td className="px-5 py-3.5 text-right">
+                          <button
+                            onClick={() => setSelectedCharge(c)}
+                            className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
+                          >
+                            <Eye size={13} />
+                            View Transaction
+                          </button>
+                        </td>
                       </tr>
                     );
                   })
@@ -258,6 +274,78 @@ export default function TransactionsPage() {
               </tbody>
             </table>
           )}
+        </div>
+      )}
+
+      {/* Charge Detail Modal */}
+      {selectedCharge && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="relative w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <button
+              onClick={() => setSelectedCharge(null)}
+              className="absolute right-4 top-4 text-gray-400 hover:text-gray-600"
+            >
+              <X size={20} />
+            </button>
+
+            <h2 className="font-heading text-lg font-semibold text-gray-900 mb-5">Transaction Details</h2>
+
+            <dl className="space-y-4">
+              <div className="flex justify-between border-b border-gray-100 pb-3">
+                <dt className="text-sm font-medium text-gray-500">Description</dt>
+                <dd className="text-sm font-semibold text-gray-900">{selectedCharge.description}</dd>
+              </div>
+              <div className="flex justify-between border-b border-gray-100 pb-3">
+                <dt className="text-sm font-medium text-gray-500">Amount</dt>
+                <dd className="text-sm font-semibold text-gray-900">{formatCents(selectedCharge.amount)}</dd>
+              </div>
+              <div className="flex justify-between border-b border-gray-100 pb-3">
+                <dt className="text-sm font-medium text-gray-500">Status</dt>
+                <dd>
+                  <span
+                    className={classNames(
+                      'inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize',
+                      getStatusColor(selectedCharge.status).bg,
+                      getStatusColor(selectedCharge.status).text
+                    )}
+                  >
+                    {selectedCharge.status}
+                  </span>
+                </dd>
+              </div>
+              <div className="flex justify-between border-b border-gray-100 pb-3">
+                <dt className="text-sm font-medium text-gray-500">Date</dt>
+                <dd className="text-sm text-gray-700">{formatDate(selectedCharge.date)}</dd>
+              </div>
+              {selectedCharge.chargeId && (
+                <div className="flex justify-between border-b border-gray-100 pb-3">
+                  <dt className="text-sm font-medium text-gray-500">Charge ID</dt>
+                  <dd className="text-sm font-mono text-gray-700 break-all text-right max-w-[60%]">{selectedCharge.chargeId}</dd>
+                </div>
+              )}
+              {selectedCharge.transactionId && (
+                <div className="flex justify-between border-b border-gray-100 pb-3">
+                  <dt className="text-sm font-medium text-gray-500">Transaction ID</dt>
+                  <dd className="text-sm font-mono text-gray-700 break-all text-right max-w-[60%]">{selectedCharge.transactionId}</dd>
+                </div>
+              )}
+              {selectedCharge.sessionId && (
+                <div className="flex justify-between">
+                  <dt className="text-sm font-medium text-gray-500">Session ID</dt>
+                  <dd className="text-sm font-mono text-gray-700 break-all text-right max-w-[60%]">{selectedCharge.sessionId}</dd>
+                </div>
+              )}
+            </dl>
+
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setSelectedCharge(null)}
+                className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
