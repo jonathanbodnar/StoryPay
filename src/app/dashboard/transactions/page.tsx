@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2, Eye, X } from 'lucide-react';
+import { Loader2, Eye, X, RotateCcw, AlertTriangle } from 'lucide-react';
 import { formatCents, formatDate, getStatusColor, classNames } from '@/lib/utils';
 
 type TabKey = 'charges' | 'schedules' | 'subscriptions';
@@ -49,6 +49,36 @@ export default function TransactionsPage() {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCharge, setSelectedCharge] = useState<Charge | null>(null);
+  const [refundTarget, setRefundTarget] = useState<Charge | null>(null);
+  const [refunding, setRefunding] = useState(false);
+  const [refundError, setRefundError] = useState('');
+
+  async function handleRefund() {
+    if (!refundTarget) return;
+    setRefunding(true);
+    setRefundError('');
+    try {
+      const res = await fetch('/api/transactions/refund', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proposalId: refundTarget.id, chargeId: refundTarget.chargeId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setRefundError(data.error || 'Refund failed');
+        return;
+      }
+      // Update charge status locally
+      setCharges((prev) =>
+        prev.map((c) => (c.id === refundTarget.id ? { ...c, status: 'refunded' } : c))
+      );
+      setRefundTarget(null);
+    } catch {
+      setRefundError('Network error — please try again');
+    } finally {
+      setRefunding(false);
+    }
+  }
 
   useEffect(() => {
     setLoading(true);
@@ -143,13 +173,24 @@ export default function TransactionsPage() {
                         </td>
                         <td className="px-5 py-3.5 text-gray-500">{formatDate(c.date)}</td>
                         <td className="px-5 py-3.5 text-right">
-                          <button
-                            onClick={() => setSelectedCharge(c)}
-                            className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
-                          >
-                            <Eye size={13} />
-                            View Transaction
-                          </button>
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => setSelectedCharge(c)}
+                              className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
+                            >
+                              <Eye size={13} />
+                              View Transaction
+                            </button>
+                            {c.status !== 'refunded' && (
+                              <button
+                                onClick={() => { setRefundError(''); setRefundTarget(c); }}
+                                className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-50"
+                              >
+                                <RotateCcw size={13} />
+                                Refund
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -274,6 +315,48 @@ export default function TransactionsPage() {
               </tbody>
             </table>
           )}
+        </div>
+      )}
+
+      {/* Refund Confirmation Modal */}
+      {refundTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="relative w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-50">
+                <AlertTriangle size={20} className="text-red-600" />
+              </div>
+              <h2 className="font-heading text-lg font-semibold text-gray-900">Confirm Refund</h2>
+            </div>
+
+            <p className="text-sm text-gray-600 mb-2">
+              Are you sure you want to refund this transaction?
+            </p>
+            <p className="text-sm font-medium text-gray-900 mb-1">{refundTarget.description}</p>
+            <p className="text-sm text-gray-500 mb-5">Amount: <span className="font-semibold text-gray-900">{formatCents(refundTarget.amount)}</span></p>
+
+            {refundError && (
+              <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{refundError}</div>
+            )}
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => { setRefundTarget(null); setRefundError(''); }}
+                disabled={refunding}
+                className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRefund}
+                disabled={refunding}
+                className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {refunding && <Loader2 size={14} className="animate-spin" />}
+                {refunding ? 'Processing...' : 'Issue Refund'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

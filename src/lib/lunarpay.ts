@@ -139,7 +139,7 @@ export function getSubscription(secretKey: string, id: number) {
   return lpFetch(`/api/v1/subscriptions/${id}`, { key: secretKey });
 }
 
-export function refundCharge(secretKey: string, chargeId: number) {
+export function refundCharge(secretKey: string, chargeId: number | string) {
   return lpFetch(`/api/v1/charges/${chargeId}/refund`, { method: 'POST', key: secretKey });
 }
 
