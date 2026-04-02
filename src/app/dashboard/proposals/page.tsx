@@ -186,15 +186,15 @@ export default function ProposalsPage() {
                   )}
                 </div>
                 <div className="flex items-center gap-1">
-                  {p.customer_lunarpay_id && (
-                    <Link
-                      href={`/dashboard/customers/${p.customer_lunarpay_id}`}
-                      className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-200"
-                    >
-                      <User size={13} />
-                      View Customer
-                    </Link>
-                  )}
+                  <Link
+                    href={p.customer_lunarpay_id
+                      ? `/dashboard/customers/${p.customer_lunarpay_id}`
+                      : `/dashboard/customers?search=${encodeURIComponent(p.customer_name || '')}`}
+                    className="inline-flex items-center rounded-md p-1.5 text-gray-600 transition-colors hover:bg-gray-200"
+                    title="View customer"
+                  >
+                    <User size={13} />
+                  </Link>
                   <Link
                     href={`/dashboard/proposals/${p.id}/edit`}
                     className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-200"
@@ -311,16 +311,15 @@ export default function ProposalsPage() {
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-1">
-                        {p.customer_lunarpay_id && (
-                          <Link
-                            href={`/dashboard/customers/${p.customer_lunarpay_id}`}
-                            className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
-                            title="View customer"
-                          >
-                            <User size={13} />
-                            View Customer
-                          </Link>
-                        )}
+                        <Link
+                          href={p.customer_lunarpay_id
+                            ? `/dashboard/customers/${p.customer_lunarpay_id}`
+                            : `/dashboard/customers?search=${encodeURIComponent(p.customer_name || '')}`}
+                          className="inline-flex items-center rounded-md p-1.5 text-gray-600 transition-colors hover:bg-gray-100"
+                          title="View customer"
+                        >
+                          <User size={13} />
+                        </Link>
                         <Link
                           href={`/dashboard/proposals/${p.id}/edit`}
                           className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
