@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { listPaymentSchedules, getSubscription } from '@/lib/lunarpay';
+import { listPaymentSchedules, getSubscription, listCustomers } from '@/lib/lunarpay';
 
 export async function GET(request: NextRequest) {
   const cookieStore = await cookies();
@@ -27,42 +27,76 @@ export async function GET(request: NextRequest) {
     if (type === 'charges') {
       const { data: proposals } = await supabaseAdmin
         .from('proposals')
-        .select('id, customer_name, customer_lunarpay_id, price, status, charge_id, checkout_session_id, transaction_id, paid_at, created_at')
+        .select('id, customer_name, customer_email, customer_lunarpay_id, price, status, charge_id, checkout_session_id, transaction_id, paid_at, created_at')
         .eq('venue_id', venueId)
         .eq('status', 'paid')
         .order('paid_at', { ascending: false });
 
-      return NextResponse.json(
-        (proposals ?? []).map((p) => ({
-          id: p.id,
-          description: `Proposal - ${p.customer_name}`,
-          amount: p.price,
-          status: p.status,
-          date: p.paid_at || p.created_at,
-          chargeId: p.charge_id,
-          transactionId: p.transaction_id,
-          sessionId: p.checkout_session_id,
-          customerId: p.customer_lunarpay_id ?? null,
-          customerName: p.customer_name,
-        }))
+      // For proposals missing a LunarPay customer ID, look it up by email and backfill
+      const resolved = await Promise.all(
+        (proposals ?? []).map(async (p) => {
+          let customerId = p.customer_lunarpay_id ?? null;
+
+          if (!customerId && p.customer_email) {
+            try {
+              const result = await listCustomers(venue.lunarpay_secret_key, p.customer_email, 1, 1);
+              const items = Array.isArray(result) ? result : result.data ?? [];
+              if (items.length > 0) {
+                customerId = items[0].id;
+                // Backfill so future lookups are instant
+                await supabaseAdmin
+                  .from('proposals')
+                  .update({ customer_lunarpay_id: customerId })
+                  .eq('id', p.id);
+              }
+            } catch {
+              // best-effort
+            }
+          }
+
+          return {
+            id: p.id,
+            description: `Proposal - ${p.customer_name}`,
+            amount: p.price,
+            status: p.status,
+            date: p.paid_at || p.created_at,
+            chargeId: p.charge_id,
+            transactionId: p.transaction_id,
+            sessionId: p.checkout_session_id,
+            customerId,
+            customerName: p.customer_name,
+          };
+        })
       );
+
+      return NextResponse.json(resolved);
     }
 
     if (type === 'schedules') {
       const { data: proposals } = await supabaseAdmin
         .from('proposals')
-        .select('id, customer_name, customer_lunarpay_id, schedule_id')
+        .select('id, customer_name, customer_email, customer_lunarpay_id, schedule_id')
         .eq('venue_id', venueId)
         .not('schedule_id', 'is', null);
 
       const customerMap: Record<string, { customerId: string | null; customerName: string | null }> = {};
       for (const p of proposals ?? []) {
-        if (p.schedule_id) {
-          customerMap[String(p.schedule_id)] = {
-            customerId: p.customer_lunarpay_id ?? null,
-            customerName: p.customer_name ?? null,
-          };
+        if (!p.schedule_id) continue;
+        let customerId = p.customer_lunarpay_id ?? null;
+        if (!customerId && p.customer_email) {
+          try {
+            const result = await listCustomers(venue.lunarpay_secret_key, p.customer_email, 1, 1);
+            const items = Array.isArray(result) ? result : result.data ?? [];
+            if (items.length > 0) {
+              customerId = items[0].id;
+              await supabaseAdmin.from('proposals').update({ customer_lunarpay_id: customerId }).eq('id', p.id);
+            }
+          } catch { /* best-effort */ }
         }
+        customerMap[String(p.schedule_id)] = {
+          customerId,
+          customerName: p.customer_name ?? null,
+        };
       }
 
       const schedules = await listPaymentSchedules(venue.lunarpay_secret_key);
@@ -79,13 +113,25 @@ export async function GET(request: NextRequest) {
     if (type === 'subscriptions') {
       const { data: proposals } = await supabaseAdmin
         .from('proposals')
-        .select('id, customer_name, customer_lunarpay_id, price, status, subscription_id, payment_config, created_at')
+        .select('id, customer_name, customer_email, customer_lunarpay_id, price, status, subscription_id, payment_config, created_at')
         .eq('venue_id', venueId)
         .not('subscription_id', 'is', null)
         .order('created_at', { ascending: false });
 
       const subscriptions = await Promise.all(
         (proposals ?? []).map(async (p) => {
+          let customerId = p.customer_lunarpay_id ?? null;
+          if (!customerId && p.customer_email) {
+            try {
+              const result = await listCustomers(venue.lunarpay_secret_key, p.customer_email, 1, 1);
+              const items = Array.isArray(result) ? result : result.data ?? [];
+              if (items.length > 0) {
+                customerId = items[0].id;
+                await supabaseAdmin.from('proposals').update({ customer_lunarpay_id: customerId }).eq('id', p.id);
+              }
+            } catch { /* best-effort */ }
+          }
+
           try {
             const sub = await getSubscription(venue.lunarpay_secret_key, p.subscription_id);
             return {
@@ -96,7 +142,7 @@ export async function GET(request: NextRequest) {
               status: sub.status ?? p.status,
               nextPayment: sub.nextPaymentDate ?? null,
               subscriptionId: p.subscription_id,
-              customerId: p.customer_lunarpay_id ?? null,
+              customerId,
               customerName: p.customer_name,
             };
           } catch {
@@ -108,7 +154,7 @@ export async function GET(request: NextRequest) {
               status: p.status,
               nextPayment: null,
               subscriptionId: p.subscription_id,
-              customerId: p.customer_lunarpay_id ?? null,
+              customerId,
               customerName: p.customer_name,
             };
           }
