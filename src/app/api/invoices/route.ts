@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const {
     customerName, customerEmail, customerPhone,
-    price, description, paymentType, paymentConfig,
+    price, lineItems, paymentType, paymentConfig,
     asDraft,
   } = body;
 
@@ -55,9 +55,48 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const invoiceContent = description
-    ? `<div><h2>Invoice</h2><p>${description.replace(/\n/g, '<br/>')}</p></div>`
-    : '<div><h2>Invoice</h2></div>';
+  const items: { name: string; description: string; amount: number }[] =
+    Array.isArray(lineItems) && lineItems.length > 0 ? lineItems : [];
+
+  const formatAmount = (cents: number) =>
+    (cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+
+  const itemRows = items
+    .map(
+      (item) => `
+      <tr>
+        <td style="padding: 12px 16px; border-bottom: 1px solid #f3f4f6; vertical-align: top;">
+          <div style="font-weight: 600; color: #111827; font-size: 14px;">${item.name || '—'}</div>
+          ${item.description ? `<div style="color: #6b7280; font-size: 13px; margin-top: 2px;">${item.description}</div>` : ''}
+        </td>
+        <td style="padding: 12px 16px; border-bottom: 1px solid #f3f4f6; text-align: right; font-size: 14px; color: #111827; white-space: nowrap; vertical-align: top;">
+          ${formatAmount(item.amount || 0)}
+        </td>
+      </tr>`
+    )
+    .join('');
+
+  const invoiceContent = `
+    <div style="font-family: 'Open Sans', Arial, sans-serif;">
+      <h2 style="font-family: 'Playfair Display', Georgia, serif; font-size: 22px; font-weight: 400; color: #111827; margin: 0 0 20px;">Invoice</h2>
+      <table style="width: 100%; border-collapse: collapse; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+        <thead>
+          <tr style="background-color: #f9fafb;">
+            <th style="padding: 10px 16px; text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #9ca3af; border-bottom: 1px solid #e5e7eb;">Item / Service</th>
+            <th style="padding: 10px 16px; text-align: right; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #9ca3af; border-bottom: 1px solid #e5e7eb;">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemRows || '<tr><td colspan="2" style="padding: 16px; text-align: center; color: #9ca3af;">No items</td></tr>'}
+        </tbody>
+        <tfoot>
+          <tr style="background-color: #f9fafb;">
+            <td style="padding: 12px 16px; font-weight: 700; font-size: 14px; color: #111827; border-top: 2px solid #e5e7eb;">Total</td>
+            <td style="padding: 12px 16px; text-align: right; font-weight: 700; font-size: 15px; color: #111827; border-top: 2px solid #e5e7eb;">${formatAmount(price || 0)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>`;
 
   const { data: proposal, error } = await supabaseAdmin
     .from('proposals')

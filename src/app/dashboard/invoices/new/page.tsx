@@ -5,6 +5,13 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Send, Save, Plus, Trash2 } from 'lucide-react';
 import { formatCents } from '@/lib/utils';
 
+interface LineItem {
+  id: string;
+  name: string;
+  description: string;
+  amount: string;
+}
+
 interface Installment {
   id: string;
   amount: string;
@@ -29,6 +36,10 @@ function formatPhoneNumber(value: string): string {
   return `+${digits.slice(0, digits.length - 10)} (${digits.slice(-10, -7)}) ${digits.slice(-7, -4)}-${digits.slice(-4)}`;
 }
 
+function emptyLineItem(): LineItem {
+  return { id: uid(), name: '', description: '', amount: '' };
+}
+
 export default function NewInvoicePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -36,8 +47,7 @@ export default function NewInvoicePage() {
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
-  const [description, setDescription] = useState('');
-  const [priceDollars, setPriceDollars] = useState('');
+  const [lineItems, setLineItems] = useState<LineItem[]>([emptyLineItem()]);
   const [paymentType, setPaymentType] = useState<'full' | 'installment' | 'subscription'>('full');
 
   const [installments, setInstallments] = useState<Installment[]>([
@@ -57,6 +67,19 @@ export default function NewInvoicePage() {
     if (name) setCustomerName(name);
     if (email) setCustomerEmail(email);
   }, [searchParams]);
+
+  function updateLineItem(id: string, field: keyof LineItem, value: string) {
+    setLineItems((prev) => prev.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
+  }
+
+  function removeLineItem(id: string) {
+    setLineItems((prev) => prev.filter((item) => item.id !== id));
+  }
+
+  const totalCents = lineItems.reduce((sum, item) => {
+    const val = parseFloat(item.amount || '0');
+    return sum + (isNaN(val) ? 0 : Math.round(val * 100));
+  }, 0);
 
   function buildPaymentConfig() {
     if (paymentType === 'installment') {
@@ -89,8 +112,12 @@ export default function NewInvoicePage() {
           customerName: customerName || undefined,
           customerEmail: customerEmail || undefined,
           customerPhone: customerPhone || undefined,
-          description,
-          price: Math.round(parseFloat(priceDollars || '0') * 100),
+          lineItems: lineItems.map((item) => ({
+            name: item.name,
+            description: item.description,
+            amount: Math.round(parseFloat(item.amount || '0') * 100),
+          })),
+          price: totalCents,
           paymentType,
           paymentConfig: buildPaymentConfig(),
           asDraft,
@@ -110,8 +137,6 @@ export default function NewInvoicePage() {
       setSubmitting(false);
     }
   }
-
-  const pricePreview = Math.round(parseFloat(priceDollars || '0') * 100);
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -166,38 +191,82 @@ export default function NewInvoicePage() {
           </div>
         </div>
 
-        {/* Description */}
+        {/* Line Items */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Description</label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="What is this invoice for?"
-            rows={3}
-            className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900 resize-none"
-          />
-        </div>
-
-        {/* Price */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Amount <span className="text-red-400">*</span>
-          </label>
-          <div className="relative w-48">
-            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={priceDollars}
-              onChange={(e) => setPriceDollars(e.target.value)}
-              placeholder="0.00"
-              className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
-            />
+          <div className="flex items-center justify-between mb-3">
+            <label className="block text-sm font-medium text-gray-700">
+              Line Items <span className="text-red-400">*</span>
+            </label>
           </div>
-          {pricePreview > 0 && (
-            <p className="mt-1 text-xs text-gray-400">{formatCents(pricePreview)}</p>
-          )}
+
+          <div className="rounded-lg border border-gray-200 overflow-hidden">
+            {/* Column headers */}
+            <div className="grid grid-cols-[1fr_1fr_120px_36px] gap-3 bg-gray-50 px-4 py-2.5 border-b border-gray-200">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Item / Service</span>
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Note / Description</span>
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Amount</span>
+              <span />
+            </div>
+
+            <div className="divide-y divide-gray-100">
+              {lineItems.map((item, idx) => (
+                <div key={item.id} className="grid grid-cols-[1fr_1fr_120px_36px] gap-3 px-4 py-3 items-start">
+                  <input
+                    type="text"
+                    value={item.name}
+                    onChange={(e) => updateLineItem(item.id, 'name', e.target.value)}
+                    placeholder={`Item ${idx + 1}`}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
+                  />
+                  <input
+                    type="text"
+                    value={item.description}
+                    onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
+                    placeholder="Optional note..."
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
+                  />
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={item.amount}
+                      onChange={(e) => updateLineItem(item.id, 'amount', e.target.value)}
+                      placeholder="0.00"
+                      className="w-full rounded-md border border-gray-300 pl-6 pr-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeLineItem(item.id)}
+                    disabled={lineItems.length === 1}
+                    className="mt-1.5 p-1.5 text-gray-400 hover:text-red-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Footer: Add line + total */}
+            <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200">
+              <button
+                type="button"
+                onClick={() => setLineItems((prev) => [...prev, emptyLineItem()])}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-900 hover:opacity-80 transition-opacity"
+              >
+                <Plus size={14} />
+                Add Line Item
+              </button>
+              <div className="flex items-center gap-3 text-sm">
+                <span className="text-gray-500">Total</span>
+                <span className="font-semibold text-gray-900 min-w-[80px] text-right">
+                  {totalCents > 0 ? formatCents(totalCents) : '$0.00'}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Payment Type */}
