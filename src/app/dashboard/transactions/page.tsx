@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2, Eye, X, RotateCcw, AlertTriangle } from 'lucide-react';
+import Link from 'next/link';
+import { Loader2, Eye, X, RotateCcw, AlertTriangle, User } from 'lucide-react';
 import { formatCents, formatDate, getStatusColor, classNames } from '@/lib/utils';
 
 type TabKey = 'charges' | 'schedules' | 'subscriptions';
@@ -15,6 +16,8 @@ interface Charge {
   chargeId?: string;
   transactionId?: string;
   sessionId?: string;
+  customerId?: string | number | null;
+  customerName?: string | null;
 }
 
 interface Schedule {
@@ -25,6 +28,8 @@ interface Schedule {
   paymentsCount?: number;
   numberOfPayments?: number;
   status: string;
+  customerId?: string | number | null;
+  customerName?: string | null;
 }
 
 interface Subscription {
@@ -34,6 +39,8 @@ interface Subscription {
   frequency: string;
   status: string;
   nextPayment: string | null;
+  customerId?: string | number | null;
+  customerName?: string | null;
 }
 
 const tabs: { key: TabKey; label: string }[] = [
@@ -174,6 +181,15 @@ export default function TransactionsPage() {
                         <td className="px-5 py-3.5 text-gray-500">{formatDate(c.date)}</td>
                         <td className="px-5 py-3.5 text-right">
                           <div className="flex items-center justify-end gap-1">
+                            {c.customerId && (
+                              <Link
+                                href={`/dashboard/customers/${c.customerId}`}
+                                className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
+                              >
+                                <User size={13} />
+                                View Customer
+                              </Link>
+                            )}
                             <button
                               onClick={() => setSelectedCharge(c)}
                               className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
@@ -216,12 +232,15 @@ export default function TransactionsPage() {
                   <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                     Status
                   </th>
+                  <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400 text-right">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {schedules.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-5 py-8 text-center text-gray-400">
+                    <td colSpan={5} className="px-5 py-8 text-center text-gray-400">
                       No payment schedules yet
                     </td>
                   </tr>
@@ -250,6 +269,17 @@ export default function TransactionsPage() {
                             {s.status}
                           </span>
                         </td>
+                        <td className="px-5 py-3.5 text-right">
+                          {s.customerId && (
+                            <Link
+                              href={`/dashboard/customers/${s.customerId}`}
+                              className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
+                            >
+                              <User size={13} />
+                              View Customer
+                            </Link>
+                          )}
+                        </td>
                       </tr>
                     );
                   })
@@ -277,12 +307,15 @@ export default function TransactionsPage() {
                   <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                     Status
                   </th>
+                  <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400 text-right">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {subscriptions.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-5 py-8 text-center text-gray-400">
+                    <td colSpan={6} className="px-5 py-8 text-center text-gray-400">
                       No subscriptions yet
                     </td>
                   </tr>
@@ -307,6 +340,17 @@ export default function TransactionsPage() {
                           >
                             {s.status}
                           </span>
+                        </td>
+                        <td className="px-5 py-3.5 text-right">
+                          {s.customerId && (
+                            <Link
+                              href={`/dashboard/customers/${s.customerId}`}
+                              className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
+                            >
+                              <User size={13} />
+                              View Customer
+                            </Link>
+                          )}
                         </td>
                       </tr>
                     );

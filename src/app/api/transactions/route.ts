@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     if (type === 'charges') {
       const { data: proposals } = await supabaseAdmin
         .from('proposals')
-        .select('id, customer_name, price, status, charge_id, checkout_session_id, transaction_id, paid_at, created_at')
+        .select('id, customer_name, customer_lunarpay_id, price, status, charge_id, checkout_session_id, transaction_id, paid_at, created_at')
         .eq('venue_id', venueId)
         .eq('status', 'paid')
         .order('paid_at', { ascending: false });
@@ -42,20 +42,44 @@ export async function GET(request: NextRequest) {
           chargeId: p.charge_id,
           transactionId: p.transaction_id,
           sessionId: p.checkout_session_id,
+          customerId: p.customer_lunarpay_id ?? null,
+          customerName: p.customer_name,
         }))
       );
     }
 
     if (type === 'schedules') {
+      const { data: proposals } = await supabaseAdmin
+        .from('proposals')
+        .select('id, customer_name, customer_lunarpay_id, schedule_id')
+        .eq('venue_id', venueId)
+        .not('schedule_id', 'is', null);
+
+      const customerMap: Record<string, { customerId: string | null; customerName: string | null }> = {};
+      for (const p of proposals ?? []) {
+        if (p.schedule_id) {
+          customerMap[String(p.schedule_id)] = {
+            customerId: p.customer_lunarpay_id ?? null,
+            customerName: p.customer_name ?? null,
+          };
+        }
+      }
+
       const schedules = await listPaymentSchedules(venue.lunarpay_secret_key);
-      const items = Array.isArray(schedules) ? schedules : schedules.data ?? [];
+      const items = (Array.isArray(schedules) ? schedules : schedules.data ?? []).map(
+        (s: Record<string, unknown>) => ({
+          ...s,
+          customerId: customerMap[String(s.id)]?.customerId ?? null,
+          customerName: customerMap[String(s.id)]?.customerName ?? null,
+        })
+      );
       return NextResponse.json(items);
     }
 
     if (type === 'subscriptions') {
       const { data: proposals } = await supabaseAdmin
         .from('proposals')
-        .select('id, customer_name, price, status, subscription_id, payment_config, created_at')
+        .select('id, customer_name, customer_lunarpay_id, price, status, subscription_id, payment_config, created_at')
         .eq('venue_id', venueId)
         .not('subscription_id', 'is', null)
         .order('created_at', { ascending: false });
@@ -72,6 +96,8 @@ export async function GET(request: NextRequest) {
               status: sub.status ?? p.status,
               nextPayment: sub.nextPaymentDate ?? null,
               subscriptionId: p.subscription_id,
+              customerId: p.customer_lunarpay_id ?? null,
+              customerName: p.customer_name,
             };
           } catch {
             return {
@@ -82,6 +108,8 @@ export async function GET(request: NextRequest) {
               status: p.status,
               nextPayment: null,
               subscriptionId: p.subscription_id,
+              customerId: p.customer_lunarpay_id ?? null,
+              customerName: p.customer_name,
             };
           }
         })

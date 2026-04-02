@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { FileText, Copy, ExternalLink, Plus, Pencil, Trash2, Send, FileStack, RefreshCw, Receipt } from 'lucide-react';
+import { FileText, Copy, ExternalLink, Plus, Pencil, Trash2, Send, FileStack, RefreshCw, Receipt, User } from 'lucide-react';
 import { formatCents, formatDate, getStatusColor, classNames } from '@/lib/utils';
 
 interface Proposal {
   id: string;
   customer_name: string | null;
   customer_email: string | null;
+  customer_lunarpay_id: number | string | null;
   status: string;
   price: number;
   payment_type: string;
@@ -185,6 +186,15 @@ export default function ProposalsPage() {
                   )}
                 </div>
                 <div className="flex items-center gap-1">
+                  {p.customer_lunarpay_id && (
+                    <Link
+                      href={`/dashboard/customers/${p.customer_lunarpay_id}`}
+                      className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-200"
+                    >
+                      <User size={13} />
+                      View Customer
+                    </Link>
+                  )}
                   <Link
                     href={`/dashboard/proposals/${p.id}/edit`}
                     className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-200"
@@ -301,6 +311,16 @@ export default function ProposalsPage() {
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-1">
+                        {p.customer_lunarpay_id && (
+                          <Link
+                            href={`/dashboard/customers/${p.customer_lunarpay_id}`}
+                            className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
+                            title="View customer"
+                          >
+                            <User size={13} />
+                            View Customer
+                          </Link>
+                        )}
                         <Link
                           href={`/dashboard/proposals/${p.id}/edit`}
                           className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
