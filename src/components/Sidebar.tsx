@@ -9,6 +9,7 @@ import {
   Users,
   CreditCard,
   BarChart2,
+  Sparkles,
   HelpCircle,
   Settings,
   ArrowLeft,
@@ -30,6 +31,7 @@ const menuItems = [
   { label: 'Customers', href: '/dashboard/customers', icon: Users },
   { label: 'Transactions', href: '/dashboard/transactions', icon: CreditCard },
   { label: 'Reports', href: '/dashboard/reports', icon: BarChart2 },
+  { label: "What's New", href: '/dashboard/updates', icon: Sparkles },
   { label: 'Support', href: '/dashboard/support', icon: HelpCircle },
   { label: 'Settings', href: '/dashboard/settings', icon: Settings },
 ];
