@@ -134,7 +134,7 @@ export default function DashboardOverview() {
       {/* Page header */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-heading text-2xl text-gray-900 leading-tight">Overview</h1>
+          <h1 className="font-heading text-2xl text-gray-900 leading-tight">Home</h1>
           <p className="mt-0.5 text-sm text-gray-500">Your venue payment dashboard</p>
         </div>
         <div className="flex items-center gap-2.5 flex-wrap">

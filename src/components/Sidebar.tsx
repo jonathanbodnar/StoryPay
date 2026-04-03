@@ -29,7 +29,7 @@ interface SidebarProps {
 }
 
 const menuItems = [
-  { label: 'Overview',     href: '/dashboard',              icon: LayoutDashboard },
+  { label: 'Home',          href: '/dashboard',              icon: LayoutDashboard },
   { label: 'Proposals',    href: '/dashboard/proposals',    icon: FileText },
   { label: 'Customers',    href: '/dashboard/customers',    icon: Users },
   { label: 'Transactions', href: '/dashboard/transactions', icon: CreditCard },
