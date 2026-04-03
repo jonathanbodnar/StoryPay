@@ -27,7 +27,7 @@ export async function POST(
 
   const { data: proposal, error } = await supabaseAdmin
     .from('proposals')
-    .select('id, venue_id, status, price, customer_name, customer_email, payment_type, payment_config')
+    .select('id, venue_id, status, price, customer_name, customer_email, customer_lunarpay_id, payment_type, payment_config')
     .eq('public_token', token)
     .single();
 
@@ -70,7 +70,9 @@ export async function POST(
 
     const amountInDollars = chargeAmountCents / 100;
 
-    const checkoutData = {
+    const hasFuturePayments = proposal.payment_type === 'installment' || proposal.payment_type === 'subscription';
+
+    const checkoutData: Record<string, unknown> = {
       amount: amountInDollars,
       description,
       customer_email: proposal.customer_email,
@@ -78,6 +80,14 @@ export async function POST(
       success_url: `${APP_URL}/proposal/${token}/success`,
       cancel_url: `${APP_URL}/proposal/${token}`,
     };
+
+    if (hasFuturePayments) {
+      checkoutData.save_payment_method = true;
+    }
+
+    if (proposal.customer_lunarpay_id) {
+      checkoutData.customer_id = proposal.customer_lunarpay_id;
+    }
 
     console.log('Creating checkout session:', JSON.stringify(checkoutData));
 

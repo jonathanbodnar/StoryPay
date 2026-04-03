@@ -147,25 +147,21 @@ export function refundCharge(secretKey: string, chargeId: number | string) {
 
 export function createCheckoutSession(
   secretKey: string,
-  data: {
-    amount: number;
-    description: string;
-    success_url: string;
-    cancel_url?: string;
-    customer_email?: string;
-    customer_name?: string;
-    metadata?: Record<string, string>;
-  }
+  data: Record<string, unknown>
 ) {
-  const body: Record<string, unknown> = {
-    amount: data.amount,
-    description: data.description,
-    success_url: data.success_url,
-  };
-  if (data.cancel_url) body.cancel_url = data.cancel_url;
-  if (data.customer_email) body.customer_email = data.customer_email;
-  if (data.customer_name) body.customer_name = data.customer_name;
-  if (data.metadata) body.metadata = data.metadata;
+  const body: Record<string, unknown> = {};
+
+  const allowedFields = [
+    'amount', 'description', 'success_url', 'cancel_url',
+    'customer_email', 'customer_name', 'customer_id',
+    'save_payment_method', 'metadata',
+  ];
+
+  for (const field of allowedFields) {
+    if (data[field] !== undefined && data[field] !== null) {
+      body[field] = data[field];
+    }
+  }
 
   return lpFetch('/api/v1/checkout/sessions', {
     method: 'POST',
