@@ -71,7 +71,7 @@ export default function Sidebar({ venue }: SidebarProps) {
         </a>
         <Link href="/dashboard" className="block">
           <Image
-            src="/storypay-logo-white.png"
+            src="/StoryPay-Light-Logo.png"
             alt="StoryPay"
             width={160}
             height={40}
@@ -117,7 +117,7 @@ export default function Sidebar({ venue }: SidebarProps) {
         style={{ backgroundColor: '#293745' }}
       >
         <Link href="/dashboard">
-          <Image src="/storypay-logo-white.png" alt="StoryPay" width={120} height={30} priority />
+          <Image src="/StoryPay-Light-Logo.png" alt="StoryPay" width={120} height={30} priority />
         </Link>
         <button
           onClick={() => setMobileOpen(v => !v)}
