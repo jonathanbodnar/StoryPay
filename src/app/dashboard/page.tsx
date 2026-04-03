@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { DollarSign, FileText, Users, Clock, TrendingUp, TrendingDown, ArrowUpRight, Receipt, ArrowRight, CheckCircle2, Send, PenLine, Eye, XCircle } from 'lucide-react';
+import { DollarSign, FileText, Users, Clock, TrendingUp, TrendingDown, ArrowUpRight, Receipt, ArrowRight, CheckCircle2, Send, PenLine, Eye, XCircle, CreditCard } from 'lucide-react';
 import { formatCents, formatDate, getStatusColor, classNames } from '@/lib/utils';
 import Link from 'next/link';
 import DateRangePicker, { DateRange, PRESETS } from '@/components/DateRangePicker';
@@ -81,6 +81,16 @@ interface Proposal {
   created_at: string;
 }
 
+interface Transaction {
+  id: string;
+  description: string;
+  amount: number;
+  status: string;
+  date: string;
+  customerId?: string | null;
+  customerName?: string | null;
+}
+
 function formatShortCurrency(cents: number) {
   const dollars = cents / 100;
   if (dollars >= 1000000) return `$${(dollars / 1000000).toFixed(1)}M`;
@@ -129,10 +139,12 @@ function BrandTooltip({ active, payload, label }: { active?: boolean; payload?: 
 }
 
 export default function DashboardOverview() {
-  const [stats, setStats]       = useState<Stats | null>(null);
-  const [proposals, setProposals] = useState<Proposal[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [dateRange, setDateRange] = useState<DateRange>(getDefaultRange);
+  const [stats, setStats]             = useState<Stats | null>(null);
+  const [proposals, setProposals]     = useState<Proposal[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [txLoading, setTxLoading]     = useState(true);
+  const [dateRange, setDateRange]     = useState<DateRange>(getDefaultRange);
 
   const fetchData = useCallback(async (range: DateRange) => {
     setLoading(true);
@@ -140,7 +152,7 @@ export default function DashboardOverview() {
       const params = new URLSearchParams({ from: range.from, to: range.to });
       const [statsRes, proposalsRes] = await Promise.all([
         fetch(`/api/dashboard/stats?${params}`),
-        fetch('/api/proposals?limit=6'),
+        fetch('/api/proposals?limit=5'),
       ]);
       if (statsRes.ok) setStats(await statsRes.json());
       if (proposalsRes.ok) {
@@ -149,6 +161,19 @@ export default function DashboardOverview() {
       }
     } catch { /* silently fail */ }
     finally { setLoading(false); }
+  }, []);
+
+  // Fetch recent transactions (charges) once on mount
+  useEffect(() => {
+    setTxLoading(true);
+    fetch('/api/transactions?type=charges')
+      .then(r => r.ok ? r.json() : [])
+      .then(data => {
+        const items = Array.isArray(data) ? data : data.data ?? [];
+        setTransactions(items.slice(0, 5));
+      })
+      .catch(() => {})
+      .finally(() => setTxLoading(false));
   }, []);
 
   useEffect(() => { fetchData(dateRange); }, [fetchData, dateRange]);
@@ -406,8 +431,8 @@ export default function DashboardOverview() {
       </div>
 
       {/* ── Recent proposals ── */}
-      <div className="rounded-xl bg-white shadow-sm overflow-hidden" style={{ border: `1px solid ${B.light}` }}>
-        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: `1px solid ${B.light}` }}>
+      <div className="rounded-xl bg-white shadow-sm overflow-hidden mb-6" style={{ border: '1px solid #f1f5f9' }}>
+        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid #f1f5f9' }}>
           <p className="text-sm font-semibold" style={{ color: B.primary }}>Recent Proposals</p>
           <Link href="/dashboard/proposals" className="inline-flex items-center gap-1 text-xs font-medium transition-colors" style={{ color: B.muted }}
             onMouseEnter={e => (e.currentTarget.style.color = B.primary)}
@@ -418,7 +443,7 @@ export default function DashboardOverview() {
 
         <table className="w-full text-sm">
           <thead>
-            <tr style={{ backgroundColor: B.bg5, borderBottom: `1px solid ${B.light}` }}>
+            <tr style={{ backgroundColor: B.bg5, borderBottom: '1px solid #f1f5f9' }}>
               <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider" style={{ color: B.muted }}>Customer</th>
               <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider" style={{ color: B.muted }}>Status</th>
               <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider" style={{ color: B.muted }}>Amount</th>
@@ -426,10 +451,10 @@ export default function DashboardOverview() {
               <th className="px-6 py-3" />
             </tr>
           </thead>
-          <tbody className="divide-y" style={{ borderColor: '#f1f5f9' }}>
+          <tbody style={{ borderTop: 'none' }}>
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
-                <tr key={i}>
+                <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
                   <td className="px-6 py-4"><Skeleton className="h-4 w-28 mb-1.5" /><Skeleton className="h-3 w-36" /></td>
                   <td className="px-6 py-4"><Skeleton className="h-5 w-14 rounded-full" /></td>
                   <td className="px-6 py-4"><Skeleton className="h-4 w-16" /></td>
@@ -451,7 +476,7 @@ export default function DashboardOverview() {
               proposals.map((p) => {
                 const color = getStatusColor(p.status);
                 return (
-                  <tr key={p.id} className="group transition-colors" style={{ cursor: 'default' }}
+                  <tr key={p.id} className="group transition-colors" style={{ cursor: 'default', borderBottom: '1px solid #f1f5f9' }}
                     onMouseEnter={e => (e.currentTarget.style.backgroundColor = B.bg5)}
                     onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}>
                     <td className="px-6 py-3.5">
@@ -474,6 +499,72 @@ export default function DashboardOverview() {
                         Open <ArrowUpRight size={11} />
                       </Link>
                     </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ── Recent Transactions ── */}
+      <div className="rounded-xl bg-white shadow-sm overflow-hidden" style={{ border: '1px solid #f1f5f9' }}>
+        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid #f1f5f9' }}>
+          <div className="flex items-center gap-2">
+            <CreditCard size={15} style={{ color: B.muted }} />
+            <p className="text-sm font-semibold" style={{ color: B.primary }}>Recent Transactions</p>
+          </div>
+          <Link href="/dashboard/transactions" className="inline-flex items-center gap-1 text-xs font-medium transition-colors" style={{ color: B.muted }}
+            onMouseEnter={e => (e.currentTarget.style.color = B.primary)}
+            onMouseLeave={e => (e.currentTarget.style.color = B.muted)}>
+            View all <ArrowUpRight size={12} />
+          </Link>
+        </div>
+
+        <table className="w-full text-sm">
+          <thead>
+            <tr style={{ backgroundColor: B.bg5, borderBottom: '1px solid #f1f5f9' }}>
+              <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider" style={{ color: B.muted }}>Description</th>
+              <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider" style={{ color: B.muted }}>Amount</th>
+              <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider" style={{ color: B.muted }}>Status</th>
+              <th className="hidden sm:table-cell px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider" style={{ color: B.muted }}>Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {txLoading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <td className="px-6 py-4"><Skeleton className="h-4 w-40" /></td>
+                  <td className="px-6 py-4"><Skeleton className="h-4 w-16" /></td>
+                  <td className="px-6 py-4"><Skeleton className="h-5 w-14 rounded-full" /></td>
+                  <td className="hidden sm:table-cell px-6 py-4"><Skeleton className="h-4 w-20" /></td>
+                </tr>
+              ))
+            ) : transactions.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-6 py-10 text-center">
+                  <CreditCard size={28} className="mx-auto mb-2" style={{ color: B.bg20 }} />
+                  <p className="text-sm text-gray-400">No transactions yet</p>
+                </td>
+              </tr>
+            ) : (
+              transactions.map((tx) => {
+                const color = getStatusColor(tx.status);
+                return (
+                  <tr key={tx.id} className="group transition-colors" style={{ borderBottom: '1px solid #f1f5f9' }}
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = B.bg5)}
+                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}>
+                    <td className="px-6 py-3.5">
+                      <p className="font-medium" style={{ color: B.primary }}>{tx.description}</p>
+                      {tx.customerName && <p className="text-xs text-gray-400 mt-0.5">{tx.customerName}</p>}
+                    </td>
+                    <td className="px-6 py-3.5 font-semibold" style={{ color: B.primary }}>{formatCents(tx.amount)}</td>
+                    <td className="px-6 py-3.5">
+                      <span className={classNames('inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold capitalize', color.bg, color.text)}>
+                        {tx.status}
+                      </span>
+                    </td>
+                    <td className="hidden sm:table-cell px-6 py-3.5 text-xs text-gray-400">{formatDate(tx.date)}</td>
                   </tr>
                 );
               })
