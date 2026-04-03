@@ -8,6 +8,7 @@ import {
   FileText,
   Users,
   CreditCard,
+  BarChart2,
   HelpCircle,
   Settings,
   ArrowLeft,
@@ -28,6 +29,7 @@ const menuItems = [
   { label: 'Proposals', href: '/dashboard/proposals', icon: FileText },
   { label: 'Customers', href: '/dashboard/customers', icon: Users },
   { label: 'Transactions', href: '/dashboard/transactions', icon: CreditCard },
+  { label: 'Reports', href: '/dashboard/reports', icon: BarChart2 },
   { label: 'Support', href: '/dashboard/support', icon: HelpCircle },
   { label: 'Settings', href: '/dashboard/settings', icon: Settings },
 ];
