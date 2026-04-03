@@ -426,7 +426,7 @@ export default function DashboardOverview() {
               <th className="px-6 py-3" />
             </tr>
           </thead>
-          <tbody className="divide-y" style={{ borderColor: B.light }}>
+          <tbody className="divide-y" style={{ borderColor: '#f1f5f9' }}>
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i}>
