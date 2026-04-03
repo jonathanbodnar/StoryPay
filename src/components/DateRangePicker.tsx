@@ -50,6 +50,7 @@ export const PRESETS: { label: string; getRange: () => { from: string; to: strin
   { label: 'This quarter',  getRange: () => ({ from: toDateStr(startOf('quarter')), to: toDateStr(new Date()) }) },
   { label: 'Year to date',  getRange: () => ({ from: toDateStr(startOf('year')), to: toDateStr(new Date()) }) },
   { label: 'Last 12 months',getRange: () => { const t = new Date(); const f = new Date(t); f.setFullYear(t.getFullYear()-1); f.setDate(f.getDate()+1); return { from: toDateStr(f), to: toDateStr(t) }; } },
+  { label: 'Last year',     getRange: () => { const y = new Date().getFullYear()-1; return { from: `${y}-01-01`, to: `${y}-12-31` }; } },
   { label: 'All time',      getRange: () => ({ from: '2020-01-01', to: toDateStr(new Date()) }) },
 ];
 
