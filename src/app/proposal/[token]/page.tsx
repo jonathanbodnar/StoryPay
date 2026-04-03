@@ -556,7 +556,7 @@ export default function ProposalPage() {
 
         {/* Footer */}
         <div className="mt-8 flex flex-col items-center gap-2">
-          <img src="/storypay-logo.png" alt="StoryPay" className="h-5 opacity-30" />
+          <img src="/storypay-logo-dark.png" alt="StoryPay" className="h-5 opacity-60" />
           <p className="text-xs text-gray-300">&copy; StoryVenue 2026</p>
         </div>
       </div>
