@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { DollarSign, FileText, Users, Clock, TrendingUp, TrendingDown, ArrowUpRight, Receipt, ArrowRight, CheckCircle2, Send, PenLine, Eye } from 'lucide-react';
+import { useEffect, useState, useCallback } from 'react';
+import { DollarSign, FileText, Users, Clock, TrendingUp, TrendingDown, ArrowUpRight, Receipt, ArrowRight, CheckCircle2, Send, PenLine, Eye, XCircle } from 'lucide-react';
 import { formatCents, formatDate, getStatusColor, classNames } from '@/lib/utils';
 import Link from 'next/link';
+import DateRangePicker, { DateRange, PRESETS } from '@/components/DateRangePicker';
 import {
   AreaChart,
   Area,
@@ -19,6 +20,7 @@ interface Stats {
   activeProposals: number;
   customerCount: number;
   pendingPayments: number;
+  failedPayments: number;
   statusBreakdown: Record<string, number>;
   monthlyChart: { month: string; label: string; revenue: number; proposals: number }[];
   trends: {
@@ -74,31 +76,40 @@ function Skeleton({ className }: { className?: string }) {
   return <div className={classNames('animate-pulse rounded bg-gray-100', className ?? '')} />;
 }
 
+function getDefaultRange(): DateRange {
+  const preset = PRESETS.find(p => p.label === 'Last 30 days')!;
+  return { ...preset.getRange(), label: preset.label };
+}
+
 export default function DashboardOverview() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dateRange, setDateRange] = useState<DateRange>(getDefaultRange);
+
+  const fetchData = useCallback(async (range: DateRange) => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ from: range.from, to: range.to });
+      const [statsRes, proposalsRes] = await Promise.all([
+        fetch(`/api/dashboard/stats?${params}`),
+        fetch('/api/proposals?limit=6'),
+      ]);
+      if (statsRes.ok) setStats(await statsRes.json());
+      if (proposalsRes.ok) {
+        const data = await proposalsRes.json();
+        setProposals(Array.isArray(data) ? data : data.proposals ?? []);
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    async function fetchData() {
-      try {
-        const [statsRes, proposalsRes] = await Promise.all([
-          fetch('/api/dashboard/stats'),
-          fetch('/api/proposals?limit=6'),
-        ]);
-        if (statsRes.ok) setStats(await statsRes.json());
-        if (proposalsRes.ok) {
-          const data = await proposalsRes.json();
-          setProposals(Array.isArray(data) ? data : data.proposals ?? []);
-        }
-      } catch {
-        // silently fail
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
-  }, []);
+    fetchData(dateRange);
+  }, [fetchData, dateRange]);
 
   const revenueChange = stats?.trends?.revenueChange ?? null;
   const proposalChange = stats?.trends?.proposalChange ?? null;
@@ -121,12 +132,13 @@ export default function DashboardOverview() {
   return (
     <div className="min-h-full bg-gray-50/40">
       {/* Page header */}
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-heading text-2xl text-gray-900 leading-tight">Overview</h1>
           <p className="mt-0.5 text-sm text-gray-500">Your venue payment dashboard</p>
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <DateRangePicker value={dateRange} onChange={setDateRange} />
           <Link
             href="/dashboard/invoices/new"
             className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-all hover:shadow hover:border-gray-300"
@@ -146,26 +158,23 @@ export default function DashboardOverview() {
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         {/* Total Revenue */}
         <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-5">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Total Revenue</span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Revenue</span>
             <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: '#29374510' }}>
               <DollarSign size={15} style={{ color: '#293745' }} />
             </div>
           </div>
           {loading ? (
-            <>
-              <Skeleton className="h-7 w-28 mb-2" />
-              <Skeleton className="h-3.5 w-16" />
-            </>
+            <><Skeleton className="h-7 w-24 mb-2" /><Skeleton className="h-3.5 w-16" /></>
           ) : (
             <>
               <p className="text-2xl font-bold text-gray-900 tracking-tight">{formatCents(stats?.totalRevenue ?? 0)}</p>
               <div className="flex items-center gap-1.5 mt-1.5">
                 <TrendBadge value={revenueChange} />
-                <span className="text-xs text-gray-400">vs last month</span>
+                <span className="text-xs text-gray-400">vs prior period</span>
               </div>
             </>
           )}
@@ -174,22 +183,19 @@ export default function DashboardOverview() {
         {/* Active Proposals */}
         <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-5">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Active Proposals</span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Proposals</span>
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
               <FileText size={15} className="text-blue-500" />
             </div>
           </div>
           {loading ? (
-            <>
-              <Skeleton className="h-7 w-16 mb-2" />
-              <Skeleton className="h-3.5 w-20" />
-            </>
+            <><Skeleton className="h-7 w-16 mb-2" /><Skeleton className="h-3.5 w-20" /></>
           ) : (
             <>
               <p className="text-2xl font-bold text-gray-900 tracking-tight">{(stats?.activeProposals ?? 0).toLocaleString()}</p>
               <div className="flex items-center gap-1.5 mt-1.5">
                 <TrendBadge value={proposalChange} />
-                <span className="text-xs text-gray-400">vs last month</span>
+                <span className="text-xs text-gray-400">vs prior period</span>
               </div>
             </>
           )}
@@ -204,10 +210,7 @@ export default function DashboardOverview() {
             </div>
           </div>
           {loading ? (
-            <>
-              <Skeleton className="h-7 w-16 mb-2" />
-              <Skeleton className="h-3.5 w-24" />
-            </>
+            <><Skeleton className="h-7 w-16 mb-2" /><Skeleton className="h-3.5 w-24" /></>
           ) : (
             <>
               <p className="text-2xl font-bold text-gray-900 tracking-tight">{(stats?.customerCount ?? 0).toLocaleString()}</p>
@@ -221,22 +224,45 @@ export default function DashboardOverview() {
         {/* Pending Payments */}
         <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-5">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Pending Payments</span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Pending</span>
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50">
               <Clock size={15} className="text-amber-500" />
             </div>
           </div>
           {loading ? (
-            <>
-              <Skeleton className="h-7 w-16 mb-2" />
-              <Skeleton className="h-3.5 w-28" />
-            </>
+            <><Skeleton className="h-7 w-16 mb-2" /><Skeleton className="h-3.5 w-28" /></>
           ) : (
             <>
               <p className="text-2xl font-bold text-gray-900 tracking-tight">{(stats?.pendingPayments ?? 0).toLocaleString()}</p>
               <Link href="/dashboard/proposals" className="inline-flex items-center gap-1 text-xs text-gray-400 mt-1.5 hover:text-gray-600 transition-colors">
                 View proposals <ArrowRight size={10} />
               </Link>
+            </>
+          )}
+        </div>
+
+        {/* Failed Payments */}
+        <div className="rounded-xl bg-white border border-red-100 shadow-sm p-5">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-semibold uppercase tracking-wider text-red-400">Failed</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-50">
+              <XCircle size={15} className="text-red-500" />
+            </div>
+          </div>
+          {loading ? (
+            <><Skeleton className="h-7 w-16 mb-2" /><Skeleton className="h-3.5 w-28" /></>
+          ) : (
+            <>
+              <p className={classNames('text-2xl font-bold tracking-tight', (stats?.failedPayments ?? 0) > 0 ? 'text-red-600' : 'text-gray-900')}>
+                {(stats?.failedPayments ?? 0).toLocaleString()}
+              </p>
+              {(stats?.failedPayments ?? 0) > 0 ? (
+                <Link href="/dashboard/transactions" className="inline-flex items-center gap-1 text-xs text-red-400 mt-1.5 hover:text-red-600 transition-colors font-medium">
+                  Review <ArrowRight size={10} />
+                </Link>
+              ) : (
+                <p className="text-xs text-gray-400 mt-1.5">All clear</p>
+              )}
             </>
           )}
         </div>
@@ -260,10 +286,10 @@ export default function DashboardOverview() {
                   (revenueChange ?? 0) >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
                 )}>
                   {(revenueChange ?? 0) >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
-                  {Math.abs(Math.round(revenueChange ?? 0))}% vs last month
+                  {Math.abs(Math.round(revenueChange ?? 0))}% vs prior period
                 </div>
               )}
-              <p className="text-xs text-gray-400 mt-1">Last 6 months</p>
+              <p className="text-xs text-gray-400 mt-1">{dateRange.label}</p>
             </div>
           </div>
 
@@ -271,7 +297,7 @@ export default function DashboardOverview() {
             {loading || !stats?.monthlyChart ? (
               <div className="h-full flex items-end gap-2 pb-2">
                 {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="flex-1 rounded animate-pulse bg-gray-100" style={{ height: `${30 + Math.random() * 50}%` }} />
+                  <div key={i} className="flex-1 rounded animate-pulse bg-gray-100" style={{ height: `${30 + i * 8}%` }} />
                 ))}
               </div>
             ) : (
@@ -318,10 +344,9 @@ export default function DashboardOverview() {
               ))}
             </div>
           ) : totalProposals === 0 ? (
-            <div className="flex-1 flex items-center justify-center text-sm text-gray-400">No proposals yet</div>
+            <div className="flex-1 flex items-center justify-center text-sm text-gray-400">No data for period</div>
           ) : (
             <div className="flex-1 flex flex-col justify-between">
-              {/* Stacked bar */}
               <div className="flex rounded-full overflow-hidden h-2 mb-5 gap-px">
                 {statusOrder.filter(s => statusBreakdown[s]).map(s => (
                   <div
@@ -330,7 +355,6 @@ export default function DashboardOverview() {
                   />
                 ))}
               </div>
-
               <div className="space-y-3">
                 {statusOrder.filter(s => statusBreakdown[s] > 0).map(s => {
                   const StatusIcon = STATUS_ICON[s] ?? FileText;
@@ -384,10 +408,7 @@ export default function DashboardOverview() {
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i}>
-                  <td className="px-6 py-4">
-                    <Skeleton className="h-4 w-28 mb-1.5" />
-                    <Skeleton className="h-3 w-36" />
-                  </td>
+                  <td className="px-6 py-4"><Skeleton className="h-4 w-28 mb-1.5" /><Skeleton className="h-3 w-36" /></td>
                   <td className="px-6 py-4"><Skeleton className="h-5 w-14 rounded-full" /></td>
                   <td className="px-6 py-4"><Skeleton className="h-4 w-16" /></td>
                   <td className="px-6 py-4"><Skeleton className="h-4 w-20" /></td>

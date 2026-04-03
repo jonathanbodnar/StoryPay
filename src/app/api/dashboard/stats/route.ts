@@ -1,8 +1,8 @@
 import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const cookieStore = await cookies();
   const venueId = cookieStore.get('venue_id')?.value;
 
@@ -10,106 +10,137 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const [totalResult, statusCounts, revenueResult, customerResult, allProposals] = await Promise.all([
-    supabaseAdmin
-      .from('proposals')
-      .select('id', { count: 'exact', head: true })
-      .eq('venue_id', venueId),
+  const { searchParams } = request.nextUrl;
+  const from = searchParams.get('from'); // ISO date string or null
+  const to = searchParams.get('to');     // ISO date string or null
 
-    supabaseAdmin
-      .from('proposals')
-      .select('status')
-      .eq('venue_id', venueId),
+  // Build a base query filter helper
+  function applyDateFilter<T>(
+    query: T & { gte: (col: string, val: string) => T; lte: (col: string, val: string) => T },
+    col: string
+  ): T {
+    if (from) query = query.gte(col, from);
+    if (to)   query = query.lte(col, to + 'T23:59:59.999Z');
+    return query;
+  }
 
-    supabaseAdmin
-      .from('proposals')
-      .select('price')
-      .eq('venue_id', venueId)
-      .eq('status', 'paid'),
+  // All proposals in date range (for revenue, status, chart)
+  let proposalsQuery = supabaseAdmin
+    .from('proposals')
+    .select('status, price, created_at, paid_at, customer_email')
+    .eq('venue_id', venueId);
+  if (from) proposalsQuery = proposalsQuery.gte('created_at', from);
+  if (to)   proposalsQuery = proposalsQuery.lte('created_at', to + 'T23:59:59.999Z');
 
-    supabaseAdmin
-      .from('proposals')
-      .select('customer_email')
-      .eq('venue_id', venueId),
+  const { data: allProposals } = await proposalsQuery;
+  const rows = allProposals ?? [];
 
-    supabaseAdmin
-      .from('proposals')
-      .select('status, price, created_at, paid_at')
-      .eq('venue_id', venueId),
-  ]);
+  // Revenue — paid proposals
+  const totalRevenue = rows
+    .filter((r) => r.status === 'paid')
+    .reduce((sum, r) => sum + (r.price ?? 0), 0);
 
-  const totalRevenue = (revenueResult.data ?? []).reduce(
-    (sum, row) => sum + (row.price ?? 0),
-    0
-  );
-
-  const activeProposals = totalResult.count ?? 0;
-
-  const uniqueEmails = new Set(
-    (customerResult.data ?? []).map((r) => r.customer_email)
-  );
-  const customerCount = uniqueEmails.size;
-
-  const pendingPayments = (statusCounts.data ?? []).filter(
-    (r) => r.status === 'sent' || r.status === 'opened'
-  ).length;
-
+  // Status breakdown
   const statusBreakdown: Record<string, number> = {};
-  for (const row of statusCounts.data ?? []) {
-    const s = row.status || 'unknown';
+  for (const r of rows) {
+    const s = r.status || 'unknown';
     statusBreakdown[s] = (statusBreakdown[s] || 0) + 1;
   }
 
-  const monthlyData: Record<string, { revenue: number; proposals: number }> = {};
-  const now = new Date();
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const key = d.toISOString().slice(0, 7);
-    monthlyData[key] = { revenue: 0, proposals: 0 };
-  }
+  // Active proposals (sent or opened within range)
+  const activeProposals = rows.filter(
+    (r) => r.status !== 'draft'
+  ).length;
 
-  for (const p of allProposals.data ?? []) {
+  // Pending payments
+  const pendingPayments = rows.filter(
+    (r) => r.status === 'sent' || r.status === 'opened'
+  ).length;
+
+  // Failed payments
+  const failedPayments = rows.filter(
+    (r) => r.status === 'failed' || r.status === 'declined'
+  ).length;
+
+  // Unique customers
+  const uniqueEmails = new Set(rows.map((r) => r.customer_email).filter(Boolean));
+  const customerCount = uniqueEmails.size;
+
+  // Monthly chart — always show relevant months for the selected range
+  // Determine start/end months
+  const now = new Date();
+  const rangeStart = from ? new Date(from) : new Date(now.getFullYear(), now.getMonth() - 5, 1);
+  const rangeEnd   = to   ? new Date(to)   : now;
+
+  // Build month buckets between rangeStart and rangeEnd
+  const monthlyData: Record<string, { revenue: number; proposals: number }> = {};
+  const cursor = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
+  while (cursor <= rangeEnd) {
+    const key = cursor.toISOString().slice(0, 7);
+    monthlyData[key] = { revenue: 0, proposals: 0 };
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  // Cap to 12 buckets max for readability
+  const allKeys = Object.keys(monthlyData).sort();
+  const cappedKeys = allKeys.slice(-12);
+  const cappedData: Record<string, { revenue: number; proposals: number }> = {};
+  for (const k of cappedKeys) cappedData[k] = monthlyData[k];
+
+  for (const p of rows) {
     const dateStr = p.paid_at || p.created_at;
     if (!dateStr) continue;
     const month = dateStr.slice(0, 7);
-    if (monthlyData[month]) {
-      monthlyData[month].proposals += 1;
-      if (p.status === 'paid') {
-        monthlyData[month].revenue += p.price || 0;
-      }
+    if (cappedData[month]) {
+      cappedData[month].proposals += 1;
+      if (p.status === 'paid') cappedData[month].revenue += p.price || 0;
     }
   }
 
-  const monthlyChart = Object.entries(monthlyData).map(([month, data]) => ({
+  const monthlyChart = Object.entries(cappedData).map(([month, data]) => ({
     month,
-    label: new Date(month + '-15').toLocaleDateString('en-US', { month: 'short' }),
+    label: new Date(month + '-15').toLocaleDateString('en-US', { month: 'short', year: cappedKeys.length > 6 ? '2-digit' : undefined }),
     revenue: data.revenue,
     proposals: data.proposals,
   }));
 
-  const thisMonth = now.toISOString().slice(0, 7);
-  const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const lastMonth = lastMonthDate.toISOString().slice(0, 7);
+  // Trends: compare current period vs equivalent prior period
+  const periodMs = rangeEnd.getTime() - rangeStart.getTime();
+  const prevEnd   = new Date(rangeStart.getTime() - 1);
+  const prevStart = new Date(prevEnd.getTime() - periodMs);
+  const prevStartStr = prevStart.toISOString();
+  const prevEndStr   = prevEnd.toISOString();
 
-  const thisMonthRevenue = monthlyData[thisMonth]?.revenue || 0;
-  const lastMonthRevenue = monthlyData[lastMonth]?.revenue || 0;
-  const thisMonthProposals = monthlyData[thisMonth]?.proposals || 0;
-  const lastMonthProposals = monthlyData[lastMonth]?.proposals || 0;
+  let prevQuery = supabaseAdmin
+    .from('proposals')
+    .select('status, price, created_at')
+    .eq('venue_id', venueId)
+    .gte('created_at', prevStartStr)
+    .lte('created_at', prevEndStr);
+
+  const { data: prevProposals } = await prevQuery;
+  const prevRows = prevProposals ?? [];
+
+  const prevRevenue   = prevRows.filter((r) => r.status === 'paid').reduce((s, r) => s + (r.price ?? 0), 0);
+  const prevProposalCount = prevRows.length;
+
+  const revenueChange   = prevRevenue       > 0 ? ((totalRevenue   - prevRevenue)       / prevRevenue)       * 100 : 0;
+  const proposalChange  = prevProposalCount > 0 ? ((activeProposals - prevProposalCount) / prevProposalCount) * 100 : 0;
 
   return NextResponse.json({
     totalRevenue,
     activeProposals,
     customerCount,
     pendingPayments,
+    failedPayments,
     statusBreakdown,
     monthlyChart,
     trends: {
-      revenueChange: lastMonthRevenue > 0 ? ((thisMonthRevenue - lastMonthRevenue) / lastMonthRevenue) * 100 : 0,
-      proposalChange: lastMonthProposals > 0 ? ((thisMonthProposals - lastMonthProposals) / lastMonthProposals) * 100 : 0,
-      thisMonthRevenue,
-      lastMonthRevenue,
-      thisMonthProposals,
-      lastMonthProposals,
+      revenueChange,
+      proposalChange,
+      thisMonthRevenue: totalRevenue,
+      lastMonthRevenue: prevRevenue,
+      thisMonthProposals: activeProposals,
+      lastMonthProposals: prevProposalCount,
     },
   });
 }
