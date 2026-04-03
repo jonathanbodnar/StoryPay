@@ -321,7 +321,7 @@ export default function ProposalPage() {
           </div>
           <div className="flex items-center gap-4">
             <StatusBadge status={proposal.status} />
-            <img src="/storypay-logo.png" alt="StoryPay" className="h-6 opacity-40" />
+            <img src="/storypay-logo-dark.png" alt="StoryPay" className="h-6" />
           </div>
         </div>
       </header>

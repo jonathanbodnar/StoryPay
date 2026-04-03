@@ -116,7 +116,7 @@ export default function InvoicePage() {
                 </p>
               </div>
               <div className="text-right">
-                <img src="/storypay-logo.png" alt="StoryPay" className="h-5 opacity-30 ml-auto mb-3 print:hidden" />
+                <img src="/storypay-logo-dark.png" alt="StoryPay" className="h-5 ml-auto mb-3 print:hidden" />
                 <h1 className="text-3xl font-bold text-gray-900 font-heading">INVOICE</h1>
                 <p className="mt-1 text-sm text-gray-500">
                   #{invoiceNumber}
@@ -280,7 +280,7 @@ export default function InvoicePage() {
 
         {/* Branding footer */}
         <div className="mt-6 flex flex-col items-center gap-2 print:hidden">
-          <img src="/storypay-logo.png" alt="StoryPay" className="h-5 opacity-30" />
+          <img src="/storypay-logo-dark.png" alt="StoryPay" className="h-5" />
           <p className="text-xs text-gray-300">&copy; StoryVenue 2026</p>
         </div>
       </div>
