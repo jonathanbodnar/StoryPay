@@ -109,7 +109,7 @@ export default function TransactionsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="mb-6 flex gap-1 rounded-lg bg-gray-100 p-1 w-fit">
+      <div className="mb-6 flex gap-1 rounded-lg bg-gray-100 p-1 w-full sm:w-fit overflow-x-auto">
         {tabs.map((tab) => (
           <button
             key={tab.key}
@@ -145,7 +145,7 @@ export default function TransactionsPage() {
                   <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                     Status
                   </th>
-                  <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                  <th className="hidden sm:table-cell px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                     Date
                   </th>
                   <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400 text-right">
@@ -178,7 +178,7 @@ export default function TransactionsPage() {
                             {c.status}
                           </span>
                         </td>
-                        <td className="px-5 py-3.5 text-gray-500">{formatDate(c.date)}</td>
+                        <td className="hidden sm:table-cell px-5 py-3.5 text-gray-500">{formatDate(c.date)}</td>
                         <td className="px-5 py-3.5 text-right">
                           <div className="flex items-center justify-end gap-1">
                             {c.customerId && (

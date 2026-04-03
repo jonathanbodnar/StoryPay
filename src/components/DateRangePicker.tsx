@@ -230,9 +230,9 @@ export default function DateRangePicker({ value, onChange }: Props) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 z-50 flex rounded-xl border border-gray-200 bg-white shadow-xl overflow-hidden" style={{ minWidth: 580 }}>
+        <div className="absolute right-0 top-full mt-2 z-50 flex rounded-xl border border-gray-200 bg-white shadow-xl overflow-hidden max-w-[calc(100vw-2rem)]" style={{ minWidth: 'min(580px, calc(100vw - 2rem))' }}>
           {/* Presets */}
-          <div className="w-44 border-r border-gray-100 py-2 flex-shrink-0">
+          <div className="hidden sm:block w-44 border-r border-gray-100 py-2 flex-shrink-0">
             <p className="px-4 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Presets</p>
             {PRESETS.map(p => (
               <button
@@ -251,7 +251,7 @@ export default function DateRangePicker({ value, onChange }: Props) {
           </div>
 
           {/* Calendar */}
-          <div className="flex-1 p-4 flex flex-col gap-4">
+          <div className="flex-1 p-4 flex flex-col gap-4 min-w-0">
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold text-gray-700">
                 {selecting === 'from' ? 'Select start date' : 'Select end date'}
@@ -259,6 +259,24 @@ export default function DateRangePicker({ value, onChange }: Props) {
               <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
                 <X size={14} />
               </button>
+            </div>
+
+            {/* Mobile-only quick presets */}
+            <div className="sm:hidden flex flex-wrap gap-1.5">
+              {['Last 7 days','Last 30 days','This month','Year to date','All time'].map(label => {
+                const preset = PRESETS.find(p => p.label === label);
+                if (!preset) return null;
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => { handlePreset(preset); }}
+                    className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${activePreset === label ? 'border-brand-900 bg-brand-900 text-white' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Range display */}

@@ -139,7 +139,7 @@ export default function NewInvoicePage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="mx-auto max-w-2xl w-full">
       <div className="mb-8">
         <button
           onClick={() => router.back()}
@@ -201,7 +201,8 @@ export default function NewInvoicePage() {
 
           <div className="rounded-lg border border-gray-200 overflow-hidden">
             {/* Column headers */}
-            <div className="grid grid-cols-[1fr_1fr_120px_36px] gap-3 bg-gray-50 px-4 py-2.5 border-b border-gray-200">
+            {/* Column headers — hidden on mobile */}
+            <div className="hidden sm:grid sm:grid-cols-[1fr_1fr_120px_36px] gap-3 bg-gray-50 px-4 py-2.5 border-b border-gray-200">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Item / Service</span>
               <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Note / Description</span>
               <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Amount</span>
@@ -210,7 +211,7 @@ export default function NewInvoicePage() {
 
             <div className="divide-y divide-gray-100">
               {lineItems.map((item, idx) => (
-                <div key={item.id} className="grid grid-cols-[1fr_1fr_120px_36px] gap-3 px-4 py-3 items-start">
+                <div key={item.id} className="flex flex-col sm:grid sm:grid-cols-[1fr_1fr_120px_36px] gap-2 sm:gap-3 px-4 py-3">
                   <input
                     type="text"
                     value={item.name}
@@ -225,23 +226,33 @@ export default function NewInvoicePage() {
                     placeholder="Optional note..."
                     className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
                   />
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={item.amount}
-                      onChange={(e) => updateLineItem(item.id, 'amount', e.target.value)}
-                      placeholder="0.00"
-                      className="w-full rounded-md border border-gray-300 pl-6 pr-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
-                    />
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1 sm:flex-none sm:w-full">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={item.amount}
+                        onChange={(e) => updateLineItem(item.id, 'amount', e.target.value)}
+                        placeholder="0.00"
+                        className="w-full rounded-md border border-gray-300 pl-6 pr-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeLineItem(item.id)}
+                      disabled={lineItems.length === 1}
+                      className="sm:hidden p-1.5 text-gray-400 hover:text-red-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <Trash2 size={15} />
+                    </button>
                   </div>
                   <button
                     type="button"
                     onClick={() => removeLineItem(item.id)}
                     disabled={lineItems.length === 1}
-                    className="mt-1.5 p-1.5 text-gray-400 hover:text-red-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    className="hidden sm:block mt-1.5 p-1.5 text-gray-400 hover:text-red-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     <Trash2 size={15} />
                   </button>

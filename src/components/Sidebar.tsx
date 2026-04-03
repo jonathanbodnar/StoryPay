@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import {
   LayoutDashboard,
   FileText,
@@ -13,6 +14,8 @@ import {
   HelpCircle,
   Settings,
   ArrowLeft,
+  Menu,
+  X,
 } from 'lucide-react';
 
 interface Venue {
@@ -26,18 +29,28 @@ interface SidebarProps {
 }
 
 const menuItems = [
-  { label: 'Overview', href: '/dashboard', icon: LayoutDashboard },
-  { label: 'Proposals', href: '/dashboard/proposals', icon: FileText },
-  { label: 'Customers', href: '/dashboard/customers', icon: Users },
+  { label: 'Overview',     href: '/dashboard',              icon: LayoutDashboard },
+  { label: 'Proposals',    href: '/dashboard/proposals',    icon: FileText },
+  { label: 'Customers',    href: '/dashboard/customers',    icon: Users },
   { label: 'Transactions', href: '/dashboard/transactions', icon: CreditCard },
-  { label: 'Reports', href: '/dashboard/reports', icon: BarChart2 },
-  { label: "What's New", href: '/dashboard/updates', icon: Sparkles },
-  { label: 'Support', href: '/dashboard/support', icon: HelpCircle },
-  { label: 'Settings', href: '/dashboard/settings', icon: Settings },
+  { label: 'Reports',      href: '/dashboard/reports',      icon: BarChart2 },
+  { label: "What's New",   href: '/dashboard/updates',      icon: Sparkles },
+  { label: 'Support',      href: '/dashboard/support',      icon: HelpCircle },
+  { label: 'Settings',     href: '/dashboard/settings',     icon: Settings },
 ];
 
 export default function Sidebar({ venue }: SidebarProps) {
   const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Close on route change
+  useEffect(() => { setMobileOpen(false); }, [pathname]);
+
+  // Prevent body scroll when mobile nav is open
+  useEffect(() => {
+    document.body.style.overflow = mobileOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [mobileOpen]);
 
   const isActive = (href: string) => {
     if (href === '/dashboard') return pathname === '/dashboard';
@@ -46,11 +59,8 @@ export default function Sidebar({ venue }: SidebarProps) {
 
   const returnUrl = `https://login.storyvenuemarketing.com/v2/location/${venue.ghl_location_id}`;
 
-  return (
-    <aside
-      className="fixed left-0 top-0 bottom-0 flex flex-col"
-      style={{ width: 240, backgroundColor: '#293745' }}
-    >
+  const NavContent = () => (
+    <>
       <div className="px-5 pt-5 pb-3">
         <a
           href={returnUrl}
@@ -74,25 +84,16 @@ export default function Sidebar({ venue }: SidebarProps) {
         {menuItems.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.href);
-
           return (
             <Link
               key={item.label}
               href={item.href}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                active
-                  ? 'text-white'
-                  : 'text-gray-400 hover:text-white'
+                active ? 'text-white' : 'text-gray-400 hover:text-white'
               }`}
-              style={{
-                backgroundColor: active ? '#354859' : undefined,
-              }}
-              onMouseEnter={(e) => {
-                if (!active) e.currentTarget.style.backgroundColor = '#2f3e4e';
-              }}
-              onMouseLeave={(e) => {
-                if (!active) e.currentTarget.style.backgroundColor = '';
-              }}
+              style={{ backgroundColor: active ? '#354859' : undefined }}
+              onMouseEnter={(e) => { if (!active) e.currentTarget.style.backgroundColor = '#2f3e4e'; }}
+              onMouseLeave={(e) => { if (!active) e.currentTarget.style.backgroundColor = ''; }}
             >
               <Icon size={18} className={active ? 'text-white' : ''} />
               <span>{item.label}</span>
@@ -105,6 +106,52 @@ export default function Sidebar({ venue }: SidebarProps) {
         <p className="text-xs text-gray-400 truncate mb-1">{venue.name}</p>
         <p className="text-[10px] text-gray-600">&copy; StoryVenue 2026</p>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* ── Mobile top bar ── */}
+      <div
+        className="lg:hidden fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 h-14"
+        style={{ backgroundColor: '#293745' }}
+      >
+        <Link href="/dashboard">
+          <Image src="/storypay-logo-white.png" alt="StoryPay" width={120} height={30} priority />
+        </Link>
+        <button
+          onClick={() => setMobileOpen(v => !v)}
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-white hover:bg-white/10 transition-colors"
+        >
+          {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+        </button>
+      </div>
+
+      {/* ── Mobile drawer backdrop ── */}
+      {mobileOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-40 bg-black/40"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* ── Mobile drawer ── */}
+      <aside
+        className={`lg:hidden fixed top-0 left-0 bottom-0 z-50 flex flex-col w-[240px] transition-transform duration-300 ${
+          mobileOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+        style={{ backgroundColor: '#293745' }}
+      >
+        <NavContent />
+      </aside>
+
+      {/* ── Desktop sidebar (always visible) ── */}
+      <aside
+        className="hidden lg:flex fixed left-0 top-0 bottom-0 flex-col"
+        style={{ width: 240, backgroundColor: '#293745' }}
+      >
+        <NavContent />
+      </aside>
+    </>
   );
 }

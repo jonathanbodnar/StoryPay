@@ -121,35 +121,35 @@ export default function ProposalsPage() {
 
   return (
     <div>
-      <div className="mb-8 flex items-start justify-between">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-heading text-2xl text-gray-900">Proposals</h1>
           <p className="mt-1 text-sm text-gray-500">Manage and track your proposals</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <Link
             href="/dashboard/proposals/templates"
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 sm:px-4 sm:py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
           >
-            <FileStack size={16} />
-            Templates
+            <FileStack size={15} />
+            <span className="hidden sm:inline">Templates</span>
           </Link>
           <Link
             href="/dashboard/invoices/new"
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 sm:px-4 sm:py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
           >
-            <Receipt size={16} />
-            Create Invoice
+            <Receipt size={15} />
+            <span className="hidden sm:inline">Create Invoice</span>
           </Link>
           <Link
             href="/dashboard/proposals/new"
-            className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg px-3 py-2 sm:px-4 sm:py-2.5 text-sm font-medium text-white transition-colors"
             style={{ backgroundColor: '#293745' }}
             onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#2f3e4e')}
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#293745')}
           >
-            <Plus size={16} />
-            Create Proposal
+            <Plus size={15} />
+            <span>Create Proposal</span>
           </Link>
         </div>
       </div>
@@ -238,10 +238,10 @@ export default function ProposalsPage() {
               <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                 Amount
               </th>
-              <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+              <th className="hidden md:table-cell px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                 Payment Type
               </th>
-              <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+              <th className="hidden sm:table-cell px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                 Sent
               </th>
               <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
@@ -305,8 +305,8 @@ export default function ProposalsPage() {
                       </span>
                     </td>
                     <td className="px-5 py-3.5 text-gray-700">{formatCents(p.price)}</td>
-                    <td className="px-5 py-3.5 text-gray-700 capitalize">{p.payment_type}</td>
-                    <td className="px-5 py-3.5 text-gray-500">
+                    <td className="hidden md:table-cell px-5 py-3.5 text-gray-700 capitalize">{p.payment_type}</td>
+                    <td className="hidden sm:table-cell px-5 py-3.5 text-gray-500">
                       {p.sent_at ? formatDate(p.sent_at) : '---'}
                     </td>
                     <td className="px-5 py-3.5">

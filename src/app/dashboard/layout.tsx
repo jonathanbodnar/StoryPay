@@ -20,8 +20,9 @@ export default async function DashboardLayout({
   return (
     <div className="min-h-screen bg-white">
       <Sidebar venue={{ id: venue.id, name: venue.name, ghl_location_id: venue.ghl_location_id }} />
-      <main className="ml-[240px] min-h-screen p-8">
-        <div className="bg-white rounded-xl border border-gray-100 p-6 min-h-[calc(100vh-4rem)]">
+      {/* Desktop: offset by sidebar width. Mobile: add top padding for mobile header bar */}
+      <main className="lg:ml-[240px] min-h-screen pt-14 lg:pt-0 p-4 sm:p-6 lg:p-8">
+        <div className="bg-white rounded-xl border border-gray-100 p-4 sm:p-5 lg:p-6 min-h-[calc(100vh-4rem)]">
           {children}
         </div>
       </main>

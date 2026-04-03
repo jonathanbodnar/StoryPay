@@ -158,7 +158,7 @@ export default function DashboardOverview() {
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mb-6">
         {/* Total Revenue */}
         <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-5">
           <div className="flex items-center justify-between mb-3">
@@ -269,7 +269,7 @@ export default function DashboardOverview() {
       </div>
 
       {/* Revenue chart + status breakdown */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6 overflow-x-hidden">
         {/* Revenue chart */}
         <div className="lg:col-span-2 rounded-xl bg-white border border-gray-200 shadow-sm p-6">
           <div className="flex items-start justify-between mb-1">

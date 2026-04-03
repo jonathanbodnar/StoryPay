@@ -104,7 +104,7 @@ export default function CustomersPage() {
 
   return (
     <div>
-      <div className="mb-8 flex items-start justify-between">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-heading text-2xl text-gray-900">Customers</h1>
           <p className="mt-1 text-sm text-gray-500">Manage your customer database</p>
@@ -122,7 +122,7 @@ export default function CustomersPage() {
       </div>
 
       {/* Search */}
-      <div className="relative mb-6 max-w-md">
+      <div className="relative mb-4 w-full max-w-md">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
         <input
           type="text"
@@ -139,8 +139,8 @@ export default function CustomersPage() {
           <thead>
             <tr className="border-b border-gray-100 bg-gray-50/60">
               <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Name</th>
-              <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Email</th>
-              <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Phone</th>
+              <th className="hidden sm:table-cell px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Email</th>
+              <th className="hidden md:table-cell px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Phone</th>
               <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400 text-right">Actions</th>
             </tr>
           </thead>
@@ -168,17 +168,17 @@ export default function CustomersPage() {
                       {c.name}
                     </Link>
                   </td>
-                  <td className="px-5 py-3.5 text-gray-700">{c.email || '---'}</td>
-                  <td className="px-5 py-3.5 text-gray-700">{c.phone || '---'}</td>
-                  <td className="px-5 py-3.5 text-right">
-                    <div className="flex items-center justify-end gap-1">
+                  <td className="hidden sm:table-cell px-5 py-3.5 text-gray-700">{c.email || '---'}</td>
+                  <td className="hidden md:table-cell px-5 py-3.5 text-gray-700">{c.phone || '---'}</td>
+                  <td className="px-3 sm:px-5 py-3.5 text-right">
+                    <div className="flex items-center justify-end gap-1 flex-wrap">
                       <Link
                         href={`/dashboard/customers/${c.id}`}
                         className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
                         title="View Customer"
                       >
                         <User size={13} />
-                        View Customer
+                        <span className="hidden sm:inline">View Customer</span>
                       </Link>
                       <Link
                         href={`/dashboard/proposals/new?email=${encodeURIComponent(c.email || '')}&name=${encodeURIComponent(c.name || '')}`}
@@ -186,7 +186,7 @@ export default function CustomersPage() {
                         title="Create Proposal"
                       >
                         <FileText size={13} />
-                        Create Proposal
+                        <span className="hidden lg:inline">Create Proposal</span>
                       </Link>
                       <Link
                         href={`/dashboard/invoices/new?email=${encodeURIComponent(c.email || '')}&name=${encodeURIComponent(c.name || '')}`}
@@ -194,7 +194,7 @@ export default function CustomersPage() {
                         title="Create Invoice"
                       >
                         <Receipt size={13} />
-                        Create Invoice
+                        <span className="hidden lg:inline">Create Invoice</span>
                       </Link>
                     </div>
                   </td>

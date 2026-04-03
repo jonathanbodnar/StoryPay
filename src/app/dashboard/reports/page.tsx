@@ -219,7 +219,7 @@ function PreviewTable({ data }: { data: ReportData }) {
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-lg border border-gray-200">
+      <div className="overflow-x-auto rounded-lg border border-gray-200 max-w-full">
         <table className="w-full text-xs">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-200">
@@ -308,7 +308,7 @@ function ReportCard({ report, dateRange }: { report: ReportDef; dateRange: DateR
   return (
     <div className="rounded-xl bg-white border border-gray-200 shadow-sm overflow-hidden">
       <div className="p-5">
-        <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-start gap-3">
             <div className={classNames('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg', report.bg)}>
               <Icon size={17} style={{ color: report.color }} />
@@ -320,7 +320,7 @@ function ReportCard({ report, dateRange }: { report: ReportDef; dateRange: DateR
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 shrink-0 w-full sm:w-auto">
             <button
               onClick={handlePreview}
               disabled={loading}
@@ -369,7 +369,7 @@ export default function ReportsPage() {
 
   return (
     <div>
-      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-heading text-2xl text-gray-900">Reports</h1>
           <p className="mt-1 text-sm text-gray-500">Generate and download financial reports for accounting and insights</p>
