@@ -1,0 +1,80 @@
+name: Publish Changelog on Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  publish-changelog:
+    runs-on: ubuntu-latest
+    # Skip if commit message starts with 'chore', 'ci:', 'docs:' or contains [skip changelog]
+    if: |
+      !startsWith(github.event.head_commit.message, 'chore') &&
+      !startsWith(github.event.head_commit.message, 'ci:') &&
+      !startsWith(github.event.head_commit.message, 'docs:') &&
+      !contains(github.event.head_commit.message, '[skip changelog]')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Build changelog entry from commit
+        id: build_entry
+        run: |
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          COMMIT_SHA="${{ github.sha }}"
+          SHORT_SHA="${COMMIT_SHA:0:7}"
+
+          # Determine category from conventional commit prefix
+          if echo "$COMMIT_MSG" | grep -qiE '^(feat|add|new)'; then
+            CATEGORY="feature"
+          elif echo "$COMMIT_MSG" | grep -qiE '^(fix|bug|patch|hotfix)'; then
+            CATEGORY="fix"
+          else
+            CATEGORY="improvement"
+          fi
+
+          # Get list of changed files for context
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | head -20 | tr '\n' ', ' | sed 's/,$//')
+
+          # Build a clean title from commit message (strip conventional prefix)
+          TITLE=$(echo "$COMMIT_MSG" | sed 's/^feat: //i; s/^fix: //i; s/^add: //i; s/^chore: //i; s/^refactor: //i; s/^improve: //i; s/^update: //i' | cut -c1-100)
+
+          # Capitalize first letter
+          TITLE="$(echo "${TITLE:0:1}" | tr '[:lower:]' '[:upper:]')${TITLE:1}"
+
+          # Build description that explains user benefit
+          DESCRIPTION="This update ships improvements to $TITLE. Changed files: $CHANGED_FILES. Deployed from commit $SHORT_SHA."
+
+          # Escape for JSON
+          TITLE_JSON=$(echo "$TITLE" | python3 -c "import sys,json; print(json.dumps(sys.stdin.read().strip()))")
+          DESC_JSON=$(echo "$DESCRIPTION" | python3 -c "import sys,json; print(json.dumps(sys.stdin.read().strip()))")
+
+          echo "title=$TITLE_JSON" >> $GITHUB_OUTPUT
+          echo "description=$DESC_JSON" >> $GITHUB_OUTPUT
+          echo "category=$CATEGORY" >> $GITHUB_OUTPUT
+
+      - name: Post to changelog API
+        run: |
+          TITLE=${{ steps.build_entry.outputs.title }}
+          DESCRIPTION=${{ steps.build_entry.outputs.description }}
+          CATEGORY=${{ steps.build_entry.outputs.category }}
+
+          curl -s -X POST "${{ secrets.APP_URL }}/api/admin/changelog" \
+            -H "Content-Type: application/json" \
+            -H "x-changelog-secret: ${{ secrets.CHANGELOG_WEBHOOK_SECRET }}" \
+            -d "{
+              \"title\": $TITLE,
+              \"description\": $DESCRIPTION,
+              \"category\": \"$CATEGORY\",
+              \"version\": \"${{ github.sha }}\"
+            }" \
+            --fail \
+            --retry 3 \
+            --retry-delay 5 \
+            -o /tmp/response.json \
+            -w "\nHTTP status: %{http_code}\n"
+
+          cat /tmp/response.json
