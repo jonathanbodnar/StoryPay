@@ -7,11 +7,11 @@ export async function GET() {
   const venueId = cookieStore.get('venue_id')?.value;
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { data, error } = await supabaseAdmin
-    .from('changelog_entries')
-    .select('*')
-    .order('released_at', { ascending: false });
+  const { data, error } = await supabaseAdmin.rpc('get_changelog');
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error('[changelog] RPC error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
   return NextResponse.json(data ?? []);
 }

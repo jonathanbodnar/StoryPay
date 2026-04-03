@@ -7,32 +7,15 @@ export async function GET() {
   const venueId = cookieStore.get('venue_id')?.value;
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { data: requests, error } = await supabaseAdmin
-    .from('feature_requests')
-    .select('*')
-    .order('vote_count', { ascending: false })
-    .order('created_at', { ascending: false });
+  const { data, error } = await supabaseAdmin.rpc('get_feature_requests', {
+    p_venue_id: venueId,
+  });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  // Fetch which ones this venue has already voted on
-  const ids = (requests ?? []).map((r) => r.id);
-  let votedSet = new Set<string>();
-  if (ids.length > 0) {
-    const { data: votes } = await supabaseAdmin
-      .from('feature_request_votes')
-      .select('request_id')
-      .eq('venue_id', venueId)
-      .in('request_id', ids);
-    votedSet = new Set((votes ?? []).map((v) => v.request_id));
+  if (error) {
+    console.error('[feature-requests] RPC error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
-
-  const result = (requests ?? []).map((r) => ({
-    ...r,
-    has_voted: votedSet.has(r.id),
-  }));
-
-  return NextResponse.json(result);
+  return NextResponse.json(data ?? []);
 }
 
 export async function POST(request: NextRequest) {
@@ -43,19 +26,17 @@ export async function POST(request: NextRequest) {
   const { title, description } = await request.json();
   if (!title?.trim()) return NextResponse.json({ error: 'Title is required' }, { status: 400 });
 
-  const { data, error } = await supabaseAdmin
-    .from('feature_requests')
-    .insert({ venue_id: venueId, title: title.trim(), description: description?.trim() || null, vote_count: 1 })
-    .select()
-    .single();
+  const { data, error } = await supabaseAdmin.rpc('submit_feature_request', {
+    p_venue_id: venueId,
+    p_title: title.trim(),
+    p_description: description?.trim() || null,
+  });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error('[feature-requests] submit RPC error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 
-  // Auto-vote for own submission
-  await supabaseAdmin
-    .from('feature_request_votes')
-    .insert({ request_id: data.id, venue_id: venueId })
-    .then(() => {});
-
-  return NextResponse.json({ ...data, has_voted: true }, { status: 201 });
+  const row = Array.isArray(data) ? data[0] : data;
+  return NextResponse.json(row, { status: 201 });
 }

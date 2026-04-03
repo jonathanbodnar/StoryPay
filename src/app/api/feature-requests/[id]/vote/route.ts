@@ -12,44 +12,16 @@ export async function POST(
 
   const { id } = await params;
 
-  // Fetch current state
-  const [{ data: existing }, { data: req }] = await Promise.all([
-    supabaseAdmin
-      .from('feature_request_votes')
-      .select('request_id')
-      .eq('request_id', id)
-      .eq('venue_id', venueId)
-      .maybeSingle(),
-    supabaseAdmin
-      .from('feature_requests')
-      .select('vote_count')
-      .eq('id', id)
-      .single(),
-  ]);
+  const { data, error } = await supabaseAdmin.rpc('toggle_feature_vote', {
+    p_request_id: id,
+    p_venue_id: venueId,
+  });
 
-  if (!req) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
-  if (existing) {
-    // Remove vote (toggle off)
-    await supabaseAdmin
-      .from('feature_request_votes')
-      .delete()
-      .eq('request_id', id)
-      .eq('venue_id', venueId);
-
-    const newCount = Math.max(0, (req.vote_count ?? 1) - 1);
-    await supabaseAdmin.from('feature_requests').update({ vote_count: newCount }).eq('id', id);
-    return NextResponse.json({ voted: false, vote_count: newCount });
+  if (error) {
+    console.error('[vote] RPC error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Add vote
-  const { error: insertError } = await supabaseAdmin
-    .from('feature_request_votes')
-    .insert({ request_id: id, venue_id: venueId });
-
-  if (insertError) return NextResponse.json({ error: insertError.message }, { status: 400 });
-
-  const newCount = (req.vote_count ?? 0) + 1;
-  await supabaseAdmin.from('feature_requests').update({ vote_count: newCount }).eq('id', id);
-  return NextResponse.json({ voted: true, vote_count: newCount });
+  const row = Array.isArray(data) ? data[0] : data;
+  return NextResponse.json({ voted: row.voted, vote_count: row.vote_count });
 }
