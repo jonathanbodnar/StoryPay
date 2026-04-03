@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getCheckoutSession, createPaymentSchedule, createSubscription } from '@/lib/lunarpay';
 
+const SERVICE_FEE_RATE = 0.01;
+
+function applyFee(cents: number): number {
+  return Math.round(cents * (1 + SERVICE_FEE_RATE));
+}
+
 interface Installment {
   amount: number;
   date: string;
@@ -44,7 +50,7 @@ export async function POST(
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('lunarpay_secret_key, name, ghl_access_token, ghl_location_id')
+    .select('lunarpay_secret_key, name, ghl_access_token, ghl_location_id, pass_service_fee')
     .eq('id', proposal.venue_id)
     .single();
 
@@ -67,9 +73,10 @@ export async function POST(
 
     const customerId = session.customer_id || session.customerId || proposal.customer_lunarpay_id;
     const paymentMethodId = session.payment_method_id || session.paymentMethodId || session.payment_method;
+    const addFee = venue.pass_service_fee === true;
 
     console.log('[verify-payment] customerId:', customerId, 'paymentMethodId:', paymentMethodId);
-    console.log('[verify-payment] payment_type:', proposal.payment_type);
+    console.log('[verify-payment] payment_type:', proposal.payment_type, 'addFee:', addFee);
     console.log('[verify-payment] payment_config:', JSON.stringify(proposal.payment_config));
 
     const updateData: Record<string, unknown> = {
@@ -99,7 +106,7 @@ export async function POST(
               paymentMethodId: Number(paymentMethodId),
               description: `${proposal.customer_name} - Installment plan`,
               payments: remaining.map((p) => ({
-                amount: p.amount,
+                amount: addFee ? applyFee(p.amount) : p.amount,
                 date: p.date,
               })),
             };
@@ -129,7 +136,7 @@ export async function POST(
           const subPayload = {
             customerId: Number(customerId),
             paymentMethodId: Number(paymentMethodId),
-            amount: config.amount,
+            amount: addFee ? applyFee(config.amount) : config.amount,
             frequency: config.frequency,
             startOn: config.start_date,
             description: `${proposal.customer_name} - ${config.frequency} subscription`,

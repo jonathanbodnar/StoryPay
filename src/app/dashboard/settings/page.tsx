@@ -10,6 +10,7 @@ import {
   MessageSquare,
   Loader2,
   ExternalLink,
+  Receipt,
 } from 'lucide-react';
 
 interface VenueInfo {
@@ -24,11 +25,13 @@ interface VenueInfo {
   onboarding_status: string | null;
   ghl_connected: boolean;
   lunarpay_merchant_id: number | null;
+  pass_service_fee: boolean;
 }
 
 export default function SettingsPage() {
   const [venue, setVenue] = useState<VenueInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [feeToggling, setFeeToggling] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -59,6 +62,22 @@ export default function SettingsPage() {
   }
 
   const isActive = venue.onboarding_status === 'active';
+
+  const toggleServiceFee = async () => {
+    setFeeToggling(true);
+    try {
+      const res = await fetch('/api/venues/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pass_service_fee: !venue.pass_service_fee }),
+      });
+      if (res.ok) {
+        setVenue((prev) => prev ? { ...prev, pass_service_fee: !prev.pass_service_fee } : prev);
+      }
+    } finally {
+      setFeeToggling(false);
+    }
+  };
 
   return (
     <div>
@@ -136,6 +155,40 @@ export default function SettingsPage() {
                 Merchant ID: {venue.lunarpay_merchant_id}
               </p>
             )}
+          </div>
+        </section>
+
+        {/* Billing Settings */}
+        <section className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+          <div className="flex items-center gap-3 border-b border-gray-100 px-6 py-4">
+            <Receipt size={18} className="text-gray-400" />
+            <h2 className="font-heading text-base font-semibold text-gray-900">Billing</h2>
+          </div>
+          <div className="px-6 py-5">
+            <div className="flex items-center justify-between">
+              <div className="pr-4">
+                <p className="text-sm font-medium text-gray-900">Pass 1% service fee to clients</p>
+                <p className="mt-0.5 text-sm text-gray-500">
+                  When enabled, a 1% StoryPay service fee is added to the client&apos;s total at checkout.
+                  When disabled, the fee is absorbed by your venue.
+                </p>
+              </div>
+              <button
+                onClick={toggleServiceFee}
+                disabled={feeToggling}
+                className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-brand-900 focus:ring-offset-2 disabled:opacity-50 ${
+                  venue.pass_service_fee ? 'bg-brand-900' : 'bg-gray-200'
+                }`}
+                role="switch"
+                aria-checked={venue.pass_service_fee}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    venue.pass_service_fee ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
           </div>
         </section>
 

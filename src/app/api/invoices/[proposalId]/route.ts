@@ -10,7 +10,7 @@ export async function GET(
 
   const { data: proposal, error } = await supabaseAdmin
     .from('proposals')
-    .select('*, venues(name, logo_url)')
+    .select('*, venues(name, logo_url, pass_service_fee)')
     .eq('id', proposalId)
     .single();
 
@@ -18,7 +18,7 @@ export async function GET(
     return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
   }
 
-  const venue = proposal.venues as { name: string; logo_url: string | null } | null;
+  const venue = proposal.venues as { name: string; logo_url: string | null; pass_service_fee: boolean } | null;
   let scheduleData = null;
   let subscriptionData = null;
 
@@ -65,5 +65,6 @@ export async function GET(
     venue_logo_url: venue?.logo_url ?? null,
     schedule: scheduleData,
     subscription: subscriptionData,
+    service_fee: venue?.pass_service_fee === true,
   });
 }

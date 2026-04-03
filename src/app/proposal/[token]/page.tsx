@@ -25,6 +25,7 @@ interface ProposalData {
   venue_name: string;
   venue_logo_url: string | null;
   proposal_id: string;
+  service_fee: boolean;
 }
 
 function SignatureCanvas({ onSignatureChange }: { onSignatureChange: (dataUrl: string | null) => void }) {
@@ -303,6 +304,10 @@ export default function ProposalPage() {
   const installments = proposal.payment_config
     ? (proposal.payment_config as { installments?: Array<{ amount: number; date: string }> }).installments
     : undefined;
+  const hasFee = proposal.service_fee;
+  const feeRate = 0.01;
+  const feeCents = hasFee ? Math.round(proposal.price * feeRate) : 0;
+  const totalWithFee = proposal.price + feeCents;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
@@ -381,7 +386,9 @@ export default function ProposalPage() {
           <div className="mx-8 mb-8 rounded-xl bg-gradient-to-r from-gray-50 to-gray-50/50 border border-gray-100 p-6">
             <div className="flex items-end justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">Total Due</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">
+                  {hasFee ? 'Subtotal' : 'Total Due'}
+                </p>
                 <p className="text-4xl font-bold text-gray-900 tracking-tight">{formatCents(proposal.price)}</p>
               </div>
               <div className="text-right">
@@ -391,32 +398,56 @@ export default function ProposalPage() {
               </div>
             </div>
 
-            {proposal.payment_type === 'installment' && installments && installments.length > 0 && (
-              <div className="mt-5 space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">Payment Schedule</p>
-                {installments.map((p, i) => (
-                  <div key={i} className="flex items-center justify-between rounded-lg bg-white border border-gray-100 px-4 py-3 text-sm">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-xs font-bold text-gray-500">
-                        {i + 1}
-                      </div>
-                      <span className="text-gray-600">{formatDate(p.date)}</span>
-                    </div>
-                    <span className="font-semibold text-gray-900">{formatCents(p.amount)}</span>
-                  </div>
-                ))}
+            {hasFee && (
+              <div className="mt-4 space-y-2 border-t border-gray-200 pt-4">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-500">Service fee (1%)</span>
+                  <span className="text-gray-700">{formatCents(feeCents)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-gray-900">Total Due</span>
+                  <span className="text-lg font-bold text-gray-900">{formatCents(totalWithFee)}</span>
+                </div>
               </div>
             )}
 
-            {proposal.payment_type === 'subscription' && proposal.payment_config && (
-              <div className="mt-4 text-sm text-gray-600">
-                <span className="font-semibold text-gray-900">
-                  {formatCents((proposal.payment_config as { amount: number }).amount)}
-                </span>{' '}
-                / {(proposal.payment_config as { frequency: string }).frequency}, starting{' '}
-                {formatDate((proposal.payment_config as { start_date: string }).start_date)}
+            {proposal.payment_type === 'installment' && installments && installments.length > 0 && (
+              <div className="mt-5 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">Payment Schedule</p>
+                {installments.map((p, i) => {
+                  const installFee = hasFee ? Math.round(p.amount * feeRate) : 0;
+                  return (
+                    <div key={i} className="flex items-center justify-between rounded-lg bg-white border border-gray-100 px-4 py-3 text-sm">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-xs font-bold text-gray-500">
+                          {i + 1}
+                        </div>
+                        <span className="text-gray-600">{formatDate(p.date)}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="font-semibold text-gray-900">{formatCents(p.amount + installFee)}</span>
+                        {hasFee && <span className="block text-[11px] text-gray-400">incl. {formatCents(installFee)} fee</span>}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
+
+            {proposal.payment_type === 'subscription' && proposal.payment_config && (() => {
+              const subAmount = (proposal.payment_config as { amount: number }).amount;
+              const subFee = hasFee ? Math.round(subAmount * feeRate) : 0;
+              return (
+                <div className="mt-4 text-sm text-gray-600">
+                  <span className="font-semibold text-gray-900">
+                    {formatCents(subAmount + subFee)}
+                  </span>{' '}
+                  / {(proposal.payment_config as { frequency: string }).frequency}, starting{' '}
+                  {formatDate((proposal.payment_config as { start_date: string }).start_date)}
+                  {hasFee && <span className="text-gray-400 ml-1">(incl. {formatCents(subFee)} fee)</span>}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Signing section */}
@@ -500,28 +531,41 @@ export default function ProposalPage() {
                 </p>
               </div>
 
-              {proposal.payment_type === 'installment' && installments && installments.length > 1 ? (
-                <div className="rounded-xl bg-gray-50 border border-gray-100 p-6 mb-6">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm text-gray-500">Due today (Payment 1 of {installments.length})</span>
-                    <span className="text-2xl font-bold text-gray-900">{formatCents(installments[0].amount)}</span>
+              {proposal.payment_type === 'installment' && installments && installments.length > 1 ? (() => {
+                const firstAmt = installments[0].amount;
+                const firstFee = hasFee ? Math.round(firstAmt * feeRate) : 0;
+                return (
+                  <div className="rounded-xl bg-gray-50 border border-gray-100 p-6 mb-6">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm text-gray-500">Due today (Payment 1 of {installments.length})</span>
+                      <span className="text-2xl font-bold text-gray-900">{formatCents(firstAmt + firstFee)}</span>
+                    </div>
+                    {hasFee && (
+                      <p className="text-xs text-gray-400 text-right mb-3">incl. {formatCents(firstFee)} service fee</p>
+                    )}
+                    <div className="border-t border-gray-200 pt-3 space-y-2">
+                      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">Remaining payments</p>
+                      {installments.slice(1).map((p, i) => {
+                        const pFee = hasFee ? Math.round(p.amount * feeRate) : 0;
+                        return (
+                          <div key={i} className="flex items-center justify-between text-sm">
+                            <span className="text-gray-500">{formatDate(p.date)}</span>
+                            <span className="font-medium text-gray-700">{formatCents(p.amount + pFee)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="border-t border-gray-200 pt-3 space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">Remaining payments</p>
-                    {installments.slice(1).map((p, i) => (
-                      <div key={i} className="flex items-center justify-between text-sm">
-                        <span className="text-gray-500">{formatDate(p.date)}</span>
-                        <span className="font-medium text-gray-700">{formatCents(p.amount)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
+                );
+              })() : (
                 <div className="rounded-xl bg-gray-50 border border-gray-100 p-6 mb-6">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-sm text-gray-500">Amount due</span>
-                    <span className="text-2xl font-bold text-gray-900">{formatCents(proposal.price)}</span>
+                    <span className="text-2xl font-bold text-gray-900">{formatCents(hasFee ? totalWithFee : proposal.price)}</span>
                   </div>
+                  {hasFee && (
+                    <p className="text-xs text-gray-400 text-right">incl. {formatCents(feeCents)} service fee</p>
+                  )}
                 </div>
               )}
 

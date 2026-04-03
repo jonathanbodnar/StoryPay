@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { createCheckoutSession } from '@/lib/lunarpay';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.storypay.io';
+const SERVICE_FEE_RATE = 0.01;
 
 interface Installment {
   amount: number;
@@ -17,6 +18,10 @@ interface SubscriptionConfig {
   amount: number;
   frequency: string;
   start_date: string;
+}
+
+function applyFee(cents: number): number {
+  return Math.round(cents * (1 + SERVICE_FEE_RATE));
 }
 
 export async function POST(
@@ -41,13 +46,15 @@ export async function POST(
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('name, lunarpay_secret_key')
+    .select('name, lunarpay_secret_key, pass_service_fee')
     .eq('id', proposal.venue_id)
     .single();
 
   if (!venue?.lunarpay_secret_key) {
     return NextResponse.json({ error: 'Venue payment not configured' }, { status: 400 });
   }
+
+  const addFee = venue.pass_service_fee === true;
 
   try {
     let chargeAmountCents = proposal.price;
@@ -68,7 +75,8 @@ export async function POST(
       }
     }
 
-    const amountInDollars = chargeAmountCents / 100;
+    const finalCents = addFee ? applyFee(chargeAmountCents) : chargeAmountCents;
+    const amountInDollars = finalCents / 100;
 
     const hasFuturePayments = proposal.payment_type === 'installment' || proposal.payment_type === 'subscription';
 
@@ -89,21 +97,22 @@ export async function POST(
       checkoutData.customer_id = proposal.customer_lunarpay_id;
     }
 
-    console.log('Creating checkout session:', JSON.stringify(checkoutData));
+    console.log('[checkout] addFee:', addFee, 'originalCents:', chargeAmountCents, 'finalCents:', finalCents);
+    console.log('[checkout] Creating checkout session:', JSON.stringify(checkoutData));
 
     const result = await createCheckoutSession(venue.lunarpay_secret_key, checkoutData);
     const session = result.data || result;
 
-    console.log('Checkout session created:', JSON.stringify(session));
+    console.log('[checkout] Session created:', JSON.stringify(session));
 
     if (!session.url) {
-      console.error('No URL in checkout session response:', JSON.stringify(result));
+      console.error('[checkout] No URL in response:', JSON.stringify(result));
       return NextResponse.json({ error: 'No payment URL returned' }, { status: 500 });
     }
 
-    return NextResponse.json({ url: session.url });
+    return NextResponse.json({ url: session.url, service_fee_applied: addFee });
   } catch (err) {
-    console.error('Checkout session error:', err);
+    console.error('[checkout] Error:', err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Failed to create checkout session' },
       { status: 500 }

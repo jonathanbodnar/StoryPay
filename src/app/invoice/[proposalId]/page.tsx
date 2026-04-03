@@ -18,6 +18,7 @@ interface InvoiceData {
   created_at: string;
   venue_name: string;
   venue_logo_url: string | null;
+  service_fee: boolean;
   schedule: {
     payments?: Array<{
       amount: number;
@@ -82,6 +83,9 @@ export default function InvoicePage() {
       ? ((invoice.payment_config as { payments: Array<{ amount: number; date: string }> }).payments ?? [])
       : [];
   const schedulePayments = invoice.schedule?.payments ?? [];
+  const hasFee = invoice.service_fee;
+  const feeCents = hasFee ? Math.round(invoice.price * 0.01) : 0;
+  const totalWithFee = invoice.price + feeCents;
 
   return (
     <div className="min-h-screen bg-gray-50 py-10 px-4 print:bg-white print:py-0">
@@ -190,12 +194,27 @@ export default function InvoicePage() {
 
           {/* Total */}
           <div className="px-8 py-6 bg-gray-50/50 border-b border-gray-100">
-            <div className="flex items-center justify-between">
-              <span className="text-lg font-semibold text-gray-900">Total</span>
-              <span className="text-2xl font-bold text-gray-900">
-                {formatCents(invoice.price)}
-              </span>
-            </div>
+            {hasFee ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-500">Subtotal</span>
+                  <span className="text-gray-700">{formatCents(invoice.price)}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-500">Service fee (1%)</span>
+                  <span className="text-gray-700">{formatCents(feeCents)}</span>
+                </div>
+                <div className="flex items-center justify-between pt-2 border-t border-gray-200">
+                  <span className="text-lg font-semibold text-gray-900">Total</span>
+                  <span className="text-2xl font-bold text-gray-900">{formatCents(totalWithFee)}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <span className="text-lg font-semibold text-gray-900">Total</span>
+                <span className="text-2xl font-bold text-gray-900">{formatCents(invoice.price)}</span>
+              </div>
+            )}
           </div>
 
           {/* Payment schedule breakdown */}

@@ -9,7 +9,7 @@ export async function GET(
 
   const { data: proposal, error } = await supabaseAdmin
     .from('proposals')
-    .select('*, venues(name, logo_url)')
+    .select('*, venues(name, logo_url, pass_service_fee)')
     .eq('public_token', token)
     .single();
 
@@ -26,7 +26,7 @@ export async function GET(
     proposal.opened_at = new Date().toISOString();
   }
 
-  const venue = proposal.venues as { name: string; logo_url: string | null } | null;
+  const venue = proposal.venues as { name: string; logo_url: string | null; pass_service_fee: boolean } | null;
 
   return NextResponse.json({
     customer_name: proposal.customer_name,
@@ -42,5 +42,6 @@ export async function GET(
     venue_name: venue?.name ?? '',
     venue_logo_url: venue?.logo_url ?? null,
     proposal_id: proposal.id,
+    service_fee: venue?.pass_service_fee === true,
   });
 }
