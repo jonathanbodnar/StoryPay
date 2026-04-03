@@ -160,7 +160,7 @@ export default function DashboardOverview() {
   const totalProposals = Object.values(statusBreakdown).reduce((a, b) => a + b, 0);
 
   return (
-    <div className="min-h-full" style={{ backgroundColor: '#f8f9fa' }}>
+    <div className="min-h-full bg-white">
 
       {/* ── Header ── */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
