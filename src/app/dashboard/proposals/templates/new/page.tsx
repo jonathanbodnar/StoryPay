@@ -101,7 +101,7 @@ export default function NewTemplatePage() {
   }
 
   return (
-    <div className="max-w-4xl">
+    <div className="max-w-5xl">
       <Link
         href="/dashboard/proposals/templates"
         className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-4 transition-colors"
@@ -136,6 +136,7 @@ export default function NewTemplatePage() {
             content={content}
             onChange={setContent}
             placeholder="Start writing your contract terms, packages, inclusions, policies..."
+            minHeight={600}
           />
         </div>
 

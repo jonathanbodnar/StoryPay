@@ -13,6 +13,9 @@ import {
   Loader2,
 } from 'lucide-react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
+
+const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ssr: false });
 
 interface Field {
   id: string;
@@ -216,7 +219,7 @@ export default function EditTemplatePage({
   }
 
   return (
-    <div className="max-w-3xl">
+    <div className="max-w-5xl">
       <Link
         href="/dashboard/proposals/templates"
         className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-4 transition-colors"
@@ -275,15 +278,14 @@ export default function EditTemplatePage({
           <label className="block text-sm font-medium text-gray-700 mb-1.5">
             Proposal Content
           </label>
-          <p className="text-xs text-gray-400 mb-1.5">
-            Body text and terms for the proposal. HTML is supported.
+          <p className="text-xs text-gray-400 mb-2">
+            Write your full proposal — use headings, tables, lists, colors, highlights, and more.
           </p>
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            rows={8}
-            placeholder="Enter proposal body, terms & conditions…"
-            className="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition resize-y"
+          <RichTextEditor
+            content={content}
+            onChange={setContent}
+            placeholder="Start writing your contract terms, packages, inclusions, policies..."
+            minHeight={600}
           />
         </div>
 
