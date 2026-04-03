@@ -14,16 +14,6 @@ export async function GET(request: NextRequest) {
   const from = searchParams.get('from'); // ISO date string or null
   const to = searchParams.get('to');     // ISO date string or null
 
-  // Build a base query filter helper
-  function applyDateFilter<T>(
-    query: T & { gte: (col: string, val: string) => T; lte: (col: string, val: string) => T },
-    col: string
-  ): T {
-    if (from) query = query.gte(col, from);
-    if (to)   query = query.lte(col, to + 'T23:59:59.999Z');
-    return query;
-  }
-
   // All proposals in date range (for revenue, status, chart)
   let proposalsQuery = supabaseAdmin
     .from('proposals')
