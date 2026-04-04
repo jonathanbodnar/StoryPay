@@ -350,13 +350,22 @@ export default function LandingPage() {
     <div className="min-h-screen text-gray-900" style={{ fontFamily: "'Open Sans', Arial, sans-serif" }}>
 
       {/* ── Hero ── */}
-      <div className="relative overflow-hidden bg-white">
+      <div className="relative bg-white">
 
-        {/* Grey gradient: starts cool grey at top, fades to pure white well before bottom so no visible line */}
+        {/* Grey gradient pinned to top only — fades fully to white before the iPhone */}
         <div
-          className="absolute inset-0 z-0"
+          className="absolute top-0 left-0 right-0 z-0 pointer-events-none"
           style={{
-            background: 'linear-gradient(180deg, #e5eaed 0%, #eceff1 15%, #f2f4f5 30%, #f7f8f9 50%, #fbfcfc 70%, #ffffff 85%)',
+            height: '70%',
+            background: 'linear-gradient(180deg, #e4e9ec 0%, #eaeef0 12%, #f0f2f4 28%, #f5f7f8 45%, #f9fafb 62%, #ffffff 100%)',
+          }}
+        />
+        {/* Extra white bleed at bottom to guarantee no line */}
+        <div
+          className="absolute bottom-0 left-0 right-0 z-0 pointer-events-none"
+          style={{
+            height: '30%',
+            background: 'linear-gradient(180deg, transparent 0%, #ffffff 60%)',
           }}
         />
 
