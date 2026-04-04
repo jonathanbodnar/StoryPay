@@ -232,7 +232,7 @@ function RequestModal({ onClose }: { onClose: () => void }) {
 // ── iPhone Dashboard Screen ───────────────────────────────────────────────────
 function DashboardScreen() {
   return (
-    <div className="w-full h-full bg-white overflow-hidden flex flex-col">
+    <div className="w-full bg-white overflow-hidden flex flex-col" style={{ height: 596 }}>
       <div className="px-4 pt-2 pb-2 flex items-center justify-between border-b border-gray-100" style={{ backgroundColor: BRAND }}>
         <span className="text-[10px] font-bold text-white/80 uppercase tracking-wider">StoryPay</span>
         <div className="flex items-center gap-2">
@@ -468,12 +468,12 @@ export default function LandingPage() {
             <div
               className="relative mx-auto rounded-[3.2rem] overflow-hidden"
               style={{
-                width: '100%',
-                maxWidth: 300,
-                aspectRatio: '300 / 620',
+                width: 300,
+                height: 620,
                 backgroundColor: '#1a1a1a',
                 border: '8px solid #1a1a1a',
                 boxShadow: '0 0 0 1px #333, 0 30px 80px rgba(0,0,0,0.35)',
+                flexShrink: 0,
               }}
             >
               {/* Side buttons */}
@@ -482,7 +482,7 @@ export default function LandingPage() {
               <div className="absolute -left-[10px] top-[36%] w-[4px] h-10 rounded-l-lg" style={{ backgroundColor: '#111' }} />
               <div className="absolute -right-[10px] top-[23%] w-[4px] h-14 rounded-r-lg" style={{ backgroundColor: '#111' }} />
 
-              <div className="w-full h-full rounded-[2.6rem] overflow-hidden relative">
+              <div className="w-full rounded-[2.6rem] overflow-hidden relative" style={{ height: 604 }}>
                 {/* Dynamic island */}
                 <div
                   className="absolute top-3 left-1/2 -translate-x-1/2 w-24 h-7 rounded-full z-30 flex items-center justify-center gap-2"
@@ -515,7 +515,7 @@ export default function LandingPage() {
                   </div>
                 </div>
 
-                <div className="w-full h-full pt-12">
+                <div className="w-full pt-12" style={{ height: 604 }}>
                   <DashboardScreen />
                 </div>
 
