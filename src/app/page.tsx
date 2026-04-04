@@ -389,7 +389,7 @@ export default function LandingPage() {
             className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-5 sm:mb-6 leading-tight"
             style={{ fontFamily: "'Playfair Display', serif", fontWeight: 400 }}
           >
-            Introducing StoryPay<sup className="text-[0.4em] align-super font-normal tracking-normal">TM</sup>
+            Introducing StoryPay<sup className="text-[0.2em] align-super font-normal tracking-normal">TM</sup>
           </h1>
 
           {/* Subheadline */}
