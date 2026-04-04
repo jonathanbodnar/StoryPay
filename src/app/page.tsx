@@ -324,14 +324,14 @@ function DashboardScreen() {
   );
 }
 
-// ── Face avatars: 4 female, 1 male — professional, no gimmicks ────────────────
-// Using specific pravatar IDs that are professional female/male headshots
+// ── Face avatars: 4 female, 1 male — well-lit, professional, real-looking ─────
+// IDs sourced from uifaces.co via pravatar — bright, natural headshots only
 const FACE_IDS = [
-  49,  // professional woman
-  54,  // professional woman
-  56,  // professional woman
-  60,  // professional woman
-  68,  // professional man
+  1,   // woman, well lit
+  5,   // woman, well lit
+  9,   // woman, well lit
+  16,  // woman, well lit
+  12,  // man, well lit
 ];
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -370,8 +370,8 @@ export default function LandingPage() {
           </h1>
 
           {/* Subheadline */}
-          <p className="text-base sm:text-lg text-gray-500 leading-relaxed mb-8 sm:mb-10 max-w-xl mx-auto">
-            The modern way for wedding venues to send proposals, collect signatures, and get paid. Beautiful, simple, and built for your business.
+          <p className="text-base sm:text-lg text-gray-500 leading-relaxed mb-8 sm:mb-10 max-w-sm sm:max-w-md mx-auto">
+            The modern way for wedding venues to send proposals, collect signatures, and get paid.
           </p>
 
           {/* CTA */}
