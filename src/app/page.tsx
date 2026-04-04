@@ -368,29 +368,11 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div className="text-gray-900" style={{ fontFamily: "'Open Sans', Arial, sans-serif" }}>
+    <div className="text-gray-900" style={{ fontFamily: "'Open Sans', Arial, sans-serif", background: 'linear-gradient(180deg, #e4e9ec 0%, #eef1f3 8%, #f4f6f7 18%, #f8f9fa 30%, #ffffff 48%)' }}>
 
       {/* ── Hero ── */}
-      <div className="relative bg-white overflow-hidden">
+      <div className="relative">
 
-        {/* Grey gradient pinned to top only — fades fully to white before the iPhone */}
-        <div
-          className="absolute top-0 left-0 right-0 z-0 pointer-events-none"
-          style={{
-            height: '70%',
-            background: 'linear-gradient(180deg, #e4e9ec 0%, #eaeef0 12%, #f0f2f4 28%, #f5f7f8 45%, #f9fafb 62%, #ffffff 100%)',
-          }}
-        />
-        {/* Extra white bleed at bottom to guarantee no line */}
-        <div
-          className="absolute bottom-0 left-0 right-0 z-0 pointer-events-none"
-          style={{
-            height: '30%',
-            background: 'linear-gradient(180deg, transparent 0%, #ffffff 60%)',
-          }}
-        />
-
-        {/* All hero content sits above the background layers */}
         <div className="relative z-10">
 
         {/* Nav */}
@@ -545,10 +527,10 @@ export default function LandingPage() {
           <div className="h-6 sm:h-10" />
         </div>
         </div>{/* end relative z-10 */}
-      </div>{/* end relative overflow-hidden hero */}
+      </div>{/* end hero */}
 
       {/* ── FAQ ── */}
-      <div className="bg-white py-16 sm:py-20 px-5 sm:px-8">
+      <div className="py-16 sm:py-20 px-5 sm:px-8">
         <div className="mx-auto max-w-2xl">
           <div className="text-center mb-10">
             <h2
@@ -568,7 +550,7 @@ export default function LandingPage() {
       </div>
 
       {/* ── Footer ── */}
-      <footer className="py-8 px-4 border-t border-gray-100 bg-white text-center">
+      <footer className="py-8 px-4 border-t border-gray-100 text-center">
         <p className="text-xs text-gray-400">&copy; 2026 StoryPay&#8482; by StoryVenue</p>
       </footer>
 
