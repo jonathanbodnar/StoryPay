@@ -454,9 +454,9 @@ export default function LandingPage() {
             <CDUnit v={countdown.seconds} label="Seconds" />
           </div>
 
-          {/* 0% fee badge */}
-          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-5 py-2 text-sm font-semibold text-emerald-700 mb-10 sm:mb-14">
-            0% processing fees. You keep 100% of every payment.
+          {/* 0% fee badge — single line on all devices */}
+          <div className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-4 py-1.5 mb-10 sm:mb-14 whitespace-nowrap">
+            <span className="text-xs sm:text-sm font-semibold text-emerald-700">0% processing fees. You keep 100% of every payment.</span>
           </div>
 
           {/* iPhone mockup */}
