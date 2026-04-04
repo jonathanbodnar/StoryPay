@@ -368,10 +368,10 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div className="min-h-screen text-gray-900" style={{ fontFamily: "'Open Sans', Arial, sans-serif" }}>
+    <div className="text-gray-900" style={{ fontFamily: "'Open Sans', Arial, sans-serif" }}>
 
       {/* ── Hero ── */}
-      <div className="relative bg-white">
+      <div className="relative bg-white overflow-hidden">
 
         {/* Grey gradient pinned to top only — fades fully to white before the iPhone */}
         <div
@@ -542,7 +542,7 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div className="h-12 sm:h-16" />
+          <div className="h-6 sm:h-10" />
         </div>
         </div>{/* end relative z-10 */}
       </div>{/* end relative overflow-hidden hero */}
