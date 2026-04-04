@@ -324,14 +324,14 @@ function DashboardScreen() {
   );
 }
 
-// ── Face avatars: 4 female, 1 male — well-lit, professional, real-looking ─────
-// IDs sourced from uifaces.co via pravatar — bright, natural headshots only
-const FACE_IDS = [
-  1,   // woman, well lit
-  5,   // woman, well lit
-  9,   // woman, well lit
-  16,  // woman, well lit
-  12,  // man, well lit
+// ── Face avatars: 4 smiling women, 1 smiling man ─────────────────────────────
+// Using randomuser.me with fixed seeds for consistent, professional portraits
+const AVATARS = [
+  { src: 'https://randomuser.me/api/portraits/women/44.jpg', alt: 'venue owner' },
+  { src: 'https://randomuser.me/api/portraits/women/65.jpg', alt: 'venue owner' },
+  { src: 'https://randomuser.me/api/portraits/women/68.jpg', alt: 'venue owner' },
+  { src: 'https://randomuser.me/api/portraits/women/90.jpg', alt: 'venue owner' },
+  { src: 'https://randomuser.me/api/portraits/men/32.jpg',   alt: 'venue owner' },
 ];
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -397,12 +397,12 @@ export default function LandingPage() {
           {/* Social proof */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-8 sm:mb-10">
             <div className="flex -space-x-2.5">
-              {FACE_IDS.map((id, i) => (
+              {AVATARS.map((av, i) => (
                 <div key={i} className="h-9 w-9 rounded-full border-2 border-white overflow-hidden shadow-sm bg-gray-200 flex-shrink-0">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={`https://i.pravatar.cc/72?img=${id}`}
-                    alt="venue owner"
+                    src={av.src}
+                    alt={av.alt}
                     className="h-full w-full object-cover"
                   />
                 </div>
