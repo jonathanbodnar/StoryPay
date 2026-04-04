@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { CheckCircle2, ChevronDown, X, Loader2 } from 'lucide-react';
+import { CheckCircle2, ChevronDown, X, Loader2, TrendingUp, Bell, CreditCard, FileText } from 'lucide-react';
 
 const BRAND = '#293745';
 const LAUNCH_DATE = new Date('2026-06-01T00:00:00Z');
@@ -29,9 +29,9 @@ function useCountdown(target: Date) {
 
 function CDUnit({ v, label }: { v: number; label: string }) {
   return (
-    <div className="flex flex-col items-center gap-1 min-w-[48px]">
-      <span className="text-2xl sm:text-3xl font-bold tabular-nums text-gray-900">{String(v).padStart(2, '0')}</span>
-      <span className="text-[9px] uppercase tracking-[0.15em] text-gray-400 font-medium">{label}</span>
+    <div className="flex flex-col items-center gap-1 min-w-[52px]">
+      <span className="text-3xl sm:text-4xl font-bold tabular-nums text-gray-900">{String(v).padStart(2, '0')}</span>
+      <span className="text-[9px] uppercase tracking-[0.18em] text-gray-400 font-medium">{label}</span>
     </div>
   );
 }
@@ -40,7 +40,7 @@ function CDUnit({ v, label }: { v: number; label: string }) {
 const FAQS = [
   { q: 'What is StoryPay?', a: 'StoryPay is a proposal and payment platform built specifically for wedding venues. Send beautiful contracts, collect e-signatures, and get paid — all from one dashboard.' },
   { q: "What's included in early access?", a: 'Early access members get full platform access, founding member pricing, priority onboarding, and a direct line to our team to shape the product roadmap.' },
-  { q: 'How do I get started?', a: 'Simply request your early access invite using the form above. We\'ll send you your invite within 24–48 hours with everything you need to get set up.' },
+  { q: 'How do I get started?', a: "Simply request your early access invite using the button above. We'll send you your invite within 24–48 hours with everything you need to get set up." },
   { q: 'Is support available?', a: 'Yes! We provide dedicated onboarding support for all early access members. Reach out to us at clients@storyvenuemarketing.com anytime.' },
   { q: 'How much will this cost?', a: 'Pricing will be announced at launch. Early access members will receive special founding member rates — significantly lower than standard pricing. Plus 0% processing fees.' },
 ];
@@ -49,59 +49,41 @@ function FAQItem({ q, a, defaultOpen = false }: { q: string; a: string; defaultO
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="rounded-2xl bg-gray-50 overflow-hidden">
-      <button
-        type="button"
-        className="w-full flex items-center justify-between px-5 py-4 text-left"
-        onClick={() => setOpen(v => !v)}
-      >
-        <span className="text-sm font-semibold text-gray-900">{q}</span>
-        <div className={`flex-shrink-0 flex h-6 w-6 items-center justify-center rounded-full transition-colors ${open ? 'bg-gray-800' : 'bg-white border border-gray-200'}`}>
+      <button type="button" className="w-full flex items-center justify-between px-6 py-5 text-left" onClick={() => setOpen(v => !v)}>
+        <span className="text-sm font-semibold text-gray-900 pr-4">{q}</span>
+        <div className={`flex-shrink-0 flex h-6 w-6 items-center justify-center rounded-full transition-all ${open ? 'bg-gray-800' : 'bg-white border border-gray-200'}`}>
           <ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180 text-white' : 'text-gray-400'}`} />
         </div>
       </button>
-      {open && (
-        <div className="px-5 pb-4 text-sm text-gray-500 leading-relaxed">
-          {a}
-        </div>
-      )}
+      {open && <div className="px-6 pb-5 text-sm text-gray-500 leading-relaxed border-t border-gray-100 pt-4">{a}</div>}
     </div>
   );
 }
 
 // ─── Request Modal ────────────────────────────────────────────────────────────
-function RequestModal({ prefillEmail, onClose }: { prefillEmail: string; onClose: () => void }) {
-  const [form, setForm]     = useState({ firstName: '', lastName: '', email: prefillEmail, phone: '', venueName: '' });
+function RequestModal({ onClose }: { onClose: () => void }) {
+  const [form, setForm]     = useState({ firstName: '', lastName: '', email: '', phone: '', venueName: '' });
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error' | 'duplicate'>('idle');
   const [msg, setMsg]       = useState('');
 
-  const upd = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm(p => ({ ...p, [k]: e.target.value }));
+  const upd = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, [k]: e.target.value }));
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setStatus('loading');
     try {
-      const res = await fetch('/api/waitlist', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
+      const res  = await fetch('/api/waitlist', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
       const data = await res.json();
-      if (res.status === 201)     { setStatus('success'); }
-      else if (res.status === 200){ setStatus('duplicate'); setMsg(data.message); }
-      else                        { setStatus('error'); setMsg(data.error || 'Something went wrong.'); }
-    } catch {
-      setStatus('error'); setMsg('Network error. Please try again.');
-    }
+      if (res.status === 201)      setStatus('success');
+      else if (res.status === 200) { setStatus('duplicate'); setMsg(data.message); }
+      else                         { setStatus('error');     setMsg(data.error || 'Something went wrong.'); }
+    } catch { setStatus('error'); setMsg('Network error. Please try again.'); }
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
       <div className="relative w-full max-w-md rounded-3xl bg-white shadow-2xl overflow-hidden">
-        <button
-          onClick={onClose}
-          className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors"
-        >
+        <button onClick={onClose} className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors">
           <X size={14} />
         </button>
 
@@ -114,9 +96,7 @@ function RequestModal({ prefillEmail, onClose }: { prefillEmail: string; onClose
             <p className="text-gray-500 text-sm leading-relaxed max-w-xs">
               Look out for your invite via email in the next <strong>24–48 hours</strong>. We&apos;re excited to have you on board.
             </p>
-            <button onClick={onClose} className="mt-2 rounded-xl px-6 py-2.5 text-sm font-semibold text-white" style={{ backgroundColor: BRAND }}>
-              Done
-            </button>
+            <button onClick={onClose} className="mt-2 rounded-xl px-6 py-2.5 text-sm font-semibold text-white" style={{ backgroundColor: BRAND }}>Done</button>
           </div>
         ) : (
           <>
@@ -129,34 +109,34 @@ function RequestModal({ prefillEmail, onClose }: { prefillEmail: string; onClose
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 mb-1.5">First Name <span className="text-red-400">*</span></label>
                   <input type="text" required value={form.firstName} onChange={upd('firstName')} placeholder="Jane"
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors" />
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors" />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 mb-1.5">Last Name</label>
                   <input type="text" value={form.lastName} onChange={upd('lastName')} placeholder="Smith"
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors" />
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors" />
                 </div>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1.5">Email <span className="text-red-400">*</span></label>
                 <input type="email" required value={form.email} onChange={upd('email')} placeholder="jane@yourvenue.com"
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors" />
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1.5">Phone</label>
                 <input type="tel" value={form.phone} onChange={upd('phone')} placeholder="(555) 000-0000"
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors" />
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1.5">Venue Name</label>
                 <input type="text" value={form.venueName} onChange={upd('venueName')} placeholder="The Grand Estate"
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors" />
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors" />
               </div>
               {(status === 'error' || status === 'duplicate') && (
                 <p className="text-xs text-center text-red-500 bg-red-50 rounded-xl py-2 px-3">{msg}</p>
               )}
               <button type="submit" disabled={status === 'loading'}
-                className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white transition-all hover:opacity-90 disabled:opacity-60 mt-1"
+                className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60 mt-1"
                 style={{ backgroundColor: BRAND }}>
                 {status === 'loading' ? <><Loader2 size={14} className="animate-spin" /> Submitting...</> : 'Request My Invite'}
               </button>
@@ -169,13 +149,144 @@ function RequestModal({ prefillEmail, onClose }: { prefillEmail: string; onClose
   );
 }
 
-// ─── Avatar stack ─────────────────────────────────────────────────────────────
-const AVATAR_INITIALS = ['J','M','S','R','A'];
-const AVATAR_BG       = ['#293745','#354859','#4a6280','#2f3e4e','#6b8aab'];
+// ─── iPhone Dashboard Screen ─────────────────────────────────────────────────
+function DashboardScreen() {
+  return (
+    <div className="w-full h-full bg-white overflow-hidden flex flex-col">
+      {/* Top bar */}
+      <div className="px-4 pt-2 pb-2 flex items-center justify-between border-b border-gray-100" style={{ backgroundColor: BRAND }}>
+        <span className="text-[10px] font-bold text-white/80 uppercase tracking-wider">StoryPay</span>
+        <div className="flex items-center gap-2">
+          <Bell size={11} className="text-white/60" />
+          <div className="h-5 w-5 rounded-full bg-white/20 flex items-center justify-center text-[8px] font-bold text-white">JW</div>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-hidden px-3 py-2 space-y-2" style={{ backgroundColor: '#f8fafc' }}>
+
+        {/* Greeting */}
+        <div>
+          <p className="text-[9px] text-gray-400">Good morning</p>
+          <p className="text-[11px] font-bold text-gray-800">Grand Estate ✦</p>
+        </div>
+
+        {/* KPI cards */}
+        <div className="grid grid-cols-2 gap-1.5">
+          {[
+            { label: 'Revenue',   value: '$48.2k', trend: '+12%', up: true },
+            { label: 'Proposals', value: '24',      trend: '+4',   up: true },
+            { label: 'Customers', value: '18',      trend: '+3',   up: true },
+            { label: 'Pending',   value: '5',       trend: '-2',   up: false },
+          ].map(c => (
+            <div key={c.label} className="rounded-xl bg-white border border-gray-100 p-2 shadow-sm">
+              <p className="text-[7px] text-gray-400 font-semibold uppercase tracking-wider">{c.label}</p>
+              <p className="text-[13px] font-bold mt-0.5" style={{ color: BRAND }}>{c.value}</p>
+              <div className={`flex items-center gap-0.5 mt-0.5 ${c.up ? 'text-emerald-500' : 'text-red-400'}`}>
+                <TrendingUp size={8} />
+                <span className="text-[7px] font-semibold">{c.trend}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Revenue chart */}
+        <div className="rounded-xl bg-white border border-gray-100 p-2.5 shadow-sm">
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="text-[8px] font-bold text-gray-500 uppercase tracking-wider">Revenue Trend</p>
+            <span className="text-[7px] text-emerald-600 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded-full">↑ Trending</span>
+          </div>
+          <svg viewBox="0 0 220 55" className="w-full" style={{ height: 44 }}>
+            <defs>
+              <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#293745" stopOpacity="0.18" />
+                <stop offset="100%" stopColor="#293745" stopOpacity="0.01" />
+              </linearGradient>
+            </defs>
+            {/* Grid lines */}
+            {[10, 25, 40].map(y => (
+              <line key={y} x1="0" y1={y} x2="220" y2={y} stroke="#f1f5f9" strokeWidth="0.5" />
+            ))}
+            {/* Area fill */}
+            <path d="M0,48 C25,44 45,35 70,28 C95,22 115,30 140,18 C165,8 185,12 220,5 L220,55 L0,55Z" fill="url(#chartGrad)" />
+            {/* Line */}
+            <path d="M0,48 C25,44 45,35 70,28 C95,22 115,30 140,18 C165,8 185,12 220,5" fill="none" stroke="#293745" strokeWidth="2" strokeLinecap="round" />
+            {/* Dots */}
+            {[[0,48],[70,28],[140,18],[220,5]].map(([x,y],i) => (
+              <circle key={i} cx={x} cy={y} r="2.5" fill="white" stroke="#293745" strokeWidth="1.5" />
+            ))}
+            {/* X labels */}
+            {['Nov','Jan','Mar','Apr'].map((l,i) => (
+              <text key={l} x={[5,70,140,210][i]} y="54" fontSize="5" fill="#94a3b8" textAnchor="middle">{l}</text>
+            ))}
+          </svg>
+        </div>
+
+        {/* Recent payments */}
+        <div className="rounded-xl bg-white border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-2.5 py-1.5 border-b border-gray-50 flex items-center justify-between">
+            <p className="text-[8px] font-bold text-gray-500 uppercase tracking-wider">Recent Payments</p>
+            <CreditCard size={9} className="text-gray-300" />
+          </div>
+          {[
+            { name: 'Johnson Wedding', amount: '$4,500', status: 'Paid',   color: '#10b981', bg: '#d1fae5' },
+            { name: 'Miller Reception', amount: '$3,200', status: 'Signed', color: '#8b5cf6', bg: '#ede9fe' },
+            { name: 'Davis Ceremony',   amount: '$2,800', status: 'Sent',   color: '#3b82f6', bg: '#dbeafe' },
+          ].map(p => (
+            <div key={p.name} className="flex items-center justify-between px-2.5 py-1.5 border-b border-gray-50 last:border-0">
+              <div className="flex items-center gap-1.5">
+                <FileText size={8} style={{ color: BRAND }} />
+                <div>
+                  <p className="text-[8px] font-semibold text-gray-700 leading-none">{p.name}</p>
+                  <p className="text-[7px] font-bold mt-0.5" style={{ color: BRAND }}>{p.amount}</p>
+                </div>
+              </div>
+              <span className="text-[7px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: p.bg, color: p.color }}>{p.status}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Proposal status donut visual */}
+        <div className="rounded-xl bg-white border border-gray-100 p-2.5 shadow-sm">
+          <p className="text-[8px] font-bold text-gray-500 uppercase tracking-wider mb-2">Proposal Status</p>
+          <div className="flex items-center gap-2">
+            <svg viewBox="0 0 40 40" className="w-10 h-10 flex-shrink-0">
+              {/* Simple donut */}
+              <circle cx="20" cy="20" r="14" fill="none" stroke="#f1f5f9" strokeWidth="6" />
+              <circle cx="20" cy="20" r="14" fill="none" stroke="#10b981" strokeWidth="6"
+                strokeDasharray="35 53" strokeDashoffset="-5" strokeLinecap="round" />
+              <circle cx="20" cy="20" r="14" fill="none" stroke="#8b5cf6" strokeWidth="6"
+                strokeDasharray="18 70" strokeDashoffset="-40" strokeLinecap="round" />
+              <circle cx="20" cy="20" r="14" fill="none" stroke="#3b82f6" strokeWidth="6"
+                strokeDasharray="15 73" strokeDashoffset="-58" strokeLinecap="round" />
+              <text x="20" y="23" textAnchor="middle" fontSize="7" fontWeight="bold" fill="#293745">24</text>
+            </svg>
+            <div className="flex flex-col gap-1">
+              {[
+                { label: 'Paid',   color: '#10b981', pct: '46%' },
+                { label: 'Signed', color: '#8b5cf6', pct: '25%' },
+                { label: 'Sent',   color: '#3b82f6', pct: '20%' },
+                { label: 'Draft',  color: '#94a3b8', pct: '9%' },
+              ].map(s => (
+                <div key={s.label} className="flex items-center gap-1">
+                  <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: s.color }} />
+                  <span className="text-[7px] text-gray-500">{s.label}</span>
+                  <span className="text-[7px] font-bold text-gray-700 ml-auto pl-2">{s.pct}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+// ─── Face avatars using picsum ────────────────────────────────────────────────
+const FACE_SEEDS = [10, 22, 35, 47, 63];
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function LandingPage() {
-  const [email, setEmail]         = useState('');
   const [showModal, setShowModal] = useState(false);
   const [count, setCount]         = useState(247);
   const countdown                 = useCountdown(LAUNCH_DATE);
@@ -186,203 +297,183 @@ export default function LandingPage() {
     }).catch(() => {});
   }, []);
 
-  function openModal(e?: React.FormEvent) {
-    e?.preventDefault();
-    setShowModal(true);
-  }
-
   return (
     <div className="min-h-screen text-gray-900" style={{ fontFamily: "'Open Sans', Arial, sans-serif" }}>
 
-      {/* ── HERO — light gradient bg matching reference ── */}
-      <div style={{ background: 'linear-gradient(180deg, #dff0f8 0%, #ffffff 55%)' }}>
+      {/* ── HERO ── */}
+      <div style={{ background: 'linear-gradient(180deg, #dff0f8 0%, #ffffff 60%)' }}>
 
         {/* Nav */}
-        <nav className="mx-auto max-w-4xl px-5 py-5 flex items-center justify-between">
-          <Image src="/storypay-logo-dark.png" alt="StoryPay" width={100} height={24} />
+        <nav className="mx-auto max-w-5xl px-6 py-5 flex items-center justify-between">
+          <Image src="/storypay-logo-dark.png" alt="StoryPay" width={110} height={26} />
           <a href="/admin" className="text-xs text-gray-400 hover:text-gray-600 transition-colors">Admin</a>
         </nav>
 
-        {/* Hero content */}
-        <div className="mx-auto max-w-lg px-5 pt-6 pb-0 text-center">
-
-          {/* App icon — dark rounded square, exactly like reference */}
-          <div className="flex justify-center mb-6">
-            <div className="h-16 w-16 rounded-[22px] shadow-lg flex items-center justify-center overflow-hidden" style={{ backgroundColor: BRAND }}>
-              <Image src="/StoryPay-Light-Logo.png" alt="StoryPay" width={44} height={44} className="object-contain p-1.5" />
-            </div>
-          </div>
+        {/* Hero content — wider max-width, more breathing room */}
+        <div className="mx-auto max-w-2xl px-6 pt-8 pb-0 text-center">
 
           {/* Headline */}
-          <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-3" style={{ fontFamily: "'Playfair Display', serif", fontWeight: 400 }}>
-            Get early access
+          <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-5 leading-tight"
+            style={{ fontFamily: "'Playfair Display', serif", fontWeight: 400 }}>
+            Introducing StoryPay
           </h1>
-          <p className="text-sm text-gray-500 leading-relaxed mb-6 max-w-xs mx-auto">
-            We&apos;re getting close. Request your invite to be among the first venues to use StoryPay and transform how you close bookings.
+
+          {/* Subheadline — wider, more spacious */}
+          <p className="text-base sm:text-lg text-gray-500 leading-relaxed mb-8 max-w-lg mx-auto">
+            The modern way for wedding venues to send proposals, collect e-signatures, and get paid — beautifully, in one place.
           </p>
 
-          {/* Email + button row — exactly like reference */}
-          <form onSubmit={openModal} className="flex items-center gap-2 mb-5 max-w-sm mx-auto">
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="Your email address"
-              className="flex-1 rounded-xl border border-gray-200 bg-white/80 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-gray-300 shadow-sm"
-            />
-            <button
-              type="submit"
-              className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white whitespace-nowrap shadow-sm hover:opacity-90 transition-opacity"
-              style={{ backgroundColor: BRAND }}
-            >
-              Request Early Access Invite
-            </button>
-          </form>
+          {/* Single CTA button — wide */}
+          <button
+            onClick={() => setShowModal(true)}
+            className="inline-flex items-center justify-center rounded-2xl px-10 py-4 text-base font-bold text-white shadow-md hover:opacity-90 hover:-translate-y-0.5 transition-all mb-8"
+            style={{ backgroundColor: BRAND }}
+          >
+            Request Early Access Invite
+          </button>
 
-          {/* Avatar + social proof — exactly like reference */}
-          <div className="flex items-center justify-center gap-2.5 mb-8">
-            <div className="flex -space-x-2">
-              {AVATAR_INITIALS.map((init, i) => (
-                <div key={i} className="h-7 w-7 rounded-full border-2 border-white flex items-center justify-center text-white text-[10px] font-bold"
-                  style={{ backgroundColor: AVATAR_BG[i] }}>
-                  {init}
+          {/* Social proof — face photos */}
+          <div className="flex items-center justify-center gap-3 mb-8">
+            <div className="flex -space-x-2.5">
+              {FACE_SEEDS.map((seed, i) => (
+                <div key={i} className="h-9 w-9 rounded-full border-2 border-white overflow-hidden shadow-sm bg-gray-200">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`https://i.pravatar.cc/72?img=${seed}`}
+                    alt="venue owner"
+                    className="h-full w-full object-cover"
+                  />
                 </div>
               ))}
             </div>
-            <span className="text-xs text-gray-500">
-              Join <span className="font-semibold text-gray-700">{count.toLocaleString()}+</span> others on the waitlist
+            <span className="text-sm text-gray-500 max-w-[180px] sm:max-w-none text-left">
+              Trusted by venue owners<br className="sm:hidden" /> all over the United States
             </span>
           </div>
 
-          {/* Countdown — exactly like reference: numbers with colons */}
-          <div className="flex items-center justify-center gap-3 sm:gap-5 mb-10">
+          {/* Countdown */}
+          <div className="flex items-center justify-center gap-4 sm:gap-8 mb-8">
             <CDUnit v={countdown.days}    label="Days"    />
-            <span className="text-xl font-light text-gray-300 pb-4">:</span>
+            <span className="text-3xl font-light text-gray-300 pb-5">:</span>
             <CDUnit v={countdown.hours}   label="Hours"   />
-            <span className="text-xl font-light text-gray-300 pb-4">:</span>
+            <span className="text-3xl font-light text-gray-300 pb-5">:</span>
             <CDUnit v={countdown.minutes} label="Minutes" />
-            <span className="text-xl font-light text-gray-300 pb-4">:</span>
+            <span className="text-3xl font-light text-gray-300 pb-5">:</span>
             <CDUnit v={countdown.seconds} label="Seconds" />
           </div>
 
-          {/* 0% fee badge */}
-          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-1.5 text-xs font-semibold text-emerald-700 mb-10">
-            🎉 0% processing fees — you keep 100% of every payment
+          {/* 0% fee — no emoji, clean pill */}
+          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-5 py-2 text-sm font-semibold text-emerald-700 mb-12">
+            0% processing fees — you keep 100% of every payment
           </div>
 
-          {/* Phone mockup — centered, large, like reference */}
-          <div className="relative mx-auto" style={{ width: 260, height: 480 }}>
-            {/* Floating notification card — left side */}
-            <div className="absolute -left-8 top-16 z-10 rounded-2xl bg-white shadow-xl border border-gray-100 px-3.5 py-2.5 text-left w-40">
-              <div className="flex items-center gap-1.5 mb-1">
-                <div className="h-5 w-5 rounded-full flex items-center justify-center text-white text-[8px] font-bold" style={{ backgroundColor: BRAND }}>S</div>
-                <span className="text-[10px] font-medium text-gray-500">StoryPay</span>
+          {/* iPhone mockup — full size, proportional */}
+          <div className="relative mx-auto" style={{ width: 300, paddingBottom: 16 }}>
+
+            {/* Floating payment notification — top left */}
+            <div className="absolute -left-12 top-20 z-10 rounded-2xl bg-white shadow-xl border border-gray-100 px-3.5 py-3 text-left w-44">
+              <div className="flex items-center gap-2 mb-1.5">
+                <div className="h-6 w-6 rounded-full flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0" style={{ backgroundColor: BRAND }}>S</div>
+                <span className="text-[10px] font-semibold text-gray-500">New Payment</span>
               </div>
-              <p className="text-xs font-bold text-gray-900">New payment</p>
-              <p className="text-[10px] text-gray-400">$4,500 · just now</p>
+              <p className="text-sm font-bold text-gray-900">$4,500.00</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">The Grand Estate · just now</p>
             </div>
 
-            {/* Phone shell */}
-            <div className="absolute inset-0 rounded-[2.8rem] overflow-hidden border-[5px] border-gray-800 bg-gray-800 shadow-2xl">
-              {/* Notch */}
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-5 bg-gray-800 rounded-b-2xl z-20" />
-              {/* Status bar dots */}
-              <div className="absolute top-2 right-4 z-20 flex items-center gap-1">
-                <div className="h-1 w-3 rounded-full bg-white/40" />
-                <div className="h-1 w-1 rounded-full bg-white/40" />
-                <div className="h-1 w-1 rounded-full bg-white/40" />
+            {/* Floating trend card — right side */}
+            <div className="absolute -right-10 top-1/3 z-10 rounded-2xl bg-white shadow-xl border border-gray-100 px-3 py-2.5 text-left w-36">
+              <p className="text-[9px] text-gray-400 font-medium mb-1">Monthly Revenue</p>
+              <p className="text-sm font-bold text-gray-900">$48,200</p>
+              <div className="flex items-center gap-1 mt-1">
+                <TrendingUp size={11} className="text-emerald-500" />
+                <span className="text-[10px] font-bold text-emerald-600">+12% this month</span>
               </div>
+            </div>
 
-              {/* Screen content */}
-              <div className="w-full h-full bg-white pt-5 overflow-hidden">
-                {/* Mini dashboard */}
-                <div className="px-3 py-2 border-b border-gray-100">
-                  <p className="text-[8px] text-gray-400 font-semibold uppercase tracking-wider">Home</p>
-                  <p className="text-[10px] font-bold text-gray-800 mt-0.5">My Tasks</p>
+            {/* The iPhone */}
+            <div
+              className="relative mx-auto rounded-[3.2rem] shadow-2xl overflow-hidden"
+              style={{
+                width: 300,
+                height: 620,
+                backgroundColor: '#1a1a1a',
+                border: '8px solid #1a1a1a',
+                boxShadow: '0 0 0 1px #333, 0 30px 80px rgba(0,0,0,0.35)',
+              }}
+            >
+              {/* Side buttons */}
+              <div className="absolute -left-[10px] top-28 w-[4px] h-8 rounded-l-lg" style={{ backgroundColor: '#111' }} />
+              <div className="absolute -left-[10px] top-40 w-[4px] h-10 rounded-l-lg" style={{ backgroundColor: '#111' }} />
+              <div className="absolute -left-[10px] top-52 w-[4px] h-10 rounded-l-lg" style={{ backgroundColor: '#111' }} />
+              <div className="absolute -right-[10px] top-36 w-[4px] h-14 rounded-r-lg" style={{ backgroundColor: '#111' }} />
+
+              {/* Screen */}
+              <div className="w-full h-full rounded-[2.6rem] overflow-hidden relative">
+                {/* Dynamic island */}
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 w-24 h-7 rounded-full z-30 flex items-center justify-center gap-2"
+                  style={{ backgroundColor: '#1a1a1a' }}>
+                  <div className="h-2 w-2 rounded-full bg-gray-700" />
+                  <div className="h-3 w-3 rounded-full bg-gray-700" />
                 </div>
-                <div className="px-3 pt-2">
-                  <p className="text-[8px] font-bold uppercase tracking-widest text-gray-400 mb-2">TOP PRIORITY</p>
-                  {/* Task card */}
-                  <div className="rounded-xl border border-gray-100 bg-white p-2.5 mb-2 flex items-center justify-between shadow-sm">
-                    <div className="flex items-center gap-1.5">
-                      <div className="h-2 w-2 rounded-full bg-emerald-400" />
-                      <div>
-                        <p className="text-[9px] font-bold text-gray-800">Final Design Review</p>
-                        <p className="text-[8px] text-gray-400">Produlis App</p>
+
+                {/* Status bar */}
+                <div className="absolute top-0 left-0 right-0 h-12 z-20 px-6 flex items-start pt-2 justify-between"
+                  style={{ backgroundColor: BRAND }}>
+                  <span className="text-[10px] font-semibold text-white/70 mt-1">9:41</span>
+                  <div className="flex items-center gap-1 mt-1">
+                    <div className="flex gap-px items-end h-3">
+                      {[3,4,5,4].map((h,i) => <div key={i} className="w-0.5 rounded-full bg-white/70" style={{ height: h * 2 }} />)}
+                    </div>
+                    <svg className="w-3 h-3 text-white/70" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M1 1l22 22M16.72 11.06A10.94 10.94 0 0112 10c-2.27 0-4.36.68-6.1 1.84L3.63 9.57A12.98 12.98 0 0112 8c2.53 0 4.88.73 6.86 1.98l-2.14 1.08zM12 20l-3.29-3.29C9.96 15.64 10.96 15 12 15s2.04.64 3.29 1.71L12 20z" />
+                    </svg>
+                    <div className="flex items-center gap-0.5">
+                      <div className="h-2.5 rounded-sm border border-white/60 p-px" style={{ width: 16 }}>
+                        <div className="h-full rounded-sm bg-white/80" style={{ width: '75%' }} />
                       </div>
                     </div>
-                    <div className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[7px] font-bold text-blue-600">Feb 20</div>
-                  </div>
-                  {/* KPI row */}
-                  <div className="grid grid-cols-2 gap-1.5 mb-2">
-                    {[{ l:'Revenue', v:'$12.4k' },{ l:'Proposals', v:'8' }].map(c=>(
-                      <div key={c.l} className="rounded-xl border border-gray-100 p-2">
-                        <p className="text-[8px] text-gray-400 font-semibold">{c.l}</p>
-                        <p className="text-[11px] font-bold mt-0.5" style={{ color: BRAND }}>{c.v}</p>
-                      </div>
-                    ))}
-                  </div>
-                  {/* Mini chart */}
-                  <div className="rounded-xl border border-gray-100 p-2 mb-2">
-                    <p className="text-[7px] text-gray-400 font-semibold mb-1.5">REVENUE</p>
-                    <svg viewBox="0 0 180 40" className="w-full h-8">
-                      <defs>
-                        <linearGradient id="lg" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#293745" stopOpacity="0.15" />
-                          <stop offset="100%" stopColor="#293745" stopOpacity="0" />
-                        </linearGradient>
-                      </defs>
-                      <path d="M0,35 C20,32 40,18 70,14 C100,10 130,22 160,6 L180,2 L180,40 L0,40Z" fill="url(#lg)" />
-                      <path d="M0,35 C20,32 40,18 70,14 C100,10 130,22 160,6 L180,2" fill="none" stroke="#293745" strokeWidth="1.5" />
-                    </svg>
-                  </div>
-                  {/* Landing page label */}
-                  <div className="flex items-center justify-between px-1">
-                    <p className="text-[9px] text-gray-400">Landing page</p>
-                    <p className="text-[7px] text-gray-300">Apr 17</p>
                   </div>
                 </div>
+
+                {/* Dashboard content */}
+                <div className="w-full h-full pt-12">
+                  <DashboardScreen />
+                </div>
+
+                {/* Bottom home bar */}
+                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-24 h-1 rounded-full bg-gray-800/60" />
               </div>
             </div>
           </div>
 
-          {/* Spacer after phone */}
-          <div className="h-12" />
+          <div className="h-16" />
         </div>
       </div>
 
-      {/* ── FAQ section — light grey bg, centered, card style ── */}
-      <div className="bg-white py-16 px-4 sm:px-6">
-        <div className="mx-auto max-w-xl">
+      {/* ── FAQ ── */}
+      <div className="bg-white py-20 px-4 sm:px-6">
+        <div className="mx-auto max-w-2xl">
           <div className="text-center mb-10">
-            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2" style={{ fontFamily: "'Playfair Display', serif", fontWeight: 400 }}>
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-3"
+              style={{ fontFamily: "'Playfair Display', serif", fontWeight: 400 }}>
               Frequently asked questions
             </h2>
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-gray-400 max-w-md mx-auto">
               Everything you need to know about StoryPay. Find answers to the most common questions below.
             </p>
           </div>
-
           <div className="space-y-2">
             {FAQS.map((f, i) => <FAQItem key={f.q} {...f} defaultOpen={i < 2} />)}
           </div>
         </div>
       </div>
 
-      {/* ── Footer — minimal, like reference ── */}
-      <footer className="py-8 px-4 border-t border-gray-100 bg-white">
-        <div className="mx-auto max-w-xl flex flex-col items-center gap-3">
-          <div className="flex items-center gap-6 text-xs text-gray-400">
-            <a href="https://storyvenuemarketing.com" className="hover:text-gray-600 transition-colors">StoryVenue</a>
-            <a href="/admin" className="hover:text-gray-600 transition-colors">Admin Login</a>
-            <a href="mailto:clients@storyvenuemarketing.com" className="hover:text-gray-600 transition-colors">clients@storyvenuemarketing.com</a>
-          </div>
-          <p className="text-xs text-gray-400">&copy; 2026 StoryPay by <span className="font-semibold">StoryVenue</span></p>
-        </div>
+      {/* ── Footer — copyright only ── */}
+      <footer className="py-8 px-4 border-t border-gray-100 bg-white text-center">
+        <p className="text-xs text-gray-400">&copy; 2026 StoryPay by StoryVenue</p>
       </footer>
 
-      {/* Modal */}
-      {showModal && <RequestModal prefillEmail={email} onClose={() => setShowModal(false)} />}
+      {showModal && <RequestModal onClose={() => setShowModal(false)} />}
     </div>
   );
 }
