@@ -442,10 +442,10 @@ export default function LandingPage() {
           </div>
 
           {/* iPhone mockup */}
-          <div className="relative mx-auto w-full" style={{ maxWidth: 340 }}>
+          <div className="relative mx-auto" style={{ width: 300 }}>
 
             {/* Floating payment notification */}
-            <div className="absolute -left-4 sm:-left-14 top-16 sm:top-20 z-10 rounded-2xl bg-white shadow-xl border border-gray-100 px-3 sm:px-3.5 py-2.5 sm:py-3 text-left w-36 sm:w-44">
+            <div className="hidden sm:block absolute -left-14 top-20 z-10 rounded-2xl bg-white shadow-xl border border-gray-100 px-3.5 py-3 text-left w-44">
               <div className="flex items-center gap-1.5 mb-1.5">
                 <div className="h-5 sm:h-6 w-5 sm:w-6 rounded-full flex items-center justify-center text-white text-[8px] sm:text-[9px] font-bold flex-shrink-0" style={{ backgroundColor: BRAND }}>S</div>
                 <span className="text-[9px] sm:text-[10px] font-semibold text-gray-500">New Payment</span>
