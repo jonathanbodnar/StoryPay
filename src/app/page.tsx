@@ -39,8 +39,8 @@ function CDUnit({ v, label }: { v: number; label: string }) {
 // ── FAQ — all closed by default ───────────────────────────────────────────────
 const FAQS = [
   {
-    q: 'What is StoryPay?',
-    a: 'StoryPay is a proposal and payment platform built specifically for wedding venues. Send beautiful contracts, collect e-signatures, and get paid, all from one dashboard.',
+    q: 'What is StoryPay\u2122?',
+    a: 'StoryPay\u2122 is a proposal and payment platform built specifically for wedding venues. Send beautiful contracts, collect e-signatures, and get paid, all from one dashboard.',
   },
   {
     q: "What's included in early access?",
@@ -377,7 +377,7 @@ export default function LandingPage() {
             className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-5 sm:mb-6 leading-tight"
             style={{ fontFamily: "'Playfair Display', serif", fontWeight: 400 }}
           >
-            Introducing StoryPay&#8482;
+            Introducing StoryPay<sup className="text-[0.4em] align-super font-normal tracking-normal">TM</sup>
           </h1>
 
           {/* Subheadline */}
@@ -528,7 +528,7 @@ export default function LandingPage() {
               Frequently asked questions
             </h2>
             <p className="text-sm text-gray-400 max-w-md mx-auto">
-              Everything you need to know about StoryPay. Find answers to the most common questions below.
+              Everything you need to know about StoryPay&#8482;. Find answers to the most common questions below.
             </p>
           </div>
           <div className="space-y-2">
@@ -539,7 +539,7 @@ export default function LandingPage() {
 
       {/* ── Footer ── */}
       <footer className="py-8 px-4 border-t border-gray-100 bg-white text-center">
-        <p className="text-xs text-gray-400">&copy; 2026 StoryPay by StoryVenue</p>
+        <p className="text-xs text-gray-400">&copy; 2026 StoryPay&#8482; by StoryVenue</p>
       </footer>
 
       {showModal && <RequestModal onClose={() => setShowModal(false)} />}
