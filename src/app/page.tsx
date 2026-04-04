@@ -85,11 +85,11 @@ function FAQItem({ q, a }: { q: string; a: string }) {
 
 // ── Request Modal ─────────────────────────────────────────────────────────────
 function RequestModal({ onClose }: { onClose: () => void }) {
-  const [form, setForm]     = useState({ firstName: '', lastName: '', email: '', phone: '', venueName: '' });
+  const [form, setForm]     = useState({ firstName: '', lastName: '', email: '', phone: '', venueName: '', referralSource: '' });
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error' | 'duplicate'>('idle');
   const [msg, setMsg]       = useState('');
 
-  const upd = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
+  const upd = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(p => ({ ...p, [k]: e.target.value }));
 
   async function submit(e: React.FormEvent) {
@@ -185,6 +185,27 @@ function RequestModal({ onClose }: { onClose: () => void }) {
                   type="text" value={form.venueName} onChange={upd('venueName')} placeholder="The Grand Estate"
                   className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors"
                 />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">How did you hear about us?</label>
+                <select
+                  value={form.referralSource}
+                  onChange={upd('referralSource')}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors appearance-none"
+                  style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 14px center' }}
+                >
+                  <option value="" disabled>Select an option...</option>
+                  <option value="A Friend">A Friend</option>
+                  <option value="Facebook">Facebook</option>
+                  <option value="Instagram">Instagram</option>
+                  <option value="Instagram Ad">Instagram Ad</option>
+                  <option value="Facebook Ad">Facebook Ad</option>
+                  <option value="Google Search">Google Search</option>
+                  <option value="Email">Email</option>
+                  <option value="Current Client">Current Client</option>
+                  <option value="StoryVenue">StoryVenue</option>
+                  <option value="Other">Other</option>
+                </select>
               </div>
               {(status === 'error' || status === 'duplicate') && (
                 <p className="text-xs text-center text-red-500 bg-red-50 rounded-xl py-2 px-3">{msg}</p>

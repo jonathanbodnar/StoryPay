@@ -10,6 +10,7 @@ async function sendNotificationEmail(data: {
   email: string;
   phone: string;
   venueName: string;
+  referralSource: string;
 }) {
   const resendKey = process.env.RESEND_API_KEY;
 
@@ -52,6 +53,7 @@ function buildEmailHtml(data: {
   email: string;
   phone: string;
   venueName: string;
+  referralSource: string;
 }) {
   return `
     <div style="font-family: 'Open Sans', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;">
@@ -75,8 +77,12 @@ function buildEmailHtml(data: {
             <td style="padding: 10px 0; border-bottom: 1px solid #f3f4f6; color: #111827; font-size: 13px; font-weight: 600;">${data.phone || 'Not provided'}</td>
           </tr>
           <tr>
-            <td style="padding: 10px 0; color: #6b7280; font-size: 13px;">Venue</td>
-            <td style="padding: 10px 0; color: #111827; font-size: 13px; font-weight: 600;">${data.venueName || 'Not provided'}</td>
+            <td style="padding: 10px 0; border-bottom: 1px solid #f3f4f6; color: #6b7280; font-size: 13px;">Venue</td>
+            <td style="padding: 10px 0; border-bottom: 1px solid #f3f4f6; color: #111827; font-size: 13px; font-weight: 600;">${data.venueName || 'Not provided'}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 0; color: #6b7280; font-size: 13px;">Heard about us via</td>
+            <td style="padding: 10px 0; color: #111827; font-size: 13px; font-weight: 600;">${data.referralSource || 'Not provided'}</td>
           </tr>
         </table>
         <div style="margin-top: 24px; padding: 16px; background: #f9fafb; border-radius: 8px;">
@@ -92,7 +98,7 @@ function buildEmailHtml(data: {
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { firstName, lastName, email, phone, venueName } = body;
+  const { firstName, lastName, email, phone, venueName, referralSource } = body;
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return NextResponse.json({ error: 'Valid email is required' }, { status: 400 });
@@ -110,6 +116,7 @@ export async function POST(request: NextRequest) {
     p_last_name:  lastName?.trim() || null,
     p_phone:      phone?.trim() || null,
     p_venue_name: venueName?.trim() || null,
+    p_referral_source: referralSource?.trim() || null,
   });
 
   if (error) {
@@ -122,7 +129,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Fire-and-forget notification
-  sendNotificationEmail({ firstName, lastName: lastName || '', email, phone: phone || '', venueName: venueName || '' });
+  sendNotificationEmail({ firstName, lastName: lastName || '', email, phone: phone || '', venueName: venueName || '', referralSource: referralSource || '' });
 
   return NextResponse.json({ message: 'success' }, { status: 201 });
 }
