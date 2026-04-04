@@ -11,35 +11,38 @@ async function sendNotificationEmail(data: {
   phone: string;
   venueName: string;
 }) {
-  // Send via GHL agency email if configured, otherwise use fetch to a mail API
-  const apiKey = process.env.GHL_AGENCY_API_KEY || process.env.GHL_CLIENT_SECRET;
+  const resendKey = process.env.RESEND_API_KEY;
 
-  // Try sending via a simple SMTP relay using fetch to an email API
-  // Falls back to logging if no email service configured
+  if (!resendKey) {
+    console.warn('[waitlist] RESEND_API_KEY not set — skipping email. Add it to Railway env vars.');
+    console.log('[waitlist] New submission:', data);
+    return;
+  }
+
   try {
-    // Use Resend if configured
-    if (process.env.RESEND_API_KEY) {
-      await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: 'StoryPay <onboarding@storypay.io>',
-          to: [NOTIFY_EMAIL],
-          subject: `New Early Access Request — ${data.venueName || data.email}`,
-          html: buildEmailHtml(data),
-        }),
-      });
-      return;
-    }
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${resendKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'StoryPay <onboarding@resend.dev>',
+        to: [NOTIFY_EMAIL],
+        reply_to: data.email,
+        subject: 'New StoryPay invite requested',
+        html: buildEmailHtml(data),
+      }),
+    });
 
-    // Fallback: log to console (visible in Railway/Vercel logs)
-    console.log('[waitlist] New early access request:', data);
-    void apiKey; // suppress unused warning
+    if (!res.ok) {
+      const body = await res.text();
+      console.error('[waitlist] Resend error:', res.status, body);
+    } else {
+      console.log('[waitlist] Email sent to', NOTIFY_EMAIL);
+    }
   } catch (err) {
-    console.error('[waitlist] Email notification failed:', err);
+    console.error('[waitlist] Email send failed:', err);
   }
 }
 
@@ -69,11 +72,11 @@ function buildEmailHtml(data: {
           </tr>
           <tr>
             <td style="padding: 10px 0; border-bottom: 1px solid #f3f4f6; color: #6b7280; font-size: 13px;">Phone</td>
-            <td style="padding: 10px 0; border-bottom: 1px solid #f3f4f6; color: #111827; font-size: 13px; font-weight: 600;">${data.phone || '—'}</td>
+            <td style="padding: 10px 0; border-bottom: 1px solid #f3f4f6; color: #111827; font-size: 13px; font-weight: 600;">${data.phone || 'Not provided'}</td>
           </tr>
           <tr>
             <td style="padding: 10px 0; color: #6b7280; font-size: 13px;">Venue</td>
-            <td style="padding: 10px 0; color: #111827; font-size: 13px; font-weight: 600;">${data.venueName || '—'}</td>
+            <td style="padding: 10px 0; color: #111827; font-size: 13px; font-weight: 600;">${data.venueName || 'Not provided'}</td>
           </tr>
         </table>
         <div style="margin-top: 24px; padding: 16px; background: #f9fafb; border-radius: 8px;">
