@@ -352,25 +352,12 @@ export default function LandingPage() {
       {/* ── Hero ── */}
       <div className="relative overflow-hidden">
 
-        {/* Background: white barn venue photo fading down to white */}
+        {/* Grey gradient background fading smoothly to white */}
         <div
           className="absolute inset-0 z-0"
           style={{
-            backgroundImage: "url('https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?w=1800&q=80&auto=format&fit=crop')",
-            backgroundSize: 'cover',
-            backgroundPosition: 'center 30%',
-            backgroundRepeat: 'no-repeat',
+            background: 'linear-gradient(180deg, #e8edf0 0%, #eef1f3 20%, #f4f6f7 45%, #f9fafb 65%, #ffffff 100%)',
           }}
-        />
-        {/* Light overlay so text stays readable */}
-        <div
-          className="absolute inset-0 z-0"
-          style={{ background: 'rgba(255,255,255,0.72)' }}
-        />
-        {/* Fade to white at the bottom */}
-        <div
-          className="absolute inset-0 z-0"
-          style={{ background: 'linear-gradient(180deg, transparent 0%, transparent 35%, rgba(255,255,255,0.85) 60%, #ffffff 100%)' }}
         />
 
         {/* All hero content sits above the background layers */}
