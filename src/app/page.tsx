@@ -350,13 +350,13 @@ export default function LandingPage() {
     <div className="min-h-screen text-gray-900" style={{ fontFamily: "'Open Sans', Arial, sans-serif" }}>
 
       {/* ── Hero ── */}
-      <div className="relative overflow-hidden">
+      <div className="relative overflow-hidden bg-white">
 
-        {/* Grey gradient background fading smoothly to white */}
+        {/* Grey gradient: starts cool grey at top, fades to pure white well before bottom so no visible line */}
         <div
           className="absolute inset-0 z-0"
           style={{
-            background: 'linear-gradient(180deg, #e8edf0 0%, #eef1f3 20%, #f4f6f7 45%, #f9fafb 65%, #ffffff 100%)',
+            background: 'linear-gradient(180deg, #e5eaed 0%, #eceff1 15%, #f2f4f5 30%, #f7f8f9 50%, #fbfcfc 70%, #ffffff 85%)',
           }}
         />
 
