@@ -100,23 +100,22 @@ export async function POST(request: NextRequest) {
 
   const fullName = `${firstName.trim()} ${lastName?.trim() || ''}`.trim();
 
-  const { error } = await supabaseAdmin
-    .from('waitlist')
-    .insert({
-      email:      email.toLowerCase().trim(),
-      name:       fullName,
-      first_name: firstName.trim(),
-      last_name:  lastName?.trim() || null,
-      phone:      phone?.trim() || null,
-      venue_name: venueName?.trim() || null,
-    });
+  const { data: result, error } = await supabaseAdmin.rpc('insert_waitlist', {
+    p_email:      email.toLowerCase().trim(),
+    p_name:       fullName,
+    p_first_name: firstName.trim(),
+    p_last_name:  lastName?.trim() || null,
+    p_phone:      phone?.trim() || null,
+    p_venue_name: venueName?.trim() || null,
+  });
 
   if (error) {
-    if (error.code === '23505') {
-      return NextResponse.json({ message: "You're already on the list!" }, { status: 200 });
-    }
-    console.error('[waitlist] DB insert error:', error);
+    console.error('[waitlist] RPC error:', error);
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 });
+  }
+
+  if (result === 'duplicate') {
+    return NextResponse.json({ message: "You're already on the list!" }, { status: 200 });
   }
 
   // Fire-and-forget notification
@@ -126,8 +125,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET() {
-  const { count } = await supabaseAdmin
-    .from('waitlist')
-    .select('*', { count: 'exact', head: true });
-  return NextResponse.json({ count: count ?? 0 });
+  const { data, error } = await supabaseAdmin.rpc('count_waitlist');
+  if (error) return NextResponse.json({ count: 0 });
+  return NextResponse.json({ count: data ?? 0 });
 }
