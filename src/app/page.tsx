@@ -350,7 +350,31 @@ export default function LandingPage() {
     <div className="min-h-screen text-gray-900" style={{ fontFamily: "'Open Sans', Arial, sans-serif" }}>
 
       {/* ── Hero ── */}
-      <div style={{ background: 'linear-gradient(180deg, #dff0f8 0%, #ffffff 60%)' }}>
+      <div className="relative overflow-hidden">
+
+        {/* Background: white barn venue photo fading down to white */}
+        <div
+          className="absolute inset-0 z-0"
+          style={{
+            backgroundImage: "url('https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?w=1800&q=80&auto=format&fit=crop')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center 30%',
+            backgroundRepeat: 'no-repeat',
+          }}
+        />
+        {/* Light overlay so text stays readable */}
+        <div
+          className="absolute inset-0 z-0"
+          style={{ background: 'rgba(255,255,255,0.72)' }}
+        />
+        {/* Fade to white at the bottom */}
+        <div
+          className="absolute inset-0 z-0"
+          style={{ background: 'linear-gradient(180deg, transparent 0%, transparent 35%, rgba(255,255,255,0.85) 60%, #ffffff 100%)' }}
+        />
+
+        {/* All hero content sits above the background layers */}
+        <div className="relative z-10">
 
         {/* Nav */}
         <nav className="mx-auto max-w-5xl px-5 sm:px-8 py-5 flex items-center justify-between">
@@ -503,7 +527,8 @@ export default function LandingPage() {
 
           <div className="h-12 sm:h-16" />
         </div>
-      </div>
+        </div>{/* end relative z-10 */}
+      </div>{/* end relative overflow-hidden hero */}
 
       {/* ── FAQ ── */}
       <div className="bg-white py-16 sm:py-20 px-5 sm:px-8">
