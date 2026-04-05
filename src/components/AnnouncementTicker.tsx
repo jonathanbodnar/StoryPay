@@ -60,9 +60,9 @@ export default function AnnouncementTicker() {
       {/* Dismiss */}
       <button
         onClick={() => setDismissed(true)}
-        className="flex-shrink-0 flex h-full items-center px-3 text-white/50 hover:text-white transition-colors self-stretch"
+        className="flex-shrink-0 flex items-center justify-center self-center mx-2 h-5 w-5 rounded-full text-white/50 hover:text-white hover:bg-white/10 transition-colors"
       >
-        <X size={14} />
+        <X size={12} />
       </button>
 
       <style>{`
