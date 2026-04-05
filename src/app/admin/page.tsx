@@ -37,6 +37,10 @@ function getDefaultRange(): DateRange { const p = PRESETS.find(x => x.label === 
 type DrillKey = 'venues' | 'waitlist' | 'customers' | 'failed' | 'pending' | null;
 interface WaitlistEntry { id: string; first_name: string | null; last_name: string | null; email: string; phone: string | null; venue_name: string | null; referral_source: string | null; created_at: string; }
 interface FailedPayment { id: string; customer_name: string | null; price: number; status: string; created_at: string; }
+interface FeatureRequestDetail { id: string; title: string; description: string | null; vote_count: number; status: string; created_at: string; voters: { venue_id: string; venue_name: string; voted_at: string }[]; }
+
+const STATUS_COLORS_FR: Record<string, string> = { open: 'bg-gray-100 text-gray-600', planned: 'bg-blue-100 text-blue-700', in_progress: 'bg-amber-100 text-amber-700', completed: 'bg-emerald-100 text-emerald-700' };
+const STATUS_LABELS_FR: Record<string, string> = { open: 'Open', planned: 'Planned', in_progress: 'In Progress', completed: 'Completed' };
 
 function KPICard({ label, value, icon: Icon, color, onClick }: { label: string; value: string | number; icon: React.ElementType; color: string; onClick?: () => void }) {
   return (
@@ -203,6 +207,10 @@ export default function AdminPage() {
   const [drillLoading, setDrillLoading] = useState(false);
   const [drillSearch, setDrillSearch]   = useState('');
 
+  // Feature request detail
+  const [frDetail, setFrDetail]           = useState<FeatureRequestDetail | null>(null);
+  const [frDetailLoading, setFrDetailLoading] = useState(false);
+
   const fetchStats = useCallback(async (range: DateRange) => {
     setStatsLoading(true);
     try {
@@ -232,6 +240,15 @@ export default function AdminPage() {
 
   useEffect(() => { fetchVenues(); }, [fetchVenues]);
   useEffect(() => { if (authState === 'authenticated') { fetchStats(dateRange); fetchAnnouncements(); } }, [authState, fetchStats, fetchAnnouncements, dateRange]);
+
+  async function openFeatureRequest(id: string) {
+    setFrDetailLoading(true);
+    setFrDetail(null);
+    try {
+      const res = await fetch(`/api/admin/feature-requests/${id}`);
+      if (res.ok) setFrDetail(await res.json());
+    } finally { setFrDetailLoading(false); }
+  }
 
   async function openDrill(key: DrillKey) {
     if (!key) return;
@@ -624,19 +641,28 @@ export default function AdminPage() {
                   <p className="px-6 py-8 text-sm text-center text-gray-400">No feature requests yet</p>
                 )}
                 {(stats?.featureRequests ?? []).map((req, i) => (
-                  <div key={req.id} className="flex items-center gap-4 px-6 py-3.5">
+                  <button
+                    key={req.id}
+                    onClick={() => openFeatureRequest(req.id)}
+                    className="w-full flex items-center gap-4 px-6 py-3.5 hover:bg-gray-50 transition-colors text-left"
+                  >
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold text-white" style={{ backgroundColor: i === 0 ? '#f59e0b' : i === 1 ? '#6b7280' : i === 2 ? '#cd7c2f' : BRAND }}>
                       #{i + 1}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-900 truncate">{req.title}</p>
-                      <span className="text-[11px] text-gray-400 capitalize">{req.status}</span>
+                      <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${STATUS_COLORS_FR[req.status] || 'bg-gray-100 text-gray-600'}`}>
+                        {STATUS_LABELS_FR[req.status] || req.status}
+                      </span>
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <ThumbsUp size={13} style={{ color: BRAND }} />
-                      <span className="text-sm font-bold" style={{ color: BRAND }}>{req.vote_count}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center gap-1">
+                        <ThumbsUp size={13} style={{ color: BRAND }} />
+                        <span className="text-sm font-bold" style={{ color: BRAND }}>{req.vote_count}</span>
+                      </div>
+                      <ChevronRight size={13} className="text-gray-300" />
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -839,6 +865,85 @@ export default function AdminPage() {
         )}
 
       </main>
+
+      {/* Feature Request Detail Modal */}
+      {(frDetail || frDetailLoading) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="relative w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4" style={{ backgroundColor: BRAND }}>
+              <h3 className="text-base font-semibold text-white">Feature Request Detail</h3>
+              <button
+                onClick={() => setFrDetail(null)}
+                className="flex h-7 w-7 items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 p-6">
+              {frDetailLoading ? (
+                <div className="flex justify-center py-8"><Loader2 size={24} className="animate-spin text-gray-400" /></div>
+              ) : frDetail ? (
+                <div className="space-y-5">
+                  {/* Title & meta */}
+                  <div>
+                    <h4 className="text-base font-bold text-gray-900 mb-2">{frDetail.title}</h4>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_COLORS_FR[frDetail.status] || 'bg-gray-100 text-gray-600'}`}>
+                        {STATUS_LABELS_FR[frDetail.status] || frDetail.status}
+                      </span>
+                      <span className="text-xs text-gray-400">{new Date(frDetail.created_at).toLocaleDateString('en-US', { dateStyle: 'medium' })}</span>
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  {frDetail.description && (
+                    <div className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3">
+                      <p className="text-sm text-gray-700 leading-relaxed">{frDetail.description}</p>
+                    </div>
+                  )}
+
+                  {/* Vote count */}
+                  <div className="flex items-center gap-3 rounded-xl border border-gray-100 px-4 py-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ backgroundColor: BRAND + '18' }}>
+                      <ThumbsUp size={18} style={{ color: BRAND }} />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold" style={{ color: BRAND }}>{frDetail.vote_count}</p>
+                      <p className="text-xs text-gray-400">{frDetail.vote_count === 1 ? 'vote' : 'votes'} from {frDetail.voters.length} {frDetail.voters.length === 1 ? 'venue' : 'venues'}</p>
+                    </div>
+                  </div>
+
+                  {/* Voter list */}
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
+                      Voted by {frDetail.voters.length} {frDetail.voters.length === 1 ? 'venue' : 'venues'}
+                    </p>
+                    {frDetail.voters.length === 0 ? (
+                      <p className="text-sm text-gray-400 text-center py-4">No votes yet</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {frDetail.voters.map((v, i) => (
+                          <div key={i} className="flex items-center justify-between rounded-xl border border-gray-100 px-4 py-3 hover:bg-gray-50 transition-colors">
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-8 w-8 items-center justify-center rounded-full text-white text-xs font-bold" style={{ backgroundColor: BRAND }}>
+                                {v.venue_name.charAt(0).toUpperCase()}
+                              </div>
+                              <p className="text-sm font-medium text-gray-900">{v.venue_name}</p>
+                            </div>
+                            <span className="text-xs text-gray-400">{new Date(v.voted_at).toLocaleDateString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
