@@ -400,7 +400,7 @@ export default function LandingPage() {
           {/* CTA */}
           <button
             onClick={() => setShowModal(true)}
-            className="inline-flex items-center justify-center rounded-2xl px-8 sm:px-12 py-4 text-base font-bold text-white shadow-md hover:opacity-90 hover:-translate-y-0.5 transition-all mb-8 sm:mb-10"
+            className="inline-flex items-center justify-center rounded-md px-8 sm:px-12 py-4 text-base font-bold text-white shadow-md hover:opacity-90 hover:-translate-y-0.5 transition-all mb-8 sm:mb-10"
             style={{ backgroundColor: BRAND }}
           >
             Request Early Access Invite
