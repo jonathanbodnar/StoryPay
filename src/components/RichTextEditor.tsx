@@ -7,7 +7,7 @@ import Underline from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
 import TiptapLink from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
-import { TextStyle, Color } from '@tiptap/extension-text-style';
+import { TextStyle, Color, FontFamily } from '@tiptap/extension-text-style';
 import Highlight from '@tiptap/extension-highlight';
 import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
@@ -110,26 +110,50 @@ function DropItem({ onClick, active, children }: { onClick: () => void; active?:
   );
 }
 
-// Color swatches
+// Google Fonts available in editor
+const GOOGLE_FONTS = [
+  { label: 'Default',           value: '' },
+  { label: 'Playfair Display',  value: "'Playfair Display', serif" },
+  { label: 'Open Sans',         value: "'Open Sans', sans-serif" },
+  { label: 'Lato',              value: "'Lato', sans-serif" },
+  { label: 'Montserrat',        value: "'Montserrat', sans-serif" },
+  { label: 'Raleway',           value: "'Raleway', sans-serif" },
+  { label: 'Merriweather',      value: "'Merriweather', serif" },
+  { label: 'Cormorant Garamond',value: "'Cormorant Garamond', serif" },
+  { label: 'EB Garamond',       value: "'EB Garamond', serif" },
+  { label: 'Libre Baskerville', value: "'Libre Baskerville', serif" },
+  { label: 'Roboto',            value: "'Roboto', sans-serif" },
+  { label: 'Inter',             value: "'Inter', sans-serif" },
+  { label: 'Nunito',            value: "'Nunito', sans-serif" },
+  { label: 'Poppins',           value: "'Poppins', sans-serif" },
+  { label: 'Dancing Script',    value: "'Dancing Script', cursive" },
+  { label: 'Great Vibes',       value: "'Great Vibes', cursive" },
+  { label: 'Pacifico',          value: "'Pacifico', cursive" },
+  { label: 'Courier Prime',     value: "'Courier Prime', monospace" },
+];
+
+// Full color palette — matches reference grid
 const TEXT_COLORS = [
-  { label: 'Black',   value: '#000000' },
-  { label: 'Gray',    value: '#6b7280' },
-  { label: 'Red',     value: '#ef4444' },
-  { label: 'Orange',  value: '#f97316' },
-  { label: 'Amber',   value: '#f59e0b' },
-  { label: 'Green',   value: '#10b981' },
-  { label: 'Blue',    value: '#3b82f6' },
-  { label: 'Violet',  value: '#8b5cf6' },
-  { label: 'Brand',   value: '#293745' },
+  '#000000','#111827','#374151','#6b7280','#9ca3af','#d1d5db','#e5e7eb','#f3f4f6','#f9fafb','#ffffff',
+  '#7f1d1d','#b91c1c','#ef4444','#f87171','#fca5a5','#fecaca','#fee2e2','#fff1f2',
+  '#78350f','#d97706','#f59e0b','#fbbf24','#fcd34d','#fde68a','#fef3c7',
+  '#14532d','#15803d','#22c55e','#4ade80','#86efac','#bbf7d0','#dcfce7',
+  '#164e63','#0e7490','#06b6d4','#38bdf8','#7dd3fc','#bae6fd','#e0f2fe',
+  '#1e3a5f','#1d4ed8','#3b82f6','#60a5fa','#93c5fd','#bfdbfe','#dbeafe',
+  '#4c1d95','#7c3aed','#8b5cf6','#a78bfa','#c4b5fd','#ddd6fe','#ede9fe',
+  '#831843','#be185d','#ec4899','#f472b6','#f9a8d4','#fbcfe8','#fce7f3',
+  '#293745','#354859','#4a6280','#6b8aab','#a8bed3','#d4e2ee',
 ];
 
 const HIGHLIGHT_COLORS = [
-  { label: 'Yellow',  value: '#fef08a' },
-  { label: 'Green',   value: '#bbf7d0' },
-  { label: 'Blue',    value: '#bfdbfe' },
-  { label: 'Pink',    value: '#fbcfe8' },
-  { label: 'Orange',  value: '#fed7aa' },
-  { label: 'Clear',   value: null },
+  '#fef08a','#fde68a','#fef3c7',
+  '#bbf7d0','#86efac','#dcfce7',
+  '#bfdbfe','#93c5fd','#dbeafe',
+  '#f9a8d4','#fbcfe8','#fce7f3',
+  '#fed7aa','#fdba74','#fff7ed',
+  '#e9d5ff','#c4b5fd','#ede9fe',
+  '#99f6e4','#5eead4','#ccfbf1',
+  '#e2e8f0','#cbd5e1','#f1f5f9',
 ];
 
 // ─── Main editor ─────────────────────────────────────────────────────────────
@@ -149,6 +173,7 @@ export default function RichTextEditor({
       Placeholder.configure({ placeholder: placeholder || 'Start writing your proposal...' }),
       TextStyle,
       Color,
+      FontFamily,
       Highlight.configure({ multicolor: true }),
       Subscript,
       Superscript,
@@ -278,53 +303,94 @@ export default function RichTextEditor({
 
         <Sep />
 
-        {/* Text color */}
-        <DropdownBtn label="A" title="Text color">
-          <div className="px-2 py-1.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Text Color</p>
-            <div className="grid grid-cols-5 gap-1">
-              {TEXT_COLORS.map(c => (
-                <button
-                  key={c.value}
-                  type="button"
-                  title={c.label}
-                  onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().setColor(c.value).run(); }}
-                  className="h-5 w-5 rounded border border-gray-200 hover:scale-110 transition-transform"
-                  style={{ backgroundColor: c.value }}
-                />
-              ))}
-            </div>
-            <button
-              type="button"
-              onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().unsetColor().run(); }}
-              className="mt-2 w-full text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
-            >
-              <RemoveFormatting size={11} /> Remove color
-            </button>
+        {/* Font family */}
+        <DropdownBtn label="Font" title="Font family">
+          <div className="py-1 min-w-[200px] max-h-72 overflow-y-auto">
+            {GOOGLE_FONTS.map(f => (
+              <DropItem
+                key={f.value}
+                onClick={() => {
+                  if (f.value) editor.chain().focus().setFontFamily(f.value).run();
+                  else editor.chain().focus().unsetFontFamily().run();
+                }}
+                active={editor.getAttributes('textStyle').fontFamily === f.value}
+              >
+                <span style={{ fontFamily: f.value || 'inherit' }}>{f.label}</span>
+              </DropItem>
+            ))}
           </div>
         </DropdownBtn>
 
-        {/* Highlight */}
-        <DropdownBtn label="🖊" title="Highlight">
-          <div className="px-2 py-1.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Highlight</p>
-            <div className="grid grid-cols-3 gap-1">
-              {HIGHLIGHT_COLORS.map(c => (
+        <Sep />
+
+        {/* Text color — full palette + custom */}
+        <DropdownBtn label="A" title="Text color">
+          <div className="px-3 py-2.5 w-56">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">Text Color</p>
+            <div className="grid grid-cols-10 gap-1 mb-2">
+              {TEXT_COLORS.map(hex => (
                 <button
-                  key={c.label}
+                  key={hex}
                   type="button"
-                  title={c.label}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    if (!c.value) { editor.chain().focus().unsetHighlight().run(); }
-                    else { editor.chain().focus().toggleHighlight({ color: c.value }).run(); }
-                  }}
-                  className="h-6 w-full rounded border border-gray-200 text-xs font-medium hover:scale-105 transition-transform flex items-center justify-center"
-                  style={{ backgroundColor: c.value ?? '#f9fafb' }}
-                >
-                  {c.value ? '' : '✕'}
-                </button>
+                  title={hex}
+                  onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().setColor(hex).run(); }}
+                  className="h-4 w-4 rounded-full border border-gray-200 hover:scale-125 transition-transform"
+                  style={{ backgroundColor: hex }}
+                />
               ))}
+            </div>
+            <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+              <label className="text-[10px] text-gray-500 font-medium cursor-pointer flex items-center gap-1.5">
+                <span>Custom</span>
+                <input
+                  type="color"
+                  className="h-5 w-5 rounded cursor-pointer border-0 p-0"
+                  onInput={(e) => { editor.chain().focus().setColor((e.target as HTMLInputElement).value).run(); }}
+                />
+              </label>
+              <button
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().unsetColor().run(); }}
+                className="ml-auto text-[10px] text-gray-400 hover:text-gray-700 flex items-center gap-1"
+              >
+                <RemoveFormatting size={10} /> Clear
+              </button>
+            </div>
+          </div>
+        </DropdownBtn>
+
+        {/* Highlight — full palette + custom */}
+        <DropdownBtn label="H" title="Highlight color">
+          <div className="px-3 py-2.5 w-56">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">Highlight Color</p>
+            <div className="grid grid-cols-8 gap-1 mb-2">
+              {HIGHLIGHT_COLORS.map(hex => (
+                <button
+                  key={hex}
+                  type="button"
+                  title={hex}
+                  onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleHighlight({ color: hex }).run(); }}
+                  className="h-5 w-5 rounded-full border border-gray-200 hover:scale-125 transition-transform"
+                  style={{ backgroundColor: hex }}
+                />
+              ))}
+            </div>
+            <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+              <label className="text-[10px] text-gray-500 font-medium cursor-pointer flex items-center gap-1.5">
+                <span>Custom</span>
+                <input
+                  type="color"
+                  className="h-5 w-5 rounded cursor-pointer border-0 p-0"
+                  onInput={(e) => { editor.chain().focus().toggleHighlight({ color: (e.target as HTMLInputElement).value }).run(); }}
+                />
+              </label>
+              <button
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().unsetHighlight().run(); }}
+                className="ml-auto text-[10px] text-gray-400 hover:text-gray-700 flex items-center gap-1"
+              >
+                <RemoveFormatting size={10} /> Clear
+              </button>
             </div>
           </div>
         </DropdownBtn>
@@ -417,6 +483,8 @@ export default function RichTextEditor({
 
       {/* ── Document area ── */}
       <div className="flex-1 overflow-y-auto bg-white">
+        {/* Google Fonts */}
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Open+Sans:wght@300;400;600;700&family=Lato:wght@300;400;700&family=Montserrat:wght@300;400;600;700&family=Raleway:wght@300;400;600;700&family=Merriweather:wght@300;400;700&family=Cormorant+Garamond:wght@300;400;600;700&family=EB+Garamond:wght@400;600&family=Libre+Baskerville:wght@400;700&family=Roboto:wght@300;400;700&family=Inter:wght@300;400;600;700&family=Nunito:wght@300;400;600;700&family=Poppins:wght@300;400;600;700&family=Dancing+Script:wght@400;600;700&family=Great+Vibes&family=Pacifico&family=Courier+Prime:wght@400;700&display=swap" />
         <div className="w-full px-6 sm:px-10 py-8">
           <style>{`
             .tiptap-editor h1 { font-size: 2rem; font-weight: 700; margin-bottom: 0.75rem; font-family: 'Playfair Display', Georgia, serif; }
