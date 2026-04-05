@@ -403,7 +403,7 @@ export default function RichTextEditor({
 
       {/* ── Document area ── */}
       <div className="flex-1 overflow-y-auto bg-white">
-        <div className="mx-auto max-w-3xl px-16 py-10">
+        <div className="w-full px-6 sm:px-10 py-8">
           <style>{`
             .tiptap-editor h1 { font-size: 2rem; font-weight: 700; margin-bottom: 0.75rem; font-family: 'Playfair Display', Georgia, serif; }
             .tiptap-editor h2 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.6rem; }
