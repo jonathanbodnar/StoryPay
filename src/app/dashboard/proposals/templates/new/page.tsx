@@ -2,11 +2,12 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, Trash2, GripVertical, PenLine, User, CalendarDays } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, GripVertical, PenLine, User, CalendarDays, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ssr: false });
+const AIProposalGenerator = dynamic(() => import('@/components/AIProposalGenerator'), { ssr: false });
 
 interface Field {
   id: string;
@@ -44,6 +45,7 @@ export default function NewTemplatePage() {
   const [name, setName] = useState('');
   const [content, setContent] = useState('');
   const [fields, setFields] = useState<Field[]>(DEFAULT_FIELDS);
+  const [showAI, setShowAI] = useState(false);
   const [fieldMenuOpen, setFieldMenuOpen] = useState(false);
 
   function addField(type: Field['field_type']) {
@@ -126,11 +128,20 @@ export default function NewTemplatePage() {
 
         {/* WYSIWYG Content */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Contract Content
-          </label>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="block text-sm font-medium text-gray-700">Contract Content</label>
+            <button
+              type="button"
+              onClick={() => setShowAI(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold text-white transition-all hover:opacity-90 shadow-sm"
+              style={{ backgroundColor: '#293745' }}
+            >
+              <Sparkles size={13} />
+              Generate with AI
+            </button>
+          </div>
           <p className="text-xs text-gray-400 mb-2">
-            Write your full proposal / contract using the editor below. Format with headings, lists, bold, etc.
+            Write your proposal manually or let AI draft it for you in seconds.
           </p>
           <RichTextEditor
             content={content}
@@ -249,6 +260,13 @@ export default function NewTemplatePage() {
           </button>
         </div>
       </div>
+
+      {showAI && (
+        <AIProposalGenerator
+          onGenerated={(html) => { setContent(html); setShowAI(false); }}
+          onClose={() => setShowAI(false)}
+        />
+      )}
     </div>
   );
 }
