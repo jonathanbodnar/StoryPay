@@ -6,7 +6,7 @@ import {
   DollarSign, Users, FileText, Clock, XCircle, Building2,
   TrendingUp, LogOut, Home,
   Megaphone, Plus, Trash2, Pencil, X, Loader2, ThumbsUp,
-  Check, BarChart2, ExternalLink, ChevronRight,
+  Check, BarChart2, ExternalLink, ChevronRight, Search,
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -58,17 +58,48 @@ function KPICard({ label, value, icon: Icon, color, onClick }: { label: string; 
   );
 }
 
-function DrillModal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+function DrillModal({ title, count, onClose, searchQuery, onSearchChange, searchPlaceholder, children }: {
+  title: string;
+  count?: number;
+  onClose: () => void;
+  searchQuery?: string;
+  onSearchChange?: (q: string) => void;
+  searchPlaceholder?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="relative w-full max-w-2xl rounded-2xl bg-white shadow-2xl overflow-hidden max-h-[80vh] flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100" style={{ backgroundColor: BRAND }}>
-          <h3 className="text-base font-semibold text-white">{title}</h3>
+      <div className="relative w-full max-w-2xl rounded-2xl bg-white shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4" style={{ backgroundColor: BRAND }}>
+          <div className="flex items-center gap-2">
+            <h3 className="text-base font-semibold text-white">{title}</h3>
+            {count !== undefined && (
+              <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs font-semibold text-white">{count}</span>
+            )}
+          </div>
           <button onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors">
             <X size={14} />
           </button>
         </div>
-        <div className="overflow-y-auto flex-1 p-6">{children}</div>
+        {/* Search bar */}
+        {onSearchChange !== undefined && (
+          <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/60">
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => onSearchChange(e.target.value)}
+                placeholder={searchPlaceholder || 'Search...'}
+                className="w-full rounded-xl border border-gray-200 bg-white pl-8 pr-3.5 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none transition-colors"
+                autoFocus
+              />
+            </div>
+          </div>
+        )}
+        {/* Content — scrollable */}
+        <div className="overflow-y-auto flex-1 p-5">{children}</div>
       </div>
     </div>
   );
@@ -170,6 +201,7 @@ export default function AdminPage() {
   const [drillKey, setDrillKey]         = useState<DrillKey>(null);
   const [drillData, setDrillData]       = useState<Record<string, unknown>[] | null>(null);
   const [drillLoading, setDrillLoading] = useState(false);
+  const [drillSearch, setDrillSearch]   = useState('');
 
   const fetchStats = useCallback(async (range: DateRange) => {
     setStatsLoading(true);
@@ -205,6 +237,7 @@ export default function AdminPage() {
     if (!key) return;
     setDrillKey(key);
     setDrillData(null);
+    setDrillSearch('');
     setDrillLoading(true);
     try {
       if (key === 'venues') {
@@ -364,75 +397,151 @@ export default function AdminPage() {
             </div>
 
             {/* Drill-down modal */}
-            {drillKey && (
-              <DrillModal
-                title={drillKey === 'venues' ? 'Active Venues' : drillKey === 'waitlist' ? 'Waitlist Signups' : drillKey === 'customers' ? 'Customers' : drillKey === 'failed' ? 'Failed Payments' : 'Pending Payments'}
-                onClose={() => { setDrillKey(null); setDrillData(null); }}
-              >
-                {drillLoading ? (
-                  <div className="flex justify-center py-8"><Loader2 size={24} className="animate-spin text-gray-400" /></div>
-                ) : !drillData || drillData.length === 0 ? (
-                  <p className="text-center text-gray-400 py-8 text-sm">No data found</p>
-                ) : drillKey === 'venues' ? (
-                  <div className="space-y-2">
-                    {(drillData as unknown as Venue[]).map(v => (
-                      <div key={v.id} className="flex items-center justify-between rounded-xl border border-gray-100 px-4 py-3">
-                        <div>
-                          <p className="text-sm font-semibold text-gray-900">{v.name}</p>
-                          <p className="text-xs text-gray-400">{v.email}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${v.setup_completed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                            {v.setup_completed ? 'Active' : 'Setup Pending'}
-                          </span>
-                          <span className="text-xs text-gray-400">{new Date(v.created_at).toLocaleDateString()}</span>
-                        </div>
+            {drillKey && (() => {
+              const q = drillSearch.toLowerCase().trim();
+
+              const filteredVenues = drillKey === 'venues' && drillData
+                ? (drillData as unknown as Venue[]).filter(v =>
+                    !q ||
+                    v.name?.toLowerCase().includes(q) ||
+                    v.email?.toLowerCase().includes(q) ||
+                    v.ghl_location_id?.toLowerCase().includes(q)
+                  )
+                : [];
+
+              const filteredCustomers = drillKey === 'customers' && drillData
+                ? (drillData as unknown as { id: string; name: string | null; email: string | null; phone: string | null; created_at: string }[]).filter(c =>
+                    !q ||
+                    c.name?.toLowerCase().includes(q) ||
+                    c.email?.toLowerCase().includes(q) ||
+                    c.phone?.toLowerCase().includes(q)
+                  )
+                : [];
+
+              const filteredWaitlist = drillKey === 'waitlist' && drillData
+                ? (drillData as unknown as WaitlistEntry[]).filter(w =>
+                    !q ||
+                    w.email?.toLowerCase().includes(q) ||
+                    w.first_name?.toLowerCase().includes(q) ||
+                    w.last_name?.toLowerCase().includes(q) ||
+                    w.phone?.toLowerCase().includes(q) ||
+                    w.venue_name?.toLowerCase().includes(q)
+                  )
+                : [];
+
+              const filteredPayments = (drillKey === 'failed' || drillKey === 'pending') && drillData
+                ? (drillData as unknown as FailedPayment[]).filter(p =>
+                    !q || p.customer_name?.toLowerCase().includes(q)
+                  )
+                : [];
+
+              const resultCount = drillKey === 'venues' ? filteredVenues.length
+                : drillKey === 'customers' ? filteredCustomers.length
+                : drillKey === 'waitlist' ? filteredWaitlist.length
+                : filteredPayments.length;
+
+              const showSearch = drillKey === 'venues' || drillKey === 'customers' || drillKey === 'waitlist';
+
+              return (
+                <DrillModal
+                  title={drillKey === 'venues' ? 'Active Venues' : drillKey === 'waitlist' ? 'Waitlist Signups' : drillKey === 'customers' ? 'Customers' : drillKey === 'failed' ? 'Failed Payments' : 'Pending Payments'}
+                  count={drillLoading ? undefined : resultCount}
+                  onClose={() => { setDrillKey(null); setDrillData(null); setDrillSearch(''); }}
+                  searchQuery={showSearch ? drillSearch : undefined}
+                  onSearchChange={showSearch ? setDrillSearch : undefined}
+                  searchPlaceholder={
+                    drillKey === 'venues' ? 'Search by name, email, or location ID...' :
+                    drillKey === 'customers' ? 'Search by name, email, or phone...' :
+                    'Search by name, email, phone, or venue...'
+                  }
+                >
+                  {drillLoading ? (
+                    <div className="flex justify-center py-8"><Loader2 size={24} className="animate-spin text-gray-400" /></div>
+                  ) : drillKey === 'venues' ? (
+                    filteredVenues.length === 0 ? <p className="text-center text-gray-400 py-8 text-sm">{q ? 'No venues match your search' : 'No venues found'}</p> : (
+                      <div className="space-y-2">
+                        {filteredVenues.map(v => (
+                          <div key={v.id} className="rounded-xl border border-gray-100 px-4 py-3.5 hover:border-gray-200 hover:bg-gray-50/50 transition-colors">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-gray-900">{v.name}</p>
+                                <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                                  {v.email && <p className="text-xs text-gray-500">{v.email}</p>}
+                                  {v.ghl_location_id && <p className="text-xs font-mono text-gray-400">ID: {v.ghl_location_id}</p>}
+                                </div>
+                              </div>
+                              <div className="flex flex-col items-end gap-1 shrink-0">
+                                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${v.setup_completed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                  {v.setup_completed ? 'Active' : 'Setup Pending'}
+                                </span>
+                                <span className="text-[11px] text-gray-400">{new Date(v.created_at).toLocaleDateString()}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                ) : drillKey === 'waitlist' ? (
-                  <div className="space-y-2">
-                    {(drillData as unknown as WaitlistEntry[]).map(w => (
-                      <div key={w.id} className="rounded-xl border border-gray-100 px-4 py-3">
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm font-semibold text-gray-900">{[w.first_name, w.last_name].filter(Boolean).join(' ') || w.email}</p>
-                          <span className="text-xs text-gray-400">{new Date(w.created_at).toLocaleDateString()}</span>
-                        </div>
-                        <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1">
-                          <p className="text-xs text-gray-500">{w.email}</p>
-                          {w.phone && <p className="text-xs text-gray-400">{w.phone}</p>}
-                          {w.venue_name && <p className="text-xs text-gray-400">Venue: {w.venue_name}</p>}
-                          {w.referral_source && <p className="text-xs text-gray-400">Via: {w.referral_source}</p>}
-                        </div>
+                    )
+                  ) : drillKey === 'customers' ? (
+                    filteredCustomers.length === 0 ? <p className="text-center text-gray-400 py-8 text-sm">{q ? 'No customers match your search' : 'No customers found'}</p> : (
+                      <div className="space-y-2">
+                        {filteredCustomers.map((c, i) => (
+                          <div key={i} className="rounded-xl border border-gray-100 px-4 py-3.5 hover:border-gray-200 hover:bg-gray-50/50 transition-colors">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-sm font-semibold text-gray-900">{c.name || '—'}</p>
+                                <div className="flex flex-wrap gap-x-3 mt-0.5">
+                                  {c.email && <p className="text-xs text-gray-500">{c.email}</p>}
+                                  {c.phone && <p className="text-xs text-gray-400">{c.phone}</p>}
+                                </div>
+                              </div>
+                              <span className="text-[11px] text-gray-400 shrink-0">{new Date(c.created_at).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                ) : (drillKey === 'failed' || drillKey === 'pending') ? (
-                  <div className="space-y-2">
-                    {(drillData as unknown as FailedPayment[]).map(p => (
-                      <div key={p.id} className="flex items-center justify-between rounded-xl border border-gray-100 px-4 py-3">
-                        <div>
-                          <p className="text-sm font-semibold text-gray-900">{p.customer_name || 'Unknown'}</p>
-                          <p className="text-xs text-gray-400">{new Date(p.created_at).toLocaleDateString()}</p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm font-bold text-gray-900">{formatCents(p.price)}</span>
-                          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${p.status === 'failed' || p.status === 'declined' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{p.status}</span>
-                        </div>
+                    )
+                  ) : drillKey === 'waitlist' ? (
+                    filteredWaitlist.length === 0 ? <p className="text-center text-gray-400 py-8 text-sm">{q ? 'No results match your search' : 'No waitlist entries'}</p> : (
+                      <div className="space-y-2">
+                        {filteredWaitlist.map(w => (
+                          <div key={w.id} className="rounded-xl border border-gray-100 px-4 py-3.5 hover:border-gray-200 hover:bg-gray-50/50 transition-colors">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-gray-900">{[w.first_name, w.last_name].filter(Boolean).join(' ') || w.email}</p>
+                                <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                                  <p className="text-xs text-gray-500">{w.email}</p>
+                                  {w.phone && <p className="text-xs text-gray-400">{w.phone}</p>}
+                                  {w.venue_name && <p className="text-xs text-gray-400">Venue: {w.venue_name}</p>}
+                                  {w.referral_source && <p className="text-xs text-gray-400">Via: {w.referral_source}</p>}
+                                </div>
+                              </div>
+                              <span className="text-[11px] text-gray-400 shrink-0">{new Date(w.created_at).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {drillData.map((row, i) => (
-                      <div key={i} className="rounded-xl border border-gray-100 px-4 py-3">
-                        <pre className="text-xs text-gray-600">{JSON.stringify(row, null, 2)}</pre>
+                    )
+                  ) : (
+                    filteredPayments.length === 0 ? <p className="text-center text-gray-400 py-8 text-sm">No payments found</p> : (
+                      <div className="space-y-2">
+                        {filteredPayments.map(p => (
+                          <div key={p.id} className="flex items-center justify-between rounded-xl border border-gray-100 px-4 py-3.5 hover:border-gray-200 hover:bg-gray-50/50 transition-colors">
+                            <div>
+                              <p className="text-sm font-semibold text-gray-900">{p.customer_name || 'Unknown'}</p>
+                              <p className="text-xs text-gray-400">{new Date(p.created_at).toLocaleDateString()}</p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="text-sm font-bold text-gray-900">{formatCents(p.price)}</span>
+                              <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${p.status === 'failed' || p.status === 'declined' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{p.status}</span>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                )}
-              </DrillModal>
-            )}
+                    )
+                  )}
+                </DrillModal>
+              );
+            })()}
 
             {/* Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
