@@ -19,3 +19,9 @@ export async function POST(request: Request) {
 
   return response;
 }
+
+export async function DELETE() {
+  const response = NextResponse.json({ success: true });
+  response.cookies.set('admin_token', '', { httpOnly: true, secure: true, sameSite: 'lax', path: '/', maxAge: 0 });
+  return response;
+}
