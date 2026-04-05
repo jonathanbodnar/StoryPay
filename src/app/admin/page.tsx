@@ -350,46 +350,56 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="text-white px-6 py-4 shadow-lg flex items-center justify-between" style={{ backgroundColor: BRAND }}>
-        <div className="flex items-center gap-4">
-          <h1 className="font-heading text-xl tracking-wide">StoryPay Admin</h1>
-          <div className="flex gap-1 bg-white/10 rounded-lg p-1">
-            {tabs.map(({ key, label, icon: Icon }) => (
-              <button key={key} onClick={() => setActiveTab(key)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${activeTab === key ? 'bg-white text-gray-900' : 'text-white/80 hover:text-white hover:bg-white/10'}`}>
-                <Icon size={14} />{label}
-              </button>
-            ))}
+      <header className="text-white shadow-lg" style={{ backgroundColor: BRAND }}>
+        {/* Top row: logo + logout/home */}
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4">
+          <h1 className="font-heading text-lg sm:text-xl tracking-wide">StoryPay Admin</h1>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Link href="/" className="flex items-center gap-1 sm:gap-1.5 rounded-lg border border-white/20 px-2.5 sm:px-3 py-1.5 text-xs text-white/80 hover:bg-white/10 transition-colors">
+              <Home size={13} />
+              <span className="hidden sm:inline">Homepage</span>
+            </Link>
+            <button onClick={handleLogout} className="flex items-center gap-1 sm:gap-1.5 rounded-lg border border-white/20 px-2.5 sm:px-3 py-1.5 text-xs text-white/80 hover:bg-white/10 transition-colors">
+              <LogOut size={13} />
+              <span className="hidden sm:inline">Logout</span>
+            </button>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <Link href="/" className="flex items-center gap-1.5 text-xs text-white/60 hover:text-white transition-colors">
-            <Home size={13} /> Homepage
-          </Link>
-          <button onClick={handleLogout} className="flex items-center gap-1.5 rounded-lg border border-white/20 px-3 py-1.5 text-xs text-white/80 hover:bg-white/10 transition-colors">
-            <LogOut size={13} /> Logout
-          </button>
+        {/* Tab nav row */}
+        <div className="flex border-t border-white/10 overflow-x-auto">
+          {tabs.map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              onClick={() => setActiveTab(key)}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 sm:px-5 py-2.5 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap min-w-[80px] ${
+                activeTab === key
+                  ? 'bg-white/15 text-white border-b-2 border-white'
+                  : 'text-white/60 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              <Icon size={14} />
+              {label}
+            </button>
+          ))}
         </div>
       </header>
 
-      <main className="p-6 max-w-7xl mx-auto">
+      <main className="p-4 sm:p-6 max-w-7xl mx-auto">
 
         {/* ── Dashboard Tab ── */}
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <h2 className="font-heading text-xl text-gray-900">Super Admin Dashboard</h2>
               <DateRangePicker value={dateRange} onChange={r => { setDateRange(r); fetchStats(r); }} />
             </div>
 
             {/* KPI grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4">
-              <div className="col-span-2"><KPICard label="Total Revenue" value={statsLoading ? '...' : formatCents(stats?.totalRevenue ?? 0)} icon={DollarSign} color={BRAND} /></div>
-              <div className="col-span-2"><KPICard label="Active Venues" value={statsLoading ? '...' : stats?.venueCount ?? 0} icon={Building2} color="#7c3aed" onClick={() => openDrill('venues')} /></div>
-              <div className="col-span-2"><KPICard label="Proposals" value={statsLoading ? '...' : stats?.totalProposals ?? 0} icon={FileText} color="#3b82f6" /></div>
-              <div className="col-span-2"><KPICard label="Waitlist" value={statsLoading ? '...' : stats?.waitlistCount ?? 0} icon={Users} color="#10b981" onClick={() => openDrill('waitlist')} /></div>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <KPICard label="Total Revenue" value={statsLoading ? '...' : formatCents(stats?.totalRevenue ?? 0)} icon={DollarSign} color={BRAND} />
+              <KPICard label="Active Venues" value={statsLoading ? '...' : stats?.venueCount ?? 0} icon={Building2} color="#7c3aed" onClick={() => openDrill('venues')} />
+              <KPICard label="Proposals" value={statsLoading ? '...' : stats?.totalProposals ?? 0} icon={FileText} color="#3b82f6" />
+              <KPICard label="Waitlist" value={statsLoading ? '...' : stats?.waitlistCount ?? 0} icon={Users} color="#10b981" onClick={() => openDrill('waitlist')} />
               <KPICard label="Unique Customers" value={statsLoading ? '...' : stats?.uniqueCustomers ?? 0} icon={Users} color="#f59e0b" onClick={() => openDrill('customers')} />
               <KPICard label="Pending Payments" value={statsLoading ? '...' : stats?.pendingPayments ?? 0} icon={Clock} color="#f59e0b" onClick={() => openDrill('pending')} />
               <KPICard label="Failed Payments" value={statsLoading ? '...' : stats?.failedPayments ?? 0} icon={XCircle} color="#ef4444" onClick={() => openDrill('failed')} />
@@ -544,7 +554,7 @@ export default function AdminPage() {
             })()}
 
             {/* Charts */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
               {/* Revenue chart */}
               <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-6">
                 <div className="flex items-center justify-between mb-4">
@@ -642,7 +652,7 @@ export default function AdminPage() {
                 <button onClick={fetchVenues} className="ml-3 underline">Retry</button>
               </div>
             )}
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
               <h2 className="font-heading text-xl text-gray-900">Venues ({venues.length})</h2>
               <button onClick={() => setShowCreateForm(!showCreateForm)}
                 className="text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors hover:opacity-90" style={{ backgroundColor: BRAND }}>
@@ -686,7 +696,33 @@ export default function AdminPage() {
               </button>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            {/* Mobile: card view. Desktop: table */}
+            <div className="sm:hidden space-y-3">
+              {venuesLoading ? <div className="text-center py-8 text-gray-400"><Loader2 size={20} className="animate-spin inline" /></div>
+              : venues.length === 0 ? <p className="text-center text-gray-400 py-8 text-sm">No venues yet</p>
+              : venues.map(venue => (
+                <div key={venue.id} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <p className="text-sm font-semibold text-gray-900">{venue.name}</p>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {statusBadge(venue.onboarding_status)}
+                      {venue.setup_completed && <span className="inline-block h-5 w-5 rounded-full bg-emerald-100 text-emerald-600 text-center text-xs leading-5">✓</span>}
+                    </div>
+                  </div>
+                  {venue.email && <p className="text-xs text-gray-500 mb-1">{venue.email}</p>}
+                  {venue.ghl_location_id && <p className="text-xs font-mono text-gray-400 mb-2">ID: {venue.ghl_location_id.slice(0,16)}…</p>}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-400">{new Date(venue.created_at).toLocaleDateString()}</span>
+                    <button onClick={() => { if (!venue.login_url) return; navigator.clipboard.writeText(venue.login_url); setCopiedId(venue.id); setTimeout(() => setCopiedId(null), 2000); }}
+                      disabled={!venue.login_url}
+                      className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors disabled:opacity-40">
+                      {copiedId === venue.id ? 'Copied!' : 'Copy Login'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="hidden sm:block bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
