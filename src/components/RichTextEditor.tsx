@@ -1,6 +1,7 @@
 'use client';
 
 import { useEditor, EditorContent } from '@tiptap/react';
+import { useEffect, useRef, useState } from 'react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
@@ -14,7 +15,6 @@ import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import { Table, TableRow, TableHeader, TableCell } from '@tiptap/extension-table';
 import Image from '@tiptap/extension-image';
-import { useRef, useState } from 'react';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
   List, ListOrdered, ListChecks,
@@ -138,6 +138,7 @@ export default function RichTextEditor({
   content, onChange, placeholder, minHeight = 500,
 }: RichTextEditorProps) {
   const s = 14;
+  const prevContent = useRef(content);
 
   const editor = useEditor({
     extensions: [
@@ -160,7 +161,11 @@ export default function RichTextEditor({
       Image.configure({ inline: false, allowBase64: true }),
     ],
     content,
-    onUpdate: ({ editor: e }) => onChange(e.getHTML()),
+    onUpdate: ({ editor: e }) => {
+      const html = e.getHTML();
+      prevContent.current = html;
+      onChange(html);
+    },
     editorProps: {
       attributes: {
         class: 'focus:outline-none',
@@ -168,6 +173,15 @@ export default function RichTextEditor({
       },
     },
   });
+
+  // When content is set externally (e.g. AI generation), push it into the editor
+  useEffect(() => {
+    if (!editor) return;
+    if (content !== prevContent.current) {
+      prevContent.current = content;
+      editor.commands.setContent(content || '');
+    }
+  }, [content, editor]);
 
   if (!editor) return null;
 
