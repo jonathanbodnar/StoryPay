@@ -4,9 +4,9 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import {
   DollarSign, Users, FileText, Clock, XCircle, Building2,
-  TrendingUp, TrendingDown, LogOut, Home, ChevronDown,
+  TrendingUp, LogOut, Home,
   Megaphone, Plus, Trash2, Pencil, X, Loader2, ThumbsUp,
-  Check, BarChart2, ExternalLink,
+  Check, BarChart2, ExternalLink, ChevronRight,
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -33,16 +33,43 @@ function formatCents(c: number) { return (c / 100).toLocaleString('en-US', { sty
 function formatShort(c: number) { const d = c / 100; return d >= 1000 ? `$${(d/1000).toFixed(1)}k` : `$${d.toFixed(0)}`; }
 function getDefaultRange(): DateRange { const p = PRESETS.find(x => x.label === 'Last 30 days')!; return { ...p.getRange(), label: p.label }; }
 
-function KPICard({ label, value, icon: Icon, color }: { label: string; value: string | number; icon: React.ElementType; color: string }) {
+// Drill-down types
+type DrillKey = 'venues' | 'waitlist' | 'customers' | 'failed' | 'pending' | null;
+interface WaitlistEntry { id: string; first_name: string | null; last_name: string | null; email: string; phone: string | null; venue_name: string | null; referral_source: string | null; created_at: string; }
+interface FailedPayment { id: string; customer_name: string | null; price: number; status: string; created_at: string; }
+
+function KPICard({ label, value, icon: Icon, color, onClick }: { label: string; value: string | number; icon: React.ElementType; color: string; onClick?: () => void }) {
   return (
-    <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-5">
+    <div
+      className={`rounded-xl bg-white border border-gray-200 shadow-sm p-5 ${onClick ? 'cursor-pointer hover:shadow-md hover:border-gray-300 transition-all' : ''}`}
+      onClick={onClick}
+    >
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">{label}</span>
-        <div className="h-8 w-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: color + '18' }}>
-          <Icon size={15} style={{ color }} />
+        <div className="flex items-center gap-1">
+          {onClick && <ChevronRight size={12} className="text-gray-300" />}
+          <div className="h-8 w-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: color + '18' }}>
+            <Icon size={15} style={{ color }} />
+          </div>
         </div>
       </div>
       <p className="text-2xl font-bold text-gray-900 tracking-tight">{value}</p>
+    </div>
+  );
+}
+
+function DrillModal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="relative w-full max-w-2xl rounded-2xl bg-white shadow-2xl overflow-hidden max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100" style={{ backgroundColor: BRAND }}>
+          <h3 className="text-base font-semibold text-white">{title}</h3>
+          <button onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors">
+            <X size={14} />
+          </button>
+        </div>
+        <div className="overflow-y-auto flex-1 p-6">{children}</div>
+      </div>
     </div>
   );
 }
@@ -139,6 +166,11 @@ export default function AdminPage() {
   const [showAnnForm, setShowAnnForm]       = useState(false);
   const [editingAnn, setEditingAnn]         = useState<Announcement | null>(null);
 
+  // Drill-down
+  const [drillKey, setDrillKey]         = useState<DrillKey>(null);
+  const [drillData, setDrillData]       = useState<Record<string, unknown>[] | null>(null);
+  const [drillLoading, setDrillLoading] = useState(false);
+
   const fetchStats = useCallback(async (range: DateRange) => {
     setStatsLoading(true);
     try {
@@ -168,6 +200,28 @@ export default function AdminPage() {
 
   useEffect(() => { fetchVenues(); }, [fetchVenues]);
   useEffect(() => { if (authState === 'authenticated') { fetchStats(dateRange); fetchAnnouncements(); } }, [authState, fetchStats, fetchAnnouncements, dateRange]);
+
+  async function openDrill(key: DrillKey) {
+    if (!key) return;
+    setDrillKey(key);
+    setDrillData(null);
+    setDrillLoading(true);
+    try {
+      if (key === 'venues') {
+        const res = await fetch('/api/admin/venues');
+        if (res.ok) { const d = await res.json(); setDrillData(d.venues || []); }
+      } else if (key === 'waitlist') {
+        const res = await fetch('/api/admin/waitlist');
+        if (res.ok) setDrillData(await res.json());
+      } else if (key === 'customers') {
+        const res = await fetch('/api/admin/customers');
+        if (res.ok) setDrillData(await res.json());
+      } else if (key === 'failed' || key === 'pending') {
+        const res = await fetch(`/api/admin/payments?status=${key}`);
+        if (res.ok) setDrillData(await res.json());
+      }
+    } finally { setDrillLoading(false); }
+  }
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -298,16 +352,87 @@ export default function AdminPage() {
             {/* KPI grid */}
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4">
               <div className="col-span-2"><KPICard label="Total Revenue" value={statsLoading ? '...' : formatCents(stats?.totalRevenue ?? 0)} icon={DollarSign} color={BRAND} /></div>
-              <div className="col-span-2"><KPICard label="Active Venues" value={statsLoading ? '...' : stats?.venueCount ?? 0} icon={Building2} color="#7c3aed" /></div>
+              <div className="col-span-2"><KPICard label="Active Venues" value={statsLoading ? '...' : stats?.venueCount ?? 0} icon={Building2} color="#7c3aed" onClick={() => openDrill('venues')} /></div>
               <div className="col-span-2"><KPICard label="Proposals" value={statsLoading ? '...' : stats?.totalProposals ?? 0} icon={FileText} color="#3b82f6" /></div>
-              <div className="col-span-2"><KPICard label="Waitlist" value={statsLoading ? '...' : stats?.waitlistCount ?? 0} icon={Users} color="#10b981" /></div>
+              <div className="col-span-2"><KPICard label="Waitlist" value={statsLoading ? '...' : stats?.waitlistCount ?? 0} icon={Users} color="#10b981" onClick={() => openDrill('waitlist')} /></div>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <KPICard label="Unique Customers" value={statsLoading ? '...' : stats?.uniqueCustomers ?? 0} icon={Users} color="#f59e0b" />
-              <KPICard label="Pending Payments" value={statsLoading ? '...' : stats?.pendingPayments ?? 0} icon={Clock} color="#f59e0b" />
-              <KPICard label="Failed Payments" value={statsLoading ? '...' : stats?.failedPayments ?? 0} icon={XCircle} color="#ef4444" />
-              <KPICard label="Total Customers" value={statsLoading ? '...' : stats?.uniqueCustomers ?? 0} icon={Users} color="#6b8aab" />
+              <KPICard label="Unique Customers" value={statsLoading ? '...' : stats?.uniqueCustomers ?? 0} icon={Users} color="#f59e0b" onClick={() => openDrill('customers')} />
+              <KPICard label="Pending Payments" value={statsLoading ? '...' : stats?.pendingPayments ?? 0} icon={Clock} color="#f59e0b" onClick={() => openDrill('pending')} />
+              <KPICard label="Failed Payments" value={statsLoading ? '...' : stats?.failedPayments ?? 0} icon={XCircle} color="#ef4444" onClick={() => openDrill('failed')} />
+              <KPICard label="Total Customers" value={statsLoading ? '...' : stats?.uniqueCustomers ?? 0} icon={Users} color="#6b8aab" onClick={() => openDrill('customers')} />
             </div>
+
+            {/* Drill-down modal */}
+            {drillKey && (
+              <DrillModal
+                title={drillKey === 'venues' ? 'Active Venues' : drillKey === 'waitlist' ? 'Waitlist Signups' : drillKey === 'customers' ? 'Customers' : drillKey === 'failed' ? 'Failed Payments' : 'Pending Payments'}
+                onClose={() => { setDrillKey(null); setDrillData(null); }}
+              >
+                {drillLoading ? (
+                  <div className="flex justify-center py-8"><Loader2 size={24} className="animate-spin text-gray-400" /></div>
+                ) : !drillData || drillData.length === 0 ? (
+                  <p className="text-center text-gray-400 py-8 text-sm">No data found</p>
+                ) : drillKey === 'venues' ? (
+                  <div className="space-y-2">
+                    {(drillData as unknown as Venue[]).map(v => (
+                      <div key={v.id} className="flex items-center justify-between rounded-xl border border-gray-100 px-4 py-3">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">{v.name}</p>
+                          <p className="text-xs text-gray-400">{v.email}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${v.setup_completed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                            {v.setup_completed ? 'Active' : 'Setup Pending'}
+                          </span>
+                          <span className="text-xs text-gray-400">{new Date(v.created_at).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : drillKey === 'waitlist' ? (
+                  <div className="space-y-2">
+                    {(drillData as unknown as WaitlistEntry[]).map(w => (
+                      <div key={w.id} className="rounded-xl border border-gray-100 px-4 py-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-semibold text-gray-900">{[w.first_name, w.last_name].filter(Boolean).join(' ') || w.email}</p>
+                          <span className="text-xs text-gray-400">{new Date(w.created_at).toLocaleDateString()}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1">
+                          <p className="text-xs text-gray-500">{w.email}</p>
+                          {w.phone && <p className="text-xs text-gray-400">{w.phone}</p>}
+                          {w.venue_name && <p className="text-xs text-gray-400">Venue: {w.venue_name}</p>}
+                          {w.referral_source && <p className="text-xs text-gray-400">Via: {w.referral_source}</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (drillKey === 'failed' || drillKey === 'pending') ? (
+                  <div className="space-y-2">
+                    {(drillData as unknown as FailedPayment[]).map(p => (
+                      <div key={p.id} className="flex items-center justify-between rounded-xl border border-gray-100 px-4 py-3">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">{p.customer_name || 'Unknown'}</p>
+                          <p className="text-xs text-gray-400">{new Date(p.created_at).toLocaleDateString()}</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-bold text-gray-900">{formatCents(p.price)}</span>
+                          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${p.status === 'failed' || p.status === 'declined' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{p.status}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {drillData.map((row, i) => (
+                      <div key={i} className="rounded-xl border border-gray-100 px-4 py-3">
+                        <pre className="text-xs text-gray-600">{JSON.stringify(row, null, 2)}</pre>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </DrillModal>
+            )}
 
             {/* Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
