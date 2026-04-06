@@ -68,8 +68,8 @@ function Sep() {
 }
 
 function DropdownBtn({
-  label, title, icon, children,
-}: { label: string; title: string; icon?: React.ReactNode; children: React.ReactNode }) {
+  label, title, icon, align = 'left', children,
+}: { label: string; title: string; icon?: React.ReactNode; align?: 'left' | 'right'; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   return (
@@ -85,7 +85,7 @@ function DropdownBtn({
       </button>
       {open && (
         <div
-          className="absolute top-full left-0 mt-1 z-50 min-w-[180px] rounded-lg border border-gray-200 bg-white shadow-lg py-1"
+          className={`absolute top-full mt-1 z-50 min-w-[180px] rounded-lg border border-gray-200 bg-white shadow-lg py-1 ${align === 'right' ? 'right-0' : 'left-0'}`}
           onMouseDown={(e) => e.preventDefault()}
         >
           {children}
@@ -454,8 +454,9 @@ export default function RichTextEditor({
           label=""
           title="Table"
           icon={<TableIcon size={s} />}
+          align="right"
         >
-          <div className="py-1 min-w-[170px]">
+          <div className="py-1 min-w-[200px]">
             <DropItem onClick={insertTable}>
               <TableIcon size={13} className="mr-2 text-gray-400" /> Insert table
             </DropItem>
