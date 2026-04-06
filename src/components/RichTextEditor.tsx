@@ -85,7 +85,7 @@ function DropdownBtn({
       </button>
       {open && (
         <div
-          className="absolute top-full left-0 mt-1 z-50 min-w-[130px] rounded-lg border border-gray-200 bg-white shadow-lg py-1"
+          className="absolute top-full left-0 mt-1 z-50 min-w-[180px] rounded-lg border border-gray-200 bg-white shadow-lg py-1"
           onMouseDown={(e) => e.preventDefault()}
         >
           {children}
@@ -260,7 +260,7 @@ export default function RichTextEditor({
             <span className="text-sm">Normal text</span>
           </DropItem>
           <DropItem onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} active={editor.isActive('heading', { level: 1 })}>
-            <span className="text-2xl font-bold leading-tight">Heading 1</span>
+            <span className="text-xl font-bold leading-tight whitespace-nowrap">Heading 1</span>
           </DropItem>
           <DropItem onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} active={editor.isActive('heading', { level: 2 })}>
             <span className="text-xl font-semibold">Heading 2</span>
