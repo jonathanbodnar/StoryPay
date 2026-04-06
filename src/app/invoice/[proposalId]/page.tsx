@@ -4,6 +4,19 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { formatCents, formatDate } from '@/lib/utils';
 
+interface VenueBrand {
+  color: string;
+  tagline: string | null;
+  email: string | null;
+  phone: string | null;
+  website: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  footer_note: string | null;
+}
+
 interface InvoiceData {
   proposal_id: string;
   customer_name: string;
@@ -18,6 +31,7 @@ interface InvoiceData {
   created_at: string;
   venue_name: string;
   venue_logo_url: string | null;
+  venue_brand: VenueBrand | null;
   service_fee: boolean;
   schedule: {
     payments?: Array<{
@@ -104,30 +118,42 @@ export default function InvoicePage() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden print:shadow-none print:border-none">
-          {/* Header */}
-          <div className="px-8 py-8 border-b border-gray-100">
-            <div className="flex items-start justify-between">
-              <div>
-                {invoice.venue_logo_url && (
-                  <img
-                    src={invoice.venue_logo_url}
-                    alt={invoice.venue_name}
-                    className="h-12 mb-3 object-contain"
-                  />
-                )}
-                <p className="text-sm font-semibold uppercase tracking-wider text-brand-900">
-                  {invoice.venue_name}
-                </p>
+          {/* Header — branded */}
+          {(() => {
+            const brand = invoice.venue_brand;
+            const color = brand?.color || '#293745';
+            return (
+              <div className="px-8 py-7" style={{ backgroundColor: color }}>
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-4">
+                    {invoice.venue_logo_url ? (
+                      <img src={invoice.venue_logo_url} alt={invoice.venue_name} className="h-12 object-contain" />
+                    ) : (
+                      <div className="h-12 w-12 rounded-xl bg-white/20 flex items-center justify-center text-white text-xl font-bold">
+                        {invoice.venue_name.charAt(0)}
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-white font-bold text-base">{invoice.venue_name}</p>
+                      {brand?.tagline && <p className="text-white/70 text-xs mt-0.5">{brand.tagline}</p>}
+                      {(brand?.address || brand?.city) && (
+                        <p className="text-white/60 text-xs mt-0.5">
+                          {[brand.address, brand.city, brand.state, brand.zip].filter(Boolean).join(', ')}
+                        </p>
+                      )}
+                      {brand?.email && <p className="text-white/60 text-xs">{brand.email}</p>}
+                      {brand?.phone && <p className="text-white/60 text-xs">{brand.phone}</p>}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <img src="/storypay-logo-dark.png" alt="StoryPay" className="h-4 ml-auto mb-3 opacity-40 print:hidden" />
+                    <h1 className="text-3xl font-bold text-white">INVOICE</h1>
+                    <p className="mt-1 text-sm text-white/60">#{invoiceNumber}</p>
+                  </div>
+                </div>
               </div>
-              <div className="text-right">
-                <img src="/storypay-logo-dark.png" alt="StoryPay" className="h-5 ml-auto mb-3 print:hidden" />
-                <h1 className="text-3xl font-bold text-gray-900 font-heading">INVOICE</h1>
-                <p className="mt-1 text-sm text-gray-500">
-                  #{invoiceNumber}
-                </p>
-              </div>
-            </div>
-          </div>
+            );
+          })()}
 
           {/* Details */}
           <div className="px-8 py-6 grid grid-cols-2 gap-6 border-b border-gray-100">
@@ -296,6 +322,13 @@ export default function InvoicePage() {
             </p>
           </div>
         </div>
+
+        {/* Footer note from venue branding */}
+        {invoice.venue_brand?.footer_note && (
+          <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-5 py-3 text-xs text-gray-500 leading-relaxed">
+            {invoice.venue_brand.footer_note}
+          </div>
+        )}
 
         {/* Branding footer */}
         <div className="mt-6 flex flex-col items-center gap-2 print:hidden">

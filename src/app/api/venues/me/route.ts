@@ -15,7 +15,7 @@ export async function GET() {
 
   const { data: venue, error } = await supabaseAdmin
     .from('venues')
-    .select('id, name, email, phone, address, city, state, zip, onboarding_status, onboarding_mpa_url, ghl_connected, setup_completed, lunarpay_merchant_id, pass_service_fee')
+    .select('id, name, email, phone, address, city, state, zip, onboarding_status, onboarding_mpa_url, ghl_connected, setup_completed, lunarpay_merchant_id, pass_service_fee, brand_logo_url, brand_tagline, brand_website, brand_color, brand_email, brand_phone, brand_address, brand_city, brand_state, brand_zip, brand_footer_note')
     .eq('id', venueId)
     .single();
 
@@ -33,7 +33,20 @@ export async function PATCH(request: Request) {
   }
 
   const body = await request.json();
-  const allowedFields: Record<string, boolean> = { pass_service_fee: true };
+  const allowedFields: Record<string, boolean> = {
+    pass_service_fee: true,
+    brand_logo_url: true,
+    brand_tagline: true,
+    brand_website: true,
+    brand_color: true,
+    brand_email: true,
+    brand_phone: true,
+    brand_address: true,
+    brand_city: true,
+    brand_state: true,
+    brand_zip: true,
+    brand_footer_note: true,
+  };
   const updates: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(body)) {
@@ -50,7 +63,7 @@ export async function PATCH(request: Request) {
     .from('venues')
     .update(updates)
     .eq('id', venueId)
-    .select('id, pass_service_fee')
+    .select('id, pass_service_fee, brand_logo_url, brand_tagline, brand_website, brand_color, brand_email, brand_phone, brand_address, brand_city, brand_state, brand_zip, brand_footer_note')
     .single();
 
   if (error) {

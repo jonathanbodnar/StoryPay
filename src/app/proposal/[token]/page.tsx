@@ -11,6 +11,19 @@ interface SigningField {
   sort_order: number;
 }
 
+interface VenueBrand {
+  color: string;
+  tagline: string | null;
+  email: string | null;
+  phone: string | null;
+  website: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  footer_note: string | null;
+}
+
 interface ProposalData {
   customer_name: string;
   customer_email: string;
@@ -24,6 +37,7 @@ interface ProposalData {
   paid_at: string | null;
   venue_name: string;
   venue_logo_url: string | null;
+  venue_brand: VenueBrand | null;
   proposal_id: string;
   service_fee: boolean;
 }
@@ -311,25 +325,38 @@ export default function ProposalPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
-      {/* Header bar */}
-      <header className="bg-white border-b border-gray-100">
-        <div className="mx-auto max-w-3xl px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {proposal.venue_logo_url ? (
-              <img src={proposal.venue_logo_url} alt={proposal.venue_name} className="h-8 object-contain" />
-            ) : (
-              <div className="h-8 w-8 rounded-lg flex items-center justify-center text-white text-sm font-bold" style={{ backgroundColor: '#293745' }}>
-                {proposal.venue_name.charAt(0)}
+      {/* Header bar — branded */}
+      {(() => {
+        const brand = proposal.venue_brand;
+        const color = brand?.color || '#293745';
+        return (
+          <header style={{ backgroundColor: color }}>
+            <div className="mx-auto max-w-3xl px-4 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {proposal.venue_logo_url ? (
+                  <img src={proposal.venue_logo_url} alt={proposal.venue_name} className="h-10 object-contain" />
+                ) : (
+                  <div className="h-9 w-9 rounded-lg flex items-center justify-center text-white text-sm font-bold bg-white/20">
+                    {proposal.venue_name.charAt(0)}
+                  </div>
+                )}
+                <div>
+                  <p className="font-semibold text-white text-sm">{proposal.venue_name}</p>
+                  {brand?.tagline && <p className="text-white/70 text-xs">{brand.tagline}</p>}
+                </div>
               </div>
-            )}
-            <span className="font-semibold text-gray-900">{proposal.venue_name}</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <StatusBadge status={proposal.status} />
-            <img src="/storypay-logo-dark.png" alt="StoryPay" className="h-6" />
-          </div>
-        </div>
-      </header>
+              <div className="flex items-center gap-4">
+                <div className="hidden sm:flex flex-col text-right text-white/70 text-xs gap-0.5">
+                  {brand?.email && <span>{brand.email}</span>}
+                  {brand?.phone && <span>{brand.phone}</span>}
+                </div>
+                <StatusBadge status={proposal.status} />
+                <img src="/storypay-logo-dark.png" alt="StoryPay" className="h-5 opacity-50" />
+              </div>
+            </div>
+          </header>
+        );
+      })()}
 
       <div className="mx-auto max-w-3xl px-4 py-8">
         {/* Progress Steps */}
