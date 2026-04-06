@@ -232,7 +232,7 @@ export default function AIProposalGenerator({ onGenerated, onClose, prefillClien
                 <button
                   type="submit"
                   disabled={generating}
-                  className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60 transition-all shadow-sm"
+                  className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60 transition-all shadow-sm whitespace-nowrap"
                   style={{ backgroundColor: BRAND }}
                 >
                   <Sparkles size={15} />
