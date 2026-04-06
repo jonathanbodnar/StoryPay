@@ -32,7 +32,7 @@ interface InvoiceData {
   venue_name: string;
   venue_logo_url: string | null;
   venue_brand: VenueBrand | null;
-  service_fee: boolean;
+  service_fee_rate: number;
   schedule: {
     payments?: Array<{
       amount: number;
@@ -97,8 +97,9 @@ export default function InvoicePage() {
       ? ((invoice.payment_config as { payments: Array<{ amount: number; date: string }> }).payments ?? [])
       : [];
   const schedulePayments = invoice.schedule?.payments ?? [];
-  const hasFee = invoice.service_fee;
-  const feeCents = hasFee ? Math.round(invoice.price * 0.01) : 0;
+  const feeRate = Number(invoice.service_fee_rate ?? 0);
+  const hasFee = feeRate > 0;
+  const feeCents = hasFee ? Math.round(invoice.price * feeRate / 100) : 0;
   const totalWithFee = invoice.price + feeCents;
 
   return (
@@ -227,7 +228,7 @@ export default function InvoicePage() {
                   <span className="text-gray-700">{formatCents(invoice.price)}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">Service fee (1%)</span>
+                  <span className="text-gray-500">Processing fee ({feeRate}%)</span>
                   <span className="text-gray-700">{formatCents(feeCents)}</span>
                 </div>
                 <div className="flex items-center justify-between pt-2 border-t border-gray-200">

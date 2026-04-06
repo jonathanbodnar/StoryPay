@@ -15,7 +15,7 @@ export async function GET() {
 
   const { data: venue, error } = await supabaseAdmin
     .from('venues')
-    .select('id, name, email, phone, address, city, state, zip, onboarding_status, onboarding_mpa_url, ghl_connected, setup_completed, lunarpay_merchant_id, pass_service_fee, brand_logo_url, brand_tagline, brand_website, brand_color, brand_email, brand_phone, brand_address, brand_city, brand_state, brand_zip, brand_footer_note')
+    .select('id, name, email, phone, address, city, state, zip, onboarding_status, onboarding_mpa_url, ghl_connected, setup_completed, lunarpay_merchant_id, service_fee_rate, brand_logo_url, brand_tagline, brand_website, brand_color, brand_email, brand_phone, brand_address, brand_city, brand_state, brand_zip, brand_footer_note')
     .eq('id', venueId)
     .single();
 
@@ -34,7 +34,7 @@ export async function PATCH(request: Request) {
 
   const body = await request.json();
   const allowedFields: Record<string, boolean> = {
-    pass_service_fee: true,
+    service_fee_rate: true,
     brand_logo_url: true,
     brand_tagline: true,
     brand_website: true,
@@ -63,7 +63,7 @@ export async function PATCH(request: Request) {
     .from('venues')
     .update(updates)
     .eq('id', venueId)
-    .select('id, pass_service_fee, brand_logo_url, brand_tagline, brand_website, brand_color, brand_email, brand_phone, brand_address, brand_city, brand_state, brand_zip, brand_footer_note')
+    .select('id, service_fee_rate, brand_logo_url, brand_tagline, brand_website, brand_color, brand_email, brand_phone, brand_address, brand_city, brand_state, brand_zip, brand_footer_note')
     .single();
 
   if (error) {

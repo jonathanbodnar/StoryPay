@@ -3,7 +3,6 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { createCheckoutSession } from '@/lib/lunarpay';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.storypay.io';
-const SERVICE_FEE_RATE = 0.01;
 
 interface Installment {
   amount: number;
@@ -20,8 +19,9 @@ interface SubscriptionConfig {
   start_date: string;
 }
 
-function applyFee(cents: number): number {
-  return Math.round(cents * (1 + SERVICE_FEE_RATE));
+function applyFee(cents: number, ratePercent: number): number {
+  if (ratePercent <= 0) return cents;
+  return Math.round(cents * (1 + ratePercent / 100));
 }
 
 export async function POST(
@@ -46,7 +46,7 @@ export async function POST(
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('name, lunarpay_secret_key, pass_service_fee')
+    .select('name, lunarpay_secret_key, service_fee_rate')
     .eq('id', proposal.venue_id)
     .single();
 
@@ -54,7 +54,8 @@ export async function POST(
     return NextResponse.json({ error: 'Venue payment not configured' }, { status: 400 });
   }
 
-  const addFee = venue.pass_service_fee === true;
+  const feeRate = Number(venue.service_fee_rate ?? 0);
+  const addFee = feeRate > 0;
 
   try {
     let chargeAmountCents = proposal.price;
@@ -75,7 +76,7 @@ export async function POST(
       }
     }
 
-    const finalCents = addFee ? applyFee(chargeAmountCents) : chargeAmountCents;
+    const finalCents = addFee ? applyFee(chargeAmountCents, feeRate) : chargeAmountCents;
     const amountInDollars = finalCents / 100;
 
     const hasFuturePayments = proposal.payment_type === 'installment' || proposal.payment_type === 'subscription';
@@ -97,7 +98,7 @@ export async function POST(
       checkoutData.customer_id = proposal.customer_lunarpay_id;
     }
 
-    console.log('[checkout] addFee:', addFee, 'originalCents:', chargeAmountCents, 'finalCents:', finalCents);
+    console.log('[checkout] feeRate:', feeRate, '% originalCents:', chargeAmountCents, 'finalCents:', finalCents);
     console.log('[checkout] Creating checkout session:', JSON.stringify(checkoutData));
 
     const result = await createCheckoutSession(venue.lunarpay_secret_key, checkoutData);

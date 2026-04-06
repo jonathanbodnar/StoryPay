@@ -10,7 +10,7 @@ export async function GET(
 
   const { data: proposal, error } = await supabaseAdmin
     .from('proposals')
-    .select('*, venues(name, logo_url, pass_service_fee, brand_logo_url, brand_tagline, brand_email, brand_phone, brand_website, brand_color, brand_address, brand_city, brand_state, brand_zip, brand_footer_note)')
+    .select('*, venues(name, logo_url, service_fee_rate, brand_logo_url, brand_tagline, brand_email, brand_phone, brand_website, brand_color, brand_address, brand_city, brand_state, brand_zip, brand_footer_note)')
     .eq('id', proposalId)
     .single();
 
@@ -18,7 +18,7 @@ export async function GET(
     return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
   }
 
-  const venue = proposal.venues as { name: string; logo_url: string | null; pass_service_fee: boolean; brand_logo_url?: string; brand_tagline?: string; brand_email?: string; brand_phone?: string; brand_website?: string; brand_color?: string; brand_address?: string; brand_city?: string; brand_state?: string; brand_zip?: string; brand_footer_note?: string } | null;
+  const venue = proposal.venues as { name: string; logo_url: string | null; service_fee_rate: number; brand_logo_url?: string; brand_tagline?: string; brand_email?: string; brand_phone?: string; brand_website?: string; brand_color?: string; brand_address?: string; brand_city?: string; brand_state?: string; brand_zip?: string; brand_footer_note?: string } | null;
   let scheduleData = null;
   let subscriptionData = null;
 
@@ -77,6 +77,6 @@ export async function GET(
     },
     schedule: scheduleData,
     subscription: subscriptionData,
-    service_fee: venue?.pass_service_fee === true,
+    service_fee_rate: Number(venue?.service_fee_rate ?? 0),
   });
 }

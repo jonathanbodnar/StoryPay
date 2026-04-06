@@ -39,7 +39,7 @@ interface ProposalData {
   venue_logo_url: string | null;
   venue_brand: VenueBrand | null;
   proposal_id: string;
-  service_fee: boolean;
+  service_fee_rate: number;
 }
 
 function SignatureCanvas({ onSignatureChange }: { onSignatureChange: (dataUrl: string | null) => void }) {
@@ -318,9 +318,9 @@ export default function ProposalPage() {
   const installments = proposal.payment_config
     ? (proposal.payment_config as { installments?: Array<{ amount: number; date: string }> }).installments
     : undefined;
-  const hasFee = proposal.service_fee;
-  const feeRate = 0.01;
-  const feeCents = hasFee ? Math.round(proposal.price * feeRate) : 0;
+  const feeRate = Number(proposal.service_fee_rate ?? 0);
+  const hasFee = feeRate > 0;
+  const feeCents = hasFee ? Math.round(proposal.price * feeRate / 100) : 0;
   const totalWithFee = proposal.price + feeCents;
 
   return (
@@ -534,7 +534,7 @@ export default function ProposalPage() {
 
               {proposal.payment_type === 'installment' && installments && installments.length > 1 ? (() => {
                 const firstAmt = installments[0].amount;
-                const firstFee = hasFee ? Math.round(firstAmt * feeRate) : 0;
+                const firstFee = hasFee ? Math.round(firstAmt * feeRate / 100) : 0;
                 return (
                   <div className="rounded-xl bg-gray-50 border border-gray-100 p-6 mb-6">
                     <div className="flex items-center justify-between mb-1">
@@ -542,12 +542,12 @@ export default function ProposalPage() {
                       <span className="text-2xl font-bold text-gray-900">{formatCents(firstAmt + firstFee)}</span>
                     </div>
                     {hasFee && (
-                      <p className="text-xs text-gray-400 text-right mb-3">incl. {formatCents(firstFee)} service fee</p>
+                      <p className="text-xs text-gray-400 text-right mb-3">incl. {formatCents(firstFee)} processing fee ({feeRate}%)</p>
                     )}
                     <div className="border-t border-gray-200 pt-3 space-y-2">
                       <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">Remaining payments</p>
                       {installments.slice(1).map((p, i) => {
-                        const pFee = hasFee ? Math.round(p.amount * feeRate) : 0;
+                        const pFee = hasFee ? Math.round(p.amount * feeRate / 100) : 0;
                         return (
                           <div key={i} className="flex items-center justify-between text-sm">
                             <span className="text-gray-500">{formatDate(p.date)}</span>
@@ -565,7 +565,7 @@ export default function ProposalPage() {
                     <span className="text-2xl font-bold text-gray-900">{formatCents(hasFee ? totalWithFee : proposal.price)}</span>
                   </div>
                   {hasFee && (
-                    <p className="text-xs text-gray-400 text-right">incl. {formatCents(feeCents)} service fee</p>
+                    <p className="text-xs text-gray-400 text-right">incl. {formatCents(feeCents)} processing fee ({feeRate}%)</p>
                   )}
                 </div>
               )}

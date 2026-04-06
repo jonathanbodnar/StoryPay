@@ -28,7 +28,7 @@ interface VenueInfo {
   onboarding_status: string | null;
   ghl_connected: boolean;
   lunarpay_merchant_id: number | null;
-  pass_service_fee: boolean;
+  service_fee_rate: number;
   brand_logo_url: string | null;
   brand_tagline: string | null;
   brand_website: string | null;
@@ -48,7 +48,9 @@ const LABEL = 'block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracki
 export default function SettingsPage() {
   const [venue, setVenue] = useState<VenueInfo | null>(null);
   const [loading, setLoading] = useState(true);
-  const [feeToggling, setFeeToggling] = useState(false);
+  const [feeSaving, setFeeSaving] = useState(false);
+  const [feeSaved, setFeeSaved] = useState(false);
+  const [feeInput, setFeeInput] = useState('2.75');
   const [brandSaving, setBrandSaving] = useState(false);
   const [brandSaved, setBrandSaved] = useState(false);
   const [brand, setBrand] = useState({
@@ -72,6 +74,7 @@ export default function SettingsPage() {
         if (res.ok) {
           const data = await res.json();
           setVenue(data);
+          setFeeInput(String(data.service_fee_rate ?? 2.75));
           setBrand({
             brand_logo_url: data.brand_logo_url || '',
             brand_tagline: data.brand_tagline || '',
@@ -131,19 +134,23 @@ export default function SettingsPage() {
 
   const isActive = venue.onboarding_status === 'active';
 
-  const toggleServiceFee = async () => {
-    setFeeToggling(true);
+  const saveServiceFee = async () => {
+    const rate = parseFloat(feeInput);
+    if (isNaN(rate) || rate < 0 || rate > 99) return;
+    setFeeSaving(true);
     try {
       const res = await fetch('/api/venues/me', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pass_service_fee: !venue.pass_service_fee }),
+        body: JSON.stringify({ service_fee_rate: rate }),
       });
       if (res.ok) {
-        setVenue((prev) => prev ? { ...prev, pass_service_fee: !prev.pass_service_fee } : prev);
+        setVenue((prev) => prev ? { ...prev, service_fee_rate: rate } : prev);
+        setFeeSaved(true);
+        setTimeout(() => setFeeSaved(false), 3000);
       }
     } finally {
-      setFeeToggling(false);
+      setFeeSaving(false);
     }
   };
 
@@ -375,31 +382,46 @@ export default function SettingsPage() {
             <Receipt size={18} className="text-gray-400" />
             <h2 className="font-heading text-base font-semibold text-gray-900">Billing</h2>
           </div>
-          <div className="px-6 py-5">
-            <div className="flex items-center justify-between">
-              <div className="pr-4">
-                <p className="text-sm font-medium text-gray-900">Pass 1% service fee to clients</p>
-                <p className="mt-0.5 text-sm text-gray-500">
-                  When enabled, a 1% StoryPay service fee is added to the client&apos;s total at checkout.
-                  When disabled, the fee is absorbed by your venue.
-                </p>
+          <div className="px-6 py-5 space-y-4">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Processing fee passed to clients</p>
+              <p className="mt-0.5 text-sm text-gray-500">
+                This percentage is added to the client&apos;s total at checkout to cover payment processing.
+                Set to 0 to absorb the fee yourself.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="relative w-32">
+                <input
+                  type="number"
+                  min="0"
+                  max="99"
+                  step="0.01"
+                  value={feeInput}
+                  onChange={(e) => setFeeInput(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-3.5 pr-8 py-2.5 text-sm text-gray-900 focus:border-brand-900 focus:outline-none focus:bg-white transition-colors"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">%</span>
               </div>
               <button
-                onClick={toggleServiceFee}
-                disabled={feeToggling}
-                className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-brand-900 focus:ring-offset-2 disabled:opacity-50 ${
-                  venue.pass_service_fee ? 'bg-brand-900' : 'bg-gray-200'
-                }`}
-                role="switch"
-                aria-checked={venue.pass_service_fee}
+                onClick={saveServiceFee}
+                disabled={feeSaving}
+                className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-60"
+                style={{ backgroundColor: '#293745' }}
               >
-                <span
-                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                    venue.pass_service_fee ? 'translate-x-6' : 'translate-x-1'
-                  }`}
-                />
+                {feeSaving ? 'Saving...' : feeSaved ? 'Saved!' : 'Save'}
               </button>
             </div>
+            {venue.service_fee_rate > 0 && (
+              <p className="text-xs text-gray-400">
+                Currently charging {venue.service_fee_rate}% to clients on every invoice and proposal.
+              </p>
+            )}
+            {venue.service_fee_rate === 0 && (
+              <p className="text-xs text-gray-400">
+                No processing fee is currently passed to clients.
+              </p>
+            )}
           </div>
         </section>
 
