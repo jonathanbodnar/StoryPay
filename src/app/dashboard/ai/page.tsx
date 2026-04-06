@@ -213,7 +213,7 @@ export default function AskAIPage() {
               placeholder="Ask about your revenue, proposals, customers..."
               rows={1}
               disabled={loading}
-              className="flex-1 bg-transparent text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none resize-none leading-relaxed disabled:opacity-50"
+              className="flex-1 bg-transparent text-sm text-gray-900 placeholder:text-gray-400 placeholder:text-center focus:outline-none resize-none leading-relaxed disabled:opacity-50"
               style={{ maxHeight: 120 }}
               onInput={e => {
                 const t = e.target as HTMLTextAreaElement;

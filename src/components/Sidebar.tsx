@@ -11,7 +11,7 @@ import {
   CreditCard,
   BarChart2,
   Sparkles,
-  Bot,
+  Megaphone,
   HelpCircle,
   Settings,
   ArrowLeft,
@@ -30,13 +30,13 @@ interface SidebarProps {
 }
 
 const menuItems = [
+  { label: 'Ask AI',        href: '/dashboard/ai',           icon: Sparkles },
   { label: 'Home',          href: '/dashboard',              icon: LayoutDashboard },
   { label: 'Proposals',    href: '/dashboard/proposals',    icon: FileText },
   { label: 'Customers',    href: '/dashboard/customers',    icon: Users },
   { label: 'Transactions', href: '/dashboard/transactions', icon: CreditCard },
   { label: 'Reports',      href: '/dashboard/reports',      icon: BarChart2 },
-  { label: 'Ask AI',       href: '/dashboard/ai',           icon: Bot },
-  { label: "What's New",   href: '/dashboard/updates',      icon: Sparkles },
+  { label: "What's New",   href: '/dashboard/updates',      icon: Megaphone },
   { label: 'Support',      href: '/dashboard/support',      icon: HelpCircle },
   { label: 'Settings',     href: '/dashboard/settings',     icon: Settings },
 ];
