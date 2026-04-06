@@ -68,8 +68,8 @@ function Sep() {
 }
 
 function DropdownBtn({
-  label, title, children,
-}: { label: string; title: string; children: React.ReactNode }) {
+  label, title, icon, children,
+}: { label: string; title: string; icon?: React.ReactNode; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   return (
@@ -80,7 +80,7 @@ function DropdownBtn({
         onMouseDown={(e) => { e.preventDefault(); setOpen(v => !v); }}
         className="flex items-center gap-0.5 h-7 px-1.5 rounded text-xs font-medium text-gray-600 hover:bg-gray-100 transition-colors"
       >
-        {label}
+        {icon ?? label}
         <ChevronDown size={11} />
       </button>
       {open && (
@@ -449,28 +449,34 @@ export default function RichTextEditor({
         <Btn onClick={insertImage} title="Insert image (by URL)">
           <ImageIcon size={s} />
         </Btn>
-        <Btn onClick={insertTable} title="Insert table">
-          <TableIcon size={s} />
-        </Btn>
-
-        {/* Table sub-controls */}
-        {editor.isActive('table') && (
-          <>
-            <Sep />
-            <DropdownBtn label="Table" title="Table options">
-              <DropItem onClick={() => editor.chain().focus().addColumnBefore().run()}>Add column before</DropItem>
-              <DropItem onClick={() => editor.chain().focus().addColumnAfter().run()}>Add column after</DropItem>
-              <DropItem onClick={() => editor.chain().focus().deleteColumn().run()}>Delete column</DropItem>
-              <DropItem onClick={() => editor.chain().focus().addRowBefore().run()}>Add row above</DropItem>
-              <DropItem onClick={() => editor.chain().focus().addRowAfter().run()}>Add row below</DropItem>
-              <DropItem onClick={() => editor.chain().focus().deleteRow().run()}>Delete row</DropItem>
-              <DropItem onClick={() => editor.chain().focus().toggleHeaderRow().run()}>Toggle header row</DropItem>
-              <DropItem onClick={() => editor.chain().focus().mergeCells().run()}>Merge cells</DropItem>
-              <DropItem onClick={() => editor.chain().focus().splitCell().run()}>Split cell</DropItem>
-              <DropItem onClick={() => editor.chain().focus().deleteTable().run()}>Delete table</DropItem>
-            </DropdownBtn>
-          </>
-        )}
+        {/* Single table dropdown — insert + edit in one */}
+        <DropdownBtn
+          label=""
+          title="Table"
+          icon={<TableIcon size={s} />}
+        >
+          <div className="py-1 min-w-[170px]">
+            <DropItem onClick={insertTable}>
+              <TableIcon size={13} className="mr-2 text-gray-400" /> Insert table
+            </DropItem>
+            <div className="h-px bg-gray-100 my-1" />
+            <DropItem onClick={() => editor.chain().focus().addColumnBefore().run()} active={false}>Add column before</DropItem>
+            <DropItem onClick={() => editor.chain().focus().addColumnAfter().run()}>Add column after</DropItem>
+            <DropItem onClick={() => editor.chain().focus().deleteColumn().run()}>Delete column</DropItem>
+            <div className="h-px bg-gray-100 my-1" />
+            <DropItem onClick={() => editor.chain().focus().addRowBefore().run()}>Add row above</DropItem>
+            <DropItem onClick={() => editor.chain().focus().addRowAfter().run()}>Add row below</DropItem>
+            <DropItem onClick={() => editor.chain().focus().deleteRow().run()}>Delete row</DropItem>
+            <div className="h-px bg-gray-100 my-1" />
+            <DropItem onClick={() => editor.chain().focus().toggleHeaderRow().run()}>Toggle header row</DropItem>
+            <DropItem onClick={() => editor.chain().focus().mergeCells().run()}>Merge cells</DropItem>
+            <DropItem onClick={() => editor.chain().focus().splitCell().run()}>Split cell</DropItem>
+            <div className="h-px bg-gray-100 my-1" />
+            <DropItem onClick={() => editor.chain().focus().deleteTable().run()}>
+              <span className="text-red-500">Delete table</span>
+            </DropItem>
+          </div>
+        </DropdownBtn>
 
         <Sep />
 
