@@ -551,7 +551,7 @@ export default function LandingPage() {
 
       {/* ── Footer ── */}
       <footer className="py-8 px-4 border-t border-gray-100 text-center">
-        <p className="text-xs text-gray-400">&copy; 2026 StoryPay&#8482; by StoryVenue</p>
+        <p className="text-xs text-gray-400">&copy; 2026 StoryPay&#8482; by <a href="https://storyvenue.com" target="_blank" rel="noreferrer" className="hover:text-gray-600 transition-colors underline">StoryVenue</a></p>
       </footer>
 
       {showModal && <RequestModal onClose={() => setShowModal(false)} />}
