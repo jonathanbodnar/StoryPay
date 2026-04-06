@@ -186,7 +186,7 @@ export default function SettingsPage() {
                 <div className="flex-1">
                   <input type="url" value={brand.brand_logo_url} onChange={upd('brand_logo_url')}
                     placeholder="https://yourvenue.com/logo.png" className={INPUT} />
-                  <p className="text-[11px] text-gray-400 mt-1">Paste a direct link to your logo image (PNG or JPG). Upload it to your website or use a service like Cloudinary or Imgur.</p>
+                  <p className="text-[11px] text-gray-400 mt-1">Paste a direct link to your logo image (PNG or JPG).</p>
                 </div>
                 {brand.brand_logo_url && (
                   <div className="flex-shrink-0 h-16 w-32 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden">
