@@ -204,7 +204,7 @@ export default function AskAIPage() {
 
         {/* Input area */}
         <div className="flex-shrink-0 border-t border-gray-100 p-3 sm:p-4">
-          <div className="flex items-end gap-2 sm:gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3 sm:px-4 py-2.5 focus-within:border-gray-300 focus-within:bg-white transition-colors">
+          <div className="flex items-center gap-2 sm:gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3 sm:px-4 py-2.5 focus-within:border-gray-300 focus-within:bg-white transition-colors">
             <textarea
               ref={inputRef}
               value={input}
@@ -213,8 +213,8 @@ export default function AskAIPage() {
               placeholder="Ask about your revenue, proposals, customers..."
               rows={1}
               disabled={loading}
-              className="flex-1 bg-transparent text-sm text-gray-900 placeholder:text-gray-400 placeholder:text-center focus:outline-none resize-none leading-relaxed disabled:opacity-50"
-              style={{ maxHeight: 120 }}
+              className="flex-1 bg-transparent text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none resize-none disabled:opacity-50 py-1"
+              style={{ maxHeight: 120, lineHeight: '1.5' }}
               onInput={e => {
                 const t = e.target as HTMLTextAreaElement;
                 t.style.height = 'auto';
