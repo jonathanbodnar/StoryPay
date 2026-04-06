@@ -197,26 +197,6 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* Brand color */}
-            <div>
-              <label className={LABEL}>Brand Color</label>
-              <div className="flex items-center gap-3">
-                <input type="color" value={brand.brand_color} onChange={upd('brand_color')}
-                  className="h-10 w-16 rounded-xl border border-gray-200 cursor-pointer p-0.5" />
-                <input type="text" value={brand.brand_color} onChange={upd('brand_color')}
-                  placeholder="#293745" maxLength={7}
-                  className="w-32 rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm font-mono focus:border-brand-900 focus:outline-none focus:bg-white transition-colors" />
-                <span className="text-xs text-gray-400">Used as the primary color on headers and buttons in documents</span>
-              </div>
-            </div>
-
-            {/* Tagline */}
-            <div>
-              <label className={LABEL}>Tagline</label>
-              <input type="text" value={brand.brand_tagline} onChange={upd('brand_tagline')}
-                placeholder="Creating unforgettable wedding memories" className={INPUT} />
-            </div>
-
             <hr className="border-gray-100" />
 
             {/* Contact info */}
