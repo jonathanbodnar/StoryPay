@@ -26,7 +26,16 @@ html, body {
 
 .font-heading {
   font-family: var(--font-heading);
-  font-weight: 300;
+  font-weight: 100;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  font-weight: 100;
+}
+
+p, span, div, input, textarea, select, button, label, a {
+  font-family: var(--font-body);
 }
 
 ::-webkit-scrollbar {

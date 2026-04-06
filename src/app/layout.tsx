@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "StoryPay — Wedding Venue Payments",
+  title: "StoryPay™ — Wedding Venue Payments by StoryVenue",
   description: "Payment management platform for wedding venues",
   icons: {
     icon: [
