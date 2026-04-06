@@ -344,7 +344,7 @@ export default function AdminPage() {
           <form onSubmit={handleLogin} className="bg-white rounded-2xl shadow-lg p-8">
             <div className="flex justify-center mb-5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/storyvenue-dark-logo.png" alt="StoryVenue" className="h-8 object-contain" />
+              <img src="/storypay-logo-dark.png" alt="StoryPay" className="h-8 object-contain" />
             </div>
             <h2 className="font-heading text-xl text-gray-900 mb-6 text-center">Admin Login</h2>
             {loginError && <div className="bg-red-50 text-red-700 text-sm rounded-xl px-4 py-2 mb-4">{loginError}</div>}
@@ -375,7 +375,7 @@ export default function AdminPage() {
         {/* Top row: logo + logout/home */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/storyvenue-light-logo.png" alt="StoryVenue" className="h-7 sm:h-8 object-contain" />
+          <img src="/StoryPay-Light-Logo.png" alt="StoryPay" className="h-7 sm:h-8 object-contain" />
           <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/" className="flex items-center gap-1 sm:gap-1.5 rounded-lg border border-white/20 px-2.5 sm:px-3 py-1.5 text-xs text-white/80 hover:bg-white/10 transition-colors">
               <Home size={13} />
