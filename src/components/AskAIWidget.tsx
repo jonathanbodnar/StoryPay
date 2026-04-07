@@ -29,20 +29,13 @@ function formatTime(d?: Date) {
   return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
+function stripBold(text: string): string {
+  return text.replace(/\*\*([^*]+)\*\*/g, '$1');
+}
+
 function renderContent(text: string) {
-  return text.split('\n').map((line, i) => {
-    if (line.startsWith('**') && line.endsWith('**')) {
-      return <p key={i} className="font-semibold text-gray-900 mt-1">{line.replace(/\*\*/g, '')}</p>;
-    }
-    if (/^\*\*(.+?)\*\*/.test(line)) {
-      return (
-        <p key={i} className="mb-0.5">
-          {line.split(/(\*\*[^*]+\*\*)/).map((part, j) =>
-            part.startsWith('**') ? <strong key={j}>{part.replace(/\*\*/g, '')}</strong> : part
-          )}
-        </p>
-      );
-    }
+  return text.split('\n').map((rawLine, i) => {
+    const line = stripBold(rawLine);
     if (line.startsWith('- ') || line.startsWith('• ')) {
       return (
         <div key={i} className="flex gap-1.5 mb-0.5">
@@ -70,6 +63,15 @@ export default function AskAIWidget() {
   const [error, setError]             = useState('');
   const [showEscalate, setShowEscalate] = useState(false);
   const [unread, setUnread]           = useState(0);
+  const [supportNote, setSupportNote] = useState('');
+  const [showSupportForm, setShowSupportForm] = useState(false);
+
+  // Listen for sidebar "Ask AI" click event
+  useEffect(() => {
+    const handler = () => setOpen(true);
+    window.addEventListener('open-ask-ai', handler);
+    return () => window.removeEventListener('open-ask-ai', handler);
+  }, []);
   const bottomRef  = useRef<HTMLDivElement>(null);
   const inputRef   = useRef<HTMLTextAreaElement>(null);
 
@@ -113,20 +115,25 @@ export default function AskAIWidget() {
   }, [input, loading, messages, open]);
 
   async function escalate() {
-    if (!hasInteracted) return;
+    if (!supportNote.trim()) return;
     setEscalating(true);
     const question = messages.find(m => m.role === 'user')?.content || '';
     try {
-      await fetch('/api/ai/escalate', {
+      const res = await fetch('/api/ai/escalate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           question,
           conversation: messages.map(m => ({ role: m.role, content: m.content })),
           currentPage: pathname,
+          supportNote: supportNote.trim(),
         }),
       });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || 'Failed to send support request.'); return; }
       setEscalated(true);
+      setShowSupportForm(false);
+      setSupportNote('');
       setMessages(prev => [...prev, {
         role: 'assistant',
         content: "I've sent your request to our support team with a full summary of our conversation. Someone will follow up with you via email shortly. Is there anything else I can help you with in the meantime?",
@@ -279,13 +286,41 @@ export default function AskAIWidget() {
                 )}
 
                 {/* Escalation prompt */}
-                {showEscalate && hasInteracted && !escalated && !loading && (
+                {showEscalate && hasInteracted && !escalated && !loading && !showSupportForm && (
                   <div className="flex justify-center">
-                    <button onClick={escalate} disabled={escalating}
-                      className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-medium text-gray-600 hover:border-gray-300 hover:shadow-sm transition-all disabled:opacity-50">
-                      {escalating ? <Loader2 size={12} className="animate-spin" /> : <LifeBuoy size={12} />}
-                      {escalating ? 'Contacting support...' : 'Still need help? Contact support →'}
+                    <button onClick={() => setShowSupportForm(true)}
+                      className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-medium text-gray-600 hover:border-gray-300 hover:shadow-sm transition-all">
+                      <LifeBuoy size={12} />
+                      Still need help? Contact support →
                     </button>
+                  </div>
+                )}
+
+                {/* Support note form */}
+                {showSupportForm && !escalated && (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3.5 space-y-2.5">
+                    <p className="text-xs font-semibold text-amber-900">Tell us what you need help with</p>
+                    <textarea
+                      value={supportNote}
+                      onChange={e => setSupportNote(e.target.value)}
+                      placeholder="Please describe your issue in detail so our team can help you quickly..."
+                      rows={3}
+                      className="w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-xs text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-amber-400 resize-none"
+                    />
+                    <div className="flex gap-2">
+                      <button onClick={() => { setShowSupportForm(false); setSupportNote(''); }}
+                        className="flex-1 rounded-xl border border-gray-200 bg-white py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+                        Cancel
+                      </button>
+                      <button
+                        onClick={escalate}
+                        disabled={!supportNote.trim() || escalating}
+                        className="flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-bold text-white disabled:opacity-40 transition-all"
+                        style={{ backgroundColor: '#293745' }}
+                      >
+                        {escalating ? <><Loader2 size={11} className="animate-spin" /> Sending...</> : 'Send to Support'}
+                      </button>
+                    </div>
                   </div>
                 )}
 

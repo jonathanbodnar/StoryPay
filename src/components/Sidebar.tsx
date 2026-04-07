@@ -86,16 +86,18 @@ export default function Sidebar({ venue }: SidebarProps) {
         {menuItems.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.href);
+          const isAskAI = item.label === 'Ask AI';
           return (
             <Link
               key={item.label}
-              href={item.href}
+              href={isAskAI ? '#' : item.href}
+              onClick={isAskAI ? (e) => { e.preventDefault(); window.dispatchEvent(new Event('open-ask-ai')); } : undefined}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                active ? 'text-white' : 'text-gray-400 hover:text-white'
+                active && !isAskAI ? 'text-white' : 'text-gray-400 hover:text-white'
               }`}
-              style={{ backgroundColor: active ? '#354859' : undefined }}
-              onMouseEnter={(e) => { if (!active) e.currentTarget.style.backgroundColor = '#2f3e4e'; }}
-              onMouseLeave={(e) => { if (!active) e.currentTarget.style.backgroundColor = ''; }}
+              style={{ backgroundColor: active && !isAskAI ? '#354859' : undefined }}
+              onMouseEnter={(e) => { if (!(active && !isAskAI)) e.currentTarget.style.backgroundColor = '#2f3e4e'; }}
+              onMouseLeave={(e) => { if (!(active && !isAskAI)) e.currentTarget.style.backgroundColor = ''; }}
             >
               <Icon size={18} className={active ? 'text-white' : ''} />
               <span>{item.label}</span>
