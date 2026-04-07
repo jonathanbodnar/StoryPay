@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { Megaphone, X } from 'lucide-react';
+import { X } from 'lucide-react';
 
 interface Announcement {
   id: string;
@@ -29,9 +29,8 @@ export default function AnnouncementTicker() {
 
   return (
     <div className="flex items-center text-sm text-white relative overflow-hidden" style={{ backgroundColor: '#293745', minHeight: 38 }}>
-      {/* Icon */}
-      <div className="flex-shrink-0 flex items-center gap-1.5 px-3 border-r border-white/20 self-stretch">
-        <Megaphone size={13} className="text-white/80" />
+      {/* Label */}
+      <div className="flex-shrink-0 flex items-center px-3 border-r border-white/20 self-stretch">
         <span className="text-[11px] font-semibold uppercase tracking-widest text-white/70 whitespace-nowrap">News</span>
       </div>
 
