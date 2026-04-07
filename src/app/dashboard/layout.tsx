@@ -25,7 +25,7 @@ export default async function DashboardLayout({
       <div className="lg:ml-[240px]">
         <AnnouncementTicker />
         {/* Desktop: offset by sidebar width. Mobile: add top padding for mobile header bar */}
-        <main className="min-h-screen pt-14 lg:pt-8 p-4 sm:p-6 lg:p-10">
+        <main className="min-h-screen pt-14 lg:pt-10 p-4 sm:p-6 lg:p-10">
           <div className="p-1">
             {children}
           </div>
