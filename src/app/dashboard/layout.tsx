@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getVenueFromSession } from '@/lib/session';
 import Sidebar from '@/components/Sidebar';
 import AnnouncementTicker from '@/components/AnnouncementTicker';
+import AskAIWidget from '@/components/AskAIWidget';
 
 export default async function DashboardLayout({
   children,
@@ -30,6 +31,7 @@ export default async function DashboardLayout({
           </div>
         </main>
       </div>
+      <AskAIWidget />
     </div>
   );
 }
