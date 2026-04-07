@@ -78,39 +78,76 @@ export async function POST(request: NextRequest) {
     </div>
   `;
 
-  const resendKey = process.env.RESEND_API_KEY;
+  const sendgridKey = process.env.SENDGRID_API_KEY;
+  const resendKey   = process.env.RESEND_API_KEY;
 
-  if (!resendKey) {
-    console.error('[escalate] RESEND_API_KEY not set');
+  if (!sendgridKey && !resendKey) {
+    console.error('[escalate] No email API key set (SENDGRID_API_KEY or RESEND_API_KEY)');
     return NextResponse.json({ error: 'Email service not configured. Please contact clients@storyvenuemarketing.com directly.' }, { status: 503 });
   }
 
-  try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${resendKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: 'StoryPay Support <onboarding@resend.dev>',
-        to: [SUPPORT_EMAIL],
-        reply_to: venue.email || SUPPORT_EMAIL,
-        subject,
-        html,
-      }),
-    });
+  // Try SendGrid first (most reliable, no domain restrictions)
+  if (sendgridKey) {
+    try {
+      const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${sendgridKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          personalizations: [{ to: [{ email: SUPPORT_EMAIL }] }],
+          from: { email: 'noreply@storypay.io', name: 'StoryPay Ask AI' },
+          reply_to: { email: venue.email || SUPPORT_EMAIL, name: venue.name },
+          subject,
+          content: [{ type: 'text/html', value: html }],
+        }),
+      });
 
-    const result = await res.json();
-    if (!res.ok) {
-      console.error('[escalate] Resend API error:', result);
-      return NextResponse.json({ error: 'Failed to send support email. Please contact clients@storyvenuemarketing.com directly.' }, { status: 500 });
+      if (res.status === 202) {
+        console.log('[escalate] Email sent via SendGrid');
+        return NextResponse.json({ success: true });
+      }
+
+      const errText = await res.text();
+      console.error('[escalate] SendGrid error:', res.status, errText);
+      // Fall through to try Resend
+    } catch (err) {
+      console.error('[escalate] SendGrid exception:', err);
+      // Fall through to try Resend
     }
-
-    console.log('[escalate] Email sent, id:', result.id);
-    return NextResponse.json({ success: true });
-  } catch (err) {
-    console.error('[escalate] Email exception:', err);
-    return NextResponse.json({ error: 'Failed to send support email. Please contact clients@storyvenuemarketing.com directly.' }, { status: 500 });
   }
+
+  // Fallback: Resend
+  if (resendKey) {
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${resendKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: 'StoryPay Ask AI <onboarding@resend.dev>',
+          to: [SUPPORT_EMAIL],
+          reply_to: venue.email || SUPPORT_EMAIL,
+          subject,
+          html,
+        }),
+      });
+
+      const result = await res.json();
+      if (res.ok) {
+        console.log('[escalate] Email sent via Resend, id:', result.id);
+        return NextResponse.json({ success: true });
+      }
+      console.error('[escalate] Resend error:', result);
+    } catch (err) {
+      console.error('[escalate] Resend exception:', err);
+    }
+  }
+
+  return NextResponse.json({
+    error: 'Failed to send support email. Please email clients@storyvenuemarketing.com directly.',
+  }, { status: 500 });
 }

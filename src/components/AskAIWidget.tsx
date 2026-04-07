@@ -29,25 +29,31 @@ function formatTime(d?: Date) {
   return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
-function stripBold(text: string): string {
-  return text.replace(/\*\*([^*]+)\*\*/g, '$1');
+function cleanLine(text: string): string {
+  // Remove markdown: bold (**text**), italic (*text*), headers (###, ##, #), backticks
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, '$1')   // **bold** → bold
+    .replace(/\*([^*]+)\*/g, '$1')         // *italic* → italic
+    .replace(/^#{1,6}\s+/, '')             // ### Heading → Heading
+    .replace(/`([^`]+)`/g, '$1')           // `code` → code
+    .trim();
 }
 
 function renderContent(text: string) {
   return text.split('\n').map((rawLine, i) => {
-    const line = stripBold(rawLine);
-    if (line.startsWith('- ') || line.startsWith('• ')) {
+    const line = cleanLine(rawLine);
+    if (!line) return <div key={i} className="h-1.5" />;
+    if (rawLine.trimStart().startsWith('- ') || rawLine.trimStart().startsWith('• ')) {
       return (
         <div key={i} className="flex gap-1.5 mb-0.5">
           <span className="mt-1.5 h-1 w-1 rounded-full bg-current flex-shrink-0 opacity-60" />
-          <span>{line.replace(/^[-•] /, '')}</span>
+          <span>{line.replace(/^[-•]\s*/, '')}</span>
         </div>
       );
     }
     if (/^\d+\.\s/.test(line)) {
       return <p key={i} className="mb-0.5 pl-1">{line}</p>;
     }
-    if (line === '') return <div key={i} className="h-1.5" />;
     return <p key={i} className="mb-0.5 leading-relaxed">{line}</p>;
   });
 }
