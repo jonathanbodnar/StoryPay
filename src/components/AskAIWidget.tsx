@@ -168,7 +168,7 @@ export default function AskAIWidget() {
       {/* ── Floating bubble ── */}
       <button
         onClick={() => setOpen(v => !v)}
-        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full shadow-2xl text-white transition-all hover:scale-105 active:scale-95"
+        className="fixed bottom-6 right-4 sm:right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full shadow-2xl text-white transition-all hover:scale-105 active:scale-95"
         style={{ backgroundColor: BRAND }}
         aria-label="Open Ask AI"
       >
@@ -183,13 +183,8 @@ export default function AskAIWidget() {
       {/* ── Chat panel ── */}
       {open && (
         <div
-          className="fixed bottom-24 right-6 z-50 flex flex-col rounded-2xl shadow-2xl overflow-hidden"
-          style={{
-            width: 'min(380px, calc(100vw - 24px))',
-            height: 'min(580px, calc(100vh - 140px))',
-            backgroundColor: '#fff',
-            border: '1px solid #e5e7eb',
-          }}
+          className="fixed z-50 flex flex-col shadow-2xl overflow-hidden bg-white border border-gray-200 bottom-0 left-0 right-0 rounded-t-2xl sm:bottom-24 sm:right-6 sm:left-auto sm:rounded-2xl sm:w-[380px]"
+          style={{ height: 'min(520px, 82vh)' }}
         >
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3.5 flex-shrink-0" style={{ backgroundColor: BRAND }}>
@@ -311,7 +306,8 @@ export default function AskAIWidget() {
                       onChange={e => setSupportNote(e.target.value)}
                       placeholder="Please describe your issue in detail so our team can help you quickly..."
                       rows={3}
-                      className="w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-xs text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-amber-400 resize-none"
+                      className="w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-amber-400 resize-none"
+                      style={{ fontSize: 16 }}
                     />
                     <div className="flex gap-2">
                       <button onClick={() => { setShowSupportForm(false); setSupportNote(''); }}
@@ -362,8 +358,8 @@ export default function AskAIWidget() {
                 placeholder="Ask a question..."
                 rows={1}
                 disabled={loading}
-                className="flex-1 bg-transparent text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none resize-none disabled:opacity-50"
-                style={{ maxHeight: 80, lineHeight: '1.4' }}
+                className="flex-1 bg-transparent text-gray-900 placeholder:text-gray-400 focus:outline-none resize-none disabled:opacity-50"
+                style={{ maxHeight: 80, lineHeight: '1.4', fontSize: 16 }}
                 onInput={e => {
                   const t = e.target as HTMLTextAreaElement;
                   t.style.height = 'auto';
@@ -376,7 +372,7 @@ export default function AskAIWidget() {
                 {loading ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
               </button>
             </div>
-            <p className="text-[10px] text-gray-300 text-center mt-1.5">Enter to send · Shift+Enter for new line</p>
+            <p className="hidden sm:block text-[10px] text-gray-300 text-center mt-1.5">Enter to send · Shift+Enter for new line</p>
           </div>
         </div>
       )}
