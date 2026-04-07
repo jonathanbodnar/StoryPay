@@ -37,7 +37,7 @@ const menuItems = [
   { label: 'Transactions', href: '/dashboard/transactions', icon: CreditCard },
   { label: 'Reports',      href: '/dashboard/reports',      icon: BarChart2 },
   { label: "What's New",   href: '/dashboard/updates',      icon: Megaphone },
-  { label: 'Support',      href: '/dashboard/support',      icon: HelpCircle },
+  { label: 'Support',       href: '/dashboard/support',      icon: HelpCircle },
   { label: 'Settings',     href: '/dashboard/settings',     icon: Settings },
 ];
 
@@ -86,7 +86,7 @@ export default function Sidebar({ venue }: SidebarProps) {
         {menuItems.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.href);
-          const isAskAI = item.label === 'Ask AI';
+          const isAskAI = item.label === 'Ask AI' || item.label === 'Support';
           return (
             <Link
               key={item.label}
