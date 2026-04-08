@@ -67,7 +67,7 @@ async function sendEmail(data: {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        from: 'StoryPay <onboarding@resend.dev>',
+          from: 'StoryPay <noreply@storypay.io>',
         to: [NOTIFY_EMAIL],
         reply_to: data.email,
         subject: 'New StoryPay invite requested',

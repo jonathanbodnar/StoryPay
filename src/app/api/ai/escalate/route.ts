@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: 'StoryPay Ask AI <onboarding@resend.dev>',
+          from: 'StoryPay Ask AI <noreply@storypay.io>',
           to: [SUPPORT_EMAIL],
           reply_to: venue.email || SUPPORT_EMAIL,
           subject,

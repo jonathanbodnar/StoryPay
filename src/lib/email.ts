@@ -49,7 +49,7 @@ export async function sendEmail({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: 'StoryPay <onboarding@resend.dev>',
+          from: 'StoryPay <noreply@storypay.io>',
           to: [to],
           reply_to: replyTo,
           subject,

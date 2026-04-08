@@ -193,7 +193,8 @@ export async function POST(request: NextRequest) {
     const amountStr = `$${((price || 0) / 100).toFixed(2)}`;
 
     // Always send direct email — ensures delivery regardless of GHL status
-    await directSendEmail({
+    console.log(`[invoice] Sending email to ${customerEmail} via Resend`);
+    const emailResult = await directSendEmail({
       to: customerEmail,
       subject: `Invoice from ${venue?.name || 'Your Venue'}`,
       html: invoiceEmailHtml({
@@ -204,6 +205,7 @@ export async function POST(request: NextRequest) {
         brandColor,
       }),
     });
+    console.log('[invoice] Email result:', JSON.stringify(emailResult));
   }
 
   return NextResponse.json(proposal, { status: 201 });
