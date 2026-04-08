@@ -17,6 +17,7 @@ import {
   Palette,
   Mail,
   UsersRound,
+  Bell,
   ArrowLeft,
   Menu,
   X,
@@ -49,6 +50,7 @@ const settingsItems = [
   { label: 'Branding',        href: '/dashboard/settings/branding',         icon: Palette },
   { label: 'Email Templates', href: '/dashboard/settings/email-templates',  icon: Mail },
   { label: 'Team',            href: '/dashboard/settings/team',             icon: UsersRound },
+  { label: 'Notifications',   href: '/dashboard/settings/notifications',    icon: Bell },
 ];
 
 export default function Sidebar({ venue }: SidebarProps) {
