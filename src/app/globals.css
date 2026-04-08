@@ -3,15 +3,15 @@
 @plugin "@tailwindcss/typography";
 
 @theme {
-  --color-brand-900: #293745;
-  --color-brand-800: #354859;
-  --color-brand-700: #2f3e4e;
-  --color-brand-600: #3d5168;
-  --color-brand-500: #4a6280;
-  --color-brand-400: #6b8aab;
+  --color-brand-900: #1b1b1b;
+  --color-brand-800: #2d2d2d;
+  --color-brand-700: #3d3d3d;
+  --color-brand-600: #555555;
+  --color-brand-500: #6b6b6b;
+  --color-brand-400: #9ca3af;
 
-  --color-accent-500: #293745;
-  --color-accent-600: #2f3e4e;
+  --color-accent-500: #1b1b1b;
+  --color-accent-600: #2d2d2d;
 
   --font-heading: 'Playfair Display', Georgia, serif;
   --font-body: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;

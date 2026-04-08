@@ -71,19 +71,28 @@ export default function Sidebar({ venue }: SidebarProps) {
 
   // ── Nav item styles ──────────────────────────────────────────────────────
   const navItem = (active: boolean) =>
-    `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-      active ? 'bg-gray-100 text-gray-900 font-semibold' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+    `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+      active ? 'text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
     }`;
+
+  const navItemStyle = (active: boolean): React.CSSProperties =>
+    active ? { backgroundColor: '#1b1b1b' } : {};
 
   const subItem = (active: boolean) =>
-    `flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${
-      active ? 'text-gray-900 font-semibold' : 'text-gray-400 hover:text-gray-700'
+    `flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition-colors ${
+      active ? 'text-white font-medium' : 'text-gray-400 hover:text-gray-800'
     }`;
 
+  const subItemStyle = (active: boolean): React.CSSProperties =>
+    active ? { backgroundColor: '#1b1b1b' } : {};
+
   const groupBtn = (active: boolean) =>
-    `w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${
-      active ? 'bg-gray-100 text-gray-900 font-semibold' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+    `w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+      active ? 'text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
     }`;
+
+  const groupBtnStyle = (active: boolean): React.CSSProperties =>
+    active ? { backgroundColor: '#1b1b1b' } : {};
 
   // ── Shared nav content ───────────────────────────────────────────────────
   const NavContent = () => (
@@ -113,6 +122,7 @@ export default function Sidebar({ venue }: SidebarProps) {
               href={isAI ? '#' : item.href}
               onClick={isAI ? (e) => { e.preventDefault(); window.dispatchEvent(new Event('open-ask-ai')); } : undefined}
               className={navItem(active && !isAI)}
+              style={navItemStyle(active && !isAI)}
             >
               <Icon size={16} />
               <span>{item.label}</span>
@@ -122,12 +132,12 @@ export default function Sidebar({ venue }: SidebarProps) {
 
         {/* Payments collapsible */}
         <div>
-          <button type="button" onClick={() => setPaymentsOpen(v => !v)} className={groupBtn(isOnPayments)}>
+          <button type="button" onClick={() => setPaymentsOpen(v => !v)} className={groupBtn(isOnPayments)} style={groupBtnStyle(isOnPayments)}>
             <div className="flex items-center gap-3">
               <CreditCard size={16} />
               <span>Payments</span>
             </div>
-            <ChevronDown size={13} className={`transition-transform duration-200 ${paymentsOpen ? 'rotate-180' : ''} text-gray-400`} />
+            <ChevronDown size={13} className={`transition-transform duration-200 ${paymentsOpen ? 'rotate-180' : ''} ${isOnPayments ? 'text-white/50' : 'text-gray-400'}`} />
           </button>
           {paymentsOpen && (
             <div className="mt-0.5 ml-3 pl-3 border-l border-gray-100 space-y-0.5 py-0.5">
@@ -135,7 +145,7 @@ export default function Sidebar({ venue }: SidebarProps) {
                 const SubIcon = sub.icon;
                 const active = isActive(sub.href);
                 return (
-                  <Link key={sub.label} href={sub.href} className={subItem(active)}>
+                  <Link key={sub.label} href={sub.href} className={subItem(active)} style={subItemStyle(active)}>
                     <SubIcon size={14} />
                     <span>{sub.label}</span>
                   </Link>
@@ -149,7 +159,7 @@ export default function Sidebar({ venue }: SidebarProps) {
         {(() => {
           const active = isActive('/dashboard/products');
           return (
-            <Link href="/dashboard/products" className={navItem(active)}>
+            <Link href="/dashboard/products" className={navItem(active)} style={navItemStyle(active)}>
               <Package size={16} />
               <span>Products</span>
             </Link>
@@ -158,12 +168,12 @@ export default function Sidebar({ venue }: SidebarProps) {
 
         {/* Settings collapsible */}
         <div>
-          <button type="button" onClick={() => setSettingsOpen(v => !v)} className={groupBtn(isOnSettings)}>
+          <button type="button" onClick={() => setSettingsOpen(v => !v)} className={groupBtn(isOnSettings)} style={groupBtnStyle(isOnSettings)}>
             <div className="flex items-center gap-3">
               <Settings size={16} />
               <span>Settings</span>
             </div>
-            <ChevronDown size={13} className={`transition-transform duration-200 ${settingsOpen ? 'rotate-180' : ''} text-gray-400`} />
+            <ChevronDown size={13} className={`transition-transform duration-200 ${settingsOpen ? 'rotate-180' : ''} ${isOnSettings ? 'text-white/50' : 'text-gray-400'}`} />
           </button>
           {settingsOpen && (
             <div className="mt-0.5 ml-3 pl-3 border-l border-gray-100 space-y-0.5 py-0.5">
@@ -171,7 +181,7 @@ export default function Sidebar({ venue }: SidebarProps) {
                 const SubIcon = sub.icon;
                 const active = pathname === sub.href;
                 return (
-                  <Link key={sub.label} href={sub.href} className={subItem(active)}>
+                  <Link key={sub.label} href={sub.href} className={subItem(active)} style={subItemStyle(active)}>
                     <SubIcon size={14} />
                     <span>{sub.label}</span>
                   </Link>
