@@ -15,6 +15,8 @@ import {
   HelpCircle,
   Settings,
   Palette,
+  Mail,
+  UsersRound,
   ArrowLeft,
   Menu,
   X,
@@ -43,8 +45,10 @@ const menuItems = [
 ];
 
 const settingsItems = [
-  { label: 'General',   href: '/dashboard/settings',          icon: Settings },
-  { label: 'Branding',  href: '/dashboard/settings/branding', icon: Palette },
+  { label: 'General',         href: '/dashboard/settings',                  icon: Settings },
+  { label: 'Branding',        href: '/dashboard/settings/branding',         icon: Palette },
+  { label: 'Email Templates', href: '/dashboard/settings/email-templates',  icon: Mail },
+  { label: 'Team',            href: '/dashboard/settings/team',             icon: UsersRound },
 ];
 
 export default function Sidebar({ venue }: SidebarProps) {
