@@ -291,7 +291,7 @@ export default function AskAIWidget() {
       {open && (
         <div
           className="fixed z-50 flex flex-col shadow-2xl overflow-hidden bg-white border border-gray-200 bottom-0 left-0 right-0 rounded-t-2xl sm:bottom-24 sm:right-6 sm:left-auto sm:rounded-2xl sm:w-[380px]"
-          style={{ height: 'min(520px, 82vh)' }}
+          style={{ height: 'min(680px, 88vh)' }}
         >
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3.5 flex-shrink-0" style={{ backgroundColor: BRAND }}>
