@@ -73,7 +73,9 @@ function renderContent(text: string) {
 function EmojiPicker({ onSelect, onClose }: { onSelect: (e: string) => void; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose(); };
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [onClose]);
@@ -81,18 +83,30 @@ function EmojiPicker({ onSelect, onClose }: { onSelect: (e: string) => void; onC
   return (
     <div
       ref={ref}
-      className="absolute bottom-full left-0 mb-2 z-20 rounded-2xl border border-gray-200 bg-white shadow-2xl overflow-hidden"
-      style={{ width: 300 }}
+      className="rounded-2xl border border-gray-200 bg-white shadow-2xl overflow-hidden"
+      style={{
+        position: 'absolute',
+        bottom: 'calc(100% + 8px)',
+        left: 0,
+        right: 0,
+        zIndex: 30,
+      }}
     >
-      <div className="px-3 pt-2.5 pb-1 border-b border-gray-100">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Emoji</p>
+      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 bg-gray-50">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Emoji</p>
+        <button onMouseDown={(e) => { e.preventDefault(); onClose(); }}
+          className="text-gray-400 hover:text-gray-600 transition-colors">
+          <X size={13} />
+        </button>
       </div>
       <div
-        className="grid p-2 overflow-y-auto"
+        className="overflow-y-auto p-2"
         style={{
+          display: 'grid',
           gridTemplateColumns: 'repeat(8, 1fr)',
-          maxHeight: 200,
-          fontFamily: '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Twemoji Mozilla",sans-serif',
+          gap: 2,
+          maxHeight: 180,
+          fontFamily: '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif',
         }}
       >
         {EMOJIS.map((e, i) => (
@@ -101,7 +115,7 @@ function EmojiPicker({ onSelect, onClose }: { onSelect: (e: string) => void; onC
             type="button"
             onMouseDown={(ev) => { ev.preventDefault(); onSelect(e); onClose(); }}
             className="flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors"
-            style={{ height: 36, width: '100%', fontSize: 22, lineHeight: 1 }}
+            style={{ height: 38, fontSize: 20, lineHeight: 1 }}
           >
             {e}
           </button>
@@ -469,7 +483,7 @@ export default function AskAIWidget() {
           </div>
 
           {/* Input area */}
-          <div className="flex-shrink-0 border-t border-gray-100 bg-white p-3">
+          <div className="flex-shrink-0 border-t border-gray-100 bg-white p-3 relative">
             {/* Pending image preview */}
             {pendingImage && (
               <div className="relative mb-2 inline-block">
@@ -511,14 +525,13 @@ export default function AskAIWidget() {
 
               {/* Toolbar row */}
               <div className="flex items-center justify-between px-2 pb-2">
-                <div className="flex items-center gap-0.5 relative">
+                <div className="flex items-center gap-0.5">
                   {/* Emoji */}
                   <button type="button" onClick={() => setShowEmoji(v => !v)}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                    className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${showEmoji ? 'bg-gray-200 text-gray-700' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
                     title="Emoji">
                     <Smile size={17} />
                   </button>
-                  {showEmoji && <EmojiPicker onSelect={e => setInput(p => p + e)} onClose={() => setShowEmoji(false)} />}
 
                   {/* Image upload */}
                   <button type="button" onClick={() => fileRef.current?.click()}
@@ -550,6 +563,14 @@ export default function AskAIWidget() {
                 </button>
               </div>
             </div>
+
+            {/* Emoji picker — anchored above the input, full width */}
+            {showEmoji && (
+              <EmojiPicker
+                onSelect={e => setInput(p => p + e)}
+                onClose={() => setShowEmoji(false)}
+              />
+            )}
           </div>
         </div>
       )}
