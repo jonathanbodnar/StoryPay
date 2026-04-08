@@ -139,8 +139,9 @@ export function getSubscription(secretKey: string, id: number) {
   return lpFetch(`/api/v1/subscriptions/${id}`, { key: secretKey });
 }
 
-export function refundCharge(secretKey: string, chargeId: number | string) {
-  return lpFetch(`/api/v1/charges/${chargeId}/refund`, { method: 'POST', key: secretKey });
+export function refundCharge(secretKey: string, chargeId: number | string, amountCents?: number) {
+  const body = amountCents ? { amount: amountCents } : undefined;
+  return lpFetch(`/api/v1/charges/${chargeId}/refund`, { method: 'POST', body, key: secretKey });
 }
 
 // ── Checkout Sessions ────────────────────────────────────────────────

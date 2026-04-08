@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Mail, Phone, MapPin, FileText, Loader2, ExternalLink, Receipt, Pencil, Copy, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, MapPin, FileText, Loader2, ExternalLink, Receipt, Pencil, Copy, RefreshCw, RotateCcw } from 'lucide-react';
+import RefundModal from '@/components/RefundModal';
 import { formatCents, formatDate, getStatusColor, classNames } from '@/lib/utils';
 
 interface Customer {
@@ -28,6 +29,7 @@ interface Proposal {
   payment_type: string;
   payment_config: Record<string, unknown> | null;
   public_token: string;
+  charge_id?: string | null;
   sent_at: string | null;
   signed_at: string | null;
   paid_at: string | null;
@@ -45,6 +47,7 @@ export default function CustomerDetailPage() {
   const [error, setError] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
+  const [refundTarget, setRefundTarget] = useState<Proposal | null>(null);
 
   useEffect(() => {
     async function fetchData() {
@@ -283,6 +286,15 @@ export default function CustomerDetailPage() {
                             <Receipt size={13} />
                           </Link>
                         )}
+                        {(p.status === 'paid') && (
+                          <button
+                            onClick={() => setRefundTarget(p)}
+                            className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-50"
+                            title="Refund"
+                          >
+                            <RotateCcw size={13} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -331,6 +343,23 @@ export default function CustomerDetailPage() {
             })}
           </div>
         </div>
+      )}
+
+      {/* Refund Modal */}
+      {refundTarget && (
+        <RefundModal
+          proposalId={refundTarget.id}
+          chargeId={refundTarget.charge_id}
+          customerName={refundTarget.customer_name || customer?.name || 'Customer'}
+          originalAmount={refundTarget.price}
+          onSuccess={(fullRefund) => {
+            if (fullRefund) {
+              setProposals(prev => prev.map(p => p.id === refundTarget.id ? { ...p, status: 'refunded' } : p));
+            }
+            setRefundTarget(null);
+          }}
+          onClose={() => setRefundTarget(null)}
+        />
       )}
     </div>
   );
