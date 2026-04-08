@@ -54,7 +54,13 @@ const settingsItems = [
 export default function Sidebar({ venue }: SidebarProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const settingsOpen = pathname.startsWith('/dashboard/settings');
+  const isOnSettings = pathname.startsWith('/dashboard/settings');
+  const [settingsOpen, setSettingsOpen] = useState(isOnSettings);
+
+  // Auto-expand when navigating to a settings page, but allow manual toggle
+  useEffect(() => {
+    if (isOnSettings) setSettingsOpen(true);
+  }, [isOnSettings]);
 
   // Close on route change
   useEffect(() => { setMobileOpen(false); }, [pathname]);
@@ -118,24 +124,29 @@ export default function Sidebar({ venue }: SidebarProps) {
 
         {/* Settings group — collapsible */}
         <div>
-          <Link
-            href="/dashboard/settings"
+          <div
             className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-              settingsOpen ? 'text-white' : 'text-gray-400 hover:text-white'
+              isOnSettings ? 'text-white' : 'text-gray-400 hover:text-white'
             }`}
-            style={{ backgroundColor: settingsOpen ? '#354859' : undefined }}
-            onMouseEnter={(e) => { if (!settingsOpen) e.currentTarget.style.backgroundColor = '#2f3e4e'; }}
-            onMouseLeave={(e) => { if (!settingsOpen) e.currentTarget.style.backgroundColor = ''; }}
+            style={{ backgroundColor: isOnSettings ? '#354859' : undefined }}
+            onMouseEnter={(e) => { if (!isOnSettings) e.currentTarget.style.backgroundColor = '#2f3e4e'; }}
+            onMouseLeave={(e) => { if (!isOnSettings) e.currentTarget.style.backgroundColor = ''; }}
           >
-            <div className="flex items-center gap-3">
-              <Settings size={18} className={settingsOpen ? 'text-white' : ''} />
+            <Link href="/dashboard/settings" className="flex items-center gap-3 flex-1">
+              <Settings size={18} className={isOnSettings ? 'text-white' : ''} />
               <span>Settings</span>
-            </div>
-            <ChevronDown
-              size={14}
-              className={`transition-transform duration-200 ${settingsOpen ? 'rotate-180 text-white/60' : 'text-gray-500'}`}
-            />
-          </Link>
+            </Link>
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(v => !v)}
+              className="flex items-center justify-center h-5 w-5 rounded hover:bg-white/10 transition-colors flex-shrink-0 ml-1"
+            >
+              <ChevronDown
+                size={14}
+                className={`transition-transform duration-200 ${settingsOpen ? 'rotate-180 text-white/60' : 'text-gray-500'}`}
+              />
+            </button>
+          </div>
 
           {/* Sub-items */}
           {settingsOpen && (
