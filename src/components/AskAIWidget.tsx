@@ -26,11 +26,16 @@ const SUGGESTED_PROMPTS = [
   'I need help with my account',
 ];
 
-// Common emoji grid
+// Standard iPhone keyboard emojis
 const EMOJIS = [
-  '😊','😂','🙏','👍','❤️','🎉','✅','⚡','🔥','💡',
-  '😅','🤔','👋','💪','🙌','😍','🥳','😬','😭','🤝',
-  '📊','📋','💰','📝','🏷️','📅','🔗','⚙️','🔒','✉️',
+  '😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃',
+  '😉','😊','😇','🥰','😍','🤩','😘','😗','😚','😙',
+  '😋','😛','😜','🤪','😝','🤑','🤗','🤭','🫣','🤫',
+  '🤔','🫠','🤐','🤨','😐','😑','😶','😏','😒','🙄',
+  '😬','🤥','😌','😔','😪','🤤','😴','😷','🤒','🤕',
+  '👋','🤚','🖐','✋','🖖','🫱','🫲','🤝','👍','👎',
+  '👏','🙌','🤲','🫶','❤️','🧡','💛','💚','💙','💜',
+  '🎉','🎊','✨','🔥','⚡','💫','⭐','🌟','💯','✅',
 ];
 
 function formatTime(d?: Date) {
@@ -74,11 +79,30 @@ function EmojiPicker({ onSelect, onClose }: { onSelect: (e: string) => void; onC
   }, [onClose]);
 
   return (
-    <div ref={ref} className="absolute bottom-full left-0 mb-2 z-10 rounded-2xl border border-gray-200 bg-white shadow-xl p-3" style={{ width: 220 }}>
-      <div className="grid grid-cols-10 gap-1">
-        {EMOJIS.map(e => (
-          <button key={e} type="button" onClick={() => { onSelect(e); onClose(); }}
-            className="flex items-center justify-center h-7 w-7 rounded-lg text-lg hover:bg-gray-100 transition-colors">
+    <div
+      ref={ref}
+      className="absolute bottom-full left-0 mb-2 z-20 rounded-2xl border border-gray-200 bg-white shadow-2xl overflow-hidden"
+      style={{ width: 300 }}
+    >
+      <div className="px-3 pt-2.5 pb-1 border-b border-gray-100">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Emoji</p>
+      </div>
+      <div
+        className="grid p-2 overflow-y-auto"
+        style={{
+          gridTemplateColumns: 'repeat(8, 1fr)',
+          maxHeight: 200,
+          fontFamily: '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Twemoji Mozilla",sans-serif',
+        }}
+      >
+        {EMOJIS.map((e, i) => (
+          <button
+            key={i}
+            type="button"
+            onMouseDown={(ev) => { ev.preventDefault(); onSelect(e); onClose(); }}
+            className="flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors"
+            style={{ height: 36, width: '100%', fontSize: 22, lineHeight: 1 }}
+          >
             {e}
           </button>
         ))}
