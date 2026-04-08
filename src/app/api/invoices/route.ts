@@ -2,8 +2,9 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { createCustomer } from '@/lib/lunarpay';
-import { findOrCreateContact, sendSms, sendEmail } from '@/lib/ghl';
+import { findOrCreateContact, sendSms, sendEmail as ghlSendEmail } from '@/lib/ghl';
 import { generateToken } from '@/lib/utils';
+import { sendEmail as directSendEmail, invoiceEmailHtml } from '@/lib/email';
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('lunarpay_secret_key, ghl_connected, ghl_access_token, ghl_location_id, name')
+    .select('lunarpay_secret_key, ghl_connected, ghl_access_token, ghl_location_id, name, brand_color')
     .eq('id', venueId)
     .single();
 
@@ -153,7 +154,7 @@ export async function POST(request: NextRequest) {
         }
 
         try {
-          await sendEmail(venue.ghl_access_token, venue.ghl_location_id, {
+          await ghlSendEmail(venue.ghl_access_token, venue.ghl_location_id, {
             contactId,
             subject: `Invoice from ${venue.name}`,
             html: `
@@ -180,6 +181,30 @@ export async function POST(request: NextRequest) {
       }
     } catch (err) {
       console.error('[invoice] GHL contact failed:', err);
+    }
+  }
+
+  // Direct email fallback — always send if GHL not connected or as extra delivery
+  if (!asDraft && customerEmail) {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+    const invoiceUrl = `${appUrl}/invoice/${proposal.id}`;
+    const clientFirst = (customerName || 'there').split(' ')[0];
+    const brandColor = (venue as { brand_color?: string })?.brand_color || '#293745';
+    const amountStr = `$${((price || 0) / 100).toFixed(2)}`;
+
+    // Only send direct email if GHL is NOT connected (avoid double-sending)
+    if (!venue?.ghl_connected) {
+      await directSendEmail({
+        to: customerEmail,
+        subject: `Invoice from ${venue?.name || 'Your Venue'}`,
+        html: invoiceEmailHtml({
+          venueName: venue?.name || 'Your Venue',
+          clientFirstName: clientFirst,
+          invoiceUrl,
+          amount: amountStr,
+          brandColor,
+        }),
+      });
     }
   }
 

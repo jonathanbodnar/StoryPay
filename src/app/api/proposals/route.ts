@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { createCustomer } from '@/lib/lunarpay';
 import { ghlRequest, sendSms, sendEmail, findOrCreateContact } from '@/lib/ghl';
 import { generateToken } from '@/lib/utils';
+import { sendEmail as directSendEmail, proposalEmailHtml } from '@/lib/email';
 
 export async function GET(request: NextRequest) {
   const cookieStore = await cookies();
@@ -252,7 +253,32 @@ export async function POST(request: NextRequest) {
       console.error('[proposal-send] GHL contact lookup failed:', err);
     }
   } else {
-    console.log('[proposal-send] GHL not connected for venue, skipping SMS/email');
+    console.log('[proposal-send] GHL not connected — sending direct email');
+  }
+
+  // Direct email fallback when GHL not connected
+  if (!venue?.ghl_connected && customerEmail) {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+    const proposalUrl = `${appUrl}/proposal/${publicToken}`;
+    const clientFirst = customerName.split(' ')[0];
+
+    // Fetch brand color
+    const { data: venueData } = await supabaseAdmin
+      .from('venues')
+      .select('brand_color')
+      .eq('id', venueId)
+      .single();
+
+    await directSendEmail({
+      to: customerEmail,
+      subject: `Proposal from ${venue?.name || 'Your Venue'}`,
+      html: proposalEmailHtml({
+        venueName: venue?.name || 'Your Venue',
+        clientFirstName: clientFirst,
+        proposalUrl,
+        brandColor: venueData?.brand_color || '#293745',
+      }),
+    });
   }
 
   return NextResponse.json(proposal, { status: 201 });
