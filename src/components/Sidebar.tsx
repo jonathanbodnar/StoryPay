@@ -14,9 +14,11 @@ import {
   Megaphone,
   HelpCircle,
   Settings,
+  Palette,
   ArrowLeft,
   Menu,
   X,
+  ChevronDown,
 } from 'lucide-react';
 
 interface Venue {
@@ -38,12 +40,17 @@ const menuItems = [
   { label: 'Reports',      href: '/dashboard/reports',      icon: BarChart2 },
   { label: "What's New",   href: '/dashboard/updates',      icon: Megaphone },
   { label: 'Support',       href: '/dashboard/support',      icon: HelpCircle },
-  { label: 'Settings',     href: '/dashboard/settings',     icon: Settings },
+];
+
+const settingsItems = [
+  { label: 'General',   href: '/dashboard/settings',          icon: Settings },
+  { label: 'Branding',  href: '/dashboard/settings/branding', icon: Palette },
 ];
 
 export default function Sidebar({ venue }: SidebarProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const settingsOpen = pathname.startsWith('/dashboard/settings');
 
   // Close on route change
   useEffect(() => { setMobileOpen(false); }, [pathname]);
@@ -104,6 +111,53 @@ export default function Sidebar({ venue }: SidebarProps) {
             </Link>
           );
         })}
+
+        {/* Settings group — collapsible */}
+        <div>
+          <Link
+            href="/dashboard/settings"
+            className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              settingsOpen ? 'text-white' : 'text-gray-400 hover:text-white'
+            }`}
+            style={{ backgroundColor: settingsOpen ? '#354859' : undefined }}
+            onMouseEnter={(e) => { if (!settingsOpen) e.currentTarget.style.backgroundColor = '#2f3e4e'; }}
+            onMouseLeave={(e) => { if (!settingsOpen) e.currentTarget.style.backgroundColor = ''; }}
+          >
+            <div className="flex items-center gap-3">
+              <Settings size={18} className={settingsOpen ? 'text-white' : ''} />
+              <span>Settings</span>
+            </div>
+            <ChevronDown
+              size={14}
+              className={`transition-transform duration-200 ${settingsOpen ? 'rotate-180 text-white/60' : 'text-gray-500'}`}
+            />
+          </Link>
+
+          {/* Sub-items */}
+          {settingsOpen && (
+            <div className="mt-0.5 ml-4 pl-3 border-l border-white/10 space-y-0.5">
+              {settingsItems.map((sub) => {
+                const SubIcon = sub.icon;
+                const subActive = pathname === sub.href;
+                return (
+                  <Link
+                    key={sub.label}
+                    href={sub.href}
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+                      subActive ? 'text-white font-medium' : 'text-gray-400 hover:text-white'
+                    }`}
+                    style={{ backgroundColor: subActive ? '#354859' : undefined }}
+                    onMouseEnter={(e) => { if (!subActive) e.currentTarget.style.backgroundColor = '#2f3e4e'; }}
+                    onMouseLeave={(e) => { if (!subActive) e.currentTarget.style.backgroundColor = ''; }}
+                  >
+                    <SubIcon size={15} />
+                    <span>{sub.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </nav>
 
       <div className="px-5 py-4 border-t border-white/10">

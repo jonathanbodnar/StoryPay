@@ -39,6 +39,8 @@ export async function PATCH(request: Request) {
     brand_tagline: true,
     brand_website: true,
     brand_color: true,
+    brand_bg_color: true,
+    brand_btn_text: true,
     brand_email: true,
     brand_phone: true,
     brand_address: true,
