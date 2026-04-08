@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Send, Save, Plus, Trash2 } from 'lucide-react';
 import { formatCents } from '@/lib/utils';
 
 const SURCHARGE_RATE = 0.0275; // 2.75%
 const SURCHARGE_ID = '__surcharge__';
+
+interface Product { id: string; name: string; description: string | null; price: number; unit: string; }
 
 interface LineItem {
   id: string;
@@ -67,6 +69,34 @@ export default function NewInvoicePage() {
   const [subStartDate, setSubStartDate] = useState('');
 
   const [submitting, setSubmitting] = useState(false);
+  const [products, setProducts]     = useState<Product[]>([]);
+  const [productSearch, setProductSearch] = useState<Record<string, string>>({});
+  const [showSuggestions, setShowSuggestions] = useState<Record<string, boolean>>({});
+  const [suggestions, setSuggestions] = useState<Record<string, Product[]>>({});
+  const suggestDebounce = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  useEffect(() => {
+    fetch('/api/products').then(r => r.ok ? r.json() : []).then(d => setProducts(Array.isArray(d) ? d : []));
+  }, []);
+
+  function searchProducts(itemId: string, query: string) {
+    setProductSearch(prev => ({ ...prev, [itemId]: query }));
+    clearTimeout(suggestDebounce.current[itemId]);
+    if (!query.trim()) { setSuggestions(prev => ({ ...prev, [itemId]: [] })); setShowSuggestions(prev => ({ ...prev, [itemId]: false })); return; }
+    suggestDebounce.current[itemId] = setTimeout(() => {
+      const filtered = products.filter(p => p.name.toLowerCase().includes(query.toLowerCase())).slice(0, 5);
+      setSuggestions(prev => ({ ...prev, [itemId]: filtered }));
+      setShowSuggestions(prev => ({ ...prev, [itemId]: filtered.length > 0 }));
+    }, 150);
+  }
+
+  function selectProduct(itemId: string, product: Product) {
+    updateLineItem(itemId, 'name', product.name);
+    updateLineItem(itemId, 'description', product.description || '');
+    updateLineItem(itemId, 'amount', (product.price / 100).toFixed(2));
+    setShowSuggestions(prev => ({ ...prev, [itemId]: false }));
+    setProductSearch(prev => ({ ...prev, [itemId]: '' }));
+  }
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -252,13 +282,36 @@ export default function NewInvoicePage() {
               {lineItems.map((item, idx) => (
                 <div key={item.id}
                   className={`flex flex-col sm:grid sm:grid-cols-[1fr_1fr_120px_36px] gap-2 sm:gap-3 px-4 py-3 ${item.isSurcharge ? 'bg-blue-50/40' : ''}`}>
-                  <input
-                    type="text"
-                    value={item.name}
-                    onChange={(e) => updateLineItem(item.id, 'name', e.target.value)}
-                    placeholder={item.isSurcharge ? 'Processing Fee (2.75%)' : `Item ${idx + 1}`}
-                    className={`w-full rounded-md border px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900 ${item.isSurcharge ? 'border-blue-200 bg-blue-50/60 font-medium text-blue-900' : 'border-gray-300'}`}
-                  />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={item.isSurcharge ? item.name : (productSearch[item.id] !== undefined ? productSearch[item.id] : item.name)}
+                      onChange={(e) => {
+                        if (item.isSurcharge) { updateLineItem(item.id, 'name', e.target.value); return; }
+                        updateLineItem(item.id, 'name', e.target.value);
+                        searchProducts(item.id, e.target.value);
+                      }}
+                      onFocus={() => { if (!item.isSurcharge && item.name) searchProducts(item.id, item.name); }}
+                      onBlur={() => setTimeout(() => setShowSuggestions(prev => ({ ...prev, [item.id]: false })), 150)}
+                      placeholder={item.isSurcharge ? 'Processing Fee (2.75%)' : `Item ${idx + 1} — type to search products`}
+                      className={`w-full rounded-md border px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900 ${item.isSurcharge ? 'border-blue-200 bg-blue-50/60 font-medium text-blue-900' : 'border-gray-300'}`}
+                    />
+                    {!item.isSurcharge && showSuggestions[item.id] && (suggestions[item.id] ?? []).length > 0 && (
+                      <div className="absolute top-full left-0 right-0 z-20 mt-1 rounded-xl border border-gray-200 bg-white shadow-lg overflow-hidden">
+                        {(suggestions[item.id] ?? []).map(p => (
+                          <button key={p.id} type="button"
+                            onMouseDown={() => selectProduct(item.id, p)}
+                            className="w-full flex items-center justify-between px-3 py-2.5 text-left hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0">
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{p.name}</p>
+                              {p.description && <p className="text-xs text-gray-400">{p.description}</p>}
+                            </div>
+                            <span className="text-xs font-semibold text-gray-600 ml-3 flex-shrink-0">{formatCents(p.price)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <input
                     type="text"
                     value={item.description}

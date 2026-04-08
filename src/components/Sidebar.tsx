@@ -18,6 +18,11 @@ import {
   Mail,
   UsersRound,
   Bell,
+  Package,
+  Receipt,
+  Link2,
+  RefreshCw,
+  DollarSign,
   ArrowLeft,
   Menu,
   X,
@@ -39,10 +44,17 @@ const menuItems = [
   { label: 'Home',          href: '/dashboard',              icon: LayoutDashboard },
   { label: 'Proposals',    href: '/dashboard/proposals',    icon: FileText },
   { label: 'Customers',    href: '/dashboard/customers',    icon: Users },
-  { label: 'Transactions', href: '/dashboard/transactions', icon: CreditCard },
   { label: 'Reports',      href: '/dashboard/reports',      icon: BarChart2 },
   { label: "What's New",   href: '/dashboard/updates',      icon: Megaphone },
   { label: 'Support',       href: '/dashboard/support',      icon: HelpCircle },
+];
+
+const paymentsItems = [
+  { label: 'Invoices',       href: '/dashboard/invoices/new',             icon: Receipt },
+  { label: 'Payment Links',  href: '/dashboard/payments/payment-links',   icon: Link2 },
+  { label: 'Transactions',   href: '/dashboard/transactions',             icon: CreditCard },
+  { label: 'Subscriptions',  href: '/dashboard/payments/subscriptions',   icon: RefreshCw },
+  { label: 'Payouts',        href: '/dashboard/payments/payouts',         icon: DollarSign },
 ];
 
 const settingsItems = [
@@ -58,11 +70,12 @@ export default function Sidebar({ venue }: SidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const isOnSettings = pathname.startsWith('/dashboard/settings');
   const [settingsOpen, setSettingsOpen] = useState(isOnSettings);
+  const isOnPayments = pathname.startsWith('/dashboard/payments') || pathname.startsWith('/dashboard/transactions') || pathname.startsWith('/dashboard/invoices');
+  const [paymentsOpen, setPaymentsOpen] = useState(isOnPayments);
 
-  // Auto-expand when navigating to a settings page, but allow manual toggle
-  useEffect(() => {
-    if (isOnSettings) setSettingsOpen(true);
-  }, [isOnSettings]);
+  // Auto-expand when navigating to relevant sections
+  useEffect(() => { if (isOnSettings) setSettingsOpen(true); }, [isOnSettings]);
+  useEffect(() => { if (isOnPayments) setPaymentsOpen(true); }, [isOnPayments]);
 
   // Close on route change
   useEffect(() => { setMobileOpen(false); }, [pathname]);
@@ -123,6 +136,71 @@ export default function Sidebar({ venue }: SidebarProps) {
             </Link>
           );
         })}
+
+        {/* Payments group — collapsible */}
+        <div>
+          <button
+            type="button"
+            onClick={() => setPaymentsOpen(v => !v)}
+            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              isOnPayments ? 'text-white' : 'text-gray-400 hover:text-white'
+            }`}
+            style={{ backgroundColor: isOnPayments ? '#354859' : undefined }}
+            onMouseEnter={(e) => { if (!isOnPayments) e.currentTarget.style.backgroundColor = '#2f3e4e'; }}
+            onMouseLeave={(e) => { if (!isOnPayments) e.currentTarget.style.backgroundColor = ''; }}
+          >
+            <div className="flex items-center gap-3">
+              <CreditCard size={18} className={isOnPayments ? 'text-white' : ''} />
+              <span>Payments</span>
+            </div>
+            <ChevronDown
+              size={14}
+              className={`transition-transform duration-200 flex-shrink-0 ${paymentsOpen ? 'rotate-180 text-white/60' : 'text-gray-500'}`}
+            />
+          </button>
+          {paymentsOpen && (
+            <div className="mt-0.5 ml-4 pl-3 border-l border-white/10 space-y-0.5">
+              {paymentsItems.map((sub) => {
+                const SubIcon = sub.icon;
+                const subActive = pathname === sub.href || pathname.startsWith(sub.href);
+                return (
+                  <Link
+                    key={sub.label}
+                    href={sub.href}
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+                      subActive ? 'text-white font-medium' : 'text-gray-400 hover:text-white'
+                    }`}
+                    style={{ backgroundColor: subActive ? '#354859' : undefined }}
+                    onMouseEnter={(e) => { if (!subActive) e.currentTarget.style.backgroundColor = '#2f3e4e'; }}
+                    onMouseLeave={(e) => { if (!subActive) e.currentTarget.style.backgroundColor = ''; }}
+                  >
+                    <SubIcon size={15} />
+                    <span>{sub.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Products */}
+        {(() => {
+          const active = isActive('/dashboard/products');
+          return (
+            <Link
+              href="/dashboard/products"
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                active ? 'text-white' : 'text-gray-400 hover:text-white'
+              }`}
+              style={{ backgroundColor: active ? '#354859' : undefined }}
+              onMouseEnter={(e) => { if (!active) e.currentTarget.style.backgroundColor = '#2f3e4e'; }}
+              onMouseLeave={(e) => { if (!active) e.currentTarget.style.backgroundColor = ''; }}
+            >
+              <Package size={18} className={active ? 'text-white' : ''} />
+              <span>Products</span>
+            </Link>
+          );
+        })()}
 
         {/* Settings group — fully collapsible row */}
         <div>
