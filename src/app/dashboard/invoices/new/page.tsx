@@ -5,11 +5,15 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Send, Save, Plus, Trash2 } from 'lucide-react';
 import { formatCents } from '@/lib/utils';
 
+const SURCHARGE_RATE = 0.0275; // 2.75%
+const SURCHARGE_ID = '__surcharge__';
+
 interface LineItem {
   id: string;
   name: string;
   description: string;
   amount: string;
+  isSurcharge?: boolean;
 }
 
 interface Installment {
@@ -40,6 +44,11 @@ function emptyLineItem(): LineItem {
   return { id: uid(), name: '', description: '', amount: '' };
 }
 
+function makeSurcharge(subtotalCents: number): LineItem {
+  const amt = ((subtotalCents * SURCHARGE_RATE) / 100).toFixed(2);
+  return { id: SURCHARGE_ID, name: 'Processing Fee (2.75%)', description: 'Credit card processing surcharge', amount: amt, isSurcharge: true };
+}
+
 export default function NewInvoicePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -47,7 +56,7 @@ export default function NewInvoicePage() {
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
-  const [lineItems, setLineItems] = useState<LineItem[]>([emptyLineItem()]);
+  const [lineItems, setLineItems] = useState<LineItem[]>([emptyLineItem(), makeSurcharge(0)]);
   const [paymentType, setPaymentType] = useState<'full' | 'installment' | 'subscription'>('full');
 
   const [installments, setInstallments] = useState<Installment[]>([
@@ -68,18 +77,48 @@ export default function NewInvoicePage() {
     if (email) setCustomerEmail(email);
   }, [searchParams]);
 
+  // Subtotal = all non-surcharge items
+  const subtotalCents = lineItems
+    .filter(i => !i.isSurcharge)
+    .reduce((sum, item) => {
+      const val = parseFloat(item.amount || '0');
+      return sum + (isNaN(val) ? 0 : Math.round(val * 100));
+    }, 0);
+
   function updateLineItem(id: string, field: keyof LineItem, value: string) {
-    setLineItems((prev) => prev.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
+    setLineItems((prev) => {
+      const updated = prev.map((item) => (item.id === id ? { ...item, [field]: value } : item));
+      // Recalculate surcharge when non-surcharge items change
+      if (id !== SURCHARGE_ID) {
+        const newSubtotal = updated
+          .filter(i => !i.isSurcharge)
+          .reduce((s, i) => { const v = parseFloat(i.amount || '0'); return s + (isNaN(v) ? 0 : Math.round(v * 100)); }, 0);
+        return updated.map(i => i.isSurcharge
+          ? { ...i, amount: ((newSubtotal * SURCHARGE_RATE) / 100).toFixed(2) }
+          : i
+        );
+      }
+      return updated;
+    });
   }
 
   function removeLineItem(id: string) {
     setLineItems((prev) => prev.filter((item) => item.id !== id));
   }
 
+  function addSurcharge() {
+    setLineItems(prev => {
+      if (prev.find(i => i.isSurcharge)) return prev;
+      return [...prev, makeSurcharge(subtotalCents)];
+    });
+  }
+
   const totalCents = lineItems.reduce((sum, item) => {
     const val = parseFloat(item.amount || '0');
     return sum + (isNaN(val) ? 0 : Math.round(val * 100));
   }, 0);
+
+  const hasSurcharge = lineItems.some(i => i.isSurcharge);
 
   function buildPaymentConfig() {
     if (paymentType === 'installment') {
@@ -211,20 +250,21 @@ export default function NewInvoicePage() {
 
             <div className="divide-y divide-gray-100">
               {lineItems.map((item, idx) => (
-                <div key={item.id} className="flex flex-col sm:grid sm:grid-cols-[1fr_1fr_120px_36px] gap-2 sm:gap-3 px-4 py-3">
+                <div key={item.id}
+                  className={`flex flex-col sm:grid sm:grid-cols-[1fr_1fr_120px_36px] gap-2 sm:gap-3 px-4 py-3 ${item.isSurcharge ? 'bg-blue-50/40' : ''}`}>
                   <input
                     type="text"
                     value={item.name}
                     onChange={(e) => updateLineItem(item.id, 'name', e.target.value)}
-                    placeholder={`Item ${idx + 1}`}
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
+                    placeholder={item.isSurcharge ? 'Processing Fee (2.75%)' : `Item ${idx + 1}`}
+                    className={`w-full rounded-md border px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900 ${item.isSurcharge ? 'border-blue-200 bg-blue-50/60 font-medium text-blue-900' : 'border-gray-300'}`}
                   />
                   <input
                     type="text"
                     value={item.description}
                     onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
-                    placeholder="Optional note..."
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
+                    placeholder={item.isSurcharge ? 'Credit card processing surcharge' : 'Optional note...'}
+                    className={`w-full rounded-md border px-3 py-2 text-sm placeholder:text-gray-400 focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900 ${item.isSurcharge ? 'border-blue-200 bg-blue-50/60 text-blue-700' : 'border-gray-300 text-gray-900'}`}
                   />
                   <div className="flex items-center gap-2">
                     <div className="relative flex-1 sm:flex-none sm:w-full">
@@ -236,14 +276,13 @@ export default function NewInvoicePage() {
                         value={item.amount}
                         onChange={(e) => updateLineItem(item.id, 'amount', e.target.value)}
                         placeholder="0.00"
-                        className="w-full rounded-md border border-gray-300 pl-6 pr-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
+                        className={`w-full rounded-md border pl-6 pr-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900 ${item.isSurcharge ? 'border-blue-200 bg-blue-50/60 font-medium' : 'border-gray-300'}`}
                       />
                     </div>
                     <button
                       type="button"
                       onClick={() => removeLineItem(item.id)}
-                      disabled={lineItems.length === 1}
-                      className="sm:hidden p-1.5 text-gray-400 hover:text-red-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      className="sm:hidden p-1.5 text-gray-400 hover:text-red-500 transition-colors"
                     >
                       <Trash2 size={15} />
                     </button>
@@ -251,8 +290,8 @@ export default function NewInvoicePage() {
                   <button
                     type="button"
                     onClick={() => removeLineItem(item.id)}
-                    disabled={lineItems.length === 1}
-                    className="hidden sm:block mt-1.5 p-1.5 text-gray-400 hover:text-red-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    className="hidden sm:block mt-1.5 p-1.5 text-gray-400 hover:text-red-500 transition-colors"
+                    title={item.isSurcharge ? 'Remove processing fee' : 'Remove item'}
                   >
                     <Trash2 size={15} />
                   </button>
@@ -260,21 +299,45 @@ export default function NewInvoicePage() {
               ))}
             </div>
 
-            {/* Footer: Add line + total */}
-            <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200">
-              <button
-                type="button"
-                onClick={() => setLineItems((prev) => [...prev, emptyLineItem()])}
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-900 hover:opacity-80 transition-opacity"
-              >
-                <Plus size={14} />
-                Add Line Item
-              </button>
-              <div className="flex items-center gap-3 text-sm">
-                <span className="text-gray-500">Total</span>
-                <span className="font-semibold text-gray-900 min-w-[80px] text-right">
-                  {totalCents > 0 ? formatCents(totalCents) : '$0.00'}
-                </span>
+            {/* Footer: Add line + subtotal + total */}
+            <div className="border-t border-gray-200 bg-gray-50">
+              <div className="flex items-center justify-between px-4 py-2.5">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setLineItems((prev) => {
+                      const nonSurcharge = prev.filter(i => !i.isSurcharge);
+                      const surcharge = prev.filter(i => i.isSurcharge);
+                      return [...nonSurcharge, emptyLineItem(), ...surcharge];
+                    })}
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-900 hover:opacity-80 transition-opacity"
+                  >
+                    <Plus size={14} />
+                    Add Line Item
+                  </button>
+                  {!hasSurcharge && (
+                    <button
+                      type="button"
+                      onClick={addSurcharge}
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors"
+                    >
+                      <Plus size={12} />
+                      Add 2.75% fee
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-col items-end gap-0.5 text-sm">
+                  {hasSurcharge && (
+                    <div className="flex items-center gap-3 text-gray-400">
+                      <span>Subtotal</span>
+                      <span className="min-w-[80px] text-right">{formatCents(subtotalCents)}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-3 font-semibold text-gray-900">
+                    <span>Total</span>
+                    <span className="min-w-[80px] text-right">{totalCents > 0 ? formatCents(totalCents) : '$0.00'}</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

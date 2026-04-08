@@ -376,55 +376,6 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* Billing Settings */}
-        <section className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-          <div className="flex items-center gap-3 border-b border-gray-100 px-6 py-4">
-            <Receipt size={18} className="text-gray-400" />
-            <h2 className="font-heading text-base font-semibold text-gray-900">Billing</h2>
-          </div>
-          <div className="px-6 py-5 space-y-4">
-            <div>
-              <p className="text-sm font-medium text-gray-900">Processing fee passed to clients</p>
-              <p className="mt-0.5 text-sm text-gray-500">
-                This percentage is added to the client&apos;s total at checkout to cover payment processing.
-                Set to 0 to absorb the fee yourself.
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="relative w-32">
-                <input
-                  type="number"
-                  min="0"
-                  max="99"
-                  step="0.01"
-                  value={feeInput}
-                  onChange={(e) => setFeeInput(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-3.5 pr-8 py-2.5 text-sm text-gray-900 focus:border-brand-900 focus:outline-none focus:bg-white transition-colors"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">%</span>
-              </div>
-              <button
-                onClick={saveServiceFee}
-                disabled={feeSaving}
-                className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-60"
-                style={{ backgroundColor: '#293745' }}
-              >
-                {feeSaving ? 'Saving...' : feeSaved ? 'Saved!' : 'Save'}
-              </button>
-            </div>
-            {venue.service_fee_rate > 0 && (
-              <p className="text-xs text-gray-400">
-                Currently charging {venue.service_fee_rate}% to clients on every invoice and proposal.
-              </p>
-            )}
-            {venue.service_fee_rate === 0 && (
-              <p className="text-xs text-gray-400">
-                No processing fee is currently passed to clients.
-              </p>
-            )}
-          </div>
-        </section>
-
         {/* Messaging Integration */}
         <section className="rounded-xl border border-gray-200 bg-white overflow-hidden">
           <div className="flex items-center gap-3 border-b border-gray-100 px-6 py-4">

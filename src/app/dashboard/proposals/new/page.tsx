@@ -78,6 +78,8 @@ export default function NewProposalPage() {
   const [customerPhone, setCustomerPhone] = useState('');
 
   const [priceDollars, setPriceDollars] = useState('');
+  const [includeSurcharge, setIncludeSurcharge] = useState(true);
+  const [surchargeOverride, setSurchargeOverride] = useState(''); // empty = auto
   const [paymentType, setPaymentType] = useState<'full' | 'installment' | 'subscription'>('full');
 
   const [installments, setInstallments] = useState<Installment[]>([
@@ -201,17 +203,17 @@ export default function NewProposalPage() {
   }
 
   function buildBody(asDraft: boolean) {
-    const price = Math.round(parseFloat(priceDollars || '0') * 100);
     return {
       templateId,
       customerName: customerName || undefined,
       customerEmail: customerEmail || undefined,
       customerPhone: customerPhone || undefined,
       ghlContactId: selectedCustomer?.id || undefined,
-      price,
+      price: pricePreview,
       paymentType,
       paymentConfig: buildPaymentConfig(),
       asDraft,
+      surchargeAmount: surchargeCents,
     };
   }
 
@@ -224,8 +226,7 @@ export default function NewProposalPage() {
       return;
     }
 
-    const price = Math.round(parseFloat(priceDollars || '0') * 100);
-    if (price <= 0) {
+    if (basePriceCents <= 0) {
       setError('Please enter a valid price.');
       return;
     }
@@ -280,7 +281,13 @@ export default function NewProposalPage() {
     }
   }
 
-  const pricePreview = Math.round(parseFloat(priceDollars || '0') * 100);
+  const basePriceCents = Math.round(parseFloat(priceDollars || '0') * 100);
+  const surchargeCents = includeSurcharge
+    ? surchargeOverride !== ''
+      ? Math.round(parseFloat(surchargeOverride || '0') * 100)
+      : Math.round(basePriceCents * 0.0275)
+    : 0;
+  const pricePreview = basePriceCents + surchargeCents;
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -479,25 +486,70 @@ export default function NewProposalPage() {
           )}
         </div>
 
-        {/* Price */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Total Price <span className="text-red-400">*</span>
-          </label>
-          <div className="relative w-48">
-            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={priceDollars}
-              onChange={(e) => setPriceDollars(e.target.value)}
-              placeholder="0.00"
-              className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
-            />
+        {/* Price + Surcharge */}
+        <div className="rounded-xl border border-gray-200 p-5 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Base Price <span className="text-red-400">*</span>
+            </label>
+            <div className="relative w-48">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={priceDollars}
+                onChange={(e) => setPriceDollars(e.target.value)}
+                placeholder="0.00"
+                className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
+              />
+            </div>
           </div>
-          {pricePreview > 0 && (
-            <p className="mt-1 text-xs text-gray-400">{formatCents(pricePreview)}</p>
+
+          {/* Surcharge row */}
+          <div className="rounded-lg border border-blue-100 bg-blue-50/40 p-3.5">
+            <div className="flex items-center justify-between mb-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={includeSurcharge}
+                  onChange={e => { setIncludeSurcharge(e.target.checked); setSurchargeOverride(''); }}
+                  className="rounded border-gray-300 text-brand-900"
+                />
+                Include 2.75% processing fee
+              </label>
+              {includeSurcharge && (
+                <span className="text-xs text-blue-600 font-medium">
+                  {formatCents(surchargeCents)} added
+                </span>
+              )}
+            </div>
+            {includeSurcharge && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">Override amount:</span>
+                <div className="relative w-32">
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={surchargeOverride}
+                    onChange={e => setSurchargeOverride(e.target.value)}
+                    placeholder={(basePriceCents * 0.0275 / 100).toFixed(2)}
+                    className="w-full rounded-lg border border-blue-200 bg-white pl-5 pr-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:ring-1 focus:ring-brand-900/20 outline-none"
+                  />
+                </div>
+                <span className="text-xs text-gray-400">Leave blank for auto (2.75%)</span>
+              </div>
+            )}
+          </div>
+
+          {/* Total */}
+          {basePriceCents > 0 && (
+            <div className="flex items-center justify-between pt-1 border-t border-gray-100">
+              <span className="text-sm font-semibold text-gray-700">Total charged to client</span>
+              <span className="text-base font-bold text-gray-900">{formatCents(pricePreview)}</span>
+            </div>
           )}
         </div>
 
