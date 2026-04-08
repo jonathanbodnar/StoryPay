@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRef } from 'react';
 import {
   Settings,
   LinkIcon,
@@ -10,10 +11,11 @@ import {
   MessageSquare,
   Loader2,
   ExternalLink,
-  Receipt,
   Palette,
   Save,
   Upload,
+  ImageIcon,
+  X,
 } from 'lucide-react';
 
 interface VenueInfo {
@@ -53,6 +55,9 @@ export default function SettingsPage() {
   const [feeInput, setFeeInput] = useState('2.75');
   const [brandSaving, setBrandSaving] = useState(false);
   const [brandSaved, setBrandSaved] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoError, setLogoError] = useState('');
+  const logoFileRef = useRef<HTMLInputElement>(null);
   const [brand, setBrand] = useState({
     brand_logo_url: '',
     brand_tagline: '',
@@ -117,6 +122,34 @@ export default function SettingsPage() {
 
   const upd = (k: keyof typeof brand) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setBrand(p => ({ ...p, [k]: e.target.value }));
+
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoUploading(true);
+    setLogoError('');
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/venues/upload-logo', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) { setLogoError(data.error || 'Upload failed'); return; }
+      setBrand(p => ({ ...p, brand_logo_url: data.url }));
+      // Also persist immediately
+      await fetch('/api/venues/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brand_logo_url: data.url }),
+      });
+      setBrandSaved(true);
+      setTimeout(() => setBrandSaved(false), 3000);
+    } catch {
+      setLogoError('Upload failed. Please try again.');
+    } finally {
+      setLogoUploading(false);
+      if (e.target) e.target.value = '';
+    }
+  }
 
   if (loading) {
     return (
@@ -186,21 +219,79 @@ export default function SettingsPage() {
 
           <div className="px-6 py-6 space-y-6">
 
-            {/* Logo */}
+            {/* Logo Upload */}
             <div>
-              <label className={LABEL}>Logo URL</label>
-              <div className="flex gap-3 items-start">
-                <div className="flex-1">
-                  <input type="url" value={brand.brand_logo_url} onChange={upd('brand_logo_url')}
-                    placeholder="https://yourvenue.com/logo.png" className={INPUT} />
-                  <p className="text-[11px] text-gray-400 mt-1">Paste a direct link to your logo image (PNG or JPG).</p>
+              <label className={LABEL}>Venue Logo</label>
+              <p className="text-[11px] text-gray-400 mb-3">
+                Your logo appears on all proposals, invoices, and client-facing documents. PNG, JPG, or SVG — max 5MB.
+              </p>
+
+              <div className="flex items-start gap-4">
+                {/* Preview */}
+                <div className="flex-shrink-0 h-24 w-40 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden relative">
+                  {brand.brand_logo_url ? (
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={brand.brand_logo_url}
+                        alt="Logo preview"
+                        className="h-full w-full object-contain p-2"
+                        onError={e => (e.currentTarget.style.display = 'none')}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setBrand(p => ({ ...p, brand_logo_url: '' }))}
+                        className="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white opacity-80 hover:opacity-100 transition-opacity"
+                      >
+                        <X size={10} />
+                      </button>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center gap-1 text-gray-300">
+                      <ImageIcon size={24} />
+                      <span className="text-[10px]">No logo</span>
+                    </div>
+                  )}
                 </div>
-                {brand.brand_logo_url && (
-                  <div className="flex-shrink-0 h-16 w-32 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={brand.brand_logo_url} alt="Logo preview" className="h-full w-full object-contain p-2" onError={e => (e.currentTarget.style.display = 'none')} />
+
+                {/* Upload controls */}
+                <div className="flex-1 space-y-2.5">
+                  <input
+                    ref={logoFileRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/svg+xml,image/webp"
+                    className="hidden"
+                    onChange={handleLogoUpload}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => logoFileRef.current?.click()}
+                    disabled={logoUploading}
+                    className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all disabled:opacity-50 shadow-sm"
+                  >
+                    {logoUploading ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+                    {logoUploading ? 'Uploading...' : brand.brand_logo_url ? 'Replace Logo' : 'Upload Logo'}
+                  </button>
+
+                  {/* URL fallback */}
+                  <div>
+                    <p className="text-[11px] text-gray-400 mb-1">Or paste a URL directly:</p>
+                    <input
+                      type="url"
+                      value={brand.brand_logo_url}
+                      onChange={upd('brand_logo_url')}
+                      placeholder="https://yourvenue.com/logo.png"
+                      className={INPUT}
+                    />
                   </div>
-                )}
+
+                  {logoError && (
+                    <p className="text-xs text-red-500">{logoError}</p>
+                  )}
+                  {logoUploading && (
+                    <p className="text-xs text-gray-400">Uploading and saving your logo...</p>
+                  )}
+                </div>
               </div>
             </div>
 
