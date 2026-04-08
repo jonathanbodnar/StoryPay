@@ -124,31 +124,27 @@ export default function Sidebar({ venue }: SidebarProps) {
           );
         })}
 
-        {/* Settings group — collapsible */}
+        {/* Settings group — fully collapsible row */}
         <div>
-          <div
-            className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(v => !v)}
+            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
               isOnSettings ? 'text-white' : 'text-gray-400 hover:text-white'
             }`}
             style={{ backgroundColor: isOnSettings ? '#354859' : undefined }}
             onMouseEnter={(e) => { if (!isOnSettings) e.currentTarget.style.backgroundColor = '#2f3e4e'; }}
             onMouseLeave={(e) => { if (!isOnSettings) e.currentTarget.style.backgroundColor = ''; }}
           >
-            <Link href="/dashboard/settings" className="flex items-center gap-3 flex-1">
+            <div className="flex items-center gap-3">
               <Settings size={18} className={isOnSettings ? 'text-white' : ''} />
               <span>Settings</span>
-            </Link>
-            <button
-              type="button"
-              onClick={() => setSettingsOpen(v => !v)}
-              className="flex items-center justify-center h-5 w-5 rounded hover:bg-white/10 transition-colors flex-shrink-0 ml-1"
-            >
-              <ChevronDown
-                size={14}
-                className={`transition-transform duration-200 ${settingsOpen ? 'rotate-180 text-white/60' : 'text-gray-500'}`}
-              />
-            </button>
-          </div>
+            </div>
+            <ChevronDown
+              size={14}
+              className={`transition-transform duration-200 flex-shrink-0 ${settingsOpen ? 'rotate-180 text-white/60' : 'text-gray-500'}`}
+            />
+          </button>
 
           {/* Sub-items */}
           {settingsOpen && (
