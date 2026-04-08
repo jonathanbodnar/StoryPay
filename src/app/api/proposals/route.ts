@@ -256,8 +256,8 @@ export async function POST(request: NextRequest) {
     console.log('[proposal-send] GHL not connected — sending direct email');
   }
 
-  // Direct email fallback when GHL not connected
-  if (!venue?.ghl_connected && customerEmail) {
+  // Always send direct email — ensures delivery regardless of GHL status
+  if (customerEmail) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
     const proposalUrl = `${appUrl}/proposal/${publicToken}`;
     const clientFirst = customerName.split(' ')[0];

@@ -57,8 +57,12 @@ export async function sendEmail({
         }),
       });
       const data = await res.json();
-      if (res.ok) return { success: true };
-      console.error('[email] Resend error:', data);
+      if (res.ok) {
+        console.log(`[email] Resend sent to ${to}, id:`, data.id);
+        return { success: true };
+      }
+      console.error('[email] Resend failed:', JSON.stringify(data));
+      return { success: false, error: JSON.stringify(data) };
     } catch (err) {
       console.error('[email] Resend exception:', err);
     }

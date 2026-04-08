@@ -192,20 +192,18 @@ export async function POST(request: NextRequest) {
     const brandColor = (venue as { brand_color?: string })?.brand_color || '#293745';
     const amountStr = `$${((price || 0) / 100).toFixed(2)}`;
 
-    // Only send direct email if GHL is NOT connected (avoid double-sending)
-    if (!venue?.ghl_connected) {
-      await directSendEmail({
-        to: customerEmail,
-        subject: `Invoice from ${venue?.name || 'Your Venue'}`,
-        html: invoiceEmailHtml({
-          venueName: venue?.name || 'Your Venue',
-          clientFirstName: clientFirst,
-          invoiceUrl,
-          amount: amountStr,
-          brandColor,
-        }),
-      });
-    }
+    // Always send direct email — ensures delivery regardless of GHL status
+    await directSendEmail({
+      to: customerEmail,
+      subject: `Invoice from ${venue?.name || 'Your Venue'}`,
+      html: invoiceEmailHtml({
+        venueName: venue?.name || 'Your Venue',
+        clientFirstName: clientFirst,
+        invoiceUrl,
+        amount: amountStr,
+        brandColor,
+      }),
+    });
   }
 
   return NextResponse.json(proposal, { status: 201 });
