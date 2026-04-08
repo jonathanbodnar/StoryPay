@@ -42,7 +42,6 @@ interface SidebarProps {
 const menuItems = [
   { label: 'Ask AI',        href: '/dashboard/ai',           icon: Sparkles },
   { label: 'Home',          href: '/dashboard',              icon: LayoutDashboard },
-  { label: 'Proposals',    href: '/dashboard/proposals',    icon: FileText },
   { label: 'Customers',    href: '/dashboard/customers',    icon: Users },
   { label: 'Reports',      href: '/dashboard/reports',      icon: BarChart2 },
   { label: "What's New",   href: '/dashboard/updates',      icon: Megaphone },
@@ -50,6 +49,7 @@ const menuItems = [
 ];
 
 const paymentsItems = [
+  { label: 'Proposals',      href: '/dashboard/proposals',                icon: FileText },
   { label: 'Invoices',       href: '/dashboard/invoices/new',             icon: Receipt },
   { label: 'Payment Links',  href: '/dashboard/payments/payment-links',   icon: Link2 },
   { label: 'Transactions',   href: '/dashboard/transactions',             icon: CreditCard },
@@ -70,7 +70,7 @@ export default function Sidebar({ venue }: SidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const isOnSettings = pathname.startsWith('/dashboard/settings');
   const [settingsOpen, setSettingsOpen] = useState(isOnSettings);
-  const isOnPayments = pathname.startsWith('/dashboard/payments') || pathname.startsWith('/dashboard/transactions') || pathname.startsWith('/dashboard/invoices');
+  const isOnPayments = pathname.startsWith('/dashboard/payments') || pathname.startsWith('/dashboard/transactions') || pathname.startsWith('/dashboard/invoices') || pathname.startsWith('/dashboard/proposals');
   const [paymentsOpen, setPaymentsOpen] = useState(isOnPayments);
 
   // Auto-expand when navigating to relevant sections
