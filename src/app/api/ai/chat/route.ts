@@ -196,14 +196,19 @@ Friendly, professional, calm, helpful, clear. Not robotic. Not salesy.`;
 
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+  // Check if any message contains an image (vision request)
+  const hasImage = messages.some((m: { role: string; content: unknown }) =>
+    Array.isArray(m.content) && m.content.some((c: { type: string }) => c.type === 'image_url')
+  );
+
   try {
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: hasImage ? 'gpt-4o' : 'gpt-4o-mini', // use gpt-4o for vision
       messages: [
         { role: 'system', content: systemPrompt },
         ...messages.slice(-20),
       ],
-      max_tokens: 600,
+      max_tokens: hasImage ? 800 : 600,
       temperature: 0.5,
     });
 
