@@ -22,13 +22,10 @@ export default async function DashboardLayout({
   return (
     <div className="min-h-screen bg-white">
       <Sidebar venue={{ id: venue.id, name: venue.name, ghl_location_id: venue.ghl_location_id }} />
-      <div className="lg:ml-[240px]">
+      <div className="lg:ml-[220px]">
         <AnnouncementTicker />
-        {/* Desktop: offset by sidebar width. Mobile: add top padding for mobile header bar */}
-        <main className="min-h-screen pt-14 lg:pt-10 p-4 sm:p-6 lg:p-10">
-          <div className="p-1">
-            {children}
-          </div>
+        <main className="min-h-screen pt-14 lg:pt-0 p-6 sm:p-8 lg:p-10 max-w-7xl mx-auto">
+          {children}
         </main>
       </div>
       <AskAIWidget />
