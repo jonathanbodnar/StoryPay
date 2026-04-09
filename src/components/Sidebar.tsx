@@ -79,12 +79,12 @@ export default function Sidebar({ venue }: SidebarProps) {
     active ? { backgroundColor: '#1b1b1b' } : {};
 
   const subItem = (active: boolean) =>
-    `flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition-colors ${
-      active ? 'text-white font-medium' : 'text-gray-400 hover:text-gray-800'
+    `flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${
+      active ? 'font-semibold' : 'text-gray-400 hover:text-gray-800'
     }`;
 
   const subItemStyle = (active: boolean): React.CSSProperties =>
-    active ? { backgroundColor: '#1b1b1b' } : {};
+    active ? { color: '#1b1b1b' } : {};
 
   const groupBtn = (active: boolean) =>
     `w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
