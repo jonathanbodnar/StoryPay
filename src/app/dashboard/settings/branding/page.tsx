@@ -4,12 +4,12 @@ import { useEffect, useState, useRef } from 'react';
 import { Loader2, Save, Upload, ImageIcon, X, CheckCircle2, FileText, Link2, FileBadge, Mail } from 'lucide-react';
 
 const COLOR_PRESETS = [
-  { label: 'Default Dark',   primary: '#1b1b1b', bg: '#ffffff', btnText: '#ffffff' },
-  { label: 'Ocean Blue',     primary: '#0ea5e9', bg: '#f0f9ff', btnText: '#ffffff' },
-  { label: 'Forest Green',   primary: '#16a34a', bg: '#f0fdf4', btnText: '#ffffff' },
-  { label: 'Royal Purple',   primary: '#7c3aed', bg: '#faf5ff', btnText: '#ffffff' },
-  { label: 'Sunset Orange',  primary: '#ea580c', bg: '#fff7ed', btnText: '#ffffff' },
-  { label: 'Rose Gold',      primary: '#e11d48', bg: '#fff1f2', btnText: '#ffffff' },
+  { label: 'Ivory & Gold',       primary: '#C6A96B', bg: '#fdfbf7', btnText: '#ffffff' },
+  { label: 'Sage & Stone',       primary: '#7A8A6B', bg: '#f7f8f5', btnText: '#ffffff' },
+  { label: 'Black & Champagne',  primary: '#1A1A1A', bg: '#faf8f4', btnText: '#ffffff' },
+  { label: 'Blush & Cream',      primary: '#D8A7A3', bg: '#fdf7f6', btnText: '#ffffff' },
+  { label: 'Coastal Blue',       primary: '#3A5A6B', bg: '#f4f7f9', btnText: '#ffffff' },
+  { label: 'Warm Earth',         primary: '#C46A4A', bg: '#fdf6f3', btnText: '#ffffff' },
 ];
 
 interface BrandState {
