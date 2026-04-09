@@ -27,22 +27,15 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Headings: Playfair Display, thin weight — used only with .font-heading class */
+/* Everything uses Open Sans */
+*, *::before, *::after {
+  font-family: var(--font-body) !important;
+}
+
 .font-heading {
-  font-family: var(--font-heading);
-  font-weight: 300;
-}
-
-/* Page titles in dashboard */
-h1.font-heading {
-  font-size: 1.5rem;
-  font-weight: 300;
+  font-family: var(--font-body) !important;
+  font-weight: 600;
   letter-spacing: -0.01em;
-  color: #1a1a1a;
-}
-
-p, span, div, input, textarea, select, button, label, a {
-  font-family: var(--font-body);
 }
 
 ::-webkit-scrollbar {
