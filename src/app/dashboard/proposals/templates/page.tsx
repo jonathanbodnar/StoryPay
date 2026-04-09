@@ -161,10 +161,12 @@ export default function TemplatesPage() {
 
       {/* Preview Modal */}
       {preview && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 backdrop-blur-sm overflow-y-auto py-8 px-4"
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 sm:p-8"
           onClick={e => { if (e.target === e.currentTarget) setPreview(null); }}>
-          <div className="relative w-full max-w-3xl bg-white rounded-2xl shadow-2xl flex flex-col">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white rounded-t-2xl z-10">
+          {/* Modal: fixed height, overflow-hidden clips content behind header */}
+          <div className="relative w-full max-w-3xl bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden" style={{ maxHeight: '90vh' }}>
+            {/* Header — never scrolls */}
+            <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-white rounded-t-2xl z-10">
               <div>
                 <h2 className="text-base font-bold text-gray-900">{preview.name}</h2>
                 <p className="text-xs text-gray-400 mt-0.5">{preview.field_count} signing field{preview.field_count !== 1 ? 's' : ''} · Created {formatDate(preview.created_at)}</p>
@@ -180,7 +182,8 @@ export default function TemplatesPage() {
                 </button>
               </div>
             </div>
-            <div className="px-8 py-8 overflow-y-auto">
+            {/* Scrollable body — flex-1 ensures it fills remaining height */}
+            <div className="flex-1 overflow-y-auto px-8 py-8">
               {preview.content ? (
                 <>
                   <style>{`
