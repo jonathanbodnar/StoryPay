@@ -203,16 +203,14 @@ export default function Sidebar({ venue }: SidebarProps) {
       </nav>
 
       {/* Footer */}
-      <div className="px-4 py-4 border-t border-gray-100 space-y-2">
+      <div className="px-4 py-4 border-t border-gray-100">
         <button
           onClick={() => window.dispatchEvent(new Event('open-ask-ai'))}
           className="flex items-center gap-2 text-gray-400 hover:text-gray-700 transition-colors text-sm w-full"
         >
           <HelpCircle size={16} />
-          <span>Help Desk</span>
+          <span>Support</span>
         </button>
-        <p className="text-xs font-medium text-gray-700 truncate">{venue.name}</p>
-        <p className="text-[10px] text-gray-400">&copy; StoryVenue 2026</p>
       </div>
     </div>
   );
