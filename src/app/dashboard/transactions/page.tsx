@@ -46,7 +46,7 @@ interface Subscription {
 
 const tabs: { key: TabKey; label: string }[] = [
   { key: 'charges', label: 'Charges' },
-  { key: 'schedules', label: 'Payment Schedules' },
+  { key: 'schedules', label: 'Installments' },
   { key: 'subscriptions', label: 'Subscriptions' },
 ];
 
@@ -77,7 +77,7 @@ export default function TransactionsPage() {
     <div>
       <div className="mb-8">
         <h1 className="font-heading text-2xl font-semibold text-gray-900">Transactions</h1>
-        <p className="mt-1 text-sm text-gray-500">Payment history and schedules</p>
+        <p className="mt-1 text-sm text-gray-500">Payment history and installments</p>
       </div>
 
       {/* Tabs */}
@@ -213,7 +213,7 @@ export default function TransactionsPage() {
                 {schedules.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-5 py-8 text-center text-gray-400">
-                      No payment schedules yet
+                      No installments yet
                     </td>
                   </tr>
                 ) : (
