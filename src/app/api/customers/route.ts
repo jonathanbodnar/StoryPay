@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { listCustomers, createCustomer } from '@/lib/lunarpay';
-import { ghlRequest } from '@/lib/ghl';
+import { ghlRequest, refreshAccessToken } from '@/lib/ghl';
 
 export async function GET(request: NextRequest) {
   const cookieStore = await cookies();
@@ -11,27 +11,48 @@ export async function GET(request: NextRequest) {
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('lunarpay_secret_key, ghl_connected, ghl_access_token, ghl_location_id')
+    .select('lunarpay_secret_key, ghl_connected, ghl_access_token, ghl_refresh_token, ghl_location_id')
     .eq('id', venueId)
     .single();
 
   if (!venue) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
 
+  // Auto-refresh GHL token if connected
+  let ghlToken = venue.ghl_access_token;
+  if (venue.ghl_connected && venue.ghl_refresh_token) {
+    try {
+      const refreshed = await refreshAccessToken(venue.ghl_refresh_token);
+      if (refreshed.access_token) {
+        ghlToken = refreshed.access_token;
+        await supabaseAdmin.from('venues').update({
+          ghl_access_token:  refreshed.access_token,
+          ghl_refresh_token: refreshed.refresh_token || venue.ghl_refresh_token,
+        }).eq('id', venueId);
+      }
+    } catch (err) {
+      console.error('[customers] GHL token refresh failed:', err);
+      // Use existing token and hope it still works
+    }
+  }
+
   const search   = request.nextUrl.searchParams.get('search') || '';
   const page     = parseInt(request.nextUrl.searchParams.get('page') || '1', 10);
   const limit    = parseInt(request.nextUrl.searchParams.get('limit') || '100', 10);
+
+  console.log(`[customers] venueId=${venueId} ghl_connected=${venue.ghl_connected} ghl_location=${venue.ghl_location_id} has_token=${!!venue.ghl_access_token} has_lp=${!!venue.lunarpay_secret_key}`);
 
   const merged: Record<string, unknown>[] = [];
   const seenEmails = new Set<string>();
 
   // ── Pull from GHL (primary source for contact info) ──────────────────────
-  if (venue.ghl_connected && venue.ghl_access_token && venue.ghl_location_id) {
+  if (venue.ghl_connected && ghlToken && venue.ghl_location_id) {
     try {
       const ghlResult = await ghlRequest(
         `/contacts/?locationId=${venue.ghl_location_id}&query=${encodeURIComponent(search)}&limit=${limit}`,
-        venue.ghl_access_token,
+        ghlToken,
         { locationId: venue.ghl_location_id }
       );
+      console.log(`[customers] GHL returned ${(ghlResult.contacts||[]).length} contacts for location ${venue.ghl_location_id}`);
       for (const c of ghlResult.contacts || []) {
         const email = ((c.email as string) || '').toLowerCase();
         const id    = c.id as string;
