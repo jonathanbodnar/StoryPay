@@ -17,7 +17,7 @@ const SURCHARGE_RATE = 0.0275;
 const SURCHARGE_ID   = '__surcharge__';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type Mode        = 'proposal' | 'invoice' | 'both';
+type Mode        = 'proposal' | 'invoice';
 type PaymentType = 'full' | 'installment' | 'subscription';
 
 interface Customer  { id: number; name: string; email: string; phone?: string; }
@@ -82,7 +82,7 @@ function LivePreview({
         </div>
 
         {/* Contract preview */}
-        {(mode === 'proposal' || mode === 'both') && contractHtml && (
+        {(mode === 'proposal') && contractHtml && (
           <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 max-h-32 overflow-hidden relative">
             <div className="text-xs text-gray-600 leading-relaxed" dangerouslySetInnerHTML={{ __html: contractHtml }} />
             <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-gray-50" />
@@ -146,7 +146,7 @@ export default function NewProposalInvoicePage() {
   const searchParams = useSearchParams();
 
   // Mode
-  const [mode, setMode] = useState<Mode>('both');
+  const [mode, setMode] = useState<Mode>('proposal');
 
   // Customer
   const [customerMode, setCustomerMode] = useState<'search'|'new'>('search');
@@ -297,7 +297,7 @@ export default function NewProposalInvoicePage() {
     setError('');
     if (!clientEmail.trim() || !clientName.trim()) { setError('Client name and email are required.'); return; }
     if (totalCents <= 0) { setError('Please add at least one line item with an amount.'); return; }
-    if ((mode==='proposal'||mode==='both') && !selectedTemplate && !contractHtml) {
+    if (mode==='proposal' && !selectedTemplate && !contractHtml) {
       if (!asDraft) { setError('Please select or create a contract for this proposal.'); return; }
     }
 
@@ -317,7 +317,7 @@ export default function NewProposalInvoicePage() {
       }
 
       // If proposal/both — use proposal API with template
-      if ((mode==='proposal'||mode==='both') && selectedTemplate) {
+      if (mode==='proposal' && selectedTemplate) {
         const res = await fetch('/api/proposals', {
           method: 'POST',
           headers: {'Content-Type':'application/json'},
@@ -396,11 +396,10 @@ export default function NewProposalInvoicePage() {
               <p className="text-sm font-semibold text-gray-900">Document Type</p>
             </div>
             <div className="px-5 py-4">
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2 max-w-sm">
                 {([
-                  {key:'proposal',label:'Proposal',desc:'Contract + payment'},
-                  {key:'invoice', label:'Invoice',  desc:'Payment only'},
-                  {key:'both',   label:'Both',      desc:'Contract + invoice'},
+                  {key:'proposal',label:'Proposal',desc:'Contract → sign → pay'},
+                  {key:'invoice', label:'Invoice',  desc:'Itemized bill → pay directly'},
                 ] as {key:Mode;label:string;desc:string}[]).map(m=>(
                   <button key={m.key} type="button" onClick={()=>setMode(m.key)}
                     className={`rounded-xl border-2 p-3 text-left transition-all ${mode===m.key?'border-gray-900 bg-gray-50':'border-gray-200 hover:border-gray-300'}`}>
@@ -483,8 +482,8 @@ export default function NewProposalInvoicePage() {
             </div>
           </div>
 
-          {/* Contract (proposal/both modes) */}
-          {(mode==='proposal'||mode==='both') && (
+          {/* Contract (proposal mode) */}
+          {mode==='proposal' && (
             <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
                 <p className="text-sm font-semibold text-gray-900">Contract / Proposal</p>

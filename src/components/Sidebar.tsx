@@ -24,11 +24,9 @@ const menuItems = [
 ];
 
 const paymentsItems = [
-  { label: 'New Proposal & Invoice', href: '/dashboard/payments/new', icon: Plus },
+  { label: 'New',           href: '/dashboard/payments/new',          icon: Plus },
   { label: 'Proposals',     href: '/dashboard/proposals',              icon: FileText },
-  { label: 'Invoices',      href: '/dashboard/invoices/new',           icon: Receipt },
-  // { label: 'Payment Links', href: '/dashboard/payments/payment-links', icon: Link2 }, // hidden
-  { label: 'Subscriptions', href: '/dashboard/payments/subscriptions', icon: RefreshCw },
+  { label: 'Transactions',  href: '/dashboard/transactions',           icon: CreditCard },
   // { label: 'Payouts', href: '/dashboard/payments/payouts', icon: DollarSign }, // hidden for now
 ];
 
