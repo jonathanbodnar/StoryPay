@@ -199,7 +199,7 @@ export default function Sidebar({ venue }: SidebarProps) {
   return (
     <>
       {/* Mobile top bar */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 h-14 border-b border-gray-100" style={{ backgroundColor: '#fafaf9' }}>
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 h-14" style={{ backgroundColor: '#fafaf9', borderBottom: '1.5px solid #e5e3df' }}>
         <Image src="/storyvenue-dark-logo.png" alt="StoryPay" width={90} height={22} />
         <button onClick={() => setMobileOpen(v => !v)} className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 transition-colors">
           {mobileOpen ? <X size={20} /> : <Menu size={20} />}
@@ -210,12 +210,12 @@ export default function Sidebar({ venue }: SidebarProps) {
       {mobileOpen && <div className="lg:hidden fixed inset-0 z-40 bg-black/20" onClick={() => setMobileOpen(false)} />}
 
       {/* Mobile drawer */}
-      <aside className={`lg:hidden fixed top-0 left-0 bottom-0 z-50 w-[240px] border-r border-gray-100 transition-transform duration-300 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`} style={{ backgroundColor: '#fafaf9' }}>
+      <aside className={`lg:hidden fixed top-0 left-0 bottom-0 z-50 w-[280px] transition-transform duration-300 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`} style={{ backgroundColor: '#fafaf9', borderRight: '1.5px solid #e5e3df' }}>
         <NavContent />
       </aside>
 
       {/* Desktop sidebar */}
-      <aside className="hidden lg:block fixed left-0 top-0 bottom-0 w-[220px] border-r border-gray-100" style={{ backgroundColor: '#fafaf9' }}>
+      <aside className="hidden lg:block fixed left-0 top-0 bottom-0 w-[260px]" style={{ backgroundColor: '#fafaf9', borderRight: '1.5px solid #e5e3df' }}>
         <NavContent />
       </aside>
     </>
