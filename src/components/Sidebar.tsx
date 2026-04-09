@@ -26,7 +26,7 @@ const menuItems = [
 const paymentsItems = [
   { label: 'Proposals',     href: '/dashboard/proposals',              icon: FileText },
   { label: 'Invoices',      href: '/dashboard/invoices/new',           icon: Receipt },
-  { label: 'Payment Links', href: '/dashboard/payments/payment-links', icon: Link2 },
+  // { label: 'Payment Links', href: '/dashboard/payments/payment-links', icon: Link2 }, // hidden
   { label: 'Transactions',  href: '/dashboard/transactions',           icon: CreditCard },
   { label: 'Subscriptions', href: '/dashboard/payments/subscriptions', icon: RefreshCw },
   // { label: 'Payouts', href: '/dashboard/payments/payouts', icon: DollarSign }, // hidden for now
@@ -165,16 +165,7 @@ export default function Sidebar({ venue }: SidebarProps) {
           )}
         </div>
 
-        {/* Products */}
-        {(() => {
-          const active = isActive('/dashboard/products');
-          return (
-            <Link href="/dashboard/products" className={navItem(active)} style={navItemStyle(active)}>
-              <Package size={16} />
-              <span>Products</span>
-            </Link>
-          );
-        })()}
+        {/* Products — hidden for now */}
 
         {/* Settings collapsible */}
         <div>
