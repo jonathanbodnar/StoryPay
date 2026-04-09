@@ -4,12 +4,13 @@ import { useEffect, useState, useRef } from 'react';
 import { Loader2, Save, Upload, ImageIcon, X, CheckCircle2, FileText, Link2, FileBadge, Mail } from 'lucide-react';
 
 const COLOR_PRESETS = [
-  { label: 'Ivory & Gold',       primary: '#C6A96B', bg: '#fdfbf7', btnText: '#ffffff' },
-  { label: 'Sage & Stone',       primary: '#7A8A6B', bg: '#f7f8f5', btnText: '#ffffff' },
-  { label: 'Black & Champagne',  primary: '#1A1A1A', bg: '#faf8f4', btnText: '#ffffff' },
-  { label: 'Blush & Cream',      primary: '#D8A7A3', bg: '#fdf7f6', btnText: '#ffffff' },
-  { label: 'Coastal Blue',       primary: '#3A5A6B', bg: '#f4f7f9', btnText: '#ffffff' },
-  { label: 'Warm Earth',         primary: '#C46A4A', bg: '#fdf6f3', btnText: '#ffffff' },
+  { label: 'Default',            primary: '#1b1b1b', bg: '#ffffff', btnText: '#ffffff' },
+  { label: 'Ivory & Gold',       primary: '#C6A96B', bg: '#ffffff', btnText: '#ffffff' },
+  { label: 'Sage & Stone',       primary: '#7A8A6B', bg: '#ffffff', btnText: '#ffffff' },
+  { label: 'Black & Champagne',  primary: '#1A1A1A', bg: '#ffffff', btnText: '#ffffff' },
+  { label: 'Blush & Cream',      primary: '#D8A7A3', bg: '#ffffff', btnText: '#ffffff' },
+  { label: 'Coastal Blue',       primary: '#3A5A6B', bg: '#ffffff', btnText: '#ffffff' },
+  { label: 'Warm Earth',         primary: '#C46A4A', bg: '#ffffff', btnText: '#ffffff' },
 ];
 
 interface BrandState {
@@ -157,7 +158,7 @@ export default function BrandingPage() {
   }, []);
 
   function applyPreset(p: typeof COLOR_PRESETS[0]) {
-    setBrand(b => ({ ...b, primary: p.primary, bg: p.bg, btnText: p.btnText }));
+    setBrand(b => ({ ...b, primary: p.primary, bg: '#ffffff', btnText: p.btnText }));
   }
 
   function upd(k: keyof BrandState) {

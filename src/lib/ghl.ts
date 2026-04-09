@@ -33,13 +33,41 @@ export async function sendSms(
   contactId: string,
   message: string
 ) {
+  // First create/get a conversation, then send SMS via that conversation
+  // This uses GHL's messaging API which routes through the sub-account's A2P phone
+  try {
+    // Get or create conversation
+    const convRes = await ghlRequest(
+      `/conversations/search?locationId=${locationId}&contactId=${contactId}&limit=1`,
+      accessToken,
+      { locationId }
+    );
+    let conversationId = convRes?.conversations?.[0]?.id;
+
+    if (!conversationId) {
+      const newConv = await ghlRequest('/conversations/', accessToken, {
+        method: 'POST',
+        body: { locationId, contactId },
+        locationId,
+      });
+      conversationId = newConv?.conversation?.id || newConv?.id;
+    }
+
+    if (conversationId) {
+      return ghlRequest('/conversations/messages', accessToken, {
+        method: 'POST',
+        body: { type: 'SMS', conversationId, message, locationId },
+        locationId,
+      });
+    }
+  } catch {
+    // Fallback to direct SMS
+  }
+
+  // Direct fallback
   return ghlRequest('/conversations/messages', accessToken, {
     method: 'POST',
-    body: {
-      type: 'SMS',
-      contactId,
-      message,
-    },
+    body: { type: 'SMS', contactId, message, locationId },
     locationId,
   });
 }

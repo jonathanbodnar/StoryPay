@@ -79,15 +79,21 @@ export function proposalEmailHtml({
   clientFirstName,
   proposalUrl,
   brandColor = '#1b1b1b',
+  logoUrl,
 }: {
   venueName: string;
   clientFirstName: string;
   proposalUrl: string;
   brandColor?: string;
+  logoUrl?: string;
 }): string {
+  const logoHtml = logoUrl
+    ? `<img src="${logoUrl}" alt="${venueName}" style="height:40px;object-fit:contain;margin-bottom:8px;display:block">`
+    : '';
   return `
     <div style="font-family:'Open Sans',Arial,sans-serif;max-width:600px;margin:0 auto;background:#ffffff">
       <div style="background-color:${brandColor};padding:28px 32px;border-radius:12px 12px 0 0">
+        ${logoHtml}
         <h1 style="color:white;font-size:22px;margin:0;font-weight:300">${venueName}</h1>
       </div>
       <div style="padding:32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
@@ -120,16 +126,22 @@ export function invoiceEmailHtml({
   invoiceUrl,
   amount,
   brandColor = '#1b1b1b',
+  logoUrl,
 }: {
   venueName: string;
   clientFirstName: string;
   invoiceUrl: string;
   amount: string;
   brandColor?: string;
+  logoUrl?: string;
 }): string {
+  const logoHtml = logoUrl
+    ? `<img src="${logoUrl}" alt="${venueName}" style="height:40px;object-fit:contain;margin-bottom:8px;display:block">`
+    : '';
   return `
     <div style="font-family:'Open Sans',Arial,sans-serif;max-width:600px;margin:0 auto;background:#ffffff">
       <div style="background-color:${brandColor};padding:28px 32px;border-radius:12px 12px 0 0">
+        ${logoHtml}
         <h1 style="color:white;font-size:22px;margin:0;font-weight:300">${venueName}</h1>
         <p style="color:rgba(255,255,255,0.7);font-size:13px;margin:6px 0 0">Invoice</p>
       </div>

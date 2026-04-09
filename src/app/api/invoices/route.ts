@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('lunarpay_secret_key, ghl_connected, ghl_access_token, ghl_location_id, name, brand_color')
+    .select('lunarpay_secret_key, ghl_connected, ghl_access_token, ghl_location_id, name, brand_color, brand_logo_url')
     .eq('id', venueId)
     .single();
 
@@ -189,7 +189,8 @@ export async function POST(request: NextRequest) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
     const invoiceUrl = `${appUrl}/invoice/${proposal.id}`;
     const clientFirst = (customerName || 'there').split(' ')[0];
-    const brandColor = (venue as { brand_color?: string })?.brand_color || '#1b1b1b';
+    const brandColor = (venue as { brand_color?: string; brand_logo_url?: string })?.brand_color || '#1b1b1b';
+    const logoUrl    = (venue as { brand_logo_url?: string })?.brand_logo_url || undefined;
     const amountStr = `$${((price || 0) / 100).toFixed(2)}`;
 
     // Always send direct email — ensures delivery regardless of GHL status
@@ -202,6 +203,7 @@ export async function POST(request: NextRequest) {
         clientFirstName: clientFirst,
         invoiceUrl,
         amount: amountStr,
+        logoUrl,
         brandColor,
       }),
     });

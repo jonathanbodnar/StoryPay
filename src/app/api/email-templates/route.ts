@@ -50,7 +50,7 @@ export const DEFAULT_TEMPLATES: Record<string, {
     icon: 'Bell',
     variables: ['{{organization}}', '{{customer_name}}', '{{customer_email}}', '{{amount}}', '{{net_amount}}', '{{fee}}'],
     defaults: {
-      subject: '💰 Payment received: {{amount}} from {{customer_name}}',
+      subject: 'Payment received: {{amount}} from {{customer_name}}',
       heading: 'New Payment Received',
       body: "You've received a new payment for {{organization}}.\n\nCustomer: {{customer_name}}\nAmount: {{amount}}",
       button_text: 'View in Dashboard',

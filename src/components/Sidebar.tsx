@@ -26,9 +26,9 @@ const menuItems = [
 const paymentsItems = [
   { label: 'New',           href: '/dashboard/payments/new',              icon: Plus },
   { label: 'Proposals',     href: '/dashboard/payments/proposals',        icon: FileText },
-  { label: 'Transactions',  href: '/dashboard/transactions',              icon: CreditCard },
   { label: 'Installments',  href: '/dashboard/payments/installments',     icon: Calendar },
   { label: 'Subscriptions', href: '/dashboard/payments/subscriptions',    icon: RefreshCw },
+  { label: 'Transactions',  href: '/dashboard/transactions',              icon: CreditCard },
   // { label: 'Payouts', href: '/dashboard/payments/payouts', icon: DollarSign }, // hidden for now
 ];
 

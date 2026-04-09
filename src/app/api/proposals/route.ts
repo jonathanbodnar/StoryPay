@@ -265,7 +265,7 @@ export async function POST(request: NextRequest) {
     // Fetch brand color
     const { data: venueData } = await supabaseAdmin
       .from('venues')
-      .select('brand_color')
+      .select('brand_color, brand_logo_url')
       .eq('id', venueId)
       .single();
 
@@ -277,6 +277,7 @@ export async function POST(request: NextRequest) {
         clientFirstName: clientFirst,
         proposalUrl,
         brandColor: venueData?.brand_color || '#1b1b1b',
+        logoUrl: venueData?.brand_logo_url || undefined,
       }),
     });
   }

@@ -48,6 +48,7 @@ export default function CustomerDetailPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [refundTarget, setRefundTarget] = useState<Proposal | null>(null);
+  const [proposalSearch, setProposalSearch] = useState('');
 
   useEffect(() => {
     async function fetchData() {
@@ -205,7 +206,29 @@ export default function CustomerDetailPage() {
       </div>
 
       {/* Proposals list */}
-      <h2 className="font-heading text-lg text-gray-900 mb-4">Proposals & Invoices</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <h2 className="font-heading text-lg text-gray-900">Proposals & Invoices</h2>
+        <div className="flex items-center gap-3">
+          <Link href="/dashboard/payments/proposals" className="text-sm text-gray-500 hover:text-gray-900 transition-colors underline">
+            View All Proposals
+          </Link>
+          <div className="relative">
+            <input
+              type="text"
+              value={proposalSearch}
+              onChange={e => setProposalSearch(e.target.value)}
+              placeholder="Search proposals..."
+              className="rounded-xl border border-gray-200 bg-white pl-3.5 pr-8 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none transition-colors w-48"
+              style={{ fontSize: 16 }}
+            />
+            {proposalSearch && (
+              <button onClick={() => setProposalSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                <span className="text-xs">×</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
       <div className="overflow-x-auto rounded-xl border border-gray-200">
         <table className="w-full text-left text-sm">
           <thead>
@@ -221,13 +244,13 @@ export default function CustomerDetailPage() {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {proposals.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-5 py-10 text-center text-gray-400">
-                  No proposals for this customer yet
-                </td>
-              </tr>
-            ) : (
-              proposals.map((p) => {
+              <tr><td colSpan={7} className="px-5 py-10 text-center text-gray-400">No proposals for this customer yet</td></tr>
+            ) : (() => {
+              const filtered = [...proposals]
+                .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                .filter(p => !proposalSearch || [p.status, p.payment_type, String(p.price/100), p.sent_at??'', p.paid_at??'', p.created_at].some(v => v.toLowerCase().includes(proposalSearch.toLowerCase())));
+              if (filtered.length === 0) return <tr><td colSpan={7} className="px-5 py-10 text-center text-gray-400">No proposals match your search</td></tr>;
+              return filtered.map((p) => {
                 const color = getStatusColor(p.status);
                 return (
                   <tr key={p.id} className="hover:bg-gray-50/50 transition-colors group">
@@ -299,8 +322,8 @@ export default function CustomerDetailPage() {
                     </td>
                   </tr>
                 );
-              })
-            )}
+              });
+            })()}
           </tbody>
         </table>
       </div>
