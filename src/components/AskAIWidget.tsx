@@ -15,7 +15,7 @@ interface Message {
   timestamp?: Date;
 }
 
-const BRAND = '#293745';
+const BRAND = '#1b1b1b';
 
 const SUGGESTED_PROMPTS = [
   'How do I use this dashboard?',

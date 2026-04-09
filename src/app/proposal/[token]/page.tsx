@@ -328,7 +328,7 @@ export default function ProposalPage() {
       {/* Header bar — branded */}
       {(() => {
         const brand = proposal.venue_brand;
-        const color = brand?.color || '#293745';
+        const color = brand?.color || '#1b1b1b';
         return (
           <header style={{ backgroundColor: color }}>
             <div className="mx-auto max-w-3xl px-4 py-4 flex items-center justify-between">
@@ -351,7 +351,7 @@ export default function ProposalPage() {
                   {brand?.phone && <span>{brand.phone}</span>}
                 </div>
                 <StatusBadge status={proposal.status} />
-                <img src="/storypay-logo-dark.png" alt="StoryPay" className="h-5 opacity-50" />
+                <img src="/storyvenue-dark-logo.png" alt="StoryPay" className="h-5 opacity-50" />
               </div>
             </div>
           </header>
@@ -601,7 +601,7 @@ export default function ProposalPage() {
 
         {/* Footer */}
         <div className="mt-8 flex flex-col items-center gap-2">
-          <img src="/storypay-logo-dark.png" alt="StoryPay" className="h-5 opacity-60" />
+          <img src="/storyvenue-dark-logo.png" alt="StoryPay" className="h-5 opacity-60" />
           <p className="text-xs text-gray-300">&copy; StoryVenue 2026</p>
         </div>
       </div>

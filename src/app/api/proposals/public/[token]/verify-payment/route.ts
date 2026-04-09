@@ -199,7 +199,7 @@ export async function POST(
               subject: `Payment Receipt - ${venue.name}`,
               html: `
                 <div style="font-family: 'Open Sans', Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                  <div style="background-color: #293745; padding: 24px 32px; border-radius: 12px 12px 0 0;">
+                  <div style="background-color: #1b1b1b; padding: 24px 32px; border-radius: 12px 12px 0 0;">
                     <h1 style="color: white; font-family: 'Playfair Display', Georgia, serif; font-size: 24px; margin: 0; font-weight: 300;">Payment Receipt</h1>
                   </div>
                   <div style="background-color: #ffffff; padding: 32px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
@@ -213,7 +213,7 @@ export async function POST(
                       </table>
                     </div>
                     <div style="text-align: center; margin-top: 24px;">
-                      <a href="${appUrl}/invoice/${proposal.id}" style="display: inline-block; background-color: #293745; color: white; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-size: 14px; font-weight: 600;">View Full Invoice</a>
+                      <a href="${appUrl}/invoice/${proposal.id}" style="display: inline-block; background-color: #1b1b1b; color: white; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-size: 14px; font-weight: 600;">View Full Invoice</a>
                     </div>
                     <p style="color: #9ca3af; font-size: 12px; text-align: center; margin-top: 32px; margin-bottom: 0;">&copy; StoryVenue 2026</p>
                   </div>

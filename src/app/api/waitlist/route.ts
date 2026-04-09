@@ -73,7 +73,7 @@ async function sendEmail(data: {
         subject: 'New StoryPay invite requested',
         html: `
           <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-            <div style="background:#293745;padding:24px 32px;border-radius:12px 12px 0 0">
+            <div style="background:#1b1b1b;padding:24px 32px;border-radius:12px 12px 0 0">
               <h1 style="color:white;font-size:18px;margin:0;font-weight:400">New StoryPay Invite Request</h1>
             </div>
             <div style="padding:32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
@@ -85,7 +85,7 @@ async function sendEmail(data: {
                 <tr><td style="padding:10px 0;color:#6b7280;font-size:13px">Heard via</td><td style="padding:10px 0;color:#111827;font-size:13px;font-weight:600">${data.referralSource || 'Not provided'}</td></tr>
               </table>
               <div style="margin-top:24px;padding:16px;background:#f9fafb;border-radius:8px">
-                <a href="${APP_URL}/admin" style="color:#293745;font-size:13px;font-weight:600;text-decoration:none">View in Admin Panel</a>
+                <a href="${APP_URL}/admin" style="color:#1b1b1b;font-size:13px;font-weight:600;text-decoration:none">View in Admin Panel</a>
               </div>
             </div>
           </div>

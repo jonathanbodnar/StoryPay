@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Loader2, Save, Upload, ImageIcon, X, CheckCircle2, FileText, Link2, FileBadge, Mail } from 'lucide-react';
 
 const COLOR_PRESETS = [
-  { label: 'Default Dark',   primary: '#293745', bg: '#ffffff', btnText: '#ffffff' },
+  { label: 'Default Dark',   primary: '#1b1b1b', bg: '#ffffff', btnText: '#ffffff' },
   { label: 'Ocean Blue',     primary: '#0ea5e9', bg: '#f0f9ff', btnText: '#ffffff' },
   { label: 'Forest Green',   primary: '#16a34a', bg: '#f0fdf4', btnText: '#ffffff' },
   { label: 'Royal Purple',   primary: '#7c3aed', bg: '#faf5ff', btnText: '#ffffff' },
@@ -131,7 +131,7 @@ export default function BrandingPage() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [brand, setBrand] = useState<BrandState>({
-    logo_url: '', primary: '#293745', bg: '#ffffff', btnText: '#ffffff',
+    logo_url: '', primary: '#1b1b1b', bg: '#ffffff', btnText: '#ffffff',
     venueName: '', email: '', phone: '', website: '',
     address: '', city: '', state: '', zip: '', footer_note: '',
   });
@@ -140,7 +140,7 @@ export default function BrandingPage() {
     fetch('/api/venues/me').then(r => r.json()).then(d => {
       setBrand({
         logo_url:    d.brand_logo_url   || '',
-        primary:     d.brand_color      || '#293745',
+        primary:     d.brand_color      || '#1b1b1b',
         bg:          d.brand_bg_color   || '#ffffff',
         btnText:     d.brand_btn_text   || '#ffffff',
         venueName:   d.name             || '',
@@ -223,7 +223,7 @@ export default function BrandingPage() {
           onClick={save}
           disabled={saving}
           className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60 transition-all shadow-sm"
-          style={{ backgroundColor: '#293745' }}
+          style={{ backgroundColor: '#1b1b1b' }}
         >
           {saving ? <Loader2 size={15} className="animate-spin" /> : saved ? <CheckCircle2 size={15} /> : <Save size={15} />}
           {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Branding Settings'}

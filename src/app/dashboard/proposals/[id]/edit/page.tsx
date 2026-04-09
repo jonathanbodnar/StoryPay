@@ -310,9 +310,9 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
                 onClick={handleSend}
                 disabled={submitting}
                 className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-white transition-colors disabled:opacity-50"
-                style={{ backgroundColor: '#293745' }}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#2f3e4e')}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#293745')}
+                style={{ backgroundColor: '#1b1b1b' }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#333333')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1b1b1b')}
               >
                 <RefreshCw size={14} className={submitting ? 'animate-spin' : ''} />
                 {submitting ? 'Resending...' : 'Resend'}
@@ -559,9 +559,9 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
                   onClick={handleSend}
                   disabled={submitting || saving}
                   className="inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium text-white transition-colors disabled:opacity-50"
-                  style={{ backgroundColor: '#293745' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#2f3e4e')}
-                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#293745')}
+                  style={{ backgroundColor: '#1b1b1b' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#333333')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1b1b1b')}
                 >
                   <Send size={16} />
                   {submitting ? 'Sending...' : 'Send Proposal'}

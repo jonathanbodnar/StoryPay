@@ -78,7 +78,7 @@ export function proposalEmailHtml({
   venueName,
   clientFirstName,
   proposalUrl,
-  brandColor = '#293745',
+  brandColor = '#1b1b1b',
 }: {
   venueName: string;
   clientFirstName: string;
@@ -119,7 +119,7 @@ export function invoiceEmailHtml({
   clientFirstName,
   invoiceUrl,
   amount,
-  brandColor = '#293745',
+  brandColor = '#1b1b1b',
 }: {
   venueName: string;
   clientFirstName: string;

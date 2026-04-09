@@ -79,7 +79,7 @@ function PreviewModal({ template, venueName, onClose }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="relative w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100" style={{ backgroundColor: '#293745' }}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100" style={{ backgroundColor: '#1b1b1b' }}>
           <div>
             <p className="text-sm font-semibold text-white">Email Preview</p>
             <p className="text-xs text-white/60 mt-0.5">{template.label}</p>
@@ -97,7 +97,7 @@ function PreviewModal({ template, venueName, onClose }: {
               </div>
               {/* Body */}
               <div style={{ fontFamily: 'Arial, sans-serif' }}>
-                <div className="px-6 py-5 text-center" style={{ backgroundColor: '#293745' }}>
+                <div className="px-6 py-5 text-center" style={{ backgroundColor: '#1b1b1b' }}>
                   <p className="text-white font-bold text-lg">{venueName || 'Your Venue'}</p>
                 </div>
                 <div className="px-6 py-6">
@@ -107,7 +107,7 @@ function PreviewModal({ template, venueName, onClose }: {
                   </div>
                   {template.button_text && (
                     <div className="text-center my-5">
-                      <span className="inline-block rounded-xl px-6 py-3 text-sm font-bold text-white" style={{ backgroundColor: '#293745' }}>
+                      <span className="inline-block rounded-xl px-6 py-3 text-sm font-bold text-white" style={{ backgroundColor: '#1b1b1b' }}>
                         {fill(template.button_text)}
                       </span>
                     </div>
@@ -223,7 +223,7 @@ export default function EmailTemplatesPage() {
                 </button>
                 <button onClick={save} disabled={saving}
                   className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60 transition-all shadow-sm"
-                  style={{ backgroundColor: '#293745' }}>
+                  style={{ backgroundColor: '#1b1b1b' }}>
                   {saving ? <Loader2 size={14} className="animate-spin" /> : saved ? <CheckCircle2 size={14} /> : <Save size={14} />}
                   {saving ? 'Saving...' : saved ? 'Saved!' : 'Save'}
                 </button>

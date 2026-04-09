@@ -13,7 +13,7 @@ export default function PaymentLinksPage() {
         </div>
         <button
           className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 transition-all shadow-sm"
-          style={{ backgroundColor: '#293745' }}
+          style={{ backgroundColor: '#1b1b1b' }}
         >
           <Plus size={15} /> Create Payment Link
         </button>

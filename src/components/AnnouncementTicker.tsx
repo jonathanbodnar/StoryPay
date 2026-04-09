@@ -28,7 +28,7 @@ export default function AnnouncementTicker() {
   const items = [...announcements, ...announcements];
 
   return (
-    <div className="flex items-center text-sm text-white relative overflow-hidden" style={{ backgroundColor: '#293745', minHeight: 38 }}>
+    <div className="flex items-center text-sm text-white relative overflow-hidden" style={{ backgroundColor: '#1b1b1b', minHeight: 38 }}>
       {/* Label */}
       <div className="flex-shrink-0 flex items-center px-3 border-r border-white/20 self-stretch">
         <span className="text-[11px] font-semibold uppercase tracking-widest text-white/70 whitespace-nowrap">News</span>

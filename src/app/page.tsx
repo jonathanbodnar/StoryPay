@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { CheckCircle2, ChevronDown, X, Loader2, TrendingUp, Bell, CreditCard, FileText } from 'lucide-react';
 
-const BRAND = '#293745';
+const BRAND = '#1b1b1b';
 const LAUNCH_DATE = new Date('2026-06-01T00:00:00Z');
 
 // ── Countdown ─────────────────────────────────────────────────────────────────
@@ -273,17 +273,17 @@ function DashboardScreen() {
           <svg viewBox="0 0 220 55" className="w-full" style={{ height: 44 }}>
             <defs>
               <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#293745" stopOpacity="0.18" />
-                <stop offset="100%" stopColor="#293745" stopOpacity="0.01" />
+                <stop offset="0%" stopColor="#1b1b1b" stopOpacity="0.18" />
+                <stop offset="100%" stopColor="#1b1b1b" stopOpacity="0.01" />
               </linearGradient>
             </defs>
             {[10, 25, 40].map(y => (
               <line key={y} x1="0" y1={y} x2="220" y2={y} stroke="#f1f5f9" strokeWidth="0.5" />
             ))}
             <path d="M0,48 C25,44 45,35 70,28 C95,22 115,30 140,18 C165,8 185,12 220,5 L220,55 L0,55Z" fill="url(#chartGrad)" />
-            <path d="M0,48 C25,44 45,35 70,28 C95,22 115,30 140,18 C165,8 185,12 220,5" fill="none" stroke="#293745" strokeWidth="2" strokeLinecap="round" />
+            <path d="M0,48 C25,44 45,35 70,28 C95,22 115,30 140,18 C165,8 185,12 220,5" fill="none" stroke="#1b1b1b" strokeWidth="2" strokeLinecap="round" />
             {([[0,48],[70,28],[140,18],[220,5]] as [number,number][]).map(([x,y],i) => (
-              <circle key={i} cx={x} cy={y} r="2.5" fill="white" stroke="#293745" strokeWidth="1.5" />
+              <circle key={i} cx={x} cy={y} r="2.5" fill="white" stroke="#1b1b1b" strokeWidth="1.5" />
             ))}
             {['Nov','Jan','Mar','Apr'].map((l,i) => (
               <text key={l} x={[5,70,140,210][i]} y="54" fontSize="5" fill="#94a3b8" textAnchor="middle">{l}</text>
@@ -299,7 +299,7 @@ function DashboardScreen() {
           {[
             { name: 'Johnson Wedding',  amount: '$4,500', status: 'Paid',   color: '#10b981', bg: '#d1fae5' },
             { name: 'Miller Reception', amount: '$3,200', status: 'Signed', color: '#8b5cf6', bg: '#ede9fe' },
-            { name: 'Davis Ceremony',   amount: '$2,800', status: 'Sent',   color: '#3b82f6', bg: '#dbeafe' },
+            { name: 'Davis Ceremony',   amount: '$2,800', status: 'Sent',   color: '#1b1b1b', bg: '#f5f5f5' },
           ].map(p => (
             <div key={p.name} className="flex items-center justify-between px-2.5 py-1.5 border-b border-gray-50 last:border-0">
               <div className="flex items-center gap-1.5">
@@ -321,14 +321,14 @@ function DashboardScreen() {
               <circle cx="20" cy="20" r="14" fill="none" stroke="#f1f5f9" strokeWidth="6" />
               <circle cx="20" cy="20" r="14" fill="none" stroke="#10b981" strokeWidth="6" strokeDasharray="35 53" strokeDashoffset="-5" strokeLinecap="round" />
               <circle cx="20" cy="20" r="14" fill="none" stroke="#8b5cf6" strokeWidth="6" strokeDasharray="18 70" strokeDashoffset="-40" strokeLinecap="round" />
-              <circle cx="20" cy="20" r="14" fill="none" stroke="#3b82f6" strokeWidth="6" strokeDasharray="15 73" strokeDashoffset="-58" strokeLinecap="round" />
-              <text x="20" y="23" textAnchor="middle" fontSize="7" fontWeight="bold" fill="#293745">24</text>
+              <circle cx="20" cy="20" r="14" fill="none" stroke="#1b1b1b" strokeWidth="6" strokeDasharray="15 73" strokeDashoffset="-58" strokeLinecap="round" />
+              <text x="20" y="23" textAnchor="middle" fontSize="7" fontWeight="bold" fill="#1b1b1b">24</text>
             </svg>
             <div className="flex flex-col gap-1">
               {[
                 { label: 'Paid',   color: '#10b981', pct: '46%' },
                 { label: 'Signed', color: '#8b5cf6', pct: '25%' },
-                { label: 'Sent',   color: '#3b82f6', pct: '20%' },
+                { label: 'Sent',   color: '#1b1b1b', pct: '20%' },
                 { label: 'Draft',  color: '#94a3b8', pct: '9%' },
               ].map(s => (
                 <div key={s.label} className="flex items-center gap-1">
@@ -377,7 +377,7 @@ export default function LandingPage() {
 
         {/* Nav */}
         <nav className="mx-auto max-w-5xl px-5 sm:px-8 py-5 flex items-center justify-between">
-          <Image src="/storypay-logo-dark.png" alt="StoryPay" width={110} height={26} />
+          <Image src="/storyvenue-dark-logo.png" alt="StoryPay" width={110} height={26} />
           <a href="/admin" className="text-xs text-gray-400 hover:text-gray-600 transition-colors">Admin</a>
         </nav>
 

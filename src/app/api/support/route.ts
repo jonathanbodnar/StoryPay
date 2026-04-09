@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
             subject: `[StoryPay Support] ${subject}`,
             html: `
               <div style="font-family: 'Open Sans', Arial, sans-serif; max-width: 600px;">
-                <h2 style="color: #293745; font-family: 'Playfair Display', Georgia, serif;">Support Ticket</h2>
+                <h2 style="color: #1b1b1b; font-family: 'Playfair Display', Georgia, serif;">Support Ticket</h2>
                 <p><strong>Venue:</strong> ${venue.name || 'Unknown'}</p>
                 <p><strong>From:</strong> ${email}</p>
                 <p><strong>Category:</strong> ${category || 'General'}</p>

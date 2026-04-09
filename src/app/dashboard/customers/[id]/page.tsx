@@ -136,7 +136,7 @@ export default function CustomerDetailPage() {
         <div className="flex items-center gap-4">
           <div
             className="flex h-14 w-14 items-center justify-center rounded-full text-xl font-semibold text-white"
-            style={{ backgroundColor: '#293745' }}
+            style={{ backgroundColor: '#1b1b1b' }}
           >
             {customer.name?.charAt(0)?.toUpperCase() || '?'}
           </div>
@@ -174,9 +174,9 @@ export default function CustomerDetailPage() {
           <Link
             href={`/dashboard/proposals/new?email=${encodeURIComponent(customer.email || '')}&name=${encodeURIComponent(customer.name || '')}`}
             className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-colors"
-            style={{ backgroundColor: '#293745' }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#2f3e4e')}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#293745')}
+            style={{ backgroundColor: '#1b1b1b' }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#333333')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1b1b1b')}
           >
             <FileText size={16} />
             Create Proposal

@@ -91,7 +91,7 @@ export default function RefundModal({
                 <p className="text-xs text-gray-400 mt-1">Partial refund — transaction remains active.</p>
               )}
             </div>
-            <button onClick={onClose} className="rounded-xl px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:opacity-90" style={{ backgroundColor: '#293745' }}>
+            <button onClick={onClose} className="rounded-xl px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:opacity-90" style={{ backgroundColor: '#1b1b1b' }}>
               Done
             </button>
           </div>

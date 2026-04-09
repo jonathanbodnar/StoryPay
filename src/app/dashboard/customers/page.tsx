@@ -112,9 +112,9 @@ export default function CustomersPage() {
         <button
           onClick={() => setShowModal(true)}
           className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-colors"
-          style={{ backgroundColor: '#293745' }}
-          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#2f3e4e')}
-          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#293745')}
+          style={{ backgroundColor: '#1b1b1b' }}
+          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#333333')}
+          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1b1b1b')}
         >
           <UserPlus size={16} />
           Add Customer
@@ -297,9 +297,9 @@ export default function CustomersPage() {
                   type="submit"
                   disabled={creating}
                   className="flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium text-white transition-colors disabled:opacity-50"
-                  style={{ backgroundColor: '#293745' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#2f3e4e')}
-                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#293745')}
+                  style={{ backgroundColor: '#1b1b1b' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#333333')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1b1b1b')}
                 >
                   {creating && <Loader2 size={16} className="animate-spin" />}
                   {creating ? 'Creating...' : 'Create Customer'}

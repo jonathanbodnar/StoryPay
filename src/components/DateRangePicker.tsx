@@ -138,7 +138,7 @@ function MiniCalendar({
                 (!start && !end && !inRange) ? 'rounded-full hover:bg-gray-100' : '',
                 edge ? 'text-white' : isToday ? 'font-bold text-brand-900' : 'text-gray-700',
               ].join(' ')}
-              style={edge ? { backgroundColor: '#293745', borderRadius: start && end ? '9999px' : start ? '9999px 0 0 9999px' : '0 9999px 9999px 0' } : {}}
+              style={edge ? { backgroundColor: '#1b1b1b', borderRadius: start && end ? '9999px' : start ? '9999px 0 0 9999px' : '0 9999px 9999px 0' } : {}}
             >
               {parseInt(d.split('-')[2], 10)}
             </button>
@@ -316,7 +316,7 @@ export default function DateRangePicker({ value, onChange }: Props) {
                 onClick={applyCustom}
                 disabled={!tempFrom || !tempTo}
                 className="rounded-lg px-3.5 py-2 text-xs font-medium text-white transition-colors disabled:opacity-40"
-                style={{ backgroundColor: '#293745' }}
+                style={{ backgroundColor: '#1b1b1b' }}
               >
                 Apply
               </button>

@@ -9,7 +9,7 @@ interface AIProposalGeneratorProps {
   prefillClientName?: string;
 }
 
-const BRAND = '#293745';
+const BRAND = '#1b1b1b';
 
 const INPUT_CLASS = 'w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:outline-none focus:bg-white transition-colors';
 const LABEL_CLASS = 'block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide';

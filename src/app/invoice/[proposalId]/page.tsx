@@ -122,7 +122,7 @@ export default function InvoicePage() {
           {/* Header — branded */}
           {(() => {
             const brand = invoice.venue_brand;
-            const color = brand?.color || '#293745';
+            const color = brand?.color || '#1b1b1b';
             return (
               <div className="px-8 py-7" style={{ backgroundColor: color }}>
                 <div className="flex items-start justify-between">
@@ -147,7 +147,7 @@ export default function InvoicePage() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <img src="/storypay-logo-dark.png" alt="StoryPay" className="h-4 ml-auto mb-3 opacity-40 print:hidden" />
+                    <img src="/storyvenue-dark-logo.png" alt="StoryPay" className="h-4 ml-auto mb-3 opacity-40 print:hidden" />
                     <h1 className="text-3xl font-bold text-white">INVOICE</h1>
                     <p className="mt-1 text-sm text-white/60">#{invoiceNumber}</p>
                   </div>
@@ -333,7 +333,7 @@ export default function InvoicePage() {
 
         {/* Branding footer */}
         <div className="mt-6 flex flex-col items-center gap-2 print:hidden">
-          <img src="/storypay-logo-dark.png" alt="StoryPay" className="h-5" />
+          <img src="/storyvenue-dark-logo.png" alt="StoryPay" className="h-5" />
           <p className="text-xs text-gray-300">&copy; StoryVenue 2026</p>
         </div>
       </div>

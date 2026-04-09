@@ -43,7 +43,7 @@ const REPORTS: ReportDef[] = [
     label: 'Proposals Report',
     description: 'Complete proposal history including status, amounts, and dates. Useful for pipeline analysis and sales tracking.',
     icon: FileText,
-    color: '#3b82f6',
+    color: '#1b1b1b',
     bg: 'bg-blue-50',
   },
   {
@@ -67,7 +67,7 @@ const REPORTS: ReportDef[] = [
     label: 'Payment Method Breakdown',
     description: 'Conversion rates and revenue by payment type (full, installment, subscription). Useful for optimizing your payment offerings.',
     icon: CreditCard,
-    color: '#293745',
+    color: '#1b1b1b',
     bg: 'bg-slate-50',
   },
   {

@@ -164,7 +164,7 @@ export async function PATCH(
                     ${venue.name} has prepared a proposal for you. Click the button below to review, sign, and complete your payment.
                   </p>
                   <div style="text-align: center; margin: 32px 0;">
-                    <a href="${proposalUrl}" style="display: inline-block; background-color: #293745; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
+                    <a href="${proposalUrl}" style="display: inline-block; background-color: #1b1b1b; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
                       View Proposal
                     </a>
                   </div>

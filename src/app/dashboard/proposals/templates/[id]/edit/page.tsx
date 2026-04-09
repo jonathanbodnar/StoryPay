@@ -284,7 +284,7 @@ export default function EditTemplatePage({
               type="button"
               onClick={() => setShowAI(true)}
               className="inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold text-white transition-all hover:opacity-90 shadow-sm"
-              style={{ backgroundColor: '#293745' }}
+              style={{ backgroundColor: '#1b1b1b' }}
             >
               <Sparkles size={13} />
               Generate with AI

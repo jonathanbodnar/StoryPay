@@ -102,7 +102,7 @@ export default function ProductsPage() {
         </div>
         <button onClick={openNew}
           className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 transition-all shadow-sm"
-          style={{ backgroundColor: '#293745' }}>
+          style={{ backgroundColor: '#1b1b1b' }}>
           <Plus size={15} /> Add Product
         </button>
       </div>
@@ -152,7 +152,7 @@ export default function ProductsPage() {
               </button>
               <button type="submit" disabled={saving}
                 className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60 transition-all"
-                style={{ backgroundColor: '#293745' }}>
+                style={{ backgroundColor: '#1b1b1b' }}>
                 {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                 {saving ? 'Saving...' : editing ? 'Save Changes' : 'Add Product'}
               </button>

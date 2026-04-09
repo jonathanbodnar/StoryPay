@@ -17,28 +17,28 @@ import {
 
 // ─── Brand palette ────────────────────────────────────────────────────────────
 const B = {
-  primary: '#293745',
-  active:  '#354859',
-  hover:   '#2f3e4e',
+  primary: '#1b1b1b',
+  active:  '#2d2d2d',
+  hover:   '#333333',
   // Tinted backgrounds derived from primary
-  bg5:     '#29374508',
-  bg10:    '#29374518',
-  bg15:    '#29374526',
-  bg20:    '#2937453a',
+  bg5:     '#1b1b1b08',
+  bg10:    '#1b1b1b18',
+  bg15:    '#1b1b1b26',
+  bg20:    '#1b1b1b3a',
   // Lighter brand shades for status variety
   teal:    '#2d5a6e',
-  slate:   '#3d5168',
-  muted:   '#6b8aab',
+  slate:   '#444444',
+  muted:   '#888888',
   light:   '#e8ecf0',
 };
 
 // ─── Proposal status — all brand-derived ─────────────────────────────────────
 const STATUS_COLORS: Record<string, string> = {
-  draft:   '#6b8aab',   // brand muted
-  sent:    '#354859',   // brand active
-  opened:  '#2f3e4e',   // brand hover
-  signed:  '#3d5168',   // brand slate
-  paid:    '#293745',   // brand primary
+  draft:   '#888888',   // brand muted
+  sent:    '#2d2d2d',   // brand active
+  opened:  '#333333',   // brand hover
+  signed:  '#444444',   // brand slate
+  paid:    '#1b1b1b',   // brand primary
 };
 
 const STATUS_LABELS: Record<string, string> = {

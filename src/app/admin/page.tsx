@@ -14,7 +14,7 @@ import {
 } from 'recharts';
 import DateRangePicker, { DateRange, PRESETS } from '@/components/DateRangePicker';
 
-const BRAND = '#293745';
+const BRAND = '#1b1b1b';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface Venue { id: string; name: string; email: string | null; ghl_location_id: string | null; onboarding_status: string; setup_completed: boolean; created_at: string; login_url: string | null; venue_tokens: { token: string }[]; }
@@ -344,7 +344,7 @@ export default function AdminPage() {
           <form onSubmit={handleLogin} className="bg-white rounded-2xl shadow-lg p-8">
             <div className="flex justify-center mb-5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/storypay-logo-dark.png" alt="StoryPay" className="h-8 object-contain" />
+              <img src="/storyvenue-dark-logo.png" alt="StoryPay" className="h-8 object-contain" />
             </div>
             <h2 className="font-heading text-xl text-gray-900 mb-6 text-center">Admin Login</h2>
             {loginError && <div className="bg-red-50 text-red-700 text-sm rounded-xl px-4 py-2 mb-4">{loginError}</div>}
@@ -375,7 +375,7 @@ export default function AdminPage() {
         {/* Top row: logo + logout/home */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/StoryPay-Light-Logo.png" alt="StoryPay" className="h-7 sm:h-8 object-contain" />
+          <img src="/storyvenue-light-logo.png" alt="StoryPay" className="h-7 sm:h-8 object-contain" />
           <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/" className="flex items-center gap-1 sm:gap-1.5 rounded-lg border border-white/20 px-2.5 sm:px-3 py-1.5 text-xs text-white/80 hover:bg-white/10 transition-colors">
               <Home size={13} />
@@ -420,12 +420,12 @@ export default function AdminPage() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               <KPICard label="Total Revenue" value={statsLoading ? '...' : formatCents(stats?.totalRevenue ?? 0)} icon={DollarSign} color={BRAND} />
               <KPICard label="Active Venues" value={statsLoading ? '...' : stats?.venueCount ?? 0} icon={Building2} color="#7c3aed" onClick={() => openDrill('venues')} />
-              <KPICard label="Proposals" value={statsLoading ? '...' : stats?.totalProposals ?? 0} icon={FileText} color="#3b82f6" />
+              <KPICard label="Proposals" value={statsLoading ? '...' : stats?.totalProposals ?? 0} icon={FileText} color="#1b1b1b" />
               <KPICard label="Waitlist" value={statsLoading ? '...' : stats?.waitlistCount ?? 0} icon={Users} color="#10b981" onClick={() => openDrill('waitlist')} />
               <KPICard label="Unique Customers" value={statsLoading ? '...' : stats?.uniqueCustomers ?? 0} icon={Users} color="#f59e0b" onClick={() => openDrill('customers')} />
               <KPICard label="Pending Payments" value={statsLoading ? '...' : stats?.pendingPayments ?? 0} icon={Clock} color="#f59e0b" onClick={() => openDrill('pending')} />
               <KPICard label="Failed Payments" value={statsLoading ? '...' : stats?.failedPayments ?? 0} icon={XCircle} color="#ef4444" onClick={() => openDrill('failed')} />
-              <KPICard label="Total Customers" value={statsLoading ? '...' : stats?.uniqueCustomers ?? 0} icon={Users} color="#6b8aab" onClick={() => openDrill('customers')} />
+              <KPICard label="Total Customers" value={statsLoading ? '...' : stats?.uniqueCustomers ?? 0} icon={Users} color="#888888" onClick={() => openDrill('customers')} />
             </div>
 
             {/* Drill-down modal */}

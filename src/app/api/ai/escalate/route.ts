@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
 
   const html = `
     <div style="font-family:'Open Sans',Arial,sans-serif;max-width:680px;margin:0 auto">
-      <div style="background:#293745;padding:24px 32px;border-radius:12px 12px 0 0">
+      <div style="background:#1b1b1b;padding:24px 32px;border-radius:12px 12px 0 0">
         <h1 style="color:white;font-size:18px;margin:0;font-weight:400">Support Request — Ask AI Escalation</h1>
         <p style="color:rgba(255,255,255,0.6);font-size:12px;margin:6px 0 0">${timestamp}</p>
       </div>
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
         </div>
 
         <h2 style="font-size:13px;font-weight:700;color:#111827;margin:0 0 10px;text-transform:uppercase;letter-spacing:0.05em">Original AI Question</h2>
-        <div style="background:#f9fafb;border-left:3px solid #293745;padding:12px 16px;border-radius:0 8px 8px 0;margin-bottom:24px">
+        <div style="background:#f9fafb;border-left:3px solid #1b1b1b;padding:12px 16px;border-radius:0 8px 8px 0;margin-bottom:24px">
           <p style="margin:0;color:#374151;font-size:13px;line-height:1.6">${question}</p>
         </div>
 
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
         </div>
 
         <div style="text-align:center;border-top:1px solid #e5e7eb;padding-top:16px">
-          <a href="${APP_URL}/admin" style="color:#293745;font-size:12px;font-weight:600;text-decoration:none">View in Admin Panel</a>
+          <a href="${APP_URL}/admin" style="color:#1b1b1b;font-size:12px;font-weight:600;text-decoration:none">View in Admin Panel</a>
           <p style="color:#9ca3af;font-size:11px;margin:8px 0 0">Sent from StoryPay Ask AI · ${timestamp}</p>
         </div>
       </div>

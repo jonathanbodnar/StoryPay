@@ -64,7 +64,7 @@ export async function GET(
     venue_name: venue?.name ?? '',
     venue_logo_url: venue?.brand_logo_url || venue?.logo_url || null,
     venue_brand: {
-      color:       venue?.brand_color || '#293745',
+      color:       venue?.brand_color || '#1b1b1b',
       tagline:     venue?.brand_tagline || null,
       email:       venue?.brand_email || null,
       phone:       venue?.brand_phone || null,

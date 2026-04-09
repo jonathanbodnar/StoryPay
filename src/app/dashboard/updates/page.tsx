@@ -245,7 +245,7 @@ function FeatureRequestsTab() {
         <button
           onClick={() => setShowForm(v => !v)}
           className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-all hover:opacity-90 shadow-sm"
-          style={{ backgroundColor: '#293745' }}
+          style={{ backgroundColor: '#1b1b1b' }}
         >
           {showForm ? <><X size={14} /> Cancel</> : <><Plus size={14} /> Submit Request</>}
         </button>
@@ -287,7 +287,7 @@ function FeatureRequestsTab() {
                 type="submit"
                 disabled={submitting}
                 className="inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50 transition-colors"
-                style={{ backgroundColor: '#293745' }}
+                style={{ backgroundColor: '#1b1b1b' }}
               >
                 {submitting && <Loader2 size={14} className="animate-spin" />}
                 {submitting ? 'Submitting...' : 'Submit Request'}

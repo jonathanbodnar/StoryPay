@@ -148,7 +148,7 @@ export default function NotificationsPage() {
             onClick={save}
             disabled={saving}
             className="flex items-center gap-2 rounded-xl px-6 py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60 transition-all shadow-sm"
-            style={{ backgroundColor: '#293745' }}
+            style={{ backgroundColor: '#1b1b1b' }}
           >
             {saving ? <Loader2 size={14} className="animate-spin" /> : saved ? <CheckCircle2 size={14} /> : <Save size={14} />}
             {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Settings'}

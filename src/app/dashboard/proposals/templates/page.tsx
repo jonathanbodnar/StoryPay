@@ -144,15 +144,15 @@ export default function TemplatesPage() {
                     .template-preview ul { list-style: disc; padding-left: 1.5rem; margin-bottom: 0.75rem; }
                     .template-preview ol { list-style: decimal; padding-left: 1.5rem; margin-bottom: 0.75rem; }
                     .template-preview li { margin-bottom: 0.25rem; line-height: 1.6; }
-                    .template-preview blockquote { border-left: 3px solid #293745; padding-left: 1rem; color: #4b5563; font-style: italic; margin: 1rem 0; }
+                    .template-preview blockquote { border-left: 3px solid #1b1b1b; padding-left: 1rem; color: #4b5563; font-style: italic; margin: 1rem 0; }
                     .template-preview hr { border: none; border-top: 1px solid #e5e7eb; margin: 1.5rem 0; }
-                    .template-preview a { color: #293745; text-decoration: underline; }
+                    .template-preview a { color: #1b1b1b; text-decoration: underline; }
                     .template-preview code { background: #f1f5f9; border-radius: 3px; padding: 0.1em 0.3em; font-size: 0.875em; font-family: monospace; }
                     .template-preview pre { background: #1e293b; color: #e2e8f0; border-radius: 8px; padding: 1rem; overflow-x: auto; margin-bottom: 0.75rem; }
                     .template-preview pre code { background: none; padding: 0; }
                     .template-preview img { max-width: 100%; border-radius: 6px; margin: 0.5rem 0; }
                     .template-preview table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
-                    .template-preview th { background: #293745; color: white; font-weight: 600; text-align: left; padding: 8px 12px; border: 1px solid #293745; }
+                    .template-preview th { background: #1b1b1b; color: white; font-weight: 600; text-align: left; padding: 8px 12px; border: 1px solid #1b1b1b; }
                     .template-preview td { padding: 8px 12px; border: 1px solid #e5e7eb; vertical-align: top; }
                     .template-preview tr:nth-child(even) td { background: #f9fafb; }
                     .template-preview mark { border-radius: 2px; padding: 0.1em 0.2em; }

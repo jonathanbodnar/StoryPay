@@ -139,16 +139,16 @@ const TEXT_COLORS = [
   '#78350f','#d97706','#f59e0b','#fbbf24','#fcd34d','#fde68a','#fef3c7',
   '#14532d','#15803d','#22c55e','#4ade80','#86efac','#bbf7d0','#dcfce7',
   '#164e63','#0e7490','#06b6d4','#38bdf8','#7dd3fc','#bae6fd','#e0f2fe',
-  '#1e3a5f','#1d4ed8','#3b82f6','#60a5fa','#93c5fd','#bfdbfe','#dbeafe',
+  '#1e3a5f','#1b1b1b','#1b1b1b','#555555','#aaaaaa','#e5e5e5','#f5f5f5',
   '#4c1d95','#7c3aed','#8b5cf6','#a78bfa','#c4b5fd','#ddd6fe','#ede9fe',
   '#831843','#be185d','#ec4899','#f472b6','#f9a8d4','#fbcfe8','#fce7f3',
-  '#293745','#354859','#4a6280','#6b8aab','#a8bed3','#d4e2ee',
+  '#1b1b1b','#2d2d2d','#555555','#888888','#a8bed3','#d4e2ee',
 ];
 
 const HIGHLIGHT_COLORS = [
   '#fef08a','#fde68a','#fef3c7',
   '#bbf7d0','#86efac','#dcfce7',
-  '#bfdbfe','#93c5fd','#dbeafe',
+  '#e5e5e5','#aaaaaa','#f5f5f5',
   '#f9a8d4','#fbcfe8','#fce7f3',
   '#fed7aa','#fdba74','#fff7ed',
   '#e9d5ff','#c4b5fd','#ede9fe',
@@ -502,15 +502,15 @@ export default function RichTextEditor({
             .tiptap-editor ul { list-style: disc; padding-left: 1.5rem; margin-bottom: 0.75rem; }
             .tiptap-editor ol { list-style: decimal; padding-left: 1.5rem; margin-bottom: 0.75rem; }
             .tiptap-editor li { margin-bottom: 0.25rem; line-height: 1.6; }
-            .tiptap-editor blockquote { border-left: 3px solid #293745; padding-left: 1rem; color: #4b5563; font-style: italic; margin: 1rem 0; }
+            .tiptap-editor blockquote { border-left: 3px solid #1b1b1b; padding-left: 1rem; color: #4b5563; font-style: italic; margin: 1rem 0; }
             .tiptap-editor hr { border: none; border-top: 1px solid #e5e7eb; margin: 1.5rem 0; }
-            .tiptap-editor a { color: #293745; text-decoration: underline; }
+            .tiptap-editor a { color: #1b1b1b; text-decoration: underline; }
             .tiptap-editor code { background: #f1f5f9; border-radius: 3px; padding: 0.1em 0.3em; font-size: 0.875em; font-family: monospace; }
             .tiptap-editor pre { background: #1e293b; color: #e2e8f0; border-radius: 8px; padding: 1rem; overflow-x: auto; margin-bottom: 0.75rem; }
             .tiptap-editor pre code { background: none; padding: 0; font-size: 0.85em; }
             .tiptap-editor img { max-width: 100%; border-radius: 6px; margin: 0.5rem 0; }
             .tiptap-editor table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
-            .tiptap-editor th { background: #293745; color: white; font-weight: 600; text-align: left; padding: 8px 12px; border: 1px solid #293745; }
+            .tiptap-editor th { background: #1b1b1b; color: white; font-weight: 600; text-align: left; padding: 8px 12px; border: 1px solid #1b1b1b; }
             .tiptap-editor td { padding: 8px 12px; border: 1px solid #e5e7eb; vertical-align: top; }
             .tiptap-editor tr:nth-child(even) td { background: #f9fafb; }
             .tiptap-editor ul[data-type="taskList"] { list-style: none; padding-left: 0; }

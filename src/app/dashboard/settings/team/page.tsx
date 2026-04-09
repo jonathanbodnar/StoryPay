@@ -37,7 +37,7 @@ function getInitials(name: string) {
 }
 
 function getAvatarColor(name: string) {
-  const colors = ['#293745','#354859','#4a6280','#6b8aab','#2f3e4e','#3d5168'];
+  const colors = ['#1b1b1b','#2d2d2d','#555555','#888888','#333333','#444444'];
   let hash = 0;
   for (const c of name) hash = (hash << 5) - hash + c.charCodeAt(0);
   return colors[Math.abs(hash) % colors.length];
@@ -113,7 +113,7 @@ export default function TeamPage() {
           <button
             onClick={() => setShowForm(v => !v)}
             className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 transition-all shadow-sm"
-            style={{ backgroundColor: '#293745' }}
+            style={{ backgroundColor: '#1b1b1b' }}
           >
             <Plus size={15} />
             Add Team Member
@@ -163,7 +163,7 @@ export default function TeamPage() {
               </button>
               <button type="submit" disabled={saving}
                 className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60 transition-all"
-                style={{ backgroundColor: '#293745' }}>
+                style={{ backgroundColor: '#1b1b1b' }}>
                 {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
                 {saving ? 'Adding...' : 'Add Member'}
               </button>

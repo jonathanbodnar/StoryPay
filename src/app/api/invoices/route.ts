@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
             subject: `Invoice from ${venue.name}`,
             html: `
               <div style="font-family: 'Open Sans', Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <div style="background-color: #293745; padding: 24px 32px; border-radius: 12px 12px 0 0;">
+                <div style="background-color: #1b1b1b; padding: 24px 32px; border-radius: 12px 12px 0 0;">
                   <h1 style="color: white; font-family: 'Playfair Display', Georgia, serif; font-size: 24px; margin: 0; font-weight: 300;">Invoice from ${venue.name}</h1>
                 </div>
                 <div style="background-color: #ffffff; padding: 32px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
@@ -168,7 +168,7 @@ export async function POST(request: NextRequest) {
                     You have a new invoice from ${venue.name}. Click below to review and complete payment.
                   </p>
                   <div style="text-align: center; margin: 32px 0;">
-                    <a href="${proposalUrl}" style="display: inline-block; background-color: #293745; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">View & Pay Invoice</a>
+                    <a href="${proposalUrl}" style="display: inline-block; background-color: #1b1b1b; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">View & Pay Invoice</a>
                   </div>
                   <p style="color: #9ca3af; font-size: 12px; text-align: center; margin-top: 24px; margin-bottom: 0;">Powered by StoryPay & LunarPay</p>
                 </div>
@@ -189,7 +189,7 @@ export async function POST(request: NextRequest) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
     const invoiceUrl = `${appUrl}/invoice/${proposal.id}`;
     const clientFirst = (customerName || 'there').split(' ')[0];
-    const brandColor = (venue as { brand_color?: string })?.brand_color || '#293745';
+    const brandColor = (venue as { brand_color?: string })?.brand_color || '#1b1b1b';
     const amountStr = `$${((price || 0) / 100).toFixed(2)}`;
 
     // Always send direct email — ensures delivery regardless of GHL status
