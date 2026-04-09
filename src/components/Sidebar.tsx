@@ -62,15 +62,23 @@ export default function Sidebar({ venue }: SidebarProps) {
     return () => { document.body.style.overflow = ''; };
   }, [mobileOpen]);
 
+  // Only ONE item can be active at a time.
+  // Priority: exact pathname match → prefix match → nothing.
+  // If inside a collapsible group section, only sub-items are "active" (text-only), 
+  // the parent group button gets the pill instead.
   const isActive = (href: string) => {
+    // Exact match for home
     if (href === '/dashboard') return pathname === '/dashboard';
-    // Don't mark a regular item active if we're inside a collapsible group
-    if (isOnPayments && !href.startsWith('/dashboard/payments') && href !== '/dashboard/transactions' && !href.startsWith('/dashboard/invoices') && !href.startsWith('/dashboard/proposals')) {
-      return false;
-    }
-    if (isOnSettings && !href.startsWith('/dashboard/settings')) {
-      return false;
-    }
+    // If we're inside Payments section, no top-level item is "active" — Payments parent gets the pill
+    if (isOnPayments) return false;
+    // If we're inside Settings section, no top-level item is "active" — Settings parent gets the pill
+    if (isOnSettings) return false;
+    return pathname.startsWith(href);
+  };
+
+  // Sub-item active: only when we're in that section and on that specific page
+  const isSubActive = (href: string) => {
+    if (href === '/dashboard/invoices/new') return pathname.startsWith('/dashboard/invoices');
     return pathname.startsWith(href);
   };
 
@@ -135,18 +143,18 @@ export default function Sidebar({ venue }: SidebarProps) {
 
         {/* Payments collapsible */}
         <div>
-          <button type="button" onClick={() => setPaymentsOpen(v => !v)} className={groupBtn(paymentsOpen)} style={groupBtnStyle(paymentsOpen)}>
+          <button type="button" onClick={() => setPaymentsOpen(v => !v)} className={groupBtn(isOnPayments && paymentsOpen)} style={groupBtnStyle(isOnPayments && paymentsOpen)}>
             <div className="flex items-center gap-3">
               <CreditCard size={16} />
               <span>Payments</span>
             </div>
-            <ChevronDown size={13} className={`transition-transform duration-200 ${paymentsOpen ? 'rotate-180 text-white/50' : 'text-gray-400'}`} />
+            <ChevronDown size={13} className={`transition-transform duration-200 ${paymentsOpen ? 'rotate-180' : ''} ${isOnPayments && paymentsOpen ? 'text-white/50' : 'text-gray-400'}`} />
           </button>
           {paymentsOpen && (
             <div className="mt-0.5 ml-3 pl-3 border-l border-gray-100 space-y-0.5 py-0.5">
               {paymentsItems.map(sub => {
                 const SubIcon = sub.icon;
-                const active = isActive(sub.href);
+                const active = isSubActive(sub.href);
                 return (
                   <Link key={sub.label} href={sub.href} className={subItem(active)} style={subItemStyle(active)}>
                     <SubIcon size={14} />
@@ -171,12 +179,12 @@ export default function Sidebar({ venue }: SidebarProps) {
 
         {/* Settings collapsible */}
         <div>
-          <button type="button" onClick={() => setSettingsOpen(v => !v)} className={groupBtn(settingsOpen)} style={groupBtnStyle(settingsOpen)}>
+          <button type="button" onClick={() => setSettingsOpen(v => !v)} className={groupBtn(isOnSettings && settingsOpen)} style={groupBtnStyle(isOnSettings && settingsOpen)}>
             <div className="flex items-center gap-3">
               <Settings size={16} />
               <span>Settings</span>
             </div>
-            <ChevronDown size={13} className={`transition-transform duration-200 ${settingsOpen ? 'rotate-180 text-white/50' : 'text-gray-400'}`} />
+            <ChevronDown size={13} className={`transition-transform duration-200 ${settingsOpen ? 'rotate-180' : ''} ${isOnSettings && settingsOpen ? 'text-white/50' : 'text-gray-400'}`} />
           </button>
           {settingsOpen && (
             <div className="mt-0.5 ml-3 pl-3 border-l border-gray-100 space-y-0.5 py-0.5">
