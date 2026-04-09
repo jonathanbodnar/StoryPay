@@ -688,11 +688,14 @@ export default function NewProposalInvoicePage() {
         <div className={`lg:block lg:sticky lg:top-10 ${showPreview ? 'block' : 'hidden lg:block'}`}>
           <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
             <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
-              <p className="text-sm font-semibold text-gray-900">Live Preview</p>
-              <div className="flex items-center gap-1.5">
-                <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"/>
-                <p className="text-xs text-gray-400">Updates as you type</p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold text-gray-900">Live Preview</p>
+                <div className="flex items-center gap-1"><div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"/><span className="text-[10px] text-gray-400">live</span></div>
               </div>
+              <button onClick={()=>setShowPreviewModal(true)}
+                className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+                <Eye size={12}/> Preview
+              </button>
             </div>
             <div className="p-4">
               <LivePreview
@@ -707,42 +710,122 @@ export default function NewProposalInvoicePage() {
         </div>
       </div>
 
-      {/* Full Preview Modal */}
+      {/* Full Preview Modal — full screen, fully scrollable */}
       {showPreviewModal && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 backdrop-blur-sm overflow-y-auto py-6 px-4">
-          <div className="relative w-full max-w-xl bg-white rounded-2xl shadow-2xl flex flex-col">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white rounded-t-2xl z-10">
-              <div>
-                <p className="text-base font-bold text-gray-900">
-                  {mode === 'invoice' ? 'Invoice Preview' : 'Proposal Preview'}
-                </p>
-                <p className="text-xs text-gray-400 mt-0.5">This is what your client will see</p>
-              </div>
-              <button onClick={() => setShowPreviewModal(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 transition-colors">
-                <X size={16}/>
-              </button>
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex flex-col" onClick={e=>{if(e.target===e.currentTarget)setShowPreviewModal(false);}}>
+          {/* Sticky top bar */}
+          <div className="flex-shrink-0 flex items-center justify-between bg-white border-b border-gray-100 px-4 sm:px-6 py-3.5 shadow-sm">
+            <div>
+              <p className="text-base font-bold text-gray-900">
+                {mode === 'invoice' ? 'Invoice Preview' : 'Proposal Preview'}
+              </p>
+              <p className="text-xs text-gray-400">Exactly what your client will see</p>
             </div>
-            <div className="p-5">
-              <LivePreview
-                mode={mode} clientName={clientName} clientEmail={clientEmail}
-                contractHtml={contractHtml} lineItems={lineItems}
-                paymentType={paymentType} installments={installments}
-                subAmount={subAmount} subFrequency={subFrequency}
-                venueName={venueName} logoUrl={logoUrl} brandColor={brandColor}
-              />
-            </div>
-            <div className="px-5 pb-5 flex gap-2 justify-end">
-              <button onClick={() => setShowPreviewModal(false)}
-                className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+            <div className="flex items-center gap-2">
+              <button onClick={()=>setShowPreviewModal(false)}
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
                 Close
               </button>
-              <button onClick={() => { setShowPreviewModal(false); submit(false); }}
-                disabled={submitting}
-                className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50 transition-all shadow-sm"
+              <button onClick={()=>{setShowPreviewModal(false);submit(false);}} disabled={submitting}
+                className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50 transition-all shadow-sm"
                 style={{backgroundColor:'#1b1b1b'}}>
-                <Send size={14}/> Looks good, Send
+                <Send size={14}/> {submitting?'Sending...':'Looks good, Send'}
               </button>
+            </div>
+          </div>
+
+          {/* Scrollable content */}
+          <div className="flex-1 overflow-y-auto py-6 px-4 flex justify-center">
+            <div className="w-full max-w-lg">
+              {/* Full document preview */}
+              <div className="rounded-2xl border border-gray-200 bg-white shadow-xl overflow-hidden">
+                {/* Branded header */}
+                <div className="px-6 py-5 flex items-center justify-between" style={{backgroundColor: brandColor||'#1b1b1b'}}>
+                  <div className="flex items-center gap-3">
+                    {logoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={logoUrl} alt="logo" className="h-10 object-contain" onError={e=>(e.currentTarget.style.display='none')}/>
+                    ) : (
+                      <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center text-white font-bold text-lg">{venueName?.charAt(0)||'V'}</div>
+                    )}
+                    <div>
+                      <p className="text-white font-bold">{venueName||'Your Venue'}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-white font-bold text-xl">{mode==='invoice'?'INVOICE':'PROPOSAL'}</p>
+                    <p className="text-white/60 text-xs">#001</p>
+                  </div>
+                </div>
+
+                <div className="px-6 py-5 space-y-5">
+                  {/* Client */}
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-1">Bill To</p>
+                    <p className="font-bold text-gray-900 text-base">{clientName||'Client Name'}</p>
+                    {clientEmail && <p className="text-sm text-gray-500 mt-0.5">{clientEmail}</p>}
+                    {clientPhone && <p className="text-sm text-gray-500">{clientPhone}</p>}
+                  </div>
+
+                  {/* Contract */}
+                  {mode==='proposal' && contractHtml && (
+                    <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-3">Contract Terms</p>
+                      <div className="text-sm text-gray-700 leading-relaxed prose prose-sm max-w-none"
+                        dangerouslySetInnerHTML={{__html:contractHtml}}/>
+                    </div>
+                  )}
+
+                  {/* Line items */}
+                  <div>
+                    <div className="rounded-xl border border-gray-100 overflow-hidden">
+                      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100 grid grid-cols-[1fr_90px] text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                        <span>Description</span><span className="text-right">Amount</span>
+                      </div>
+                      {lineItems.filter(i=>i.name||parseFloat(i.amount||'0')>0).map(item=>(
+                        <div key={item.id} className="px-4 py-3 grid grid-cols-[1fr_90px] border-b border-gray-50 last:border-0">
+                          <div>
+                            <p className={`text-sm ${item.isSurcharge?'text-gray-500':'text-gray-900 font-medium'}`}>{item.name||'Item'}</p>
+                            {item.description&&<p className="text-xs text-gray-400 mt-0.5">{item.description}</p>}
+                          </div>
+                          <p className="text-sm text-right font-medium text-gray-900">{formatCents(Math.round(parseFloat(item.amount||'0')*100))}</p>
+                        </div>
+                      ))}
+                      <div className="px-4 py-3 border-t-2 border-gray-100 grid grid-cols-[1fr_90px]">
+                        <p className="text-sm font-bold text-gray-900">Total</p>
+                        <p className="text-sm font-bold text-right text-gray-900">{formatCents(totalCents)}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Payment details */}
+                  {paymentType==='installment' && installments.filter(i=>i.amount&&i.date).length>0 && (
+                    <div>
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-2">Installment Schedule</p>
+                      <div className="rounded-xl border border-gray-100 overflow-hidden">
+                        {installments.filter(i=>i.amount&&i.date).map((inst,idx)=>(
+                          <div key={inst.id} className="flex items-center justify-between px-4 py-2.5 border-b border-gray-50 last:border-0">
+                            <span className="text-sm text-gray-600">Payment {idx+1} — {inst.date}</span>
+                            <span className="text-sm font-semibold text-gray-900">{formatCents(Math.round(parseFloat(inst.amount||'0')*100))}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {paymentType==='subscription' && subAmount && (
+                    <div className="rounded-xl border border-gray-100 px-4 py-3">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-1">Recurring Payment</p>
+                      <p className="text-sm text-gray-900"><span className="font-bold">{formatCents(Math.round(parseFloat(subAmount||'0')*100))}</span> / {subFrequency}{subStartDate&&` starting ${subStartDate}`}</p>
+                    </div>
+                  )}
+
+                  {/* CTA */}
+                  <button className="w-full rounded-xl py-3.5 text-sm font-bold text-white" style={{backgroundColor:brandColor||'#1b1b1b'}}>
+                    {mode==='invoice'?'Pay Now':'Review & Sign'}
+                  </button>
+                  <p className="text-[11px] text-gray-300 text-center">Powered by StoryPay</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
