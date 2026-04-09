@@ -261,8 +261,8 @@ export default function CustomersPage() {
                 <input name="email" type="email" value={form.email} onChange={handleFormChange} required className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none" />
               </div>
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Phone</label>
-                <input name="phone" type="tel" value={form.phone} onChange={handleFormChange} className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none" />
+                <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Phone *</label>
+                <input name="phone" type="tel" value={form.phone} onChange={handleFormChange} required placeholder="(555) 000-0000" className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none" />
               </div>
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Address</label>

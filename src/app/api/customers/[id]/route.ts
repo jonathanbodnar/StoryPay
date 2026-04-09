@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { lpFetch } from '@/lib/lunarpay';
+import { ghlRequest, refreshAccessToken } from '@/lib/ghl';
 
 export async function GET(
   _request: NextRequest,
@@ -10,52 +11,95 @@ export async function GET(
   const { id } = await params;
   const cookieStore = await cookies();
   const venueId = cookieStore.get('venue_id')?.value;
-
-  if (!venueId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('lunarpay_secret_key')
+    .select('lunarpay_secret_key, ghl_connected, ghl_access_token, ghl_refresh_token, ghl_location_id')
     .eq('id', venueId)
     .single();
 
-  if (!venue?.lunarpay_secret_key) {
-    return NextResponse.json({ error: 'LunarPay not configured' }, { status: 400 });
+  if (!venue) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
+
+  // Auto-refresh GHL token
+  let ghlToken = venue.ghl_access_token;
+  if (venue.ghl_connected && venue.ghl_refresh_token) {
+    try {
+      const refreshed = await refreshAccessToken(venue.ghl_refresh_token);
+      if (refreshed.access_token) {
+        ghlToken = refreshed.access_token;
+        await supabaseAdmin.from('venues').update({
+          ghl_access_token: refreshed.access_token,
+          ghl_refresh_token: refreshed.refresh_token || venue.ghl_refresh_token,
+        }).eq('id', venueId);
+      }
+    } catch { /* use existing token */ }
   }
 
-  try {
-    const customerResult = await lpFetch(`/api/v1/customers/${id}`, {
-      method: 'GET',
-      key: venue.lunarpay_secret_key,
-    });
+  // Determine source: LunarPay IDs are numeric, GHL IDs are alphanumeric strings
+  const isLunarPayId = /^\d+$/.test(id);
 
-    const customer = customerResult.data || customerResult;
+  let customer: Record<string, unknown> | null = null;
+  let customerEmail = '';
 
-    const { data: proposals } = await supabaseAdmin
-      .from('proposals')
-      .select('id, customer_name, customer_email, status, price, payment_type, public_token, sent_at, signed_at, paid_at, created_at')
-      .eq('venue_id', venueId)
-      .or(`customer_email.eq.${customer.email}`);
-
-    return NextResponse.json({
-      customer: {
-        id: customer.id,
-        name: customer.name || [customer.firstName, customer.lastName].filter(Boolean).join(' '),
-        firstName: customer.firstName,
-        lastName: customer.lastName,
-        email: customer.email,
-        phone: customer.phone,
-        address: customer.address,
-        city: customer.city,
-        state: customer.state,
-        zip: customer.zip,
-      },
-      proposals: proposals || [],
-    });
-  } catch (err) {
-    console.error('Customer detail error:', err);
-    return NextResponse.json({ error: 'Failed to fetch customer' }, { status: 500 });
+  if (isLunarPayId && venue.lunarpay_secret_key) {
+    try {
+      const result = await lpFetch(`/api/v1/customers/${id}`, { method: 'GET', key: venue.lunarpay_secret_key });
+      const c = result.data || result;
+      customerEmail = c.email || '';
+      customer = {
+        id: c.id,
+        name: c.name || [c.firstName, c.lastName].filter(Boolean).join(' '),
+        firstName: c.firstName || '',
+        lastName:  c.lastName  || '',
+        email:     c.email     || '',
+        phone:     c.phone     || '',
+        address:   c.address   || '',
+        city:      c.city      || '',
+        state:     c.state     || '',
+        zip:       c.zip       || '',
+      };
+    } catch (err) {
+      console.error('[customer detail] LunarPay error:', err);
+    }
   }
+
+  // Try GHL if not found via LunarPay or if it's a GHL ID
+  if (!customer && ghlToken && venue.ghl_location_id) {
+    try {
+      const result = await ghlRequest(`/contacts/${id}`, ghlToken, { locationId: venue.ghl_location_id });
+      const c = result.contact || result;
+      customerEmail = c.email || '';
+      customer = {
+        id: c.id,
+        name: [c.firstName, c.lastName].filter(Boolean).join(' ') || c.email || 'Unknown',
+        firstName: c.firstName || '',
+        lastName:  c.lastName  || '',
+        email:     c.email     || '',
+        phone:     c.phone     || '',
+        address:   c.address   || '',
+        city:      c.city      || '',
+        state:     c.state     || '',
+        zip:       c.postalCode || '',
+      };
+    } catch (err) {
+      console.error('[customer detail] GHL error:', err);
+    }
+  }
+
+  if (!customer) {
+    return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
+  }
+
+  // Fetch proposals by email
+  const { data: proposals } = customerEmail
+    ? await supabaseAdmin
+        .from('proposals')
+        .select('id, customer_name, customer_email, status, price, payment_type, payment_config, public_token, sent_at, signed_at, paid_at, created_at, charge_id')
+        .eq('venue_id', venueId)
+        .eq('customer_email', customerEmail)
+        .order('created_at', { ascending: false })
+    : { data: [] };
+
+  return NextResponse.json({ customer, proposals: proposals || [] });
 }

@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, FileText, Users, CreditCard, BarChart2,
   Sparkles, Megaphone, Settings, Palette, Mail, UsersRound,
-  Bell, Package, Receipt, Link2, RefreshCw, DollarSign, Plus,
+  Bell, Package, Receipt, Link2, RefreshCw, DollarSign, Plus, Calendar,
   ArrowLeft, Menu, X, ChevronDown,
   HelpCircle,
 } from 'lucide-react';
@@ -24,10 +24,11 @@ const menuItems = [
 ];
 
 const paymentsItems = [
-  { label: 'New',           href: '/dashboard/payments/new',          icon: Plus },
-  { label: 'Proposal Templates', href: '/dashboard/proposals',         icon: FileText },
-  { label: 'Transactions',  href: '/dashboard/transactions',           icon: CreditCard },
-  { label: 'Subscriptions', href: '/dashboard/payments/subscriptions', icon: RefreshCw },
+  { label: 'New',           href: '/dashboard/payments/new',              icon: Plus },
+  { label: 'Proposals',     href: '/dashboard/payments/proposals',        icon: FileText },
+  { label: 'Transactions',  href: '/dashboard/transactions',              icon: CreditCard },
+  { label: 'Installments',  href: '/dashboard/payments/installments',     icon: Calendar },
+  { label: 'Subscriptions', href: '/dashboard/payments/subscriptions',    icon: RefreshCw },
   // { label: 'Payouts', href: '/dashboard/payments/payouts', icon: DollarSign }, // hidden for now
 ];
 
@@ -47,8 +48,7 @@ export default function Sidebar({ venue }: SidebarProps) {
   const isOnPayments = pathname.startsWith('/dashboard/payments')
     || pathname.startsWith('/dashboard/transactions')
     || pathname.startsWith('/dashboard/invoices')
-    || pathname.startsWith('/dashboard/proposals')
-    || pathname === '/dashboard/payments/new';
+    || pathname.startsWith('/dashboard/proposals');
 
   const [settingsOpen, setSettingsOpen] = useState(isOnSettings);
   const [paymentsOpen, setPaymentsOpen] = useState(isOnPayments);

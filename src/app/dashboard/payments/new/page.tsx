@@ -301,6 +301,7 @@ export default function NewProposalInvoicePage() {
   async function submit(asDraft: boolean) {
     setError('');
     if (!clientEmail.trim() || !clientName.trim()) { setError('Client name and email are required.'); return; }
+    if (customerMode === 'new' && !clientPhone.trim()) { setError('Phone number is required.'); return; }
     if (totalCents <= 0) { setError('Please add at least one line item with an amount.'); return; }
     if (mode==='proposal' && !selectedTemplate && !contractHtml) {
       if (!asDraft) { setError('Please select or create a contract for this proposal.'); return; }
@@ -483,8 +484,8 @@ export default function NewProposalInvoicePage() {
                     <input type="email" value={clientEmail} onChange={e=>setClientEmail(e.target.value)} placeholder="jane@example.com" className={INPUT}/>
                   </div>
                   <div>
-                    <label className={LABEL}>Phone</label>
-                    <input type="tel" value={clientPhone} onChange={e=>setClientPhone(e.target.value)} placeholder="(555) 000-0000" className={INPUT}/>
+                    <label className={LABEL}>Phone <span className="text-red-400">*</span></label>
+                    <input type="tel" required value={clientPhone} onChange={e=>setClientPhone(e.target.value)} placeholder="(555) 000-0000" className={INPUT} style={{fontSize:16}}/>
                   </div>
                 </div>
               )}

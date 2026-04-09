@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { ghlRequest } from '@/lib/ghl';
+import { ghlRequest, refreshAccessToken } from '@/lib/ghl';
 import { listCustomers } from '@/lib/lunarpay';
 
 interface NormalizedContact {
@@ -24,12 +24,25 @@ export async function GET(request: NextRequest) {
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('ghl_connected, ghl_access_token, ghl_location_id, lunarpay_secret_key')
+    .select('ghl_connected, ghl_access_token, ghl_refresh_token, ghl_location_id, lunarpay_secret_key')
     .eq('id', venueId)
     .single();
 
-  if (!venue) {
-    return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
+  if (!venue) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
+
+  // Auto-refresh GHL token
+  let ghlToken = venue.ghl_access_token;
+  if (venue.ghl_connected && venue.ghl_refresh_token) {
+    try {
+      const refreshed = await refreshAccessToken(venue.ghl_refresh_token);
+      if (refreshed.access_token) {
+        ghlToken = refreshed.access_token;
+        await supabaseAdmin.from('venues').update({
+          ghl_access_token: refreshed.access_token,
+          ghl_refresh_token: refreshed.refresh_token || venue.ghl_refresh_token,
+        }).eq('id', venueId);
+      }
+    } catch (err) { console.error('[contacts] token refresh failed:', err); }
   }
 
   const search = request.nextUrl.searchParams.get('search') || '';
@@ -39,11 +52,11 @@ export async function GET(request: NextRequest) {
   const seenEmails = new Set<string>();
 
   // Query GHL contacts
-  if (venue.ghl_connected && venue.ghl_access_token && venue.ghl_location_id) {
+  if (venue.ghl_connected && ghlToken && venue.ghl_location_id) {
     try {
       const ghlResult = await ghlRequest(
         `/contacts/?locationId=${venue.ghl_location_id}&query=${encodeURIComponent(search)}&limit=${limit}`,
-        venue.ghl_access_token,
+        ghlToken,
         { locationId: venue.ghl_location_id }
       );
 
