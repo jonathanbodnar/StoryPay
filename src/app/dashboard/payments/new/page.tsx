@@ -182,10 +182,11 @@ export default function NewProposalInvoicePage() {
   const [subStartDate, setSubStartDate] = useState('');
 
   // UI
-  const [showPreview, setShowPreview] = useState(false);
-  const [submitting, setSubmitting]   = useState(false);
-  const [saving, setSaving]           = useState(false);
-  const [error, setError]             = useState('');
+  const [showPreview, setShowPreview]       = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [submitting, setSubmitting]         = useState(false);
+  const [saving, setSaving]                 = useState(false);
+  const [error, setError]                   = useState('');
 
   // Branding
   const [venueName, setVenueName]   = useState('');
@@ -364,10 +365,14 @@ export default function NewProposalInvoicePage() {
           <p className="text-sm text-gray-500 mt-0.5">Create a proposal, invoice, or both — then send to your client</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={()=>setShowPreviewModal(true)}
+            className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors shadow-sm">
+            <Eye size={15}/> Preview
+          </button>
           <button onClick={()=>setShowPreview(v=>!v)}
             className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors shadow-sm lg:hidden">
             {showPreview ? <EyeOff size={15}/> : <Eye size={15}/>}
-            {showPreview ? 'Hide Preview' : 'Preview'}
+            {showPreview ? 'Live' : 'Live'}
           </button>
           <button onClick={()=>submit(true)} disabled={saving||submitting}
             className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-50">
@@ -412,7 +417,7 @@ export default function NewProposalInvoicePage() {
           </div>
 
           {/* Customer */}
-          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
               <p className="text-sm font-semibold text-gray-900">Client</p>
               <div className="flex gap-1">
@@ -448,7 +453,7 @@ export default function NewProposalInvoicePage() {
                         {searchLoading && <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-gray-400"/>}
                       </div>
                       {showDropdown && searchQuery.length>=2 && (
-                        <div className="absolute z-20 mt-1 w-full rounded-xl border border-gray-200 bg-white shadow-lg overflow-hidden max-h-56 overflow-y-auto">
+                        <div className="absolute z-50 mt-1 w-full rounded-xl border border-gray-200 bg-white shadow-xl overflow-hidden max-h-56 overflow-y-auto" style={{top:'100%',left:0}}>
                           {searchResults.length>0 ? searchResults.map(c=>(
                             <button key={c.id} type="button" onClick={()=>{setSelectedCustomer(c);setClientName(c.name||'');setClientEmail(c.email||'');setClientPhone(c.phone||'');setShowDropdown(false);}}
                               className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0">
@@ -680,8 +685,8 @@ export default function NewProposalInvoicePage() {
         </div>
 
         {/* ── RIGHT: Live Preview (desktop always visible, mobile toggle) ── */}
-        <div className={`lg:block lg:sticky lg:top-10 ${showPreview ? 'block' : 'hidden'}`}>
-          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+        <div className={`lg:block lg:sticky lg:top-10 ${showPreview ? 'block' : 'hidden lg:block'}`}>
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
             <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
               <p className="text-sm font-semibold text-gray-900">Live Preview</p>
               <div className="flex items-center gap-1.5">
@@ -701,6 +706,47 @@ export default function NewProposalInvoicePage() {
           </div>
         </div>
       </div>
+
+      {/* Full Preview Modal */}
+      {showPreviewModal && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 backdrop-blur-sm overflow-y-auto py-6 px-4">
+          <div className="relative w-full max-w-xl bg-white rounded-2xl shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white rounded-t-2xl z-10">
+              <div>
+                <p className="text-base font-bold text-gray-900">
+                  {mode === 'invoice' ? 'Invoice Preview' : 'Proposal Preview'}
+                </p>
+                <p className="text-xs text-gray-400 mt-0.5">This is what your client will see</p>
+              </div>
+              <button onClick={() => setShowPreviewModal(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 transition-colors">
+                <X size={16}/>
+              </button>
+            </div>
+            <div className="p-5">
+              <LivePreview
+                mode={mode} clientName={clientName} clientEmail={clientEmail}
+                contractHtml={contractHtml} lineItems={lineItems}
+                paymentType={paymentType} installments={installments}
+                subAmount={subAmount} subFrequency={subFrequency}
+                venueName={venueName} logoUrl={logoUrl} brandColor={brandColor}
+              />
+            </div>
+            <div className="px-5 pb-5 flex gap-2 justify-end">
+              <button onClick={() => setShowPreviewModal(false)}
+                className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+                Close
+              </button>
+              <button onClick={() => { setShowPreviewModal(false); submit(false); }}
+                disabled={submitting}
+                className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50 transition-all shadow-sm"
+                style={{backgroundColor:'#1b1b1b'}}>
+                <Send size={14}/> Looks good, Send
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* AI Generator Modal */}
       {showAI && (
