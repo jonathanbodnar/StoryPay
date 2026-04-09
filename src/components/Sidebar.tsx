@@ -92,7 +92,7 @@ export default function Sidebar({ venue }: SidebarProps) {
     }`;
 
   const groupBtnStyle = (active: boolean): React.CSSProperties =>
-    active ? { backgroundColor: '#1b1b1b' } : {};
+    active ? { backgroundColor: '#1b1b1b', color: '#ffffff' } : {};
 
   // ── Shared nav content ───────────────────────────────────────────────────
   const NavContent = () => (
@@ -128,12 +128,12 @@ export default function Sidebar({ venue }: SidebarProps) {
 
         {/* Payments collapsible */}
         <div>
-          <button type="button" onClick={() => setPaymentsOpen(v => !v)} className={groupBtn(isOnPayments)} style={groupBtnStyle(isOnPayments)}>
+          <button type="button" onClick={() => setPaymentsOpen(v => !v)} className={groupBtn(paymentsOpen)} style={groupBtnStyle(paymentsOpen)}>
             <div className="flex items-center gap-3">
               <CreditCard size={16} />
               <span>Payments</span>
             </div>
-            <ChevronDown size={13} className={`transition-transform duration-200 ${paymentsOpen ? 'rotate-180' : ''} ${isOnPayments ? 'text-white/50' : 'text-gray-400'}`} />
+            <ChevronDown size={13} className={`transition-transform duration-200 ${paymentsOpen ? 'rotate-180 text-white/50' : 'text-gray-400'}`} />
           </button>
           {paymentsOpen && (
             <div className="mt-0.5 ml-3 pl-3 border-l border-gray-100 space-y-0.5 py-0.5">
@@ -164,12 +164,12 @@ export default function Sidebar({ venue }: SidebarProps) {
 
         {/* Settings collapsible */}
         <div>
-          <button type="button" onClick={() => setSettingsOpen(v => !v)} className={groupBtn(isOnSettings)} style={groupBtnStyle(isOnSettings)}>
+          <button type="button" onClick={() => setSettingsOpen(v => !v)} className={groupBtn(settingsOpen)} style={groupBtnStyle(settingsOpen)}>
             <div className="flex items-center gap-3">
               <Settings size={16} />
               <span>Settings</span>
             </div>
-            <ChevronDown size={13} className={`transition-transform duration-200 ${settingsOpen ? 'rotate-180' : ''} ${isOnSettings ? 'text-white/50' : 'text-gray-400'}`} />
+            <ChevronDown size={13} className={`transition-transform duration-200 ${settingsOpen ? 'rotate-180 text-white/50' : 'text-gray-400'}`} />
           </button>
           {settingsOpen && (
             <div className="mt-0.5 ml-3 pl-3 border-l border-gray-100 space-y-0.5 py-0.5">
