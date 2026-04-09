@@ -134,13 +134,7 @@ export default function ProposalsPage() {
             <FileStack size={15} />
             <span className="hidden sm:inline">Templates</span>
           </Link>
-          <Link
-            href="/dashboard/invoices/new"
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 sm:px-4 sm:py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-          >
-            <Receipt size={15} />
-            <span className="hidden sm:inline">Create Invoice</span>
-          </Link>
+
           <Link
             href="/dashboard/proposals/new"
             className="inline-flex items-center gap-2 rounded-lg px-3 py-2 sm:px-4 sm:py-2.5 text-sm font-medium text-white transition-colors"
