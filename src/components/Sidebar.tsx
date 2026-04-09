@@ -21,7 +21,6 @@ const menuItems = [
   { label: 'Customers',   href: '/dashboard/customers', icon: Users },
   { label: 'Reports',     href: '/dashboard/reports',   icon: BarChart2 },
   { label: "What's New",  href: '/dashboard/updates',   icon: Megaphone },
-  { label: 'Support',     href: '/dashboard/support',   icon: HelpCircle },
 ];
 
 const paymentsItems = [
@@ -115,7 +114,7 @@ export default function Sidebar({ venue }: SidebarProps) {
       {/* Logo area */}
       <div className="px-4 pt-5 pb-2">
         <Link href="/dashboard" className="block">
-          <Image src="/storyvenue-dark-logo.png" alt="StoryPay" width={110} height={28} className="opacity-90" />
+          <Image src="/storyvenue-dark-logo.png" alt="StoryPay" width={148} height={38} className="opacity-90" />
         </Link>
       </div>
 
@@ -204,9 +203,16 @@ export default function Sidebar({ venue }: SidebarProps) {
       </nav>
 
       {/* Footer */}
-      <div className="px-4 py-4 border-t border-gray-100">
+      <div className="px-4 py-4 border-t border-gray-100 space-y-2">
+        <button
+          onClick={() => window.dispatchEvent(new Event('open-ask-ai'))}
+          className="flex items-center gap-2 text-gray-400 hover:text-gray-700 transition-colors text-sm w-full"
+        >
+          <HelpCircle size={16} />
+          <span>Help Desk</span>
+        </button>
         <p className="text-xs font-medium text-gray-700 truncate">{venue.name}</p>
-        <p className="text-[10px] text-gray-400 mt-0.5">&copy; StoryVenue 2026</p>
+        <p className="text-[10px] text-gray-400">&copy; StoryVenue 2026</p>
       </div>
     </div>
   );

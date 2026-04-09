@@ -197,26 +197,6 @@ export default function DashboardOverview() {
         </div>
         <div className="flex items-center gap-2.5 flex-wrap">
           <DateRangePicker value={dateRange} onChange={setDateRange} />
-          <Link
-            href="/dashboard/invoices/new"
-            className="flex items-center gap-2 rounded-lg border bg-white px-4 py-2.5 text-sm font-medium shadow-sm transition-all"
-            style={{ borderColor: B.light, color: B.primary }}
-            onMouseEnter={e => (e.currentTarget.style.borderColor = B.active)}
-            onMouseLeave={e => (e.currentTarget.style.borderColor = B.light)}
-          >
-            <Receipt size={15} />
-            Create Invoice
-          </Link>
-          <Link
-            href="/dashboard/proposals/new"
-            className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-all"
-            style={{ backgroundColor: B.primary }}
-            onMouseEnter={e => (e.currentTarget.style.backgroundColor = B.hover)}
-            onMouseLeave={e => (e.currentTarget.style.backgroundColor = B.primary)}
-          >
-            <FileText size={15} />
-            Create Proposal
-          </Link>
         </div>
       </div>
 
