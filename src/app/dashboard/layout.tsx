@@ -24,7 +24,8 @@ export default async function DashboardLayout({
       <Sidebar venue={{ id: venue.id, name: venue.name, ghl_location_id: venue.ghl_location_id }} />
       <div className="lg:ml-[260px]">
         <AnnouncementTicker />
-        <main className="min-h-screen pt-14 lg:pt-0 p-6 sm:p-8 lg:p-10 max-w-7xl mx-auto">
+        {/* lg:pt-[68px] aligns page title with first sidebar nav item regardless of ticker */}
+        <main className="min-h-screen pt-14 lg:pt-[68px] px-6 sm:px-8 lg:px-10 pb-10 max-w-7xl mx-auto">
           {children}
         </main>
       </div>
