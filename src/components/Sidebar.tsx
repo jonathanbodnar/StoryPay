@@ -30,7 +30,7 @@ const paymentsItems = [
   { label: 'Payment Links', href: '/dashboard/payments/payment-links', icon: Link2 },
   { label: 'Transactions',  href: '/dashboard/transactions',           icon: CreditCard },
   { label: 'Subscriptions', href: '/dashboard/payments/subscriptions', icon: RefreshCw },
-  { label: 'Payouts',       href: '/dashboard/payments/payouts',       icon: DollarSign },
+  // { label: 'Payouts', href: '/dashboard/payments/payouts', icon: DollarSign }, // hidden for now
 ];
 
 const settingsItems = [
@@ -99,10 +99,6 @@ export default function Sidebar({ venue }: SidebarProps) {
     <div className="flex flex-col h-full">
       {/* Logo area */}
       <div className="px-4 pt-5 pb-2">
-        <a href={returnUrl} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors mb-4">
-          <ArrowLeft size={12} />
-          <span>Return to StoryVenue</span>
-        </a>
         <Link href="/dashboard" className="block">
           <Image src="/storyvenue-dark-logo.png" alt="StoryPay" width={110} height={28} className="opacity-90" />
         </Link>
