@@ -43,12 +43,12 @@ const LABEL = 'block text-sm font-medium text-gray-700 mb-1.5';
 // ─── Live Preview ─────────────────────────────────────────────────────────────
 function LivePreview({
   mode, clientName, clientEmail, contractHtml, lineItems, paymentType,
-  installments, subAmount, subFrequency, venueName, logoUrl, brandColor,
+  installments, subAmount, subFrequency, venueName, logoUrl, brandColor, onPreview,
 }: {
   mode: Mode; clientName: string; clientEmail: string; contractHtml: string;
   lineItems: LineItem[]; paymentType: PaymentType;
   installments: Installment[]; subAmount: string; subFrequency: string;
-  venueName: string; logoUrl: string; brandColor: string;
+  venueName: string; logoUrl: string; brandColor: string; onPreview?: () => void;
 }) {
   const totalCents = lineItems.reduce((s, i) => { const v = parseFloat(i.amount||'0'); return s + (isNaN(v)?0:Math.round(v*100)); }, 0);
 
@@ -130,8 +130,10 @@ function LivePreview({
         )}
 
         {/* CTA */}
-        <button className="w-full rounded-xl py-2.5 text-sm font-bold text-white" style={{ backgroundColor: brandColor || '#1b1b1b' }}>
-          {mode === 'invoice' ? 'Pay Now' : 'Review & Sign'}
+        <button onClick={onPreview}
+          className="w-full rounded-xl py-2.5 text-sm font-bold text-white flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
+          style={{ backgroundColor: brandColor || '#1b1b1b' }}>
+          <Eye size={14}/> Preview Full {mode === 'invoice' ? 'Invoice' : 'Proposal'}
         </button>
 
         <p className="text-[10px] text-gray-300 text-center">Powered by StoryPay</p>
@@ -704,16 +706,17 @@ export default function NewProposalInvoicePage() {
                 paymentType={paymentType} installments={installments}
                 subAmount={subAmount} subFrequency={subFrequency}
                 venueName={venueName} logoUrl={logoUrl} brandColor={brandColor}
+                onPreview={() => setShowPreviewModal(true)}
               />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Full Preview Modal — full screen, fully scrollable */}
+      {/* Full Preview Modal — true full-screen scrollable */}
       {showPreviewModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex flex-col" onClick={e=>{if(e.target===e.currentTarget)setShowPreviewModal(false);}}>
-          {/* Sticky top bar */}
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" style={{ display: 'flex', flexDirection: 'column', height: '100dvh' }}>
+          {/* Sticky top bar — never scrolls */}
           <div className="flex-shrink-0 flex items-center justify-between bg-white border-b border-gray-100 px-4 sm:px-6 py-3.5 shadow-sm">
             <div>
               <p className="text-base font-bold text-gray-900">
@@ -734,9 +737,9 @@ export default function NewProposalInvoicePage() {
             </div>
           </div>
 
-          {/* Scrollable content */}
-          <div className="flex-1 overflow-y-auto py-6 px-4 flex justify-center">
-            <div className="w-full max-w-lg">
+          {/* Scrollable content — flex-1 + overflow-y-auto = true scroll */}
+          <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }} className="py-6 px-4 flex justify-center">
+            <div className="w-full max-w-lg pb-8">
               {/* Full document preview */}
               <div className="rounded-2xl border border-gray-200 bg-white shadow-xl overflow-hidden">
                 {/* Branded header */}
