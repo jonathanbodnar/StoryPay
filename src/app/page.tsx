@@ -377,7 +377,7 @@ export default function LandingPage() {
 
         {/* Nav */}
         <nav className="mx-auto max-w-5xl px-5 sm:px-8 py-5 flex items-center justify-between">
-          <Image src="/storyvenue-dark-logo.png" alt="StoryPay" width={110} height={26} />
+          <Image src="/storypay-logo-dark.png" alt="StoryPay" width={110} height={26} />
           <a href="/admin" className="text-xs text-gray-400 hover:text-gray-600 transition-colors">Admin</a>
         </nav>
 

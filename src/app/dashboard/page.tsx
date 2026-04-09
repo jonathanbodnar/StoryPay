@@ -34,11 +34,11 @@ const B = {
 
 // ─── Proposal status — all brand-derived ─────────────────────────────────────
 const STATUS_COLORS: Record<string, string> = {
-  draft:   '#888888',   // brand muted
-  sent:    '#2d2d2d',   // brand active
-  opened:  '#333333',   // brand hover
-  signed:  '#444444',   // brand slate
-  paid:    '#1b1b1b',   // brand primary
+  draft:   '#9ca3af',   // gray
+  sent:    '#3b82f6',   // blue
+  opened:  '#f59e0b',   // amber
+  signed:  '#8b5cf6',   // purple
+  paid:    '#10b981',   // green
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -115,11 +115,11 @@ function Skeleton({ className }: { className?: string }) {
   return <div className={classNames('animate-pulse rounded', className ?? '')} style={{ backgroundColor: B.bg10 }} />;
 }
 
-// KPI card icon badge — always brand-tinted
-function IconBadge({ icon: Icon }: { icon: React.ElementType }) {
+// KPI card icon badge — colored per card
+function IconBadge({ icon: Icon, bg, color }: { icon: React.ElementType; bg: string; color: string }) {
   return (
-    <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: B.bg10 }}>
-      <Icon size={15} style={{ color: B.primary }} />
+    <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: bg }}>
+      <Icon size={15} style={{ color }} />
     </div>
   );
 }
@@ -207,7 +207,7 @@ export default function DashboardOverview() {
         <div className="rounded-xl bg-white shadow-sm p-5" style={{ border: `1px solid ${B.light}` }}>
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: B.muted }}>Revenue</span>
-            <IconBadge icon={DollarSign} />
+            <IconBadge icon={DollarSign} bg="#f0fdf4" color="#16a34a" />
           </div>
           {loading ? <><Skeleton className="h-7 w-24 mb-2" /><Skeleton className="h-3.5 w-16" /></> : (
             <>
@@ -224,7 +224,7 @@ export default function DashboardOverview() {
         <div className="rounded-xl bg-white shadow-sm p-5" style={{ border: `1px solid ${B.light}` }}>
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: B.muted }}>Proposals</span>
-            <IconBadge icon={FileText} />
+            <IconBadge icon={FileText} bg="#eff6ff" color="#2563eb" />
           </div>
           {loading ? <><Skeleton className="h-7 w-16 mb-2" /><Skeleton className="h-3.5 w-20" /></> : (
             <>
@@ -241,7 +241,7 @@ export default function DashboardOverview() {
         <div className="rounded-xl bg-white shadow-sm p-5" style={{ border: `1px solid ${B.light}` }}>
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: B.muted }}>Customers</span>
-            <IconBadge icon={Users} />
+            <IconBadge icon={Users} bg="#faf5ff" color="#7c3aed" />
           </div>
           {loading ? <><Skeleton className="h-7 w-16 mb-2" /><Skeleton className="h-3.5 w-24" /></> : (
             <>
@@ -259,7 +259,7 @@ export default function DashboardOverview() {
         <div className="rounded-xl bg-white shadow-sm p-5" style={{ border: `1px solid ${B.light}` }}>
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: B.muted }}>Pending</span>
-            <IconBadge icon={Clock} />
+            <IconBadge icon={Clock} bg="#fff7ed" color="#d97706" />
           </div>
           {loading ? <><Skeleton className="h-7 w-16 mb-2" /><Skeleton className="h-3.5 w-28" /></> : (
             <>
