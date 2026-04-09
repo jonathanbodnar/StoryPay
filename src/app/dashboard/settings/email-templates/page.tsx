@@ -189,15 +189,15 @@ export default function EmailTemplatesPage() {
               const active = selected === t.type;
               return (
                 <button key={t.type} onClick={() => setSelected(t.type)}
-                  className={`w-full flex items-center gap-3 px-5 py-4 text-left transition-colors ${active ? 'bg-gray-900 text-white' : 'hover:bg-gray-50/80 text-gray-700'}`}>
-                  <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${active ? 'bg-white/15' : 'bg-gray-100'}`}>
-                    <Icon size={16} className={active ? 'text-white' : 'text-gray-500'} />
+                  className={`w-full flex items-center gap-3 px-5 py-4 text-left transition-colors ${active ? 'bg-gray-100 text-gray-900' : 'hover:bg-gray-50/80 text-gray-700'}`}>
+                  <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${active ? 'bg-white border border-gray-200' : 'bg-gray-100'}`}>
+                    <Icon size={16} className="text-gray-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-semibold leading-tight ${active ? 'text-white' : 'text-gray-900'}`}>{t.label}</p>
-                    <p className={`text-[11px] mt-0.5 truncate ${active ? 'text-white/60' : 'text-gray-400'}`}>{t.description}</p>
+                    <p className="text-sm font-semibold leading-tight text-gray-900">{t.label}</p>
+                    <p className="text-[11px] mt-0.5 truncate text-gray-400">{t.description}</p>
                   </div>
-                  <ChevronRight size={15} className={active ? 'text-white/60' : 'text-gray-300'} />
+                  <ChevronRight size={15} className={active ? 'text-gray-500' : 'text-gray-300'} />
                 </button>
               );
             })}
