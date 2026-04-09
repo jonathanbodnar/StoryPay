@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { DollarSign, FileText, Users, Clock, TrendingUp, TrendingDown, ArrowUpRight, Receipt, ArrowRight, CheckCircle2, Send, PenLine, Eye, XCircle, CreditCard } from 'lucide-react';
+import { DollarSign, FileText, Users, Clock, TrendingUp, TrendingDown, ArrowUpRight, Receipt, ArrowRight, CheckCircle2, Send, PenLine, Eye, XCircle, CreditCard, RotateCcw } from 'lucide-react';
 import { formatCents, formatDate, getStatusColor, classNames } from '@/lib/utils';
 import Link from 'next/link';
 import DateRangePicker, { DateRange, PRESETS } from '@/components/DateRangePicker';
@@ -59,6 +59,8 @@ interface Stats {
   customerCount: number;
   pendingPayments: number;
   failedPayments: number;
+  refundedCount: number;
+  refundedAmount: number;
   statusBreakdown: Record<string, number>;
   monthlyChart: { month: string; label: string; revenue: number; proposals: number }[];
   trends: {
@@ -219,7 +221,7 @@ export default function DashboardOverview() {
       </div>
 
       {/* ── KPI Cards ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-6">
 
         {/* Revenue */}
         <div className="rounded-xl bg-white shadow-sm p-5" style={{ border: `1px solid ${B.light}` }}>
@@ -308,6 +310,33 @@ export default function DashboardOverview() {
                 ? <Link href="/dashboard/transactions" className="inline-flex items-center gap-1 text-xs text-red-400 mt-1.5 hover:text-red-600 transition-colors font-medium">Review <ArrowRight size={10} /></Link>
                 : <p className="text-xs mt-1.5" style={{ color: B.muted }}>All clear</p>
               }
+            </>
+          )}
+        </div>
+
+        {/* Refunded */}
+        <div className="rounded-xl bg-white shadow-sm p-5" style={{ border: `1px solid ${B.light}` }}>
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Refunded</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-50">
+              <RotateCcw size={15} className="text-gray-500" />
+            </div>
+          </div>
+          {loading ? <><Skeleton className="h-7 w-16 mb-2" /><Skeleton className="h-3.5 w-28" /></> : (
+            <>
+              <p className="text-2xl font-bold tracking-tight" style={{ color: (stats?.refundedCount ?? 0) > 0 ? '#ef4444' : B.primary }}>
+                {(stats?.refundedCount ?? 0).toLocaleString()}
+              </p>
+              {(stats?.refundedCount ?? 0) > 0 ? (
+                <div className="mt-1.5">
+                  <p className="text-xs text-red-500 font-medium">{formatCents(stats?.refundedAmount ?? 0)} refunded</p>
+                  <Link href="/dashboard/transactions" className="inline-flex items-center gap-1 text-xs text-gray-400 mt-0.5 hover:text-gray-700 transition-colors">
+                    View <ArrowRight size={10} />
+                  </Link>
+                </div>
+              ) : (
+                <p className="text-xs mt-1.5" style={{ color: B.muted }}>None this period</p>
+              )}
             </>
           )}
         </div>

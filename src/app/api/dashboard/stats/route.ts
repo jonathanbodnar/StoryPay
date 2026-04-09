@@ -52,6 +52,12 @@ export async function GET(request: NextRequest) {
     (r) => r.status === 'failed' || r.status === 'declined'
   ).length;
 
+  // Refunded transactions
+  const refundedCount = rows.filter((r) => r.status === 'refunded').length;
+  const refundedAmount = rows
+    .filter((r) => r.status === 'refunded')
+    .reduce((sum, r) => sum + (r.price ?? 0), 0);
+
   // Unique customers
   const uniqueEmails = new Set(rows.map((r) => r.customer_email).filter(Boolean));
   const customerCount = uniqueEmails.size;
@@ -122,6 +128,8 @@ export async function GET(request: NextRequest) {
     customerCount,
     pendingPayments,
     failedPayments,
+    refundedCount,
+    refundedAmount,
     statusBreakdown,
     monthlyChart,
     trends: {
