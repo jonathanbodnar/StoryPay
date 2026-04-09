@@ -5,6 +5,7 @@ import { DollarSign, FileText, Users, Clock, TrendingUp, TrendingDown, ArrowUpRi
 import { formatCents, formatDate, getStatusColor, classNames } from '@/lib/utils';
 import Link from 'next/link';
 import DateRangePicker, { DateRange, PRESETS } from '@/components/DateRangePicker';
+import OnboardingChecklist from '@/components/OnboardingChecklist';
 import {
   AreaChart,
   Area,
@@ -188,6 +189,9 @@ export default function DashboardOverview() {
 
   return (
     <div className="min-h-full bg-white">
+
+      {/* ── Onboarding Checklist ── */}
+      <OnboardingChecklist />
 
       {/* ── Header ── */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
