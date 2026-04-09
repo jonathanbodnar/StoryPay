@@ -140,7 +140,7 @@ export default function BrandingPage() {
     fetch('/api/venues/me').then(r => r.json()).then(d => {
       setBrand({
         logo_url:    d.brand_logo_url   || '',
-        primary:     d.brand_color      || '#1b1b1b',
+        primary:     (d.brand_color && d.brand_color !== '#293745' && d.brand_color !== '#354859') ? d.brand_color : '#1b1b1b',
         bg:          d.brand_bg_color   || '#ffffff',
         btnText:     d.brand_btn_text   || '#ffffff',
         venueName:   d.name             || '',

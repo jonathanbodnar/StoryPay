@@ -211,7 +211,9 @@ export default function NewProposalInvoicePage() {
     fetch('/api/venues/me').then(r=>r.json()).then(d=>{
       setVenueName(d.name||'');
       setLogoUrl(d.brand_logo_url||'');
-      setBrandColor(d.brand_color||'#1b1b1b');
+      // Treat old default #293745 as unset — use #1b1b1b
+      const c = d.brand_color;
+      setBrandColor(c && c !== '#293745' && c !== '#354859' ? c : '#1b1b1b');
     });
   }, []);
 
