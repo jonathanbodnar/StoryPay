@@ -381,12 +381,13 @@ export default function ProposalPage() {
         <div className="bg-white rounded-2xl shadow-xl shadow-gray-200/50 border border-gray-100 overflow-hidden">
           {/* Proposal header */}
           <div className="px-8 pt-8 pb-6 border-b border-gray-100">
-            <p className="text-xs font-semibold uppercase tracking-widest text-brand-900 mb-1">Proposal</p>
-            <h1
-              className="text-3xl font-bold text-gray-900 mb-1 font-heading"
-            >
-              {proposal.venue_name}
-            </h1>
+            <p className="text-xs font-semibold uppercase tracking-widest text-brand-900 mb-2">Proposal</p>
+            {proposal.venue_logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={proposal.venue_logo_url} alt={proposal.venue_name} className="h-12 object-contain mb-3" />
+            ) : (
+              <h1 className="text-3xl font-bold text-gray-900 mb-1 font-heading">{proposal.venue_name}</h1>
+            )}
             <p className="text-gray-500">
               Prepared for <span className="font-medium text-gray-700">{proposal.customer_name}</span>
             </p>

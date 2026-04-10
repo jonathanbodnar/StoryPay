@@ -61,11 +61,13 @@ function LivePreview({
             // eslint-disable-next-line @next/next/no-img-element
             <img src={logoUrl} alt="logo" className="h-8 object-contain" onError={e=>(e.currentTarget.style.display='none')} />
           ) : (
-            <div className="h-8 w-8 rounded-lg bg-white/20 flex items-center justify-center text-white font-bold">
-              {venueName?.charAt(0)||'V'}
-            </div>
+            <>
+              <div className="h-8 w-8 rounded-lg bg-white/20 flex items-center justify-center text-white font-bold">
+                {venueName?.charAt(0)||'V'}
+              </div>
+              <p className="text-white font-semibold text-sm">{venueName || 'Your Venue'}</p>
+            </>
           )}
-          <p className="text-white font-semibold text-sm">{venueName || 'Your Venue'}</p>
         </div>
         <div className="text-right">
           <p className="text-white font-bold text-base">{mode === 'invoice' ? 'INVOICE' : 'PROPOSAL'}</p>
@@ -766,11 +768,11 @@ export default function NewProposalInvoicePage() {
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={logoUrl} alt="logo" className="h-10 object-contain" onError={e=>(e.currentTarget.style.display='none')}/>
                     ) : (
-                      <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center text-white font-bold text-lg">{venueName?.charAt(0)||'V'}</div>
+                      <>
+                        <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center text-white font-bold text-lg">{venueName?.charAt(0)||'V'}</div>
+                        <p className="text-white font-bold">{venueName||'Your Venue'}</p>
+                      </>
                     )}
-                    <div>
-                      <p className="text-white font-bold">{venueName||'Your Venue'}</p>
-                    </div>
                   </div>
                   <div className="text-right">
                     <p className="text-white font-bold text-xl">{mode==='invoice'?'INVOICE':'PROPOSAL'}</p>
