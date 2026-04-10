@@ -385,12 +385,6 @@ export default function NewProposalInvoicePage() {
             className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors shadow-sm whitespace-nowrap">
             <Eye size={14}/> Preview
           </button>
-          {/* Live toggle — desktop only */}
-          <button onClick={()=>setShowPreview(v=>!v)}
-            className="hidden lg:flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors shadow-sm whitespace-nowrap">
-            {showPreview ? <EyeOff size={14}/> : <Eye size={14}/>}
-            Live
-          </button>
           <button onClick={()=>submit(true)} disabled={saving||submitting}
             className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-50 whitespace-nowrap">
             {saving ? <Loader2 size={14} className="animate-spin"/> : <Save size={14}/>}
