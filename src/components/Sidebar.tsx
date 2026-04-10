@@ -113,7 +113,7 @@ export default function Sidebar({ venue }: SidebarProps) {
     <div className="flex flex-col h-full">
       {/* Logo area */}
       <div className="px-4 pt-5 pb-2">
-        <Link href="/dashboard" className="block">
+        <Link href="/dashboard" className="block" onClick={() => setMobileOpen(false)}>
           <Image src="/storyvenue-dark-logo.png" alt="StoryPay" width={148} height={38} className="opacity-90" />
         </Link>
       </div>
