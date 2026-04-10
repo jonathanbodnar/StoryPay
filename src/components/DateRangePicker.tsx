@@ -308,13 +308,10 @@ export default function DateRangePicker({ value, onChange }: Props) {
 
   const panel = open ? (
     isMobileScreen ? (
-      // Full-width bottom sheet on mobile
-      <div className="flex flex-col bg-white rounded-t-2xl shadow-2xl overflow-y-auto"
-        style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 9999, maxHeight: '88vh' }}
+      // Centered modal on mobile — inset 16px from all edges, max 88vh tall
+      <div className="flex flex-col bg-white rounded-2xl shadow-2xl overflow-y-auto"
+        style={{ position: 'fixed', top: '50%', left: 16, right: 16, transform: 'translateY(-50%)', zIndex: 9999, maxHeight: '88vh' }}
         onClick={e => e.stopPropagation()}>
-        <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
-          <div className="h-1 w-10 rounded-full bg-gray-300" />
-        </div>
         <div className="flex flex-col">{calendarInner}</div>
       </div>
     ) : (

@@ -188,6 +188,7 @@ export default function BrandingPage() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          name:              brand.venueName,
           brand_logo_url:    brand.logo_url,
           brand_color:       brand.primary,
           brand_bg_color:    brand.bg,
@@ -346,6 +347,10 @@ export default function BrandingPage() {
             </div>
             <div className="px-6 py-5 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2">
+                  <label className={LABEL}>Business Name</label>
+                  <input type="text" value={brand.venueName} onChange={upd('venueName')} placeholder="Your Venue Name" className={INPUT} />
+                </div>
                 <div>
                   <label className={LABEL}>Contact Email</label>
                   <input type="email" value={brand.email} onChange={upd('email')} placeholder="hello@yourvenue.com" className={INPUT} />

@@ -34,6 +34,7 @@ export async function PATCH(request: Request) {
 
   const body = await request.json();
   const allowedFields: Record<string, boolean> = {
+    name: true,
     service_fee_rate: true,
     brand_logo_url: true,
     brand_tagline: true,
