@@ -408,7 +408,7 @@ function FeatureRequestsTab() {
                     <button
                       onClick={() => handleDelete(req)}
                       disabled={deletingId === req.id}
-                      className="flex items-center justify-center h-6 w-6 rounded-md text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40"
+                      className="flex items-center justify-center h-6 w-6 rounded-md text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40"
                       title="Delete your request"
                     >
                       {deletingId === req.id
