@@ -75,7 +75,7 @@ export default function TemplatesPage() {
           style={{ backgroundColor: '#1b1b1b' }}
         >
           <Plus size={15} />
-          Create Proposal Template
+          New Proposal
         </Link>
       </div>
 
