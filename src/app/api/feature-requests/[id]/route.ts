@@ -9,7 +9,8 @@ async function getVenueId() {
 
 async function isAdmin() {
   const c = await cookies();
-  return !!c.get('admin_token')?.value;
+  const token = c.get('admin_token')?.value;
+  return !!token && token === process.env.ADMIN_SECRET;
 }
 
 export async function DELETE(
@@ -24,14 +25,18 @@ export async function DELETE(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Admins can delete any request; venues can only delete their own
-  const query = supabaseAdmin.from('feature_requests').delete().eq('id', id);
-
-  if (!admin && venueId) {
-    query.eq('venue_id', venueId);
+  if (admin) {
+    const { error } = await supabaseAdmin.rpc('admin_delete_feature_request', { p_id: id });
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true });
   }
 
-  const { error } = await query;
+  const { error } = await supabaseAdmin.rpc('venue_delete_feature_request', {
+    p_id: id,
+    p_venue_id: venueId,
+  });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

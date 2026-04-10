@@ -210,6 +210,8 @@ export default function AdminPage() {
   // Feature request detail
   const [frDetail, setFrDetail]           = useState<FeatureRequestDetail | null>(null);
   const [frDetailLoading, setFrDetailLoading] = useState(false);
+  const [frDeleting, setFrDeleting]       = useState<string | null>(null);
+  const [frStatusSaving, setFrStatusSaving] = useState(false);
 
   const fetchStats = useCallback(async (range: DateRange) => {
     setStatsLoading(true);
@@ -248,6 +250,34 @@ export default function AdminPage() {
       const res = await fetch(`/api/admin/feature-requests/${id}`);
       if (res.ok) setFrDetail(await res.json());
     } finally { setFrDetailLoading(false); }
+  }
+
+  async function deleteFeatureRequest(id: string, fromModal = false) {
+    if (!confirm('Permanently delete this feature request and all its votes?')) return;
+    setFrDeleting(id);
+    try {
+      const res = await fetch(`/api/admin/feature-requests/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        if (fromModal) setFrDetail(null);
+        fetchStats(dateRange);
+      }
+    } finally { setFrDeleting(null); }
+  }
+
+  async function updateFeatureRequestStatus(id: string, status: string) {
+    setFrStatusSaving(true);
+    try {
+      const res = await fetch(`/api/admin/feature-requests/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setFrDetail(prev => prev ? { ...prev, status: updated.status } : prev);
+        fetchStats(dateRange);
+      }
+    } finally { setFrStatusSaving(false); }
   }
 
   async function openDrill(key: DrillKey) {
@@ -646,28 +676,37 @@ export default function AdminPage() {
                   <p className="px-6 py-8 text-sm text-center text-gray-400">No feature requests yet</p>
                 )}
                 {(stats?.featureRequests ?? []).map((req, i) => (
-                  <button
-                    key={req.id}
-                    onClick={() => openFeatureRequest(req.id)}
-                    className="w-full flex items-center gap-4 px-6 py-3.5 hover:bg-gray-50 transition-colors text-left"
-                  >
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold text-white" style={{ backgroundColor: i === 0 ? '#f59e0b' : i === 1 ? '#6b7280' : i === 2 ? '#cd7c2f' : BRAND }}>
-                      #{i + 1}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{req.title}</p>
-                      <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${STATUS_COLORS_FR[req.status] || 'bg-gray-100 text-gray-600'}`}>
-                        {STATUS_LABELS_FR[req.status] || req.status}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <div className="flex items-center gap-1">
-                        <ThumbsUp size={13} style={{ color: BRAND }} />
-                        <span className="text-sm font-bold" style={{ color: BRAND }}>{req.vote_count}</span>
+                  <div key={req.id} className="flex items-center gap-4 px-6 py-3.5 hover:bg-gray-50 transition-colors">
+                    <button
+                      onClick={() => openFeatureRequest(req.id)}
+                      className="flex items-center gap-4 flex-1 min-w-0 text-left"
+                    >
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold text-white" style={{ backgroundColor: i === 0 ? '#f59e0b' : i === 1 ? '#6b7280' : i === 2 ? '#cd7c2f' : BRAND }}>
+                        #{i + 1}
                       </div>
-                      <ChevronRight size={13} className="text-gray-300" />
-                    </div>
-                  </button>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{req.title}</p>
+                        <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${STATUS_COLORS_FR[req.status] || 'bg-gray-100 text-gray-600'}`}>
+                          {STATUS_LABELS_FR[req.status] || req.status}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center gap-1">
+                          <ThumbsUp size={13} style={{ color: BRAND }} />
+                          <span className="text-sm font-bold" style={{ color: BRAND }}>{req.vote_count}</span>
+                        </div>
+                        <ChevronRight size={13} className="text-gray-300" />
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => deleteFeatureRequest(req.id)}
+                      disabled={frDeleting === req.id}
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-red-200 text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-40"
+                      title="Delete feature request"
+                    >
+                      {frDeleting === req.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>
@@ -899,6 +938,34 @@ export default function AdminPage() {
                         {STATUS_LABELS_FR[frDetail.status] || frDetail.status}
                       </span>
                       <span className="text-xs text-gray-400">{new Date(frDetail.created_at).toLocaleDateString('en-US', { dateStyle: 'medium' })}</span>
+                    </div>
+                  </div>
+
+                  {/* Admin actions: status change + delete */}
+                  <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                    <div className="flex-1">
+                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Status</label>
+                      <select
+                        value={frDetail.status}
+                        onChange={e => updateFeatureRequestStatus(frDetail.id, e.target.value)}
+                        disabled={frStatusSaving}
+                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-900 focus:outline-none focus:border-gray-400 transition-colors disabled:opacity-60"
+                      >
+                        <option value="open">Open</option>
+                        <option value="planned">Planned</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="completed">Completed</option>
+                      </select>
+                    </div>
+                    <div className="pt-5">
+                      <button
+                        onClick={() => deleteFeatureRequest(frDetail.id, true)}
+                        disabled={frDeleting === frDetail.id}
+                        className="flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                      >
+                        {frDeleting === frDetail.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                        Delete
+                      </button>
                     </div>
                   </div>
 
