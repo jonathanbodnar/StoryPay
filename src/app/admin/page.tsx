@@ -38,7 +38,8 @@ function getDefaultRange(): DateRange { const p = PRESETS.find(x => x.label === 
 type DrillKey = 'venues' | 'waitlist' | 'customers' | 'failed' | 'pending' | null;
 interface WaitlistEntry { id: string; first_name: string | null; last_name: string | null; email: string; phone: string | null; venue_name: string | null; referral_source: string | null; created_at: string; }
 interface FailedPayment { id: string; customer_name: string | null; price: number; status: string; created_at: string; }
-interface FeatureRequestDetail { id: string; title: string; description: string | null; vote_count: number; status: string; created_at: string; voters: { venue_id: string; venue_name: string; voted_at: string }[]; }
+interface ChangelogEntry { id: string; title: string; description: string; category: string; released_at: string; }
+interface FeatureRequestDetail { id: string; title: string; description: string | null; vote_count: number; status: string; created_at: string; completed_at: string | null; changelog_id: string | null; changelogEntry: ChangelogEntry | null; voters: { venue_id: string; venue_name: string; voted_at: string }[]; }
 
 const STATUS_COLORS_FR: Record<string, string> = { open: 'bg-gray-100 text-gray-600', planned: 'bg-blue-100 text-blue-700', in_progress: 'bg-amber-100 text-amber-700', completed: 'bg-emerald-100 text-emerald-700' };
 const STATUS_LABELS_FR: Record<string, string> = { open: 'Open', planned: 'Planned', in_progress: 'In Progress', completed: 'Completed' };
@@ -254,60 +255,83 @@ function FeatureRequestsAdminTab({
         </div>
       )}
 
-      {/* List */}
+      {/* Lists */}
       {loading ? (
         <div className="flex justify-center py-16"><Loader2 size={24} className="animate-spin text-gray-400" /></div>
-      ) : requests.length === 0 ? (
-        <div className="py-16 text-center rounded-2xl border border-dashed border-gray-200">
-          <Lightbulb size={36} className="mx-auto mb-3 text-gray-200" />
-          <p className="text-sm text-gray-500">No feature requests yet</p>
-          <p className="text-xs text-gray-400 mt-1">Create one above to get started</p>
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-          <div className="hidden sm:grid grid-cols-[1fr_100px_80px_120px_48px] gap-4 px-6 py-3 bg-gray-50 border-b border-gray-100">
-            {['Title', 'Status', 'Votes', 'Date', ''].map(h => (
-              <span key={h} className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{h}</span>
-            ))}
-          </div>
-          <div className="divide-y divide-gray-100">
-            {requests.map((req, i) => (
-              <div key={req.id} className="hover:bg-gray-50 transition-colors">
-                {/* Mobile */}
-                <div className="sm:hidden flex items-center gap-3 px-4 py-3.5">
-                  <button onClick={() => onOpen(req.id)} className="flex-1 min-w-0 text-left">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-medium text-gray-900 truncate">{req.title}</span>
-                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${STATUS_COLORS_FR[req.status] || 'bg-gray-100 text-gray-600'}`}>{STATUS_LABELS_FR[req.status] || req.status}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-gray-400">
-                      <ThumbsUp size={11} /> {req.vote_count} · {new Date(req.created_at).toLocaleDateString()}
-                    </div>
-                  </button>
-                  <button onClick={() => onDelete(req.id)} disabled={frDeleting === req.id}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40">
-                    {frDeleting === req.id ? <Loader2 size={13} className="animate-spin"/> : <Trash2 size={13}/>}
-                  </button>
+      ) : (() => {
+        const active = requests.filter(r => r.status !== 'completed');
+        const completed = requests.filter(r => r.status === 'completed');
+
+        const RequestRow = ({ req, i }: { req: typeof requests[0]; i: number }) => (
+          <div key={req.id} className="hover:bg-gray-50 transition-colors">
+            <div className="sm:hidden flex items-center gap-3 px-4 py-3.5">
+              <button onClick={() => onOpen(req.id)} className="flex-1 min-w-0 text-left">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-medium text-gray-900 truncate">{req.title}</span>
+                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${STATUS_COLORS_FR[req.status] || 'bg-gray-100 text-gray-600'}`}>{STATUS_LABELS_FR[req.status] || req.status}</span>
                 </div>
-                {/* Desktop */}
-                <div className="hidden sm:grid grid-cols-[1fr_100px_80px_120px_48px] gap-4 px-6 py-4 items-center">
-                  <button onClick={() => onOpen(req.id)} className="text-left flex items-center gap-3 min-w-0">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold text-white" style={{ backgroundColor: i===0?'#f59e0b':i===1?'#6b7280':i===2?'#cd7c2f':'#1b1b1b' }}>#{i+1}</div>
-                    <span className="text-sm font-medium text-gray-900 truncate hover:underline">{req.title}</span>
-                  </button>
-                  <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full w-fit ${STATUS_COLORS_FR[req.status] || 'bg-gray-100 text-gray-600'}`}>{STATUS_LABELS_FR[req.status] || req.status}</span>
-                  <div className="flex items-center gap-1 text-sm text-gray-600"><ThumbsUp size={13} className="text-gray-400"/>{req.vote_count}</div>
-                  <span className="text-sm text-gray-500">{new Date(req.created_at).toLocaleDateString()}</span>
-                  <button onClick={() => onDelete(req.id)} disabled={frDeleting === req.id}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40">
-                    {frDeleting === req.id ? <Loader2 size={13} className="animate-spin"/> : <Trash2 size={13}/>}
-                  </button>
+                <div className="flex items-center gap-2 text-xs text-gray-400"><ThumbsUp size={11}/> {req.vote_count} · {new Date(req.created_at).toLocaleDateString()}</div>
+              </button>
+              <button onClick={() => onDelete(req.id)} disabled={frDeleting === req.id}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 disabled:opacity-40">
+                {frDeleting === req.id ? <Loader2 size={13} className="animate-spin"/> : <Trash2 size={13}/>}
+              </button>
+            </div>
+            <div className="hidden sm:grid grid-cols-[1fr_110px_80px_120px_48px] gap-4 px-6 py-4 items-center">
+              <button onClick={() => onOpen(req.id)} className="text-left flex items-center gap-3 min-w-0">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold text-white" style={{ backgroundColor: i===0?'#f59e0b':i===1?'#6b7280':i===2?'#cd7c2f':'#1b1b1b' }}>#{i+1}</div>
+                <span className="text-sm font-medium text-gray-900 truncate hover:underline">{req.title}</span>
+              </button>
+              <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full w-fit ${STATUS_COLORS_FR[req.status] || 'bg-gray-100 text-gray-600'}`}>{STATUS_LABELS_FR[req.status] || req.status}</span>
+              <div className="flex items-center gap-1 text-sm text-gray-600"><ThumbsUp size={13} className="text-gray-400"/>{req.vote_count}</div>
+              <span className="text-sm text-gray-500">{new Date(req.created_at).toLocaleDateString()}</span>
+              <button onClick={() => onDelete(req.id)} disabled={frDeleting === req.id}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 disabled:opacity-40">
+                {frDeleting === req.id ? <Loader2 size={13} className="animate-spin"/> : <Trash2 size={13}/>}
+              </button>
+            </div>
+          </div>
+        );
+
+        return (
+          <div className="space-y-8">
+            {/* Active requests */}
+            <div>
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Active Requests ({active.length})</h2>
+              {active.length === 0 ? (
+                <div className="py-12 text-center rounded-2xl border border-dashed border-gray-200">
+                  <Lightbulb size={32} className="mx-auto mb-3 text-gray-200" />
+                  <p className="text-sm text-gray-500">No active feature requests</p>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                  <div className="hidden sm:grid grid-cols-[1fr_110px_80px_120px_48px] gap-4 px-6 py-3 bg-gray-50 border-b border-gray-100">
+                    {['Title','Status','Votes','Date',''].map(h => <span key={h} className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{h}</span>)}
+                  </div>
+                  <div className="divide-y divide-gray-100">
+                    {active.map((req, i) => <RequestRow key={req.id} req={req} i={i} />)}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Completed archive */}
+            {completed.length > 0 && (
+              <div>
+                <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">✅ Completed &amp; Shipped ({completed.length})</h2>
+                <div className="rounded-2xl border border-emerald-200 bg-white shadow-sm overflow-hidden">
+                  <div className="hidden sm:grid grid-cols-[1fr_110px_80px_120px_48px] gap-4 px-6 py-3 bg-emerald-50 border-b border-emerald-100">
+                    {['Title','Status','Votes','Completed',''].map(h => <span key={h} className="text-[11px] font-semibold uppercase tracking-wider text-emerald-600">{h}</span>)}
+                  </div>
+                  <div className="divide-y divide-gray-100">
+                    {completed.map((req, i) => <RequestRow key={req.id} req={req} i={i} />)}
+                  </div>
                 </div>
               </div>
-            ))}
+            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
@@ -351,6 +375,11 @@ export default function AdminPage() {
   const [frDetailLoading, setFrDetailLoading] = useState(false);
   const [frDeleting, setFrDeleting]       = useState<string | null>(null);
   const [frStatusSaving, setFrStatusSaving] = useState(false);
+  // Changelog form (shown when marking a request completed)
+  const [showChangelogForm, setShowChangelogForm] = useState(false);
+  const [clTitle, setClTitle]   = useState('');
+  const [clDesc, setClDesc]     = useState('');
+  const [clCat, setClCat]       = useState<'feature' | 'improvement' | 'fix'>('feature');
 
   const fetchStats = useCallback(async (range: DateRange) => {
     setStatsLoading(true);
@@ -391,17 +420,7 @@ export default function AdminPage() {
     } finally { setFrDetailLoading(false); }
   }
 
-  async function updateFrStatus(id: string, status: string) {
-    const res = await fetch(`/api/admin/feature-requests/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
-    });
-    if (res.ok) {
-      setFrDetail(prev => prev ? { ...prev, status } : prev);
-      setStats(prev => prev ? { ...prev, featureRequests: prev.featureRequests.map(r => r.id === id ? { ...r, status } : r) } : prev);
-    }
-  }
+
 
 
   async function deleteFeatureRequest(id: string, fromModal = false) {
@@ -419,20 +438,36 @@ export default function AdminPage() {
     } finally { setFrDeleting(null); }
   }
 
-  async function updateFeatureRequestStatus(id: string, status: string) {
+  async function updateFeatureRequestStatus(id: string, status: string, changelogData?: { title: string; description: string; category: string }) {
     setFrStatusSaving(true);
     try {
       const res = await fetch(`/api/admin/feature-requests/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({
+          status,
+          changelogTitle: changelogData?.title,
+          changelogDescription: changelogData?.description,
+          changelogCategory: changelogData?.category,
+        }),
       });
       if (res.ok) {
         const updated = await res.json();
-        setFrDetail(prev => prev ? { ...prev, status: updated.status } : prev);
+        setFrDetail(prev => prev ? { ...prev, status: updated.status, completed_at: updated.completed_at ?? null, changelog_id: updated.changelog_id ?? null } : prev);
+        setShowChangelogForm(false);
+        setClTitle(''); setClDesc(''); setClCat('feature');
         fetchStats(dateRange);
       }
     } finally { setFrStatusSaving(false); }
+  }
+
+  async function markCompleted() {
+    if (!frDetail) return;
+    await updateFeatureRequestStatus(frDetail.id, 'completed', {
+      title: clTitle,
+      description: clDesc,
+      category: clCat,
+    });
   }
 
   async function openDrill(key: DrillKey) {
@@ -858,7 +893,7 @@ export default function AdminPage() {
                 {!statsLoading && (stats?.featureRequests ?? []).length === 0 && (
                   <p className="px-6 py-8 text-sm text-center text-gray-400">No feature requests yet</p>
                 )}
-                {(stats?.featureRequests ?? []).map((req, i) => (
+                {(stats?.featureRequests ?? []).filter(r => r.status !== 'completed').slice(0, 3).map((req, i) => (
                   <div key={req.id} className="flex items-center gap-4 px-6 py-3.5 hover:bg-gray-50 transition-colors">
                     <button
                       onClick={() => openFeatureRequest(req.id)}
@@ -1126,54 +1161,9 @@ export default function AdminPage() {
                   {/* Title & meta */}
                   <div>
                     <h4 className="text-base font-bold text-gray-900 mb-1">{frDetail.title}</h4>
-                    <span className="text-xs text-gray-400">{new Date(frDetail.created_at).toLocaleDateString('en-US', { dateStyle: 'medium' })}</span>
-                  </div>
-
-                  {/* Status selector */}
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Change Status</p>
-                    <div className="flex flex-wrap gap-2">
-                      {Object.entries(STATUS_LABELS_FR).map(([val, label]) => (
-                        <button
-                          key={val}
-                          onClick={() => updateFrStatus(frDetail.id, val)}
-                          className={`rounded-full px-3 py-1.5 text-xs font-semibold border-2 transition-all ${
-                            frDetail.status === val
-                              ? 'border-gray-900 bg-gray-900 text-white'
-                              : 'border-gray-200 text-gray-600 hover:border-gray-400'
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Admin actions: status change + delete */}
-                  <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-                    <div className="flex-1">
-                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Status</label>
-                      <select
-                        value={frDetail.status}
-                        onChange={e => updateFeatureRequestStatus(frDetail.id, e.target.value)}
-                        disabled={frStatusSaving}
-                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-900 focus:outline-none focus:border-gray-400 transition-colors disabled:opacity-60"
-                      >
-                        <option value="open">Open</option>
-                        <option value="planned">Planned</option>
-                        <option value="in_progress">In Progress</option>
-                        <option value="completed">Completed</option>
-                      </select>
-                    </div>
-                    <div className="pt-5">
-                      <button
-                        onClick={() => deleteFeatureRequest(frDetail.id, true)}
-                        disabled={frDeleting === frDetail.id}
-                        className="flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
-                      >
-                        {frDeleting === frDetail.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
-                        Delete
-                      </button>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_COLORS_FR[frDetail.status] || 'bg-gray-100 text-gray-600'}`}>{STATUS_LABELS_FR[frDetail.status] || frDetail.status}</span>
+                      <span className="text-xs text-gray-400">{new Date(frDetail.created_at).toLocaleDateString('en-US', { dateStyle: 'medium' })}</span>
                     </div>
                   </div>
 
@@ -1184,46 +1174,115 @@ export default function AdminPage() {
                     </div>
                   )}
 
-                  {/* Vote count */}
+                  {/* Votes */}
                   <div className="flex items-center gap-3 rounded-xl border border-gray-100 px-4 py-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ backgroundColor: BRAND + '18' }}>
                       <ThumbsUp size={18} style={{ color: BRAND }} />
                     </div>
                     <div>
                       <p className="text-2xl font-bold" style={{ color: BRAND }}>{frDetail.vote_count}</p>
-                      <p className="text-xs text-gray-400">{frDetail.vote_count === 1 ? 'vote' : 'votes'} from {frDetail.voters.length} {frDetail.voters.length === 1 ? 'venue' : 'venues'}</p>
+                      <p className="text-xs text-gray-400">{frDetail.vote_count} {frDetail.vote_count === 1 ? 'vote' : 'votes'} · {frDetail.voters.length} {frDetail.voters.length === 1 ? 'venue' : 'venues'}</p>
                     </div>
                   </div>
 
-                  {/* Voter list */}
+                  {/* Status buttons */}
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
-                      Voted by {frDetail.voters.length} {frDetail.voters.length === 1 ? 'venue' : 'venues'}
-                    </p>
-                    {frDetail.voters.length === 0 ? (
-                      <p className="text-sm text-gray-400 text-center py-4">No votes yet</p>
-                    ) : (
-                      <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Change Status</p>
+                    <div className="flex flex-wrap gap-2">
+                      {(['open','planned','in_progress'] as const).map(val => (
+                        <button key={val} onClick={() => updateFeatureRequestStatus(frDetail.id, val)}
+                          disabled={frStatusSaving}
+                          className={`rounded-full px-3 py-1.5 text-xs font-semibold border-2 transition-all disabled:opacity-50 ${frDetail.status === val ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 text-gray-600 hover:border-gray-400'}`}>
+                          {STATUS_LABELS_FR[val]}
+                        </button>
+                      ))}
+                      {frDetail.status !== 'completed' ? (
+                        <button onClick={() => { setShowChangelogForm(v => !v); setClTitle(frDetail.title); setClDesc(frDetail.description || ''); }}
+                          className="rounded-full px-3 py-1.5 text-xs font-semibold border-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50 transition-all">
+                          ✓ Mark Completed
+                        </button>
+                      ) : (
+                        <span className="rounded-full px-3 py-1.5 text-xs font-semibold border-2 border-emerald-400 bg-emerald-500 text-white">✓ Completed</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Changelog form — shown when marking completed */}
+                  {showChangelogForm && frDetail.status !== 'completed' && (
+                    <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/40 p-4 space-y-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">📋 Post to Client Changelog</p>
+
+                      {/* Category */}
+                      <div className="flex gap-2">
+                        {([
+                          { val: 'feature',     label: '✨ New Feature',  cls: 'border-violet-300 text-violet-700 bg-violet-50' },
+                          { val: 'improvement', label: '⚡ Improvement',  cls: 'border-blue-300 text-blue-700 bg-blue-50' },
+                          { val: 'fix',         label: '🔧 Bug Fix',      cls: 'border-amber-300 text-amber-700 bg-amber-50' },
+                        ] as const).map(({ val, label, cls }) => (
+                          <button key={val} type="button" onClick={() => setClCat(val)}
+                            className={`rounded-full px-3 py-1.5 text-xs font-semibold border-2 transition-all ${clCat === val ? cls + ' ring-2 ring-offset-1 ring-current' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Changelog Heading <span className="text-red-400">*</span></label>
+                        <input type="text" value={clTitle} onChange={e => setClTitle(e.target.value)} placeholder="What did we ship?"
+                          style={{ fontSize: 16 }}
+                          className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-emerald-400 focus:outline-none transition-colors" />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Description</label>
+                        <textarea value={clDesc} onChange={e => setClDesc(e.target.value)} rows={3}
+                          placeholder="Describe what clients can now do with this update..."
+                          className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-emerald-400 focus:outline-none transition-colors resize-none" />
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={markCompleted} disabled={!clTitle.trim() || frStatusSaving}
+                          className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50 transition-colors">
+                          {frStatusSaving ? <Loader2 size={14} className="animate-spin"/> : <Check size={14}/>}
+                          Complete & Post to Changelog
+                        </button>
+                        <button onClick={() => setShowChangelogForm(false)} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Linked changelog entry */}
+                  {frDetail.changelogEntry && (
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-600 mb-1">📢 Posted to Changelog</p>
+                      <p className="text-sm font-semibold text-gray-900">{frDetail.changelogEntry.title}</p>
+                      {frDetail.changelogEntry.description && <p className="text-xs text-gray-600 mt-0.5">{frDetail.changelogEntry.description}</p>}
+                      <p className="text-[11px] text-emerald-600 mt-1 capitalize">{frDetail.changelogEntry.category} · {new Date(frDetail.changelogEntry.released_at).toLocaleDateString()}</p>
+                    </div>
+                  )}
+
+                  {/* Voters */}
+                  {frDetail.voters.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Voted by {frDetail.voters.length} {frDetail.voters.length === 1 ? 'venue' : 'venues'}</p>
+                      <div className="space-y-1.5">
                         {frDetail.voters.map((v, i) => (
-                          <div key={i} className="flex items-center justify-between rounded-xl border border-gray-100 px-4 py-3 hover:bg-gray-50 transition-colors">
-                            <div className="flex items-center gap-3">
-                              <div className="flex h-8 w-8 items-center justify-center rounded-full text-white text-xs font-bold" style={{ backgroundColor: BRAND }}>
-                                {v.venue_name.charAt(0).toUpperCase()}
-                              </div>
-                              <p className="text-sm font-medium text-gray-900">{v.venue_name}</p>
+                          <div key={i} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              <div className="flex h-7 w-7 items-center justify-center rounded-full text-white text-xs font-bold" style={{ backgroundColor: BRAND }}>{v.venue_name.charAt(0).toUpperCase()}</div>
+                              <p className="text-sm text-gray-900">{v.venue_name}</p>
                             </div>
                             <span className="text-xs text-gray-400">{new Date(v.voted_at).toLocaleDateString()}</span>
                           </div>
                         ))}
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
+
                   {/* Delete */}
                   <div className="pt-2 border-t border-gray-100">
-                    <button
-                      onClick={() => deleteFeatureRequest(frDetail.id, true)}
-                      className="flex items-center gap-2 rounded-xl border border-red-200 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors w-full justify-center"
-                    >
+                    <button onClick={() => deleteFeatureRequest(frDetail.id, true)}
+                      className="flex items-center gap-2 rounded-xl border border-red-200 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors w-full justify-center">
                       <Trash2 size={14} /> Delete This Request
                     </button>
                   </div>

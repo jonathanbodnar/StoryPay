@@ -18,11 +18,22 @@ export async function GET(
 
   const { data: req } = await supabaseAdmin
     .from('feature_requests')
-    .select('id, title, description, vote_count, status, created_at')
+    .select('id, title, description, vote_count, status, created_at, completed_at, changelog_id')
     .eq('id', id)
     .single();
 
   if (!req) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  // Get changelog entry if linked
+  let changelogEntry = null;
+  if (req.changelog_id) {
+    const { data } = await supabaseAdmin
+      .from('changelog_entries')
+      .select('id, title, description, category, released_at')
+      .eq('id', req.changelog_id)
+      .single();
+    changelogEntry = data;
+  }
 
   const { data: votes } = await supabaseAdmin
     .from('feature_request_votes')
@@ -46,7 +57,7 @@ export async function GET(
     voted_at: v.created_at,
   }));
 
-  return NextResponse.json({ ...req, voters });
+  return NextResponse.json({ ...req, voters, changelogEntry });
 }
 
 export async function PATCH(
@@ -56,15 +67,44 @@ export async function PATCH(
   if (!(await verifyAdmin())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id } = await params;
-  const { status } = await request.json();
+  const body = await request.json();
+  const { status, changelogTitle, changelogDescription, changelogCategory } = body;
+
   const valid = ['open', 'planned', 'in_progress', 'completed'];
   if (!valid.includes(status)) return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
 
+  const updates: Record<string, unknown> = {
+    status,
+    updated_at: new Date().toISOString(),
+  };
+
+  // When marking as completed and changelog fields provided, create a changelog entry
+  if (status === 'completed') {
+    updates.completed_at = new Date().toISOString();
+
+    if (changelogTitle?.trim()) {
+      const { data: entry, error: clErr } = await supabaseAdmin
+        .from('changelog_entries')
+        .insert({
+          title: changelogTitle.trim(),
+          description: changelogDescription?.trim() || '',
+          category: changelogCategory || 'feature',
+          released_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single();
+
+      if (!clErr && entry) {
+        updates.changelog_id = entry.id;
+      }
+    }
+  }
+
   const { data, error } = await supabaseAdmin
     .from('feature_requests')
-    .update({ status, updated_at: new Date().toISOString() })
+    .update(updates)
     .eq('id', id)
-    .select('id, status')
+    .select('id, status, completed_at, changelog_id')
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
