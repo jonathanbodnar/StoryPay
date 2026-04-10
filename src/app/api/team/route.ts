@@ -10,39 +10,58 @@ async function getVenueId() {
 export async function GET() {
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  let rpcData = null;
-  let rpcErr = null;
-  try {
-    const result = await supabaseAdmin.rpc('get_team_members', { p_venue_id: venueId });
-    rpcData = result.data;
-    rpcErr = result.error;
-  } catch {
-    rpcErr = { message: 'RPC not found' };
+
+  // Use RPC to bypass PostgREST schema cache issues
+  const { data, error } = await supabaseAdmin.rpc('get_team_members', { p_venue_id: venueId });
+  if (error) {
+    console.error('[team] get error:', error.message);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  if (rpcErr || !rpcData) {
-    // Fallback to direct query
-    const { data: rows } = await supabaseAdmin
-      .from('venue_team_members')
-      .select('*')
-      .eq('venue_id', venueId)
-      .order('created_at', { ascending: true });
-    return NextResponse.json(rows ?? []);
-  }
-  return NextResponse.json(rpcData ?? []);
+  return NextResponse.json(data ?? []);
 }
 
 export async function POST(request: NextRequest) {
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   const { name, email, role } = await request.json();
-  if (!name?.trim() || !email?.trim()) return NextResponse.json({ error: 'Name and email are required' }, { status: 400 });
-  const { data, error } = await supabaseAdmin
-    .from('venue_team_members')
-    .insert({ venue_id: venueId, name: name.trim(), email: email.trim().toLowerCase(), role: role || 'member' })
-    .select().single();
-  if (error) {
-    console.error('[team] insert error:', error);
-    return NextResponse.json({ error: error.message + ' — run the team_members SQL in your Supabase dashboard' }, { status: 500 });
+  if (!name?.trim() || !email?.trim()) {
+    return NextResponse.json({ error: 'Name and email are required' }, { status: 400 });
   }
-  return NextResponse.json(data, { status: 201 });
+
+  // Use RPC to bypass PostgREST schema cache issues
+  const { data, error } = await supabaseAdmin.rpc('insert_team_member', {
+    p_venue_id: venueId,
+    p_name: name.trim(),
+    p_email: email.trim().toLowerCase(),
+    p_role: role || 'member',
+  });
+
+  if (error) {
+    console.error('[team] insert error:', error.message);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // rpc returns an array for RETURNS TABLE — take first row
+  const row = Array.isArray(data) ? data[0] : data;
+  return NextResponse.json(row, { status: 201 });
+}
+
+export async function DELETE(request: NextRequest) {
+  const venueId = await getVenueId();
+  if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { id } = await request.json();
+  if (!id) return NextResponse.json({ error: 'Member id required' }, { status: 400 });
+
+  const { error } = await supabaseAdmin.rpc('delete_team_member', {
+    p_id: id,
+    p_venue_id: venueId,
+  });
+
+  if (error) {
+    console.error('[team] delete error:', error.message);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  return NextResponse.json({ ok: true });
 }
