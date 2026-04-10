@@ -103,3 +103,69 @@ export async function GET(
 
   return NextResponse.json({ customer, proposals: proposals || [] });
 }
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const cookieStore = await cookies();
+  const venueId = cookieStore.get('venue_id')?.value;
+  if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { firstName, lastName, email, phone, address, city, state, zip } = await request.json();
+  const name = [firstName, lastName].filter(Boolean).join(' ');
+
+  const { data: venue } = await supabaseAdmin
+    .from('venues')
+    .select('lunarpay_secret_key, ghl_connected, ghl_access_token, ghl_refresh_token, ghl_location_id')
+    .eq('id', venueId)
+    .single();
+
+  if (!venue) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
+
+  // Refresh GHL token
+  let ghlToken = venue.ghl_access_token;
+  if (venue.ghl_connected && venue.ghl_refresh_token) {
+    try {
+      const refreshed = await refreshAccessToken(venue.ghl_refresh_token);
+      if (refreshed.access_token) {
+        ghlToken = refreshed.access_token;
+        await supabaseAdmin.from('venues').update({ ghl_access_token: refreshed.access_token, ghl_refresh_token: refreshed.refresh_token || venue.ghl_refresh_token }).eq('id', venueId);
+      }
+    } catch { /* continue */ }
+  }
+
+  const errors: string[] = [];
+
+  // Update in LunarPay if numeric ID
+  if (venue.lunarpay_secret_key && /^\d+$/.test(id)) {
+    try {
+      await lpFetch(`/api/v1/customers/${id}`, {
+        method: 'PUT',
+        body: { firstName, lastName, email, phone },
+        key: venue.lunarpay_secret_key,
+      });
+    } catch (err) {
+      errors.push(`LunarPay: ${err instanceof Error ? err.message : 'update failed'}`);
+    }
+  }
+
+  // Update in GHL if alphanumeric ID
+  if (venue.ghl_connected && ghlToken && venue.ghl_location_id && !/^\d+$/.test(id)) {
+    try {
+      await ghlRequest(`/contacts/${id}`, ghlToken, {
+        method: 'PUT',
+        body: { firstName, lastName, email, phone, address1: address, city, state, postalCode: zip },
+        locationId: venue.ghl_location_id,
+      });
+    } catch (err) {
+      errors.push(`GHL: ${err instanceof Error ? err.message : 'update failed'}`);
+    }
+  }
+
+  // Return updated customer shape
+  const updatedCustomer = { id, name, firstName, lastName, email, phone, address, city, state, zip };
+  return NextResponse.json({ customer: updatedCustomer, warnings: errors.length ? errors : undefined });
+}
+

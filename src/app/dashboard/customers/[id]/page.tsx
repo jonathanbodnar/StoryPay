@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Mail, Phone, MapPin, FileText, Loader2, ExternalLink, Receipt, Pencil, Copy, RefreshCw, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, MapPin, FileText, Loader2, ExternalLink, Receipt, Pencil, Copy, RefreshCw, RotateCcw, Save, X as XIcon, Check } from 'lucide-react';
 import RefundModal from '@/components/RefundModal';
 import { formatCents, formatDate, getStatusColor, classNames } from '@/lib/utils';
 
@@ -49,6 +49,10 @@ export default function CustomerDetailPage() {
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [refundTarget, setRefundTarget] = useState<Proposal | null>(null);
   const [proposalSearch, setProposalSearch] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState({ firstName: '', lastName: '', email: '', phone: '', address: '', city: '', state: '', zip: '' });
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState('');
 
   useEffect(() => {
     async function fetchData() {
@@ -98,6 +102,56 @@ export default function CustomerDetailPage() {
     }
   }
 
+  function startEdit() {
+    if (!customer) return;
+    setEditForm({
+      firstName: customer.firstName || customer.name?.split(' ')[0] || '',
+      lastName: customer.lastName || customer.name?.split(' ').slice(1).join(' ') || '',
+      email: customer.email || '',
+      phone: customer.phone || '',
+      address: customer.address || '',
+      city: customer.city || '',
+      state: customer.state || '',
+      zip: customer.zip || '',
+    });
+    setEditing(true);
+  }
+
+  async function saveEdit() {
+    if (!customer) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/customers/${customerId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstName: editForm.firstName.trim(),
+          lastName: editForm.lastName.trim(),
+          email: editForm.email.trim(),
+          phone: editForm.phone.trim(),
+          address: editForm.address.trim(),
+          city: editForm.city.trim(),
+          state: editForm.state.trim(),
+          zip: editForm.zip.trim(),
+        }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setCustomer(prev => prev ? { ...prev, ...updated.customer } : prev);
+        setEditing(false);
+        setSaveMsg('Saved');
+        setTimeout(() => setSaveMsg(''), 2500);
+      } else {
+        const d = await res.json();
+        setSaveMsg(d.error || 'Failed to save');
+      }
+    } catch {
+      setSaveMsg('Network error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -133,37 +187,73 @@ export default function CustomerDetailPage() {
       </button>
 
       {/* Customer header */}
-      <div className="flex items-start justify-between mb-8">
-        <div className="flex items-center gap-4">
-          <div
-            className="flex h-14 w-14 items-center justify-center rounded-full text-xl font-semibold text-white"
-            style={{ backgroundColor: '#1b1b1b' }}
-          >
-            {customer.name?.charAt(0)?.toUpperCase() || '?'}
-          </div>
-          <div>
-            <h1 className="font-heading text-2xl text-gray-900">{customer.name}</h1>
-            <div className="flex items-center gap-4 mt-1">
-              {customer.email && (
-                <span className="flex items-center gap-1 text-sm text-gray-500">
-                  <Mail size={14} /> {customer.email}
-                </span>
-              )}
-              {customer.phone && (
-                <span className="flex items-center gap-1 text-sm text-gray-500">
-                  <Phone size={14} /> {customer.phone}
-                </span>
+      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm mb-6 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full text-lg font-semibold text-white flex-shrink-0" style={{ backgroundColor: '#1b1b1b' }}>
+              {customer.name?.charAt(0)?.toUpperCase() || '?'}
+            </div>
+            <div>
+              <h1 className="font-heading text-xl text-gray-900">{customer.name}</h1>
+              {!editing && (
+                <div className="flex flex-wrap items-center gap-3 mt-0.5">
+                  {customer.email && <span className="flex items-center gap-1 text-sm text-gray-500"><Mail size={13} />{customer.email}</span>}
+                  {customer.phone && <span className="flex items-center gap-1 text-sm text-gray-500"><Phone size={13} />{customer.phone}</span>}
+                  {(customer.address || customer.city) && <span className="flex items-center gap-1 text-sm text-gray-400"><MapPin size={13} />{[customer.address, customer.city, customer.state, customer.zip].filter(Boolean).join(', ')}</span>}
+                </div>
               )}
             </div>
-            {(customer.address || customer.city || customer.state) && (
-              <span className="flex items-center gap-1 text-sm text-gray-400 mt-0.5">
-                <MapPin size={14} />
-                {[customer.address, customer.city, customer.state, customer.zip].filter(Boolean).join(', ')}
-              </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {saveMsg && <span className="text-xs text-emerald-600 font-medium">{saveMsg}</span>}
+            {editing ? (
+              <>
+                <button onClick={() => setEditing(false)} className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-500 hover:bg-gray-50 transition-colors">
+                  <XIcon size={13} /> Cancel
+                </button>
+                <button onClick={saveEdit} disabled={saving} className="flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50 transition-all" style={{ backgroundColor: '#1b1b1b' }}>
+                  {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save
+                </button>
+              </>
+            ) : (
+              <button onClick={startEdit} className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+                <Pencil size={13} /> Edit
+              </button>
             )}
           </div>
         </div>
 
+        {/* Inline edit form */}
+        {editing && (
+          <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {[
+              { label: 'First Name', key: 'firstName', type: 'text', placeholder: 'Jane' },
+              { label: 'Last Name',  key: 'lastName',  type: 'text', placeholder: 'Smith' },
+              { label: 'Email',      key: 'email',     type: 'email', placeholder: 'jane@example.com' },
+              { label: 'Phone',      key: 'phone',     type: 'tel',   placeholder: '(555) 000-0000' },
+              { label: 'Address',    key: 'address',   type: 'text', placeholder: '123 Main St', colSpan: true },
+              { label: 'City',       key: 'city',      type: 'text', placeholder: 'Columbus' },
+              { label: 'State',      key: 'state',     type: 'text', placeholder: 'OH' },
+              { label: 'ZIP',        key: 'zip',       type: 'text', placeholder: '43215' },
+            ].map(f => (
+              <div key={f.key} className={f.colSpan ? 'sm:col-span-2' : ''}>
+                <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{f.label}</label>
+                <input
+                  type={f.type}
+                  value={editForm[f.key as keyof typeof editForm]}
+                  onChange={e => setEditForm(p => ({ ...p, [f.key]: e.target.value }))}
+                  placeholder={f.placeholder}
+                  style={{ fontSize: 16 }}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:bg-white focus:outline-none transition-colors"
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Action buttons */}
+      <div className="flex flex-wrap items-center gap-2 mb-8">
         <div className="flex items-center gap-3">
           <Link
             href={`/dashboard/invoices/new?email=${encodeURIComponent(customer.email || '')}&name=${encodeURIComponent(customer.name || '')}`}

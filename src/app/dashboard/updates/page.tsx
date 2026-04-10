@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import {
-  Sparkles, Zap, Wrench, ThumbsUp, Plus, X, Loader2,
+  Sparkles, Zap, Wrench, ThumbsUp, Plus, X, Loader2, Trash2,
   ChevronRight, Megaphone, Clock, CheckCircle2, AlertCircle, Lightbulb,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
@@ -26,6 +26,7 @@ interface FeatureRequest {
   status: 'open' | 'planned' | 'in_progress' | 'completed';
   created_at: string;
   has_voted: boolean;
+  is_mine: boolean;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -181,6 +182,7 @@ function FeatureRequestsTab() {
   const [desc, setDesc]         = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [votingId, setVotingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError]       = useState('');
   const [formError, setFormError] = useState('');
 
@@ -191,6 +193,19 @@ function FeatureRequestsTab() {
       .catch(() => setError('Failed to load feature requests'))
       .finally(() => setLoading(false));
   }, []);
+
+  async function handleDelete(req: FeatureRequest) {
+    if (!confirm(`Delete "${req.title}"? This cannot be undone.`)) return;
+    setDeletingId(req.id);
+    try {
+      const res = await fetch(`/api/feature-requests/${req.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setRequests(prev => prev.filter(r => r.id !== req.id));
+      }
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   async function handleVote(req: FeatureRequest) {
     if (votingId) return;
@@ -376,17 +391,31 @@ function FeatureRequestsTab() {
                   </p>
                 </div>
 
-                {/* Rank indicator for top items */}
-                {idx < 3 && req.vote_count > 0 && (
-                  <div className={classNames(
-                    'flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-bold',
-                    idx === 0 ? 'bg-amber-100 text-amber-700' :
-                    idx === 1 ? 'bg-gray-100 text-gray-600' :
-                                'bg-orange-50 text-orange-600'
-                  )}>
-                    #{idx + 1}
-                  </div>
-                )}
+                {/* Rank + delete */}
+                <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                  {idx < 3 && req.vote_count > 0 && (
+                    <div className={classNames(
+                      'flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-bold',
+                      idx === 0 ? 'bg-amber-100 text-amber-700' :
+                      idx === 1 ? 'bg-gray-100 text-gray-600' :
+                                  'bg-orange-50 text-orange-600'
+                    )}>
+                      #{idx + 1}
+                    </div>
+                  )}
+                  {req.is_mine && (
+                    <button
+                      onClick={() => handleDelete(req)}
+                      disabled={deletingId === req.id}
+                      className="flex items-center justify-center h-6 w-6 rounded-md text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40"
+                      title="Delete your request"
+                    >
+                      {deletingId === req.id
+                        ? <Loader2 size={11} className="animate-spin" />
+                        : <Trash2 size={11} />}
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}
