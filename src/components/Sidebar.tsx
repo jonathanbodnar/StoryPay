@@ -204,7 +204,7 @@ export default function Sidebar({ venue }: SidebarProps) {
         </button>
         <a
           href="/api/auth/logout"
-          className="flex items-center gap-2 text-gray-400 hover:text-red-500 transition-colors text-sm w-full px-2 py-1.5 rounded-lg hover:bg-red-50"
+          className="flex items-center gap-2 text-gray-400 hover:text-gray-700 transition-colors text-sm w-full px-2 py-1.5 rounded-lg hover:bg-gray-50"
         >
           <LogOut size={16} />
           <span>Logout</span>
