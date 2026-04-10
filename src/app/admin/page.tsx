@@ -252,6 +252,27 @@ export default function AdminPage() {
     } finally { setFrDetailLoading(false); }
   }
 
+  async function updateFrStatus(id: string, status: string) {
+    const res = await fetch(`/api/admin/feature-requests/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    if (res.ok) {
+      setFrDetail(prev => prev ? { ...prev, status } : prev);
+      setStats(prev => prev ? { ...prev, featureRequests: prev.featureRequests.map(r => r.id === id ? { ...r, status } : r) } : prev);
+    }
+  }
+
+  async function deleteFrAdmin(id: string) {
+    if (!confirm('Delete this feature request for all users?')) return;
+    const res = await fetch(`/api/admin/feature-requests/${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      setFrDetail(null);
+      setStats(prev => prev ? { ...prev, featureRequests: prev.featureRequests.filter(r => r.id !== id) } : prev);
+    }
+  }
+
   async function deleteFeatureRequest(id: string, fromModal = false) {
     if (!confirm('Permanently delete this feature request and all its votes?')) return;
     setFrDeleting(id);
@@ -932,12 +953,27 @@ export default function AdminPage() {
                 <div className="space-y-5">
                   {/* Title & meta */}
                   <div>
-                    <h4 className="text-base font-bold text-gray-900 mb-2">{frDetail.title}</h4>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_COLORS_FR[frDetail.status] || 'bg-gray-100 text-gray-600'}`}>
-                        {STATUS_LABELS_FR[frDetail.status] || frDetail.status}
-                      </span>
-                      <span className="text-xs text-gray-400">{new Date(frDetail.created_at).toLocaleDateString('en-US', { dateStyle: 'medium' })}</span>
+                    <h4 className="text-base font-bold text-gray-900 mb-1">{frDetail.title}</h4>
+                    <span className="text-xs text-gray-400">{new Date(frDetail.created_at).toLocaleDateString('en-US', { dateStyle: 'medium' })}</span>
+                  </div>
+
+                  {/* Status selector */}
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Change Status</p>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(STATUS_LABELS_FR).map(([val, label]) => (
+                        <button
+                          key={val}
+                          onClick={() => updateFrStatus(frDetail.id, val)}
+                          className={`rounded-full px-3 py-1.5 text-xs font-semibold border-2 transition-all ${
+                            frDetail.status === val
+                              ? 'border-gray-900 bg-gray-900 text-white'
+                              : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
                     </div>
                   </div>
 
@@ -1009,6 +1045,15 @@ export default function AdminPage() {
                         ))}
                       </div>
                     )}
+                  </div>
+                  {/* Delete */}
+                  <div className="pt-2 border-t border-gray-100">
+                    <button
+                      onClick={() => deleteFrAdmin(frDetail.id)}
+                      className="flex items-center gap-2 rounded-xl border border-red-200 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors w-full justify-center"
+                    >
+                      <Trash2 size={14} /> Delete This Request
+                    </button>
                   </div>
                 </div>
               ) : null}

@@ -16,15 +16,37 @@ export async function GET(
 
   const { id } = await params;
 
-  const { data, error } = await supabaseAdmin.rpc('admin_get_feature_request_detail', {
-    p_id: id,
-  });
+  const { data: req } = await supabaseAdmin
+    .from('feature_requests')
+    .select('id, title, description, vote_count, status, created_at')
+    .eq('id', id)
+    .single();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!req) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  const { data: votes } = await supabaseAdmin
+    .from('feature_request_votes')
+    .select('venue_id, created_at')
+    .eq('request_id', id)
+    .order('created_at', { ascending: false });
+
+  const venueIds = (votes ?? []).map(v => v.venue_id);
+  let venueMap: Record<string, string> = {};
+  if (venueIds.length > 0) {
+    const { data: venues } = await supabaseAdmin
+      .from('venues')
+      .select('id, name')
+      .in('id', venueIds);
+    venueMap = Object.fromEntries((venues ?? []).map(v => [v.id, v.name]));
   }
 
-  return NextResponse.json(data);
+  const voters = (votes ?? []).map(v => ({
+    venue_id: v.venue_id,
+    venue_name: venueMap[v.venue_id] || 'Unknown Venue',
+    voted_at: v.created_at,
+  }));
+
+  return NextResponse.json({ ...req, voters });
 }
 
 export async function PATCH(
@@ -34,21 +56,18 @@ export async function PATCH(
   if (!(await verifyAdmin())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id } = await params;
-  const body = await request.json();
+  const { status } = await request.json();
+  const valid = ['open', 'planned', 'in_progress', 'completed'];
+  if (!valid.includes(status)) return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
 
-  if (!body.status) {
-    return NextResponse.json({ error: 'Status is required' }, { status: 400 });
-  }
+  const { data, error } = await supabaseAdmin
+    .from('feature_requests')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select('id, status')
+    .single();
 
-  const { data, error } = await supabaseAdmin.rpc('admin_update_feature_request_status', {
-    p_id: id,
-    p_status: body.status,
-  });
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);
 }
 
@@ -59,14 +78,7 @@ export async function DELETE(
   if (!(await verifyAdmin())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id } = await params;
-
-  const { error } = await supabaseAdmin.rpc('admin_delete_feature_request', {
-    p_id: id,
-  });
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
+  const { error } = await supabaseAdmin.from('feature_requests').delete().eq('id', id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }
