@@ -464,7 +464,13 @@ export default function AdminPage() {
       });
       if (res.ok) {
         const updated = await res.json();
-        setFrDetail(prev => prev ? { ...prev, status: updated.status, completed_at: updated.completed_at ?? null, changelog_id: updated.changelog_id ?? null } : prev);
+        // If marking completed, close modal and refresh list
+        if (status === 'completed') {
+          setFrDetail(null);
+          setFrDetailError('');
+        } else {
+          setFrDetail(prev => prev ? { ...prev, status: updated.status } : prev);
+        }
         setShowChangelogForm(false);
         setClTitle(''); setClDesc(''); setClCat('feature');
         fetchStats(dateRange);
