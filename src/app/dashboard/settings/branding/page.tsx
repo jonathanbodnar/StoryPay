@@ -54,14 +54,16 @@ function LivePreview({ brand }: { brand: BrandState }) {
             // eslint-disable-next-line @next/next/no-img-element
             <img src={brand.logo_url} alt="Logo" className="h-10 object-contain" onError={e => (e.currentTarget.style.display = 'none')} />
           ) : (
-            <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center text-white font-bold text-lg">
-              {brand.venueName?.charAt(0) || 'V'}
-            </div>
+            <>
+              <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center text-white font-bold text-lg">
+                {brand.venueName?.charAt(0) || 'V'}
+              </div>
+              <div>
+                <p className="text-white font-bold text-sm leading-tight">{brand.venueName || 'Your Venue'}</p>
+                {brand.email && <p className="text-white/60 text-xs mt-0.5">{brand.email}</p>}
+              </div>
+            </>
           )}
-          <div>
-            <p className="text-white font-bold text-sm leading-tight">{brand.venueName || 'Your Venue'}</p>
-            {brand.email && <p className="text-white/60 text-xs mt-0.5">{brand.email}</p>}
-          </div>
         </div>
         <div className="text-right">
           <p className="text-white font-bold text-base">INVOICE</p>
