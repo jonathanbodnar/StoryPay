@@ -4,6 +4,9 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { Search, UserPlus, X, Loader2, FileText, Receipt, ChevronLeft, ChevronRight, User } from 'lucide-react';
 
+const capitalizeName = (name: string) =>
+  name.replace(/\b\w/g, c => c.toUpperCase());
+
 interface Customer {
   id: number;
   name: string;
@@ -167,7 +170,7 @@ export default function CustomersPage() {
                       href={`/dashboard/customers/${c.id}`}
                       className="font-medium text-gray-900 hover:text-brand-900 hover:underline"
                     >
-                      {c.name}
+                      {capitalizeName(c.name || '')}
                     </Link>
                   </td>
                   <td className="hidden sm:table-cell px-5 py-3.5 text-gray-700">{c.email || '---'}</td>
