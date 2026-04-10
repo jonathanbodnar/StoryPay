@@ -16,27 +16,14 @@ export async function GET(
 
   const { id } = await params;
 
-  // Use RPC to bypass PostgREST schema cache for new columns (completed_at, changelog_id)
-  const { data: rows, error: rpcErr } = await supabaseAdmin
-    .rpc('get_feature_request_detail', { p_id: id });
+  const { data: req } = await supabaseAdmin
+    .from('feature_requests')
+    .select('id, title, description, vote_count, status, created_at, completed_at, changelog_id')
+    .eq('id', id)
+    .single();
 
-  const req = (Array.isArray(rows) ? rows[0] : rows) ?? null;
+  if (!req) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  if (rpcErr || !req) {
-    // Fallback to direct select (old columns only)
-    const { data: fallback } = await supabaseAdmin
-      .from('feature_requests')
-      .select('id, title, description, vote_count, status, created_at')
-      .eq('id', id)
-      .single();
-    if (!fallback) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    // Patch missing new columns
-    Object.assign(fallback, { completed_at: null, changelog_id: null });
-    Object.assign(req ?? {}, fallback);
-    if (!req) return NextResponse.json({ ...fallback, voters: [], changelogEntry: null });
-  }
-
-  // Get changelog entry if linked
   let changelogEntry = null;
   if (req.changelog_id) {
     const { data } = await supabaseAdmin
@@ -85,12 +72,13 @@ export async function PATCH(
   const valid = ['open', 'planned', 'in_progress', 'completed'];
   if (!valid.includes(status)) return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
 
-  let completedAt: string | null = null;
-  let changelogId: string | null = null;
+  const updateFields: Record<string, unknown> = {
+    status,
+    updated_at: new Date().toISOString(),
+  };
 
-  // When marking completed: create changelog entry first (direct insert, no new columns referenced)
   if (status === 'completed') {
-    completedAt = new Date().toISOString();
+    updateFields.completed_at = new Date().toISOString();
 
     if (changelogTitle?.trim()) {
       const { data: entry, error: clErr } = await supabaseAdmin
@@ -105,24 +93,22 @@ export async function PATCH(
         .single();
 
       if (!clErr && entry) {
-        changelogId = entry.id;
+        updateFields.changelog_id = entry.id;
       }
     }
   }
 
-  const { data, error } = await supabaseAdmin.rpc('admin_update_feature_request_status', {
-    p_id: id,
-    p_status: status,
-    p_completed_at: completedAt,
-    p_changelog_id: changelogId,
-  });
+  const { error } = await supabaseAdmin
+    .from('feature_requests')
+    .update(updateFields)
+    .eq('id', id);
 
   if (error) {
-    console.error('[feature-request PATCH] RPC error:', error.message);
+    console.error('[feature-request PATCH] error:', error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json(data ?? { id, status });
+  return NextResponse.json({ id, status });
 }
 
 export async function DELETE(
@@ -132,7 +118,17 @@ export async function DELETE(
   if (!(await verifyAdmin())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id } = await params;
-  const { error } = await supabaseAdmin.rpc('admin_delete_feature_request', { p_id: id });
+
+  await supabaseAdmin
+    .from('feature_request_votes')
+    .delete()
+    .eq('request_id', id);
+
+  const { error } = await supabaseAdmin
+    .from('feature_requests')
+    .delete()
+    .eq('id', id);
+
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }
