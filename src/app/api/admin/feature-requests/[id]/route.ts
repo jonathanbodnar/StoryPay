@@ -85,14 +85,12 @@ export async function PATCH(
   const valid = ['open', 'planned', 'in_progress', 'completed'];
   if (!valid.includes(status)) return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
 
-  const updates: Record<string, unknown> = {
-    status,
-    updated_at: new Date().toISOString(),
-  };
+  let completedAt: string | null = null;
+  let changelogId: string | null = null;
 
-  // When marking as completed and changelog fields provided, create a changelog entry
+  // When marking completed: create changelog entry first (direct insert, no new columns referenced)
   if (status === 'completed') {
-    updates.completed_at = new Date().toISOString();
+    completedAt = new Date().toISOString();
 
     if (changelogTitle?.trim()) {
       const { data: entry, error: clErr } = await supabaseAdmin
@@ -107,22 +105,26 @@ export async function PATCH(
         .single();
 
       if (!clErr && entry) {
-        updates.changelog_id = entry.id;
+        changelogId = entry.id;
       }
     }
   }
 
-  // Only select columns PostgREST knows about (completed_at/changelog_id may not be in cache yet)
-  // We use the RPC for reading; here we just need to confirm the update succeeded
-  const { data, error } = await supabaseAdmin
-    .from('feature_requests')
-    .update(updates)
-    .eq('id', id)
-    .select('id, status')
-    .single();
+  // Use RPC to bypass PostgREST schema cache — avoids "column not found" errors
+  const { data, error } = await supabaseAdmin.rpc('update_feature_request_status', {
+    p_id: id,
+    p_status: status,
+    p_completed_at: completedAt,
+    p_changelog_id: changelogId,
+  });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data);
+  if (error) {
+    console.error('[feature-request PATCH] RPC error:', error.message);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  const row = Array.isArray(data) ? data[0] : data;
+  return NextResponse.json(row ?? { id, status });
 }
 
 export async function DELETE(
