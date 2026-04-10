@@ -1,29 +1,26 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
-
-const EDGE_URL = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/team-members`;
-const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+import { supabaseAdmin } from '@/lib/supabase';
 
 async function getVenueId() {
   const c = await cookies();
   return c.get('venue_id')?.value;
 }
 
-function edgeHeaders(venueId: string) {
-  return {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${ANON_KEY}`,
-    'x-venue-id': venueId,
-  };
-}
-
 export async function GET() {
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const res = await fetch(EDGE_URL, { headers: edgeHeaders(venueId) });
-  const data = await res.json();
-  return NextResponse.json(data, { status: res.status });
+  const { data, error } = await supabaseAdmin
+    .from('venue_team_members')
+    .select('id, venue_id, name, first_name, last_name, email, role, status, avatar_url, created_at, invited_at')
+    .eq('venue_id', venueId)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  return NextResponse.json(data ?? []);
 }
 
 export async function POST(request: NextRequest) {
@@ -31,25 +28,42 @@ export async function POST(request: NextRequest) {
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await request.json();
-  const res = await fetch(EDGE_URL, {
-    method: 'POST',
-    headers: edgeHeaders(venueId),
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  return NextResponse.json(data, { status: res.status });
-}
+  const { first_name, last_name, email, role } = body;
 
-export async function DELETE(request: NextRequest) {
-  const venueId = await getVenueId();
-  if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!first_name?.trim() || !email?.trim()) {
+    return NextResponse.json({ error: 'First name and email are required' }, { status: 400 });
+  }
 
-  const body = await request.json();
-  const res = await fetch(EDGE_URL, {
-    method: 'DELETE',
-    headers: edgeHeaders(venueId),
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  return NextResponse.json(data, { status: res.status });
+  const fullName = [first_name.trim(), (last_name || '').trim()].filter(Boolean).join(' ');
+
+  const { data: existing } = await supabaseAdmin
+    .from('venue_team_members')
+    .select('id')
+    .eq('venue_id', venueId)
+    .eq('email', email.trim().toLowerCase())
+    .maybeSingle();
+
+  if (existing) {
+    return NextResponse.json({ error: 'A member with this email already exists.' }, { status: 409 });
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('venue_team_members')
+    .insert({
+      venue_id: venueId,
+      name: fullName,
+      first_name: first_name.trim(),
+      last_name: (last_name || '').trim(),
+      email: email.trim().toLowerCase(),
+      role: role || 'member',
+      status: 'invited',
+      invited_at: new Date().toISOString(),
+    })
+    .select('id, venue_id, name, first_name, last_name, email, role, status, avatar_url, created_at, invited_at')
+    .single();
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  return NextResponse.json(data, { status: 201 });
 }
