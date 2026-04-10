@@ -112,11 +112,13 @@ export async function PATCH(
     }
   }
 
+  // Only select columns PostgREST knows about (completed_at/changelog_id may not be in cache yet)
+  // We use the RPC for reading; here we just need to confirm the update succeeded
   const { data, error } = await supabaseAdmin
     .from('feature_requests')
     .update(updates)
     .eq('id', id)
-    .select('id, status, completed_at, changelog_id')
+    .select('id, status')
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

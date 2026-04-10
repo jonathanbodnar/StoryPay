@@ -182,6 +182,90 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ rows, summary: { 'Total Refunds': rows.length, 'Total Refunded': `$${(total / 100).toFixed(2)}` } });
     }
 
+    case 'bank-reconciliation': {
+      // Fetch all paid proposals in range
+      let qPaid = supabaseAdmin
+        .from('proposals')
+        .select('id, customer_name, customer_email, price, payment_type, paid_at, created_at, payment_config')
+        .eq('venue_id', venueId)
+        .eq('status', 'paid')
+        .order('paid_at', { ascending: false });
+      if (from)  qPaid = qPaid.gte('paid_at', from);
+      if (toEnd) qPaid = qPaid.lte('paid_at', toEnd);
+
+      // Fetch refunds in same range
+      let qRef = supabaseAdmin
+        .from('proposals')
+        .select('id, customer_name, price, paid_at')
+        .eq('venue_id', venueId)
+        .eq('status', 'refunded')
+        .order('paid_at', { ascending: false });
+      if (from)  qRef = qRef.gte('paid_at', from);
+      if (toEnd) qRef = qRef.lte('paid_at', toEnd);
+
+      // Get venue fee rate
+      const { data: venue } = await supabaseAdmin
+        .from('venues')
+        .select('service_fee_rate')
+        .eq('id', venueId)
+        .single();
+
+      const feeRate = (venue?.service_fee_rate ?? 2.75) / 100;
+
+      const [{ data: paid }, { data: refunded }] = await Promise.all([qPaid, qRef]);
+
+      const paidRows = (paid ?? []).map((r) => {
+        const gross = (r.price ?? 0) / 100;
+        const processingFee = parseFloat((gross * feeRate).toFixed(2));
+        const net = parseFloat((gross - processingFee).toFixed(2));
+        return {
+          'Date':             r.paid_at ? new Date(r.paid_at).toLocaleDateString('en-US') : '',
+          'Type':             'Payment Received',
+          'Customer':         r.customer_name ?? '',
+          'Description':      `${(r.payment_type ?? 'full').replace('_', ' ')} payment`,
+          'Gross Amount ($)': gross.toFixed(2),
+          'Processing Fee ($)': processingFee.toFixed(2),
+          'Net to Bank ($)':  net.toFixed(2),
+          'Proposal ID':      r.id,
+        };
+      });
+
+      const refundRows = (refunded ?? []).map((r) => {
+        const gross = (r.price ?? 0) / 100;
+        return {
+          'Date':               r.paid_at ? new Date(r.paid_at).toLocaleDateString('en-US') : '',
+          'Type':               'Refund Issued',
+          'Customer':           r.customer_name ?? '',
+          'Description':        'Refund',
+          'Gross Amount ($)':   `(${gross.toFixed(2)})`,
+          'Processing Fee ($)': '—',
+          'Net to Bank ($)':    `(${gross.toFixed(2)})`,
+          'Proposal ID':        r.id,
+        };
+      });
+
+      const rows = [...paidRows, ...refundRows].sort((a, b) =>
+        new Date(b['Date']).getTime() - new Date(a['Date']).getTime()
+      );
+
+      const totalGross  = (paid ?? []).reduce((s, r) => s + (r.price ?? 0), 0) / 100;
+      const totalFees   = parseFloat((totalGross * feeRate).toFixed(2));
+      const totalNet    = parseFloat((totalGross - totalFees).toFixed(2));
+      const totalRefunds = (refunded ?? []).reduce((s, r) => s + (r.price ?? 0), 0) / 100;
+      const netDeposit  = parseFloat((totalNet - totalRefunds).toFixed(2));
+
+      return NextResponse.json({
+        rows,
+        summary: {
+          'Total Payments':        paidRows.length,
+          'Gross Collections ($)': totalGross.toFixed(2),
+          'Processing Fees ($)':   totalFees.toFixed(2),
+          'Total Refunds ($)':     totalRefunds.toFixed(2),
+          'Estimated Net Deposit ($)': netDeposit.toFixed(2),
+        },
+      });
+    }
+
     default:
       return NextResponse.json({ error: 'Invalid report type' }, { status: 400 });
   }

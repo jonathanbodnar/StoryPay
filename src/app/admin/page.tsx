@@ -463,17 +463,21 @@ export default function AdminPage() {
         }),
       });
       if (res.ok) {
-        const updated = await res.json();
-        // If marking completed, close modal and refresh list
+        // If marking completed, always close modal immediately
         if (status === 'completed') {
           setFrDetail(null);
           setFrDetailError('');
+          setShowChangelogForm(false);
+          setClTitle(''); setClDesc(''); setClCat('feature');
         } else {
+          const updated = await res.json();
           setFrDetail(prev => prev ? { ...prev, status: updated.status } : prev);
+          setShowChangelogForm(false);
         }
-        setShowChangelogForm(false);
-        setClTitle(''); setClDesc(''); setClCat('feature');
         fetchStats(dateRange);
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setFrDetailError(d.error || 'Failed to update status');
       }
     } finally { setFrStatusSaving(false); }
   }

@@ -4,13 +4,14 @@ import { useState, useCallback } from 'react';
 import {
   DollarSign, FileText, Users, Clock, CreditCard, RotateCcw,
   Download, FileSpreadsheet, Table2, Loader2, ChevronDown, ChevronUp,
+  Landmark,
 } from 'lucide-react';
 import DateRangePicker, { DateRange, PRESETS } from '@/components/DateRangePicker';
 import { classNames } from '@/lib/utils';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type ReportType = 'revenue' | 'proposals' | 'customers' | 'aging' | 'payment-methods' | 'refunds';
+type ReportType = 'revenue' | 'proposals' | 'customers' | 'aging' | 'payment-methods' | 'refunds' | 'bank-reconciliation';
 type Format = 'csv' | 'excel' | 'pdf';
 
 interface ReportDef {
@@ -77,6 +78,14 @@ const REPORTS: ReportDef[] = [
     icon: RotateCcw,
     color: '#ef4444',
     bg: 'bg-red-50',
+  },
+  {
+    type: 'bank-reconciliation',
+    label: 'Bank Reconciliation',
+    description: 'Match StoryPay collections to your bank deposits. Shows gross payments, processing fees deducted, refunds, and estimated net deposit — ready for your accountant.',
+    icon: Landmark,
+    color: '#0369a1',
+    bg: 'bg-sky-50',
   },
 ];
 
