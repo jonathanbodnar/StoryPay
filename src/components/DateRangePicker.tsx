@@ -223,115 +223,107 @@ export default function DateRangePicker({ value, onChange }: Props) {
     setOpen(true);
   }
 
-  // Dropdown panel — portaled to body so overflow:hidden ancestors can't clip it
-  const dropdownStyle: React.CSSProperties = btnRect
-    ? {
-        position: 'fixed',
-        top: btnRect.bottom + 8,
-        // Right-align to button, but clamp to viewport
-        right: Math.max(8, window.innerWidth - btnRect.right),
-        width: Math.min(580, window.innerWidth - 16),
-        zIndex: 9999,
-      }
-    : { position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 9999, width: Math.min(580, typeof window !== 'undefined' ? window.innerWidth - 16 : 400) };
+  // Shared calendar inner content
+  const calendarInner = (
+    <>
+      {/* Desktop presets sidebar */}
+      <div className="hidden sm:block w-44 border-r border-gray-100 py-2 flex-shrink-0">
+        <p className="px-4 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Presets</p>
+        {PRESETS.map(p => (
+          <button key={p.label} onClick={() => handlePreset(p)}
+            className={['w-full text-left px-4 py-1.5 text-xs transition-colors', activePreset === p.label ? 'font-semibold text-gray-900 bg-gray-100' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'].join(' ')}>
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Calendar panel */}
+      <div className="flex-1 p-4 flex flex-col gap-4 min-w-0">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold text-gray-800">
+            {selecting === 'from' ? 'Select start date' : 'Select end date'}
+          </p>
+          <button onClick={() => setOpen(false)} className="p-1 text-gray-400 hover:text-gray-600 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Mobile quick presets */}
+        <div className="sm:hidden flex flex-wrap gap-2">
+          {['Last 7 days','Last 30 days','This month','Last 3 months','Year to date','All time'].map(label => {
+            const preset = PRESETS.find(p => p.label === label);
+            if (!preset) return null;
+            return (
+              <button key={label} type="button" onClick={() => handlePreset(preset)}
+                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${activePreset === label ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 text-gray-600'}`}>
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* From / To selectors */}
+        <div className="flex items-center gap-2">
+          <button onClick={() => setSelecting('from')}
+            className={['flex-1 px-3 py-2 text-xs rounded-lg border text-center transition-colors', selecting === 'from' ? 'border-gray-900 bg-gray-900/5 font-semibold text-gray-900' : 'border-gray-200 text-gray-500'].join(' ')}>
+            {displayFrom ? formatDisplay(displayFrom) : 'Start date'}
+          </button>
+          <span className="text-gray-300 flex-shrink-0 text-xs">→</span>
+          <button onClick={() => setSelecting('to')}
+            className={['flex-1 px-3 py-2 text-xs rounded-lg border text-center transition-colors', selecting === 'to' ? 'border-gray-900 bg-gray-900/5 font-semibold text-gray-900' : 'border-gray-200 text-gray-500'].join(' ')}>
+            {displayTo ? formatDisplay(displayTo) : 'End date'}
+          </button>
+        </div>
+
+        <MiniCalendar month={calMonth} year={calYear} selecting={selecting}
+          selectedFrom={tempFrom} selectedTo={tempTo} hovered={selecting === 'to' ? hovered : null}
+          onSelect={handleCalSelect} onHover={setHovered}
+          onMonthChange={(m, y) => { setCalMonth(m); setCalYear(y); }} />
+
+        <div className="flex gap-2 pt-2 border-t border-gray-100">
+          <button onClick={() => setOpen(false)}
+            className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+            Cancel
+          </button>
+          <button onClick={applyCustom} disabled={!tempFrom || !tempTo}
+            className="flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40 transition-colors"
+            style={{ backgroundColor: '#1b1b1b' }}>
+            Apply
+          </button>
+        </div>
+      </div>
+    </>
+  );
+
+  // Mobile: bottom sheet. Desktop: fixed dropdown below button.
+  const isMobileScreen = typeof window !== 'undefined' && window.innerWidth < 640;
+
+  const desktopStyle: React.CSSProperties = btnRect ? {
+    position: 'fixed',
+    top: btnRect.bottom + 8,
+    right: Math.max(8, window.innerWidth - btnRect.right),
+    width: Math.min(580, window.innerWidth - 16),
+    zIndex: 9999,
+  } : { position: 'fixed', top: 80, right: 16, width: 560, zIndex: 9999 };
 
   const panel = open ? (
-    <div
-      className="flex rounded-xl border border-gray-200 bg-white shadow-2xl overflow-hidden"
-      style={dropdownStyle}
-    >
-          {/* Presets */}
-          <div className="hidden sm:block w-44 border-r border-gray-100 py-2 flex-shrink-0">
-            <p className="px-4 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Presets</p>
-            {PRESETS.map(p => (
-              <button
-                key={p.label}
-                onClick={() => handlePreset(p)}
-                className={[
-                  'w-full text-left px-4 py-1.5 text-xs transition-colors',
-                  activePreset === p.label
-                    ? 'bg-brand-900/8 font-semibold text-gray-900'
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
-                ].join(' ')}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Calendar */}
-          <div className="flex-1 p-4 flex flex-col gap-4 min-w-0">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-gray-700">
-                {selecting === 'from' ? 'Select start date' : 'Select end date'}
-              </p>
-              <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
-                <X size={14} />
-              </button>
-            </div>
-
-            {/* Mobile-only quick presets */}
-            <div className="sm:hidden flex flex-wrap gap-1.5">
-              {['Last 7 days','Last 30 days','This month','Year to date','All time'].map(label => {
-                const preset = PRESETS.find(p => p.label === label);
-                if (!preset) return null;
-                return (
-                  <button
-                    key={label}
-                    type="button"
-                    onClick={() => { handlePreset(preset); }}
-                    className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${activePreset === label ? 'border-brand-900 bg-brand-900 text-white' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Range display */}
-            <div className="flex items-center gap-2 text-xs">
-              <button
-                onClick={() => setSelecting('from')}
-                className={['px-3 py-1.5 rounded-lg border transition-colors', selecting === 'from' ? 'border-brand-900 bg-brand-900/5 text-gray-900 font-medium' : 'border-gray-200 text-gray-500 hover:border-gray-300'].join(' ')}
-              >
-                {displayFrom ? formatDisplay(displayFrom) : 'Start date'}
-              </button>
-              <span className="text-gray-300">→</span>
-              <button
-                onClick={() => setSelecting('to')}
-                className={['px-3 py-1.5 rounded-lg border transition-colors', selecting === 'to' ? 'border-brand-900 bg-brand-900/5 text-gray-900 font-medium' : 'border-gray-200 text-gray-500 hover:border-gray-300'].join(' ')}
-              >
-                {displayTo ? formatDisplay(displayTo) : 'End date'}
-              </button>
-            </div>
-
-            <MiniCalendar
-              month={calMonth} year={calYear}
-              selecting={selecting}
-              selectedFrom={tempFrom} selectedTo={tempTo} hovered={selecting === 'to' ? hovered : null}
-              onSelect={handleCalSelect}
-              onHover={setHovered}
-              onMonthChange={(m, y) => { setCalMonth(m); setCalYear(y); }}
-            />
-
-            <div className="flex justify-end gap-2 pt-1 border-t border-gray-100">
-              <button
-                onClick={() => setOpen(false)}
-                className="rounded-lg border border-gray-200 px-3.5 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={applyCustom}
-                disabled={!tempFrom || !tempTo}
-                className="rounded-lg px-3.5 py-2 text-xs font-medium text-white transition-colors disabled:opacity-40"
-                style={{ backgroundColor: '#1b1b1b' }}
-              >
-                Apply
-              </button>
-            </div>
-          </div>
+    isMobileScreen ? (
+      // Full-width bottom sheet on mobile
+      <div className="flex flex-col bg-white rounded-t-2xl shadow-2xl overflow-y-auto"
+        style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 9999, maxHeight: '88vh' }}
+        onClick={e => e.stopPropagation()}>
+        <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
+          <div className="h-1 w-10 rounded-full bg-gray-300" />
         </div>
+        <div className="flex flex-col">{calendarInner}</div>
+      </div>
+    ) : (
+      <div className="flex rounded-xl border border-gray-200 bg-white shadow-2xl overflow-hidden"
+        style={desktopStyle}
+        onClick={e => e.stopPropagation()}>
+        {calendarInner}
+      </div>
+    )
   ) : null;
 
   return (

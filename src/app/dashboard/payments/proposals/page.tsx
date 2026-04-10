@@ -204,24 +204,43 @@ export default function PaymentsProposalsPage() {
               </div>
             ) : (
               <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                {/* Desktop header */}
                 <div className="hidden sm:grid grid-cols-[1fr_100px_100px_110px_120px] gap-4 px-6 py-3 border-b border-gray-100 bg-gray-50">
                   {['Client','Status','Amount','Payment','Sent'].map(h=>(
                     <span key={h} className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{h}</span>
                   ))}
                 </div>
-                <div className="divide-y divide-gray-50">
+                <div className="divide-y divide-gray-100">
                   {sent.map(p=>{
                     const color = getStatusColor(p.status);
                     return (
-                      <div key={p.id} className="flex flex-col sm:grid sm:grid-cols-[1fr_100px_100px_110px_120px] gap-2 sm:gap-4 px-6 py-4 hover:bg-gray-50/50 transition-colors group">
-                        <div>
-                          <Link href={`/dashboard/proposals/${p.id}/edit`} className="text-sm font-semibold text-gray-900 hover:underline truncate block">{p.customer_name||'Unknown'}</Link>
-                          {p.customer_email && <p className="text-xs text-gray-400 truncate">{p.customer_email}</p>}
+                      <div key={p.id} className="hover:bg-gray-50/50 transition-colors">
+                        {/* Mobile card */}
+                        <div className="sm:hidden px-4 py-4 space-y-2">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <Link href={`/dashboard/proposals/${p.id}/edit`} className="text-sm font-semibold text-gray-900 hover:underline block truncate">{p.customer_name||'Unknown'}</Link>
+                              {p.customer_email && <p className="text-xs text-gray-400 truncate">{p.customer_email}</p>}
+                            </div>
+                            <span className={classNames('inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize flex-shrink-0', color.bg, color.text)}>{p.status}</span>
+                          </div>
+                          <div className="flex items-center gap-4 text-sm text-gray-500">
+                            <span className="font-semibold text-gray-800">{formatCents(p.price)}</span>
+                            <span className="capitalize">{p.payment_type}</span>
+                            {p.sent_at && <span>{formatDate(p.sent_at)}</span>}
+                          </div>
                         </div>
-                        <span className={classNames('inline-block self-center rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize w-fit', color.bg, color.text)}>{p.status}</span>
-                        <p className="text-sm text-gray-700 self-center">{formatCents(p.price)}</p>
-                        <p className="text-sm text-gray-500 self-center capitalize">{p.payment_type}</p>
-                        <p className="text-sm text-gray-500 self-center">{p.sent_at?formatDate(p.sent_at):'—'}</p>
+                        {/* Desktop row */}
+                        <div className="hidden sm:grid grid-cols-[1fr_100px_100px_110px_120px] gap-4 px-6 py-4 items-center">
+                          <div>
+                            <Link href={`/dashboard/proposals/${p.id}/edit`} className="text-sm font-semibold text-gray-900 hover:underline truncate block">{p.customer_name||'Unknown'}</Link>
+                            {p.customer_email && <p className="text-xs text-gray-400 truncate">{p.customer_email}</p>}
+                          </div>
+                          <span className={classNames('inline-block self-center rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize w-fit', color.bg, color.text)}>{p.status}</span>
+                          <p className="text-sm text-gray-700 self-center">{formatCents(p.price)}</p>
+                          <p className="text-sm text-gray-500 self-center capitalize">{p.payment_type}</p>
+                          <p className="text-sm text-gray-500 self-center">{p.sent_at?formatDate(p.sent_at):'—'}</p>
+                        </div>
                       </div>
                     );
                   })}
