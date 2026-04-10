@@ -25,6 +25,7 @@ export function getFreshBooksAuthUrl(state: string) {
     client_id: FB_CLIENT_ID,
     response_type: 'code',
     redirect_uri: FB_REDIRECT_URI,
+    scope: 'user:profile:read user:invoices:read user:invoices:write',
     state,
   });
   return `https://auth.freshbooks.com/oauth/authorize?${params}`;
@@ -171,16 +172,17 @@ export async function createFreshBooksInvoice(
     },
     body: JSON.stringify({
       invoice: {
-        customerid: 0,
         create_date: txn.date.slice(0, 10),
         lines: [{
-          type: 0,
-          name: txn.description,
-          amount: { amount: (txn.amount / 100).toFixed(2), code: 'USD' },
-          quantity: 1,
+          name: txn.customer_name,
+          description: txn.description,
+          qty: 1,
+          unit_cost: {
+            amount: (txn.amount / 100).toFixed(2),
+            code: 'USD',
+          },
         }],
         notes: `Synced from StoryPay - ${txn.id}`,
-        status: 2,
       },
     }),
   });
