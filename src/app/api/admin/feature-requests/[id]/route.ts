@@ -110,8 +110,7 @@ export async function PATCH(
     }
   }
 
-  // Use plpgsql RPC to bypass PostgREST schema cache for completed_at and changelog_id
-  const { error } = await supabaseAdmin.rpc('update_feature_request_status', {
+  const { data, error } = await supabaseAdmin.rpc('admin_update_feature_request_status', {
     p_id: id,
     p_status: status,
     p_completed_at: completedAt,
@@ -123,7 +122,7 @@ export async function PATCH(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ id, status });
+  return NextResponse.json(data ?? { id, status });
 }
 
 export async function DELETE(
@@ -133,7 +132,7 @@ export async function DELETE(
   if (!(await verifyAdmin())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id } = await params;
-  const { error } = await supabaseAdmin.from('feature_requests').delete().eq('id', id);
+  const { error } = await supabaseAdmin.rpc('admin_delete_feature_request', { p_id: id });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }
