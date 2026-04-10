@@ -286,11 +286,11 @@ function FeatureRequestsTab() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50 transition-colors"
+                className="inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50 transition-colors whitespace-nowrap"
                 style={{ backgroundColor: '#1b1b1b' }}
               >
-                {submitting && <Loader2 size={14} className="animate-spin" />}
-                {submitting ? 'Submitting...' : 'Submit Request'}
+                {submitting && <Loader2 size={14} className="animate-spin flex-shrink-0" />}
+                <span>{submitting ? 'Submitting...' : 'Submit Request'}</span>
               </button>
             </div>
           </form>

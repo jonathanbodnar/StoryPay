@@ -230,7 +230,7 @@ export default function DateRangePicker({ value, onChange }: Props) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 z-50 flex rounded-xl border border-gray-200 bg-white shadow-xl overflow-hidden max-w-[calc(100vw-2rem)]" style={{ minWidth: 'min(580px, calc(100vw - 2rem))' }}>
+        <div className="absolute right-0 sm:right-0 left-auto max-sm:left-0 max-sm:right-auto top-full mt-2 z-50 flex rounded-xl border border-gray-200 bg-white shadow-xl overflow-hidden" style={{ width: 'min(580px, calc(100vw - 2rem))', maxWidth: 'calc(100vw - 1rem)' }}>
           {/* Presets */}
           <div className="hidden sm:block w-44 border-r border-gray-100 py-2 flex-shrink-0">
             <p className="px-4 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Presets</p>

@@ -336,14 +336,16 @@ export default function ProposalPage() {
                 {proposal.venue_logo_url ? (
                   <img src={proposal.venue_logo_url} alt={proposal.venue_name} className="h-10 object-contain" />
                 ) : (
-                  <div className="h-9 w-9 rounded-lg flex items-center justify-center text-white text-sm font-bold bg-white/20">
-                    {proposal.venue_name.charAt(0)}
-                  </div>
+                  <>
+                    <div className="h-9 w-9 rounded-lg flex items-center justify-center text-white text-sm font-bold bg-white/20">
+                      {proposal.venue_name.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-white text-sm">{proposal.venue_name}</p>
+                      {brand?.tagline && <p className="text-white/70 text-xs">{brand.tagline}</p>}
+                    </div>
+                  </>
                 )}
-                <div>
-                  <p className="font-semibold text-white text-sm">{proposal.venue_name}</p>
-                  {brand?.tagline && <p className="text-white/70 text-xs">{brand.tagline}</p>}
-                </div>
               </div>
               <div className="flex items-center gap-4">
                 <div className="hidden sm:flex flex-col text-right text-white/70 text-xs gap-0.5">
@@ -351,7 +353,6 @@ export default function ProposalPage() {
                   {brand?.phone && <span>{brand.phone}</span>}
                 </div>
                 <StatusBadge status={proposal.status} />
-                <img src="/storyvenue-dark-logo.png" alt="StoryPay" className="h-5 opacity-50" />
               </div>
             </div>
           </header>

@@ -9,7 +9,7 @@ import {
   Sparkles, Megaphone, Settings, Palette, Mail, UsersRound,
   Bell, Package, Receipt, Link2, RefreshCw, DollarSign, Plus, Calendar,
   ArrowLeft, Menu, X, ChevronDown,
-  HelpCircle,
+  HelpCircle, LogOut,
 } from 'lucide-react';
 
 interface Venue { id: string; name: string; ghl_location_id: string; }
@@ -24,12 +24,12 @@ const menuItems = [
 ];
 
 const paymentsItems = [
-  { label: 'New',           href: '/dashboard/payments/new',              icon: Plus },
-  { label: 'Proposals',     href: '/dashboard/payments/proposals',        icon: FileText },
-  { label: 'Installments',  href: '/dashboard/payments/installments',     icon: Calendar },
-  { label: 'Subscriptions', href: '/dashboard/payments/subscriptions',    icon: RefreshCw },
-  { label: 'Transactions',  href: '/dashboard/transactions',              icon: CreditCard },
-  // { label: 'Payouts', href: '/dashboard/payments/payouts', icon: DollarSign }, // hidden for now
+  { label: 'New',                href: '/dashboard/payments/new',               icon: Plus },
+  { label: 'Proposals',          href: '/dashboard/payments/proposals',         icon: FileText },
+  { label: 'Proposal Templates', href: '/dashboard/proposals/templates',        icon: Receipt },
+  { label: 'Installments',       href: '/dashboard/payments/installments',      icon: Calendar },
+  { label: 'Subscriptions',      href: '/dashboard/payments/subscriptions',     icon: RefreshCw },
+  { label: 'Transactions',       href: '/dashboard/transactions',               icon: CreditCard },
 ];
 
 const settingsItems = [
@@ -194,14 +194,21 @@ export default function Sidebar({ venue }: SidebarProps) {
       </nav>
 
       {/* Footer */}
-      <div className="px-4 py-4 border-t border-gray-100">
+      <div className="px-4 py-4 border-t border-gray-100 space-y-1">
         <button
           onClick={() => window.dispatchEvent(new Event('open-ask-ai'))}
-          className="flex items-center gap-2 text-gray-400 hover:text-gray-700 transition-colors text-sm w-full"
+          className="flex items-center gap-2 text-gray-400 hover:text-gray-700 transition-colors text-sm w-full px-2 py-1.5 rounded-lg hover:bg-gray-50"
         >
           <HelpCircle size={16} />
           <span>Support</span>
         </button>
+        <a
+          href="/api/auth/logout"
+          className="flex items-center gap-2 text-gray-400 hover:text-red-500 transition-colors text-sm w-full px-2 py-1.5 rounded-lg hover:bg-red-50"
+        >
+          <LogOut size={16} />
+          <span>Logout</span>
+        </a>
       </div>
     </div>
   );
@@ -210,10 +217,21 @@ export default function Sidebar({ venue }: SidebarProps) {
     <>
       {/* Mobile top bar */}
       <div className="lg:hidden fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 h-14" style={{ backgroundColor: '#fafaf9', borderBottom: '1px solid #ebebeb' }}>
-        <Image src="/storyvenue-dark-logo.png" alt="StoryPay" width={90} height={22} />
-        <button onClick={() => setMobileOpen(v => !v)} className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 transition-colors">
-          {mobileOpen ? <X size={20} /> : <Menu size={20} />}
-        </button>
+        <Link href="/dashboard">
+          <Image src="/storyvenue-dark-logo.png" alt="StoryPay" width={90} height={22} />
+        </Link>
+        <div className="flex items-center gap-2">
+          <a
+            href="/api/auth/logout"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+            title="Logout"
+          >
+            <LogOut size={17} />
+          </a>
+          <button onClick={() => setMobileOpen(v => !v)} className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 transition-colors">
+            {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile backdrop */}

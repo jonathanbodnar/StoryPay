@@ -130,24 +130,25 @@ export default function InvoicePage() {
                     {invoice.venue_logo_url ? (
                       <img src={invoice.venue_logo_url} alt={invoice.venue_name} className="h-12 object-contain" />
                     ) : (
-                      <div className="h-12 w-12 rounded-xl bg-white/20 flex items-center justify-center text-white text-xl font-bold">
-                        {invoice.venue_name.charAt(0)}
-                      </div>
+                      <>
+                        <div className="h-12 w-12 rounded-xl bg-white/20 flex items-center justify-center text-white text-xl font-bold">
+                          {invoice.venue_name.charAt(0)}
+                        </div>
+                        <div>
+                          <p className="text-white font-bold text-base">{invoice.venue_name}</p>
+                          {brand?.tagline && <p className="text-white/70 text-xs mt-0.5">{brand.tagline}</p>}
+                          {(brand?.address || brand?.city) && (
+                            <p className="text-white/60 text-xs mt-0.5">
+                              {[brand.address, brand.city, brand.state, brand.zip].filter(Boolean).join(', ')}
+                            </p>
+                          )}
+                          {brand?.email && <p className="text-white/60 text-xs">{brand.email}</p>}
+                          {brand?.phone && <p className="text-white/60 text-xs">{brand.phone}</p>}
+                        </div>
+                      </>
                     )}
-                    <div>
-                      <p className="text-white font-bold text-base">{invoice.venue_name}</p>
-                      {brand?.tagline && <p className="text-white/70 text-xs mt-0.5">{brand.tagline}</p>}
-                      {(brand?.address || brand?.city) && (
-                        <p className="text-white/60 text-xs mt-0.5">
-                          {[brand.address, brand.city, brand.state, brand.zip].filter(Boolean).join(', ')}
-                        </p>
-                      )}
-                      {brand?.email && <p className="text-white/60 text-xs">{brand.email}</p>}
-                      {brand?.phone && <p className="text-white/60 text-xs">{brand.phone}</p>}
-                    </div>
                   </div>
                   <div className="text-right">
-                    <img src="/storyvenue-dark-logo.png" alt="StoryPay" className="h-4 ml-auto mb-3 opacity-40 print:hidden" />
                     <h1 className="text-3xl font-bold text-white">INVOICE</h1>
                     <p className="mt-1 text-sm text-white/60">#{invoiceNumber}</p>
                   </div>
@@ -331,10 +332,9 @@ export default function InvoicePage() {
           </div>
         )}
 
-        {/* Branding footer */}
-        <div className="mt-6 flex flex-col items-center gap-2 print:hidden">
-          <img src="/storyvenue-dark-logo.png" alt="StoryPay" className="h-5" />
-          <p className="text-xs text-gray-300">&copy; StoryVenue 2026</p>
+        {/* Powered-by footer — minimal */}
+        <div className="mt-6 flex flex-col items-center gap-1 print:hidden">
+          <p className="text-xs text-gray-300">Powered by StoryPay</p>
         </div>
       </div>
     </div>

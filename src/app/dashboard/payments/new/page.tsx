@@ -225,7 +225,7 @@ export default function NewProposalInvoicePage() {
 
   // Customer search
   const searchCustomers = useCallback(async (q: string) => {
-    if (q.length < 2) { setSearchResults([]); return; }
+    if (q.length < 1) { setSearchResults([]); return; }
     setSearchLoading(true);
     try {
       const res = await fetch(`/api/contacts?search=${encodeURIComponent(q)}&limit=8`);
@@ -239,11 +239,16 @@ export default function NewProposalInvoicePage() {
   }, [searchQuery, searchCustomers]);
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
+    const handler = (e: Event) => {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) setShowDropdown(false);
     };
+    // Both mouse and touch for mobile
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler);
+    };
   }, []);
 
   // ── Line item helpers ──────────────────────────────────────────────────────
@@ -457,13 +462,16 @@ export default function NewProposalInvoicePage() {
                     <>
                       <div className="relative">
                         <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"/>
-                        <input type="text" value={searchQuery} onChange={e=>{setSearchQuery(e.target.value);setShowDropdown(true);}}
-                          onFocus={()=>searchQuery.length>=2&&setShowDropdown(true)}
+                        <input type="text" value={searchQuery}
+                          onChange={e=>{setSearchQuery(e.target.value);if(e.target.value.length>=1) setShowDropdown(true);}}
+                          onFocus={()=>{ if(searchQuery.length>=1) setShowDropdown(true); }}
                           placeholder="Search by name, email, or phone..."
+                          autoComplete="off"
+                          style={{ fontSize: 16 }}
                           className="w-full rounded-xl border border-gray-200 bg-white pl-9 pr-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none transition-colors"/>
                         {searchLoading && <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-gray-400"/>}
                       </div>
-                      {showDropdown && searchQuery.length>=2 && (
+                      {showDropdown && searchQuery.length>=1 && (
                         <div className="absolute z-50 mt-1 w-full rounded-xl border border-gray-200 bg-white shadow-xl overflow-hidden max-h-56 overflow-y-auto" style={{top:'100%',left:0}}>
                           {searchResults.length>0 ? searchResults.map(c=>(
                             <button key={c.id} type="button" onClick={()=>{setSelectedCustomer(c);const parts=(c.name||'').trim().split(' ');setClientFirst(parts[0]||'');setClientLast(parts.slice(1).join(' ')||'');setClientEmail(c.email||'');setClientPhone(c.phone||'');setShowDropdown(false);}}

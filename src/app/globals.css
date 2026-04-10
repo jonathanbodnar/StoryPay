@@ -38,6 +38,13 @@ html, body {
   letter-spacing: -0.01em;
 }
 
+/* Prevent iOS auto-zoom on input focus — keep font-size at 16px minimum */
+@media screen and (max-width: 768px) {
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 6px;
 }

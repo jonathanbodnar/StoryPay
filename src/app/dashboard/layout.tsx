@@ -23,9 +23,10 @@ export default async function DashboardLayout({
     <div className="min-h-screen" style={{ backgroundColor: '#ffffff' }}>
       <Sidebar venue={{ id: venue.id, name: venue.name, ghl_location_id: venue.ghl_location_id }} />
       <div className="lg:ml-[260px]">
+        {/* Spacer for mobile fixed top bar */}
+        <div className="h-14 lg:hidden" />
         <AnnouncementTicker />
-        {/* lg:pt-[68px] aligns page title with first sidebar nav item regardless of ticker */}
-        <main className="min-h-screen pt-14 lg:pt-[68px] px-6 sm:px-8 lg:px-10 pb-10 max-w-7xl mx-auto">
+        <main className="min-h-screen lg:pt-[68px] px-6 sm:px-8 lg:px-10 pb-10 max-w-7xl mx-auto">
           {children}
         </main>
       </div>
