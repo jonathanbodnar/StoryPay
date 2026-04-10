@@ -240,7 +240,8 @@ function FeatureRequestsTab() {
         return;
       }
       const newReq = await res.json();
-      setRequests(prev => [newReq, ...prev].sort((a, b) => b.vote_count - a.vote_count));
+      // Always mark newly submitted requests as is_mine = true
+      setRequests(prev => [{ ...newReq, is_mine: true }, ...prev].sort((a, b) => b.vote_count - a.vote_count));
       setTitle(''); setDesc('');
       setShowForm(false);
     } catch {
