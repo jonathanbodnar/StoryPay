@@ -190,6 +190,6 @@ export async function createFreshBooksInvoice(
 }
 
 export function isConfigured(provider: 'quickbooks' | 'freshbooks') {
-  if (provider === 'quickbooks') return !!(QB_CLIENT_ID && QB_CLIENT_SECRET);
-  return !!(FB_CLIENT_ID && FB_CLIENT_SECRET);
+  if (provider === 'quickbooks') return !!(QB_CLIENT_ID && QB_CLIENT_SECRET && QB_REDIRECT_URI);
+  return !!(FB_CLIENT_ID && FB_CLIENT_SECRET && FB_REDIRECT_URI);
 }

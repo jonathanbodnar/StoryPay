@@ -31,5 +31,13 @@ export async function GET() {
       quickbooks: isConfigured('quickbooks'),
       freshbooks: isConfigured('freshbooks'),
     },
+    debug: {
+      fb_client_id_set: !!process.env.FRESHBOOKS_CLIENT_ID,
+      fb_secret_set: !!process.env.FRESHBOOKS_CLIENT_SECRET,
+      fb_redirect_set: !!process.env.FRESHBOOKS_REDIRECT_URI,
+      qb_client_id_set: !!process.env.QUICKBOOKS_CLIENT_ID,
+      qb_secret_set: !!process.env.QUICKBOOKS_CLIENT_SECRET,
+      qb_redirect_set: !!process.env.QUICKBOOKS_REDIRECT_URI,
+    },
   });
 }
