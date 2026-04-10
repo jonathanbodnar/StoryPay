@@ -110,8 +110,8 @@ export async function PATCH(
     }
   }
 
-  // Use RPC to bypass PostgREST schema cache — avoids "column not found" errors
-  const { data, error } = await supabaseAdmin.rpc('update_feature_request_status', {
+  // Use plpgsql RPC to bypass PostgREST schema cache for completed_at and changelog_id
+  const { error } = await supabaseAdmin.rpc('update_feature_request_status', {
     p_id: id,
     p_status: status,
     p_completed_at: completedAt,
@@ -123,8 +123,7 @@ export async function PATCH(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const row = Array.isArray(data) ? data[0] : data;
-  return NextResponse.json(row ?? { id, status });
+  return NextResponse.json({ id, status });
 }
 
 export async function DELETE(
