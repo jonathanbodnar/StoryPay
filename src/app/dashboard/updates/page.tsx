@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import {
-  Sparkles, Zap, Wrench, ThumbsUp, Plus, X, Loader2, Trash2,
+  Sparkles, Zap, Wrench, ThumbsUp, Plus, X, Loader2, Trash2, Pencil,
   ChevronRight, Megaphone, Clock, CheckCircle2, AlertCircle, Lightbulb,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
@@ -183,6 +183,10 @@ function FeatureRequestsTab() {
   const [submitting, setSubmitting] = useState(false);
   const [votingId, setVotingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDesc, setEditDesc]   = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
   const [error, setError]       = useState('');
   const [formError, setFormError] = useState('');
 
@@ -194,8 +198,29 @@ function FeatureRequestsTab() {
       .finally(() => setLoading(false));
   }, []);
 
+  function startEdit(req: FeatureRequest) {
+    setEditingId(req.id);
+    setEditTitle(req.title);
+    setEditDesc(req.description || '');
+  }
+
+  async function saveEdit(req: FeatureRequest) {
+    if (!editTitle.trim()) return;
+    setSavingEdit(true);
+    try {
+      const res = await fetch(`/api/feature-requests/${req.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: editTitle.trim(), description: editDesc.trim() }),
+      });
+      if (res.ok) {
+        setRequests(prev => prev.map(r => r.id === req.id ? { ...r, title: editTitle.trim(), description: editDesc.trim() } : r));
+        setEditingId(null);
+      }
+    } finally { setSavingEdit(false); }
+  }
+
   async function handleDelete(req: FeatureRequest) {
-    if (!confirm(`Delete "${req.title}"? This cannot be undone.`)) return;
     setDeletingId(req.id);
     try {
       const res = await fetch(`/api/feature-requests/${req.id}`, { method: 'DELETE' });
@@ -375,46 +400,74 @@ function FeatureRequestsTab() {
 
                 {/* Content */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-start gap-2 flex-wrap">
-                    <h4 className="text-sm font-bold text-gray-900 leading-snug" style={{ fontFamily: "'Open Sans', sans-serif", fontWeight: 700 }}>{req.title}</h4>
-                    <span className={classNames('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold flex-shrink-0', statusConf.bg, statusConf.text)}>
-                      <StatusIcon size={9} />
-                      {statusConf.label}
-                    </span>
-                  </div>
-                  {req.description && (
-                    <p className="mt-1 text-xs text-gray-500 leading-relaxed">{req.description}</p>
+                  {editingId === req.id ? (
+                    /* Inline edit form */
+                    <div className="space-y-2 pr-1">
+                      <input
+                        type="text"
+                        value={editTitle}
+                        onChange={e => setEditTitle(e.target.value)}
+                        style={{ fontSize: 16 }}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:border-gray-500 focus:outline-none"
+                      />
+                      <textarea
+                        value={editDesc}
+                        onChange={e => setEditDesc(e.target.value)}
+                        rows={2}
+                        placeholder="Description (optional)"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-xs text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none resize-none"
+                      />
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => saveEdit(req)} disabled={savingEdit || !editTitle.trim()}
+                          className="flex items-center gap-1.5 rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50 transition-all">
+                          {savingEdit ? <Loader2 size={11} className="animate-spin"/> : null}
+                          Save
+                        </button>
+                        <button onClick={() => setEditingId(null)}
+                          className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-start gap-2 flex-wrap">
+                        <h4 className="text-sm font-bold text-gray-900 leading-snug">{req.title}</h4>
+                        <span className={classNames('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold flex-shrink-0', statusConf.bg, statusConf.text)}>
+                          <StatusIcon size={9} />{statusConf.label}
+                        </span>
+                      </div>
+                      {req.description && <p className="mt-1 text-xs text-gray-500 leading-relaxed">{req.description}</p>}
+                      <p className="mt-1.5 text-[11px] text-gray-400">
+                        {timeAgo(req.created_at)}
+                        {req.vote_count > 1 && <><span className="ml-1.5 text-gray-300">·</span><span className="ml-1.5">{req.vote_count} votes</span></>}
+                      </p>
+                    </>
                   )}
-                  <p className="mt-1.5 text-[11px] text-gray-400">
-                    {timeAgo(req.created_at)}
-                    {req.vote_count > 1 && <span className="ml-1.5 text-gray-300">·</span>}
-                    {req.vote_count > 1 && <span className="ml-1.5">{req.vote_count} votes</span>}
-                  </p>
                 </div>
 
-                {/* Rank + delete */}
-                <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                {/* Rank + edit + delete */}
+                <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
                   {idx < 3 && req.vote_count > 0 && (
                     <div className={classNames(
                       'flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-bold',
                       idx === 0 ? 'bg-amber-100 text-amber-700' :
-                      idx === 1 ? 'bg-gray-100 text-gray-600' :
-                                  'bg-orange-50 text-orange-600'
-                    )}>
-                      #{idx + 1}
-                    </div>
+                      idx === 1 ? 'bg-gray-100 text-gray-600' : 'bg-orange-50 text-orange-600'
+                    )}>#{idx + 1}</div>
                   )}
-                  {req.is_mine && (
-                    <button
-                      onClick={() => handleDelete(req)}
-                      disabled={deletingId === req.id}
-                      className="flex items-center justify-center h-6 w-6 rounded-md text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40"
-                      title="Delete your request"
-                    >
-                      {deletingId === req.id
-                        ? <Loader2 size={11} className="animate-spin" />
-                        : <Trash2 size={11} />}
-                    </button>
+                  {req.is_mine && editingId !== req.id && (
+                    <>
+                      <button onClick={() => startEdit(req)}
+                        className="flex items-center justify-center h-6 w-6 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                        title="Edit">
+                        <Pencil size={11} />
+                      </button>
+                      <button onClick={() => handleDelete(req)} disabled={deletingId === req.id}
+                        className="flex items-center justify-center h-6 w-6 rounded-md text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40"
+                        title="Delete">
+                        {deletingId === req.id ? <Loader2 size={11} className="animate-spin"/> : <Trash2 size={11}/>}
+                      </button>
+                    </>
                   )}
                 </div>
               </div>

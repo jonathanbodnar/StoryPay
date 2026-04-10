@@ -16,13 +16,25 @@ export async function GET(
 
   const { id } = await params;
 
-  const { data: req } = await supabaseAdmin
-    .from('feature_requests')
-    .select('id, title, description, vote_count, status, created_at, completed_at, changelog_id')
-    .eq('id', id)
-    .single();
+  // Use RPC to bypass PostgREST schema cache for new columns (completed_at, changelog_id)
+  const { data: rows, error: rpcErr } = await supabaseAdmin
+    .rpc('get_feature_request_detail', { p_id: id });
 
-  if (!req) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  const req = (Array.isArray(rows) ? rows[0] : rows) ?? null;
+
+  if (rpcErr || !req) {
+    // Fallback to direct select (old columns only)
+    const { data: fallback } = await supabaseAdmin
+      .from('feature_requests')
+      .select('id, title, description, vote_count, status, created_at')
+      .eq('id', id)
+      .single();
+    if (!fallback) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    // Patch missing new columns
+    Object.assign(fallback, { completed_at: null, changelog_id: null });
+    Object.assign(req ?? {}, fallback);
+    if (!req) return NextResponse.json({ ...fallback, voters: [], changelogEntry: null });
+  }
 
   // Get changelog entry if linked
   let changelogEntry = null;
