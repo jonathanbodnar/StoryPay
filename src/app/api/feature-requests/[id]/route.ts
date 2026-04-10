@@ -13,6 +13,7 @@ async function isAdmin() {
   return !!token && token === process.env.ADMIN_SECRET;
 }
 
+// DELETE — venue can delete their own; admin can delete any
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -25,22 +26,15 @@ export async function DELETE(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  if (admin) {
-    const { error } = await supabaseAdmin.rpc('admin_delete_feature_request', { p_id: id });
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-    return NextResponse.json({ ok: true });
+  // Build delete query — admin deletes any, venue deletes only their own
+  const query = supabaseAdmin.from('feature_requests').delete().eq('id', id);
+  if (!admin && venueId) {
+    query.eq('venue_id', venueId);
   }
 
-  const { error } = await supabaseAdmin.rpc('venue_delete_feature_request', {
-    p_id: id,
-    p_venue_id: venueId,
-  });
-
+  const { error } = await query;
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-
   return NextResponse.json({ ok: true });
 }

@@ -373,6 +373,7 @@ export default function AdminPage() {
   // Feature request detail
   const [frDetail, setFrDetail]           = useState<FeatureRequestDetail | null>(null);
   const [frDetailLoading, setFrDetailLoading] = useState(false);
+  const [frDetailError, setFrDetailError] = useState('');
   const [frDeleting, setFrDeleting]       = useState<string | null>(null);
   const [frStatusSaving, setFrStatusSaving] = useState(false);
   // Changelog form (shown when marking a request completed)
@@ -414,10 +415,20 @@ export default function AdminPage() {
   async function openFeatureRequest(id: string) {
     setFrDetailLoading(true);
     setFrDetail(null);
+    setFrDetailError('');
     try {
       const res = await fetch(`/api/admin/feature-requests/${id}`);
-      if (res.ok) setFrDetail(await res.json());
-    } finally { setFrDetailLoading(false); }
+      if (res.ok) {
+        setFrDetail(await res.json());
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setFrDetailError(d.error || `Error ${res.status}`);
+      }
+    } catch {
+      setFrDetailError('Network error — could not load request');
+    } finally {
+      setFrDetailLoading(false);
+    }
   }
 
 
@@ -1139,14 +1150,14 @@ export default function AdminPage() {
         )}
 
       {/* Feature Request Detail Modal */}
-      {(frDetail || frDetailLoading) && (
+      {(frDetail || frDetailLoading || frDetailError) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="relative w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4" style={{ backgroundColor: BRAND }}>
               <h3 className="text-base font-semibold text-white">Feature Request Detail</h3>
               <button
-                onClick={() => setFrDetail(null)}
+                onClick={() => { setFrDetail(null); setFrDetailError(''); setShowChangelogForm(false); }}
                 className="flex h-7 w-7 items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors"
               >
                 <X size={14} />
@@ -1156,6 +1167,11 @@ export default function AdminPage() {
             <div className="overflow-y-auto flex-1 p-6">
               {frDetailLoading ? (
                 <div className="flex justify-center py-8"><Loader2 size={24} className="animate-spin text-gray-400" /></div>
+              ) : frDetailError ? (
+                <div className="py-8 text-center">
+                  <p className="text-sm text-red-600 bg-red-50 rounded-xl px-4 py-3 mb-3">{frDetailError}</p>
+                  <button onClick={() => { setFrDetail(null); setFrDetailError(''); }} className="text-sm text-gray-500 hover:underline">Close</button>
+                </div>
               ) : frDetail ? (
                 <div className="space-y-5">
                   {/* Title & meta */}
