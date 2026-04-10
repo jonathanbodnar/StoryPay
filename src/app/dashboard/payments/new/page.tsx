@@ -157,9 +157,11 @@ export default function NewProposalInvoicePage() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer|null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [clientName, setClientName]     = useState('');
+  const [clientFirst, setClientFirst]   = useState('');
+  const [clientLast, setClientLast]     = useState('');
   const [clientEmail, setClientEmail]   = useState('');
   const [clientPhone, setClientPhone]   = useState('');
+  const clientName = [clientFirst, clientLast].filter(Boolean).join(' ');
   const searchRef = useRef<HTMLDivElement>(null);
 
   // Contract
@@ -199,7 +201,11 @@ export default function NewProposalInvoicePage() {
   useEffect(() => {
     const name  = searchParams.get('name');
     const email = searchParams.get('email');
-    if (name)  setClientName(name);
+    if (name) {
+      const parts = name.trim().split(' ');
+      setClientFirst(parts[0] || '');
+      setClientLast(parts.slice(1).join(' ') || '');
+    }
     if (email) setClientEmail(email);
     if (name || email) setCustomerMode('new');
   }, [searchParams]);
@@ -300,7 +306,7 @@ export default function NewProposalInvoicePage() {
   // ── Submit ─────────────────────────────────────────────────────────────────
   async function submit(asDraft: boolean) {
     setError('');
-    if (!clientEmail.trim() || !clientName.trim()) { setError('Client name and email are required.'); return; }
+    if (!clientEmail.trim() || !clientFirst.trim() || !clientLast.trim()) { setError('First name, last name, and email are required.'); return; }
     if (customerMode === 'new' && !clientPhone.trim()) { setError('Phone number is required.'); return; }
     if (totalCents <= 0) { setError('Please add at least one line item with an amount.'); return; }
     if (mode==='proposal' && !selectedTemplate && !contractHtml) {
@@ -444,7 +450,7 @@ export default function NewProposalInvoicePage() {
                         <p className="text-sm font-semibold text-gray-900">{clientName}</p>
                         <p className="text-xs text-gray-500">{clientEmail}</p>
                       </div>
-                      <button onClick={()=>{setSelectedCustomer(null);setClientName('');setClientEmail('');setClientPhone('');setSearchQuery('');}}
+                      <button onClick={()=>{setSelectedCustomer(null);setClientFirst('');setClientLast('');setClientEmail('');setClientPhone('');setSearchQuery('');}}
                         className="text-gray-400 hover:text-gray-600"><X size={15}/></button>
                     </div>
                   ) : (
@@ -460,7 +466,7 @@ export default function NewProposalInvoicePage() {
                       {showDropdown && searchQuery.length>=2 && (
                         <div className="absolute z-50 mt-1 w-full rounded-xl border border-gray-200 bg-white shadow-xl overflow-hidden max-h-56 overflow-y-auto" style={{top:'100%',left:0}}>
                           {searchResults.length>0 ? searchResults.map(c=>(
-                            <button key={c.id} type="button" onClick={()=>{setSelectedCustomer(c);setClientName(c.name||'');setClientEmail(c.email||'');setClientPhone(c.phone||'');setShowDropdown(false);}}
+                            <button key={c.id} type="button" onClick={()=>{setSelectedCustomer(c);const parts=(c.name||'').trim().split(' ');setClientFirst(parts[0]||'');setClientLast(parts.slice(1).join(' ')||'');setClientEmail(c.email||'');setClientPhone(c.phone||'');setShowDropdown(false);}}
                               className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0">
                               <div><p className="text-sm font-medium text-gray-900">{c.name}</p><p className="text-xs text-gray-400">{c.email}</p></div>
                               {c.phone && <p className="text-xs text-gray-400">{c.phone}</p>}
@@ -475,9 +481,13 @@ export default function NewProposalInvoicePage() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="sm:col-span-2">
-                    <label className={LABEL}>Full Name <span className="text-red-400">*</span></label>
-                    <input type="text" value={clientName} onChange={e=>setClientName(e.target.value)} placeholder="Jane Smith" className={INPUT}/>
+                  <div>
+                    <label className={LABEL}>First Name <span className="text-red-400">*</span></label>
+                    <input type="text" value={clientFirst} onChange={e=>setClientFirst(e.target.value)} placeholder="Jane" className={INPUT} style={{fontSize:16}}/>
+                  </div>
+                  <div>
+                    <label className={LABEL}>Last Name <span className="text-red-400">*</span></label>
+                    <input type="text" value={clientLast} onChange={e=>setClientLast(e.target.value)} placeholder="Smith" className={INPUT} style={{fontSize:16}}/>
                   </div>
                   <div>
                     <label className={LABEL}>Email <span className="text-red-400">*</span></label>
