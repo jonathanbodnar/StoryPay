@@ -36,6 +36,7 @@ const settingsItems = [
   { label: 'General',         href: '/dashboard/settings',                 icon: Settings },
   { label: 'Branding',        href: '/dashboard/settings/branding',        icon: Palette },
   { label: 'Email Templates', href: '/dashboard/settings/email-templates', icon: Mail },
+  { label: 'Integrations',    href: '/dashboard/settings/integrations',    icon: Link2 },
   { label: 'Team',            href: '/dashboard/settings/team',            icon: UsersRound },
   { label: 'Notifications',   href: '/dashboard/settings/notifications',   icon: Bell },
 ];
