@@ -34,12 +34,12 @@ function ColorSwatch({ color, label, selected, onClick }: { color: string; label
     <button
       type="button"
       onClick={onClick}
-      className={`flex items-center gap-2.5 rounded-xl border-2 px-3 py-2.5 text-sm font-medium transition-all ${
+      className={`flex items-center gap-2 rounded-xl border-2 px-3 py-2.5 text-xs font-medium transition-all text-left leading-tight ${
         selected ? 'border-gray-900 shadow-sm' : 'border-gray-200 hover:border-gray-300'
       }`}
     >
       <span className="h-4 w-4 rounded-full flex-shrink-0 border border-black/10" style={{ backgroundColor: color }} />
-      {label}
+      <span className="break-words leading-tight">{label}</span>
     </button>
   );
 }

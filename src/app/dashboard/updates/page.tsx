@@ -238,13 +238,11 @@ function FeatureRequestsTab() {
   return (
     <div>
       {/* Header row */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <p className="text-sm text-gray-600">Vote on features you want most. The most-requested features guide our roadmap.</p>
-        </div>
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
+        <p className="text-sm text-gray-600 flex-1 min-w-0">Vote on features you want most. The most-requested features guide our roadmap.</p>
         <button
           onClick={() => setShowForm(v => !v)}
-          className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-all hover:opacity-90 shadow-sm"
+          className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-all hover:opacity-90 shadow-sm whitespace-nowrap flex-shrink-0"
           style={{ backgroundColor: '#1b1b1b' }}
         >
           {showForm ? <><X size={14} /> Cancel</> : <><Plus size={14} /> Submit Request</>}

@@ -380,25 +380,25 @@ export default function NewProposalInvoicePage() {
           <h1 className="text-2xl font-bold text-gray-900">New Proposal & Invoice</h1>
           <p className="text-sm text-gray-500 mt-0.5">Create a proposal, invoice, or both — then send to your client</p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 overflow-x-auto pb-0.5 flex-nowrap">
           <button onClick={()=>setShowPreviewModal(true)}
-            className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors shadow-sm">
-            <Eye size={15}/> Preview
+            className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors shadow-sm whitespace-nowrap flex-shrink-0">
+            <Eye size={14}/> Preview
           </button>
           <button onClick={()=>setShowPreview(v=>!v)}
-            className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors shadow-sm lg:hidden">
-            {showPreview ? <EyeOff size={15}/> : <Eye size={15}/>}
-            {showPreview ? 'Live' : 'Live'}
+            className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors shadow-sm lg:hidden whitespace-nowrap flex-shrink-0">
+            {showPreview ? <EyeOff size={14}/> : <Eye size={14}/>}
+            Live
           </button>
           <button onClick={()=>submit(true)} disabled={saving||submitting}
-            className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-50">
-            {saving ? <Loader2 size={15} className="animate-spin"/> : <Save size={15}/>}
+            className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-50 whitespace-nowrap flex-shrink-0">
+            {saving ? <Loader2 size={14} className="animate-spin"/> : <Save size={14}/>}
             {saving ? 'Saving...' : 'Save Draft'}
           </button>
           <button onClick={()=>submit(false)} disabled={saving||submitting}
-            className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:opacity-90 disabled:opacity-50 transition-all"
+            className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-bold text-white shadow-sm hover:opacity-90 disabled:opacity-50 transition-all whitespace-nowrap flex-shrink-0"
             style={{backgroundColor:'#1b1b1b'}}>
-            {submitting ? <Loader2 size={15} className="animate-spin"/> : <Send size={15}/>}
+            {submitting ? <Loader2 size={14} className="animate-spin"/> : <Send size={14}/>}
             {submitting ? 'Sending...' : 'Send'}
           </button>
         </div>

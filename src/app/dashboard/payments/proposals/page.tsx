@@ -117,19 +117,19 @@ export default function PaymentsProposalsPage() {
               <div className="space-y-2">
                 {drafts.map(p => (
                   <div key={p.id} className="rounded-xl border border-dashed border-gray-300 bg-gray-50/50 hover:bg-gray-50 transition-colors overflow-hidden">
-                    <div className="flex items-center justify-between px-5 py-3.5 gap-3">
-                      {/* Left: info */}
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 py-3.5 gap-2">
+                      {/* Info */}
                       <div className="flex items-center gap-3 min-w-0">
                         <span className="inline-block rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600 flex-shrink-0">Draft</span>
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-gray-900 truncate">{p.customer_name || 'No customer yet'}</p>
                           {p.customer_email && <p className="text-xs text-gray-400 truncate">{p.customer_email}</p>}
                         </div>
-                        {p.price > 0 && <span className="text-sm text-gray-500 flex-shrink-0">{formatCents(p.price)}</span>}
+                        {p.price > 0 && <span className="text-sm text-gray-500 flex-shrink-0 ml-auto sm:ml-0">{formatCents(p.price)}</span>}
                       </div>
 
-                      {/* Right: actions */}
-                      <div className="flex items-center gap-1 flex-shrink-0">
+                      {/* Actions — scrollable row on mobile */}
+                      <div className="flex items-center gap-1 overflow-x-auto flex-nowrap flex-shrink-0">
                         {/* Preview */}
                         <Link
                           href={`/proposal/${p.public_token}`}

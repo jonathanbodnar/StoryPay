@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Calendar, ChevronDown, ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 export interface DateRange {
@@ -161,20 +162,13 @@ export default function DateRangePicker({ value, onChange }: Props) {
   const [activePreset, setActivePreset] = useState<string>(value.label);
   const ref = useRef<HTMLDivElement>(null);
 
+  // Close on resize (position would be stale)
   useEffect(() => {
-    function handle(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener('mousedown', handle);
-    return () => document.removeEventListener('mousedown', handle);
-  }, []);
-
-  function openPicker() {
-    setTempFrom(value.from);
-    setTempTo(value.to);
-    setSelecting('from');
-    setOpen(true);
-  }
+    if (!open) return;
+    function onResize() { setOpen(false); }
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [open]);
 
   function handlePreset(preset: typeof PRESETS[0]) {
     const range = preset.getRange();
@@ -218,19 +212,34 @@ export default function DateRangePicker({ value, onChange }: Props) {
     return `${parseInt(m, 10)}/${parseInt(day, 10)}/${y}`;
   };
 
-  return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={openPicker}
-        className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-all hover:border-gray-300 hover:shadow"
-      >
-        <Calendar size={14} className="text-gray-400" />
-        <span>{value.label === 'Custom range' ? `${formatDisplay(value.from)} – ${formatDisplay(value.to)}` : value.label}</span>
-        <ChevronDown size={13} className="text-gray-400" />
-      </button>
+  const [btnRect, setBtnRect] = useState<DOMRect | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
 
-      {open && (
-        <div className="absolute right-0 sm:right-0 left-auto max-sm:left-0 max-sm:right-auto top-full mt-2 z-50 flex rounded-xl border border-gray-200 bg-white shadow-xl overflow-hidden" style={{ width: 'min(580px, calc(100vw - 2rem))', maxWidth: 'calc(100vw - 1rem)' }}>
+  function openPicker() {
+    if (btnRef.current) setBtnRect(btnRef.current.getBoundingClientRect());
+    setTempFrom(value.from);
+    setTempTo(value.to);
+    setSelecting('from');
+    setOpen(true);
+  }
+
+  // Dropdown panel — portaled to body so overflow:hidden ancestors can't clip it
+  const dropdownStyle: React.CSSProperties = btnRect
+    ? {
+        position: 'fixed',
+        top: btnRect.bottom + 8,
+        // Right-align to button, but clamp to viewport
+        right: Math.max(8, window.innerWidth - btnRect.right),
+        width: Math.min(580, window.innerWidth - 16),
+        zIndex: 9999,
+      }
+    : { position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 9999, width: Math.min(580, typeof window !== 'undefined' ? window.innerWidth - 16 : 400) };
+
+  const panel = open ? (
+    <div
+      className="flex rounded-xl border border-gray-200 bg-white shadow-2xl overflow-hidden"
+      style={dropdownStyle}
+    >
           {/* Presets */}
           <div className="hidden sm:block w-44 border-r border-gray-100 py-2 flex-shrink-0">
             <p className="px-4 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Presets</p>
@@ -323,7 +332,29 @@ export default function DateRangePicker({ value, onChange }: Props) {
             </div>
           </div>
         </div>
+  ) : null;
+
+  return (
+    <>
+      <div ref={ref} className="relative">
+        <button
+          ref={btnRef}
+          onClick={openPicker}
+          className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-all hover:border-gray-300 hover:shadow"
+        >
+          <Calendar size={14} className="text-gray-400" />
+          <span>{value.label === 'Custom range' ? `${formatDisplay(value.from)} – ${formatDisplay(value.to)}` : value.label}</span>
+          <ChevronDown size={13} className="text-gray-400" />
+        </button>
+      </div>
+      {open && typeof document !== 'undefined' && createPortal(
+        <>
+          {/* Backdrop — close on tap outside */}
+          <div className="fixed inset-0 z-[9998]" onClick={() => setOpen(false)} />
+          {panel}
+        </>,
+        document.body
       )}
-    </div>
+    </>
   );
 }
