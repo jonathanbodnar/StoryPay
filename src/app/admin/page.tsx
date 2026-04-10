@@ -7,6 +7,7 @@ import {
   TrendingUp, LogOut, Home,
   Megaphone, Plus, Trash2, Pencil, X, Loader2, ThumbsUp,
   Check, BarChart2, ExternalLink, ChevronRight, Search,
+  LayoutDashboard, Menu, Lightbulb,
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -174,11 +175,149 @@ function AnnouncementForm({ initial, onSave, onCancel }: {
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
+// ─── Feature Requests Admin Tab ──────────────────────────────────────────────
+function FeatureRequestsAdminTab({
+  requests, loading, onDelete, onOpen, onRefresh, frDeleting,
+}: {
+  requests: { id: string; title: string; vote_count: number; status: string; created_at: string }[];
+  loading: boolean;
+  onDelete: (id: string) => void;
+  onOpen: (id: string) => void;
+  onRefresh: () => void;
+  frDeleting: string | null;
+}) {
+  const [showForm, setShowForm] = useState(false);
+  const [title, setTitle]       = useState('');
+  const [desc, setDesc]         = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError]   = useState('');
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!title.trim()) { setFormError('Title is required'); return; }
+    setSubmitting(true); setFormError('');
+    try {
+      const res = await fetch('/api/admin/feature-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: title.trim(), description: desc.trim() || null }),
+      });
+      if (!res.ok) { const d = await res.json(); setFormError(d.error || 'Failed'); return; }
+      setTitle(''); setDesc(''); setShowForm(false);
+      onRefresh();
+    } catch { setFormError('Network error'); }
+    finally { setSubmitting(false); }
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="font-heading text-2xl text-gray-900">Feature Requests</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Manage and prioritize venue feature requests</p>
+        </div>
+        <button
+          onClick={() => setShowForm(v => !v)}
+          className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90 transition-all shadow-sm"
+          style={{ backgroundColor: '#1b1b1b' }}
+        >
+          {showForm ? <><X size={14}/> Cancel</> : <><Plus size={14}/> New Request</>}
+        </button>
+      </div>
+
+      {/* Create form */}
+      {showForm && (
+        <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h3 className="text-sm font-semibold text-gray-900 mb-4">Create Feature Request</h3>
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Title <span className="text-red-400">*</span></label>
+              <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Bulk invoice export" maxLength={120}
+                style={{ fontSize: 16 }}
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:bg-white focus:outline-none transition-colors" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Description <span className="text-gray-300">(optional)</span></label>
+              <textarea value={desc} onChange={e => setDesc(e.target.value)} rows={3} placeholder="Describe the feature and why it would help..."
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:bg-white focus:outline-none transition-colors resize-none" />
+            </div>
+            {formError && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{formError}</p>}
+            <div className="flex justify-end">
+              <button type="submit" disabled={submitting}
+                className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 transition-all"
+                style={{ backgroundColor: '#1b1b1b' }}>
+                {submitting && <Loader2 size={14} className="animate-spin" />}
+                {submitting ? 'Creating...' : 'Create Request'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* List */}
+      {loading ? (
+        <div className="flex justify-center py-16"><Loader2 size={24} className="animate-spin text-gray-400" /></div>
+      ) : requests.length === 0 ? (
+        <div className="py-16 text-center rounded-2xl border border-dashed border-gray-200">
+          <Lightbulb size={36} className="mx-auto mb-3 text-gray-200" />
+          <p className="text-sm text-gray-500">No feature requests yet</p>
+          <p className="text-xs text-gray-400 mt-1">Create one above to get started</p>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+          <div className="hidden sm:grid grid-cols-[1fr_100px_80px_120px_48px] gap-4 px-6 py-3 bg-gray-50 border-b border-gray-100">
+            {['Title', 'Status', 'Votes', 'Date', ''].map(h => (
+              <span key={h} className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{h}</span>
+            ))}
+          </div>
+          <div className="divide-y divide-gray-100">
+            {requests.map((req, i) => (
+              <div key={req.id} className="hover:bg-gray-50 transition-colors">
+                {/* Mobile */}
+                <div className="sm:hidden flex items-center gap-3 px-4 py-3.5">
+                  <button onClick={() => onOpen(req.id)} className="flex-1 min-w-0 text-left">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-sm font-medium text-gray-900 truncate">{req.title}</span>
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${STATUS_COLORS_FR[req.status] || 'bg-gray-100 text-gray-600'}`}>{STATUS_LABELS_FR[req.status] || req.status}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-gray-400">
+                      <ThumbsUp size={11} /> {req.vote_count} · {new Date(req.created_at).toLocaleDateString()}
+                    </div>
+                  </button>
+                  <button onClick={() => onDelete(req.id)} disabled={frDeleting === req.id}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40">
+                    {frDeleting === req.id ? <Loader2 size={13} className="animate-spin"/> : <Trash2 size={13}/>}
+                  </button>
+                </div>
+                {/* Desktop */}
+                <div className="hidden sm:grid grid-cols-[1fr_100px_80px_120px_48px] gap-4 px-6 py-4 items-center">
+                  <button onClick={() => onOpen(req.id)} className="text-left flex items-center gap-3 min-w-0">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold text-white" style={{ backgroundColor: i===0?'#f59e0b':i===1?'#6b7280':i===2?'#cd7c2f':'#1b1b1b' }}>#{i+1}</div>
+                    <span className="text-sm font-medium text-gray-900 truncate hover:underline">{req.title}</span>
+                  </button>
+                  <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full w-fit ${STATUS_COLORS_FR[req.status] || 'bg-gray-100 text-gray-600'}`}>{STATUS_LABELS_FR[req.status] || req.status}</span>
+                  <div className="flex items-center gap-1 text-sm text-gray-600"><ThumbsUp size={13} className="text-gray-400"/>{req.vote_count}</div>
+                  <span className="text-sm text-gray-500">{new Date(req.created_at).toLocaleDateString()}</span>
+                  <button onClick={() => onDelete(req.id)} disabled={frDeleting === req.id}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40">
+                    {frDeleting === req.id ? <Loader2 size={13} className="animate-spin"/> : <Trash2 size={13}/>}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const [authState, setAuthState]   = useState<AuthState>('loading');
   const [secret, setSecret]         = useState('');
   const [loginError, setLoginError] = useState('');
-  const [activeTab, setActiveTab]   = useState<'dashboard' | 'venues' | 'announcements'>('dashboard');
+  const [activeTab, setActiveTab]   = useState<'dashboard' | 'venues' | 'announcements' | 'feature-requests'>('dashboard');
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // Stats
   const [stats, setStats]       = useState<AdminStats | null>(null);
@@ -264,23 +403,18 @@ export default function AdminPage() {
     }
   }
 
-  async function deleteFrAdmin(id: string) {
-    if (!confirm('Delete this feature request for all users?')) return;
-    const res = await fetch(`/api/admin/feature-requests/${id}`, { method: 'DELETE' });
-    if (res.ok) {
-      setFrDetail(null);
-      setStats(prev => prev ? { ...prev, featureRequests: prev.featureRequests.filter(r => r.id !== id) } : prev);
-    }
-  }
 
   async function deleteFeatureRequest(id: string, fromModal = false) {
-    if (!confirm('Permanently delete this feature request and all its votes?')) return;
+    // Skip confirm dialog — just delete directly (admin-only action)
     setFrDeleting(id);
     try {
       const res = await fetch(`/api/admin/feature-requests/${id}`, { method: 'DELETE' });
       if (res.ok) {
         if (fromModal) setFrDetail(null);
-        fetchStats(dateRange);
+        setStats(prev => prev ? { ...prev, featureRequests: prev.featureRequests.filter(r => r.id !== id) } : prev);
+      } else {
+        const d = await res.json().catch(() => ({}));
+        alert(d.error || 'Delete failed');
       }
     } finally { setFrDeleting(null); }
   }
@@ -413,51 +547,79 @@ export default function AdminPage() {
   }
 
   // ── Authenticated ───────────────────────────────────────────────────────────
-  const tabs = [
-    { key: 'dashboard', label: 'Dashboard', icon: BarChart2 },
-    { key: 'venues',    label: 'Venues',    icon: Building2 },
-    { key: 'announcements', label: 'Announcements', icon: Megaphone },
+  const navItems = [
+    { key: 'dashboard',        label: 'Dashboard',        icon: LayoutDashboard },
+    { key: 'venues',           label: 'Venues',           icon: Building2 },
+    { key: 'announcements',    label: 'Announcements',    icon: Megaphone },
+    { key: 'feature-requests', label: 'Feature Requests', icon: Lightbulb },
   ] as const;
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="text-white shadow-lg" style={{ backgroundColor: BRAND }}>
-        {/* Top row: logo + logout/home */}
-        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/storyvenue-light-logo.png" alt="StoryPay" className="h-7 sm:h-8 object-contain" />
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Link href="/" className="flex items-center gap-1 sm:gap-1.5 rounded-lg border border-white/20 px-2.5 sm:px-3 py-1.5 text-xs text-white/80 hover:bg-white/10 transition-colors">
-              <Home size={13} />
-              <span className="hidden sm:inline">Homepage</span>
-            </Link>
-            <button onClick={handleLogout} className="flex items-center gap-1 sm:gap-1.5 rounded-lg border border-white/20 px-2.5 sm:px-3 py-1.5 text-xs text-white/80 hover:bg-white/10 transition-colors">
-              <LogOut size={13} />
-              <span className="hidden sm:inline">Logout</span>
-            </button>
-          </div>
-        </div>
-        {/* Tab nav row */}
-        <div className="flex border-t border-white/10 overflow-x-auto">
-          {tabs.map(({ key, label, icon: Icon }) => (
+  const NavSidebar = () => (
+    <div className="flex flex-col h-full" style={{ backgroundColor: '#fafaf9' }}>
+      {/* Logo */}
+      <div className="px-5 pt-5 pb-3 border-b border-gray-100">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/storyvenue-dark-logo.png" alt="StoryPay Admin" className="h-8 object-contain" />
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mt-1.5">Super Admin</p>
+      </div>
+
+      {/* Nav */}
+      <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
+        {navItems.map(({ key, label, icon: Icon }) => {
+          const active = activeTab === key;
+          return (
             <button
               key={key}
-              onClick={() => setActiveTab(key)}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-3 sm:px-5 py-2.5 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap min-w-[80px] ${
-                activeTab === key
-                  ? 'bg-white/15 text-white border-b-2 border-white'
-                  : 'text-white/60 hover:text-white hover:bg-white/10'
-              }`}
+              onClick={() => { setActiveTab(key); setMobileSidebarOpen(false); }}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${active ? 'text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+              style={active ? { backgroundColor: BRAND } : {}}
             >
-              <Icon size={14} />
-              {label}
+              <Icon size={16} />
+              <span>{label}</span>
             </button>
-          ))}
-        </div>
-      </header>
+          );
+        })}
+      </nav>
 
-      <main className="p-4 sm:p-6 max-w-7xl mx-auto">
+      {/* Footer */}
+      <div className="px-4 py-4 border-t border-gray-100 space-y-1">
+        <Link href="/" className="flex items-center gap-2 text-gray-400 hover:text-gray-700 transition-colors text-sm w-full px-2 py-1.5 rounded-lg hover:bg-gray-50">
+          <Home size={16} /><span>Homepage</span>
+        </Link>
+        <button onClick={handleLogout} className="flex items-center gap-2 text-gray-400 hover:text-gray-700 transition-colors text-sm w-full px-2 py-1.5 rounded-lg hover:bg-gray-50">
+          <LogOut size={16} /><span>Logout</span>
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-white flex">
+
+      {/* ── Desktop Sidebar ── */}
+      <aside className="hidden lg:block fixed left-0 top-0 bottom-0 w-[260px] border-r border-gray-200 z-30">
+        <NavSidebar />
+      </aside>
+
+      {/* ── Mobile top bar ── */}
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 h-14 border-b border-gray-200 bg-white">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/storyvenue-dark-logo.png" alt="StoryPay" className="h-7 object-contain" />
+        <button onClick={() => setMobileSidebarOpen(v => !v)} className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100">
+          {mobileSidebarOpen ? <X size={20} /> : <Menu size={20} />}
+        </button>
+      </div>
+
+      {/* ── Mobile drawer ── */}
+      {mobileSidebarOpen && <div className="lg:hidden fixed inset-0 z-40 bg-black/20" onClick={() => setMobileSidebarOpen(false)} />}
+      <aside className={`lg:hidden fixed top-0 left-0 bottom-0 z-50 w-[280px] border-r border-gray-200 transition-transform duration-300 ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <NavSidebar />
+      </aside>
+
+      {/* ── Main content ── */}
+      <div className="flex-1 lg:ml-[260px]">
+        <div className="h-14 lg:hidden" />
+        <main className="min-h-screen pt-6 lg:pt-10 px-6 sm:px-8 lg:px-10 pb-10 max-w-7xl mx-auto">
 
         {/* ── Dashboard Tab ── */}
         {activeTab === 'dashboard' && (
@@ -929,7 +1091,17 @@ export default function AdminPage() {
           </div>
         )}
 
-      </main>
+        {/* ── Feature Requests Tab ── */}
+        {activeTab === 'feature-requests' && (
+          <FeatureRequestsAdminTab
+            requests={stats?.featureRequests ?? []}
+            loading={statsLoading}
+            onDelete={deleteFeatureRequest}
+            onOpen={openFeatureRequest}
+            onRefresh={() => fetchStats(dateRange)}
+            frDeleting={frDeleting}
+          />
+        )}
 
       {/* Feature Request Detail Modal */}
       {(frDetail || frDetailLoading) && (
@@ -1049,7 +1221,7 @@ export default function AdminPage() {
                   {/* Delete */}
                   <div className="pt-2 border-t border-gray-100">
                     <button
-                      onClick={() => deleteFrAdmin(frDetail.id)}
+                      onClick={() => deleteFeatureRequest(frDetail.id, true)}
                       className="flex items-center gap-2 rounded-xl border border-red-200 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors w-full justify-center"
                     >
                       <Trash2 size={14} /> Delete This Request
@@ -1061,6 +1233,8 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+        </main>
+      </div>
     </div>
   );
 }
