@@ -73,9 +73,11 @@ export default function NewProposalPage() {
   const [ghlConnected, setGhlConnected] = useState<boolean | null>(null);
   const searchRef = useRef<HTMLDivElement>(null);
 
-  const [customerName, setCustomerName] = useState('');
+  const [customerFirst, setCustomerFirst] = useState('');
+  const [customerLast, setCustomerLast]   = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const customerName = [customerFirst, customerLast].filter(Boolean).join(' ');
 
   const [priceDollars, setPriceDollars] = useState('');
   const [includeSurcharge, setIncludeSurcharge] = useState(true);
@@ -155,7 +157,9 @@ export default function NewProposalPage() {
   function selectCustomer(c: GHLContact) {
     setSelectedCustomer(c);
     const name = displayName(c);
-    setCustomerName(name);
+    const parts = name.trim().split(' ');
+    setCustomerFirst(parts[0] || '');
+    setCustomerLast(parts.slice(1).join(' ') || '');
     setCustomerEmail(c.email || '');
     setCustomerPhone(c.phone || '');
     setSearchQuery(name);
@@ -164,7 +168,8 @@ export default function NewProposalPage() {
 
   function clearCustomer() {
     setSelectedCustomer(null);
-    setCustomerName('');
+    setCustomerFirst('');
+    setCustomerLast('');
     setCustomerEmail('');
     setCustomerPhone('');
     setSearchQuery('');
@@ -221,7 +226,7 @@ export default function NewProposalPage() {
     e.preventDefault();
     setError('');
 
-    if (!templateId || !customerName || !customerEmail) {
+    if (!templateId || !customerFirst.trim() || !customerLast.trim() || !customerEmail) {
       setError('Please fill in all required fields.');
       return;
     }
@@ -445,15 +450,29 @@ export default function NewProposalPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg border border-gray-200 p-4">
-              <div className="sm:col-span-2">
+              <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">
-                  Full Name <span className="text-red-400">*</span>
+                  First Name <span className="text-red-400">*</span>
                 </label>
                 <input
                   type="text"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="Jane Smith"
+                  value={customerFirst}
+                  onChange={(e) => setCustomerFirst(e.target.value)}
+                  placeholder="Jane"
+                  style={{ fontSize: 16 }}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">
+                  Last Name <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={customerLast}
+                  onChange={(e) => setCustomerLast(e.target.value)}
+                  placeholder="Smith"
+                  style={{ fontSize: 16 }}
                   className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
                 />
               </div>
@@ -685,7 +704,7 @@ export default function NewProposalPage() {
         <div className="flex items-center gap-3 pt-2">
           <button
             type="submit"
-            disabled={submitting || saving || !templateId || !customerName || !customerEmail}
+            disabled={submitting || saving || !templateId || !customerFirst.trim() || !customerLast.trim() || !customerEmail}
             className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Send size={16} />
