@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
-import { Search, X, Loader2, FileText, Send, Plus, Pencil, RefreshCw, Copy, ExternalLink, User } from 'lucide-react';
+import { Search, X, Loader2, FileText, Send, Plus, Pencil, Eye, Trash2, Copy, ExternalLink } from 'lucide-react';
 import { formatCents, formatDate, getStatusColor, classNames } from '@/lib/utils';
 
 interface Proposal {
@@ -22,8 +22,10 @@ export default function PaymentsProposalsPage() {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading]     = useState(true);
   const [search, setSearch]       = useState('');
-  const [copiedId, setCopiedId]   = useState<string | null>(null);
-  const [sendingId, setSendingId] = useState<string | null>(null);
+  const [copiedId, setCopiedId]     = useState<string | null>(null);
+  const [sendingId, setSendingId]   = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   useEffect(() => { fetchProposals(); }, []);
 
@@ -52,6 +54,17 @@ export default function PaymentsProposalsPage() {
       await fetch(`/api/proposals/${p.id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sendNow:true}) });
       fetchProposals();
     } finally { setSendingId(null); }
+  }
+
+  async function deleteDraft(id: string) {
+    setDeletingId(id);
+    try {
+      await fetch(`/api/proposals/${id}`, { method: 'DELETE' });
+      setProposals(prev => prev.filter(p => p.id !== id));
+    } finally {
+      setDeletingId(null);
+      setConfirmDelete(null);
+    }
   }
 
   const filtered = useMemo(() => {
@@ -103,20 +116,76 @@ export default function PaymentsProposalsPage() {
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Drafts ({drafts.length})</h2>
               <div className="space-y-2">
                 {drafts.map(p => (
-                  <div key={p.id} className="flex items-center justify-between rounded-xl border border-dashed border-gray-300 bg-gray-50/50 px-5 py-3.5 hover:bg-gray-50 transition-colors">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className="inline-block rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600 flex-shrink-0">Draft</span>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">{p.customer_name||'No customer yet'}</p>
-                        {p.customer_email && <p className="text-xs text-gray-400 truncate">{p.customer_email}</p>}
+                  <div key={p.id} className="rounded-xl border border-dashed border-gray-300 bg-gray-50/50 hover:bg-gray-50 transition-colors overflow-hidden">
+                    <div className="flex items-center justify-between px-5 py-3.5 gap-3">
+                      {/* Left: info */}
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="inline-block rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600 flex-shrink-0">Draft</span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{p.customer_name || 'No customer yet'}</p>
+                          {p.customer_email && <p className="text-xs text-gray-400 truncate">{p.customer_email}</p>}
+                        </div>
+                        {p.price > 0 && <span className="text-sm text-gray-500 flex-shrink-0">{formatCents(p.price)}</span>}
                       </div>
-                      {p.price > 0 && <span className="text-sm text-gray-500 flex-shrink-0">{formatCents(p.price)}</span>}
-                    </div>
-                    <div className="flex items-center gap-1 flex-shrink-0 ml-3">
-                      <Link href={`/dashboard/proposals/${p.id}/edit`} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors"><Pencil size={12}/> Edit</Link>
-                      <button onClick={()=>resend(p)} disabled={sendingId===p.id} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-900 hover:bg-gray-200 transition-colors disabled:opacity-50">
-                        <Send size={12}/>{sendingId===p.id?'Sending...':'Send'}
-                      </button>
+
+                      {/* Right: actions */}
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {/* Preview */}
+                        <Link
+                          href={`/proposal/${p.public_token}`}
+                          target="_blank"
+                          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors"
+                          title="Preview"
+                        >
+                          <Eye size={12}/> <span className="hidden sm:inline">Preview</span>
+                        </Link>
+
+                        {/* Edit */}
+                        <Link
+                          href={`/dashboard/proposals/${p.id}/edit`}
+                          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors"
+                          title="Edit"
+                        >
+                          <Pencil size={12}/> <span className="hidden sm:inline">Edit</span>
+                        </Link>
+
+                        {/* Send */}
+                        <button
+                          onClick={() => resend(p)}
+                          disabled={sendingId === p.id}
+                          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-900 hover:bg-gray-200 transition-colors disabled:opacity-50"
+                          title="Send"
+                        >
+                          <Send size={12}/> <span className="hidden sm:inline">{sendingId === p.id ? 'Sending…' : 'Send'}</span>
+                        </button>
+
+                        {/* Delete */}
+                        {confirmDelete === p.id ? (
+                          <div className="flex items-center gap-1 ml-1">
+                            <button
+                              onClick={() => deleteDraft(p.id)}
+                              disabled={deletingId === p.id}
+                              className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-white bg-red-500 hover:bg-red-600 transition-colors disabled:opacity-50"
+                            >
+                              {deletingId === p.id ? 'Deleting…' : 'Confirm'}
+                            </button>
+                            <button
+                              onClick={() => setConfirmDelete(null)}
+                              className="rounded-lg px-2 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-200 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDelete(p.id)}
+                            className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-red-500 hover:bg-red-50 transition-colors ml-1"
+                            title="Delete draft"
+                          >
+                            <Trash2 size={12}/> <span className="hidden sm:inline">Delete</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
