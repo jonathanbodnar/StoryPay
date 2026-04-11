@@ -1,18 +1,28 @@
 import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { supabaseAdmin } from '@/lib/supabase';
 import { HELP_CATEGORIES } from '@/lib/help-articles';
 
-// One-time route (or re-run whenever articles change) to generate and store
-// OpenAI embeddings for every help article.
-// Only callable by an authenticated venue session (no admin secret needed since
-// embeddings are not sensitive — it just prevents public abuse of the endpoint).
+// One-time route to generate and store OpenAI embeddings for every help article.
+// Accepts either:
+//   - a valid venue_id session cookie (normal logged-in user), OR
+//   - an Authorization: Bearer <ADMIN_SECRET> header (for server-side seeding)
 
-export async function POST() {
+export async function POST(request: NextRequest) {
+  // Auth: cookie session OR admin bearer token
   const cookieStore = await cookies();
-  const venueId = cookieStore.get('venue_id')?.value;
-  if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const venueId     = cookieStore.get('venue_id')?.value;
+  const authHeader  = request.headers.get('authorization') ?? '';
+  const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  const adminSecret = process.env.ADMIN_SECRET;
+
+  const isAdmin  = adminSecret && bearerToken === adminSecret;
+  const isVenue  = !!venueId;
+
+  if (!isAdmin && !isVenue) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json({ error: 'AI not configured' }, { status: 503 });
