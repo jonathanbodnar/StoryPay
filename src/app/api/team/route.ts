@@ -11,13 +11,13 @@ export async function GET() {
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { data, error } = await supabaseAdmin.rpc('list_team_members', {
-    p_venue_id: venueId,
-  });
+  const { data, error } = await supabaseAdmin
+    .from('venue_team_members')
+    .select('*')
+    .eq('venue_id', venueId)
+    .order('created_at', { ascending: true });
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data ?? []);
 }
 
@@ -32,20 +32,33 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'First name and email are required' }, { status: 400 });
   }
 
-  const { data, error } = await supabaseAdmin.rpc('insert_team_member', {
-    p_venue_id: venueId,
-    p_first_name: first_name.trim(),
-    p_last_name: (last_name || '').trim(),
-    p_email: email.trim(),
-    p_role: role || 'member',
-  });
+  const { count } = await supabaseAdmin
+    .from('venue_team_members')
+    .select('id', { count: 'exact', head: true })
+    .eq('venue_id', venueId)
+    .eq('email', email.trim());
 
-  if (error) {
-    const msg = error.message || '';
-    if (msg.includes('already exists')) {
-      return NextResponse.json({ error: 'A member with this email already exists.' }, { status: 409 });
-    }
-    return NextResponse.json({ error: msg }, { status: 500 });
+  if ((count ?? 0) > 0) {
+    return NextResponse.json({ error: 'A member with this email already exists.' }, { status: 409 });
   }
+
+  const fullName = [first_name.trim(), (last_name || '').trim()].filter(Boolean).join(' ');
+
+  const { data, error } = await supabaseAdmin
+    .from('venue_team_members')
+    .insert({
+      venue_id: venueId,
+      first_name: first_name.trim(),
+      last_name: (last_name || '').trim(),
+      name: fullName,
+      email: email.trim(),
+      role: role || 'member',
+      status: 'active',
+      invited_at: new Date().toISOString(),
+    })
+    .select()
+    .single();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data, { status: 201 });
 }

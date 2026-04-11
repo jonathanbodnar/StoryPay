@@ -16,13 +16,15 @@ export async function POST(
 
   const { id } = await params;
 
-  const { data, error } = await supabaseAdmin.rpc('resend_team_invite', {
-    p_id: id,
-    p_venue_id: venueId,
-  });
+  const { data, error } = await supabaseAdmin
+    .from('venue_team_members')
+    .update({ invited_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('venue_id', venueId)
+    .select()
+    .single();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data)  return NextResponse.json({ error: 'Team member not found' }, { status: 404 });
   return NextResponse.json(data);
 }
