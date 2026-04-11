@@ -54,9 +54,11 @@ function VariablePill({ variable, onClick }: { variable: string; onClick: () => 
   );
 }
 
-function PreviewModal({ template, venueName, onClose }: {
+function PreviewModal({ template, venueName, logoUrl, brandColor, onClose }: {
   template: EmailTemplate;
   venueName: string;
+  logoUrl?: string;
+  brandColor?: string;
   onClose: () => void;
 }) {
   function fill(text: string) {
@@ -97,8 +99,11 @@ function PreviewModal({ template, venueName, onClose }: {
               </div>
               {/* Body */}
               <div style={{ fontFamily: 'Arial, sans-serif' }}>
-                <div className="px-6 py-5 text-center" style={{ backgroundColor: '#1b1b1b' }}>
-                  <p className="text-white font-bold text-lg">{venueName || 'Your Venue'}</p>
+                <div className="px-6 py-5" style={{ backgroundColor: brandColor || '#1b1b1b' }}>
+                  {logoUrl
+                    ? <img src={logoUrl} alt={venueName} style={{ maxHeight: 52, maxWidth: 220, objectFit: 'contain', display: 'block' }} />
+                    : <p className="text-white font-bold text-lg m-0">{venueName || 'Your Venue'}</p>
+                  }
                 </div>
                 <div className="px-6 py-6">
                   <h2 className="text-lg font-bold text-gray-900 mb-3">{fill(template.heading)}</h2>
@@ -132,8 +137,10 @@ export default function EmailTemplatesPage() {
   const [selected, setSelected]   = useState<string | null>(null);
   const [saving, setSaving]       = useState(false);
   const [saved, setSaved]         = useState(false);
-  const [preview, setPreview]     = useState(false);
-  const [venueName, setVenueName] = useState('');
+  const [preview, setPreview]       = useState(false);
+  const [venueName, setVenueName]   = useState('');
+  const [logoUrl, setLogoUrl]       = useState('');
+  const [brandColor, setBrandColor] = useState('#1b1b1b');
   const [showTestForm, setShowTestForm] = useState(false);
   const [testEmail, setTestEmail]       = useState('');
   const [testSending, setTestSending]   = useState(false);
@@ -147,6 +154,8 @@ export default function EmailTemplatesPage() {
       setTemplates(Array.isArray(tmpl) ? tmpl : []);
       if (tmpl.length > 0) setSelected(tmpl[0].type);
       setVenueName(venue?.name || '');
+      setLogoUrl(venue?.brand_logo_url || '');
+      setBrandColor(venue?.brand_color || '#1b1b1b');
     }).finally(() => setLoading(false));
   }, []);
 
@@ -175,10 +184,21 @@ export default function EmailTemplatesPage() {
     setTestSending(true);
     setTestResult(null);
     try {
+      // Pass the live editor state so the test reflects unsaved edits,
+      // not the last-saved version in the database.
       const res = await fetch(`/api/email-templates/${current.type}/test`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: testEmail }),
+        body: JSON.stringify({
+          to: testEmail,
+          template: {
+            subject:     current.subject,
+            heading:     current.heading,
+            body:        current.body,
+            button_text: current.button_text,
+            footer:      current.footer,
+          },
+        }),
       });
       setTestResult(res.ok ? 'sent' : 'error');
       if (res.ok) setTimeout(() => { setTestResult(null); setShowTestForm(false); setTestEmail(''); }, 3000);
@@ -359,7 +379,7 @@ export default function EmailTemplatesPage() {
 
       {/* Preview modal */}
       {preview && current && (
-        <PreviewModal template={current} venueName={venueName} onClose={() => setPreview(false)} />
+        <PreviewModal template={current} venueName={venueName} logoUrl={logoUrl || undefined} brandColor={brandColor} onClose={() => setPreview(false)} />
       )}
     </div>
   );

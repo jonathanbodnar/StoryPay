@@ -147,9 +147,10 @@ export function buildEmailHtml({
   const btnText = template.button_text ? fillTemplate(template.button_text, vars) : null;
   const footer  = template.footer ? fillTemplate(template.footer, vars) : null;
 
+  // Show logo when available; fall back to venue name text only
   const logoHtml = logoUrl
-    ? `<img src="${logoUrl}" alt="${venueName}" style="height:40px;object-fit:contain;margin-bottom:8px;display:block">`
-    : '';
+    ? `<img src="${logoUrl}" alt="${venueName}" style="max-height:52px;max-width:220px;object-fit:contain;display:block">`
+    : `<h1 style="color:white;font-size:22px;margin:0;font-weight:300">${venueName}</h1>`;
 
   const buttonHtml = (btnText && actionUrl)
     ? `<div style="text-align:center;margin:32px 0">
@@ -179,7 +180,6 @@ export function buildEmailHtml({
 <div style="font-family:'Open Sans',Arial,sans-serif;max-width:600px;margin:0 auto;background:#ffffff">
   <div style="background-color:${brandColor};padding:28px 32px;border-radius:12px 12px 0 0">
     ${logoHtml}
-    <h1 style="color:white;font-size:22px;margin:0;font-weight:300">${venueName}</h1>
   </div>
   <div style="padding:32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
     <h2 style="color:#111827;font-size:20px;font-weight:700;margin:0 0 20px">${heading}</h2>

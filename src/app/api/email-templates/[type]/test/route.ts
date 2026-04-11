@@ -61,11 +61,21 @@ export async function POST(
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { type } = await params;
-  const { to } = await request.json() as { to?: string };
+  const body = await request.json() as {
+    to?: string;
+    template?: {
+      subject: string;
+      heading: string;
+      body: string;
+      button_text?: string | null;
+      footer?: string | null;
+    };
+  };
 
-  if (!to || !to.includes('@')) {
+  if (!body.to || !body.to.includes('@')) {
     return NextResponse.json({ error: 'A valid email address is required' }, { status: 400 });
   }
+  const to = body.to;
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
@@ -73,7 +83,23 @@ export async function POST(
     .eq('id', venueId)
     .single();
 
-  const tmpl = await getVenueEmailTemplate(venueId, type);
+  // Use the template passed from the editor (reflects unsaved edits).
+  // Fall back to the saved DB version only if no template was supplied.
+  let tmpl;
+  if (body.template) {
+    tmpl = {
+      type,
+      subject:     body.template.subject,
+      heading:     body.template.heading,
+      body:        body.template.body,
+      button_text: body.template.button_text ?? null,
+      footer:      body.template.footer      ?? null,
+      enabled:     true,
+    };
+  } else {
+    tmpl = await getVenueEmailTemplate(venueId, type);
+  }
+
   if (!tmpl) {
     return NextResponse.json({ error: `Unknown template type: ${type}` }, { status: 400 });
   }
