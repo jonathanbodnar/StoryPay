@@ -17,7 +17,7 @@ interface Message {
 }
 
 const BRAND = '#1b1b1b';
-const AI_BUBBLE = '#374151'; // gray-700 — darker than user bubble, lighter than brand black
+const AI_BUBBLE = '#525252'; // neutral grey — no blue tint, darker than user white bubble
 
 // ─── Emoji Picker ─────────────────────────────────────────────────────────────
 
