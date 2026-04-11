@@ -721,12 +721,15 @@ function InlineAI() {
           <>
             {messages.map((m, i) => (
               <div key={i} className={`flex gap-2 ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                <div className={`h-6 w-6 rounded-full flex-shrink-0 flex items-center justify-center mt-0.5 ${m.role === 'user' ? 'bg-gray-200' : 'bg-gray-900'}`}>
+                <div
+                  className={`h-6 w-6 rounded-full flex-shrink-0 flex items-center justify-center mt-0.5 ${m.role === 'user' ? 'bg-gray-200' : ''}`}
+                  style={m.role === 'assistant' ? { backgroundColor: '#374151' } : {}}>
                   {m.role === 'user'
                     ? <span className="text-[9px] font-bold text-gray-500">You</span>
                     : <Sparkles size={11} className="text-white" />}
                 </div>
-                <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${m.role === 'user' ? 'bg-white border border-gray-200 text-gray-900 rounded-tr-sm' : 'bg-gray-900 text-white rounded-tl-sm'}`}>
+                <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${m.role === 'user' ? 'bg-white border border-gray-200 text-gray-900 rounded-tr-sm' : 'text-white rounded-tl-sm'}`}
+                  style={m.role === 'assistant' ? { backgroundColor: '#374151' } : {}}>
                   {m.role === 'assistant'
                     ? renderInlineContent(m.content, (path) => inlineRouter.push(path))
                     : m.content.split('\n').map((line, j) => (
@@ -739,10 +742,10 @@ function InlineAI() {
             ))}
             {loading && (
               <div className="flex gap-2">
-                <div className="h-6 w-6 rounded-full bg-gray-900 flex items-center justify-center">
+                <div className="h-6 w-6 rounded-full flex items-center justify-center" style={{ backgroundColor: '#374151' }}>
                   <Sparkles size={11} className="text-white" />
                 </div>
-                <div className="rounded-2xl rounded-tl-sm bg-gray-900 px-3 py-2.5">
+                <div className="rounded-2xl rounded-tl-sm px-3 py-2.5" style={{ backgroundColor: '#374151' }}>
                   <div className="flex gap-1 items-center">
                     {[0,1,2].map(i => (
                       <div key={i} className="h-1.5 w-1.5 rounded-full bg-white/60 animate-bounce" style={{ animationDelay: `${i*0.15}s` }} />

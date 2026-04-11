@@ -17,6 +17,7 @@ interface Message {
 }
 
 const BRAND = '#1b1b1b';
+const AI_BUBBLE = '#374151'; // gray-700 — darker than user bubble, lighter than brand black
 
 // ─── Emoji Picker ─────────────────────────────────────────────────────────────
 
@@ -574,7 +575,7 @@ export default function AskAIWidget() {
                 <div>
                   <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-4 mb-3">
                     <div className="flex items-center gap-2 mb-2">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-full" style={{ backgroundColor: BRAND }}>
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full" style={{ backgroundColor: AI_BUBBLE }}>
                         <Sparkles size={13} className="text-white" />
                       </div>
                       <span className="text-sm font-semibold text-gray-900">Hi! I&apos;m Ask AI 👋</span>
@@ -604,7 +605,7 @@ export default function AskAIWidget() {
                   <div key={i} className={`flex gap-2.5 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                     <div
                       className={`flex-shrink-0 flex h-7 w-7 items-center justify-center rounded-full mt-0.5 ${msg.role === 'user' ? 'bg-gray-200' : ''}`}
-                      style={msg.role === 'assistant' ? { backgroundColor: BRAND } : {}}>
+                      style={msg.role === 'assistant' ? { backgroundColor: AI_BUBBLE } : {}}>
                       {msg.role === 'user'
                         ? <span className="text-[10px] font-bold text-gray-500">You</span>
                         : <Sparkles size={12} className="text-white" />}
@@ -615,7 +616,7 @@ export default function AskAIWidget() {
                           ? 'bg-white border border-gray-200 text-gray-900 rounded-tr-sm'
                           : 'text-white rounded-tl-sm'
                       }`}
-                      style={msg.role === 'assistant' ? { backgroundColor: BRAND } : {}}>
+                      style={msg.role === 'assistant' ? { backgroundColor: AI_BUBBLE } : {}}>
                       {msg.image && (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={msg.image} alt="screenshot" className="rounded-xl max-w-full mb-2 max-h-40 object-contain" />
@@ -624,7 +625,7 @@ export default function AskAIWidget() {
                         {renderContent(msg.content, (path) => { router.push(path); setOpen(false); })}
                       </div>
                       {msg.timestamp && (
-                        <p className={`text-[10px] mt-1.5 ${msg.role === 'user' ? 'text-gray-400 text-right' : 'text-white/50'}`}>
+                        <p className={`text-[10px] mt-1.5 ${msg.role === 'user' ? 'text-gray-400 text-right' : 'text-white/60'}`}>
                           {formatTime(msg.timestamp)}
                         </p>
                       )}
@@ -634,10 +635,10 @@ export default function AskAIWidget() {
 
                 {loading && (
                   <div className="flex gap-2.5">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full" style={{ backgroundColor: BRAND }}>
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full" style={{ backgroundColor: AI_BUBBLE }}>
                       <Sparkles size={12} className="text-white" />
                     </div>
-                    <div className="rounded-2xl rounded-tl-sm px-4 py-3" style={{ backgroundColor: BRAND }}>
+                    <div className="rounded-2xl rounded-tl-sm px-4 py-3" style={{ backgroundColor: AI_BUBBLE }}>
                       <div className="flex gap-1 items-center h-3">
                         {[0,1,2].map(i => (
                           <div key={i} className="h-1.5 w-1.5 rounded-full bg-white/60 animate-bounce"
