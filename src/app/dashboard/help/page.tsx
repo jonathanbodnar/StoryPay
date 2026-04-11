@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect, useTransition } from 'react';
 import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import {
   Search, Sparkles, ChevronRight, ChevronDown, X, Send, Loader2,
@@ -16,6 +16,7 @@ import {
   getArticleById,
   type HelpArticle,
 } from '@/lib/help-articles';
+import { normaliseHelpQuery } from '@/lib/help-search';
 
 // ─── Icon map (help-articles stores icon names as strings) ────────────────────
 
@@ -767,37 +768,8 @@ function InlineAI() {
   );
 }
 
-// ─── Search term normalisation ────────────────────────────────────────────────
-// Strip common natural-language prefixes so "how do I create a proposal"
-// matches the same as "create a proposal".
-
-const STRIP_PREFIXES = [
-  /^how\s+do\s+i\s+/i,
-  /^how\s+do\s+you\s+/i,
-  /^how\s+to\s+/i,
-  /^how\s+can\s+i\s+/i,
-  /^what\s+is\s+/i,
-  /^what\s+are\s+/i,
-  /^where\s+is\s+/i,
-  /^where\s+can\s+i\s+/i,
-  /^where\s+do\s+i\s+/i,
-  /^can\s+i\s+/i,
-  /^i\s+want\s+to\s+/i,
-  /^i\s+need\s+to\s+/i,
-  /^show\s+me\s+/i,
-  /^tell\s+me\s+/i,
-  /^help\s+me\s+/i,
-  /^explain\s+/i,
-];
-
-function normaliseQuery(raw: string): string {
-  let q = raw.trim().toLowerCase();
-  for (const re of STRIP_PREFIXES) {
-    const stripped = q.replace(re, '').trim();
-    if (stripped.length >= 2) { q = stripped; break; }
-  }
-  return q;
-}
+// ─── Search term normalisation (imported from shared lib) ─────────────────────
+const normaliseQuery = normaliseHelpQuery;
 
 // ─── Highlight helper ─────────────────────────────────────────────────────────
 // Splits `text` around all case-insensitive matches of `term` and wraps
@@ -872,6 +844,45 @@ export default function HelpPage() {
   const [showAI, setShowAI]               = useState(false);
   const normalisedQuery = useMemo(() => normaliseQuery(query), [query]);
 
+  // ── Semantic search state ──────────────────────────────────────────────────
+  // semanticIds: ordered article IDs from the vector similarity API
+  // semanticOnly: IDs returned by semantic search but NOT by substring search
+  const [semanticIds,   setSemanticIds]   = useState<string[]>([]);
+  const [semanticLoading, setSemanticLoading] = useState(false);
+  const [semanticError,   setSemanticError]   = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Fire semantic search 400ms after the user stops typing
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!normalisedQuery || normalisedQuery.length < 3) {
+      setSemanticIds([]);
+      setSemanticLoading(false);
+      setSemanticError(false);
+      return;
+    }
+    setSemanticLoading(true);
+    setSemanticError(false);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res  = await fetch('/api/help/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: normalisedQuery }),
+        });
+        if (!res.ok) { setSemanticError(true); setSemanticLoading(false); return; }
+        const data = await res.json();
+        const ids  = (data.results as { article_id: string; similarity: number }[]).map(r => r.article_id);
+        setSemanticIds(ids);
+      } catch {
+        setSemanticError(true);
+      } finally {
+        setSemanticLoading(false);
+      }
+    }, 400);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [normalisedQuery]);
+
   // Deep-link: /dashboard/help?article=pay-new opens that article directly
   useEffect(() => {
     const id = searchParams.get('article');
@@ -895,22 +906,53 @@ export default function HelpPage() {
     [contextualIds]
   );
 
-  const allArticles = useMemo(() =>
-    ALL_ARTICLES,
-    []
-  );
+  const allArticles = useMemo(() => ALL_ARTICLES, []);
 
-  const searchResults = useMemo(() => {
-    if (!normalisedQuery || normalisedQuery.length < 2) return [];
+  // Substring results (fast, synchronous)
+  const substringResults = useMemo(() => {
+    if (!normalisedQuery || normalisedQuery.length < 2) return new Set<string>();
     const q = normalisedQuery.toLowerCase();
-    return allArticles.filter(a =>
-      a.title.toLowerCase().includes(q) ||
-      a.body.toLowerCase().includes(q) ||
-      a.tags.some(t => t.toLowerCase().includes(q))
+    return new Set(
+      allArticles
+        .filter(a =>
+          a.title.toLowerCase().includes(q) ||
+          a.body.toLowerCase().includes(q) ||
+          a.tags.some(t => t.toLowerCase().includes(q))
+        )
+        .map(a => a.id)
     );
   }, [normalisedQuery, allArticles]);
 
-  const isSearching = normalisedQuery.length >= 2;
+  // Merged results: semantic order first, then any substring-only hits appended.
+  // Each result carries a flag for whether semantic found it (but keyword didn't).
+  const searchResults = useMemo(() => {
+    if (!normalisedQuery || normalisedQuery.length < 2) return [];
+
+    const seen    = new Set<string>();
+    const merged: { article: typeof allArticles[0]; semanticOnly: boolean }[] = [];
+
+    // 1. Semantic results (in similarity order) — may or may not overlap substring
+    for (const id of semanticIds) {
+      const a = allArticles.find(x => x.id === id);
+      if (a && !seen.has(id)) {
+        seen.add(id);
+        merged.push({ article: a, semanticOnly: !substringResults.has(id) });
+      }
+    }
+
+    // 2. Append any substring hits that semantic didn't return
+    for (const id of substringResults) {
+      if (!seen.has(id)) {
+        const a = allArticles.find(x => x.id === id);
+        if (a) { seen.add(id); merged.push({ article: a, semanticOnly: false }); }
+      }
+    }
+
+    return merged;
+  }, [semanticIds, substringResults, normalisedQuery, allArticles]);
+
+  const isSearching   = normalisedQuery.length >= 2;
+  const showLoading   = isSearching && semanticLoading && searchResults.length === 0;
 
   const activeCategory = activeCat ? CATEGORIES.find(c => c.id === activeCat) : null;
 
@@ -1043,31 +1085,72 @@ export default function HelpPage() {
           {/* Search results */}
           {isSearching && !showAI && (
             <div>
+              {/* Header row */}
               <div className="flex items-center justify-between mb-4">
-                <p className="text-sm text-gray-500">
-                  {searchResults.length === 0
-                    ? <>No articles found for <span className="font-medium text-gray-700">&ldquo;{query}&rdquo;</span></>
-                    : <>{searchResults.length} article{searchResults.length !== 1 ? 's' : ''} matching <span className="font-medium text-gray-700">&ldquo;{normalisedQuery}&rdquo;</span></>}
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm text-gray-500">
+                    {showLoading
+                      ? <span className="flex items-center gap-1.5"><Loader2 size={13} className="animate-spin text-gray-400" /> Searching&hellip;</span>
+                      : searchResults.length === 0
+                        ? <>No articles found for <span className="font-medium text-gray-700">&ldquo;{query}&rdquo;</span></>
+                        : <>{searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for <span className="font-medium text-gray-700">&ldquo;{normalisedQuery}&rdquo;</span></>
+                    }
+                  </p>
+                  {/* Semantic search indicator */}
+                  {!semanticLoading && semanticIds.length > 0 && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 border border-violet-200 px-2 py-0.5 text-[10px] font-medium text-violet-700">
+                      <Sparkles size={9} /> AI-powered
+                    </span>
+                  )}
+                </div>
                 {normalisedQuery !== query.trim().toLowerCase() && query.trim() && (
-                  <p className="text-xs text-gray-400 italic">Searching for: &ldquo;{normalisedQuery}&rdquo;</p>
+                  <p className="text-xs text-gray-400 italic hidden sm:block">Searching: &ldquo;{normalisedQuery}&rdquo;</p>
                 )}
               </div>
-              {searchResults.length === 0 ? (
+
+              {/* Loading skeleton */}
+              {showLoading && (
+                <div className="space-y-3">
+                  {[0,1,2].map(i => (
+                    <div key={i} className="rounded-xl border border-gray-100 bg-white p-4 animate-pulse">
+                      <div className="flex gap-3">
+                        <div className="h-7 w-7 rounded-lg bg-gray-100 flex-shrink-0" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-3.5 bg-gray-100 rounded w-2/3" />
+                          <div className="h-2.5 bg-gray-50 rounded w-1/4" />
+                          <div className="h-2.5 bg-gray-50 rounded w-full" />
+                          <div className="h-2.5 bg-gray-50 rounded w-3/4" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* No results */}
+              {!showLoading && searchResults.length === 0 && (
                 <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-8 text-center">
                   <HelpCircle size={32} className="text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500 text-sm mb-4">No results. Try Ask AI for a direct answer.</p>
+                  <p className="text-gray-500 text-sm mb-1">No articles match your search.</p>
+                  <p className="text-gray-400 text-xs mb-5">Try different words, or ask AI directly.</p>
                   <button onClick={() => { setShowAI(true); setQuery(''); }}
                     className="inline-flex items-center gap-2 rounded-xl bg-gray-900 text-white px-4 py-2.5 text-sm font-medium hover:bg-gray-800 transition-colors">
                     <Sparkles size={14} /> Ask AI instead
                   </button>
                 </div>
-              ) : (
+              )}
+
+              {/* Results list */}
+              {!showLoading && searchResults.length > 0 && (
                 <div className="space-y-3">
-                  {searchResults.map(a => {
-                    const cat = CATEGORIES.find(c => c.id === a.catId)!;
+                  {searchResults.map(({ article: a, semanticOnly }) => {
+                    const cat  = CATEGORIES.find(c => c.id === a.catId)!;
                     const Icon = cat.icon;
-                    const snippet = getBestSnippet(a.body, normalisedQuery);
+                    // For semantic-only hits there's no substring to highlight,
+                    // so show the first meaningful body line as the snippet.
+                    const snippet = semanticOnly
+                      ? a.body.split('\n').find(l => l.trim()) || ''
+                      : getBestSnippet(a.body, normalisedQuery);
                     return (
                       <button
                         key={a.id}
@@ -1079,12 +1162,23 @@ export default function HelpPage() {
                             <Icon size={14} style={{ color: cat.color }} />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="text-sm font-semibold text-gray-900 mb-0.5">
-                              <Highlight text={a.title} term={normalisedQuery} />
-                            </p>
+                            <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                              <p className="text-sm font-semibold text-gray-900">
+                                {semanticOnly
+                                  ? a.title
+                                  : <Highlight text={a.title} term={normalisedQuery} />}
+                              </p>
+                              {semanticOnly && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 border border-violet-200 px-1.5 py-0.5 text-[9px] font-medium text-violet-600 flex-shrink-0">
+                                  <Sparkles size={8} /> related
+                                </span>
+                              )}
+                            </div>
                             <p className="text-xs text-gray-400 mb-1.5">{cat.label}</p>
                             <p className="text-xs text-gray-500 leading-relaxed">
-                              <Highlight text={snippet} term={normalisedQuery} />
+                              {semanticOnly
+                                ? snippet
+                                : <Highlight text={snippet} term={normalisedQuery} />}
                             </p>
                           </div>
                           <ChevronRight size={14} className="text-gray-300 flex-shrink-0 mt-1" />
