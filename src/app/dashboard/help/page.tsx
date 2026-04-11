@@ -750,9 +750,76 @@ function InlineAI() {
   );
 }
 
+// ─── Search term normalisation ────────────────────────────────────────────────
+// Strip common natural-language prefixes so "how do I create a proposal"
+// matches the same as "create a proposal".
+
+const STRIP_PREFIXES = [
+  /^how\s+do\s+i\s+/i,
+  /^how\s+do\s+you\s+/i,
+  /^how\s+to\s+/i,
+  /^how\s+can\s+i\s+/i,
+  /^what\s+is\s+/i,
+  /^what\s+are\s+/i,
+  /^where\s+is\s+/i,
+  /^where\s+can\s+i\s+/i,
+  /^where\s+do\s+i\s+/i,
+  /^can\s+i\s+/i,
+  /^i\s+want\s+to\s+/i,
+  /^i\s+need\s+to\s+/i,
+  /^show\s+me\s+/i,
+  /^tell\s+me\s+/i,
+  /^help\s+me\s+/i,
+  /^explain\s+/i,
+];
+
+function normaliseQuery(raw: string): string {
+  let q = raw.trim().toLowerCase();
+  for (const re of STRIP_PREFIXES) {
+    const stripped = q.replace(re, '').trim();
+    if (stripped.length >= 2) { q = stripped; break; }
+  }
+  return q;
+}
+
+// ─── Highlight helper ─────────────────────────────────────────────────────────
+// Splits `text` around all case-insensitive matches of `term` and wraps
+// matches in a yellow <mark> span.
+
+function Highlight({ text, term }: { text: string; term: string }) {
+  if (!term || term.length < 2) return <>{text}</>;
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === term.toLowerCase()
+          ? <mark key={i} className="bg-yellow-200 text-yellow-900 rounded-sm px-0.5 not-italic font-medium">{part}</mark>
+          : <span key={i}>{part}</span>
+      )}
+    </>
+  );
+}
+
+// Returns the best snippet from body text that contains the search term,
+// with a small window of surrounding context (~140 chars).
+function getBestSnippet(body: string, term: string): string {
+  if (!term || term.length < 2) return body.split('\n').find(l => l.trim()) || '';
+  const lower = body.toLowerCase();
+  const idx   = lower.indexOf(term.toLowerCase());
+  if (idx === -1) return body.split('\n').find(l => l.trim()) || '';
+  const start = Math.max(0, idx - 60);
+  const end   = Math.min(body.length, idx + term.length + 80);
+  let snippet = body.slice(start, end).replace(/\n/g, ' ').trim();
+  if (start > 0) snippet = '\u2026' + snippet;
+  if (end < body.length) snippet = snippet + '\u2026';
+  return snippet;
+}
+
 // ─── Article view ─────────────────────────────────────────────────────────────
 
-function ArticleBody({ text }: { text: string }) {
+function ArticleBody({ text, highlight = '' }: { text: string; highlight?: string }) {
+  const term = normaliseQuery(highlight);
   return (
     <div className="text-sm text-gray-700 leading-relaxed space-y-1.5">
       {text.split('\n').map((line, i) => {
@@ -761,14 +828,14 @@ function ArticleBody({ text }: { text: string }) {
           return (
             <div key={i} className="flex gap-2 items-start">
               <span className="mt-2 h-1.5 w-1.5 rounded-full bg-gray-400 flex-shrink-0" />
-              <span>{line.replace(/^[-\s]+/, '')}</span>
+              <span><Highlight text={line.replace(/^[-\s]+/, '')} term={term} /></span>
             </div>
           );
         }
         if (/^\d+\.\s/.test(line.trimStart())) {
-          return <p key={i} className="pl-1 font-medium text-gray-800">{line}</p>;
+          return <p key={i} className="pl-1 font-medium text-gray-800"><Highlight text={line} term={term} /></p>;
         }
-        return <p key={i}>{line}</p>;
+        return <p key={i}><Highlight text={line} term={term} /></p>;
       })}
     </div>
   );
@@ -782,6 +849,8 @@ export default function HelpPage() {
   const [activeArticle, setActiveArticle] = useState<Article | null>(null);
   const [expandedCats, setExpandedCats]   = useState<Set<string>>(new Set());
   const [showAI, setShowAI]               = useState(false);
+  // term used for matching (prefix-stripped); raw query kept for display
+  const normalisedQuery = useMemo(() => normaliseQuery(query), [query]);
 
   const allArticles = useMemo(() =>
     CATEGORIES.flatMap(c => c.articles.map(a => ({ ...a, catId: c.id, catLabel: c.label }))),
@@ -789,21 +858,24 @@ export default function HelpPage() {
   );
 
   const searchResults = useMemo(() => {
-    if (!query.trim()) return [];
-    const q = query.toLowerCase();
+    if (!normalisedQuery || normalisedQuery.length < 2) return [];
+    const q = normalisedQuery.toLowerCase();
     return allArticles.filter(a =>
       a.title.toLowerCase().includes(q) ||
       a.body.toLowerCase().includes(q) ||
       a.tags.some(t => t.toLowerCase().includes(q))
     );
-  }, [query, allArticles]);
+  }, [normalisedQuery, allArticles]);
 
-  const isSearching = query.trim().length > 0;
+  const isSearching = normalisedQuery.length >= 2;
 
   const activeCategory = activeCat ? CATEGORIES.find(c => c.id === activeCat) : null;
 
+  const [articleHighlight, setArticleHighlight] = useState('');
+
   function selectArticle(article: Article) {
     setActiveArticle(article);
+    setArticleHighlight(normalisedQuery);
     setShowAI(false);
   }
 
@@ -832,7 +904,7 @@ export default function HelpPage() {
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           <input
             type="text"
-            placeholder={'Search help articles\u2026 e.g. \u201crefund\u201d, \u201ctemplate\u201d, \u201cQuickBooks\u201d'}
+            placeholder={'Search or ask anything\u2026 e.g. \u201chow do I create a proposal\u201d or \u201crefund\u201d'}
             value={query}
             onChange={e => { setQuery(e.target.value); setActiveCat(null); setActiveArticle(null); }}
             className="w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 shadow-sm"
@@ -903,11 +975,16 @@ export default function HelpPage() {
           {/* Search results */}
           {isSearching && !showAI && (
             <div>
-              <p className="text-sm text-gray-500 mb-4">
-                {searchResults.length === 0
-                  ? `No articles found for "${query}"`
-                  : `${searchResults.length} article${searchResults.length !== 1 ? 's' : ''} found for "${query}"`}
-              </p>
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-sm text-gray-500">
+                  {searchResults.length === 0
+                    ? <>No articles found for <span className="font-medium text-gray-700">&ldquo;{query}&rdquo;</span></>
+                    : <>{searchResults.length} article{searchResults.length !== 1 ? 's' : ''} matching <span className="font-medium text-gray-700">&ldquo;{normalisedQuery}&rdquo;</span></>}
+                </p>
+                {normalisedQuery !== query.trim().toLowerCase() && query.trim() && (
+                  <p className="text-xs text-gray-400 italic">Searching for: &ldquo;{normalisedQuery}&rdquo;</p>
+                )}
+              </div>
               {searchResults.length === 0 ? (
                 <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-8 text-center">
                   <HelpCircle size={32} className="text-gray-300 mx-auto mb-3" />
@@ -922,6 +999,7 @@ export default function HelpPage() {
                   {searchResults.map(a => {
                     const cat = CATEGORIES.find(c => c.id === a.catId)!;
                     const Icon = cat.icon;
+                    const snippet = getBestSnippet(a.body, normalisedQuery);
                     return (
                       <button
                         key={a.id}
@@ -932,10 +1010,14 @@ export default function HelpPage() {
                           <div className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: cat.color + '18' }}>
                             <Icon size={14} style={{ color: cat.color }} />
                           </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-gray-900 mb-0.5">{a.title}</p>
-                            <p className="text-xs text-gray-400">{cat.label}</p>
-                            <p className="text-xs text-gray-500 mt-1.5 line-clamp-2">{a.body.split('\n')[0]}</p>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-gray-900 mb-0.5">
+                              <Highlight text={a.title} term={normalisedQuery} />
+                            </p>
+                            <p className="text-xs text-gray-400 mb-1.5">{cat.label}</p>
+                            <p className="text-xs text-gray-500 leading-relaxed">
+                              <Highlight text={snippet} term={normalisedQuery} />
+                            </p>
                           </div>
                           <ChevronRight size={14} className="text-gray-300 flex-shrink-0 mt-1" />
                         </div>
@@ -968,8 +1050,10 @@ export default function HelpPage() {
                     )}
                   </div>
                   <div className="p-6 sm:p-8">
-                    <h2 className="text-xl font-bold text-gray-900 mb-5">{activeArticle.title}</h2>
-                    <ArticleBody text={activeArticle.body} />
+                    <h2 className="text-xl font-bold text-gray-900 mb-5">
+                      <Highlight text={activeArticle.title} term={articleHighlight} />
+                    </h2>
+                    <ArticleBody text={activeArticle.body} highlight={articleHighlight} />
                     <div className="mt-8 pt-6 border-t border-gray-100 flex items-center justify-between">
                       <p className="text-xs text-gray-400">Not what you were looking for?</p>
                       <button onClick={() => setShowAI(true)}
