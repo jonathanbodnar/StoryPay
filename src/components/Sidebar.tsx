@@ -9,7 +9,7 @@ import {
   Sparkles, Megaphone, Settings, Palette, Mail, UsersRound,
   Bell, Package, Receipt, Link2, RefreshCw, DollarSign, Plus, Calendar,
   ArrowLeft, Menu, X, ChevronDown,
-  HelpCircle, LogOut,
+  HelpCircle, LogOut, BookOpen,
 } from 'lucide-react';
 
 interface Venue { id: string; name: string; ghl_location_id: string; }
@@ -21,6 +21,7 @@ const menuItems = [
   { label: 'Customers',   href: '/dashboard/customers', icon: Users },
   { label: 'Reports',     href: '/dashboard/reports',   icon: BarChart2 },
   { label: "What's New",  href: '/dashboard/updates',   icon: Megaphone },
+  { label: 'Help Center', href: '/dashboard/help',      icon: BookOpen },
 ];
 
 const paymentsItems = [
