@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import {
   Search, Sparkles, ChevronRight, ChevronDown, X, Send, Loader2,
   LayoutDashboard, Users, BarChart2, CreditCard, FileText, Receipt,
@@ -8,16 +9,25 @@ import {
   Settings, HelpCircle, Mic, MicOff, Smile, Paperclip,
   BookOpen, Zap, DollarSign, Package,
 } from 'lucide-react';
+import {
+  HELP_CATEGORIES,
+  ALL_ARTICLES,
+  getArticlesForPath,
+  getArticleById,
+  type HelpArticle,
+} from '@/lib/help-articles';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Icon map (help-articles stores icon names as strings) ────────────────────
 
-interface Article {
-  id: string;
-  title: string;
-  body: string;   // plain text — supports \n for paragraphs, "- " for bullets
-  tags: string[];
-}
+const ICON_MAP: Record<string, React.ElementType> = {
+  Zap, LayoutDashboard, Users, BarChart2, CreditCard, FileText, Receipt,
+  Calendar, RefreshCw, Palette, Mail, UsersRound, Bell, Link2,
+  Settings, HelpCircle, BookOpen, Sparkles, DollarSign, Package,
+};
 
+// ─── Local type aliases ───────────────────────────────────────────────────────
+
+type Article  = HelpArticle;
 interface Category {
   id: string;
   label: string;
@@ -26,9 +36,15 @@ interface Category {
   articles: Article[];
 }
 
-// ─── Help content ─────────────────────────────────────────────────────────────
+// Map shared data to local shape (inject resolved icon)
+const CATEGORIES: Category[] = HELP_CATEGORIES.map(c => ({
+  ...c,
+  icon: ICON_MAP[c.iconName] ?? HelpCircle,
+}));
 
-const CATEGORIES: Category[] = [
+// ─── (inline article data removed — imported from @/lib/help-articles) ───────
+
+const _PLACEHOLDER: Category[] = [
   {
     id: 'getting-started',
     label: 'Getting Started',
@@ -538,6 +554,7 @@ You'll get a follow-up by email. Alternatively, email clients@storyvenuemarketin
     ],
   },
 ];
+void _PLACEHOLDER; // suppress unused warning — data comes from shared module
 
 // ─── Inline AI chat (mini) ────────────────────────────────────────────────────
 
@@ -844,16 +861,42 @@ function ArticleBody({ text, highlight = '' }: { text: string; highlight?: strin
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function HelpPage() {
+  const pathname     = usePathname();
+  const searchParams = useSearchParams();
+  const router       = useRouter();
+
   const [query, setQuery]                 = useState('');
   const [activeCat, setActiveCat]         = useState<string | null>(null);
   const [activeArticle, setActiveArticle] = useState<Article | null>(null);
   const [expandedCats, setExpandedCats]   = useState<Set<string>>(new Set());
   const [showAI, setShowAI]               = useState(false);
-  // term used for matching (prefix-stripped); raw query kept for display
   const normalisedQuery = useMemo(() => normaliseQuery(query), [query]);
 
+  // Deep-link: /dashboard/help?article=pay-new opens that article directly
+  useEffect(() => {
+    const id = searchParams.get('article');
+    if (id) {
+      const a = getArticleById(id);
+      if (a) {
+        setActiveArticle(a);
+        setArticleHighlight('');
+        // Remove the query param without a full navigation
+        router.replace('/dashboard/help');
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Contextual articles for the *previous* page (stored in referrer logic via
+  // the badge — here we just surface them in the sidebar as "Suggested for you")
+  const contextualIds      = useMemo(() => getArticlesForPath(pathname), [pathname]);
+  const contextualArticles = useMemo(
+    () => contextualIds.map(id => getArticleById(id)).filter(Boolean) as NonNullable<ReturnType<typeof getArticleById>>[],
+    [contextualIds]
+  );
+
   const allArticles = useMemo(() =>
-    CATEGORIES.flatMap(c => c.articles.map(a => ({ ...a, catId: c.id, catLabel: c.label }))),
+    ALL_ARTICLES,
     []
   );
 
@@ -926,7 +969,32 @@ export default function HelpPage() {
 
       <div className="flex gap-6 items-start">
         {/* ── Sidebar: categories ── */}
-        <aside className="hidden lg:block w-60 flex-shrink-0">
+        <aside className="hidden lg:block w-60 flex-shrink-0 space-y-3">
+
+          {/* Contextual: suggested articles for the current page */}
+          {contextualArticles.length > 0 && !isSearching && !activeArticle && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 overflow-hidden">
+              <div className="px-4 py-3 border-b border-amber-100 flex items-center gap-2">
+                <span className="text-amber-500 text-xs">✦</span>
+                <p className="text-xs font-semibold text-amber-800">Suggested for this page</p>
+              </div>
+              <nav className="p-2 space-y-0.5">
+                {contextualArticles.map(a => (
+                  <button
+                    key={a.id}
+                    onClick={() => { setActiveArticle(a); setArticleHighlight(''); setActiveCat(null); setQuery(''); setShowAI(false); }}
+                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors text-left text-amber-900 hover:bg-amber-100`}
+                  >
+                    <div className="h-1.5 w-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: a.catColor }} />
+                    <span className="flex-1 truncate text-xs">{a.title}</span>
+                    <ChevronRight size={11} className="text-amber-400 flex-shrink-0" />
+                  </button>
+                ))}
+              </nav>
+            </div>
+          )}
+
+          {/* All topics */}
           <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-100">
               <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Topics</p>

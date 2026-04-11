@@ -3,6 +3,7 @@ import { getVenueFromSession } from '@/lib/session';
 import Sidebar from '@/components/Sidebar';
 import AnnouncementTicker from '@/components/AnnouncementTicker';
 import AskAIWidget from '@/components/AskAIWidget';
+import ContextualHelpBadge from '@/components/ContextualHelpBadge';
 
 export default async function DashboardLayout({
   children,
@@ -32,6 +33,7 @@ export default async function DashboardLayout({
         </main>
       </div>
       <AskAIWidget />
+      <ContextualHelpBadge />
     </div>
   );
 }
