@@ -119,7 +119,7 @@ function PreviewModal({ template, venueName, logoUrl, brandColor, onClose }: {
                   </div>
                   {template.button_text && (
                     <div className="text-center my-5">
-                      <span className="inline-block rounded-xl px-6 py-3 text-sm font-bold text-white" style={{ backgroundColor: '#1b1b1b' }}>
+                      <span className="inline-block rounded-xl px-6 py-3 text-sm font-bold text-white" style={{ backgroundColor: brandColor || '#1b1b1b' }}>
                         {fill(template.button_text)}
                       </span>
                     </div>

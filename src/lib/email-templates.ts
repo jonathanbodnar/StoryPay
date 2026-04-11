@@ -147,15 +147,18 @@ export function buildEmailHtml({
   const btnText = template.button_text ? fillTemplate(template.button_text, vars) : null;
   const footer  = template.footer ? fillTemplate(template.footer, vars) : null;
 
-  const buttonHtml = (btnText && actionUrl)
+  const buttonHtml = (btnText && actionUrl && actionUrl !== '#')
     ? `<div style="text-align:center;margin:32px 0">
-        <a href="${actionUrl}" style="display:inline-block;background-color:${brandColor};color:white;padding:14px 36px;border-radius:10px;text-decoration:none;font-weight:600;font-size:16px">
-          ${btnText}
+        <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="${actionUrl}" style="height:48px;v-text-anchor:middle;width:220px;" arcsize="21%" strokecolor="${brandColor}" fillcolor="${brandColor}"><w:anchorlock/><center><![endif]-->
+        <a href="${actionUrl}"
+          style="background-color:${brandColor};border-radius:10px;color:#ffffff;display:inline-block;font-family:'Open Sans',Arial,sans-serif;font-size:16px;font-weight:700;line-height:48px;text-align:center;text-decoration:none;width:220px;-webkit-text-size-adjust:none;mso-hide:all;">
+          <span style="color:#ffffff;text-decoration:none;">${btnText}</span>
         </a>
+        <!--[if mso]></center></v:roundrect><![endif]-->
       </div>
       <p style="color:#9ca3af;font-size:12px;text-align:center;margin:8px 0 0">
-        If the button doesn't work, copy this link:<br>
-        <a href="${actionUrl}" style="color:${brandColor}">${actionUrl}</a>
+        If the button doesn&apos;t work, copy this link:<br>
+        <a href="${actionUrl}" style="color:${brandColor};text-decoration:underline;">${actionUrl}</a>
       </p>`
     : '';
 
