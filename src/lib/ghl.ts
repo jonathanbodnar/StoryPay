@@ -67,25 +67,69 @@ export async function ghlRequest(
   return res.json();
 }
 
+/**
+ * Get a location-scoped access token from the agency JWT.
+ * The GHL_AGENCY_API_KEY is agency-level and must be exchanged for a
+ * location token before making location-scoped API calls (SMS, contacts, etc.)
+ */
+async function getLocationToken(agencyToken: string, locationId: string): Promise<string> {
+  const res = await fetch(`${GHL_API_BASE}/oauth/locationToken`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${agencyToken}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Version': '2021-07-28',
+    },
+    body: new URLSearchParams({ companyId: locationId, locationId }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`GHL location token exchange failed ${res.status}: ${err}`);
+  }
+
+  const data = await res.json();
+  return data.access_token || data.token;
+}
+
+/**
+ * Resolve a location-scoped token. If the provided token is an agency JWT
+ * (detected by the presence of GHL_AGENCY_API_KEY matching it), exchange it
+ * for a location token first. Otherwise use it directly.
+ */
+async function resolveLocationToken(token: string, locationId: string): Promise<string> {
+  const isAgencyToken = process.env.GHL_AGENCY_API_KEY && token === process.env.GHL_AGENCY_API_KEY;
+  if (isAgencyToken) {
+    try {
+      return await getLocationToken(token, locationId);
+    } catch (err) {
+      console.error('[ghl] location token exchange failed, falling back to agency token:', err);
+      return token; // fall back — may still work for some endpoints
+    }
+  }
+  return token;
+}
+
 export async function sendSms(
   accessToken: string,
   locationId: string,
   contactId: string,
   message: string
 ) {
-  // First create/get a conversation, then send SMS via that conversation
-  // This uses GHL's messaging API which routes through the sub-account's A2P phone
+  // Exchange agency token → location token if needed
+  const token = await resolveLocationToken(accessToken, locationId);
+
+  // Get or create a conversation, then send SMS through it
   try {
-    // Get or create conversation
     const convRes = await ghlRequest(
       `/conversations/search?locationId=${locationId}&contactId=${contactId}&limit=1`,
-      accessToken,
+      token,
       { locationId }
     );
     let conversationId = convRes?.conversations?.[0]?.id;
 
     if (!conversationId) {
-      const newConv = await ghlRequest('/conversations/', accessToken, {
+      const newConv = await ghlRequest('/conversations/', token, {
         method: 'POST',
         body: { locationId, contactId },
         locationId,
@@ -94,18 +138,20 @@ export async function sendSms(
     }
 
     if (conversationId) {
-      return ghlRequest('/conversations/messages', accessToken, {
+      const result = await ghlRequest('/conversations/messages', token, {
         method: 'POST',
         body: { type: 'SMS', conversationId, message, locationId },
         locationId,
       });
+      console.log(`[ghl] SMS sent via conversation ${conversationId}`);
+      return result;
     }
-  } catch {
-    // Fallback to direct SMS
+  } catch (err) {
+    console.error('[ghl] sendSms conversation path failed, trying direct:', err);
   }
 
   // Direct fallback
-  return ghlRequest('/conversations/messages', accessToken, {
+  return ghlRequest('/conversations/messages', token, {
     method: 'POST',
     body: { type: 'SMS', contactId, message, locationId },
     locationId,
@@ -140,6 +186,8 @@ export async function findOrCreateContact(
   locationId: string,
   contact: { email: string; phone?: string; firstName?: string; lastName?: string }
 ) {
+  const token = await resolveLocationToken(accessToken, locationId);
+
   // Always normalize phone to E.164 before sending to GHL
   const normalizedPhone = contact.phone ? normalizePhone(contact.phone) : undefined;
   const contactPayload = { ...contact, ...(normalizedPhone ? { phone: normalizedPhone } : { phone: undefined }) };
@@ -148,13 +196,13 @@ export async function findOrCreateContact(
   const searchKey = contactPayload.email ? 'email' : 'phone';
   const searchRes = await ghlRequest(
     `/contacts/search/duplicate?locationId=${locationId}&${searchKey}=${encodeURIComponent(identifier!)}`,
-    accessToken,
+    token,
     { locationId }
   );
 
   if (searchRes.contact?.id) return searchRes.contact.id;
 
-  const createRes = await ghlRequest('/contacts/', accessToken, {
+  const createRes = await ghlRequest('/contacts/', token, {
     method: 'POST',
     body: { locationId, ...contactPayload },
     locationId,
