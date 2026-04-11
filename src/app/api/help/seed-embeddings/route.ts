@@ -50,18 +50,14 @@ export async function POST(request: NextRequest) {
       input: batch.map(a => a.text),
     });
 
-    const upserts = batch.map((a, j) => ({
-      article_id: a.id,
-      embedding:  embeddingRes.data[j].embedding,
-      updated_at: new Date().toISOString(),
-    }));
-
-    const { error } = await supabaseAdmin
-      .from('help_article_embeddings')
-      .upsert(upserts, { onConflict: 'article_id' });
-
-    for (const a of batch) {
-      results.push({ id: a.id, status: error ? 'error' : 'ok', error: error?.message });
+    // Use SECURITY DEFINER RPC to bypass PostgREST schema cache
+    for (let j = 0; j < batch.length; j++) {
+      const { error } = await supabaseAdmin.rpc('upsert_help_embedding', {
+        p_article_id: batch[j].id,
+        p_embedding:  embeddingRes.data[j].embedding,
+        p_updated_at: new Date().toISOString(),
+      });
+      results.push({ id: batch[j].id, status: error ? 'error' : 'ok', error: error?.message });
     }
 
     // Small pause between batches
