@@ -18,37 +18,31 @@ export async function GET(
   const base = getBaseUrl(request);
 
   try {
-    const { data: venueToken, error: tokenError } = await supabaseAdmin
-      .from('venue_tokens')
-      .select('venue_id')
-      .eq('token', token)
+    const { data: venue, error: tokenError } = await supabaseAdmin
+      .from('venues')
+      .select('id, setup_completed, onboarding_status')
+      .eq('login_token', token)
       .single();
 
-    if (tokenError || !venueToken) {
+    if (tokenError || !venue) {
       return NextResponse.redirect(`${base}/login/invalid`);
     }
 
-    const { data: venue } = await supabaseAdmin
-      .from('venues')
-      .select('setup_completed, onboarding_status')
-      .eq('id', venueToken.venue_id)
-      .single();
-
-    const destination = venue?.setup_completed
+    const destination = venue.setup_completed
       ? '/dashboard'
-      : venue?.onboarding_status === 'active'
+      : venue.onboarding_status === 'active'
         ? '/dashboard'
         : '/setup';
 
-    if (!venue?.setup_completed && venue?.onboarding_status === 'active') {
+    if (!venue.setup_completed && venue.onboarding_status === 'active') {
       await supabaseAdmin
         .from('venues')
         .update({ setup_completed: true })
-        .eq('id', venueToken.venue_id);
+        .eq('id', venue.id);
     }
     const response = NextResponse.redirect(`${base}${destination}`);
 
-    response.cookies.set('venue_id', venueToken.venue_id, {
+    response.cookies.set('venue_id', venue.id, {
       path: '/',
       httpOnly: true,
       secure: true,

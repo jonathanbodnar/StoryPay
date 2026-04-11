@@ -26,16 +26,6 @@ async function provisionVenue(locationId: string) {
     throw new Error(`Failed to create venue: ${venueError?.message}`);
   }
 
-  const { data: tokenData, error: tokenError } = await supabaseAdmin
-    .from('venue_tokens')
-    .insert({ venue_id: venue.id })
-    .select()
-    .single();
-
-  if (tokenError || !tokenData) {
-    throw new Error(`Failed to create login token: ${tokenError?.message}`);
-  }
-
   return venue;
 }
 

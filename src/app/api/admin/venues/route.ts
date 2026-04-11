@@ -23,7 +23,7 @@ export async function GET() {
 
     const { data: venues, error } = await supabaseAdmin
       .from('venues')
-      .select('*, venue_tokens(token)')
+      .select('*')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -32,11 +32,9 @@ export async function GET() {
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
     const venuesWithLinks = (venues || []).map((venue: Record<string, unknown>) => {
-      const tokens = venue.venue_tokens as { token: string }[] | null;
-      const token = tokens?.[0]?.token;
       return {
         ...venue,
-        login_url: token ? `${appUrl}/login/${token}` : null,
+        login_url: venue.login_token ? `${appUrl}/login/${venue.login_token}` : null,
       };
     });
 
@@ -106,23 +104,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `DB error: ${venueError.message}` }, { status: 500 });
     }
 
-    const { data: tokenData, error: tokenError } = await supabaseAdmin
-      .from('venue_tokens')
-      .insert({ venue_id: venue.id })
-      .select()
-      .single();
-
-    if (tokenError) {
-      return NextResponse.json({ error: `Token error: ${tokenError.message}` }, { status: 500 });
-    }
-
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
 
     return NextResponse.json({
       venue: {
         ...venue,
-        venue_tokens: [tokenData],
-        login_url: `${appUrl}/login/${tokenData.token}`,
+        login_url: venue.login_token ? `${appUrl}/login/${venue.login_token}` : null,
       },
     });
   } catch (err) {
