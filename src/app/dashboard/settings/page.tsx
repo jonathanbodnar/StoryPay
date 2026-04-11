@@ -243,7 +243,7 @@ export default function SettingsPage() {
           </div>
           <div className="px-6 py-5">
             {venue.ghl_connected ? (
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-4">
                 <div>
                   <p className="text-sm font-medium text-gray-900">Connected</p>
                   <p className="mt-0.5 text-sm text-gray-500">
@@ -251,10 +251,20 @@ export default function SettingsPage() {
                     when proposals are created.
                   </p>
                 </div>
-                <span className="shrink-0 ml-4 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
-                  <CheckCircle2 size={14} />
-                  Connected
-                </span>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                    <CheckCircle2 size={14} />
+                    Connected
+                  </span>
+                  <a
+                    href="/api/messaging/connect"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                    title="Re-authorize your GHL account to refresh tokens"
+                  >
+                    <ExternalLink size={13} />
+                    Reconnect
+                  </a>
+                </div>
               </div>
             ) : (
               <div className="text-center py-4">
