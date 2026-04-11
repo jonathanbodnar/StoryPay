@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { createCustomer } from '@/lib/lunarpay';
-import { findOrCreateContact, sendSms, sendEmail } from '@/lib/ghl';
+import { findOrCreateContact, sendSms, sendEmail, normalizePhone } from '@/lib/ghl';
 
 export async function GET(
   _request: NextRequest,
@@ -127,19 +127,21 @@ export async function PATCH(
 
     if (venue?.ghl_connected && venue.ghl_access_token && venue.ghl_location_id) {
       try {
+        const phoneE164 = normalizePhone(phone) || undefined;
         const contactId = await findOrCreateContact(
           venue.ghl_access_token,
           venue.ghl_location_id,
           {
             email,
-            phone: phone || undefined,
+            phone: phoneE164,
             firstName: name.split(' ')[0],
             lastName: name.split(' ').slice(1).join(' ') || undefined,
           }
         );
 
         if (contactId) {
-          if (phone) {
+          const phoneE164Check = normalizePhone(phone);
+          if (phoneE164Check) {
             try {
               await sendSms(
                 venue.ghl_access_token,

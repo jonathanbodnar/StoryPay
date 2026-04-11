@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { createCustomer } from '@/lib/lunarpay';
-import { findOrCreateContact, sendSms, sendEmail as ghlSendEmail } from '@/lib/ghl';
+import { findOrCreateContact, sendSms, sendEmail as ghlSendEmail, normalizePhone } from '@/lib/ghl';
 import { generateToken } from '@/lib/utils';
 import { sendEmail as directSendEmail, invoiceEmailHtml } from '@/lib/email';
 
@@ -128,19 +128,21 @@ export async function POST(request: NextRequest) {
     const proposalUrl = `${appUrl}/proposal/${publicToken}`;
 
     try {
+      const phoneE164 = normalizePhone(customerPhone) || undefined;
       const contactId = await findOrCreateContact(
         venue.ghl_access_token,
         venue.ghl_location_id,
         {
           email: customerEmail,
-          phone: customerPhone || undefined,
+          phone: phoneE164,
           firstName: (customerName || '').split(' ')[0],
           lastName: (customerName || '').split(' ').slice(1).join(' ') || undefined,
         }
       );
 
       if (contactId) {
-        if (customerPhone) {
+        const phoneE164Check = normalizePhone(customerPhone);
+        if (phoneE164Check) {
           try {
             await sendSms(
               venue.ghl_access_token,

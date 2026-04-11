@@ -1,5 +1,20 @@
 const GHL_API_BASE = process.env.GHL_API_BASE || 'https://services.leadconnectorhq.com';
 
+/**
+ * Normalize any US phone number to E.164 format (+1XXXXXXXXXX).
+ * GHL rejects numbers that are not in E.164 — this is the primary
+ * reason SMS fails when phone numbers are entered in display format.
+ *
+ * Returns null if the input cannot be parsed as a valid US number.
+ */
+export function normalizePhone(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+  return null;
+}
+
 export async function ghlRequest(
   path: string,
   accessToken: string,
@@ -100,8 +115,12 @@ export async function findOrCreateContact(
   locationId: string,
   contact: { email: string; phone?: string; firstName?: string; lastName?: string }
 ) {
-  const identifier = contact.email || contact.phone;
-  const searchKey = contact.email ? 'email' : 'phone';
+  // Always normalize phone to E.164 before sending to GHL
+  const normalizedPhone = contact.phone ? normalizePhone(contact.phone) : undefined;
+  const contactPayload = { ...contact, ...(normalizedPhone ? { phone: normalizedPhone } : { phone: undefined }) };
+
+  const identifier = contactPayload.email || normalizedPhone;
+  const searchKey = contactPayload.email ? 'email' : 'phone';
   const searchRes = await ghlRequest(
     `/contacts/search/duplicate?locationId=${locationId}&${searchKey}=${encodeURIComponent(identifier!)}`,
     accessToken,
@@ -112,7 +131,7 @@ export async function findOrCreateContact(
 
   const createRes = await ghlRequest('/contacts/', accessToken, {
     method: 'POST',
-    body: { locationId, ...contact },
+    body: { locationId, ...contactPayload },
     locationId,
   });
 

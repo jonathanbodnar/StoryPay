@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { createCustomer } from '@/lib/lunarpay';
-import { ghlRequest, sendSms, sendEmail, findOrCreateContact } from '@/lib/ghl';
+import { ghlRequest, sendSms, sendEmail, findOrCreateContact, normalizePhone } from '@/lib/ghl';
 import { generateToken } from '@/lib/utils';
 import { sendEmail as directSendEmail, proposalEmailHtml } from '@/lib/email';
 
@@ -183,12 +183,13 @@ export async function POST(request: NextRequest) {
       let contactId = ghlContactId || null;
 
       if (!contactId) {
+        const phoneE164 = normalizePhone(customerPhone) || undefined;
         contactId = await findOrCreateContact(
           venue.ghl_access_token,
           venue.ghl_location_id,
           {
             email: customerEmail,
-            phone: customerPhone || undefined,
+            phone: phoneE164,
             firstName: customerName.split(' ')[0],
             lastName: customerName.split(' ').slice(1).join(' ') || undefined,
           }
@@ -196,8 +197,9 @@ export async function POST(request: NextRequest) {
       }
 
       if (contactId) {
-        // Send SMS if customer has a phone number
-        if (customerPhone) {
+        // Send SMS if customer has a phone number (must be valid E.164)
+        const phoneE164 = normalizePhone(customerPhone);
+        if (phoneE164) {
           try {
             await sendSms(
               venue.ghl_access_token,

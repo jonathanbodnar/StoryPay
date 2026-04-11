@@ -36,10 +36,18 @@ function today() {
 function formatPhoneNumber(value: string): string {
   const digits = value.replace(/\D/g, '');
   if (digits.length === 0) return '';
-  if (digits.length <= 3) return `(${digits}`;
-  if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
-  if (digits.length <= 10) return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
-  return `+${digits.slice(0, digits.length - 10)} (${digits.slice(-10, -7)}) ${digits.slice(-7, -4)}-${digits.slice(-4)}`;
+  const local = digits.startsWith('1') && digits.length > 10 ? digits.slice(1) : digits;
+  if (local.length <= 3) return `+1 (${local}`;
+  if (local.length <= 6) return `+1 (${local.slice(0, 3)}) ${local.slice(3)}`;
+  if (local.length <= 10) return `+1 (${local.slice(0, 3)}) ${local.slice(3, 6)}-${local.slice(6)}`;
+  return `+1 (${local.slice(0, 3)}) ${local.slice(3, 6)}-${local.slice(6, 10)}`;
+}
+
+function toE164(formatted: string): string {
+  const digits = formatted.replace(/\D/g, '');
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+  return formatted;
 }
 
 function emptyLineItem(): LineItem {
@@ -180,7 +188,7 @@ export default function NewInvoicePage() {
         body: JSON.stringify({
           customerName: customerName || undefined,
           customerEmail: customerEmail || undefined,
-          customerPhone: customerPhone || undefined,
+          customerPhone: customerPhone ? toE164(customerPhone) : undefined,
           lineItems: lineItems.map((item) => ({
             name: item.name,
             description: item.description,
@@ -249,12 +257,14 @@ export default function NewInvoicePage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Phone</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Phone <span className="text-gray-400 font-normal text-xs">(US — for SMS)</span>
+            </label>
             <input
               type="tel"
               value={customerPhone}
               onChange={(e) => setCustomerPhone(formatPhoneNumber(e.target.value))}
-              placeholder="(555) 000-0000"
+              placeholder="+1 (555) 000-0000"
               className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
             />
           </div>
