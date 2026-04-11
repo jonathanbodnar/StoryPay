@@ -5,9 +5,9 @@ import Link from 'next/link';
 import {
   DollarSign, Users, FileText, Clock, XCircle, Building2,
   TrendingUp, LogOut, Home,
-  Megaphone, Plus, Trash2, Pencil, X, Loader2, ThumbsUp,
+  Megaphone, Plus, Trash2, Pencil, X, Loader2, ThumbsUp, ThumbsDown,
   Check, BarChart2, ExternalLink, ChevronRight, Search,
-  LayoutDashboard, Menu, Lightbulb,
+  LayoutDashboard, Menu, Lightbulb, BookOpen, Star,
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -340,7 +340,7 @@ export default function AdminPage() {
   const [authState, setAuthState]   = useState<AuthState>('loading');
   const [secret, setSecret]         = useState('');
   const [loginError, setLoginError] = useState('');
-  const [activeTab, setActiveTab]   = useState<'dashboard' | 'venues' | 'announcements' | 'feature-requests'>('dashboard');
+  const [activeTab, setActiveTab]   = useState<'dashboard' | 'venues' | 'announcements' | 'feature-requests' | 'suggested-articles' | 'search-analytics' | 'article-ratings'>('dashboard');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // Stats
@@ -382,6 +382,71 @@ export default function AdminPage() {
   const [clDesc, setClDesc]     = useState('');
   const [clCat, setClCat]       = useState<'feature' | 'improvement' | 'fix'>('feature');
 
+  // ── Suggested Articles ──────────────────────────────────────────────────────
+  interface SuggestedArticle { id: string; title: string; body: string; source_question: string | null; venue_id: string | null; status: string; created_at: string; }
+  const [suggestedArticles, setSuggestedArticles]       = useState<SuggestedArticle[]>([]);
+  const [suggestedLoading, setSuggestedLoading]         = useState(false);
+  const [suggestedExpandedId, setSuggestedExpandedId]   = useState<string | null>(null);
+  const [suggestedSaving, setSuggestedSaving]           = useState<string | null>(null);
+
+  const fetchSuggestedArticles = useCallback(async () => {
+    setSuggestedLoading(true);
+    try {
+      const res = await fetch('/api/admin/suggested-articles');
+      if (res.ok) setSuggestedArticles(await res.json());
+    } finally { setSuggestedLoading(false); }
+  }, []);
+
+  async function updateSuggestedStatus(id: string, status: string) {
+    setSuggestedSaving(id);
+    try {
+      const res = await fetch('/api/admin/suggested-articles', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status }),
+      });
+      if (res.ok) setSuggestedArticles(prev => prev.map(a => a.id === id ? { ...a, status } : a));
+    } finally { setSuggestedSaving(null); }
+  }
+
+  async function deleteSuggestedArticle(id: string) {
+    const res = await fetch('/api/admin/suggested-articles', {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    });
+    if (res.ok) setSuggestedArticles(prev => prev.filter(a => a.id !== id));
+  }
+
+  // ── Search Analytics ────────────────────────────────────────────────────────
+  interface SearchAnalytics {
+    zeroResults: { term: string; count: number }[];
+    topSearches: { term: string; count: number }[];
+    totalSearches: number;
+    totalZeroResults: number;
+  }
+  const [searchAnalytics, setSearchAnalytics]     = useState<SearchAnalytics | null>(null);
+  const [searchAnalyticsLoading, setSearchAnalyticsLoading] = useState(false);
+
+  const fetchSearchAnalytics = useCallback(async () => {
+    setSearchAnalyticsLoading(true);
+    try {
+      const res = await fetch('/api/admin/search-analytics');
+      if (res.ok) setSearchAnalytics(await res.json());
+    } finally { setSearchAnalyticsLoading(false); }
+  }, []);
+
+  // ── Article Ratings ─────────────────────────────────────────────────────────
+  interface ArticleRatingRow { article_id: string; up: number; down: number; total: number; }
+  const [articleRatings, setArticleRatings]       = useState<ArticleRatingRow[]>([]);
+  const [ratingsLoading, setRatingsLoading]       = useState(false);
+
+  const fetchArticleRatings = useCallback(async () => {
+    setRatingsLoading(true);
+    try {
+      const res = await fetch('/api/admin/article-ratings');
+      if (res.ok) setArticleRatings(await res.json());
+    } finally { setRatingsLoading(false); }
+  }, []);
+
   const fetchStats = useCallback(async (range: DateRange) => {
     setStatsLoading(true);
     try {
@@ -411,6 +476,9 @@ export default function AdminPage() {
 
   useEffect(() => { fetchVenues(); }, [fetchVenues]);
   useEffect(() => { if (authState === 'authenticated') { fetchStats(dateRange); fetchAnnouncements(); } }, [authState, fetchStats, fetchAnnouncements, dateRange]);
+  useEffect(() => { if (authState === 'authenticated' && activeTab === 'suggested-articles') fetchSuggestedArticles(); }, [authState, activeTab, fetchSuggestedArticles]);
+  useEffect(() => { if (authState === 'authenticated' && activeTab === 'search-analytics') fetchSearchAnalytics(); }, [authState, activeTab, fetchSearchAnalytics]);
+  useEffect(() => { if (authState === 'authenticated' && activeTab === 'article-ratings') fetchArticleRatings(); }, [authState, activeTab, fetchArticleRatings]);
 
   async function openFeatureRequest(id: string) {
     setFrDetailLoading(true);
@@ -604,10 +672,13 @@ export default function AdminPage() {
 
   // ── Authenticated ───────────────────────────────────────────────────────────
   const navItems = [
-    { key: 'dashboard',        label: 'Dashboard',        icon: LayoutDashboard },
-    { key: 'venues',           label: 'Venues',           icon: Building2 },
-    { key: 'announcements',    label: 'Announcements',    icon: Megaphone },
-    { key: 'feature-requests', label: 'Feature Requests', icon: Lightbulb },
+    { key: 'dashboard',         label: 'Dashboard',         icon: LayoutDashboard },
+    { key: 'venues',            label: 'Venues',            icon: Building2 },
+    { key: 'announcements',     label: 'Announcements',     icon: Megaphone },
+    { key: 'feature-requests',  label: 'Feature Requests',  icon: Lightbulb },
+    { key: 'suggested-articles', label: 'Suggested Articles', icon: BookOpen },
+    { key: 'search-analytics',  label: 'Search Analytics',  icon: BarChart2 },
+    { key: 'article-ratings',   label: 'Article Ratings',   icon: Star },
   ] as const;
 
   const NavSidebar = () => (
@@ -1318,6 +1389,237 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+        {/* ── Suggested Articles Tab ── */}
+        {activeTab === 'suggested-articles' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-heading text-xl text-gray-900">Suggested Articles</h2>
+                <p className="text-sm text-gray-500 mt-0.5">AI-drafted articles from escalated conversations. Review, publish, or dismiss.</p>
+              </div>
+              <button onClick={fetchSuggestedArticles} disabled={suggestedLoading}
+                className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors">
+                {suggestedLoading ? <Loader2 size={14} className="animate-spin" /> : <TrendingUp size={14} />} Refresh
+              </button>
+            </div>
+            {suggestedLoading && suggestedArticles.length === 0 ? (
+              <div className="flex items-center justify-center py-16"><Loader2 size={24} className="animate-spin text-gray-400" /></div>
+            ) : suggestedArticles.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-gray-200 py-16 text-center">
+                <BookOpen size={32} className="mx-auto mb-3 text-gray-200" />
+                <p className="text-sm text-gray-500">No suggested articles yet.</p>
+                <p className="text-xs text-gray-400 mt-1">Articles are drafted automatically when users escalate to support.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {(() => {
+                  const STATUS_COLORS: Record<string, string> = { draft: 'bg-amber-100 text-amber-700', published: 'bg-emerald-100 text-emerald-700', dismissed: 'bg-gray-100 text-gray-500' };
+                  return suggestedArticles.map(a => (
+                    <div key={a.id} className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                      <div className="flex items-center gap-3 px-5 py-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${STATUS_COLORS[a.status] || 'bg-gray-100 text-gray-600'}`}>{a.status}</span>
+                            <span className="text-xs text-gray-400">{new Date(a.created_at).toLocaleDateString()}</span>
+                            {a.source_question?.startsWith('rewrite:') && (
+                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">AI Rewrite</span>
+                            )}
+                          </div>
+                          <p className="text-sm font-semibold text-gray-900 truncate">{a.title}</p>
+                          {a.source_question && !a.source_question.startsWith('rewrite:') && (
+                            <p className="text-xs text-gray-400 mt-0.5 truncate">Triggered by: &ldquo;{a.source_question}&rdquo;</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <button onClick={() => setSuggestedExpandedId(suggestedExpandedId === a.id ? null : a.id)}
+                            className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+                            {suggestedExpandedId === a.id ? 'Collapse' : 'Preview'}
+                          </button>
+                          {a.status === 'draft' && (
+                            <button onClick={() => updateSuggestedStatus(a.id, 'published')} disabled={suggestedSaving === a.id}
+                              className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 transition-colors">
+                              {suggestedSaving === a.id ? <Loader2 size={11} className="animate-spin inline" /> : '✓ Publish'}
+                            </button>
+                          )}
+                          {a.status !== 'dismissed' && (
+                            <button onClick={() => updateSuggestedStatus(a.id, 'dismissed')} disabled={suggestedSaving === a.id}
+                              className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors">
+                              Dismiss
+                            </button>
+                          )}
+                          <button onClick={() => deleteSuggestedArticle(a.id)}
+                            className="flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 transition-colors">
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </div>
+                      {suggestedExpandedId === a.id && (
+                        <div className="px-5 pb-5 border-t border-gray-100 pt-4">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Article body</p>
+                          <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{a.body}</div>
+                        </div>
+                      )}
+                    </div>
+                  ));
+                })()}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Search Analytics Tab ── */}
+        {activeTab === 'search-analytics' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-heading text-xl text-gray-900">Search Analytics</h2>
+                <p className="text-sm text-gray-500 mt-0.5">Last 30 days of help center searches. Zero-result queries show content gaps.</p>
+              </div>
+              <button onClick={fetchSearchAnalytics} disabled={searchAnalyticsLoading}
+                className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors">
+                {searchAnalyticsLoading ? <Loader2 size={14} className="animate-spin" /> : <TrendingUp size={14} />} Refresh
+              </button>
+            </div>
+            {searchAnalyticsLoading && !searchAnalytics ? (
+              <div className="flex items-center justify-center py-16"><Loader2 size={24} className="animate-spin text-gray-400" /></div>
+            ) : searchAnalytics ? (
+              <>
+                {/* Summary KPIs */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Total Searches</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1">{searchAnalytics.totalSearches}</p>
+                  </div>
+                  <div className="rounded-xl border border-red-200 bg-red-50 p-4 shadow-sm">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-red-400">Zero Results</p>
+                    <p className="text-2xl font-bold text-red-700 mt-1">{searchAnalytics.totalZeroResults}</p>
+                  </div>
+                  <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Zero-Result Rate</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1">
+                      {searchAnalytics.totalSearches > 0 ? Math.round((searchAnalytics.totalZeroResults / searchAnalytics.totalSearches) * 100) : 0}%
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Unique Zero-Result Terms</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1">{searchAnalytics.zeroResults.length}</p>
+                  </div>
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-6">
+                  {/* Zero-result queries — most actionable */}
+                  <div className="rounded-2xl border border-red-200 bg-white shadow-sm overflow-hidden">
+                    <div className="px-5 py-4 border-b border-red-100 bg-red-50">
+                      <p className="text-sm font-semibold text-red-900">Zero-Result Searches</p>
+                      <p className="text-xs text-red-500 mt-0.5">Content you should write next</p>
+                    </div>
+                    {searchAnalytics.zeroResults.length === 0 ? (
+                      <div className="px-5 py-8 text-center text-sm text-gray-400">No zero-result searches yet.</div>
+                    ) : (
+                      <div className="divide-y divide-gray-100">
+                        {searchAnalytics.zeroResults.map((r, i) => (
+                          <div key={i} className="flex items-center justify-between px-5 py-3">
+                            <span className="text-sm text-gray-800 font-medium truncate flex-1">{r.term}</span>
+                            <span className="ml-3 flex-shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-600">{r.count}×</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Top searches overall */}
+                  <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                    <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
+                      <p className="text-sm font-semibold text-gray-900">Top Searches</p>
+                      <p className="text-xs text-gray-500 mt-0.5">What users look for most</p>
+                    </div>
+                    {searchAnalytics.topSearches.length === 0 ? (
+                      <div className="px-5 py-8 text-center text-sm text-gray-400">No searches yet.</div>
+                    ) : (
+                      <div className="divide-y divide-gray-100">
+                        {searchAnalytics.topSearches.map((r, i) => (
+                          <div key={i} className="flex items-center justify-between px-5 py-3">
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                              <span className="text-[11px] font-bold text-gray-300 flex-shrink-0 w-4 text-right">{i + 1}</span>
+                              <span className="text-sm text-gray-800 font-medium truncate">{r.term}</span>
+                            </div>
+                            <span className="ml-3 flex-shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">{r.count}×</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-gray-200 py-16 text-center">
+                <BarChart2 size={32} className="mx-auto mb-3 text-gray-200" />
+                <p className="text-sm text-gray-500">No analytics data yet.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Article Ratings Tab ── */}
+        {activeTab === 'article-ratings' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-heading text-xl text-gray-900">Article Ratings</h2>
+                <p className="text-sm text-gray-500 mt-0.5">Thumbs-up / thumbs-down feedback per article. Articles with 2+ thumbs-down get an automatic AI rewrite draft.</p>
+              </div>
+              <button onClick={fetchArticleRatings} disabled={ratingsLoading}
+                className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors">
+                {ratingsLoading ? <Loader2 size={14} className="animate-spin" /> : <TrendingUp size={14} />} Refresh
+              </button>
+            </div>
+            {ratingsLoading && articleRatings.length === 0 ? (
+              <div className="flex items-center justify-center py-16"><Loader2 size={24} className="animate-spin text-gray-400" /></div>
+            ) : articleRatings.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-gray-200 py-16 text-center">
+                <Star size={32} className="mx-auto mb-3 text-gray-200" />
+                <p className="text-sm text-gray-500">No ratings yet.</p>
+                <p className="text-xs text-gray-400 mt-1">Ratings appear after users click thumbs-up or thumbs-down on articles.</p>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                <div className="hidden sm:grid grid-cols-[1fr_80px_80px_80px_140px] gap-4 px-5 py-3 bg-gray-50 border-b border-gray-100">
+                  {['Article ID', '👍 Up', '👎 Down', 'Total', 'Status'].map(h => (
+                    <span key={h} className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{h}</span>
+                  ))}
+                </div>
+                <div className="divide-y divide-gray-100">
+                  {articleRatings.map(r => {
+                    const pct = r.total > 0 ? Math.round((r.up / r.total) * 100) : 0;
+                    const flagged = r.down >= 2;
+                    return (
+                      <div key={r.article_id} className={`grid grid-cols-2 sm:grid-cols-[1fr_80px_80px_80px_140px] gap-4 px-5 py-3.5 items-center ${flagged ? 'bg-red-50' : ''}`}>
+                        <span className="text-sm text-gray-800 font-mono truncate">{r.article_id}</span>
+                        <div className="flex items-center gap-1 text-emerald-600 font-semibold text-sm">
+                          <ThumbsUp size={13} />{r.up}
+                        </div>
+                        <div className="flex items-center gap-1 text-red-500 font-semibold text-sm">
+                          <ThumbsDown size={13} />{r.down}
+                        </div>
+                        <span className="text-sm text-gray-500">{r.total}</span>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                            <div className="h-full rounded-full bg-emerald-400" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="text-xs text-gray-500 w-8 text-right">{pct}%</span>
+                          {flagged && (
+                            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600 whitespace-nowrap">Rewrite queued</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         </main>
       </div>
     </div>

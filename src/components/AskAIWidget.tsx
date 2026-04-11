@@ -76,20 +76,61 @@ function cleanLine(text: string) {
     .trim();
 }
 
-function renderContent(text: string) {
+// Matches [Button Label](/dashboard/path) — navigation deep-links emitted by AI
+const NAV_LINK_RE = /\[([^\]]+)\]\((\/dashboard[^)]*)\)/g;
+
+function renderLineWithLinks(text: string, onNavigate: (path: string) => void) {
+  const parts: React.ReactNode[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  NAV_LINK_RE.lastIndex = 0;
+  while ((m = NAV_LINK_RE.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    const [, label, path] = m;
+    parts.push(
+      <button
+        key={m.index}
+        onClick={() => onNavigate(path)}
+        className="inline-flex items-center gap-1 rounded-lg border border-white/30 bg-white/15 px-2.5 py-1 text-xs font-semibold text-white hover:bg-white/25 transition-colors mx-0.5"
+      >
+        {label} →
+      </button>
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts.length > 1 ? <>{parts}</> : text;
+}
+
+function renderContent(text: string, onNavigate: (path: string) => void) {
   return text.split('\n').map((rawLine, i) => {
     const line = cleanLine(rawLine);
     if (!line) return <div key={i} className="h-1.5" />;
+    // A line that is purely a nav link becomes a standalone button row
+    const trimmed = line.trim();
+    const soloMatch = /^\[([^\]]+)\]\((\/dashboard[^)]*)\)$/.exec(trimmed);
+    if (soloMatch) {
+      return (
+        <div key={i} className="mt-1.5 mb-0.5">
+          <button
+            onClick={() => onNavigate(soloMatch[2])}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-white/15 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/25 transition-colors"
+          >
+            {soloMatch[1]} →
+          </button>
+        </div>
+      );
+    }
     if (rawLine.trimStart().startsWith('- ') || rawLine.trimStart().startsWith('• ')) {
       return (
         <div key={i} className="flex gap-1.5 mb-0.5">
           <span className="mt-1.5 h-1 w-1 rounded-full bg-current flex-shrink-0 opacity-60" />
-          <span>{line.replace(/^[-•]\s*/, '')}</span>
+          <span>{renderLineWithLinks(line.replace(/^[-•]\s*/, ''), onNavigate)}</span>
         </div>
       );
     }
-    if (/^\d+\.\s/.test(line)) return <p key={i} className="mb-0.5 pl-1">{line}</p>;
-    return <p key={i} className="mb-0.5 leading-relaxed">{line}</p>;
+    if (/^\d+\.\s/.test(line)) return <p key={i} className="mb-0.5 pl-1">{renderLineWithLinks(line, onNavigate)}</p>;
+    return <p key={i} className="mb-0.5 leading-relaxed">{renderLineWithLinks(line, onNavigate)}</p>;
   });
 }
 
@@ -272,13 +313,14 @@ export default function AskAIWidget() {
   async function escalate() {
     if (!supportNote.trim()) return;
     setEscalating(true);
+    const convo = messages.map(m => ({ role: m.role, content: m.content }));
     const question = messages.find(m => m.role === 'user')?.content || '';
     try {
       const res = await fetch('/api/ai/escalate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           question,
-          conversation: messages.map(m => ({ role: m.role, content: m.content })),
+          conversation: convo,
           currentPage: pathname,
           supportNote: supportNote.trim(),
         }),
@@ -291,6 +333,11 @@ export default function AskAIWidget() {
         content: "I've sent your request to our support team with a full summary of our conversation. Someone will follow up with you via email shortly.",
         timestamp: new Date(),
       }]);
+      // Fire-and-forget: draft a help article from this unanswered conversation
+      fetch('/api/help/suggest-article', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversation: convo }),
+      }).catch(() => { /* non-critical */ });
     } catch {
       setError('Could not send request. Please email clients@storyvenuemarketing.com directly.');
     } finally {
@@ -574,7 +621,7 @@ export default function AskAIWidget() {
                         <img src={msg.image} alt="screenshot" className="rounded-xl max-w-full mb-2 max-h-40 object-contain" />
                       )}
                       <div className={msg.role === 'assistant' ? 'text-white/95' : ''}>
-                        {renderContent(msg.content)}
+                        {renderContent(msg.content, (path) => { router.push(path); setOpen(false); })}
                       </div>
                       {msg.timestamp && (
                         <p className={`text-[10px] mt-1.5 ${msg.role === 'user' ? 'text-gray-400 text-right' : 'text-white/50'}`}>

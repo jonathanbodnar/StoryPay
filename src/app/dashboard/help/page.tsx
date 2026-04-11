@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, BarChart2, CreditCard, FileText, Receipt,
   Calendar, RefreshCw, Palette, Mail, UsersRound, Bell, Link2,
   Settings, HelpCircle, Mic, MicOff, Smile, Paperclip,
-  BookOpen, Zap, DollarSign, Package,
+  BookOpen, Zap, DollarSign, Package, ThumbsUp, ThumbsDown,
 } from 'lucide-react';
 import {
   HELP_CATEGORIES,
@@ -561,7 +561,60 @@ void _PLACEHOLDER; // suppress unused warning — data comes from shared module
 
 interface AiMsg { role: 'user' | 'assistant'; content: string; }
 
+// Matches [Button Label](/dashboard/path) — nav deep-links in AI responses
+const NAV_LINK_RE_INLINE = /\[([^\]]+)\]\((\/dashboard[^)]*)\)/g;
+
+function renderInlineContent(text: string, navigate: (path: string) => void) {
+  return text.split('\n').map((rawLine, i) => {
+    if (!rawLine.trim()) return <div key={i} className="h-1" />;
+    const trimmed = rawLine.trim();
+    const soloMatch = /^\[([^\]]+)\]\((\/dashboard[^)]*)\)$/.exec(trimmed);
+    if (soloMatch) {
+      return (
+        <div key={i} className="mt-1.5 mb-0.5">
+          <button
+            onClick={() => navigate(soloMatch[2])}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-white/15 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/25 transition-colors"
+          >
+            {soloMatch[1]} →
+          </button>
+        </div>
+      );
+    }
+    if (rawLine.trimStart().startsWith('- ')) {
+      const withLinks = renderInlineLineLinks(rawLine.replace(/^[-\s]+/, ''), navigate);
+      return (
+        <div key={i} className="flex gap-1.5 mb-0.5">
+          <span className="mt-2 h-1 w-1 rounded-full bg-current flex-shrink-0 opacity-60" />
+          <span>{withLinks}</span>
+        </div>
+      );
+    }
+    return <p key={i} className="mb-0.5 leading-relaxed">{renderInlineLineLinks(rawLine, navigate)}</p>;
+  });
+}
+
+function renderInlineLineLinks(text: string, navigate: (path: string) => void) {
+  const parts: React.ReactNode[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  NAV_LINK_RE_INLINE.lastIndex = 0;
+  while ((m = NAV_LINK_RE_INLINE.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    parts.push(
+      <button key={m.index} onClick={() => navigate(m![2])}
+        className="inline-flex items-center gap-1 rounded-lg border border-white/30 bg-white/15 px-2.5 py-1 text-xs font-semibold text-white hover:bg-white/25 transition-colors mx-0.5">
+        {m[1]} →
+      </button>
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts.length > 1 ? <>{parts}</> : text;
+}
+
 function InlineAI() {
+  const inlineRouter = useRouter();
   const [messages, setMessages] = useState<AiMsg[]>([]);
   const [input, setInput]       = useState('');
   const [loading, setLoading]   = useState(false);
@@ -674,16 +727,13 @@ function InlineAI() {
                     : <Sparkles size={11} className="text-white" />}
                 </div>
                 <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${m.role === 'user' ? 'bg-white border border-gray-200 text-gray-900 rounded-tr-sm' : 'bg-gray-900 text-white rounded-tl-sm'}`}>
-                  {m.content.split('\n').map((line, j) => {
-                    if (!line.trim()) return <div key={j} className="h-1" />;
-                    if (line.trimStart().startsWith('- ')) return (
-                      <div key={j} className="flex gap-1.5 mb-0.5">
-                        <span className="mt-2 h-1 w-1 rounded-full bg-current flex-shrink-0 opacity-60" />
-                        <span>{line.replace(/^[-\s]+/, '')}</span>
-                      </div>
-                    );
-                    return <p key={j} className="mb-0.5 leading-relaxed">{line.replace(/^\d+\.\s/, (m) => m)}</p>;
-                  })}
+                  {m.role === 'assistant'
+                    ? renderInlineContent(m.content, (path) => inlineRouter.push(path))
+                    : m.content.split('\n').map((line, j) => (
+                        !line.trim() ? <div key={j} className="h-1" /> :
+                        <p key={j} className="mb-0.5 leading-relaxed">{line}</p>
+                      ))
+                  }
                 </div>
               </div>
             ))}
@@ -1009,9 +1059,41 @@ export default function HelpPage() {
   const isSearching   = normalisedQuery.length >= 2;
   const showLoading   = isSearching && semanticLoading && searchResults.length === 0;
 
+  // Log search analytics once semantic search settles (not while loading)
+  const logSearchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (logSearchRef.current) clearTimeout(logSearchRef.current);
+    if (!normalisedQuery || normalisedQuery.length < 2 || semanticLoading) return;
+    // Small extra delay so we don't log mid-keystroke corrections
+    logSearchRef.current = setTimeout(() => {
+      fetch('/api/help/log-search', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ search_term: normalisedQuery, result_count: searchResults.length }),
+      }).catch(() => { /* non-critical */ });
+    }, 1500);
+    return () => { if (logSearchRef.current) clearTimeout(logSearchRef.current); };
+  }, [normalisedQuery, semanticLoading, searchResults.length]);
+
   const activeCategory = activeCat ? CATEGORIES.find(c => c.id === activeCat) : null;
 
   const [articleHighlight, setArticleHighlight] = useState('');
+
+  // ── Article ratings ────────────────────────────────────────────────────────
+  const [ratings, setRatings]     = useState<Record<string, 'up' | 'down'>>({});
+  const [ratingBusy, setRatingBusy] = useState<string | null>(null);
+
+  async function rateArticle(articleId: string, rating: 'up' | 'down') {
+    if (ratings[articleId] || ratingBusy === articleId) return;
+    setRatingBusy(articleId);
+    try {
+      await fetch('/api/help/rate-article', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ article_id: articleId, rating }),
+      });
+      setRatings(prev => ({ ...prev, [articleId]: rating }));
+    } catch { /* non-critical */ }
+    finally { setRatingBusy(null); }
+  }
 
   function selectArticle(article: Article) {
     setActiveArticle(article);
@@ -1306,12 +1388,40 @@ export default function HelpPage() {
                         </div>
                       );
                     })()}
-                    <div className="mt-8 pt-6 border-t border-gray-100 flex items-center justify-between">
-                      <p className="text-xs text-gray-400">Not what you were looking for?</p>
-                      <button onClick={() => setShowAI(true)}
-                        className="flex items-center gap-1.5 rounded-xl bg-gray-900 text-white px-3.5 py-2 text-xs font-medium hover:bg-gray-800 transition-colors">
-                        <Sparkles size={12} /> Ask AI
-                      </button>
+                    <div className="mt-8 pt-6 border-t border-gray-100 space-y-4">
+                      {/* Was this helpful? */}
+                      <div className="flex items-center gap-3">
+                        <p className="text-xs text-gray-400 flex-shrink-0">Was this helpful?</p>
+                        {ratings[activeArticle.id] ? (
+                          <span className="text-xs text-gray-500">
+                            {ratings[activeArticle.id] === 'up' ? '👍 Thanks for the feedback!' : '👎 Thanks — we\'ll improve this.'}
+                          </span>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => rateArticle(activeArticle.id, 'up')}
+                              disabled={ratingBusy === activeArticle.id}
+                              className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-500 hover:border-emerald-300 hover:text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-40"
+                            >
+                              <ThumbsUp size={12} /> Yes
+                            </button>
+                            <button
+                              onClick={() => rateArticle(activeArticle.id, 'down')}
+                              disabled={ratingBusy === activeArticle.id}
+                              className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-500 hover:border-red-300 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40"
+                            >
+                              <ThumbsDown size={12} /> No
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-gray-400">Not what you were looking for?</p>
+                        <button onClick={() => setShowAI(true)}
+                          className="flex items-center gap-1.5 rounded-xl bg-gray-900 text-white px-3.5 py-2 text-xs font-medium hover:bg-gray-800 transition-colors">
+                          <Sparkles size={12} /> Ask AI
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>

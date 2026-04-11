@@ -190,6 +190,10 @@ ${accountContext}
 - Use plain text only
 - Use numbered lists (1. 2. 3.) or dashes (- item) for lists
 - Keep headings as plain text with a colon, e.g. "How to Access Reports:"
+- When directing the user to a specific page, include ONE navigation link using ONLY this format: [Button Label](/dashboard/path)
+  Examples: [Open Branding Settings](/dashboard/settings) [View Proposals](/dashboard/proposals) [Go to Reports](/dashboard/reports) [Manage Customers](/dashboard/customers) [View Transactions](/dashboard/transactions)
+- Only link to real dashboard paths. Valid paths: /dashboard, /dashboard/proposals, /dashboard/customers, /dashboard/transactions, /dashboard/reports, /dashboard/settings, /dashboard/help
+- Place the link on its own line at the end of the relevant sentence or step, not inline mid-sentence
 
 === TONE ===
 Friendly, professional, calm, helpful, clear. Not robotic. Not salesy.`;
