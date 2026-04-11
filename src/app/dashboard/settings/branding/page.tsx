@@ -191,7 +191,7 @@ export default function BrandingPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name:              brand.venueName,
-          brand_logo_url:    brand.logo_url,
+          brand_logo_url:    brand.logo_url || null,
           brand_color:       brand.primary,
           brand_bg_color:    brand.bg,
           brand_btn_text:    brand.btnText,
@@ -250,14 +250,15 @@ export default function BrandingPage() {
               <div>
                 <label className={LABEL}>Logo</label>
                 <div className="flex items-start gap-4">
-                  <div className="flex-shrink-0 h-20 w-36 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden relative">
+                  {/* Preview box */}
+                  <div className="flex-shrink-0 h-20 w-36 rounded-xl border-2 border-dashed border-gray-200 bg-white flex items-center justify-center overflow-hidden relative">
                     {brand.logo_url ? (
                       <>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={brand.logo_url} alt="Logo" className="h-full w-full object-contain p-2"
                           onError={e => (e.currentTarget.style.display = 'none')} />
                         <button type="button" onClick={() => setBrand(b => ({ ...b, logo_url: '' }))}
-                          className="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white text-[9px]">
+                          className="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white">
                           <X size={9} />
                         </button>
                       </>
@@ -268,6 +269,7 @@ export default function BrandingPage() {
                       </div>
                     )}
                   </div>
+                  {/* Upload controls — no URL input */}
                   <div className="flex-1 space-y-2">
                     <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
                     <button type="button" onClick={() => fileRef.current?.click()} disabled={logoUploading}
@@ -275,9 +277,7 @@ export default function BrandingPage() {
                       {logoUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
                       {logoUploading ? 'Uploading...' : brand.logo_url ? 'Replace Logo' : 'Upload Logo'}
                     </button>
-                    <input type="url" value={brand.logo_url} onChange={upd('logo_url')}
-                      placeholder="Or paste image URL..." className={INPUT} />
-                    <p className="text-[10px] text-gray-400">PNG, JPG, SVG — max 5MB</p>
+                    <p className="text-[10px] text-gray-400">PNG, JPG, SVG — max 5MB. This logo will appear on all emails and invoices.</p>
                     {logoError && <p className="text-xs text-red-500">{logoError}</p>}
                   </div>
                 </div>
