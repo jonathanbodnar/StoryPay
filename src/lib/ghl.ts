@@ -18,6 +18,9 @@ export function getGhlToken(venue: {
   ghl_access_token?: string | null;
 }): string | null {
   if (venue.ghl_access_token) return venue.ghl_access_token;
+  // GHL_AGENCY_API_KEY is the agency-level JWT already set in Railway
+  if (process.env.GHL_AGENCY_API_KEY) return process.env.GHL_AGENCY_API_KEY;
+  // legacy alias
   if (process.env.GHL_PRIVATE_KEY) return process.env.GHL_PRIVATE_KEY;
   return null;
 }
