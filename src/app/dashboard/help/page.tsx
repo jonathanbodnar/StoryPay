@@ -844,6 +844,40 @@ export default function HelpPage() {
   const [showAI, setShowAI]               = useState(false);
   const normalisedQuery = useMemo(() => normaliseQuery(query), [query]);
 
+  // ── Voice search ──────────────────────────────────────────────────────────
+  const [speechSupported, setSpeechSupported] = useState(false);
+  const [isListening, setIsListening]         = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const searchRecRef = useRef<any>(null);
+
+  useEffect(() => {
+    const w = window as unknown as Record<string, unknown>;
+    setSpeechSupported(!!(w['SpeechRecognition'] || w['webkitSpeechRecognition']));
+  }, []);
+
+  function toggleSearchVoice() {
+    const w = window as unknown as Record<string, unknown>;
+    const SR = (w['SpeechRecognition'] || w['webkitSpeechRecognition']) as (new () => {
+      continuous: boolean; interimResults: boolean; lang: string;
+      start(): void; stop(): void;
+      onresult: ((e: { results: { [k: number]: { [k: number]: { transcript: string } } } }) => void) | null;
+      onend: (() => void) | null; onerror: (() => void) | null;
+    }) | undefined;
+    if (!SR) return;
+    if (isListening) { searchRecRef.current?.stop(); setIsListening(false); return; }
+    const r = new SR();
+    r.continuous = false; r.interimResults = false; r.lang = 'en-US';
+    r.onresult = (e) => {
+      const transcript = e.results[0][0].transcript;
+      setQuery(transcript);
+      setActiveCat(null);
+      setActiveArticle(null);
+    };
+    r.onend   = () => setIsListening(false);
+    r.onerror = () => setIsListening(false);
+    searchRecRef.current = r; r.start(); setIsListening(true);
+  }
+
   // ── Semantic search state ──────────────────────────────────────────────────
   // semanticIds: ordered article IDs from the vector similarity API
   // semanticOnly: IDs returned by semantic search but NOT by substring search
@@ -992,13 +1026,25 @@ export default function HelpPage() {
             placeholder={'Search or ask anything\u2026 e.g. \u201chow do I create a proposal\u201d or \u201crefund\u201d'}
             value={query}
             onChange={e => { setQuery(e.target.value); setActiveCat(null); setActiveArticle(null); }}
-            className="w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 shadow-sm"
+            className={`w-full rounded-xl border bg-white pl-10 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 shadow-sm transition-colors ${isListening ? 'border-red-300 ring-2 ring-red-100' : 'border-gray-200'} ${(query || speechSupported) ? 'pr-16' : 'pr-4'}`}
           />
-          {query && (
-            <button onClick={() => setQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-              <X size={15} />
-            </button>
-          )}
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+            {query && (
+              <button onClick={() => setQuery('')} className="p-1 text-gray-400 hover:text-gray-600">
+                <X size={15} />
+              </button>
+            )}
+            {speechSupported && (
+              <button
+                type="button"
+                onClick={toggleSearchVoice}
+                title={isListening ? 'Stop recording' : 'Search by voice'}
+                className={`p-1 rounded-lg transition-colors ${isListening ? 'text-red-500 bg-red-50' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
+              >
+                {isListening ? <MicOff size={15} /> : <Mic size={15} />}
+              </button>
+            )}
+          </div>
         </div>
         <button
           onClick={() => { setShowAI(v => !v); setActiveArticle(null); setActiveCat(null); setQuery(''); }}
