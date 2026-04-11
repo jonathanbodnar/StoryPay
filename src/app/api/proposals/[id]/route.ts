@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { createCustomer } from '@/lib/lunarpay';
 import { findOrCreateContact, sendSms, sendEmail, normalizePhone, getGhlToken } from '@/lib/ghl';
+import { sendEmail as directSendEmail } from '@/lib/email';
+import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
 
 export async function GET(
   _request: NextRequest,
@@ -183,6 +185,37 @@ export async function PATCH(
         }
       } catch (err) {
         console.error('[proposal-send-draft] GHL contact lookup failed:', err);
+      }
+    }
+
+    // Always send direct email using the venue's saved template
+    if (email) {
+      const { data: brandData } = await supabaseAdmin
+        .from('venues')
+        .select('brand_color, brand_logo_url')
+        .eq('id', venueId)
+        .single();
+
+      const tmpl = await getVenueEmailTemplate(venueId, 'proposal');
+      if (tmpl) {
+        const venueName = venue?.name || 'Your Venue';
+        const vars: Record<string, string> = {
+          organization:  venueName,
+          customer_name: name,
+          amount:        finalPrice ? `$${(finalPrice / 100).toFixed(2)}` : '',
+        };
+        await directSendEmail({
+          to: email,
+          subject: fillTemplate(tmpl.subject, vars),
+          html: buildEmailHtml({
+            template:   tmpl,
+            vars,
+            actionUrl:  proposalUrl,
+            brandColor: brandData?.brand_color  || '#1b1b1b',
+            logoUrl:    brandData?.brand_logo_url || undefined,
+            venueName,
+          }),
+        });
       }
     }
   }

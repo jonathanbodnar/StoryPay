@@ -4,7 +4,8 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { createCustomer } from '@/lib/lunarpay';
 import { findOrCreateContact, sendSms, sendEmail as ghlSendEmail, normalizePhone, getGhlToken } from '@/lib/ghl';
 import { generateToken } from '@/lib/utils';
-import { sendEmail as directSendEmail, invoiceEmailHtml } from '@/lib/email';
+import { sendEmail as directSendEmail } from '@/lib/email';
+import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
@@ -187,30 +188,39 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Direct email fallback — always send if GHL not connected or as extra delivery
+  // Always send direct email using the venue's saved template
   if (!asDraft && customerEmail) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
-    const invoiceUrl = `${appUrl}/invoice/${proposal.id}`;
-    const clientFirst = (customerName || 'there').split(' ')[0];
-    const brandColor = (venue as { brand_color?: string; brand_logo_url?: string })?.brand_color || '#1b1b1b';
+    const invoiceUrl = `${appUrl}/proposal/${proposal.public_token}`;
+    const brandColor = (venue as { brand_color?: string })?.brand_color || '#1b1b1b';
     const logoUrl    = (venue as { brand_logo_url?: string })?.brand_logo_url || undefined;
-    const amountStr = `$${((price || 0) / 100).toFixed(2)}`;
+    const amountStr  = `$${((price || 0) / 100).toFixed(2)}`;
+    const venueName  = venue?.name || 'Your Venue';
 
-    // Always send direct email — ensures delivery regardless of GHL status
-    console.log(`[invoice] Sending email to ${customerEmail} via Resend`);
-    const emailResult = await directSendEmail({
-      to: customerEmail,
-      subject: `Invoice from ${venue?.name || 'Your Venue'}`,
-      html: invoiceEmailHtml({
-        venueName: venue?.name || 'Your Venue',
-        clientFirstName: clientFirst,
-        invoiceUrl,
-        amount: amountStr,
-        logoUrl,
-        brandColor,
-      }),
-    });
-    console.log('[invoice] Email result:', JSON.stringify(emailResult));
+    const tmpl = await getVenueEmailTemplate(venueId, 'invoice');
+    if (tmpl) {
+      const vars: Record<string, string> = {
+        organization:   venueName,
+        customer_name:  customerName || 'there',
+        amount:         amountStr,
+        invoice_number: proposal.id.slice(0, 8).toUpperCase(),
+        due_date:       '',
+      };
+      console.log(`[invoice] Sending templated email to ${customerEmail}`);
+      const emailResult = await directSendEmail({
+        to: customerEmail,
+        subject: fillTemplate(tmpl.subject, vars),
+        html: buildEmailHtml({
+          template: tmpl,
+          vars,
+          actionUrl: invoiceUrl,
+          brandColor,
+          logoUrl,
+          venueName,
+        }),
+      });
+      console.log('[invoice] Email result:', JSON.stringify(emailResult));
+    }
   }
 
   return NextResponse.json(proposal, { status: 201 });

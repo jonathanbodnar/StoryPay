@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getCheckoutSession, createPaymentSchedule, createSubscription } from '@/lib/lunarpay';
+import { sendEmail as directSendEmail } from '@/lib/email';
+import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
 
 function applyFee(cents: number, ratePercent: number): number {
   if (ratePercent <= 0) return cents;
@@ -49,7 +51,7 @@ export async function POST(
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('lunarpay_secret_key, name, ghl_access_token, ghl_location_id, service_fee_rate')
+    .select('id, lunarpay_secret_key, name, ghl_access_token, ghl_location_id, service_fee_rate')
     .eq('id', proposal.venue_id)
     .single();
 
@@ -161,64 +163,46 @@ export async function POST(
 
     console.log('[verify-payment] Proposal updated:', JSON.stringify(updateData));
 
-    // Send receipt email via GHL
+    // Send payment confirmation email using the venue's saved template
     try {
       const { data: fullProposal } = await supabaseAdmin
         .from('proposals')
-        .select('customer_email, price')
+        .select('customer_email, customer_name, price, public_token')
         .eq('id', proposal.id)
         .single();
 
-      if (venue?.ghl_access_token && venue?.ghl_location_id && fullProposal?.customer_email) {
-        const searchRes = await fetch(
-          `https://services.leadconnectorhq.com/contacts/search/duplicate?locationId=${venue.ghl_location_id}&email=${encodeURIComponent(fullProposal.customer_email)}`,
-          {
-            headers: {
-              Authorization: `Bearer ${venue.ghl_access_token}`,
-              Version: '2021-07-28',
-            },
-          }
-        );
-        const searchData = await searchRes.json();
-        const contactId = searchData?.contact?.id;
+      if (fullProposal?.customer_email && venue?.id) {
+        const { data: brandData } = await supabaseAdmin
+          .from('venues')
+          .select('brand_color, brand_logo_url')
+          .eq('id', venue.id)
+          .single();
 
-        if (contactId) {
+        const tmpl = await getVenueEmailTemplate(venue.id, 'payment_confirmation');
+        if (tmpl) {
           const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.storypay.io';
-          const amountFormatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format((fullProposal.price || 0) / 100);
+          const venueName = venue.name || 'Your Venue';
+          const amountFormatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
+            .format((fullProposal.price || 0) / 100);
+          const invoiceUrl = `${appUrl}/proposal/${fullProposal.public_token}`;
+          const vars: Record<string, string> = {
+            organization:   venueName,
+            customer_name:  fullProposal.customer_name || 'there',
+            amount:         amountFormatted,
+            date:           new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+            payment_method: '',
+          };
 
-          await fetch('https://services.leadconnectorhq.com/conversations/messages', {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${venue.ghl_access_token}`,
-              'Content-Type': 'application/json',
-              Version: '2021-07-28',
-            },
-            body: JSON.stringify({
-              type: 'Email',
-              contactId,
-              subject: `Payment Receipt - ${venue.name}`,
-              html: `
-                <div style="font-family: 'Open Sans', Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                  <div style="background-color: #1b1b1b; padding: 24px 32px; border-radius: 12px 12px 0 0;">
-                    <h1 style="color: white; font-family: 'Playfair Display', Georgia, serif; font-size: 24px; margin: 0; font-weight: 300;">Payment Receipt</h1>
-                  </div>
-                  <div style="background-color: #ffffff; padding: 32px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
-                    <p style="color: #374151; font-size: 15px; line-height: 1.6; margin-top: 0;">Hi ${proposal.customer_name},</p>
-                    <p style="color: #374151; font-size: 15px; line-height: 1.6;">Thank you for your payment! Here is your receipt:</p>
-                    <div style="background-color: #f9fafb; border-radius: 8px; padding: 20px; margin: 24px 0;">
-                      <table style="width: 100%; border-collapse: collapse;">
-                        <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Venue</td><td style="padding: 8px 0; text-align: right; color: #111827; font-weight: 600; font-size: 14px;">${venue.name}</td></tr>
-                        <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Amount Paid</td><td style="padding: 8px 0; text-align: right; color: #059669; font-weight: 600; font-size: 14px;">${amountFormatted}</td></tr>
-                        <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Date</td><td style="padding: 8px 0; text-align: right; color: #111827; font-size: 14px;">${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</td></tr>
-                      </table>
-                    </div>
-                    <div style="text-align: center; margin-top: 24px;">
-                      <a href="${appUrl}/invoice/${proposal.id}" style="display: inline-block; background-color: #1b1b1b; color: white; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-size: 14px; font-weight: 600;">View Full Invoice</a>
-                    </div>
-                    <p style="color: #9ca3af; font-size: 12px; text-align: center; margin-top: 32px; margin-bottom: 0;">&copy; StoryVenue 2026</p>
-                  </div>
-                </div>
-              `,
+          await directSendEmail({
+            to: fullProposal.customer_email,
+            subject: fillTemplate(tmpl.subject, vars),
+            html: buildEmailHtml({
+              template:   tmpl,
+              vars,
+              actionUrl:  invoiceUrl,
+              brandColor: brandData?.brand_color   || '#1b1b1b',
+              logoUrl:    brandData?.brand_logo_url || undefined,
+              venueName,
             }),
           });
           console.log('[verify-payment] Receipt email sent to', fullProposal.customer_email);

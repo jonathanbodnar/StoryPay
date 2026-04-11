@@ -4,7 +4,8 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { createCustomer } from '@/lib/lunarpay';
 import { sendSms, sendEmail, findOrCreateContact, normalizePhone, getGhlToken } from '@/lib/ghl';
 import { generateToken } from '@/lib/utils';
-import { sendEmail as directSendEmail, proposalEmailHtml } from '@/lib/email';
+import { sendEmail as directSendEmail } from '@/lib/email';
+import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
 
 export async function GET(request: NextRequest) {
   const cookieStore = await cookies();
@@ -261,30 +262,38 @@ export async function POST(request: NextRequest) {
     console.log('[proposal-send] GHL not connected — sending direct email');
   }
 
-  // Always send direct email — ensures delivery regardless of GHL status
+  // Always send direct email using the venue's saved template
   if (customerEmail) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
     const proposalUrl = `${appUrl}/proposal/${publicToken}`;
-    const clientFirst = customerName.split(' ')[0];
 
-    // Fetch brand color
     const { data: venueData } = await supabaseAdmin
       .from('venues')
       .select('brand_color, brand_logo_url')
       .eq('id', venueId)
       .single();
 
-    await directSendEmail({
-      to: customerEmail,
-      subject: `Proposal from ${venue?.name || 'Your Venue'}`,
-      html: proposalEmailHtml({
-        venueName: venue?.name || 'Your Venue',
-        clientFirstName: clientFirst,
-        proposalUrl,
-        brandColor: venueData?.brand_color || '#1b1b1b',
-        logoUrl: venueData?.brand_logo_url || undefined,
-      }),
-    });
+    const tmpl = await getVenueEmailTemplate(venueId, 'proposal');
+    if (tmpl) {
+      const venueName = venue?.name || 'Your Venue';
+      const vars: Record<string, string> = {
+        organization:   venueName,
+        customer_name:  customerName,
+        amount:         `$${((price ?? 0) / 100).toFixed(2)}`,
+      };
+      await directSendEmail({
+        to: customerEmail,
+        subject: fillTemplate(tmpl.subject, vars),
+        html: buildEmailHtml({
+          template: tmpl,
+          vars,
+          actionUrl: proposalUrl,
+          brandColor: venueData?.brand_color || '#1b1b1b',
+          logoUrl:    venueData?.brand_logo_url || undefined,
+          venueName,
+        }),
+      });
+    }
   }
 
   return NextResponse.json(proposal, { status: 201 });

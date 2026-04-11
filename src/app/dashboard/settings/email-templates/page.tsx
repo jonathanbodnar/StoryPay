@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import {
   FileText, CreditCard, Bell, RefreshCw, XCircle, AlertTriangle,
-  Eye, Save, Loader2, ChevronRight, CheckCircle2, PenLine,
+  Eye, Save, Loader2, ChevronRight, CheckCircle2, PenLine, Send, X,
 } from 'lucide-react';
 
 interface EmailTemplate {
@@ -134,6 +134,10 @@ export default function EmailTemplatesPage() {
   const [saved, setSaved]         = useState(false);
   const [preview, setPreview]     = useState(false);
   const [venueName, setVenueName] = useState('');
+  const [showTestForm, setShowTestForm] = useState(false);
+  const [testEmail, setTestEmail]       = useState('');
+  const [testSending, setTestSending]   = useState(false);
+  const [testResult, setTestResult]     = useState<'sent' | 'error' | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -164,6 +168,22 @@ export default function EmailTemplatesPage() {
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } finally { setSaving(false); }
+  }
+
+  async function sendTest() {
+    if (!current || !testEmail.includes('@')) return;
+    setTestSending(true);
+    setTestResult(null);
+    try {
+      const res = await fetch(`/api/email-templates/${current.type}/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: testEmail }),
+      });
+      setTestResult(res.ok ? 'sent' : 'error');
+      if (res.ok) setTimeout(() => { setTestResult(null); setShowTestForm(false); setTestEmail(''); }, 3000);
+    } catch { setTestResult('error'); }
+    finally { setTestSending(false); }
   }
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 size={24} className="animate-spin text-gray-400" /></div>;
@@ -217,6 +237,10 @@ export default function EmailTemplatesPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                <button onClick={() => { setShowTestForm(v => !v); setTestResult(null); }}
+                  className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+                  <Send size={14} /> Send Test
+                </button>
                 <button onClick={() => setPreview(true)}
                   className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
                   <Eye size={14} /> Preview
@@ -229,6 +253,43 @@ export default function EmailTemplatesPage() {
                 </button>
               </div>
             </div>
+
+            {/* ── Test email inline form ── */}
+            {showTestForm && (
+              <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/60">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="email"
+                    value={testEmail}
+                    onChange={e => setTestEmail(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && sendTest()}
+                    placeholder="Enter email address to send test to..."
+                    className="flex-1 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none transition-colors"
+                  />
+                  <button
+                    onClick={sendTest}
+                    disabled={testSending || !testEmail.includes('@')}
+                    className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 transition-all"
+                    style={{ backgroundColor: '#1b1b1b' }}
+                  >
+                    {testSending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                    {testSending ? 'Sending...' : 'Send'}
+                  </button>
+                  <button onClick={() => { setShowTestForm(false); setTestResult(null); setTestEmail(''); }}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
+                    <X size={14} />
+                  </button>
+                </div>
+                {testResult === 'sent' && (
+                  <p className="mt-2 text-xs text-emerald-600 flex items-center gap-1.5">
+                    <CheckCircle2 size={13} /> Test email sent! Check your inbox.
+                  </p>
+                )}
+                {testResult === 'error' && (
+                  <p className="mt-2 text-xs text-red-500">Failed to send — check that your email service (Resend/SendGrid) is configured.</p>
+                )}
+              </div>
+            )}
 
             <div className="px-6 py-5 space-y-5">
               {/* Variables */}
