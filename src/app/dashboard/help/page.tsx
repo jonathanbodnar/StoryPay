@@ -830,6 +830,27 @@ function ArticleBody({ text, highlight = '' }: { text: string; highlight?: strin
   );
 }
 
+// ─── Related articles ─────────────────────────────────────────────────────────
+
+type EnrichedArticle = typeof ALL_ARTICLES[0];
+
+function getRelatedArticles(sourceId: string, limit = 3): EnrichedArticle[] {
+  const source = ALL_ARTICLES.find(a => a.id === sourceId);
+  if (!source) return [];
+  const sourceTags = new Set(source.tags.map(t => t.toLowerCase()));
+  return ALL_ARTICLES
+    .filter(a => a.id !== sourceId)
+    .map(a => {
+      const tagOverlap = a.tags.filter(t => sourceTags.has(t.toLowerCase())).length;
+      const sameCategory = a.catId === source.catId ? 1 : 0;
+      return { article: a, score: tagOverlap + sameCategory };
+    })
+    .filter(({ score }) => score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map(({ article }) => article);
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function HelpPage() {
@@ -1262,6 +1283,29 @@ export default function HelpPage() {
                       <Highlight text={activeArticle.title} term={articleHighlight} />
                     </h2>
                     <ArticleBody text={activeArticle.body} highlight={articleHighlight} />
+                    {(() => {
+                      const related = getRelatedArticles(activeArticle.id);
+                      if (related.length === 0) return null;
+                      return (
+                        <div className="mt-8 pt-6 border-t border-gray-100">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">Related articles</p>
+                          <div className="space-y-1.5">
+                            {related.map(a => (
+                              <button
+                                key={a.id}
+                                onClick={() => { setActiveArticle(a); setArticleHighlight(''); }}
+                                className="w-full flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-left hover:bg-gray-100 hover:border-gray-200 transition-colors group"
+                              >
+                                <div className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: a.catColor }} />
+                                <span className="flex-1 text-sm text-gray-700 group-hover:text-gray-900 font-medium truncate">{a.title}</span>
+                                <span className="text-xs text-gray-400 flex-shrink-0">{a.catLabel}</span>
+                                <ChevronRight size={13} className="text-gray-300 group-hover:text-gray-400 flex-shrink-0" />
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
                     <div className="mt-8 pt-6 border-t border-gray-100 flex items-center justify-between">
                       <p className="text-xs text-gray-400">Not what you were looking for?</p>
                       <button onClick={() => setShowAI(true)}
