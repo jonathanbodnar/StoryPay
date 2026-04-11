@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { createCustomer } from '@/lib/lunarpay';
-import { findOrCreateContact, sendSms, sendEmail as ghlSendEmail, normalizePhone } from '@/lib/ghl';
+import { findOrCreateContact, sendSms, sendEmail as ghlSendEmail, normalizePhone, getGhlToken } from '@/lib/ghl';
 import { generateToken } from '@/lib/utils';
 import { sendEmail as directSendEmail, invoiceEmailHtml } from '@/lib/email';
 
@@ -123,14 +123,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to create invoice' }, { status: 500 });
   }
 
-  if (!asDraft && venue?.ghl_connected && venue.ghl_access_token && venue.ghl_location_id && customerEmail) {
+  const ghlToken = venue ? getGhlToken(venue) : null;
+  if (!asDraft && venue?.ghl_location_id && ghlToken && customerEmail) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
     const proposalUrl = `${appUrl}/proposal/${publicToken}`;
 
     try {
       const phoneE164 = normalizePhone(customerPhone) || undefined;
       const contactId = await findOrCreateContact(
-        venue.ghl_access_token,
+        ghlToken,
         venue.ghl_location_id,
         {
           email: customerEmail,
@@ -145,7 +146,7 @@ export async function POST(request: NextRequest) {
         if (phoneE164Check) {
           try {
             await sendSms(
-              venue.ghl_access_token,
+              ghlToken,
               venue.ghl_location_id,
               contactId,
               `Hi ${(customerName || '').split(' ')[0]}, ${venue.name} has sent you an invoice. View and pay here: ${proposalUrl}`
@@ -156,7 +157,7 @@ export async function POST(request: NextRequest) {
         }
 
         try {
-          await ghlSendEmail(venue.ghl_access_token, venue.ghl_location_id, {
+          await ghlSendEmail(ghlToken, venue.ghl_location_id, {
             contactId,
             subject: `Invoice from ${venue.name}`,
             html: `

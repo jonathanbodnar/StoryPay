@@ -1,6 +1,28 @@
 const GHL_API_BASE = process.env.GHL_API_BASE || 'https://services.leadconnectorhq.com';
 
 /**
+ * Resolve the best available GHL access token for a venue.
+ *
+ * Priority:
+ *   1. Per-venue OAuth access token (stored after the user connects via Settings)
+ *   2. GHL_PRIVATE_KEY env var — a single Private Integration API key that
+ *      works for all sub-accounts under your GHL agency. Set this once in
+ *      Railway/Vercel and every venue gets SMS without any OAuth flow.
+ *
+ * GHL Private Integration keys are created at:
+ *   GHL Agency → Settings → Integrations → Private Integration Keys
+ *
+ * Returns null if no token is available (SMS will be skipped).
+ */
+export function getGhlToken(venue: {
+  ghl_access_token?: string | null;
+}): string | null {
+  if (venue.ghl_access_token) return venue.ghl_access_token;
+  if (process.env.GHL_PRIVATE_KEY) return process.env.GHL_PRIVATE_KEY;
+  return null;
+}
+
+/**
  * Normalize any US phone number to E.164 format (+1XXXXXXXXXX).
  * GHL rejects numbers that are not in E.164 — this is the primary
  * reason SMS fails when phone numbers are entered in display format.

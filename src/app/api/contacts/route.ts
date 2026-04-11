@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { ghlRequest, refreshAccessToken } from '@/lib/ghl';
+import { ghlRequest, refreshAccessToken, getGhlToken } from '@/lib/ghl';
 import { listCustomers } from '@/lib/lunarpay';
 
 interface NormalizedContact {
@@ -51,8 +51,14 @@ export async function GET(request: NextRequest) {
   const results: NormalizedContact[] = [];
   const seenEmails = new Set<string>();
 
+  // Fall back to private key if no per-venue token
+  if (!ghlToken) {
+    const privateToken = getGhlToken({ ghl_access_token: null });
+    if (privateToken) ghlToken = privateToken;
+  }
+
   // Query GHL contacts
-  if (venue.ghl_connected && ghlToken && venue.ghl_location_id) {
+  if (venue.ghl_location_id && ghlToken) {
     try {
       const ghlResult = await ghlRequest(
         `/contacts/?locationId=${venue.ghl_location_id}&query=${encodeURIComponent(search)}&limit=${limit}`,

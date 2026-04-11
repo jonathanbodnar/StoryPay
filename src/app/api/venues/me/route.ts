@@ -15,7 +15,7 @@ export async function GET() {
 
   const { data: venue, error } = await supabaseAdmin
     .from('venues')
-    .select('id, name, email, phone, address, city, state, zip, onboarding_status, onboarding_mpa_url, ghl_connected, setup_completed, lunarpay_merchant_id, service_fee_rate, brand_logo_url, brand_tagline, brand_website, brand_color, brand_email, brand_phone, brand_address, brand_city, brand_state, brand_zip, brand_footer_note')
+    .select('id, name, email, phone, address, city, state, zip, onboarding_status, onboarding_mpa_url, ghl_connected, ghl_location_id, setup_completed, lunarpay_merchant_id, service_fee_rate, brand_logo_url, brand_tagline, brand_website, brand_color, brand_email, brand_phone, brand_address, brand_city, brand_state, brand_zip, brand_footer_note')
     .eq('id', venueId)
     .single();
 

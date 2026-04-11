@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { createCustomer } from '@/lib/lunarpay';
-import { ghlRequest, sendSms, sendEmail, findOrCreateContact, normalizePhone } from '@/lib/ghl';
+import { sendSms, sendEmail, findOrCreateContact, normalizePhone, getGhlToken } from '@/lib/ghl';
 import { generateToken } from '@/lib/utils';
 import { sendEmail as directSendEmail, proposalEmailHtml } from '@/lib/email';
 
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('lunarpay_secret_key, ghl_connected, ghl_access_token, ghl_location_id, name')
+    .select('lunarpay_secret_key, ghl_connected, ghl_access_token, ghl_location_id, name, email')
     .eq('id', venueId)
     .single();
 
@@ -177,7 +177,10 @@ export async function POST(request: NextRequest) {
   const proposalUrl = `${appUrl}/proposal/${publicToken}`;
 
   // 3. Send via GHL (SMS + Email)
-  if (venue?.ghl_connected && venue.ghl_access_token && venue.ghl_location_id) {
+  // Use per-venue OAuth token if available; fall back to the shared GHL_PRIVATE_KEY
+  // so venues that signed up via location ID get SMS without needing to OAuth connect.
+  const ghlToken = venue ? getGhlToken(venue) : null;
+  if (venue?.ghl_location_id && ghlToken) {
     try {
       // Find or use existing GHL contact
       let contactId = ghlContactId || null;
@@ -185,7 +188,7 @@ export async function POST(request: NextRequest) {
       if (!contactId) {
         const phoneE164 = normalizePhone(customerPhone) || undefined;
         contactId = await findOrCreateContact(
-          venue.ghl_access_token,
+          ghlToken,
           venue.ghl_location_id,
           {
             email: customerEmail,
@@ -202,7 +205,7 @@ export async function POST(request: NextRequest) {
         if (phoneE164) {
           try {
             await sendSms(
-              venue.ghl_access_token,
+              ghlToken,
               venue.ghl_location_id,
               contactId,
               `Hi ${customerName.split(' ')[0]}, ${venue.name} has sent you a proposal. View and sign here: ${proposalUrl}`
@@ -216,7 +219,7 @@ export async function POST(request: NextRequest) {
         // Send email
         try {
           await sendEmail(
-            venue.ghl_access_token,
+            ghlToken,
             venue.ghl_location_id,
             {
               contactId,

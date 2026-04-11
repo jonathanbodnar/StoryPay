@@ -29,6 +29,7 @@ interface VenueInfo {
   zip: string | null;
   onboarding_status: string | null;
   ghl_connected: boolean;
+  ghl_location_id: string | null;
   lunarpay_merchant_id: number | null;
   service_fee_rate: number;
   brand_logo_url: string | null;
@@ -242,8 +243,8 @@ export default function SettingsPage() {
             <h2 className="font-heading text-base font-semibold text-gray-900">Messaging</h2>
           </div>
           <div className="px-6 py-5">
-            {venue.ghl_connected ? (
-              <div className="flex items-center justify-between gap-4">
+            {venue.ghl_connected || venue.ghl_location_id ? (
+              <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-900">Connected</p>
                   <p className="mt-0.5 text-sm text-gray-500">
@@ -251,20 +252,10 @@ export default function SettingsPage() {
                     when proposals are created.
                   </p>
                 </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
-                    <CheckCircle2 size={14} />
-                    Connected
-                  </span>
-                  <a
-                    href="/api/messaging/connect"
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
-                    title="Re-authorize your GHL account to refresh tokens"
-                  >
-                    <ExternalLink size={13} />
-                    Reconnect
-                  </a>
-                </div>
+                <span className="shrink-0 ml-4 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                  <CheckCircle2 size={14} />
+                  Connected
+                </span>
               </div>
             ) : (
               <div className="text-center py-4">

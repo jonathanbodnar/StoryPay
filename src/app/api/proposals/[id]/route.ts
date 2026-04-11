@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { createCustomer } from '@/lib/lunarpay';
-import { findOrCreateContact, sendSms, sendEmail, normalizePhone } from '@/lib/ghl';
+import { findOrCreateContact, sendSms, sendEmail, normalizePhone, getGhlToken } from '@/lib/ghl';
 
 export async function GET(
   _request: NextRequest,
@@ -125,11 +125,12 @@ export async function PATCH(
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
     const proposalUrl = `${appUrl}/proposal/${existing.public_token}`;
 
-    if (venue?.ghl_connected && venue.ghl_access_token && venue.ghl_location_id) {
+    const ghlToken = venue ? getGhlToken(venue) : null;
+    if (venue?.ghl_location_id && ghlToken) {
       try {
         const phoneE164 = normalizePhone(phone) || undefined;
         const contactId = await findOrCreateContact(
-          venue.ghl_access_token,
+          ghlToken,
           venue.ghl_location_id,
           {
             email,
@@ -144,7 +145,7 @@ export async function PATCH(
           if (phoneE164Check) {
             try {
               await sendSms(
-                venue.ghl_access_token,
+                ghlToken,
                 venue.ghl_location_id,
                 contactId,
                 `Hi ${name.split(' ')[0]}, ${venue.name} has sent you a proposal. View and sign here: ${proposalUrl}`
@@ -155,7 +156,7 @@ export async function PATCH(
           }
 
           try {
-            await sendEmail(venue.ghl_access_token, venue.ghl_location_id, {
+            await sendEmail(ghlToken, venue.ghl_location_id, {
               contactId,
               subject: `Proposal from ${venue.name}`,
               html: `
