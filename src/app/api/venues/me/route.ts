@@ -18,7 +18,7 @@ export async function GET() {
 
   const { data: venue, error } = await supabaseAdmin
     .from('venues')
-    .select('id, name, email, phone, address, city, state, zip, onboarding_status, onboarding_mpa_url, ghl_connected, ghl_location_id, setup_completed, lunarpay_merchant_id, service_fee_rate, brand_logo_url, brand_tagline, brand_website, brand_color, brand_bg_color, brand_btn_text, brand_email, brand_phone, brand_address, brand_city, brand_state, brand_zip, brand_footer_note')
+    .select('*')
     .eq('id', venueId)
     .single();
 
@@ -69,15 +69,33 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
   }
 
-  const { data: venue, error } = await supabaseAdmin
+  let { data: venue, error } = await supabaseAdmin
     .from('venues')
     .update(updates)
     .eq('id', venueId)
-    .select('id, name, service_fee_rate, brand_logo_url, brand_color, brand_bg_color, brand_btn_text, brand_tagline, brand_website, brand_email, brand_phone, brand_address, brand_city, brand_state, brand_zip, brand_footer_note')
+    .select('*')
     .single();
 
+  // If a column doesn't exist in this DB (schema mismatch), strip unknown fields and retry
+  if (error && error.message?.includes('column')) {
+    console.error('[venues/me] PATCH error (will retry without unknown columns):', error.message);
+    const safeUpdates: Record<string, unknown> = {};
+    const knownCols = ['name', 'service_fee_rate', 'brand_logo_url', 'brand_color',
+      'brand_tagline', 'brand_website', 'brand_email', 'brand_phone',
+      'brand_address', 'brand_city', 'brand_state', 'brand_zip', 'brand_footer_note'];
+    for (const k of knownCols) {
+      if (k in updates) safeUpdates[k] = updates[k];
+    }
+    if (Object.keys(safeUpdates).length > 0) {
+      const retry = await supabaseAdmin.from('venues').update(safeUpdates).eq('id', venueId).select('*').single();
+      venue = retry.data;
+      error = retry.error;
+    }
+  }
+
   if (error) {
-    return NextResponse.json({ error: 'Failed to update' }, { status: 500 });
+    console.error('[venues/me] PATCH failed:', error.message);
+    return NextResponse.json({ error: 'Failed to update', detail: error.message }, { status: 500 });
   }
 
   return NextResponse.json(venue);
