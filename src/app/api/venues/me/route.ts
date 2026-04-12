@@ -52,9 +52,12 @@ export async function PATCH(request: Request) {
   };
   const updates: Record<string, unknown> = {};
 
-  for (const [key, value] of Object.entries(body)) {
+  // Use Object.keys on the raw body so null values are explicitly included.
+  // This is important for clearing fields like brand_logo_url — Supabase's
+  // .update() needs the key present with a null value to write NULL to the DB.
+  for (const key of Object.keys(body)) {
     if (allowedFields[key]) {
-      updates[key] = value;
+      updates[key] = body[key] ?? null;
     }
   }
 

@@ -260,7 +260,15 @@ export default function BrandingPage() {
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={brand.logo_url} alt="Logo" className="h-full w-full object-contain p-2"
                           onError={e => (e.currentTarget.style.display = 'none')} />
-                        <button type="button" onClick={() => setBrand(b => ({ ...b, logo_url: '' }))}
+                        <button type="button" onClick={async () => {
+                          setBrand(b => ({ ...b, logo_url: '' }));
+                          // Immediately persist the removal so refresh doesn't restore the old logo
+                          await fetch('/api/venues/me', {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ brand_logo_url: null }),
+                          });
+                        }}
                           className="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white">
                           <X size={9} />
                         </button>
