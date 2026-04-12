@@ -13,7 +13,13 @@ import {
 } from 'lucide-react';
 
 interface Venue { id: string; name: string; ghl_location_id: string; }
-interface SidebarProps { venue: Venue; }
+type UserRole = 'owner' | 'admin' | 'member';
+interface SidebarProps {
+  venue: Venue;
+  role?: UserRole;
+  memberName?: string | null;
+  memberEmail?: string | null;
+}
 
 const menuItems = [
   { label: 'Ask AI',       href: '/dashboard/ai',        icon: Sparkles },
@@ -42,7 +48,9 @@ const settingsItems = [
   { label: 'Notifications',   href: '/dashboard/settings/notifications',   icon: Bell },
 ];
 
-export default function Sidebar({ venue }: SidebarProps) {
+export default function Sidebar({ venue, role = 'owner', memberName, memberEmail }: SidebarProps) {
+  const isOwner = role === 'owner';
+  const isAdmin = role === 'owner' || role === 'admin';
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -123,8 +131,13 @@ export default function Sidebar({ venue }: SidebarProps) {
       {/* Nav */}
       <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
 
-        {/* Main items */}
-        {menuItems.map(item => {
+        {/* Main items — filtered by role */}
+        {menuItems.filter(item => {
+          // Members: only Home, Customers, Help Center, Ask AI
+          if (!isAdmin && item.label === 'Reports') return false;
+          if (!isAdmin && item.label === "What's New") return false;
+          return true;
+        }).map(item => {
           const Icon = item.icon;
           const active = isActive(item.href);
           const isAI = item.label === 'Ask AI' || item.label === 'Support';
@@ -169,34 +182,54 @@ export default function Sidebar({ venue }: SidebarProps) {
 
         {/* Products — hidden for now */}
 
-        {/* Settings collapsible */}
-        <div>
-          <button type="button" onClick={() => setSettingsOpen(v => !v)} className={groupBtn(isOnSettings && settingsOpen)} style={groupBtnStyle(isOnSettings && settingsOpen)}>
-            <div className="flex items-center gap-3">
-              <Settings size={16} />
-              <span>Settings</span>
-            </div>
-            <ChevronDown size={13} className={`transition-transform duration-200 ${settingsOpen ? 'rotate-180' : ''} ${isOnSettings && settingsOpen ? 'text-white/50' : 'text-gray-400'}`} />
-          </button>
-          {settingsOpen && (
-            <div className="mt-0.5 ml-3 pl-3 border-l border-gray-100 space-y-0.5 py-0.5">
-              {settingsItems.map(sub => {
-                const SubIcon = sub.icon;
-                const active = pathname === sub.href;
-                return (
-                  <Link key={sub.label} href={sub.href} className={subItem(active)} style={subItemStyle(active)}>
-                    <SubIcon size={14} />
-                    <span>{sub.label}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        {/* Settings collapsible — role-filtered */}
+        {isAdmin && (
+          <div>
+            <button type="button" onClick={() => setSettingsOpen(v => !v)} className={groupBtn(isOnSettings && settingsOpen)} style={groupBtnStyle(isOnSettings && settingsOpen)}>
+              <div className="flex items-center gap-3">
+                <Settings size={16} />
+                <span>Settings</span>
+              </div>
+              <ChevronDown size={13} className={`transition-transform duration-200 ${settingsOpen ? 'rotate-180' : ''} ${isOnSettings && settingsOpen ? 'text-white/50' : 'text-gray-400'}`} />
+            </button>
+            {settingsOpen && (
+              <div className="mt-0.5 ml-3 pl-3 border-l border-gray-100 space-y-0.5 py-0.5">
+                {settingsItems.filter(sub => {
+                  // Owner-only settings
+                  if (!isOwner && sub.label === 'General') return false;
+                  if (!isOwner && sub.label === 'Team') return false;
+                  if (!isOwner && sub.label === 'Integrations') return false;
+                  return true;
+                }).map(sub => {
+                  const SubIcon = sub.icon;
+                  const active = pathname === sub.href;
+                  return (
+                    <Link key={sub.label} href={sub.href} className={subItem(active)} style={subItemStyle(active)}>
+                      <SubIcon size={14} />
+                      <span>{sub.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </nav>
 
       {/* Footer */}
       <div className="px-4 py-4 border-t border-gray-100 space-y-1">
+        {/* Team member profile */}
+        {memberName && (
+          <Link
+            href="/dashboard/profile"
+            className="flex items-center gap-2 text-gray-700 hover:text-gray-900 transition-colors text-sm w-full px-2 py-1.5 rounded-lg hover:bg-gray-50"
+          >
+            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-[10px] font-bold text-gray-600 flex-shrink-0">
+              {memberName.charAt(0).toUpperCase()}
+            </div>
+            <span className="truncate">{memberName}</span>
+          </Link>
+        )}
         <button
           onClick={() => window.dispatchEvent(new Event('open-ask-ai'))}
           className="flex items-center gap-2 text-gray-400 hover:text-gray-700 transition-colors text-sm w-full px-2 py-1.5 rounded-lg hover:bg-gray-50"

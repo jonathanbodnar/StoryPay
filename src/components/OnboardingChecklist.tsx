@@ -86,6 +86,14 @@ export default function OnboardingChecklist() {
       const id: string = venue.id;
       setVenueId(id);
       setChecked(loadCheckedSteps(id));
+
+      // Check if this is a team member session — hide onboarding for non-owners
+      const sessionRes = await fetch('/api/session/me', { cache: 'no-store' });
+      if (sessionRes.ok) {
+        const session = await sessionRes.json();
+        if (!session.isOwner) { setDismissed(true); return; }
+      }
+
       setDismissed(
         loadDismissed(id) ||
         venue.onboarding_checklist_dismissed === true ||

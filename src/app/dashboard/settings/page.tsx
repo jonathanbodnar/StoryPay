@@ -44,6 +44,7 @@ interface VenueInfo {
 export default function SettingsPage() {
   const [venue, setVenue] = useState<VenueInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isOwner, setIsOwner] = useState(true); // default true until session loads
   const [feeSaving, setFeeSaving] = useState(false);
   const [feeSaved, setFeeSaved] = useState(false);
   const [feeInput, setFeeInput] = useState('2.75');
@@ -111,6 +112,12 @@ export default function SettingsPage() {
             brand_zip: data.brand_zip || '',
             brand_footer_note: data.brand_footer_note || '',
           });
+        }
+        // Check role — hide owner-only controls for team members
+        const sessionRes = await fetch('/api/session/me', { cache: 'no-store' });
+        if (sessionRes.ok) {
+          const session = await sessionRes.json();
+          setIsOwner(session.isOwner ?? true);
         }
       } finally {
         setLoading(false);
@@ -261,8 +268,8 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* ── Setup Guide ── */}
-        <section className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+        {/* ── Setup Guide (owners only) ── */}
+        {isOwner && <section className="rounded-xl border border-gray-200 bg-white overflow-hidden">
           <div className="flex items-center justify-between gap-4 px-6 py-5">
             <div className="flex items-center gap-3">
               <Rocket size={18} className="text-gray-400" />
@@ -280,7 +287,7 @@ export default function SettingsPage() {
               Restart Setup Guide
             </button>
           </div>
-        </section>
+        </section>}
 
         {/* Messaging Integration */}
         <section className="rounded-xl border border-gray-200 bg-white overflow-hidden">

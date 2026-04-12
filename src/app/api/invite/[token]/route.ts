@@ -34,13 +34,14 @@ export async function GET(
       .update({ status: 'active' })
       .eq('id', member.id);
 
-    // Set venue_id cookie and redirect to dashboard
+    // Set venue_id + member_id cookies so the session knows this is a team member
     const response = NextResponse.redirect(`${base}/dashboard`);
     response.cookies.set('venue_id', member.venue_id, {
-      path: '/',
-      httpOnly: true,
-      secure: true,
-      sameSite: 'lax',
+      path: '/', httpOnly: true, secure: true, sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 30,
+    });
+    response.cookies.set('member_id', member.id, {
+      path: '/', httpOnly: true, secure: true, sameSite: 'lax',
       maxAge: 60 * 60 * 24 * 30,
     });
 
