@@ -753,7 +753,28 @@ export default function AdminPage() {
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <h2 className="font-heading text-xl text-gray-900">Super Admin Dashboard</h2>
-              <DateRangePicker value={dateRange} onChange={r => { setDateRange(r); fetchStats(r); }} />
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={async () => {
+                    const res = await fetch('/api/admin/setup-db', { method: 'POST' });
+                    const data = await res.json();
+                    const missing = data.missing ?? [];
+                    if (missing.length === 0) {
+                      alert('All tables and columns exist — production DB is up to date.');
+                    } else {
+                      const sql = data.sqlToRun;
+                      prompt(
+                        `${missing.length} item(s) missing. Copy this SQL and run it in your production Supabase SQL Editor:`,
+                        sql
+                      );
+                    }
+                  }}
+                  className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  🛠 Setup DB
+                </button>
+                <DateRangePicker value={dateRange} onChange={r => { setDateRange(r); fetchStats(r); }} />
+              </div>
             </div>
 
             {/* KPI grid */}

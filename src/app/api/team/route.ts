@@ -19,7 +19,12 @@ export async function GET() {
     .eq('venue_id', venueId)
     .order('created_at', { ascending: false });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    if (error.message?.includes('schema cache') || error.message?.includes('does not exist')) {
+      return NextResponse.json([]);
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
   return NextResponse.json(data ?? []);
 }
 
@@ -34,7 +39,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'First name and email are required' }, { status: 400 });
   }
 
-  // Check for duplicate email in this venue
   const { data: existing } = await supabaseAdmin
     .from('venue_team_members')
     .select('id')
