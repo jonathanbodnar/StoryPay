@@ -96,7 +96,7 @@ export default function SettingsPage() {
 
   const loadOnboarding = useCallback(async () => {
     try {
-      const res = await fetch('/api/onboarding');
+      const res = await fetch('/api/onboarding', { cache: 'no-store' });
       if (res.ok) setOnboarding(await res.json());
     } catch { /* non-critical */ }
   }, []);

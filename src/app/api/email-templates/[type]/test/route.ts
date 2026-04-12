@@ -79,7 +79,7 @@ export async function POST(
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('name, brand_color, brand_logo_url')
+    .select('*')
     .eq('id', venueId)
     .single();
 

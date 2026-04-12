@@ -78,7 +78,7 @@ export default function OnboardingChecklist() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch('/api/onboarding');
+      const res = await fetch('/api/onboarding', { cache: 'no-store' });
       if (!res.ok) return;
       const json: OnboardingData = await res.json();
       if (json.dismissed || json.completed) setVisible(false);

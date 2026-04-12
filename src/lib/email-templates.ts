@@ -176,10 +176,18 @@ export function buildEmailHtml({
 
   // Header: always white background + brand-color bottom strip.
   // Logo shown if available, otherwise venue name text in dark gray.
-  // White header ensures any logo (dark, transparent, light) is always visible.
+  // Use an HTML table for the logo cell so email clients (Gmail, Outlook)
+  // correctly apply the white background behind transparent PNGs.
   const hasLogo = logoUrl && logoUrl.trim().length > 0;
   const headerContent = hasLogo
-    ? `<img src="${logoUrl}" alt="${venueName}" style="max-height:56px;max-width:200px;width:auto;height:auto;display:block;background-color:#ffffff">`
+    ? `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse">
+        <tr>
+          <td bgcolor="#ffffff" style="background-color:#ffffff;padding:0">
+            <img src="${logoUrl}" alt="${venueName}" width="auto" height="auto"
+              style="max-height:56px;max-width:200px;width:auto;height:auto;display:block;border:0;outline:none;text-decoration:none;background-color:#ffffff;-ms-interpolation-mode:bicubic">
+          </td>
+        </tr>
+       </table>`
     : `<span style="font-size:20px;font-weight:700;color:#111827;font-family:'Open Sans',Arial,sans-serif;">${venueName}</span>`;
   const headerHtml = `<div style="background-color:#ffffff;padding:24px 32px 20px;border-radius:12px 12px 0 0;border:1px solid #e5e7eb;border-bottom:4px solid ${brandColor}">
     ${headerContent}
