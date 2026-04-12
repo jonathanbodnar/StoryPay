@@ -18,30 +18,29 @@ const STEPS = [
   'team_member',
 ] as const;
 
+type StepId = typeof STEPS[number];
+
 export async function GET() {
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { data: venue, error: venueError } = await supabaseAdmin
+  const { data: venue, error } = await supabaseAdmin
     .from('venues')
     .select('*')
     .eq('id', venueId)
     .single();
 
-  if (venueError || !venue) {
-    console.error('[onboarding] venue fetch error:', venueError?.message, 'venueId:', venueId);
-    return NextResponse.json({ error: 'Venue not found', detail: venueError?.message }, { status: 404 });
+  if (error || !venue) {
+    console.error('[onboarding] fetch error:', error?.message, 'venueId:', venueId);
+    return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
   }
 
-  // Only manually-checked steps count — no auto-detection
-  const { data: stepRows } = await supabaseAdmin
-    .from('venue_onboarding_steps')
-    .select('step, completed_at')
-    .eq('venue_id', venueId);
+  // Steps stored as JSON array on venues row — works in all environments
+  const completedSteps: string[] = Array.isArray(venue.onboarding_steps_completed)
+    ? venue.onboarding_steps_completed
+    : [];
 
-  const completedStepSet = new Set((stepRows || []).map((r: { step: string }) => r.step));
-
-  const steps = STEPS.map(id => ({ id, completed: completedStepSet.has(id) }));
+  const steps = STEPS.map(id => ({ id, completed: completedSteps.includes(id) }));
   const completedCount = steps.filter(s => s.completed).length;
   const allComplete = completedCount === STEPS.length;
 
@@ -49,7 +48,7 @@ export async function GET() {
     steps,
     completedCount,
     totalSteps: STEPS.length,
-    dismissed: venue.onboarding_checklist_dismissed  ?? false,
+    dismissed: venue.onboarding_checklist_dismissed ?? false,
     completed: allComplete || (venue.onboarding_checklist_completed ?? false),
     venueName: venue.name,
   });
@@ -59,50 +58,77 @@ export async function POST(req: NextRequest) {
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const body = await req.json();
+  const body = await req.json() as {
+    action?: string;
+    step?: StepId;
+  };
+
+  // First read current steps
+  const { data: venue } = await supabaseAdmin
+    .from('venues')
+    .select('onboarding_steps_completed, onboarding_checklist_dismissed, onboarding_checklist_completed')
+    .eq('id', venueId)
+    .single();
+
+  const currentSteps: string[] = Array.isArray(venue?.onboarding_steps_completed)
+    ? venue.onboarding_steps_completed
+    : [];
 
   if (body.action === 'dismiss') {
-    await supabaseAdmin
+    const { error } = await supabaseAdmin
       .from('venues')
       .update({ onboarding_checklist_dismissed: true })
       .eq('id', venueId);
-    return NextResponse.json({ ok: true });
-  }
-
-  if (body.action === 'reset') {
-    await supabaseAdmin
-      .from('venues')
-      .update({ onboarding_checklist_dismissed: false, onboarding_checklist_completed: false })
-      .eq('id', venueId);
-    await supabaseAdmin
-      .from('venue_onboarding_steps')
-      .delete()
-      .eq('venue_id', venueId);
-    return NextResponse.json({ ok: true });
-  }
-
-  // Toggle a step on
-  if (body.step && !body.action) {
-    const { error } = await supabaseAdmin
-      .from('venue_onboarding_steps')
-      .upsert(
-        { venue_id: venueId, step: body.step, completed_at: new Date().toISOString() },
-        { onConflict: 'venue_id,step' }
-      );
     if (error) {
-      console.error('[onboarding] upsert step error:', error.message);
+      console.error('[onboarding] dismiss error:', error.message);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
     return NextResponse.json({ ok: true });
   }
 
-  // Toggle a step off
+  if (body.action === 'reset') {
+    const { error } = await supabaseAdmin
+      .from('venues')
+      .update({
+        onboarding_checklist_dismissed: false,
+        onboarding_checklist_completed: false,
+        onboarding_steps_completed: [],
+      })
+      .eq('id', venueId);
+    if (error) {
+      console.error('[onboarding] reset error:', error.message);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // Check a step on
+  if (body.step && !body.action) {
+    const updated = currentSteps.includes(body.step)
+      ? currentSteps
+      : [...currentSteps, body.step];
+    const { error } = await supabaseAdmin
+      .from('venues')
+      .update({ onboarding_steps_completed: updated })
+      .eq('id', venueId);
+    if (error) {
+      console.error('[onboarding] check step error:', error.message);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // Uncheck a step
   if (body.action === 'uncheck_step' && body.step) {
-    await supabaseAdmin
-      .from('venue_onboarding_steps')
-      .delete()
-      .eq('venue_id', venueId)
-      .eq('step', body.step);
+    const updated = currentSteps.filter(s => s !== body.step);
+    const { error } = await supabaseAdmin
+      .from('venues')
+      .update({ onboarding_steps_completed: updated })
+      .eq('id', venueId);
+    if (error) {
+      console.error('[onboarding] uncheck step error:', error.message);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
     return NextResponse.json({ ok: true });
   }
 
