@@ -2,6 +2,9 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
+// Never cache this route — it returns live per-venue data
+export const dynamic = 'force-dynamic';
+
 async function getVenueId() {
   const cookieStore = await cookies();
   return cookieStore.get('venue_id')?.value;

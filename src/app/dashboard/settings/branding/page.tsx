@@ -135,7 +135,7 @@ export default function BrandingPage() {
   });
 
   useEffect(() => {
-    fetch('/api/venues/me').then(r => r.json()).then(d => {
+    fetch('/api/venues/me', { cache: 'no-store' }).then(r => r.json()).then(d => {
       setBrand({
         logo_url:    d.brand_logo_url   || '',
         primary:     d.brand_color      || '#1b1b1b',
@@ -200,19 +200,19 @@ export default function BrandingPage() {
           brand_footer_note: brand.footer_note,
         }),
       });
+      // Parse body once regardless of status
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        console.error('[branding] save failed:', err);
+        console.error('[branding] save failed:', data);
         return;
       }
       // Sync local state from DB response so preview stays accurate
-      const saved = await res.json();
       setBrand(b => ({
         ...b,
-        primary:    saved.brand_color     || b.primary,
-        bg:         saved.brand_bg_color  || b.bg,
-        btnText:    saved.brand_btn_text  || b.btnText,
-        logo_url:   saved.brand_logo_url  ?? '',
+        primary:    data.brand_color     || b.primary,
+        bg:         data.brand_bg_color  || b.bg,
+        btnText:    data.brand_btn_text  || b.btnText,
+        logo_url:   data.brand_logo_url  ?? '',
       }));
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);

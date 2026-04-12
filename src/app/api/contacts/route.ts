@@ -4,6 +4,8 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { ghlRequest, refreshAccessToken, getGhlToken } from '@/lib/ghl';
 import { listCustomers } from '@/lib/lunarpay';
 
+export const dynamic = 'force-dynamic';
+
 interface NormalizedContact {
   id: string;
   source: 'ghl' | 'lunarpay';
