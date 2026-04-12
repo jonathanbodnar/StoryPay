@@ -918,6 +918,19 @@ export default function HelpPage() {
   const [showAI, setShowAI]               = useState(false);
   const normalisedQuery = useMemo(() => normaliseQuery(query), [query]);
 
+  // ── Reset to home when sidebar Help Center link is clicked ────────────────
+  useEffect(() => {
+    if (searchParams.get('reset') === '1') {
+      setQuery('');
+      setActiveCat(null);
+      setActiveArticle(null);
+      setExpandedCats(new Set());
+      setShowAI(false);
+      // Remove the ?reset=1 param from the URL without a full navigation
+      router.replace('/dashboard/help', { scroll: false });
+    }
+  }, [searchParams, router]);
+
   // ── Voice search ──────────────────────────────────────────────────────────
   const [speechSupported, setSpeechSupported] = useState(false);
   const [isListening, setIsListening]         = useState(false);

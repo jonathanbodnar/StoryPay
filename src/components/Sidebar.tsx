@@ -141,10 +141,11 @@ export default function Sidebar({ venue, role = 'owner', memberName, memberEmail
           const Icon = item.icon;
           const active = isActive(item.href);
           const isAI = item.label === 'Ask AI' || item.label === 'Support';
+          const isHelpCenter = item.label === 'Help Center';
           return (
             <Link
               key={item.label}
-              href={isAI ? '#' : item.href}
+              href={isAI ? '#' : isHelpCenter ? '/dashboard/help?reset=1' : item.href}
               onClick={isAI ? (e) => { e.preventDefault(); window.dispatchEvent(new Event('open-ask-ai')); } : undefined}
               className={navItem(active && !isAI)}
               style={navItemStyle(active && !isAI)}
