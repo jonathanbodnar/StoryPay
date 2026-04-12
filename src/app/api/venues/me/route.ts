@@ -23,7 +23,8 @@ export async function GET() {
     .single();
 
   if (error || !venue) {
-    return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
+    console.error('[venues/me] query error:', error?.message, 'venueId:', venueId);
+    return NextResponse.json({ error: 'Venue not found', detail: error?.message }, { status: 404 });
   }
 
   return NextResponse.json(venue);

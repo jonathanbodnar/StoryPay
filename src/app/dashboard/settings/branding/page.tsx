@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { Loader2, Save, Upload, ImageIcon, X, CheckCircle2, FileText, Link2, FileBadge, Mail } from 'lucide-react';
 
 const COLOR_PRESETS = [
@@ -126,7 +126,8 @@ export default function BrandingPage() {
   const [saved, setSaved]           = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoError, setLogoError]   = useState('');
-  const fileRef = useRef<HTMLInputElement>(null);
+  const fileRef    = useRef<HTMLInputElement>(null);
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [brand, setBrand] = useState<BrandState>({
     logo_url: '', primary: '#1b1b1b', bg: '#ffffff', btnText: '#ffffff',
@@ -154,13 +155,55 @@ export default function BrandingPage() {
     }).finally(() => setLoading(false));
   }, []);
 
-  function applyPreset(p: typeof COLOR_PRESETS[0]) {
-    setBrand(b => ({ ...b, primary: p.primary, bg: '#ffffff', btnText: p.btnText }));
+  async function applyPreset(p: typeof COLOR_PRESETS[0]) {
+    const next = { primary: p.primary, bg: '#ffffff', btnText: p.btnText };
+    setBrand(b => ({ ...b, ...next }));
+    // Auto-save immediately so preset changes persist on refresh
+    setSaving(true);
+    try {
+      const res = await fetch('/api/venues/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brand_color:    next.primary,
+          brand_bg_color: next.bg,
+          brand_btn_text: next.btnText,
+        }),
+      });
+      if (res.ok) {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+      } else {
+        console.error('[branding preset] save failed:', await res.text());
+      }
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function upd(k: keyof BrandState) {
-    return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-      setBrand(b => ({ ...b, [k]: e.target.value }));
+  // Memoised so color pickers can use it in useCallback deps safely
+  const saveNow = useCallback(async (partial: Partial<Record<string, string | null>>) => {
+    try {
+      await fetch('/api/venues/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(partial),
+      });
+    } catch { /* non-critical */ }
+  }, []);
+
+  function upd(k: keyof BrandState, dbField?: string) {
+    return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      const val = e.target.value;
+      setBrand(b => ({ ...b, [k]: val }));
+      // Debounce auto-save for color pickers (fires 800ms after user stops dragging)
+      if (dbField) {
+        if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+        autoSaveTimer.current = setTimeout(() => {
+          saveNow({ [dbField]: val });
+        }, 800);
+      }
+    };
   }
 
   async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -330,23 +373,23 @@ export default function BrandingPage() {
             <div className="px-6 py-5">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {[
-                  { label: 'Primary / Button Color', key: 'primary' as const },
-                  { label: 'Background Color',       key: 'bg' as const },
-                  { label: 'Button Text Color',      key: 'btnText' as const },
-                ].map(({ label, key }) => (
+                  { label: 'Primary / Button Color', key: 'primary' as const,  db: 'brand_color'    },
+                  { label: 'Background Color',       key: 'bg' as const,       db: 'brand_bg_color' },
+                  { label: 'Button Text Color',      key: 'btnText' as const,  db: 'brand_btn_text' },
+                ].map(({ label, key, db }) => (
                   <div key={key}>
                     <label className={LABEL}>{label}</label>
                     <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 focus-within:border-gray-400 focus-within:bg-white transition-colors">
                       <input
                         type="color"
                         value={brand[key]}
-                        onChange={upd(key)}
+                        onChange={upd(key, db)}
                         className="h-7 w-7 rounded-lg cursor-pointer border-0 p-0 bg-transparent flex-shrink-0"
                       />
                       <input
                         type="text"
                         value={brand[key]}
-                        onChange={upd(key)}
+                        onChange={upd(key, db)}
                         maxLength={7}
                         placeholder="#000000"
                         className="flex-1 bg-transparent text-sm font-mono text-gray-900 focus:outline-none placeholder:text-gray-400"

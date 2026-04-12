@@ -129,7 +129,7 @@ export default function SettingsPage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch('/api/venues/me');
+        const res = await fetch('/api/venues/me', { cache: 'no-store' });
         if (res.ok) {
           const data = await res.json();
           setVenue(data);
@@ -216,7 +216,15 @@ export default function SettingsPage() {
 
   if (!venue) {
     return (
-      <div className="py-20 text-center text-gray-500">Unable to load venue settings.</div>
+      <div className="py-20 text-center">
+        <p className="text-gray-500 mb-4">Unable to load venue settings.</p>
+        <button
+          onClick={() => { setLoading(true); window.location.reload(); }}
+          className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+        >
+          Retry
+        </button>
+      </div>
     );
   }
 
