@@ -17,17 +17,36 @@ export async function PATCH(
   const { id } = await params;
   const body = await request.json();
 
-  const { data, error } = await supabaseAdmin.rpc('update_team_member', {
-    p_id: id,
-    p_venue_id: venueId,
-    p_first_name: body.first_name ?? null,
-    p_last_name: body.last_name ?? null,
-    p_email: body.email ?? null,
-    p_role: body.role ?? null,
-    p_status: body.status ?? null,
-  });
+  const updates: Record<string, string> = {};
+  if (body.first_name != null) updates.first_name = body.first_name;
+  if (body.last_name  != null) updates.last_name  = body.last_name;
+  if (body.email      != null) updates.email      = body.email;
+  if (body.role       != null) updates.role       = body.role;
+  if (body.status     != null) updates.status     = body.status;
+
+  // Keep the denormalised name column in sync
+  if (updates.first_name != null || updates.last_name != null) {
+    const { data: current } = await supabaseAdmin
+      .from('venue_team_members')
+      .select('first_name, last_name')
+      .eq('id', id)
+      .eq('venue_id', venueId)
+      .single();
+    const fn = updates.first_name ?? current?.first_name ?? '';
+    const ln = updates.last_name  ?? current?.last_name  ?? '';
+    updates.name = [fn, ln].filter(Boolean).join(' ');
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('venue_team_members')
+    .update(updates)
+    .eq('id', id)
+    .eq('venue_id', venueId)
+    .select()
+    .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data)  return NextResponse.json({ error: 'Team member not found' }, { status: 404 });
   return NextResponse.json(data);
 }
 
@@ -40,10 +59,11 @@ export async function DELETE(
 
   const { id } = await params;
 
-  const { error } = await supabaseAdmin.rpc('delete_team_member', {
-    p_id: id,
-    p_venue_id: venueId,
-  });
+  const { error } = await supabaseAdmin
+    .from('venue_team_members')
+    .delete()
+    .eq('id', id)
+    .eq('venue_id', venueId);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
