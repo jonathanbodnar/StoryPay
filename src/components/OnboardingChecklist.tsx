@@ -52,7 +52,7 @@ export default function OnboardingChecklist() {
   async function toggleStep(step: Step) {
     if (togglingStep) return;
     setTogglingStep(step.id);
-    // Optimistically update — don't re-fetch after success to avoid stale cache overwrite
+    // Optimistic update so UI feels instant
     const newCompleted = !step.completed;
     setData(d => {
       if (!d) return d;
@@ -71,10 +71,15 @@ export default function OnboardingChecklist() {
             : { step: step.id }
         ),
       });
-      // Only revert if server returned an error
-      if (!res.ok) await load();
+      if (res.ok) {
+        // Sync from DB so the state persists across navigation
+        await load();
+      } else {
+        // Revert optimistic update on failure
+        await load();
+      }
     } catch {
-      await load(); // revert on network error
+      await load();
     } finally {
       setTogglingStep(null);
     }
@@ -82,14 +87,19 @@ export default function OnboardingChecklist() {
 
   async function confirmComplete() {
     setConfirming(true);
-    // Mark as permanently completed/dismissed
-    setData(d => d ? { ...d, dismissed: true, completed: true } : d);
-    setModalOpen(false);
-    await fetch('/api/onboarding', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'dismiss' }),
-    }).catch(() => {});
-    setConfirming(false);
+    try {
+      const res = await fetch('/api/onboarding', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'dismiss' }),
+      });
+      if (res.ok) {
+        // Confirmed — hide bubble for good
+        setData(d => d ? { ...d, dismissed: true, completed: true } : d);
+        setModalOpen(false);
+      }
+    } finally {
+      setConfirming(false);
+    }
   }
 
   // Hidden when dismissed or confirmed complete

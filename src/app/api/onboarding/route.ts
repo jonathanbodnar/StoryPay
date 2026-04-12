@@ -83,9 +83,16 @@ export async function POST(req: NextRequest) {
 
   // Toggle a step on
   if (body.step && !body.action) {
-    await supabaseAdmin
+    const { error } = await supabaseAdmin
       .from('venue_onboarding_steps')
-      .upsert({ venue_id: venueId, step: body.step, completed_at: new Date().toISOString() });
+      .upsert(
+        { venue_id: venueId, step: body.step, completed_at: new Date().toISOString() },
+        { onConflict: 'venue_id,step' }
+      );
+    if (error) {
+      console.error('[onboarding] upsert step error:', error.message);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
     return NextResponse.json({ ok: true });
   }
 
