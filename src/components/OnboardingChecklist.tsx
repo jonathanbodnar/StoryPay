@@ -3,9 +3,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  CheckCircle2, Circle, X, ChevronDown, ChevronUp,
+  CheckCircle2, Circle, X, Rocket, ArrowRight,
   CreditCard, Users, FileText, Palette, Mail, UsersRound,
-  Rocket, ArrowRight,
 } from 'lucide-react';
 
 interface Step { id: string; completed: boolean; }
@@ -72,15 +71,14 @@ const STEP_META: Record<string, {
 export default function OnboardingChecklist() {
   const router = useRouter();
   const [data, setData] = useState<OnboardingData | null>(null);
-  const [collapsed, setCollapsed] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
   const [togglingStep, setTogglingStep] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       const res = await fetch('/api/onboarding', { cache: 'no-store' });
       if (!res.ok) return;
-      const json: OnboardingData = await res.json();
-      setData(json);
+      setData(await res.json());
     } catch { /* non-critical */ }
   }, []);
 
@@ -91,7 +89,7 @@ export default function OnboardingChecklist() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'dismiss' }),
     });
-    // Re-fetch so visibility is driven purely by API state
+    setModalOpen(false);
     await load();
   }
 
@@ -99,25 +97,19 @@ export default function OnboardingChecklist() {
     if (togglingStep) return;
     setTogglingStep(step.id);
     try {
-      if (step.completed) {
-        // Only allow unchecking manually-completed steps (auto-detected ones
-        // like branding/payment can't be unchecked since they reflect real data)
-        await fetch('/api/onboarding', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'uncheck_step', step: step.id }),
-        });
-      } else {
-        await fetch('/api/onboarding', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ step: step.id }),
-        });
-      }
+      await fetch('/api/onboarding', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          step.completed
+            ? { action: 'uncheck_step', step: step.id }
+            : { step: step.id }
+        ),
+      });
       await load();
     } finally { setTogglingStep(null); }
   }
 
-  // Hide only when API says dismissed or fully completed — never from local state
-  // so that a reset from Settings immediately makes it re-appear on next page load
+  // Hidden when dismissed or all steps manually checked
   if (!data || data.dismissed || data.completed) return null;
 
   const { steps, completedCount, totalSteps } = data;
@@ -125,121 +117,168 @@ export default function OnboardingChecklist() {
   const allDone = completedCount === totalSteps;
 
   return (
-    <div className="mb-6 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4 px-5 py-4 bg-[#1b1b1b]">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="flex-shrink-0 flex h-9 w-9 items-center justify-center rounded-xl bg-white/10">
-            <Rocket size={18} className="text-white" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-white leading-tight">
-              {allDone ? 'Setup Complete!' : 'Get Started with StoryPay'}
-            </p>
-            <p className="text-xs text-white/60 mt-0.5">
-              {allDone
-                ? 'Your account is fully configured.'
-                : `${completedCount} of ${totalSteps} steps completed`}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {/* Progress pill */}
-          <div className="hidden sm:flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5">
-            <span className="text-xs font-semibold text-white">{pct}%</span>
-            <div className="h-1.5 w-20 rounded-full bg-white/20 overflow-hidden">
-              <div className="h-full rounded-full bg-white transition-all duration-500" style={{ width: `${pct}%` }} />
+    <>
+      {/* ── Dashboard bubble ── */}
+      <div className="mb-6 flex items-center gap-2">
+        {/* Pill button to open modal */}
+        <button
+          onClick={() => setModalOpen(true)}
+          className="flex items-center gap-2.5 rounded-full border border-gray-200 bg-white px-4 py-2 shadow-sm hover:shadow-md hover:border-gray-300 transition-all group"
+        >
+          <Rocket size={15} className="text-[#1b1b1b] flex-shrink-0" />
+          <span className="text-sm font-semibold text-gray-800">Get Started</span>
+          {/* Progress indicator */}
+          <div className="flex items-center gap-1.5 ml-0.5">
+            <span className="text-xs text-gray-400">{completedCount}/{totalSteps}</span>
+            <div className="h-2 w-16 rounded-full bg-gray-100 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-[#1b1b1b] transition-all duration-500"
+                style={{ width: `${pct}%` }}
+              />
             </div>
           </div>
-          <button onClick={() => setCollapsed(c => !c)}
-            className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors text-white">
-            {collapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-          </button>
-          <button onClick={dismiss}
-            className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors text-white"
-            title="Dismiss — can be restarted in Settings → General">
-            <X size={14} />
-          </button>
-        </div>
+        </button>
+
+        {/* X to dismiss bubble entirely */}
+        <button
+          onClick={dismiss}
+          className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-400 hover:text-gray-600 hover:border-gray-300 shadow-sm transition-all"
+          title="Dismiss setup guide"
+        >
+          <X size={13} />
+        </button>
       </div>
 
-      {/* Mobile progress bar */}
-      <div className="sm:hidden h-1 bg-gray-100">
-        <div className="h-full bg-[#1b1b1b] transition-all duration-500" style={{ width: `${pct}%` }} />
-      </div>
+      {/* ── Modal ── */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="relative w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
 
-      {/* Steps */}
-      {!collapsed && (
-        <div className="divide-y divide-gray-100">
-          {steps.map((step) => {
-            const meta = STEP_META[step.id];
-            if (!meta) return null;
-            const Icon = meta.icon;
-            const busy = togglingStep === step.id;
-
-            return (
-              <div key={step.id}
-                className={`flex items-center gap-4 px-5 py-4 transition-colors ${step.completed ? 'bg-gray-50/60' : 'bg-white hover:bg-gray-50/40'}`}>
-
-                {/* Checkbox toggle */}
-                <button
-                  onClick={() => toggleStep(step)}
-                  disabled={busy}
-                  className="flex-shrink-0 transition-transform hover:scale-110 disabled:opacity-50"
-                  title={step.completed ? 'Mark as incomplete' : 'Mark as complete'}
-                >
-                  {step.completed
-                    ? <CheckCircle2 size={22} className="text-emerald-500" />
-                    : <Circle size={22} className="text-gray-300 hover:text-gray-400" />}
-                </button>
-
-                {/* Icon */}
-                <div className={`flex-shrink-0 flex h-9 w-9 items-center justify-center rounded-xl ${step.completed ? 'bg-emerald-50' : 'bg-gray-100'}`}>
-                  <Icon size={16} className={step.completed ? 'text-emerald-500' : 'text-gray-500'} />
-                </div>
-
-                {/* Text */}
-                <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-medium leading-tight ${step.completed ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
-                    {meta.label}
-                  </p>
-                  {!step.completed && (
-                    <p className="mt-0.5 text-xs text-gray-500 leading-relaxed">{meta.description}</p>
-                  )}
-                </div>
-
-                {/* Action */}
-                {step.completed ? (
-                  <span className="flex-shrink-0 text-xs font-medium text-emerald-600 bg-emerald-50 rounded-full px-2.5 py-1">Done</span>
-                ) : (
-                  <button
-                    onClick={() => router.push(meta.href)}
-                    className="flex-shrink-0 flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs font-semibold text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-all"
-                  >
-                    {meta.cta} <ArrowRight size={11} />
-                  </button>
-                )}
-              </div>
-            );
-          })}
-
-          {/* All done */}
-          {allDone && (
-            <div className="flex items-center justify-between gap-4 px-5 py-4 bg-emerald-50">
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-6 py-5 bg-[#1b1b1b]">
               <div className="flex items-center gap-3">
-                <CheckCircle2 size={20} className="text-emerald-500 flex-shrink-0" />
-                <p className="text-sm font-medium text-emerald-800">
-                  Your account is fully set up. You&apos;re ready to go!
-                </p>
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10">
+                  <Rocket size={17} className="text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-white leading-tight">
+                    {allDone ? 'Setup Complete!' : 'Get Started with StoryPay'}
+                  </p>
+                  <p className="text-xs text-white/60 mt-0.5">
+                    {completedCount} of {totalSteps} steps completed
+                  </p>
+                </div>
               </div>
-              <button onClick={dismiss}
-                className="flex-shrink-0 rounded-xl bg-emerald-500 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-600 transition-colors">
-                Dismiss
+              <button
+                onClick={() => setModalOpen(false)}
+                className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors text-white"
+                title="Close"
+              >
+                <X size={14} />
               </button>
             </div>
-          )}
+
+            {/* Progress bar */}
+            <div className="h-1.5 bg-gray-100">
+              <div
+                className="h-full bg-[#1b1b1b] transition-all duration-500"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+
+            {/* Steps list */}
+            <div className="overflow-y-auto flex-1 divide-y divide-gray-100">
+              {steps.map((step) => {
+                const meta = STEP_META[step.id];
+                if (!meta) return null;
+                const Icon = meta.icon;
+                const busy = togglingStep === step.id;
+
+                return (
+                  <div
+                    key={step.id}
+                    className={`flex items-center gap-4 px-6 py-4 transition-colors ${step.completed ? 'bg-gray-50/60' : 'hover:bg-gray-50/40'}`}
+                  >
+                    {/* Check toggle */}
+                    <button
+                      onClick={() => toggleStep(step)}
+                      disabled={busy}
+                      className="flex-shrink-0 transition-transform hover:scale-110 disabled:opacity-40"
+                      title={step.completed ? 'Mark as incomplete' : 'Mark as complete'}
+                    >
+                      {busy
+                        ? <Circle size={22} className="text-gray-200 animate-pulse" />
+                        : step.completed
+                          ? <CheckCircle2 size={22} className="text-emerald-500" />
+                          : <Circle size={22} className="text-gray-300 hover:text-gray-400" />
+                      }
+                    </button>
+
+                    {/* Icon */}
+                    <div className={`flex-shrink-0 flex h-9 w-9 items-center justify-center rounded-xl ${step.completed ? 'bg-emerald-50' : 'bg-gray-100'}`}>
+                      <Icon size={16} className={step.completed ? 'text-emerald-500' : 'text-gray-500'} />
+                    </div>
+
+                    {/* Label */}
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm font-medium leading-tight ${step.completed ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                        {meta.label}
+                      </p>
+                      {!step.completed && (
+                        <p className="mt-0.5 text-xs text-gray-500">{meta.description}</p>
+                      )}
+                    </div>
+
+                    {/* CTA */}
+                    {!step.completed && (
+                      <button
+                        onClick={() => { setModalOpen(false); router.push(meta.href); }}
+                        className="flex-shrink-0 flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-all"
+                      >
+                        {meta.cta} <ArrowRight size={10} />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* All done footer */}
+            {allDone && (
+              <div className="px-6 py-4 bg-emerald-50 border-t border-emerald-100 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={18} className="text-emerald-500 flex-shrink-0" />
+                  <p className="text-sm font-medium text-emerald-800">All steps complete — you&apos;re ready!</p>
+                </div>
+                <button
+                  onClick={dismiss}
+                  className="flex-shrink-0 rounded-xl bg-emerald-500 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-600 transition-colors"
+                >
+                  Done
+                </button>
+              </div>
+            )}
+
+            {/* Modal footer */}
+            {!allDone && (
+              <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
+                <button
+                  onClick={dismiss}
+                  className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  Dismiss setup guide
+                </button>
+                <button
+                  onClick={() => setModalOpen(false)}
+                  className="rounded-xl bg-[#1b1b1b] px-4 py-2 text-xs font-semibold text-white hover:bg-[#2d2d2d] transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
