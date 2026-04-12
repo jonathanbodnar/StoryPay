@@ -8,11 +8,11 @@ import {
 } from 'lucide-react';
 
 const STEPS = [
-  'payment_processing',
-  'first_customer',
-  'first_proposal',
-  'branding',
+  'profile_branding',
   'email_templates',
+  'proposal_template',
+  'create_proposal',
+  'send_proposal',
   'team_member',
 ] as const;
 
@@ -25,12 +25,12 @@ const STEP_META: Record<StepId, {
   icon: React.ComponentType<{ size?: number; className?: string }>;
   cta: string;
 }> = {
-  payment_processing: { label: 'Configure Payment Processing', description: 'Connect LunarPay to accept credit cards & ACH payments.', href: '/dashboard/settings', icon: CreditCard, cta: 'Go to Settings' },
-  first_customer:     { label: 'Add Your First Customer',       description: 'Create a customer profile to send proposals and invoices.', href: '/dashboard/customers', icon: Users, cta: 'Add Customer' },
-  first_proposal:     { label: 'Create Your First Proposal',    description: 'Build and send a branded proposal or invoice to a client.', href: '/dashboard/payments/new', icon: FileText, cta: 'Create Proposal' },
-  branding:           { label: 'Customize Your Branding',       description: 'Upload your logo and set your brand colors.', href: '/dashboard/settings/branding', icon: Palette, cta: 'Set Up Branding' },
-  email_templates:    { label: 'Set Up Email Templates',        description: 'Customize the emails sent to your clients.', href: '/dashboard/settings/email-templates', icon: Mail, cta: 'Edit Templates' },
-  team_member:        { label: 'Invite a Team Member',          description: 'Add your team so they can help manage your account.', href: '/dashboard/settings/team', icon: UsersRound, cta: 'Manage Team' },
+  profile_branding:  { label: 'Create Your Profile & Branding',    description: 'Set up your venue profile, upload your logo, and choose your brand colors.', href: '/dashboard/settings/branding', icon: Palette, cta: 'Set Up Branding' },
+  email_templates:   { label: 'Customize Email Templates',          description: 'Customize the emails sent to your clients for proposals and invoices.', href: '/dashboard/settings/email-templates', icon: Mail, cta: 'Edit Templates' },
+  proposal_template: { label: 'Create Your First Proposal Template', description: 'Build a reusable template with your contract content and signature fields.', href: '/dashboard/proposals/templates', icon: FileText, cta: 'Create Template' },
+  create_proposal:   { label: 'Create Your First Proposal',         description: 'Use your template to build a branded proposal for a client.', href: '/dashboard/payments/new', icon: CreditCard, cta: 'Create Proposal' },
+  send_proposal:     { label: 'Send Your First Proposal',           description: 'Send the proposal to your client so they can review, sign, and pay.', href: '/dashboard/payments/new', icon: Users, cta: 'Send Proposal' },
+  team_member:       { label: 'Invite a Team Member',               description: 'Add your team so they can help manage your account.', href: '/dashboard/settings/team', icon: UsersRound, cta: 'Manage Team' },
 };
 
 function getStorageKey(venueId: string) {

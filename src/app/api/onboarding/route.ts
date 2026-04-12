@@ -10,11 +10,11 @@ async function getVenueId() {
 }
 
 const STEPS = [
-  'payment_processing',
-  'first_customer',
-  'first_proposal',
-  'branding',
+  'profile_branding',
   'email_templates',
+  'proposal_template',
+  'create_proposal',
+  'send_proposal',
   'team_member',
 ] as const;
 
