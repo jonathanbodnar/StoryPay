@@ -118,8 +118,10 @@ export default function LoginPage() {
                   </div>
                   {forgotError && <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{forgotError}</p>}
                   <button type="submit" disabled={forgotLoading || !forgotEmail.trim()}
-                    className="w-full flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50 transition-all"
-                    style={{ backgroundColor: '#1b1b1b' }}>
+                    className="w-full flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed"
+                    style={{ backgroundColor: '#1b1b1b' }}
+                    onMouseEnter={e => { if (!forgotLoading && forgotEmail.trim()) (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#333333'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#1b1b1b'; }}>
                     {forgotLoading ? <Loader2 size={15} className="animate-spin" /> : null}
                     {forgotLoading ? 'Sending...' : 'Send Sign-In Link'}
                   </button>
@@ -172,8 +174,10 @@ export default function LoginPage() {
                 {error && <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
 
                 <button type="submit" disabled={loading || !email.trim()}
-                  className="w-full flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50 transition-all"
-                  style={{ backgroundColor: '#1b1b1b' }}>
+                  className="w-full flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed"
+                  style={{ backgroundColor: '#1b1b1b' }}
+                  onMouseEnter={e => { if (!loading && email.trim()) (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#333333'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#1b1b1b'; }}>
                   {loading ? <Loader2 size={15} className="animate-spin" /> : null}
                   {loading ? 'Signing in...' : 'Sign In'}
                 </button>
