@@ -378,12 +378,9 @@ export default function LandingPage() {
         {/* Nav */}
         <nav className="mx-auto max-w-5xl px-5 sm:px-8 py-5 flex items-center justify-between">
           <Image src="/storypay-logo-dark.png" alt="StoryPay" width={110} height={26} />
-          <div className="flex items-center gap-4">
-            <a href="/login" className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm">
-              Log In
-            </a>
-            <a href="/admin" className="text-xs text-gray-400 hover:text-gray-600 transition-colors">Admin</a>
-          </div>
+          <a href="/login" className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm">
+            Log In
+          </a>
         </nav>
 
         {/* Hero content */}
@@ -555,8 +552,15 @@ export default function LandingPage() {
       </div>
 
       {/* ── Footer ── */}
-      <footer className="py-8 px-4 border-t border-gray-100 text-center">
-        <p className="text-xs text-gray-400">&copy; 2026 StoryPay&#8482; by <a href="https://storyvenue.com" target="_blank" rel="noreferrer" className="hover:text-gray-600 transition-colors underline">StoryVenue</a></p>
+      <footer className="py-8 px-4 border-t border-gray-100">
+        <div className="mx-auto max-w-5xl flex flex-col sm:flex-row items-center justify-between gap-3">
+          <p className="text-xs text-gray-400">&copy; {new Date().getFullYear()} StoryPay&#8482; by <a href="https://storyvenue.com" target="_blank" rel="noreferrer" className="hover:text-gray-600 transition-colors underline">StoryVenue</a></p>
+          <div className="flex items-center gap-4 text-xs text-gray-400">
+            <a href="/privacy" className="hover:text-gray-600 transition-colors">Privacy Policy</a>
+            <a href="/terms" className="hover:text-gray-600 transition-colors">Terms of Use</a>
+            <a href="/admin" className="hover:text-gray-600 transition-colors">Admin</a>
+          </div>
+        </div>
       </footer>
 
       {showModal && <RequestModal onClose={() => setShowModal(false)} />}
