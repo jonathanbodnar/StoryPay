@@ -1,28 +1,14 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
-  CheckCircle2,
-  Circle,
-  X,
-  ChevronDown,
-  ChevronUp,
-  CreditCard,
-  Users,
-  FileText,
-  Palette,
-  Mail,
-  UsersRound,
-  Rocket,
-  ArrowRight,
+  CheckCircle2, Circle, X, ChevronDown, ChevronUp,
+  CreditCard, Users, FileText, Palette, Mail, UsersRound,
+  Rocket, ArrowRight,
 } from 'lucide-react';
 
-interface Step {
-  id: string;
-  completed: boolean;
-}
-
+interface Step { id: string; completed: boolean; }
 interface OnboardingData {
   steps: Step[];
   completedCount: number;
@@ -69,7 +55,7 @@ const STEP_META: Record<string, {
   },
   email_templates: {
     label: 'Set Up Email Templates',
-    description: 'Customize the emails sent to your clients for proposals and invoices.',
+    description: 'Customize the emails sent to your clients.',
     href: '/dashboard/settings/email-templates',
     icon: Mail,
     cta: 'Edit Templates',
@@ -84,38 +70,51 @@ const STEP_META: Record<string, {
 };
 
 export default function OnboardingChecklist() {
+  const router = useRouter();
   const [data, setData] = useState<OnboardingData | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [visible, setVisible] = useState(true);
-  const [dismissing, setDismissing] = useState(false);
+  const [togglingStep, setTogglingStep] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       const res = await fetch('/api/onboarding');
       if (!res.ok) return;
       const json: OnboardingData = await res.json();
-      if (json.dismissed || json.completed) {
-        setVisible(false);
-      }
+      if (json.dismissed || json.completed) setVisible(false);
       setData(json);
-    } catch {
-      // silently fail — onboarding is non-critical
-    }
+    } catch { /* non-critical */ }
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
   async function dismiss() {
-    setDismissing(true);
+    await fetch('/api/onboarding', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'dismiss' }),
+    });
+    setVisible(false);
+  }
+
+  async function toggleStep(step: Step) {
+    if (togglingStep) return;
+    setTogglingStep(step.id);
     try {
-      await fetch('/api/onboarding', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'dismiss' }),
-      });
-    } finally {
-      setVisible(false);
-    }
+      if (step.completed) {
+        // Only allow unchecking manually-completed steps (auto-detected ones
+        // like branding/payment can't be unchecked since they reflect real data)
+        await fetch('/api/onboarding', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'uncheck_step', step: step.id }),
+        });
+      } else {
+        await fetch('/api/onboarding', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ step: step.id }),
+        });
+      }
+      await load();
+    } finally { setTogglingStep(null); }
   }
 
   if (!visible || !data) return null;
@@ -123,11 +122,10 @@ export default function OnboardingChecklist() {
   const { steps, completedCount, totalSteps } = data;
   const pct = Math.round((completedCount / totalSteps) * 100);
   const allDone = completedCount === totalSteps;
-  const nextStep = steps.find(s => !s.completed);
 
   return (
     <div className="mb-6 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-      {/* ── Header ── */}
+      {/* Header */}
       <div className="flex items-center justify-between gap-4 px-5 py-4 bg-[#1b1b1b]">
         <div className="flex items-center gap-3 min-w-0">
           <div className="flex-shrink-0 flex h-9 w-9 items-center justify-center rounded-xl bg-white/10">
@@ -138,7 +136,9 @@ export default function OnboardingChecklist() {
               {allDone ? 'Setup Complete!' : 'Get Started with StoryPay'}
             </p>
             <p className="text-xs text-white/60 mt-0.5">
-              {allDone ? 'Your account is fully configured.' : `${completedCount} of ${totalSteps} steps completed`}
+              {allDone
+                ? 'Your account is fully configured.'
+                : `${completedCount} of ${totalSteps} steps completed`}
             </p>
           </div>
         </div>
@@ -147,91 +147,59 @@ export default function OnboardingChecklist() {
           <div className="hidden sm:flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5">
             <span className="text-xs font-semibold text-white">{pct}%</span>
             <div className="h-1.5 w-20 rounded-full bg-white/20 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-white transition-all duration-500"
-                style={{ width: `${pct}%` }}
-              />
+              <div className="h-full rounded-full bg-white transition-all duration-500" style={{ width: `${pct}%` }} />
             </div>
           </div>
-          {/* Collapse toggle */}
-          <button
-            onClick={() => setCollapsed(c => !c)}
-            className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors text-white"
-            aria-label={collapsed ? 'Expand' : 'Collapse'}
-          >
+          <button onClick={() => setCollapsed(c => !c)}
+            className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors text-white">
             {collapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
           </button>
-          {/* Dismiss */}
-          <button
-            onClick={dismiss}
-            disabled={dismissing}
+          <button onClick={dismiss}
             className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors text-white"
-            aria-label="Dismiss setup guide"
-            title="Dismiss — I'll set up on my own"
-          >
+            title="Dismiss — can be restarted in Settings → General">
             <X size={14} />
           </button>
         </div>
       </div>
 
-      {/* ── Progress bar (mobile) ── */}
+      {/* Mobile progress bar */}
       <div className="sm:hidden h-1 bg-gray-100">
-        <div
-          className="h-full bg-[#1b1b1b] transition-all duration-500"
-          style={{ width: `${pct}%` }}
-        />
+        <div className="h-full bg-[#1b1b1b] transition-all duration-500" style={{ width: `${pct}%` }} />
       </div>
 
-      {/* ── Steps list ── */}
+      {/* Steps */}
       {!collapsed && (
         <div className="divide-y divide-gray-100">
-          {steps.map((step, idx) => {
+          {steps.map((step) => {
             const meta = STEP_META[step.id];
             if (!meta) return null;
             const Icon = meta.icon;
-            const isNext = nextStep?.id === step.id;
+            const busy = togglingStep === step.id;
 
             return (
-              <div
-                key={step.id}
-                className={`flex items-start gap-4 px-5 py-4 transition-colors ${
-                  step.completed
-                    ? 'bg-gray-50/50'
-                    : isNext
-                    ? 'bg-blue-50/30'
-                    : 'bg-white'
-                }`}
-              >
-                {/* Step number / check icon */}
-                <div className="flex-shrink-0 pt-0.5">
-                  {step.completed ? (
-                    <CheckCircle2 size={20} className="text-emerald-500" />
-                  ) : isNext ? (
-                    <div className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-[#1b1b1b] bg-white">
-                      <span className="text-[10px] font-bold text-[#1b1b1b]">{idx + 1}</span>
-                    </div>
-                  ) : (
-                    <div className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-gray-200">
-                      <span className="text-[10px] font-medium text-gray-400">{idx + 1}</span>
-                    </div>
-                  )}
-                </div>
+              <div key={step.id}
+                className={`flex items-center gap-4 px-5 py-4 transition-colors ${step.completed ? 'bg-gray-50/60' : 'bg-white hover:bg-gray-50/40'}`}>
+
+                {/* Checkbox toggle */}
+                <button
+                  onClick={() => toggleStep(step)}
+                  disabled={busy}
+                  className="flex-shrink-0 transition-transform hover:scale-110 disabled:opacity-50"
+                  title={step.completed ? 'Mark as incomplete' : 'Mark as complete'}
+                >
+                  {step.completed
+                    ? <CheckCircle2 size={22} className="text-emerald-500" />
+                    : <Circle size={22} className="text-gray-300 hover:text-gray-400" />}
+                </button>
 
                 {/* Icon */}
-                <div className={`flex-shrink-0 flex h-9 w-9 items-center justify-center rounded-xl transition-colors ${
-                  step.completed ? 'bg-emerald-50' : isNext ? 'bg-[#1b1b1b]' : 'bg-gray-100'
-                }`}>
-                  <Icon
-                    size={16}
-                    className={step.completed ? 'text-emerald-500' : isNext ? 'text-white' : 'text-gray-400'}
-                  />
+                <div className={`flex-shrink-0 flex h-9 w-9 items-center justify-center rounded-xl ${step.completed ? 'bg-emerald-50' : 'bg-gray-100'}`}>
+                  <Icon size={16} className={step.completed ? 'text-emerald-500' : 'text-gray-500'} />
                 </div>
 
                 {/* Text */}
                 <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-medium leading-tight ${
-                    step.completed ? 'text-gray-400 line-through' : 'text-gray-900'
-                  }`}>
+                  <p className={`text-sm font-medium leading-tight ${step.completed ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
                     {meta.label}
                   </p>
                   {!step.completed && (
@@ -239,30 +207,22 @@ export default function OnboardingChecklist() {
                   )}
                 </div>
 
-                {/* CTA */}
-                {!step.completed && (
-                  <Link
-                    href={meta.href}
-                    className={`flex-shrink-0 flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all ${
-                      isNext
-                        ? 'bg-[#1b1b1b] text-white hover:bg-[#2d2d2d]'
-                        : 'bg-white border border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50'
-                    }`}
+                {/* Action */}
+                {step.completed ? (
+                  <span className="flex-shrink-0 text-xs font-medium text-emerald-600 bg-emerald-50 rounded-full px-2.5 py-1">Done</span>
+                ) : (
+                  <button
+                    onClick={() => router.push(meta.href)}
+                    className="flex-shrink-0 flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs font-semibold text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-all"
                   >
-                    {meta.cta}
-                    <ArrowRight size={11} />
-                  </Link>
-                )}
-                {step.completed && (
-                  <span className="flex-shrink-0 text-xs font-medium text-emerald-500 bg-emerald-50 rounded-full px-2.5 py-1">
-                    Done
-                  </span>
+                    {meta.cta} <ArrowRight size={11} />
+                  </button>
                 )}
               </div>
             );
           })}
 
-          {/* All done footer */}
+          {/* All done */}
           {allDone && (
             <div className="flex items-center justify-between gap-4 px-5 py-4 bg-emerald-50">
               <div className="flex items-center gap-3">
@@ -271,10 +231,8 @@ export default function OnboardingChecklist() {
                   Your account is fully set up. You&apos;re ready to go!
                 </p>
               </div>
-              <button
-                onClick={dismiss}
-                className="flex-shrink-0 rounded-xl bg-emerald-500 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-600 transition-colors"
-              >
+              <button onClick={dismiss}
+                className="flex-shrink-0 rounded-xl bg-emerald-500 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-600 transition-colors">
                 Dismiss
               </button>
             </div>

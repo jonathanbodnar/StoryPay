@@ -1,21 +1,24 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import {
-  Settings,
   LinkIcon,
   CheckCircle2,
-  Building2,
+  Circle,
   CreditCard,
   MessageSquare,
   Loader2,
   ExternalLink,
+  Rocket,
+  RotateCcw,
+  ArrowRight,
+  Users,
+  FileText,
   Palette,
-  Save,
-  Upload,
-  ImageIcon,
-  X,
+  Mail,
+  UsersRound,
 } from 'lucide-react';
 
 interface VenueInfo {
@@ -45,10 +48,23 @@ interface VenueInfo {
   brand_footer_note: string | null;
 }
 
-const INPUT = 'w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:outline-none focus:bg-white transition-colors';
-const LABEL = 'block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide';
+const STEP_META: Record<string, {
+  label: string; description: string; href: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>; cta: string;
+}> = {
+  payment_processing: { label: 'Configure Payment Processing', description: 'Connect your LunarPay account to accept credit cards & ACH payments.', href: '/dashboard/settings', icon: CreditCard, cta: 'Go to Settings' },
+  first_customer:     { label: 'Add Your First Customer',       description: 'Create a customer profile so you can send proposals and invoices.', href: '/dashboard/customers', icon: Users, cta: 'Add Customer' },
+  first_proposal:     { label: 'Create Your First Proposal',    description: 'Build and send a branded proposal or invoice to a client.', href: '/dashboard/payments/new', icon: FileText, cta: 'Create Proposal' },
+  branding:           { label: 'Customize Your Branding',       description: 'Upload your logo and set your brand colors for all documents.', href: '/dashboard/settings/branding', icon: Palette, cta: 'Set Up Branding' },
+  email_templates:    { label: 'Set Up Email Templates',        description: 'Customize the emails sent to your clients.', href: '/dashboard/settings/email-templates', icon: Mail, cta: 'Edit Templates' },
+  team_member:        { label: 'Invite a Team Member',          description: 'Add your team so they can help manage your account.', href: '/dashboard/settings/team', icon: UsersRound, cta: 'Manage Team' },
+};
+
+interface OnboardingStep { id: string; completed: boolean; }
+interface OnboardingData { steps: OnboardingStep[]; completedCount: number; totalSteps: number; dismissed: boolean; completed: boolean; }
 
 export default function SettingsPage() {
+  const router = useRouter();
   const [venue, setVenue] = useState<VenueInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [feeSaving, setFeeSaving] = useState(false);
@@ -72,6 +88,43 @@ export default function SettingsPage() {
     brand_zip: '',
     brand_footer_note: '',
   });
+
+  // Onboarding state
+  const [onboarding, setOnboarding] = useState<OnboardingData | null>(null);
+  const [togglingStep, setTogglingStep] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
+
+  const loadOnboarding = useCallback(async () => {
+    try {
+      const res = await fetch('/api/onboarding');
+      if (res.ok) setOnboarding(await res.json());
+    } catch { /* non-critical */ }
+  }, []);
+
+  async function toggleStep(step: OnboardingStep) {
+    if (togglingStep) return;
+    setTogglingStep(step.id);
+    try {
+      await fetch('/api/onboarding', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(step.completed
+          ? { action: 'uncheck_step', step: step.id }
+          : { step: step.id }),
+      });
+      await loadOnboarding();
+    } finally { setTogglingStep(null); }
+  }
+
+  async function resetOnboarding() {
+    setResetting(true);
+    try {
+      await fetch('/api/onboarding', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reset' }),
+      });
+      await loadOnboarding();
+    } finally { setResetting(false); }
+  }
 
   useEffect(() => {
     async function load() {
@@ -100,7 +153,8 @@ export default function SettingsPage() {
       }
     }
     load();
-  }, []);
+    loadOnboarding();
+  }, [loadOnboarding]);
 
   async function saveBranding() {
     setBrandSaving(true);
@@ -234,6 +288,97 @@ export default function SettingsPage() {
               </p>
             )}
           </div>
+        </section>
+
+        {/* ── Setup Guide ── */}
+        <section className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+          <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-gray-100">
+            <div className="flex items-center gap-3">
+              <Rocket size={18} className="text-gray-400" />
+              <div>
+                <h2 className="font-heading text-base font-semibold text-gray-900">Setup Guide</h2>
+                <p className="text-xs text-gray-400 mt-0.5">Track your account setup progress. Check off items as you complete them.</p>
+              </div>
+            </div>
+            <button
+              onClick={resetOnboarding}
+              disabled={resetting}
+              className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3.5 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
+              title="Restart the setup guide — resets check marks but does not delete any data"
+            >
+              {resetting ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />}
+              Restart Guide
+            </button>
+          </div>
+
+          {onboarding ? (
+            <>
+              {/* Progress bar */}
+              <div className="px-6 py-3 border-b border-gray-100 bg-gray-50/60">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs text-gray-500">{onboarding.completedCount} of {onboarding.totalSteps} completed</span>
+                  <span className="text-xs font-semibold text-gray-700">{Math.round((onboarding.completedCount / onboarding.totalSteps) * 100)}%</span>
+                </div>
+                <div className="h-2 w-full rounded-full bg-gray-200 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-[#1b1b1b] transition-all duration-500"
+                    style={{ width: `${Math.round((onboarding.completedCount / onboarding.totalSteps) * 100)}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Steps */}
+              <div className="divide-y divide-gray-100">
+                {onboarding.steps.map((step) => {
+                  const meta = STEP_META[step.id];
+                  if (!meta) return null;
+                  const Icon = meta.icon;
+                  const busy = togglingStep === step.id;
+                  return (
+                    <div key={step.id}
+                      className={`flex items-center gap-4 px-6 py-4 transition-colors ${step.completed ? 'bg-gray-50/50' : 'hover:bg-gray-50/40'}`}>
+                      {/* Toggle */}
+                      <button onClick={() => toggleStep(step)} disabled={busy}
+                        className="flex-shrink-0 transition-transform hover:scale-110 disabled:opacity-50"
+                        title={step.completed ? 'Mark as incomplete' : 'Mark as complete'}>
+                        {busy
+                          ? <Loader2 size={22} className="text-gray-300 animate-spin" />
+                          : step.completed
+                          ? <CheckCircle2 size={22} className="text-emerald-500" />
+                          : <Circle size={22} className="text-gray-300 hover:text-gray-400" />}
+                      </button>
+                      {/* Icon */}
+                      <div className={`flex-shrink-0 flex h-9 w-9 items-center justify-center rounded-xl ${step.completed ? 'bg-emerald-50' : 'bg-gray-100'}`}>
+                        <Icon size={16} className={step.completed ? 'text-emerald-500' : 'text-gray-500'} />
+                      </div>
+                      {/* Text */}
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium ${step.completed ? 'text-gray-400 line-through' : 'text-gray-900'}`}>{meta.label}</p>
+                        {!step.completed && <p className="text-xs text-gray-500 mt-0.5">{meta.description}</p>}
+                      </div>
+                      {/* Action */}
+                      {step.completed
+                        ? <span className="flex-shrink-0 text-xs font-medium text-emerald-600 bg-emerald-50 rounded-full px-2.5 py-1">Done</span>
+                        : <button onClick={() => router.push(meta.href)}
+                            className="flex-shrink-0 flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs font-semibold text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-all">
+                            {meta.cta} <ArrowRight size={11} />
+                          </button>
+                      }
+                    </div>
+                  );
+                })}
+              </div>
+
+              {onboarding.completedCount === onboarding.totalSteps && (
+                <div className="px-6 py-4 bg-emerald-50 flex items-center gap-3">
+                  <CheckCircle2 size={18} className="text-emerald-500 flex-shrink-0" />
+                  <p className="text-sm font-medium text-emerald-800">All steps complete — your account is fully set up!</p>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="px-6 py-8 flex justify-center"><Loader2 size={20} className="animate-spin text-gray-300" /></div>
+          )}
         </section>
 
         {/* Messaging Integration */}

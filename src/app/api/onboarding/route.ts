@@ -120,10 +120,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
+  // Reset: clear dismissed/completed flags and all manual step completions.
+  // Does NOT touch any real data (proposals, customers, branding, etc.).
+  // Auto-detected completions will still show based on actual account state.
+  if (body.action === 'reset') {
+    await supabaseAdmin
+      .from('venues')
+      .update({ onboarding_checklist_dismissed: false, onboarding_checklist_completed: false })
+      .eq('id', venueId);
+    await supabaseAdmin
+      .from('venue_onboarding_steps')
+      .delete()
+      .eq('venue_id', venueId);
+    return NextResponse.json({ ok: true });
+  }
+
   if (body.step) {
     await supabaseAdmin
       .from('venue_onboarding_steps')
       .upsert({ venue_id: venueId, step: body.step, completed_at: new Date().toISOString() });
+    return NextResponse.json({ ok: true });
+  }
+
+  // Uncheck a manually-checked step
+  if (body.action === 'uncheck_step' && body.step) {
+    await supabaseAdmin
+      .from('venue_onboarding_steps')
+      .delete()
+      .eq('venue_id', venueId)
+      .eq('step', body.step);
     return NextResponse.json({ ok: true });
   }
 
