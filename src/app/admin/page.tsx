@@ -2125,212 +2125,89 @@ function SeoPageTab() {
 }
 
 
+
 // ─── Google Trends Tab ────────────────────────────────────────────────────────
-// Uses the official Google Trends JS embed API (trends.embed.renderExploreWidget)
-// which is the same method Google Trends uses when you click the embed <> button.
+// Uses official Google Trends iframe embed format with both req= and eq= params,
+// exactly matching what Google's embed button generates.
 
-declare global {
-  interface Window {
-    trends?: {
-      embed: {
-        renderExploreWidget: (
-          type: string,
-          query: Record<string, unknown>,
-          opts: Record<string, unknown>
-        ) => void;
-      };
-    };
-  }
-}
-
-interface TrendWidgetConfig {
+interface TrendWidget {
   id: string;
   title: string;
   description: string;
-  type: 'TIMESERIES' | 'GEO_MAP' | 'RELATED_QUERIES';
   keywords: string[];
-  exploreQuery: string;
-  height?: number;
+  type?: 'TIMESERIES' | 'GEO_MAP' | 'RELATED_QUERIES';
+  fixedTime?: string;
 }
 
-const VENUE_WIDGETS: TrendWidgetConfig[] = [
-  {
-    id: 'v1', title: 'Wedding Venue — Overall Interest',
-    description: 'Search interest for "wedding venue" over your selected period.',
-    type: 'TIMESERIES', keywords: ['wedding venue'],
-    exploreQuery: 'q=wedding+venue&geo=US',
-  },
-  {
-    id: 'v2', title: 'Venue Styles — Barn vs Garden vs Ballroom vs Vineyard',
-    description: 'Compare which venue types are trending.',
-    type: 'TIMESERIES', keywords: ['barn wedding venue', 'garden wedding venue', 'ballroom wedding venue', 'vineyard wedding venue'],
-    exploreQuery: 'q=barn+wedding+venue,garden+wedding+venue,ballroom+wedding+venue,vineyard+wedding+venue&geo=US',
-  },
-  {
-    id: 'v3', title: 'Venue Search Intent',
-    description: '"Near me", outdoor, rustic, and intimate venue searches.',
-    type: 'TIMESERIES', keywords: ['wedding venue near me', 'outdoor wedding venue', 'rustic wedding venue', 'intimate wedding venue'],
-    exploreQuery: 'q=wedding+venue+near+me,outdoor+wedding+venue,rustic+wedding+venue,intimate+wedding+venue&geo=US',
-  },
-  {
-    id: 'v4', title: 'Venue Pricing Searches',
-    description: 'How couples research venue costs and packages.',
-    type: 'TIMESERIES', keywords: ['wedding venue cost', 'wedding venue packages', 'affordable wedding venue', 'all inclusive wedding venue'],
-    exploreQuery: 'q=wedding+venue+cost,wedding+venue+packages,affordable+wedding+venue,all+inclusive+wedding+venue&geo=US',
-  },
-  {
-    id: 'v5', title: 'Wedding Venue — Related Queries',
-    description: 'Rising and breakout searches — great for blog content ideas.',
-    type: 'RELATED_QUERIES', keywords: ['wedding venue'],
-    exploreQuery: 'q=wedding+venue&geo=US',
-    height: 500,
-  },
-  {
-    id: 'v6', title: 'Wedding Venue — Geographic Interest (US)',
-    description: 'Which states are searching most for wedding venues.',
-    type: 'GEO_MAP', keywords: ['wedding venue'],
-    exploreQuery: 'q=wedding+venue&geo=US',
-    height: 380,
-  },
+const VENUE_WIDGETS: TrendWidget[] = [
+  { id: 'v1', title: 'Wedding Venue — Overall Interest',        description: 'Search interest for "wedding venue" over your selected period.',       keywords: ['wedding venue'] },
+  { id: 'v2', title: 'Venue Styles Comparison',                 description: 'Barn vs Garden vs Ballroom vs Vineyard.',                               keywords: ['barn wedding venue', 'garden wedding venue', 'ballroom wedding venue', 'vineyard wedding venue'] },
+  { id: 'v3', title: 'Venue Search Intent',                     description: '"Near me", outdoor, rustic, and intimate venue searches.',               keywords: ['wedding venue near me', 'outdoor wedding venue', 'rustic wedding venue', 'intimate wedding venue'] },
+  { id: 'v4', title: 'Venue Pricing Searches',                  description: 'How couples research venue costs and packages.',                         keywords: ['wedding venue cost', 'wedding venue packages', 'affordable wedding venue', 'all inclusive wedding venue'] },
+  { id: 'v5', title: 'Wedding Venue — Related Queries',         description: 'Rising and breakout searches — blog content goldmine.',                 keywords: ['wedding venue'],           type: 'RELATED_QUERIES' },
+  { id: 'v6', title: 'Wedding Venue — Geographic Map (US)',     description: 'Which US states search most for wedding venues.',                        keywords: ['wedding venue'],           type: 'GEO_MAP' },
 ];
 
-const WEDDING_WIDGETS: TrendWidgetConfig[] = [
-  {
-    id: 'w1', title: 'Wedding Planning Trends',
-    description: 'Wedding planning, elopement, micro wedding, and intimate wedding searches.',
-    type: 'TIMESERIES', keywords: ['wedding planning', 'elopement', 'micro wedding', 'intimate wedding'],
-    exploreQuery: 'q=wedding+planning,elopement,micro+wedding,intimate+wedding&geo=US',
-  },
-  {
-    id: 'w2', title: 'What Brides Are Searching For',
-    description: 'Dress, flowers, photographer, and hair trends.',
-    type: 'TIMESERIES', keywords: ['wedding dress trends', 'wedding flowers', 'wedding photographer', 'wedding hair'],
-    exploreQuery: 'q=wedding+dress+trends,wedding+flowers,wedding+photographer,wedding+hair&geo=US',
-  },
-  {
-    id: 'w3', title: 'Wedding Décor & Themes',
-    description: 'Trending aesthetic and style searches.',
-    type: 'TIMESERIES', keywords: ['boho wedding', 'modern wedding decor', 'wedding centerpieces', 'wedding arch'],
-    exploreQuery: 'q=boho+wedding,modern+wedding+decor,wedding+centerpieces,wedding+arch&geo=US',
-  },
-  {
-    id: 'w4', title: 'Budget & Planning Tools',
-    description: 'How couples plan and budget for their wedding.',
-    type: 'TIMESERIES', keywords: ['wedding budget', 'wedding checklist', 'wedding website', 'wedding planner'],
-    exploreQuery: 'q=wedding+budget,wedding+checklist,wedding+website,wedding+planner&geo=US',
-  },
-  {
-    id: 'w5', title: 'Food, Catering & Cake',
-    description: 'What couples want on the menu.',
-    type: 'TIMESERIES', keywords: ['wedding catering', 'wedding cake trends', 'wedding food stations', 'wedding bar ideas'],
-    exploreQuery: 'q=wedding+catering,wedding+cake+trends,wedding+food+stations,wedding+bar+ideas&geo=US',
-  },
-  {
-    id: 'w6', title: 'Honeymoon Travel Trends',
-    description: 'Top honeymoon destination searches.',
-    type: 'TIMESERIES', keywords: ['honeymoon destinations', 'all inclusive honeymoon', 'europe honeymoon', 'tropical honeymoon'],
-    exploreQuery: 'q=honeymoon+destinations,all+inclusive+honeymoon,europe+honeymoon,tropical+honeymoon&geo=US',
-  },
-  {
-    id: 'w7', title: 'Wedding — 5-Year Seasonality',
-    description: 'See exactly when wedding season peaks each year.',
-    type: 'TIMESERIES', keywords: ['wedding'],
-    exploreQuery: 'q=wedding&geo=US&date=today+5-y',
-  },
-  {
-    id: 'w8', title: 'Wedding Planning — Related Queries',
-    description: 'Rising queries around wedding planning — content goldmine.',
-    type: 'RELATED_QUERIES', keywords: ['wedding planning'],
-    exploreQuery: 'q=wedding+planning&geo=US',
-    height: 500,
-  },
+const WEDDING_WIDGETS: TrendWidget[] = [
+  { id: 'w1', title: 'Wedding Planning Trends',                 description: 'Planning, elopement, micro wedding, intimate wedding.',                 keywords: ['wedding planning', 'elopement', 'micro wedding', 'intimate wedding'] },
+  { id: 'w2', title: 'What Brides Are Searching For',           description: 'Dress, flowers, photographer, hair searches.',                          keywords: ['wedding dress trends', 'wedding flowers', 'wedding photographer', 'wedding hair'] },
+  { id: 'w3', title: 'Wedding Décor & Themes',                  description: 'Boho, modern décor, centerpieces, arch trends.',                        keywords: ['boho wedding', 'modern wedding decor', 'wedding centerpieces', 'wedding arch'] },
+  { id: 'w4', title: 'Budget & Planning Tools',                 description: 'Budget, checklist, website, planner searches.',                         keywords: ['wedding budget', 'wedding checklist', 'wedding website', 'wedding planner'] },
+  { id: 'w5', title: 'Food, Catering & Cake',                   description: 'Catering, cake, food stations, bar ideas.',                             keywords: ['wedding catering', 'wedding cake trends', 'wedding food stations', 'wedding bar ideas'] },
+  { id: 'w6', title: 'Honeymoon Travel Trends',                 description: 'Top honeymoon destination searches.',                                   keywords: ['honeymoon destinations', 'all inclusive honeymoon', 'europe honeymoon', 'tropical honeymoon'] },
+  { id: 'w7', title: 'Wedding — 5-Year Seasonality',            description: 'See exactly when wedding season peaks each year.',                      keywords: ['wedding'], fixedTime: 'today 5-y' },
+  { id: 'w8', title: 'Wedding Planning — Related Queries',      description: 'Rising queries — content goldmine.',                                    keywords: ['wedding planning'], type: 'RELATED_QUERIES' },
 ];
 
 const TIME_OPTIONS = [
-  { label: 'Past 7 days',    value: 'now 7-d',     eq: 'date=now+7-d' },
-  { label: 'Past 30 days',   value: 'today 1-m',   eq: 'date=today+1-m' },
-  { label: 'Past 90 days',   value: 'today 3-m',   eq: 'date=today+3-m' },
-  { label: 'Past 12 months', value: 'today 12-m',  eq: 'date=today+12-m' },
-  { label: 'Past 5 years',   value: 'today 5-y',   eq: 'date=today+5-y' },
+  { label: 'Past 7 days',    value: 'now 7-d',    dateParam: 'now+7-d' },
+  { label: 'Past 30 days',   value: 'today 1-m',  dateParam: 'today+1-m' },
+  { label: 'Past 90 days',   value: 'today 3-m',  dateParam: 'today+3-m' },
+  { label: 'Past 12 months', value: 'today 12-m', dateParam: 'today+12-m' },
+  { label: 'Past 5 years',   value: 'today 5-y',  dateParam: 'today+5-y' },
 ];
+
+function buildTrendsUrl(widget: TrendWidget, timeframe: string): string {
+  const time = widget.fixedTime ?? timeframe;
+  const timeOpt = TIME_OPTIONS.find(t => t.value === time) ?? TIME_OPTIONS[3];
+  const dateParam = widget.fixedTime ? 'today+5-y' : timeOpt.dateParam;
+  const type = widget.type ?? 'TIMESERIES';
+  const geo = 'US';
+
+  const comparisonItem = widget.keywords.map(kw => ({ keyword: kw, geo, time }));
+  const req = encodeURIComponent(JSON.stringify({ comparisonItem, category: 0, property: '' }));
+
+  // Build eq= param — mirrors the explore query string Google uses
+  const qParam = widget.keywords.map(k => encodeURIComponent(k)).join('%2C');
+  const eq = `date%3D${dateParam}%26geo%3D${geo}%26q%3D${qParam}`;
+
+  return `https://trends.google.com/trends/embed/explore/${type}?req=${req}&tz=300&eq=${eq}`;
+}
 
 function TrendsTab() {
   const [section, setSection] = React.useState<'venues' | 'wedding'>('venues');
   const [timeframe, setTimeframe] = React.useState('today 12-m');
   const [loaded, setLoaded] = React.useState<Set<string>>(new Set());
-  const [scriptReady, setScriptReady] = React.useState(false);
   const widgets = section === 'venues' ? VENUE_WIDGETS : WEDDING_WIDGETS;
 
-  // Load embed_loader.js once
-  React.useEffect(() => {
-    if (window.trends) { setScriptReady(true); return; }
-    const existing = document.getElementById('gt-embed-loader');
-    if (existing) {
-      const check = setInterval(() => { if (window.trends) { setScriptReady(true); clearInterval(check); } }, 100);
-      return;
-    }
-    const script = document.createElement('script');
-    script.id = 'gt-embed-loader';
-    script.src = 'https://ssl.gstatic.com/trends_nrtr/3768_RC01/embed_loader.js';
-    script.async = true;
-    script.onload = () => setScriptReady(true);
-    document.head.appendChild(script);
-  }, []);
-
-  // Render a widget into its container div
-  function renderWidget(cfg: TrendWidgetConfig, timeVal: string) {
-    if (!window.trends?.embed) return;
-    const containerId = `gt-${cfg.id}`;
-    const el = document.getElementById(containerId);
-    if (!el) return;
-    el.innerHTML = ''; // clear previous render
-
-    const timeOption = TIME_OPTIONS.find(t => t.value === timeVal) ?? TIME_OPTIONS[3];
-    // For the 5-year chart, always use 5-year
-    const resolvedTime = cfg.id === 'w7' ? 'today 5-y' : timeVal;
-    const resolvedEq   = cfg.id === 'w7' ? 'date=today+5-y' : timeOption.eq;
-
-    const comparisonItem = cfg.keywords.map(kw => ({
-      keyword: kw,
-      geo: 'US',
-      time: resolvedTime,
-    }));
-
-    window.trends.embed.renderExploreWidget(
-      cfg.type,
-      { comparisonItem, category: 0, property: '' },
-      {
-        exploreQuery: `${resolvedEq}&${cfg.exploreQuery}&geo=US`,
-        guestPath: 'https://trends.google.com:443/trends/embed/',
-      }
-    );
-  }
-
-  function loadChart(cfg: TrendWidgetConfig) {
-    setLoaded(prev => new Set([...prev, cfg.id]));
-    // Give React time to mount the container div before rendering
-    setTimeout(() => renderWidget(cfg, timeframe), 100);
+  function loadChart(id: string) {
+    setLoaded(prev => new Set([...prev, id]));
   }
 
   function loadAll() {
-    const ids = new Set(widgets.map(w => w.id));
-    setLoaded(ids);
-    setTimeout(() => {
-      widgets.forEach(cfg => renderWidget(cfg, timeframe));
-    }, 150);
+    setLoaded(new Set(widgets.map(w => w.id)));
   }
 
-  // Re-render loaded charts when timeframe changes
-  React.useEffect(() => {
-    if (!scriptReady || loaded.size === 0) return;
-    const timer = setTimeout(() => {
-      widgets.forEach(cfg => {
-        if (loaded.has(cfg.id)) renderWidget(cfg, timeframe);
-      });
-    }, 200);
-    return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeframe, scriptReady]);
+  function handleSectionChange(s: 'venues' | 'wedding') {
+    setSection(s);
+    setLoaded(new Set());
+  }
+
+  function handleTimeChange(t: string) {
+    setTimeframe(t);
+    // Reload all currently loaded charts with new timeframe by toggling loaded set
+    setLoaded(new Set());
+  }
 
   return (
     <div className="space-y-6">
@@ -2348,60 +2225,63 @@ function TrendsTab() {
       {/* Controls */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex rounded-xl border border-gray-200 overflow-hidden">
-          <button onClick={() => { setSection('venues'); setLoaded(new Set()); }}
+          <button onClick={() => handleSectionChange('venues')}
             className={`px-4 py-2 text-sm font-semibold transition-colors ${section === 'venues' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
             🏛 Wedding Venues
           </button>
-          <button onClick={() => { setSection('wedding'); setLoaded(new Set()); }}
+          <button onClick={() => handleSectionChange('wedding')}
             className={`px-4 py-2 text-sm font-semibold transition-colors border-l border-gray-200 ${section === 'wedding' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
             💍 Wedding Industry
           </button>
         </div>
-        <select value={timeframe} onChange={e => setTimeframe(e.target.value)}
+        <select value={timeframe} onChange={e => handleTimeChange(e.target.value)}
           className="rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:border-gray-400 transition-colors">
           {TIME_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
-        <button onClick={loadAll} disabled={!scriptReady}
-          className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50">
-          {scriptReady ? 'Load All Charts' : 'Loading...'}
+        <button onClick={loadAll}
+          className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+          Load All Charts
         </button>
       </div>
 
       <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
-        <strong>Tip:</strong> Click &ldquo;Load Chart&rdquo; on each card to render it. Use &ldquo;Load All Charts&rdquo; to load everything at once.
-        Change the timeframe to see seasonal patterns. <strong>Related Queries</strong> charts show rising/breakout searches — perfect for blog content ideas.
+        <strong>Tip:</strong> Click &ldquo;Load Chart&rdquo; to render each chart, or &ldquo;Load All Charts&rdquo; to load everything.
+        Use <strong>Related Queries</strong> charts for blog content and keyword ideas. Change the timeframe to see seasonal patterns.
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-        {widgets.map(cfg => (
-          <div key={cfg.id} className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+        {widgets.map(widget => (
+          <div key={widget.id} className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
             <div className="flex items-start justify-between gap-2 px-5 py-4 border-b border-gray-200">
               <div>
-                <p className="text-sm font-semibold text-gray-900">{cfg.title}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{cfg.description}</p>
+                <p className="text-sm font-semibold text-gray-900">{widget.title}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{widget.description}</p>
               </div>
-              {loaded.has(cfg.id) && (
-                <a href={`https://trends.google.com/trends/explore?${cfg.exploreQuery}`}
-                  target="_blank" rel="noreferrer"
-                  className="flex-shrink-0 text-[11px] text-gray-400 hover:text-gray-600 transition-colors mt-0.5">
-                  Open ↗
-                </a>
-              )}
+              <a href={`https://trends.google.com/trends/explore?q=${encodeURIComponent(widget.keywords[0])}&geo=US`}
+                target="_blank" rel="noreferrer"
+                className="flex-shrink-0 text-[11px] text-gray-400 hover:text-gray-600 transition-colors mt-0.5 whitespace-nowrap">
+                Open ↗
+              </a>
             </div>
-            <div className="p-4">
-              {loaded.has(cfg.id) ? (
-                <div
-                  id={`gt-${cfg.id}`}
-                  style={{ minHeight: cfg.height ?? 310 }}
-                  className="w-full"
+            <div className="p-3">
+              {loaded.has(widget.id) ? (
+                <iframe
+                  key={`${widget.id}-${timeframe}`}
+                  src={buildTrendsUrl(widget, timeframe)}
+                  width="100%"
+                  height={widget.type === 'RELATED_QUERIES' ? 480 : widget.type === 'GEO_MAP' ? 360 : 320}
+                  frameBorder="0"
+                  scrolling="0"
+                  style={{ display: 'block' }}
+                  title={widget.title}
                 />
               ) : (
                 <div className="flex flex-col items-center justify-center gap-3 py-12 bg-gray-50 rounded-xl">
                   <TrendingUp size={24} className="text-gray-300" />
-                  <p className="text-xs text-gray-400 text-center max-w-[200px]">{cfg.description}</p>
-                  <button onClick={() => loadChart(cfg)} disabled={!scriptReady}
-                    className="rounded-xl bg-gray-900 px-4 py-2 text-xs font-semibold text-white hover:bg-gray-700 transition-colors disabled:opacity-50">
-                    {scriptReady ? 'Load Chart' : 'Loading...'}
+                  <p className="text-xs text-gray-400 text-center max-w-[220px]">{widget.description}</p>
+                  <button onClick={() => loadChart(widget.id)}
+                    className="rounded-xl bg-gray-900 px-5 py-2 text-xs font-semibold text-white hover:bg-gray-700 transition-colors">
+                    Load Chart
                   </button>
                 </div>
               )}
