@@ -3,8 +3,10 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   const cookieStore = await cookies();
-  // Clear the venue session cookie
+  // Clear session cookies
   cookieStore.delete('venue_id');
-  // Redirect to login page
-  return NextResponse.redirect(new URL('/', process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io'));
+  cookieStore.delete('member_id');
+  // Send to login page so they can easily log back in
+  const base = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
+  return NextResponse.redirect(new URL('/login', base));
 }

@@ -378,7 +378,12 @@ export default function LandingPage() {
         {/* Nav */}
         <nav className="mx-auto max-w-5xl px-5 sm:px-8 py-5 flex items-center justify-between">
           <Image src="/storypay-logo-dark.png" alt="StoryPay" width={110} height={26} />
-          <a href="/admin" className="text-xs text-gray-400 hover:text-gray-600 transition-colors">Admin</a>
+          <div className="flex items-center gap-4">
+            <a href="/login" className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm">
+              Log In
+            </a>
+            <a href="/admin" className="text-xs text-gray-400 hover:text-gray-600 transition-colors">Admin</a>
+          </div>
         </nav>
 
         {/* Hero content */}
