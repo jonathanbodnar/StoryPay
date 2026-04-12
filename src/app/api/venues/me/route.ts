@@ -15,7 +15,7 @@ export async function GET() {
 
   const { data: venue, error } = await supabaseAdmin
     .from('venues')
-    .select('id, name, email, phone, address, city, state, zip, onboarding_status, onboarding_mpa_url, ghl_connected, ghl_location_id, setup_completed, lunarpay_merchant_id, service_fee_rate, brand_logo_url, brand_tagline, brand_website, brand_color, brand_email, brand_phone, brand_address, brand_city, brand_state, brand_zip, brand_footer_note')
+    .select('id, name, email, phone, address, city, state, zip, onboarding_status, onboarding_mpa_url, ghl_connected, ghl_location_id, setup_completed, lunarpay_merchant_id, service_fee_rate, brand_logo_url, brand_tagline, brand_website, brand_color, brand_bg_color, brand_btn_text, brand_email, brand_phone, brand_address, brand_city, brand_state, brand_zip, brand_footer_note')
     .eq('id', venueId)
     .single();
 
@@ -34,20 +34,20 @@ export async function PATCH(request: Request) {
 
   const body = await request.json();
   const allowedFields: Record<string, boolean> = {
-    name: true,
-    service_fee_rate: true,
-    brand_logo_url: true,
-    brand_tagline: true,
-    brand_website: true,
-    brand_color: true,
-    brand_bg_color: true,
-    brand_btn_text: true,
-    brand_email: true,
-    brand_phone: true,
-    brand_address: true,
-    brand_city: true,
-    brand_state: true,
-    brand_zip: true,
+    name:              true,
+    service_fee_rate:  true,
+    brand_logo_url:    true,
+    brand_color:       true,  // primary / button color
+    brand_bg_color:    true,  // background color
+    brand_btn_text:    true,  // button text color
+    brand_tagline:     true,
+    brand_website:     true,
+    brand_email:       true,
+    brand_phone:       true,
+    brand_address:     true,
+    brand_city:        true,
+    brand_state:       true,
+    brand_zip:         true,
     brand_footer_note: true,
   };
   const updates: Record<string, unknown> = {};
@@ -69,7 +69,7 @@ export async function PATCH(request: Request) {
     .from('venues')
     .update(updates)
     .eq('id', venueId)
-    .select('id, service_fee_rate, brand_logo_url, brand_tagline, brand_website, brand_color, brand_email, brand_phone, brand_address, brand_city, brand_state, brand_zip, brand_footer_note')
+    .select('id, name, service_fee_rate, brand_logo_url, brand_color, brand_bg_color, brand_btn_text, brand_tagline, brand_website, brand_email, brand_phone, brand_address, brand_city, brand_state, brand_zip, brand_footer_note')
     .single();
 
   if (error) {

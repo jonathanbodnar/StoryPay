@@ -138,7 +138,7 @@ export default function BrandingPage() {
     fetch('/api/venues/me').then(r => r.json()).then(d => {
       setBrand({
         logo_url:    d.brand_logo_url   || '',
-        primary:     (d.brand_color && d.brand_color !== '#293745' && d.brand_color !== '#354859') ? d.brand_color : '#1b1b1b',
+        primary:     d.brand_color      || '#1b1b1b',
         bg:          d.brand_bg_color   || '#ffffff',
         btnText:     d.brand_btn_text   || '#ffffff',
         venueName:   d.name             || '',
@@ -181,7 +181,7 @@ export default function BrandingPage() {
   async function save() {
     setSaving(true);
     try {
-      await fetch('/api/venues/me', {
+      const res = await fetch('/api/venues/me', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -200,6 +200,20 @@ export default function BrandingPage() {
           brand_footer_note: brand.footer_note,
         }),
       });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error('[branding] save failed:', err);
+        return;
+      }
+      // Sync local state from DB response so preview stays accurate
+      const saved = await res.json();
+      setBrand(b => ({
+        ...b,
+        primary:    saved.brand_color     || b.primary,
+        bg:         saved.brand_bg_color  || b.bg,
+        btnText:    saved.brand_btn_text  || b.btnText,
+        logo_url:   saved.brand_logo_url  ?? '',
+      }));
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } finally { setSaving(false); }
