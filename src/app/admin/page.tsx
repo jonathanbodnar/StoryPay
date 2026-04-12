@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import {
   DollarSign, Users, FileText, Clock, XCircle, Building2,
@@ -340,7 +340,7 @@ export default function AdminPage() {
   const [authState, setAuthState]   = useState<AuthState>('loading');
   const [secret, setSecret]         = useState('');
   const [loginError, setLoginError] = useState('');
-  const [activeTab, setActiveTab]   = useState<'dashboard' | 'venues' | 'announcements' | 'feature-requests' | 'suggested-articles' | 'search-analytics' | 'article-ratings'>('dashboard');
+  const [activeTab, setActiveTab]   = useState<'dashboard' | 'venues' | 'announcements' | 'feature-requests' | 'suggested-articles' | 'search-analytics' | 'article-ratings' | 'blog'>('dashboard');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // Stats
@@ -674,6 +674,7 @@ export default function AdminPage() {
   const navItems = [
     { key: 'dashboard',         label: 'Dashboard',         icon: LayoutDashboard },
     { key: 'venues',            label: 'Venues',            icon: Building2 },
+    { key: 'blog',              label: 'Blog / SEO',        icon: BookOpen },
     { key: 'announcements',     label: 'Announcements',     icon: Megaphone },
     { key: 'feature-requests',  label: 'Feature Requests',  icon: Lightbulb },
     { key: 'suggested-articles', label: 'Suggested Articles', icon: BookOpen },
@@ -1641,8 +1642,247 @@ export default function AdminPage() {
           </div>
         )}
 
+        {/* ── Blog / SEO Tab ── */}
+        {activeTab === 'blog' && <BlogTab />}
+
         </main>
       </div>
     </div>
   );
+}
+
+// ─── Blog CMS component (separate to keep admin page clean) ──────────────────
+function BlogTab() {
+  const [posts, setPosts] = React.useState<BlogPost[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [editing, setEditing] = React.useState<BlogPost | null>(null);
+  const [creating, setCreating] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+  const [form, setForm] = React.useState<Partial<BlogPost>>(emptyPost());
+
+  function emptyPost(): Partial<BlogPost> {
+    return { title: '', slug: '', meta_title: '', meta_description: '', excerpt: '', content: '',
+      author_name: 'StoryPay Team', category: '', tags: [], featured_image: '', og_image: '',
+      status: 'draft', noindex: false };
+  }
+
+  React.useEffect(() => {
+    fetch('/api/admin/blog').then(r => r.ok ? r.json() : []).then(setPosts).finally(() => setLoading(false));
+  }, []);
+
+  function autoSlug(title: string) {
+    return title.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').trim();
+  }
+
+  function upd(k: keyof BlogPost) {
+    return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+      const val = e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value;
+      setForm(p => ({
+        ...p, [k]: val,
+        ...(k === 'title' && !p.slug ? { slug: autoSlug(e.target.value) } : {}),
+      }));
+    };
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      const method = editing ? 'PATCH' : 'POST';
+      const url = editing ? `/api/admin/blog/${editing.id}` : '/api/admin/blog';
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
+      if (res.ok) {
+        const saved = await res.json();
+        setPosts(p => editing ? p.map(x => x.id === saved.id ? saved : x) : [saved, ...p]);
+        setEditing(null); setCreating(false); setForm(emptyPost());
+      }
+    } finally { setSaving(false); }
+  }
+
+  async function deletePost(id: string) {
+    if (!confirm('Delete this post? This cannot be undone.')) return;
+    await fetch(`/api/admin/blog/${id}`, { method: 'DELETE' });
+    setPosts(p => p.filter(x => x.id !== id));
+  }
+
+  function startEdit(post: BlogPost) {
+    setForm({ ...post, tags: post.tags || [] });
+    setEditing(post); setCreating(false);
+  }
+
+  const INPUT = 'w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors';
+  const LABEL = 'block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide';
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="font-heading text-xl text-gray-900">Blog / SEO</h2>
+          <p className="text-sm text-gray-500 mt-0.5">Create and manage blog posts. All posts include automatic Schema markup, OG tags, and sitemap inclusion.</p>
+        </div>
+        {!creating && !editing && (
+          <button onClick={() => { setCreating(true); setEditing(null); setForm(emptyPost()); }}
+            className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 transition-all shadow-sm"
+            style={{ backgroundColor: BRAND }}>
+            <Plus size={15} /> New Post
+          </button>
+        )}
+      </div>
+
+      {/* Editor */}
+      {(creating || editing) && (
+        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+            <h3 className="font-semibold text-gray-900">{editing ? 'Edit Post' : 'New Post'}</h3>
+            <button onClick={() => { setEditing(null); setCreating(false); setForm(emptyPost()); }}
+              className="text-gray-400 hover:text-gray-600 transition-colors"><X size={18} /></button>
+          </div>
+          <div className="px-6 py-5 space-y-5">
+            {/* Core fields */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="sm:col-span-2">
+                <label className={LABEL}>Title *</label>
+                <input type="text" value={form.title || ''} onChange={upd('title')} placeholder="10 Ways Wedding Venues Can Simplify Payments" className={INPUT} />
+              </div>
+              <div>
+                <label className={LABEL}>URL Slug *</label>
+                <input type="text" value={form.slug || ''} onChange={upd('slug')} placeholder="simplify-venue-payments" className={INPUT} />
+                <p className="text-[10px] text-gray-400 mt-1">storypay.io/blog/{form.slug || 'your-slug'}</p>
+              </div>
+              <div>
+                <label className={LABEL}>Category</label>
+                <input type="text" value={form.category || ''} onChange={upd('category')} placeholder="Venue Management" className={INPUT} />
+              </div>
+              <div>
+                <label className={LABEL}>Author</label>
+                <input type="text" value={form.author_name || ''} onChange={upd('author_name')} placeholder="StoryPay Team" className={INPUT} />
+              </div>
+              <div>
+                <label className={LABEL}>Status</label>
+                <select value={form.status || 'draft'} onChange={upd('status')} className={INPUT}>
+                  <option value="draft">Draft</option>
+                  <option value="published">Published</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Excerpt */}
+            <div>
+              <label className={LABEL}>Excerpt (shown in blog list)</label>
+              <textarea value={form.excerpt || ''} onChange={upd('excerpt')} rows={2} placeholder="A brief summary of the post..." className={`${INPUT} resize-none`} />
+            </div>
+
+            {/* Content */}
+            <div>
+              <label className={LABEL}>Content (HTML)</label>
+              <textarea value={form.content || ''} onChange={upd('content')} rows={16}
+                placeholder="<h2 id='section-1'>Introduction</h2><p>Your content here...</p>"
+                className={`${INPUT} resize-y font-mono text-xs`} />
+              <p className="text-[10px] text-gray-400 mt-1">Write in HTML. Add id= to headings for table of contents. Use h2/h3 for proper hierarchy.</p>
+            </div>
+
+            {/* Images */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={LABEL}>Featured Image URL</label>
+                <input type="url" value={form.featured_image || ''} onChange={upd('featured_image')} placeholder="https://..." className={INPUT} />
+              </div>
+              <div>
+                <label className={LABEL}>OG / Social Share Image URL</label>
+                <input type="url" value={form.og_image || ''} onChange={upd('og_image')} placeholder="https://... (1200×630px)" className={INPUT} />
+              </div>
+            </div>
+
+            {/* SEO Controls */}
+            <div className="rounded-xl border border-gray-200 bg-gray-50/50 p-4 space-y-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">SEO Controls</p>
+              <div>
+                <label className={LABEL}>SEO Title (overrides post title in search results)</label>
+                <input type="text" value={form.meta_title || ''} onChange={upd('meta_title')} placeholder="Leave blank to use post title" className={INPUT} />
+                <p className="text-[10px] text-gray-400 mt-0.5">{(form.meta_title || form.title || '').length}/60 characters recommended</p>
+              </div>
+              <div>
+                <label className={LABEL}>Meta Description</label>
+                <textarea value={form.meta_description || ''} onChange={upd('meta_description')} rows={2}
+                  placeholder="155 character description for search results..." className={`${INPUT} resize-none`} />
+                <p className="text-[10px] text-gray-400 mt-0.5">{(form.meta_description || '').length}/155 characters recommended</p>
+              </div>
+              <div>
+                <label className={LABEL}>Tags (comma-separated)</label>
+                <input type="text" value={(form.tags || []).join(', ')} onChange={e => setForm(p => ({ ...p, tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean) }))}
+                  placeholder="wedding venue, payments, proposals" className={INPUT} />
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={form.noindex || false}
+                  onChange={e => setForm(p => ({ ...p, noindex: e.target.checked }))}
+                  className="h-4 w-4 rounded border-gray-300" />
+                <span className="text-sm text-gray-700">Noindex (hide from search engines)</span>
+              </label>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <button onClick={() => { setEditing(null); setCreating(false); setForm(emptyPost()); }}
+                className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+                Cancel
+              </button>
+              <button onClick={save} disabled={saving || !form.title?.trim() || !form.slug?.trim()}
+                className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60 transition-all shadow-sm"
+                style={{ backgroundColor: BRAND }}>
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                {saving ? 'Saving...' : form.status === 'published' ? 'Publish Post' : 'Save Draft'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Posts list */}
+      {loading ? (
+        <div className="flex justify-center py-12"><Loader2 size={22} className="animate-spin text-gray-400" /></div>
+      ) : posts.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-gray-200 py-16 text-center">
+          <BookOpen size={32} className="mx-auto mb-3 text-gray-200" />
+          <p className="text-sm text-gray-500">No blog posts yet. Create your first post to start driving SEO traffic.</p>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+          <div className="hidden sm:grid grid-cols-[1fr_120px_100px_100px_80px] gap-4 px-5 py-3 bg-gray-50 border-b border-gray-100">
+            {['Title', 'Category', 'Status', 'Published', ''].map(h => (
+              <span key={h} className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{h}</span>
+            ))}
+          </div>
+          <div className="divide-y divide-gray-100">
+            {posts.map(post => (
+              <div key={post.id} className="grid grid-cols-1 sm:grid-cols-[1fr_120px_100px_100px_80px] gap-4 px-5 py-4 items-center hover:bg-gray-50/50">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 truncate">{post.title}</p>
+                  <a href={`/blog/${post.slug}`} target="_blank" rel="noreferrer"
+                    className="text-xs text-gray-400 hover:text-gray-600 truncate block">/blog/{post.slug}</a>
+                </div>
+                <span className="text-sm text-gray-500 truncate">{post.category || '—'}</span>
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full w-fit ${post.status === 'published' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                  {post.status}
+                </span>
+                <span className="text-xs text-gray-400">{post.published_at ? new Date(post.published_at).toLocaleDateString() : '—'}</span>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => startEdit(post)} className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
+                    <Pencil size={13} />
+                  </button>
+                  <button onClick={() => deletePost(post.id)} className="flex h-7 w-7 items-center justify-center rounded-lg text-red-400 hover:bg-red-50 transition-colors">
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface BlogPost {
+  id: string; slug: string; title: string; meta_title: string | null;
+  meta_description: string | null; og_image: string | null; excerpt: string | null;
+  content: string; author_name: string; category: string | null; tags: string[];
+  featured_image: string | null; status: string; noindex: boolean; published_at: string | null;
 }
