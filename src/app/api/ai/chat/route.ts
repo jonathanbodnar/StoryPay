@@ -7,94 +7,131 @@ const PLATFORM_DOCS = `
 # StoryPay Platform Documentation
 
 ## Overview
-StoryPay is a proposal and payment platform built specifically for wedding venues. It lets you send branded contracts, collect e-signatures, and get paid — all in one place.
+StoryPay is an all-in-one platform for wedding venues to manage proposals, invoices, payments, customers, email templates, branding, and team members — all from one place.
 
 ## Navigation / Sections
-- **Home (Dashboard)**: Overview of revenue, proposals, customers, pending payments. Has a date range filter and recent proposals/transactions.
-- **Proposals**: Create, send, edit, and track proposals and contracts. Includes templates. Status flow: Draft → Sent → Opened → Signed → Paid.
-- **Customers**: Manage your client database. Add customers, view their history, create proposals/invoices directly from their profile.
-- **Transactions**: View Charges (paid proposals), Payment Schedules (installment plans), and Subscriptions. Can issue refunds from Charges tab.
-- **Reports**: Run 6 financial reports (Revenue, Proposals, Customer Summary, AR Aging, Payment Methods, Refunds). Download as CSV, Excel, or PDF.
-- **Ask AI**: This AI assistant. Ask any question about the platform or your account.
-- **What's New**: Changelog of latest features and a Feature Requests board where you can vote on what to build next.
-- **Support**: Submit a support ticket.
-- **Settings**: Manage venue info, branding (logo, contact info, address, footer note), payment processing status, billing fee settings, and messaging integrations.
+- Home (Dashboard): Revenue overview, KPI cards, recent proposals and transactions, date range filter.
+- Customers: Manage your client database. Add, view, and create proposals/invoices from a customer profile.
+- Reports: 6 downloadable financial reports (CSV, Excel, PDF).
+- Payments: Create proposals/invoices, manage templates, installments, subscriptions, transactions.
+- Help Center: Searchable documentation with AI-assisted answers.
+- What's New: Changelog and Feature Requests board.
+- Settings: General, Branding, Email Templates, Integrations, Team, Notifications.
+- Ask AI: This assistant — answers questions about your account in real time.
 
 ## Proposals
-- Click **Proposals** → **Create Proposal** to start a new proposal.
-- You must select a template first, then fill in customer details and pricing.
-- Payment types: Full Payment, Installment Plan, or Subscription.
-- Send via SMS/email through GHL (if connected), or copy the proposal link manually.
-- Clients open the link, read the contract, sign it, then pay.
-- You can resend a proposal from the Proposals tab using the refresh icon.
+- Go to Payments → New to create a proposal or invoice.
+- Proposals require a template. Invoices do not.
+- Payment types: Full Payment, Installment Plan, Subscription.
+- Clients receive an email/SMS with a link to review, sign, and pay.
 - Proposal statuses: Draft, Sent, Opened, Signed, Paid, Refunded.
+- Resend a proposal from the Proposals list using the refresh icon.
 
-## Templates
-- Go to **Proposals → Templates** to create and manage proposal templates.
-- Use the full WYSIWYG editor (like Google Docs) to write your contract content.
-- Click **Generate with AI** to have AI draft a complete proposal from your details.
-- Add signature fields (Signature, Printed Name, Date) that appear at the bottom for clients to fill in.
-- Preview any template before editing using the **Preview** button.
+## Proposal Templates
+- Go to Payments → Proposal Templates to create and manage templates.
+- Use the WYSIWYG editor to write contract content.
+- Click Generate with AI to have AI draft a complete template.
+- Add signature fields (Signature, Printed Name, Date) at the bottom.
 
 ## Invoices
-- Go to **Proposals → Create Invoice** to send a one-off invoice (no template needed).
-- Add multiple line items with names, descriptions, and amounts.
-- The total auto-calculates.
-- Clients receive the invoice via SMS/email and can pay online.
+- Go to Payments → New → Create Invoice for a one-off invoice without a template.
+- Add multiple line items; total auto-calculates.
+- Clients receive it via email/SMS and pay online.
 
 ## Customers
-- Go to **Customers** to view all clients.
-- Click **Add Customer** to add a new client manually.
-- Each customer row has: **View Customer**, **Create Proposal**, and **Create Invoice** buttons.
-- Click on a customer name to view their full profile with proposal history and total spend.
+- Go to Customers to view all clients.
+- Add Customer to create a new record manually.
+- Each row has View, Create Proposal, and Create Invoice actions.
+- Click a customer name to see their full history and total spend.
 
 ## Transactions
-- **Charges tab**: All paid transactions. Click **View Transaction** to see full details. Click **Refund** to issue a refund.
-- **Payment Schedules tab**: Installment plans. Shows total, number of payments, and status.
-- **Subscriptions tab**: Recurring subscription payments.
-- All tabs have a **View Customer** button to jump to the client profile.
+- Charges tab: All paid transactions. Click Refund to issue a refund.
+- Payment Schedules tab: Installment plans.
+- Subscriptions tab: Recurring payments.
 
 ## Reports
-- Go to **Reports** to run any of 6 built-in reports.
-- Use the date range picker to filter by time period.
-- Click **Preview** to see data before downloading.
-- Download as **CSV**, **Excel (.xlsx)**, or **PDF** (branded with your venue header).
-- Report types: Revenue, Proposals, Customer Summary, AR Aging (overdue), Payment Method Breakdown, Refunds.
+- 6 report types: Revenue, Proposals, Customer Summary, AR Aging, Payment Method Breakdown, Refunds.
+- Filter by date range. Download as CSV, Excel, or PDF.
 
-## Settings
-- **Venue Branding**: Add your logo URL, contact email, phone, website, address, and a footer note for documents.
-- **Payment Processing**: Shows your LunarPay merchant account status (Active, Pending, Under Review).
-- **Billing**: Configure the processing fee percentage passed to clients at checkout.
-- **Messaging**: Connect your GHL (Go High Level) account for SMS/email notifications.
+## Branding & Customization
+- Go to Settings → Branding to upload a logo and set brand colors.
+- Logo and colors appear on all emails, invoices, and proposals sent to clients.
+- Color presets available (Default, Ivory & Gold, Sage & Stone, etc.) — click a preset to apply and save instantly.
+- Custom colors: Primary/button color, background color, button text color.
+- Contact info (email, phone, address) shown on documents.
+- All emails use the venue logo in a white header with a brand-color strip underneath.
+
+## Email Templates
+- Go to Settings → Email Templates to customize every type of outgoing email.
+- Template types: Invoice, Proposal, Payment Confirmation, Payment Notification, Subscription Confirmation, Subscription Cancelled, Payment Failed.
+- Each template has: Subject Line, Email Heading, Body Text, Button Text (optional), Footer Text (optional).
+- Click Preview to see exactly what the email will look like.
+- Click Send Test to send a test version to any email address.
+- Toggle Enable/Disable to turn a template on or off.
+- All emails use your venue branding (logo, brand color).
+
+## Settings → General
+- Payment Processing: Shows LunarPay merchant account status.
+- Setup Guide: Restart the Getting Started checklist on your dashboard (owners only).
+- Messaging: Connect GHL (Go High Level) for SMS notifications.
+
+## Team Members
+- Go to Settings → Team to manage who has access to your account.
+- Three roles:
+  - Owner: Full access to everything including settings, team management, branding.
+  - Admin: Access to proposals, customers, reports, branding, email templates. Cannot manage team or general settings.
+  - Member: Can only view and manage proposals and customers. No access to settings or reports.
+- Click Add Team Member to invite someone by email.
+- They receive a branded invite email with an Accept Invitation link.
+- Click the ... menu on any member to Edit, Resend Invite, or Remove.
+- Team members can update their own profile (name, email) at Settings → Profile.
+
+## Get Started Checklist (Onboarding)
+- New accounts see a Get Started bubble on the dashboard (owners only).
+- Click the bubble to open a modal with 6 setup steps:
+  1. Create Your Profile and Branding
+  2. Customize Email Templates
+  3. Create Your First Proposal Template
+  4. Create Your First Proposal
+  5. Send Your First Proposal
+  6. Invite a Team Member
+- Check off each step manually as you complete it.
+- Once all steps are checked, click "I'm Ready" to dismiss the bubble permanently.
+- To restart the guide, go to Settings → General → Restart Setup Guide.
+
+## SMS Notifications
+- SMS is sent automatically when proposals and invoices are created (if customer has a phone number).
+- Phone numbers must be in US format — the system auto-formats them to +1XXXXXXXXXX (E.164).
+- SMS routes through your GHL sub-account's A2P approved phone number.
 
 ## Refunds
-- Go to **Transactions → Charges**.
-- Find the charge and click **Refund**.
-- Confirm the amount in the popup and click **Issue Refund**.
-- The refund processes immediately through LunarPay.
+- Go to Transactions → Charges → find the charge → click Refund.
+- Confirm the amount and click Issue Refund. Processes immediately through LunarPay.
 
 ## Payment Processing
-- StoryPay uses **LunarPay** (powered by Fortis) for all payment processing.
-- Your account must complete Fortis onboarding before you can accept payments.
-- Card numbers never touch StoryPay's servers — they go directly to Fortis (PCI SAQ-A compliant).
+- StoryPay uses LunarPay (powered by Fortis) for all payment processing.
+- Account must complete Fortis onboarding before accepting payments.
+- Card numbers go directly to Fortis — PCI SAQ-A compliant.
 
-## GHL / Messaging Integration
-- Go to **Settings → Messaging** and click **Connect Account**.
-- Once connected, SMS and email notifications are sent automatically when proposals are created or signed.
-
-## Ask AI
-- Ask any question about your account, reports, proposals, invoices, or how to use the platform.
-- After Ask AI attempts to help, you can request human support.
-- Human support emails are sent to clients@storyvenuemarketing.com with your full account context.
+## Help Center
+- Go to Help Center for searchable documentation.
+- Use voice search (mic icon) to speak your question.
+- Each article has related articles at the bottom.
+- Click Ask AI in the Help Center to chat with the AI assistant.
+- Rate articles with thumbs up/down to help improve documentation.
 
 ## Common Questions
-- **How do I create a proposal?** Go to Proposals → Create Proposal → select a template → fill in client details and pricing → Send.
-- **How do I see my revenue?** Check the Home dashboard (filter by date range) or run a Revenue Report.
-- **How do I refund a payment?** Go to Transactions → Charges → find the charge → click Refund.
-- **Why can't I accept payments?** Your LunarPay merchant account may still be pending. Check Settings → Payment Processing.
-- **How do I add my logo?** Go to Settings → Venue Branding → enter your logo URL.
-- **How do I see who voted on feature requests?** Go to What's New → Feature Requests.
-- **How do I send a test proposal?** Create a proposal to yourself using your own email.
+- How do I create a proposal? Payments → New → select a template → fill in client details → Send.
+- How do I see my revenue? Home dashboard (filter by date) or Reports → Revenue.
+- How do I refund a payment? Transactions → Charges → click Refund.
+- Why can't I accept payments? LunarPay account may be pending. Check Settings → Payment Processing.
+- How do I add my logo? Settings → Branding → upload logo file.
+- How do I change my brand colors? Settings → Branding → Color Presets or Custom Colors.
+- How do I add a team member? Settings → Team → Add Team Member.
+- Why can't a team member see Settings? Members only see proposals and customers. Admins see most settings. Only owners see General and Team.
+- How do I customize emails? Settings → Email Templates → select a type → edit → Save.
+- How do I send a test email? Settings → Email Templates → select a type → Send Test.
+- How do I restart the setup guide? Settings → General → Restart Setup Guide (owners only).
 `;
 
 export async function POST(request: NextRequest) {

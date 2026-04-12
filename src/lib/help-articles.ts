@@ -28,33 +28,42 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         id: 'gs-overview',
         title: 'Platform overview',
         tags: ['overview', 'intro', 'dashboard', 'what is'],
-        body: `StoryVenue is an all-in-one platform for wedding venues to manage proposals, invoices, payments, customers, and team members — all from one place.
+        body: `StoryPay is an all-in-one platform for wedding venues to manage proposals, invoices, payments, customers, branding, email templates, and team members — all from one place.
 
 After logging in you land on the Home dashboard which shows your revenue, pipeline, recent proposals, and recent transactions at a glance.
 
 Navigation lives in the left sidebar (or the hamburger menu on mobile). The main sections are:
 - Home — your live snapshot
 - Customers — manage contacts
-- Reports — 7 downloadable report types
-- Payments — proposals, invoices, installments, subscriptions
+- Reports — 6 downloadable financial report types (owners and admins only)
+- Payments — proposals, invoices, installments, subscriptions, transactions
+- Help Center — searchable documentation with AI-powered answers
 - Settings — branding, email templates, integrations, team, notifications
+
+What you see in the sidebar depends on your role. Owners see everything. Admins see most things. Members only see Payments and Customers.
 
 The floating sparkle button (bottom-right) opens Ask AI, which can answer questions about your account in real time.`,
       },
       {
         id: 'gs-onboarding',
         title: 'Get Started checklist',
-        tags: ['checklist', 'onboarding', 'setup', 'first steps'],
-        body: `When you first access your dashboard you'll see a "Get Started" checklist on the Home page. It tracks 6 steps:
+        tags: ['checklist', 'onboarding', 'setup', 'first steps', 'restart'],
+        body: `When you first access your dashboard as an owner you'll see a "Get Started" bubble near the top of the page.
 
-1. Payment Processing — connect your LunarPay merchant account (Settings → General)
-2. First Customer — add your first customer record
-3. First Proposal — create and send a proposal
-4. Branding — upload your logo and pick brand colors (Settings → Branding)
-5. Email Templates — customise your automated emails (Settings → Email Templates)
-6. Team Member — invite a colleague (Settings → Team)
+Click the bubble to open the setup checklist. It tracks 6 steps:
 
-Once all 6 are done the checklist collapses. You can also dismiss it early.`,
+1. Create Your Profile and Branding — upload your logo and set brand colors (Settings → Branding)
+2. Customize Email Templates — personalize the emails sent to clients (Settings → Email Templates)
+3. Create Your First Proposal Template — build a reusable contract template (Payments → Proposal Templates)
+4. Create Your First Proposal — use a template to create a proposal for a client
+5. Send Your First Proposal — send it to a client so they can sign and pay
+6. Invite a Team Member — add staff to your account (Settings → Team)
+
+Check off each step manually as you complete it. When all steps are checked, click "I'm Ready — Start Using StoryPay" to dismiss the bubble permanently.
+
+To restart the checklist at any time, go to Settings → General → Restart Setup Guide. This only clears the checkmarks — it does not delete any data.
+
+Note: The setup guide is only visible to account owners. Admins and Members do not see it.`,
       },
       {
         id: 'gs-login',
@@ -302,20 +311,22 @@ Downloads happen instantly in your browser — no email required. For large date
       {
         id: 'brand-setup',
         title: 'Setting up your brand',
-        tags: ['branding', 'logo', 'colors', 'brand', 'customize'],
+        tags: ['branding', 'logo', 'colors', 'brand', 'customize', 'email colors'],
         body: `Go to Settings → Branding.
 
-Upload your logo — click the upload area or drag-and-drop an image. Recommended size: 400×100 px, PNG or SVG.
+Upload your logo by clicking "Upload Logo" and selecting a PNG, JPG, or SVG file (max 5MB). The logo appears in all outgoing emails — it shows in a white header with a colored strip underneath.
 
-Choose a brand color by clicking one of the preset swatches or entering a hex code. This color appears on your proposals, invoices, and customer-facing emails.
+Choose brand colors:
+- Click a Color Preset (Default, Ivory & Gold, Sage & Stone, Blush & Cream, Coastal Blue, etc.) — saves automatically when clicked.
+- Or use Custom Colors to set the Primary/Button color, Background color, and Button Text color precisely.
 
-Fill in your contact details (email, phone, address) — these appear in the footer of every email and document you send.
+The live Preview panel on the right updates in real time as you change colors, showing exactly how invoices and emails will look.
 
-Add a tagline and website URL if you'd like them on customer documents.
+Fill in Contact Information — your email, phone, website, address, and a footer note. These appear on documents and in email footers.
 
-The live Preview panel on the right updates as you type, showing exactly how your invoices will look.
+Changes save automatically when you click a color preset. For other fields, click "Save Branding Settings" at the top.
 
-Click Save when done.`,
+Note: Branding settings are visible to owners and admins only.`,
       },
     ],
   },
@@ -328,20 +339,33 @@ Click Save when done.`,
       {
         id: 'email-types',
         title: 'Email template types',
-        tags: ['email', 'templates', 'automated', 'notification'],
-        body: `StoryVenue sends automated emails on your behalf. You can customise each one at Settings → Email Templates.
+        tags: ['email', 'templates', 'automated', 'notification', 'test email', 'preview'],
+        body: `StoryPay sends automated emails on your behalf. Customize each one at Settings → Email Templates.
 
 The 7 template types are:
-
 1. Invoice — sent when you send an invoice to a customer
 2. Proposal — sent when you send a proposal
-3. Payment Confirmation — sent to the customer after a successful payment
-4. Payment Notification — sent to you when you receive a payment
+3. Payment Confirmation — receipt sent to the customer after a successful payment
+4. Payment Notification — alert sent to you when you receive a payment
 5. Subscription Confirmation — sent to the customer when a subscription starts
 6. Subscription Cancelled — sent to the customer when a subscription ends
 7. Payment Failed — sent when a payment attempt fails
 
-Each template has a subject line, heading, body, optional button text, and footer. Toggle the Enable/Disable switch to turn individual emails on or off.`,
+Each template has:
+- Subject Line
+- Email Heading
+- Body Text (supports merge variables like {{customer_name}} and {{amount}})
+- Button Text (optional — the action button in the email)
+- Footer Text (optional — e.g. your cancellation policy)
+- Enable/Disable toggle
+
+All emails use your venue branding — your logo appears in the email header, and your brand color is used for the accent strip and button.
+
+To test a template: click "Send Test" and enter any email address. The test email shows exactly what clients receive, using sample data.
+
+To preview: click "Preview" for a live mock-up inside the editor.
+
+Tip: Send a test email to yourself before sending a real proposal to ensure everything looks correct.`,
       },
       {
         id: 'email-variables',
@@ -405,7 +429,7 @@ Invoices and charges sync to FreshBooks automatically. Use Sync Now for a manual
       {
         id: 'team-invite',
         title: 'Inviting team members',
-        tags: ['team', 'invite', 'add member', 'staff', 'user'],
+        tags: ['team', 'invite', 'add member', 'staff', 'user', 'email invite'],
         body: `Go to Settings → Team. Click "+ Add Team Member".
 
 Fill in:
@@ -414,33 +438,47 @@ Fill in:
 - Email (required)
 - Role: Owner, Admin, or Member
 
-Role permissions:
-- Owner — full access to everything including billing
-- Admin — manage proposals, customers, and settings
-- Member — view and manage proposals and customers (no settings access)
+Click Add Member. The team member immediately receives a branded invitation email at the address you entered. The email includes an Accept Invitation button that logs them into your account.
 
-Click Add Member. The team member appears in the list immediately. You can resend their invite, change their role, or remove them at any time.`,
+Once they click the link they are taken straight to the dashboard with the correct access level for their role.
+
+To manage a team member: click the three-dot (...) menu on their row to:
+- Edit — update their name, email, or role
+- Resend Invite — send the invitation email again
+- Remove — remove them from the account
+
+Team members can update their own name and email at any time by clicking their name in the sidebar footer → My Profile.
+
+Note: Only owners and admins can manage team members.`,
       },
       {
         id: 'team-roles',
         title: 'Team roles and permissions',
-        tags: ['roles', 'permissions', 'owner', 'admin', 'member', 'access'],
+        tags: ['roles', 'permissions', 'owner', 'admin', 'member', 'access', 'what can they see'],
         body: `There are three roles:
 
 Owner
 - Full access to everything
-- Can manage billing, integrations, and all settings
-- Cannot be removed (there must always be at least one owner)
+- Sees all sidebar items including Reports, What's New, and all Settings
+- Can manage branding, email templates, team, integrations, general settings
+- Sees the Get Started onboarding checklist and can restart it
+- Can manage billing and payment processing
 
 Admin
-- Can manage proposals, customers, invoices, and settings
-- Can invite and remove Members (but not other Admins or Owners)
+- Access to proposals, customers, invoices, payments, and most settings
+- Can manage branding and email templates
+- Cannot access General settings, Team management, or Integrations
+- Does not see the onboarding checklist
 
 Member
-- Can view and create proposals and customers
-- Cannot access Settings, Reports, or financial data
+- Can only view and manage proposals and customers
+- Sees Home, Customers, Payments, Help Center, and Ask AI
+- Cannot access Settings, Reports, or What's New
+- Does not see the onboarding checklist
 
-To change a member's role: click the menu (three dots) on their row → Change Role.`,
+To change a member's role: click the three-dot menu (...) on their row → Edit Member → change the Role field.
+
+Team members can update their own profile (name, email) by clicking their name in the sidebar footer.`,
       },
     ],
   },
@@ -469,6 +507,24 @@ SMS notifications (requires messaging connected):
 - Payment failed
 
 Toggle each switch on or off, then click Save. Changes take effect immediately.`,
+      },
+      {
+        id: 'sms-notifications',
+        title: 'SMS notifications for customers',
+        tags: ['sms', 'text message', 'phone', 'messaging', 'ghl', 'notification'],
+        body: `When you send a proposal or invoice to a customer with a phone number on file, StoryPay automatically sends them an SMS with a link.
+
+For SMS to work:
+1. The customer must have a phone number entered when creating the proposal or invoice.
+2. Phone numbers are automatically formatted to US E.164 format (+1XXXXXXXXXX). Enter numbers in any format — StoryPay handles the rest.
+3. Your account's GHL (Go High Level) sub-account must be connected. SMS routes through your A2P-approved phone number.
+
+If SMS is not sending, check:
+- Is the customer's phone number entered?
+- Is the phone number a valid US number?
+- Is messaging connected? (Settings → General → Messaging should show "Connected")
+
+Note: SMS uses your GHL sub-account's verified A2P phone number automatically — no manual configuration needed once messaging is connected.`,
       },
     ],
   },
