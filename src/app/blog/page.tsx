@@ -2,21 +2,19 @@ import { Metadata } from 'next';
 import Link from 'next/link';
 import Image from 'next/image';
 import { supabaseAdmin } from '@/lib/supabase';
+import { getPageSeo, buildMetadata } from '@/lib/page-seo';
 import { Calendar, User, ArrowRight } from 'lucide-react';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
 
-export const metadata: Metadata = {
-  title: 'Blog — Wedding Venue Business Tips & Resources',
-  description: 'Practical guides, tips, and resources for wedding venue owners. Learn how to streamline proposals, improve client communication, and grow your venue business.',
-  alternates: { canonical: `${APP_URL}/blog` },
-  openGraph: {
-    title: 'StoryPay Blog — Wedding Venue Business Tips',
-    description: 'Practical guides and resources for wedding venue owners.',
+export async function generateMetadata(): Promise<Metadata> {
+  const seo = await getPageSeo('blog');
+  return buildMetadata(seo, {
+    title: 'Blog — Wedding Venue Business Tips & Resources',
+    description: 'Practical guides, tips, and resources for wedding venue owners. Learn how to streamline proposals, improve client communication, and grow your venue business.',
     url: `${APP_URL}/blog`,
-    type: 'website',
-  },
-};
+  });
+}
 
 interface Post {
   id: string;

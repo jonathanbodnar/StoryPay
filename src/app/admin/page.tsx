@@ -2,13 +2,20 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import {
   DollarSign, Users, FileText, Clock, XCircle, Building2,
   TrendingUp, LogOut, Home,
   Megaphone, Plus, Trash2, Pencil, X, Loader2, ThumbsUp, ThumbsDown,
   Check, BarChart2, ExternalLink, ChevronRight, Search,
-  LayoutDashboard, Menu, Lightbulb, BookOpen, Star,
+  LayoutDashboard, Menu, Lightbulb, BookOpen, Star, Globe,
 } from 'lucide-react';
+
+// Lazy-load the WYSIWYG editor so it doesn't affect admin initial load
+const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
+  ssr: false,
+  loading: () => <div className="h-64 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center text-sm text-gray-400">Loading editor...</div>,
+});
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, BarChart, Bar,
@@ -340,7 +347,7 @@ export default function AdminPage() {
   const [authState, setAuthState]   = useState<AuthState>('loading');
   const [secret, setSecret]         = useState('');
   const [loginError, setLoginError] = useState('');
-  const [activeTab, setActiveTab]   = useState<'dashboard' | 'venues' | 'announcements' | 'feature-requests' | 'suggested-articles' | 'search-analytics' | 'article-ratings' | 'blog'>('dashboard');
+  const [activeTab, setActiveTab]   = useState<'dashboard' | 'venues' | 'announcements' | 'feature-requests' | 'suggested-articles' | 'search-analytics' | 'article-ratings' | 'blog' | 'seo-pages'>('dashboard');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // Stats
@@ -672,14 +679,15 @@ export default function AdminPage() {
 
   // ── Authenticated ───────────────────────────────────────────────────────────
   const navItems = [
-    { key: 'dashboard',         label: 'Dashboard',         icon: LayoutDashboard },
-    { key: 'venues',            label: 'Venues',            icon: Building2 },
-    { key: 'blog',              label: 'Blog / SEO',        icon: BookOpen },
-    { key: 'announcements',     label: 'Announcements',     icon: Megaphone },
-    { key: 'feature-requests',  label: 'Feature Requests',  icon: Lightbulb },
+    { key: 'dashboard',          label: 'Dashboard',          icon: LayoutDashboard },
+    { key: 'venues',             label: 'Venues',             icon: Building2 },
+    { key: 'blog',               label: 'Blog Posts',         icon: BookOpen },
+    { key: 'seo-pages',          label: 'SEO / Pages',        icon: Globe },
+    { key: 'announcements',      label: 'Announcements',      icon: Megaphone },
+    { key: 'feature-requests',   label: 'Feature Requests',   icon: Lightbulb },
     { key: 'suggested-articles', label: 'Suggested Articles', icon: BookOpen },
-    { key: 'search-analytics',  label: 'Search Analytics',  icon: BarChart2 },
-    { key: 'article-ratings',   label: 'Article Ratings',   icon: Star },
+    { key: 'search-analytics',   label: 'Search Analytics',   icon: BarChart2 },
+    { key: 'article-ratings',    label: 'Article Ratings',    icon: Star },
   ] as const;
 
   const NavSidebar = () => (
@@ -1642,8 +1650,11 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* ── Blog / SEO Tab ── */}
+        {/* ── Blog Posts Tab ── */}
         {activeTab === 'blog' && <BlogTab />}
+
+        {/* ── SEO / Pages Tab ── */}
+        {activeTab === 'seo-pages' && <SeoPageTab />}
 
         </main>
       </div>
@@ -1771,13 +1782,18 @@ function BlogTab() {
               <textarea value={form.excerpt || ''} onChange={upd('excerpt')} rows={2} placeholder="A brief summary of the post..." className={`${INPUT} resize-none`} />
             </div>
 
-            {/* Content */}
+            {/* Content — WYSIWYG editor */}
             <div>
-              <label className={LABEL}>Content (HTML)</label>
-              <textarea value={form.content || ''} onChange={upd('content')} rows={16}
-                placeholder="<h2 id='section-1'>Introduction</h2><p>Your content here...</p>"
-                className={`${INPUT} resize-y font-mono text-xs`} />
-              <p className="text-[10px] text-gray-400 mt-1">Write in HTML. Add id= to headings for table of contents. Use h2/h3 for proper hierarchy.</p>
+              <label className={LABEL}>Content</label>
+              <div className="rounded-xl border border-gray-200 overflow-hidden">
+                <RichTextEditor
+                  content={form.content || ''}
+                  onChange={html => setForm(p => ({ ...p, content: html }))}
+                  placeholder="Start writing your post... Use headings (H2, H3) for structure and SEO."
+                  minHeight={400}
+                />
+              </div>
+              <p className="text-[10px] text-gray-400 mt-1">Use H2 and H3 headings for structure. The editor outputs clean HTML that renders on the blog.</p>
             </div>
 
             {/* Images */}
@@ -1885,4 +1901,221 @@ interface BlogPost {
   meta_description: string | null; og_image: string | null; excerpt: string | null;
   content: string; author_name: string; category: string | null; tags: string[];
   featured_image: string | null; status: string; noindex: boolean; published_at: string | null;
+}
+
+// ─── SEO Pages Tab ────────────────────────────────────────────────────────────
+
+const PAGE_LABELS: Record<string, { label: string; url: string; description: string }> = {
+  home:    { label: 'Homepage',     url: 'storypay.io/',        description: 'Main landing page' },
+  blog:    { label: 'Blog Index',   url: 'storypay.io/blog',    description: 'Blog listing page' },
+  login:   { label: 'Login Page',   url: 'storypay.io/login',   description: 'Sign-in page' },
+  privacy: { label: 'Privacy Policy', url: 'storypay.io/privacy', description: 'Privacy policy page' },
+  terms:   { label: 'Terms of Use', url: 'storypay.io/terms',   description: 'Terms of use page' },
+};
+
+interface PageSeo {
+  page_key: string; title: string | null; description: string | null;
+  og_image: string | null; og_title: string | null; og_description: string | null;
+  noindex: boolean; canonical: string | null; schema_json: string | null;
+}
+
+function SeoPageTab() {
+  const [pages, setPages] = React.useState<PageSeo[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [selected, setSelected] = React.useState<string>('home');
+  const [form, setForm] = React.useState<Partial<PageSeo>>({});
+  const [saving, setSaving] = React.useState(false);
+  const [saved, setSaved] = React.useState(false);
+
+  React.useEffect(() => {
+    fetch('/api/admin/page-seo')
+      .then(r => r.ok ? r.json() : [])
+      .then((data: PageSeo[]) => {
+        setPages(data);
+        const first = data.find(p => p.page_key === 'home') || data[0];
+        if (first) { setSelected(first.page_key); setForm(first); }
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  function selectPage(key: string) {
+    const p = pages.find(x => x.page_key === key);
+    setSelected(key);
+    setForm(p ?? { page_key: key });
+    setSaved(false);
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/admin/page-seo', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, page_key: selected }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setPages(p => p.map(x => x.page_key === selected ? updated : x).concat(
+          p.find(x => x.page_key === selected) ? [] : [updated]
+        ));
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
+      }
+    } finally { setSaving(false); }
+  }
+
+  const INPUT = 'w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors';
+  const LABEL = 'block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide';
+
+  const pageInfo = PAGE_LABELS[selected];
+  const titleLen = (form.title || '').length;
+  const descLen  = (form.description || '').length;
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="font-heading text-xl text-gray-900">SEO / Pages</h2>
+        <p className="text-sm text-gray-500 mt-0.5">Edit meta titles, descriptions, OG images, and schema for every public page.</p>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-12"><Loader2 size={22} className="animate-spin text-gray-400" /></div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-6 items-start">
+
+          {/* Page selector */}
+          <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-200">
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Pages</p>
+            </div>
+            <nav className="p-2 space-y-0.5">
+              {Object.entries(PAGE_LABELS).map(([key, meta]) => (
+                <button key={key} onClick={() => selectPage(key)}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-left transition-colors ${selected === key ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
+                  <Globe size={14} className={selected === key ? 'text-white/60' : 'text-gray-400'} />
+                  <div className="min-w-0">
+                    <p className="truncate">{meta.label}</p>
+                    <p className={`text-[10px] truncate ${selected === key ? 'text-white/50' : 'text-gray-400'}`}>{meta.url}</p>
+                  </div>
+                </button>
+              ))}
+            </nav>
+          </div>
+
+          {/* Editor */}
+          <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <div>
+                <p className="font-semibold text-gray-900">{pageInfo?.label}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{pageInfo?.description} · <a href={`https://${pageInfo?.url}`} target="_blank" rel="noreferrer" className="underline hover:text-gray-600">{pageInfo?.url}</a></p>
+              </div>
+              <button onClick={save} disabled={saving}
+                className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60 transition-all"
+                style={{ backgroundColor: BRAND }}>
+                {saving ? <Loader2 size={14} className="animate-spin" /> : saved ? <Check size={14} /> : <Check size={14} />}
+                {saving ? 'Saving...' : saved ? 'Saved!' : 'Save SEO'}
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-5">
+              {/* Basic SEO */}
+              <div className="rounded-xl border border-gray-200 bg-gray-50/50 p-4 space-y-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Search Engine Optimization</p>
+
+                <div>
+                  <label className={LABEL}>
+                    Page Title
+                    <span className={`ml-2 font-normal normal-case ${titleLen > 60 ? 'text-red-400' : titleLen > 50 ? 'text-amber-500' : 'text-gray-400'}`}>
+                      {titleLen}/60
+                    </span>
+                  </label>
+                  <input type="text" value={form.title || ''} onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
+                    placeholder="SEO-optimized page title..." className={INPUT} />
+                  <p className="text-[10px] text-gray-400 mt-1">Shown in browser tab and Google search results. 50–60 characters ideal.</p>
+                </div>
+
+                <div>
+                  <label className={LABEL}>
+                    Meta Description
+                    <span className={`ml-2 font-normal normal-case ${descLen > 160 ? 'text-red-400' : descLen > 140 ? 'text-amber-500' : 'text-gray-400'}`}>
+                      {descLen}/160
+                    </span>
+                  </label>
+                  <textarea value={form.description || ''} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+                    rows={3} placeholder="Describe this page in 140–160 characters for search results..."
+                    className={`${INPUT} resize-none`} />
+                </div>
+
+                <div>
+                  <label className={LABEL}>Canonical URL (optional)</label>
+                  <input type="url" value={form.canonical || ''} onChange={e => setForm(p => ({ ...p, canonical: e.target.value }))}
+                    placeholder="https://storypay.io/... (leave blank to use page URL)" className={INPUT} />
+                </div>
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={form.noindex || false}
+                    onChange={e => setForm(p => ({ ...p, noindex: e.target.checked }))}
+                    className="h-4 w-4 rounded border-gray-300" />
+                  <div>
+                    <span className="text-sm text-gray-700">Noindex — hide from search engines</span>
+                    <p className="text-[10px] text-gray-400">Use for login, setup, and utility pages that shouldn&apos;t appear in Google.</p>
+                  </div>
+                </label>
+              </div>
+
+              {/* Open Graph / Social */}
+              <div className="rounded-xl border border-gray-200 bg-gray-50/50 p-4 space-y-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Social Sharing (Open Graph)</p>
+
+                <div>
+                  <label className={LABEL}>OG Title (overrides page title for social)</label>
+                  <input type="text" value={form.og_title || ''} onChange={e => setForm(p => ({ ...p, og_title: e.target.value }))}
+                    placeholder="Leave blank to use page title" className={INPUT} />
+                </div>
+
+                <div>
+                  <label className={LABEL}>OG Description (overrides meta description for social)</label>
+                  <textarea value={form.og_description || ''} onChange={e => setForm(p => ({ ...p, og_description: e.target.value }))}
+                    rows={2} placeholder="Leave blank to use meta description" className={`${INPUT} resize-none`} />
+                </div>
+
+                <div>
+                  <label className={LABEL}>OG Image URL (1200×630px recommended)</label>
+                  <input type="url" value={form.og_image || ''} onChange={e => setForm(p => ({ ...p, og_image: e.target.value }))}
+                    placeholder="https://storypay.io/og-image.png" className={INPUT} />
+                  {form.og_image && (
+                    <div className="mt-2 rounded-xl overflow-hidden border border-gray-200 max-w-sm">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={form.og_image} alt="OG preview" className="w-full" onError={e => (e.currentTarget.style.display = 'none')} />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Schema / JSON-LD */}
+              <div className="rounded-xl border border-gray-200 bg-gray-50/50 p-4 space-y-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Custom JSON-LD Schema</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">Advanced: override the auto-generated schema for this page. Leave blank to use the default.</p>
+                </div>
+                <textarea value={form.schema_json || ''} onChange={e => setForm(p => ({ ...p, schema_json: e.target.value }))}
+                  rows={6} placeholder={'{\n  "@context": "https://schema.org",\n  "@type": "WebPage",\n  ...\n}'}
+                  className={`${INPUT} resize-y font-mono text-xs`} />
+              </div>
+
+              {/* Live preview */}
+              <div className="rounded-xl border border-gray-200 bg-white p-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">Google Search Preview</p>
+                <div className="max-w-xl">
+                  <p className="text-[13px] text-blue-700 truncate">{pageInfo?.url}</p>
+                  <p className="text-lg text-blue-800 font-medium leading-tight truncate">{form.title || '(no title set)'}</p>
+                  <p className="text-sm text-gray-600 leading-snug mt-0.5 line-clamp-2">{form.description || '(no description set)'}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

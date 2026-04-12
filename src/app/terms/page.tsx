@@ -1,10 +1,18 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import { Metadata } from 'next';
+import { getPageSeo, buildMetadata } from '@/lib/page-seo';
 
-export const metadata = {
-  title: 'Terms of Use — StoryPay',
-  description: 'Terms governing your use of the StoryPay platform.',
-};
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
+
+export async function generateMetadata(): Promise<Metadata> {
+  const seo = await getPageSeo('terms');
+  return buildMetadata(seo, {
+    title: 'Terms of Use — StoryPay',
+    description: 'Terms governing your use of the StoryPay platform.',
+    url: `${APP_URL}/terms`,
+  });
+}
 
 export default function TermsPage() {
   return (

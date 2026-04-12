@@ -1,10 +1,18 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import { Metadata } from 'next';
+import { getPageSeo, buildMetadata } from '@/lib/page-seo';
 
-export const metadata = {
-  title: 'Privacy Policy — StoryPay',
-  description: 'How StoryPay collects, uses, and protects your information.',
-};
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
+
+export async function generateMetadata(): Promise<Metadata> {
+  const seo = await getPageSeo('privacy');
+  return buildMetadata(seo, {
+    title: 'Privacy Policy — StoryPay',
+    description: 'How StoryPay collects, uses, and protects your information.',
+    url: `${APP_URL}/privacy`,
+  });
+}
 
 export default function PrivacyPage() {
   return (
