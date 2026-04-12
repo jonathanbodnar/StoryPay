@@ -71,15 +71,10 @@ export default function OnboardingChecklist() {
             : { step: step.id }
         ),
       });
-      if (res.ok) {
-        // Sync from DB so the state persists across navigation
-        await load();
-      } else {
-        // Revert optimistic update on failure
-        await load();
-      }
+      // On failure only: revert the optimistic update
+      if (!res.ok) await load();
     } catch {
-      await load();
+      await load(); // network error — revert
     } finally {
       setTogglingStep(null);
     }
