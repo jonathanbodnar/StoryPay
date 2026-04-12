@@ -8,6 +8,34 @@ import TextAlign from '@tiptap/extension-text-align';
 import TiptapLink from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import { TextStyle, Color, FontFamily } from '@tiptap/extension-text-style';
+import { Extension } from '@tiptap/core';
+
+// Font size extension — injects font-size as inline style via TextStyle
+const FontSize = Extension.create({
+  name: 'fontSize',
+  addGlobalAttributes() {
+    return [{
+      types: ['textStyle'],
+      attributes: {
+        fontSize: {
+          default: null,
+          parseHTML: el => el.style.fontSize || null,
+          renderHTML: attrs => attrs.fontSize ? { style: `font-size: ${attrs.fontSize}` } : {},
+        },
+      },
+    }];
+  },
+  addCommands() {
+    return {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setFontSize: (fontSize: string) => ({ chain }: any) =>
+        chain().setMark('textStyle', { fontSize }).run(),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      unsetFontSize: () => ({ chain }: any) =>
+        chain().setMark('textStyle', { fontSize: null }).removeEmptyTextStyle().run(),
+    } as never;
+  },
+});
 import Highlight from '@tiptap/extension-highlight';
 import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
@@ -174,6 +202,7 @@ export default function RichTextEditor({
       TextStyle,
       Color,
       FontFamily,
+      FontSize,
       Highlight.configure({ multicolor: true }),
       Subscript,
       Superscript,
@@ -318,6 +347,35 @@ export default function RichTextEditor({
                 <span style={{ fontFamily: f.value || 'inherit' }}>{f.label}</span>
               </DropItem>
             ))}
+          </div>
+        </DropdownBtn>
+
+        {/* Font size */}
+        <DropdownBtn
+          label={(() => {
+            const fs = editor.getAttributes('textStyle').fontSize;
+            return fs ? fs.replace('px', '') : 'Size';
+          })()}
+          title="Font size"
+        >
+          <div className="py-1 min-w-[130px] max-h-80 overflow-y-auto">
+            <DropItem onClick={() => { (editor.chain().focus() as unknown as { unsetFontSize: () => { run: () => void } }).unsetFontSize().run(); }}>
+              <span className="text-gray-400 text-sm">Default</span>
+            </DropItem>
+            <div className="h-px bg-gray-100 my-1" />
+            {[8,9,10,11,12,13,14,15,16,18,20,22,24,26,28,32,36,40,48,56,64,72,80,96].map(size => {
+              const val = `${size}px`;
+              const active = editor.getAttributes('textStyle').fontSize === val;
+              return (
+                <DropItem
+                  key={size}
+                  onClick={() => { (editor.chain().focus() as unknown as { setFontSize: (s: string) => { run: () => void } }).setFontSize(val).run(); }}
+                  active={active}
+                >
+                  <span style={{ fontSize: Math.min(size, 18) }}>{size}</span>
+                </DropItem>
+              );
+            })}
           </div>
         </DropdownBtn>
 
