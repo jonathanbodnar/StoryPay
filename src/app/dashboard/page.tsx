@@ -208,7 +208,7 @@ export default function DashboardOverview() {
  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-6">
 
  {/* Revenue */}
- <div className="rounded-2xl bg-white p-5">
+ <div className="rounded-2xl bg-white p-5 border border-gray-200">
  <div className="flex items-center justify-between mb-3">
  <span className="text-xs font-semibold uppercase tracking-wider"style={{ color: B.muted }}>Revenue</span>
  <IconBadge icon={DollarSign} bg="#f0fdf4"color="#16a34a"/>
@@ -225,7 +225,7 @@ export default function DashboardOverview() {
  </div>
 
  {/* Proposals */}
- <div className="rounded-2xl bg-white p-5">
+ <div className="rounded-2xl bg-white p-5 border border-gray-200">
  <div className="flex items-center justify-between mb-3">
  <span className="text-xs font-semibold uppercase tracking-wider"style={{ color: B.muted }}>Proposals</span>
  <IconBadge icon={FileText} bg="#eff6ff"color="#2563eb"/>
@@ -242,7 +242,7 @@ export default function DashboardOverview() {
  </div>
 
  {/* Customers */}
- <div className="rounded-2xl bg-white p-5">
+ <div className="rounded-2xl bg-white p-5 border border-gray-200">
  <div className="flex items-center justify-between mb-3">
  <span className="text-xs font-semibold uppercase tracking-wider"style={{ color: B.muted }}>Customers</span>
  <IconBadge icon={Users} bg="#faf5ff"color="#7c3aed"/>
@@ -260,7 +260,7 @@ export default function DashboardOverview() {
  </div>
 
  {/* Pending */}
- <div className="rounded-2xl bg-white p-5">
+ <div className="rounded-2xl bg-white p-5 border border-gray-200">
  <div className="flex items-center justify-between mb-3">
  <span className="text-xs font-semibold uppercase tracking-wider"style={{ color: B.muted }}>Pending</span>
  <IconBadge icon={Clock} bg="#fff7ed"color="#d97706"/>
@@ -299,7 +299,7 @@ export default function DashboardOverview() {
  </div>
 
  {/* Refunded */}
- <div className="rounded-2xl bg-white p-5">
+ <div className="rounded-2xl bg-white p-5 border border-gray-200">
  <div className="flex items-center justify-between mb-3">
  <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Refunded</span>
  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-50">
