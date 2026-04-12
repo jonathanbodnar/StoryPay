@@ -85,17 +85,28 @@ export default function OnboardingChecklist() {
   useEffect(() => { load(); }, [load]);
 
   async function dismiss() {
-    await fetch('/api/onboarding', {
+    // Optimistically hide immediately — don't wait for a round-trip
+    setData(d => d ? { ...d, dismissed: true } : d);
+    setModalOpen(false);
+    // Persist in background
+    fetch('/api/onboarding', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'dismiss' }),
-    });
-    setModalOpen(false);
-    await load();
+    }).catch(() => {});
   }
 
   async function toggleStep(step: Step) {
     if (togglingStep) return;
     setTogglingStep(step.id);
+    // Optimistically flip the step immediately
+    setData(d => {
+      if (!d) return d;
+      const steps = d.steps.map(s =>
+        s.id === step.id ? { ...s, completed: !s.completed } : s
+      );
+      const completedCount = steps.filter(s => s.completed).length;
+      return { ...d, steps, completedCount, completed: completedCount === d.totalSteps };
+    });
     try {
       await fetch('/api/onboarding', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -105,6 +116,10 @@ export default function OnboardingChecklist() {
             : { step: step.id }
         ),
       });
+      // Sync from server to confirm
+      await load();
+    } catch {
+      // On error revert by re-loading
       await load();
     } finally { setTogglingStep(null); }
   }
