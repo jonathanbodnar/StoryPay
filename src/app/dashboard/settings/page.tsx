@@ -72,6 +72,17 @@ export default function SettingsPage() {
   async function resetOnboarding() {
     setResetting(true);
     try {
+      // Clear localStorage keys for this venue — the checklist component listens for this event
+      const venueRes = await fetch('/api/venues/me', { cache: 'no-store' });
+      if (venueRes.ok) {
+        const v = await venueRes.json();
+        try {
+          localStorage.removeItem(`onboarding_steps_${v.id}`);
+          localStorage.removeItem(`onboarding_dismissed_${v.id}`);
+        } catch { /* storage unavailable */ }
+        window.dispatchEvent(new Event('onboarding:reset'));
+      }
+      // Also reset DB flags (best-effort)
       await fetch('/api/onboarding', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'reset' }),

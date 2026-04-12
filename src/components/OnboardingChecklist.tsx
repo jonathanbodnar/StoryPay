@@ -7,17 +7,18 @@ import {
   CreditCard, Users, FileText, Palette, Mail, UsersRound,
 } from 'lucide-react';
 
-interface Step { id: string; completed: boolean; }
-interface OnboardingData {
-  steps: Step[];
-  completedCount: number;
-  totalSteps: number;
-  dismissed: boolean;
-  completed: boolean;
-  venueName: string;
-}
+const STEPS = [
+  'payment_processing',
+  'first_customer',
+  'first_proposal',
+  'branding',
+  'email_templates',
+  'team_member',
+] as const;
 
-const STEP_META: Record<string, {
+type StepId = typeof STEPS[number];
+
+const STEP_META: Record<StepId, {
   label: string;
   description: string;
   href: string;
@@ -32,81 +33,119 @@ const STEP_META: Record<string, {
   team_member:        { label: 'Invite a Team Member',          description: 'Add your team so they can help manage your account.', href: '/dashboard/settings/team', icon: UsersRound, cta: 'Manage Team' },
 };
 
+function getStorageKey(venueId: string) {
+  return `onboarding_steps_${venueId}`;
+}
+function getDismissedKey(venueId: string) {
+  return `onboarding_dismissed_${venueId}`;
+}
+
+function loadCheckedSteps(venueId: string): Set<StepId> {
+  try {
+    const raw = localStorage.getItem(getStorageKey(venueId));
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw) as string[];
+    return new Set(arr.filter((s): s is StepId => (STEPS as readonly string[]).includes(s)));
+  } catch { return new Set(); }
+}
+
+function saveCheckedSteps(venueId: string, steps: Set<StepId>) {
+  try {
+    localStorage.setItem(getStorageKey(venueId), JSON.stringify([...steps]));
+  } catch { /* storage unavailable */ }
+}
+
+function loadDismissed(venueId: string): boolean {
+  try {
+    return localStorage.getItem(getDismissedKey(venueId)) === 'true';
+  } catch { return false; }
+}
+
+function saveDismissed(venueId: string, val: boolean) {
+  try {
+    if (val) localStorage.setItem(getDismissedKey(venueId), 'true');
+    else localStorage.removeItem(getDismissedKey(venueId));
+  } catch { /* storage unavailable */ }
+}
+
 export default function OnboardingChecklist() {
   const router = useRouter();
-  const [data, setData] = useState<OnboardingData | null>(null);
+  const [venueId, setVenueId] = useState<string | null>(null);
+  const [checked, setChecked] = useState<Set<StepId>>(new Set());
+  const [dismissed, setDismissed] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
-  const [togglingStep, setTogglingStep] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-  const load = useCallback(async () => {
+  // Load venue ID then hydrate from localStorage
+  const init = useCallback(async () => {
     try {
-      const res = await fetch('/api/onboarding', { cache: 'no-store' });
+      const res = await fetch('/api/venues/me', { cache: 'no-store' });
       if (!res.ok) return;
-      setData(await res.json());
+      const venue = await res.json();
+      const id: string = venue.id;
+      setVenueId(id);
+      setChecked(loadCheckedSteps(id));
+      setDismissed(
+        loadDismissed(id) ||
+        venue.onboarding_checklist_dismissed === true ||
+        venue.onboarding_checklist_completed === true
+      );
     } catch { /* non-critical */ }
+    finally { setMounted(true); }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { init(); }, [init]);
 
-  async function toggleStep(step: Step) {
-    if (togglingStep) return;
-    setTogglingStep(step.id);
-    // Optimistic update so UI feels instant
-    const newCompleted = !step.completed;
-    setData(d => {
-      if (!d) return d;
-      const steps = d.steps.map(s =>
-        s.id === step.id ? { ...s, completed: newCompleted } : s
-      );
-      const completedCount = steps.filter(s => s.completed).length;
-      return { ...d, steps, completedCount };
+  function toggleStep(stepId: StepId) {
+    if (!venueId) return;
+    setChecked(prev => {
+      const next = new Set(prev);
+      if (next.has(stepId)) next.delete(stepId);
+      else next.add(stepId);
+      saveCheckedSteps(venueId, next);
+      return next;
     });
-    try {
-      const res = await fetch('/api/onboarding', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(
-          step.completed
-            ? { action: 'uncheck_step', step: step.id }
-            : { step: step.id }
-        ),
-      });
-      // On failure only: revert the optimistic update
-      if (!res.ok) await load();
-    } catch {
-      await load(); // network error — revert
-    } finally {
-      setTogglingStep(null);
-    }
   }
 
   async function confirmComplete() {
+    if (!venueId) return;
     setConfirming(true);
-    try {
-      const res = await fetch('/api/onboarding', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'dismiss' }),
-      });
-      if (res.ok) {
-        // Confirmed — hide bubble for good
-        setData(d => d ? { ...d, dismissed: true, completed: true } : d);
-        setModalOpen(false);
-      }
-    } finally {
-      setConfirming(false);
-    }
+    saveDismissed(venueId, true);
+    setDismissed(true);
+    setModalOpen(false);
+    // Persist to DB (best-effort — localStorage is the source of truth)
+    fetch('/api/onboarding', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'dismiss' }),
+    }).catch(() => {});
+    setConfirming(false);
   }
 
-  // Hidden when dismissed or confirmed complete
-  if (!data || data.dismissed || data.completed) return null;
+  // Called by Settings "Restart Guide" — clears localStorage and DB flag
+  // This is triggered by a custom event dispatched from the settings page
+  useEffect(() => {
+    function onReset() {
+      if (!venueId) return;
+      saveDismissed(venueId, false);
+      saveCheckedSteps(venueId, new Set());
+      setChecked(new Set());
+      setDismissed(false);
+    }
+    window.addEventListener('onboarding:reset', onReset);
+    return () => window.removeEventListener('onboarding:reset', onReset);
+  }, [venueId]);
 
-  const { steps, completedCount, totalSteps } = data;
+  if (!mounted || dismissed) return null;
+
+  const completedCount = checked.size;
+  const totalSteps = STEPS.length;
   const pct = Math.round((completedCount / totalSteps) * 100);
   const allChecked = completedCount === totalSteps;
 
   return (
     <>
-      {/* ── Dashboard bubble ── */}
+      {/* Dashboard bubble */}
       <div className="mb-6 flex items-center gap-2">
         <button
           onClick={() => setModalOpen(true)}
@@ -117,16 +156,13 @@ export default function OnboardingChecklist() {
           <div className="flex items-center gap-1.5 ml-0.5">
             <span className="text-xs text-gray-400">{completedCount}/{totalSteps}</span>
             <div className="h-2 w-16 rounded-full bg-gray-100 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-[#1b1b1b] transition-all duration-500"
-                style={{ width: `${pct}%` }}
-              />
+              <div className="h-full rounded-full bg-[#1b1b1b] transition-all duration-500" style={{ width: `${pct}%` }} />
             </div>
           </div>
         </button>
       </div>
 
-      {/* ── Modal ── */}
+      {/* Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="relative w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -142,10 +178,8 @@ export default function OnboardingChecklist() {
                   <p className="text-xs text-white/60 mt-0.5">{completedCount} of {totalSteps} steps completed</p>
                 </div>
               </div>
-              <button
-                onClick={() => setModalOpen(false)}
-                className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors text-white"
-              >
+              <button onClick={() => setModalOpen(false)}
+                className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors text-white">
                 <X size={14} />
               </button>
             </div>
@@ -157,42 +191,38 @@ export default function OnboardingChecklist() {
 
             {/* Steps */}
             <div className="overflow-y-auto flex-1 divide-y divide-gray-100">
-              {steps.map((step) => {
-                const meta = STEP_META[step.id];
-                if (!meta) return null;
+              {STEPS.map((stepId) => {
+                const meta = STEP_META[stepId];
+                const isChecked = checked.has(stepId);
                 const Icon = meta.icon;
-                const busy = togglingStep === step.id;
 
                 return (
-                  <div
-                    key={step.id}
-                    className={`flex items-center gap-4 px-6 py-4 transition-colors ${step.completed ? 'bg-gray-50/60' : 'hover:bg-gray-50/40'}`}
-                  >
+                  <div key={stepId}
+                    className={`flex items-center gap-4 px-6 py-4 transition-colors ${isChecked ? 'bg-gray-50/60' : 'hover:bg-gray-50/40'}`}>
+
                     <button
-                      onClick={() => toggleStep(step)}
-                      disabled={busy}
-                      className="flex-shrink-0 transition-transform hover:scale-110 disabled:opacity-40"
-                      title={step.completed ? 'Uncheck' : 'Check off'}
+                      onClick={() => toggleStep(stepId)}
+                      className="flex-shrink-0 transition-transform hover:scale-110"
+                      title={isChecked ? 'Uncheck' : 'Mark as done'}
                     >
-                      {busy
-                        ? <Circle size={22} className="text-gray-200 animate-pulse" />
-                        : step.completed
-                          ? <CheckCircle2 size={22} className="text-emerald-500" />
-                          : <Circle size={22} className="text-gray-300 hover:text-gray-400" />
+                      {isChecked
+                        ? <CheckCircle2 size={22} className="text-emerald-500" />
+                        : <Circle size={22} className="text-gray-300 hover:text-gray-400" />
                       }
                     </button>
-                    <div className={`flex-shrink-0 flex h-9 w-9 items-center justify-center rounded-xl ${step.completed ? 'bg-emerald-50' : 'bg-gray-100'}`}>
-                      <Icon size={16} className={step.completed ? 'text-emerald-500' : 'text-gray-500'} />
+
+                    <div className={`flex-shrink-0 flex h-9 w-9 items-center justify-center rounded-xl ${isChecked ? 'bg-emerald-50' : 'bg-gray-100'}`}>
+                      <Icon size={16} className={isChecked ? 'text-emerald-500' : 'text-gray-500'} />
                     </div>
+
                     <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-medium leading-tight ${step.completed ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                      <p className={`text-sm font-medium leading-tight ${isChecked ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
                         {meta.label}
                       </p>
-                      {!step.completed && (
-                        <p className="mt-0.5 text-xs text-gray-500">{meta.description}</p>
-                      )}
+                      {!isChecked && <p className="mt-0.5 text-xs text-gray-500">{meta.description}</p>}
                     </div>
-                    {!step.completed && (
+
+                    {!isChecked && (
                       <button
                         onClick={() => { setModalOpen(false); router.push(meta.href); }}
                         className="flex-shrink-0 flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-all"
@@ -205,7 +235,7 @@ export default function OnboardingChecklist() {
               })}
             </div>
 
-            {/* Footer — confirmation only when all checked */}
+            {/* Footer */}
             <div className="px-6 py-4 border-t border-gray-100">
               {allChecked ? (
                 <button
@@ -219,10 +249,8 @@ export default function OnboardingChecklist() {
               ) : (
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-gray-400">Check off each step when done</p>
-                  <button
-                    onClick={() => setModalOpen(false)}
-                    className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
-                  >
+                  <button onClick={() => setModalOpen(false)}
+                    className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors">
                     Close
                   </button>
                 </div>
