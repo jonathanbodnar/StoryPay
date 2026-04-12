@@ -73,7 +73,6 @@ export default function OnboardingChecklist() {
   const router = useRouter();
   const [data, setData] = useState<OnboardingData | null>(null);
   const [collapsed, setCollapsed] = useState(false);
-  const [visible, setVisible] = useState(true);
   const [togglingStep, setTogglingStep] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -81,7 +80,6 @@ export default function OnboardingChecklist() {
       const res = await fetch('/api/onboarding', { cache: 'no-store' });
       if (!res.ok) return;
       const json: OnboardingData = await res.json();
-      if (json.dismissed || json.completed) setVisible(false);
       setData(json);
     } catch { /* non-critical */ }
   }, []);
@@ -93,7 +91,8 @@ export default function OnboardingChecklist() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'dismiss' }),
     });
-    setVisible(false);
+    // Re-fetch so visibility is driven purely by API state
+    await load();
   }
 
   async function toggleStep(step: Step) {
@@ -117,7 +116,9 @@ export default function OnboardingChecklist() {
     } finally { setTogglingStep(null); }
   }
 
-  if (!visible || !data) return null;
+  // Hide only when API says dismissed or fully completed — never from local state
+  // so that a reset from Settings immediately makes it re-appear on next page load
+  if (!data || data.dismissed || data.completed) return null;
 
   const { steps, completedCount, totalSteps } = data;
   const pct = Math.round((completedCount / totalSteps) * 100);
