@@ -347,7 +347,7 @@ export default function AdminPage() {
   const [authState, setAuthState]   = useState<AuthState>('loading');
   const [secret, setSecret]         = useState('');
   const [loginError, setLoginError] = useState('');
-  const [activeTab, setActiveTab]   = useState<'dashboard' | 'venues' | 'announcements' | 'feature-requests' | 'suggested-articles' | 'search-analytics' | 'article-ratings' | 'blog' | 'seo-pages'>('dashboard');
+  const [activeTab, setActiveTab]   = useState<'dashboard' | 'venues' | 'announcements' | 'feature-requests' | 'suggested-articles' | 'search-analytics' | 'article-ratings' | 'blog' | 'seo-pages' | 'trends'>('dashboard');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // Stats
@@ -683,6 +683,7 @@ export default function AdminPage() {
     { key: 'venues',             label: 'Venues',             icon: Building2 },
     { key: 'blog',               label: 'Blog Posts',         icon: BookOpen },
     { key: 'seo-pages',          label: 'SEO / Pages',        icon: Globe },
+    { key: 'trends',             label: 'Google Trends',      icon: TrendingUp },
     { key: 'announcements',      label: 'Announcements',      icon: Megaphone },
     { key: 'feature-requests',   label: 'Feature Requests',   icon: Lightbulb },
     { key: 'suggested-articles', label: 'Suggested Articles', icon: BookOpen },
@@ -1656,6 +1657,9 @@ export default function AdminPage() {
         {/* ── SEO / Pages Tab ── */}
         {activeTab === 'seo-pages' && <SeoPageTab />}
 
+        {/* ── Google Trends Tab ── */}
+        {activeTab === 'trends' && <TrendsTab />}
+
         </main>
       </div>
     </div>
@@ -2116,6 +2120,165 @@ function SeoPageTab() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Google Trends Tab ────────────────────────────────────────────────────────
+
+function trendsUrl(keywords: string[], timeframe = 'today 12-m', geo = 'US') {
+  const items = keywords.map(kw => ({ keyword: kw, geo, time: timeframe }));
+  const req = encodeURIComponent(JSON.stringify({ comparisonItem: items, category: 0, property: '' }));
+  return `https://trends.google.com/trends/embed/explore/TIMESERIES?req=${req}&tz=300`;
+}
+
+function relatedUrl(keyword: string, geo = 'US') {
+  const req = encodeURIComponent(JSON.stringify({ comparisonItem: [{ keyword, geo, time: 'today 12-m' }], category: 0, property: '' }));
+  return `https://trends.google.com/trends/embed/explore/RELATED_QUERIES?req=${req}&tz=300`;
+}
+
+interface TrendChart { id: string; title: string; description: string; baseKeywords?: string[]; fixedUrl?: string; height?: number; }
+
+const VENUE_CHARTS: TrendChart[] = [
+  { id: 'v1', title: 'Wedding Venue — Overall Interest', description: 'Search interest for "wedding venue" over your selected period.', baseKeywords: ['wedding venue'] },
+  { id: 'v2', title: 'Venue Styles — Barn vs Garden vs Ballroom vs Vineyard', description: 'Compare which venue types are trending.', baseKeywords: ['barn wedding venue', 'garden wedding venue', 'ballroom wedding venue', 'vineyard wedding venue'] },
+  { id: 'v3', title: 'Venue Search Intent', description: '"Near me", outdoor, rustic, and intimate venue searches.', baseKeywords: ['wedding venue near me', 'outdoor wedding venue', 'rustic wedding venue', 'intimate wedding venue'] },
+  { id: 'v4', title: 'Venue Pricing Searches', description: 'How couples research venue costs and packages.', baseKeywords: ['wedding venue cost', 'wedding venue packages', 'affordable wedding venue', 'all inclusive wedding venue'] },
+  { id: 'v5', title: 'Wedding Venue — Related Queries', description: 'Rising and breakout searches around wedding venues — great for blog topics.', fixedUrl: relatedUrl('wedding venue'), height: 420 },
+  { id: 'v6', title: 'Wedding Venue — Geographic Interest (US)', description: 'Which states are searching for wedding venues the most.', fixedUrl: `https://trends.google.com/trends/embed/explore/GEO_MAP?req=${encodeURIComponent(JSON.stringify({ comparisonItem: [{ keyword: 'wedding venue', geo: 'US', time: 'today 12-m' }], category: 0, property: '' }))}&tz=300`, height: 380 },
+];
+
+const WEDDING_CHARTS: TrendChart[] = [
+  { id: 'w1', title: 'Wedding Planning Trends', description: 'Broad wedding planning searches — spot seasonal peaks and rising interest.', baseKeywords: ['wedding planning', 'elopement', 'micro wedding', 'intimate wedding'] },
+  { id: 'w2', title: 'What Brides Are Searching For', description: 'Dress, hair, flowers, and photographer searches.', baseKeywords: ['wedding dress trends', 'wedding flowers', 'wedding photographer', 'wedding hair'] },
+  { id: 'w3', title: 'Wedding Décor & Themes', description: 'Trending aesthetic and style searches.', baseKeywords: ['boho wedding', 'modern wedding decor', 'wedding centerpieces', 'wedding arch'] },
+  { id: 'w4', title: 'Wedding Budget & Planning Tools', description: 'How couples plan and budget for their wedding.', baseKeywords: ['wedding budget', 'wedding checklist', 'wedding website', 'wedding planner'] },
+  { id: 'w5', title: 'Food, Catering & Cake Trends', description: 'What couples want on the menu and for their cake.', baseKeywords: ['wedding catering', 'wedding cake trends', 'wedding food stations', 'wedding bar ideas'] },
+  { id: 'w6', title: 'Honeymoon Travel Trends', description: 'Top honeymoon destination searches.', baseKeywords: ['honeymoon destinations', 'all inclusive honeymoon', 'europe honeymoon', 'tropical honeymoon'] },
+  { id: 'w7', title: 'Wedding — 5-Year Seasonality', description: '"Wedding" interest over 5 years — see exactly when peak season hits.', fixedUrl: `https://trends.google.com/trends/embed/explore/TIMESERIES?req=${encodeURIComponent(JSON.stringify({ comparisonItem: [{ keyword: 'wedding', geo: 'US', time: 'today 5-y' }], category: 0, property: '' }))}&tz=300` },
+  { id: 'w8', title: 'Wedding Planning — Related Queries', description: 'Rising and top queries around wedding planning — content goldmine.', fixedUrl: relatedUrl('wedding planning'), height: 420 },
+];
+
+const TIME_OPTIONS = [
+  { label: 'Past 7 days',    value: 'now 7-d' },
+  { label: 'Past 30 days',   value: 'today 1-m' },
+  { label: 'Past 90 days',   value: 'today 3-m' },
+  { label: 'Past 12 months', value: 'today 12-m' },
+  { label: 'Past 5 years',   value: 'today 5-y' },
+];
+
+function TrendsTab() {
+  const [section, setSection] = React.useState<'venues' | 'wedding'>('venues');
+  const [timeframe, setTimeframe] = React.useState('today 12-m');
+  const [loaded, setLoaded] = React.useState<Set<string>>(new Set());
+  const charts = section === 'venues' ? VENUE_CHARTS : WEDDING_CHARTS;
+
+  function chartUrl(chart: TrendChart): string {
+    if (chart.fixedUrl) return chart.fixedUrl;
+    const items = (chart.baseKeywords ?? []).map(kw => ({ keyword: kw, geo: 'US', time: timeframe }));
+    const req = encodeURIComponent(JSON.stringify({ comparisonItem: items, category: 0, property: '' }));
+    return `https://trends.google.com/trends/embed/explore/TIMESERIES?req=${req}&tz=300`;
+  }
+
+  function loadAll() {
+    setLoaded(new Set(charts.map(c => c.id)));
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="font-heading text-xl text-gray-900">Google Trends — Wedding Industry</h2>
+          <p className="text-sm text-gray-500 mt-0.5">Live search trend data from Google. Find content angles, seasonal patterns, and what brides are searching for right now.</p>
+        </div>
+        <a href="https://trends.google.com/trends/explore?q=wedding+venue&geo=US" target="_blank" rel="noreferrer"
+          className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3.5 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+          <ExternalLink size={13} /> Open Google Trends ↗
+        </a>
+      </div>
+
+      {/* Controls */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex rounded-xl border border-gray-200 overflow-hidden">
+          <button onClick={() => { setSection('venues'); setLoaded(new Set()); }}
+            className={`px-4 py-2 text-sm font-semibold transition-colors ${section === 'venues' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+            🏛 Wedding Venues
+          </button>
+          <button onClick={() => { setSection('wedding'); setLoaded(new Set()); }}
+            className={`px-4 py-2 text-sm font-semibold transition-colors border-l border-gray-200 ${section === 'wedding' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+            💍 Wedding Industry
+          </button>
+        </div>
+        <select value={timeframe} onChange={e => { setTimeframe(e.target.value); setLoaded(new Set()); }}
+          className="rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:border-gray-400 transition-colors">
+          {TIME_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        <button onClick={loadAll}
+          className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+          Load All Charts
+        </button>
+      </div>
+
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+        <strong>How to use:</strong> Click &ldquo;Load Chart&rdquo; on each card. Use <strong>Related Queries</strong> charts for blog post and keyword ideas. Change the timeframe to see seasonal patterns.
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+        {charts.map(chart => (
+          <div key={chart.id} className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+            <div className="flex items-start justify-between gap-2 px-5 py-4 border-b border-gray-200">
+              <div>
+                <p className="text-sm font-semibold text-gray-900">{chart.title}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{chart.description}</p>
+              </div>
+              {loaded.has(chart.id) && (
+                <a href={`https://trends.google.com/trends/explore?q=${encodeURIComponent((chart.baseKeywords ?? ['wedding'])[0])}&geo=US`}
+                  target="_blank" rel="noreferrer"
+                  className="flex-shrink-0 text-[11px] text-gray-400 hover:text-gray-600 transition-colors mt-0.5">
+                  Open ↗
+                </a>
+              )}
+            </div>
+            <div className="p-4">
+              {loaded.has(chart.id) ? (
+                <iframe
+                  src={chartUrl(chart)}
+                  width="100%"
+                  height={chart.height ?? 310}
+                  frameBorder="0"
+                  scrolling="0"
+                  className="rounded-xl w-full"
+                  title={chart.title}
+                  loading="lazy"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center gap-3 py-10 bg-gray-50 rounded-xl">
+                  <TrendingUp size={24} className="text-gray-300" />
+                  <p className="text-xs text-gray-400 text-center max-w-xs">{chart.description}</p>
+                  <button onClick={() => setLoaded(prev => new Set([...prev, chart.id]))}
+                    className="rounded-xl bg-gray-900 px-4 py-2 text-xs font-semibold text-white hover:bg-gray-700 transition-colors">
+                    Load Chart
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Quick links */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-5">
+        <p className="text-sm font-semibold text-gray-900 mb-3">Quick Search — Open Directly in Google Trends</p>
+        <div className="flex flex-wrap gap-2">
+          {['wedding venue','barn wedding','outdoor wedding','elopement','micro wedding','boho wedding','wedding photographer','wedding catering','wedding budget','wedding dress trends 2026','wedding checklist','honeymoon destinations','wedding arch','rustic wedding','all inclusive wedding venue'].map(q => (
+            <a key={q} href={`https://trends.google.com/trends/explore?q=${encodeURIComponent(q)}&geo=US`}
+              target="_blank" rel="noreferrer"
+              className="rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-gray-400 hover:text-gray-900 transition-colors">
+              {q} ↗
+            </a>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
