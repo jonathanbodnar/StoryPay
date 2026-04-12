@@ -504,76 +504,8 @@ export default function AskAIWidget() {
  {isEmpty && !inlineArticle && (
  <div className="p-4 space-y-4">
 
- {/* Contextual articles for this page */}
- {contextualArticles.length > 0 && (
- <div className="rounded-2xl bg-white border border-gray-200 overflow-hidden">
- {/* Section header */}
- <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50">
- <div className="flex items-center gap-1.5">
- <BookOpen size={13} className="text-gray-500"/>
- <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
- Help for this page
- </p>
- </div>
- <span className="text-[11px] text-gray-400">
- {contextualArticles.length} article{contextualArticles.length !== 1 ? 's' : ''}
- </span>
- </div>
-
- {/* Article rows */}
- <div className="divide-y divide-gray-50">
- {contextualArticles.map(a => (
- <button
- key={a.id}
- onClick={() => setInlineArticleId(a.id)}
- className="w-full text-left px-4 py-3.5 hover:bg-gray-50 transition-colors group flex items-start gap-3"
- >
- {/* Category colour dot */}
- <div
- className="mt-1 h-5 w-5 rounded-full flex-shrink-0 flex items-center justify-center"
- style={{ backgroundColor: a.catColor + '22' }}
- >
- <div className="h-2 w-2 rounded-full"style={{ backgroundColor: a.catColor }} />
- </div>
- <div className="flex-1 min-w-0">
- <p className="text-sm font-semibold text-gray-900 leading-snug group-hover:text-gray-700">
- {a.title}
- </p>
- <p className="text-xs text-gray-400 mt-0.5 truncate">
- {a.body.split('\n').find(l => l.trim()) || ''}
- </p>
- </div>
- <ChevronRight size={15} className="text-gray-300 flex-shrink-0 mt-0.5 group-hover:text-gray-500 transition-colors"/>
- </button>
- ))}
- </div>
-
- {/* Footer: link to full help center */}
- <div className="flex items-center justify-between px-4 py-2.5 border-t border-gray-200 bg-gray-50">
- <p className="text-[11px] text-gray-400">Need more help?</p>
- <button
- onClick={() => { setOpen(false); router.push('/dashboard/help'); }}
- className="flex items-center gap-1 text-[11px] font-medium text-gray-600 hover:text-gray-900 transition-colors"
- >
- <BookOpen size={11} />
- All help articles →
- </button>
- </div>
- </div>
- )}
-
- {/* Divider */}
- <div className="flex items-center gap-3">
- <div className="flex-1 h-px bg-gray-200"/>
- <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 flex-shrink-0">
- Or ask a question
- </p>
- <div className="flex-1 h-px bg-gray-200"/>
- </div>
-
- {/* AI intro + suggested prompts */}
- <div>
- <div className="rounded-2xl bg-white border border-gray-200 p-4 mb-3">
+ {/* AI intro */}
+ <div className="rounded-2xl bg-white border border-gray-200 p-4">
  <div className="flex items-center gap-2 mb-2">
  <div className="flex h-7 w-7 items-center justify-center rounded-full"style={{ backgroundColor: AI_BUBBLE }}>
  <Sparkles size={13} className="text-white"/>
@@ -583,15 +515,6 @@ export default function AskAIWidget() {
  <p className="text-sm text-gray-600 leading-relaxed">
  I know your account data in real time — revenue, proposals, customers. Ask me anything, or attach a screenshot.
  </p>
- </div>
- <div className="space-y-2">
- {suggestedPrompts.map(p => (
- <button key={p} onClick={() => send(p)}
- className="w-full text-left rounded-2xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-700 hover:border-gray-300 hover: transition-all">
- {p}
- </button>
- ))}
- </div>
  </div>
 
  <div ref={bottomRef} />
