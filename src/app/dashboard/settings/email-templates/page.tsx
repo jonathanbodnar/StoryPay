@@ -80,7 +80,7 @@ function PreviewModal({ template, venueName, logoUrl, brandColor, onClose }: {
 
  return (
  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
- <div className="relative w-full max-w-lg rounded-2xl bg-white overflow-hidden max-h-[85vh] flex flex-col shadow-xl">
+ <div className="relative w-full max-w-lg rounded-2xl bg-white overflow-hidden max-h-[85vh] flex flex-col">
  <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200"style={{ backgroundColor: '#1b1b1b' }}>
  <div>
  <p className="text-sm font-semibold text-white">Email Preview</p>
@@ -225,7 +225,7 @@ export default function EmailTemplatesPage() {
  <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-5 items-start">
 
  {/* ── Left: Email Types list ── */}
- <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xl">
+ <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="px-5 py-3.5 border-b border-gray-200 flex items-center gap-2">
  <span className="text-sm font-semibold text-gray-900">Email Types</span>
  </div>
@@ -252,7 +252,7 @@ export default function EmailTemplatesPage() {
 
  {/* ── Right: Editor ── */}
  {current ? (
- <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xl">
+ <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  {/* Editor header */}
  <div className="flex items-start justify-between px-6 py-4 border-b border-gray-200">
  <div className="flex items-center gap-3">

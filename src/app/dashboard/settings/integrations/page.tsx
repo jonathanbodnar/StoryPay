@@ -189,7 +189,7 @@ export default function IntegrationsPage() {
  const isAvailable = data?.available[key] ?? false;
 
  return (
- <div key={key} className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xl">
+ <div key={key} className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="px-6 py-5">
  <div className="flex items-start gap-4">
  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-2xl"
@@ -290,7 +290,7 @@ export default function IntegrationsPage() {
  {data && data.recentSyncs.length > 0 && (
  <div className="mt-8">
  <h2 className="text-sm font-semibold text-gray-900 mb-3">Recent Sync Activity</h2>
- <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden divide-y divide-gray-50 shadow-xl">
+ <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden divide-y divide-gray-50">
  {data.recentSyncs.map(log => (
  <div key={log.id} className="flex items-center gap-3 px-4 py-3">
  {log.status === 'success' ? (

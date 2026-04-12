@@ -292,7 +292,7 @@ export default function BrandingPage() {
  <div className="space-y-6">
 
  {/* Brand Settings card */}
- <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xl">
+ <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="px-6 py-4 border-b border-gray-200">
  <h2 className="text-base font-semibold text-gray-900">Brand Settings</h2>
  </div>
@@ -303,7 +303,7 @@ export default function BrandingPage() {
  <label className={LABEL}>Logo</label>
  <div className="flex items-start gap-4">
  {/* Preview box */}
- <div className="flex-shrink-0 h-20 w-36 rounded-2xl border-2 border-dashed border-gray-200 bg-white flex items-center justify-center overflow-hidden relative shadow-xl">
+ <div className="flex-shrink-0 h-20 w-36 rounded-2xl border-2 border-dashed border-gray-200 bg-white flex items-center justify-center overflow-hidden relative">
  {brand.logo_url ? (
  <>
  {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -346,7 +346,7 @@ export default function BrandingPage() {
  </div>
 
  {/* Color Presets */}
- <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xl">
+ <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="px-6 py-4 border-b border-gray-200">
  <h2 className="text-base font-semibold text-gray-900">Color Presets</h2>
  </div>
@@ -366,7 +366,7 @@ export default function BrandingPage() {
  </div>
 
  {/* Custom Colors */}
- <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xl">
+ <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="px-6 py-4 border-b border-gray-200">
  <h2 className="text-base font-semibold text-gray-900">Custom Colors</h2>
  </div>
@@ -402,7 +402,7 @@ export default function BrandingPage() {
  </div>
 
  {/* Contact & Footer */}
- <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xl">
+ <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="px-6 py-4 border-b border-gray-200">
  <h2 className="text-base font-semibold text-gray-900">Contact Information</h2>
  <p className="text-xs text-gray-400 mt-0.5">Shown on invoices and proposals</p>
@@ -456,7 +456,7 @@ export default function BrandingPage() {
  </div>
 
  {/* Applies to */}
- <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xl">
+ <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="px-6 py-4 border-b border-gray-200">
  <h2 className="text-base font-semibold text-gray-900">Note</h2>
  </div>
@@ -483,7 +483,7 @@ export default function BrandingPage() {
 
  {/* ── Right: Live Preview ── */}
  <div className="xl:sticky xl:top-10 space-y-3">
- <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xl">
+ <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="px-5 py-3.5 border-b border-gray-200">
  <h2 className="text-sm font-semibold text-gray-900">Invoice / Payment Link Preview</h2>
  <p className="text-xs text-gray-400 mt-0.5">Updates in real time as you edit</p>

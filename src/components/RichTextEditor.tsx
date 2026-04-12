@@ -85,7 +85,7 @@ function DropdownBtn({
       </button>
       {open && (
         <div
-          className={`absolute top-full mt-1 z-50 min-w-[180px] rounded-lg border border-gray-200 bg-white shadow-lg py-1 ${align === 'right' ? 'right-0' : 'left-0'}`}
+          className={`absolute top-full mt-1 z-50 min-w-[180px] rounded-lg border border-gray-200 bg-white py-1 ${align === 'right' ? 'right-0' : 'left-0'}`}
           onMouseDown={(e) => e.preventDefault()}
         >
           {children}
@@ -232,7 +232,7 @@ export default function RichTextEditor({
   // ── Toolbar ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col rounded-xl border border-gray-300 overflow-hidden focus-within:border-brand-900 focus-within:ring-2 focus-within:ring-brand-900/20 transition bg-white shadow-sm">
+    <div className="flex flex-col rounded-xl border border-gray-300 overflow-hidden focus-within:border-brand-900 focus-within:ring-2 focus-within:ring-brand-900/20 transition bg-white">
 
       {/* ── Toolbar ── */}
       <div className="flex flex-wrap items-center gap-0.5 px-2 py-1.5 border-b border-gray-200 bg-gray-50/80 sticky top-0 z-10">

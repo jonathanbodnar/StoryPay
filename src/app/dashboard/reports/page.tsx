@@ -315,7 +315,7 @@ function ReportCard({ report, dateRange }: { report: ReportDef; dateRange: DateR
  }
 
  return (
- <div className="rounded-2xl bg-white border border-gray-200 overflow-hidden shadow-xl">
+ <div className="rounded-2xl bg-white border border-gray-200 overflow-hidden">
  <div className="p-5">
  <div className="flex flex-wrap items-start justify-between gap-3">
  <div className="flex items-start gap-3">

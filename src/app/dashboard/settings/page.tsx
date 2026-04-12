@@ -230,7 +230,7 @@ export default function SettingsPage() {
  <div className="space-y-6">
 
  {/* Payment Processing */}
- <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xl">
+ <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="flex items-center gap-3 border-b border-gray-200 px-6 py-4">
  <CreditCard size={18} className="text-gray-400"/>
  <h2 className="font-heading text-base font-semibold text-gray-900">Payment Processing</h2>
@@ -269,7 +269,7 @@ export default function SettingsPage() {
  </section>
 
  {/* ── Setup Guide (owners only) ── */}
- {isOwner && <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xl">
+ {isOwner && <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="flex items-center justify-between gap-4 px-6 py-5">
  <div className="flex items-center gap-3">
  <Rocket size={18} className="text-gray-400"/>
@@ -290,7 +290,7 @@ export default function SettingsPage() {
  </section>}
 
  {/* Messaging Integration */}
- <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xl">
+ <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="flex items-center gap-3 border-b border-gray-200 px-6 py-4">
  <MessageSquare size={18} className="text-gray-400"/>
  <h2 className="font-heading text-base font-semibold text-gray-900">Messaging</h2>

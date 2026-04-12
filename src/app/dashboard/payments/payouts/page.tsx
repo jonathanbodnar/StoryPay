@@ -10,7 +10,7 @@ export default function PayoutsPage() {
  <p className="mt-1 text-sm text-gray-500">View your payout history and schedule</p>
  </div>
 
- <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xl">
+ <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="py-16 text-center">
  <DollarSign size={40} className="mx-auto mb-4 text-gray-200"/>
  <p className="text-sm font-medium text-gray-500">Payouts are managed by LunarPay</p>

@@ -307,7 +307,7 @@ export default function NewInvoicePage() {
  className={`w-full rounded-md border px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900 ${item.isSurcharge ? 'border-blue-200 bg-blue-50/60 font-medium text-blue-900' : 'border-gray-300'}`}
  />
  {!item.isSurcharge && showSuggestions[item.id] && (suggestions[item.id] ?? []).length > 0 && (
- <div className="absolute top-full left-0 right-0 z-20 mt-1 rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xl">
+ <div className="absolute top-full left-0 right-0 z-20 mt-1 rounded-2xl border border-gray-200 bg-white overflow-hidden">
  {(suggestions[item.id] ?? []).map(p => (
  <button key={p.id} type="button"
  onMouseDown={() => selectProduct(item.id, p)}

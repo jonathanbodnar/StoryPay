@@ -58,7 +58,7 @@ export default function RefundModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="relative w-full max-w-sm rounded-2xl bg-white shadow-2xl overflow-hidden">
+      <div className="relative w-full max-w-sm rounded-2xl bg-white overflow-hidden">
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">

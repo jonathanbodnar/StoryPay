@@ -19,7 +19,7 @@ export default function PaymentLinksPage() {
  </button>
  </div>
 
- <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xl">
+ <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="py-16 text-center">
  <Link2 size={40} className="mx-auto mb-4 text-gray-200"/>
  <p className="text-sm font-medium text-gray-500">No payment links yet</p>

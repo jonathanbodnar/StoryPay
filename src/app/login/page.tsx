@@ -81,7 +81,7 @@ export default function LoginPage() {
           </Link>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+        <div className="bg-white rounded-2xl border border-gray-200 p-8">
 
           {forgotMode ? (
             /* ── Forgot / reset password ── */

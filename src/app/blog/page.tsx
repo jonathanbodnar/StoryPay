@@ -96,7 +96,7 @@ export default async function BlogPage() {
           <>
             {/* Featured post */}
             {featured && (
-              <Link href={`/blog/${featured.slug}`} className="group block mb-12 rounded-2xl border border-gray-200 overflow-hidden hover:border-gray-300 hover:shadow-md transition-all">
+              <Link href={`/blog/${featured.slug}`} className="group block mb-12 rounded-2xl border border-gray-200 overflow-hidden hover:border-gray-300 hover:transition-all">
                 <div className="grid md:grid-cols-2">
                   {featured.featured_image && (
                     <div className="relative h-56 md:h-auto">
@@ -124,7 +124,7 @@ export default async function BlogPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {rest.map(post => (
                   <Link key={post.id} href={`/blog/${post.slug}`}
-                    className="group rounded-2xl border border-gray-200 overflow-hidden hover:border-gray-300 hover:shadow-md transition-all flex flex-col">
+                    className="group rounded-2xl border border-gray-200 overflow-hidden hover:border-gray-300 hover:transition-all flex flex-col">
                     {post.featured_image && (
                       <div className="h-44 overflow-hidden">
                         {/* eslint-disable-next-line @next/next/no-img-element */}

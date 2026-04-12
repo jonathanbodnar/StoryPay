@@ -504,7 +504,7 @@ function StepIndicator({ currentStep, paymentReady, ghlReady }: { currentStep: n
 
 function StepCard({ number, title, active, children }: { number: number; title: string; active?: boolean; children: React.ReactNode }) {
   return (
-    <div className={`bg-white rounded-2xl shadow-sm border p-8 transition-all ${active ? 'border-brand-800/20 shadow-lg' : 'border-gray-100'}`}>
+    <div className={`bg-white rounded-2xl border p-8 transition-all ${active ? 'border-brand-800/20' : 'border-gray-100'}`}>
       <div className="flex items-center gap-3 mb-6">
         <span className="text-sm font-semibold text-brand-800 bg-brand-800/5 rounded-full w-8 h-8 flex items-center justify-center">{number}</span>
         <h2 className="font-heading text-xl text-brand-900">{title}</h2>

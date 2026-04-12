@@ -47,7 +47,7 @@ const STATUS_LABELS_FR: Record<string, string> = { open: 'Open', planned: 'Plann
 function KPICard({ label, value, icon: Icon, color, onClick }: { label: string; value: string | number; icon: React.ElementType; color: string; onClick?: () => void }) {
   return (
     <div
-      className={`rounded-xl bg-white border border-gray-200 shadow-sm p-5 ${onClick ? 'cursor-pointer hover:shadow-md hover:border-gray-300 transition-all' : ''}`}
+      className={`rounded-xl bg-white border border-gray-200 p-5 ${onClick ? 'cursor-pointer hover:hover:border-gray-300 transition-all' : ''}`}
       onClick={onClick}
     >
       <div className="flex items-center justify-between mb-3">
@@ -75,7 +75,7 @@ function DrillModal({ title, count, onClose, searchQuery, onSearchChange, search
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="relative w-full max-w-2xl rounded-2xl bg-white shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
+      <div className="relative w-full max-w-2xl rounded-2xl bg-white overflow-hidden max-h-[85vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4" style={{ backgroundColor: BRAND }}>
           <div className="flex items-center gap-2">
@@ -219,7 +219,7 @@ function FeatureRequestsAdminTab({
         </div>
         <button
           onClick={() => setShowForm(v => !v)}
-          className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90 transition-all shadow-sm"
+          className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90 transition-all"
           style={{ backgroundColor: '#1b1b1b' }}
         >
           {showForm ? <><X size={14}/> Cancel</> : <><Plus size={14}/> New Request</>}
@@ -228,7 +228,7 @@ function FeatureRequestsAdminTab({
 
       {/* Create form */}
       {showForm && (
-        <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-5">
           <h3 className="text-sm font-semibold text-gray-900 mb-4">Create Feature Request</h3>
           <form onSubmit={handleSubmit} className="space-y-3">
             <div>
@@ -304,7 +304,7 @@ function FeatureRequestsAdminTab({
                   <p className="text-sm text-gray-500">No active feature requests</p>
                 </div>
               ) : (
-                <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
                   <div className="hidden sm:grid grid-cols-[1fr_110px_80px_120px_48px] gap-4 px-6 py-3 bg-gray-50 border-b border-gray-100">
                     {['Title','Status','Votes','Date',''].map(h => <span key={h} className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{h}</span>)}
                   </div>
@@ -319,7 +319,7 @@ function FeatureRequestsAdminTab({
             {completed.length > 0 && (
               <div>
                 <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">✅ Completed &amp; Shipped ({completed.length})</h2>
-                <div className="rounded-2xl border border-emerald-200 bg-white shadow-sm overflow-hidden">
+                <div className="rounded-2xl border border-emerald-200 bg-white overflow-hidden">
                   <div className="hidden sm:grid grid-cols-[1fr_110px_80px_120px_48px] gap-4 px-6 py-3 bg-emerald-50 border-b border-emerald-100">
                     {['Title','Status','Votes','Completed',''].map(h => <span key={h} className="text-[11px] font-semibold uppercase tracking-wider text-emerald-600">{h}</span>)}
                   </div>
@@ -650,7 +650,7 @@ export default function AdminPage() {
           <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-6 transition-colors">
             <Home size={14} /> Back to homepage
           </Link>
-          <form onSubmit={handleLogin} className="bg-white rounded-2xl shadow-lg p-8">
+          <form onSubmit={handleLogin} className="bg-white rounded-2xl p-8">
             <div className="flex justify-center mb-5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/storyvenue-dark-logo.png" alt="StoryPay" className="h-8 object-contain" />
@@ -940,7 +940,7 @@ export default function AdminPage() {
             {/* Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
               {/* Revenue chart */}
-              <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-6">
+              <div className="rounded-xl bg-white border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Platform Revenue</p>
@@ -970,7 +970,7 @@ export default function AdminPage() {
               </div>
 
               {/* Proposals chart */}
-              <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-6">
+              <div className="rounded-xl bg-white border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Proposals Sent</p>
@@ -995,7 +995,7 @@ export default function AdminPage() {
             </div>
 
             {/* Feature requests */}
-            <div className="rounded-xl bg-white border border-gray-200 shadow-sm overflow-hidden">
+            <div className="rounded-xl bg-white border border-gray-200 overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <ThumbsUp size={16} style={{ color: BRAND }} />
@@ -1063,7 +1063,7 @@ export default function AdminPage() {
             </div>
 
             {showCreateForm && (
-              <form onSubmit={handleCreate} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-5">
+              <form onSubmit={handleCreate} className="bg-white rounded-xl border border-gray-200 p-6 mb-5">
                 <h3 className="font-heading text-lg text-gray-900 mb-4">New Venue</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">Business Name *</label>
@@ -1103,7 +1103,7 @@ export default function AdminPage() {
               {venuesLoading ? <div className="text-center py-8 text-gray-400"><Loader2 size={20} className="animate-spin inline" /></div>
               : venues.length === 0 ? <p className="text-center text-gray-400 py-8 text-sm">No venues yet</p>
               : venues.map(venue => (
-                <div key={venue.id} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                <div key={venue.id} className="bg-white rounded-xl border border-gray-200 p-4">
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <p className="text-sm font-semibold text-gray-900">{venue.name}</p>
                     <div className="flex items-center gap-1.5 shrink-0">
@@ -1124,7 +1124,7 @@ export default function AdminPage() {
                 </div>
               ))}
             </div>
-            <div className="hidden sm:block bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="hidden sm:block bg-white rounded-xl border border-gray-200 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
@@ -1173,7 +1173,7 @@ export default function AdminPage() {
               </div>
               {!showAnnForm && !editingAnn && (
                 <button onClick={() => setShowAnnForm(true)}
-                  className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 transition-all shadow-sm" style={{ backgroundColor: BRAND }}>
+                  className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 transition-all" style={{ backgroundColor: BRAND }}>
                   <Plus size={15} /> New Announcement
                 </button>
               )}
@@ -1200,7 +1200,7 @@ export default function AdminPage() {
             ) : (
               <div className="space-y-3">
                 {announcements.map(ann => (
-                  <div key={ann.id} className={`rounded-xl border bg-white p-5 transition-all ${ann.is_active ? 'border-gray-200 shadow-sm' : 'border-gray-100 opacity-60'}`}>
+                  <div key={ann.id} className={`rounded-xl border bg-white p-5 transition-all ${ann.is_active ? 'border-gray-200' : 'border-gray-100 opacity-60'}`}>
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1.5">
@@ -1255,7 +1255,7 @@ export default function AdminPage() {
       {/* Feature Request Detail Modal */}
       {(frDetail || frDetailLoading || frDetailError) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="relative w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
+          <div className="relative w-full max-w-lg rounded-2xl bg-white overflow-hidden max-h-[85vh] flex flex-col">
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4" style={{ backgroundColor: BRAND }}>
               <h3 className="text-base font-semibold text-white">Feature Request Detail</h3>
@@ -1437,7 +1437,7 @@ export default function AdminPage() {
                 {(() => {
                   const STATUS_COLORS: Record<string, string> = { draft: 'bg-amber-100 text-amber-700', published: 'bg-emerald-100 text-emerald-700', dismissed: 'bg-gray-100 text-gray-500' };
                   return suggestedArticles.map(a => (
-                    <div key={a.id} className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                    <div key={a.id} className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
                       <div className="flex items-center gap-3 px-5 py-4">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-0.5">
@@ -1508,21 +1508,21 @@ export default function AdminPage() {
               <>
                 {/* Summary KPIs */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                  <div className="rounded-xl border border-gray-200 bg-white p-4">
                     <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Total Searches</p>
                     <p className="text-2xl font-bold text-gray-900 mt-1">{searchAnalytics.totalSearches}</p>
                   </div>
-                  <div className="rounded-xl border border-red-200 bg-red-50 p-4 shadow-sm">
+                  <div className="rounded-xl border border-red-200 bg-red-50 p-4">
                     <p className="text-xs font-semibold uppercase tracking-wider text-red-400">Zero Results</p>
                     <p className="text-2xl font-bold text-red-700 mt-1">{searchAnalytics.totalZeroResults}</p>
                   </div>
-                  <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                  <div className="rounded-xl border border-gray-200 bg-white p-4">
                     <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Zero-Result Rate</p>
                     <p className="text-2xl font-bold text-gray-900 mt-1">
                       {searchAnalytics.totalSearches > 0 ? Math.round((searchAnalytics.totalZeroResults / searchAnalytics.totalSearches) * 100) : 0}%
                     </p>
                   </div>
-                  <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                  <div className="rounded-xl border border-gray-200 bg-white p-4">
                     <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Unique Zero-Result Terms</p>
                     <p className="text-2xl font-bold text-gray-900 mt-1">{searchAnalytics.zeroResults.length}</p>
                   </div>
@@ -1530,7 +1530,7 @@ export default function AdminPage() {
 
                 <div className="grid sm:grid-cols-2 gap-6">
                   {/* Zero-result queries — most actionable */}
-                  <div className="rounded-2xl border border-red-200 bg-white shadow-sm overflow-hidden">
+                  <div className="rounded-2xl border border-red-200 bg-white overflow-hidden">
                     <div className="px-5 py-4 border-b border-red-100 bg-red-50">
                       <p className="text-sm font-semibold text-red-900">Zero-Result Searches</p>
                       <p className="text-xs text-red-500 mt-0.5">Content you should write next</p>
@@ -1550,7 +1550,7 @@ export default function AdminPage() {
                   </div>
 
                   {/* Top searches overall */}
-                  <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                  <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
                     <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
                       <p className="text-sm font-semibold text-gray-900">Top Searches</p>
                       <p className="text-xs text-gray-500 mt-0.5">What users look for most</p>
@@ -1604,7 +1604,7 @@ export default function AdminPage() {
                 <p className="text-xs text-gray-400 mt-1">Ratings appear after users click thumbs-up or thumbs-down on articles.</p>
               </div>
             ) : (
-              <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+              <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
                 <div className="hidden sm:grid grid-cols-[1fr_80px_80px_80px_140px] gap-4 px-5 py-3 bg-gray-50 border-b border-gray-100">
                   {['Article ID', '👍 Up', '👎 Down', 'Total', 'Status'].map(h => (
                     <span key={h} className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{h}</span>
@@ -1721,7 +1721,7 @@ function BlogTab() {
         </div>
         {!creating && !editing && (
           <button onClick={() => { setCreating(true); setEditing(null); setForm(emptyPost()); }}
-            className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 transition-all shadow-sm"
+            className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 transition-all"
             style={{ backgroundColor: BRAND }}>
             <Plus size={15} /> New Post
           </button>
@@ -1730,7 +1730,7 @@ function BlogTab() {
 
       {/* Editor */}
       {(creating || editing) && (
-        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+        <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
             <h3 className="font-semibold text-gray-900">{editing ? 'Edit Post' : 'New Post'}</h3>
             <button onClick={() => { setEditing(null); setCreating(false); setForm(emptyPost()); }}
@@ -1825,7 +1825,7 @@ function BlogTab() {
                 Cancel
               </button>
               <button onClick={save} disabled={saving || !form.title?.trim() || !form.slug?.trim()}
-                className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60 transition-all shadow-sm"
+                className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60 transition-all"
                 style={{ backgroundColor: BRAND }}>
                 {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                 {saving ? 'Saving...' : form.status === 'published' ? 'Publish Post' : 'Save Draft'}
@@ -1844,7 +1844,7 @@ function BlogTab() {
           <p className="text-sm text-gray-500">No blog posts yet. Create your first post to start driving SEO traffic.</p>
         </div>
       ) : (
-        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+        <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
           <div className="hidden sm:grid grid-cols-[1fr_120px_100px_100px_80px] gap-4 px-5 py-3 bg-gray-50 border-b border-gray-100">
             {['Title', 'Category', 'Status', 'Published', ''].map(h => (
               <span key={h} className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{h}</span>

@@ -187,7 +187,7 @@ export default function CustomerDetailPage() {
  </button>
 
  {/* Customer header */}
- <div className="rounded-2xl border border-gray-200 bg-white mb-6 overflow-hidden shadow-xl">
+ <div className="rounded-2xl border border-gray-200 bg-white mb-6 overflow-hidden">
  <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
  <div className="flex items-center gap-3">
  <div className="flex h-11 w-11 items-center justify-center rounded-full text-lg font-semibold text-white flex-shrink-0"style={{ backgroundColor: '#1b1b1b' }}>

@@ -173,7 +173,7 @@ export default function OnboardingChecklist() {
  {/* Modal */}
  {modalOpen && (
  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
- <div className="relative w-full max-w-md rounded-2xl bg-white overflow-hidden flex flex-col max-h-[90vh] shadow-xl">
+ <div className="relative w-full max-w-md rounded-2xl bg-white overflow-hidden flex flex-col max-h-[90vh]">
 
  {/* Header */}
  <div className="flex items-center justify-between px-6 py-5 bg-[#1b1b1b]">

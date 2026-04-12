@@ -43,7 +43,7 @@ function EmojiPicker({ onSelect, onClose }: { onSelect: (e: string) => void; onC
  }, [onClose]);
 
  return (
- <div ref={ref} className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xl"
+ <div ref={ref} className="rounded-2xl border border-gray-200 bg-white overflow-hidden"
  style={{ position: 'absolute', bottom: 'calc(100% + 8px)', left: 0, right: 0, zIndex: 30 }}>
  <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50">
  <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Emoji</p>
@@ -372,7 +372,7 @@ export default function AskAIWidget() {
  Listening… speak now
  </div>
  )}
- <div className="rounded-2xl border border-gray-200 bg-gray-50 focus-within:border-gray-300 focus-within:bg-white transition-colors overflow-hidden shadow-xl">
+ <div className="rounded-2xl border border-gray-200 bg-gray-50 focus-within:border-gray-300 focus-within:bg-white transition-colors overflow-hidden">
  <textarea
  ref={inputRef}
  value={input}
@@ -506,7 +506,7 @@ export default function AskAIWidget() {
 
  {/* Contextual articles for this page */}
  {contextualArticles.length > 0 && (
- <div className="rounded-2xl bg-white border border-gray-200 overflow-hidden shadow-xl">
+ <div className="rounded-2xl bg-white border border-gray-200 overflow-hidden">
  {/* Section header */}
  <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50">
  <div className="flex items-center gap-1.5">

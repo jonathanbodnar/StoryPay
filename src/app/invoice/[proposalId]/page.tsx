@@ -81,7 +81,7 @@ export default function InvoicePage() {
   if (error || !invoice) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="bg-white rounded-2xl shadow-lg p-10 max-w-md w-full text-center">
+        <div className="bg-white rounded-2xl p-10 max-w-md w-full text-center">
           <h1 className="text-2xl font-semibold text-gray-900 mb-3">
             Invoice Not Found
           </h1>
@@ -118,7 +118,7 @@ export default function InvoicePage() {
           </button>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden print:shadow-none print:border-none">
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden print:border-none">
           {/* Header — branded */}
           {(() => {
             const brand = invoice.venue_brand;

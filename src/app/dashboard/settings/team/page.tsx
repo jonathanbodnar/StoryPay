@@ -219,7 +219,7 @@ export default function TeamPage() {
 
  {/* Add member form */}
  {showForm && (
- <div className="mb-6 rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xl">
+ <div className="mb-6 rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="px-6 py-4 border-b border-gray-200">
  <h2 className="text-base font-semibold text-gray-900">Add Team Member</h2>
  <p className="text-xs text-gray-400 mt-0.5">They will receive an invitation to join your account</p>
@@ -409,7 +409,7 @@ export default function TeamPage() {
  return (
  <div
  data-menu
- className="fixed z-50 w-52 rounded-2xl border border-gray-200 bg-white py-1 shadow-lg"
+ className="fixed z-50 w-52 rounded-2xl border border-gray-200 bg-white py-1"
  style={{ top: menuPos.top, right: menuPos.right }}
  >
  <button
@@ -442,7 +442,7 @@ export default function TeamPage() {
  })()}
 
  {/* Members list */}
- <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xl">
+ <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
  <Users size={16} className="text-gray-400"/>
  <h2 className="text-sm font-semibold text-gray-900">Team Members</h2>

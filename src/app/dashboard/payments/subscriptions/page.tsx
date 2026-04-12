@@ -94,7 +94,7 @@ export default function SubscriptionsPage() {
  </Link>
  </div>
  ) : (
- <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xl">
+ <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  {/* Table header */}
  <div className="hidden sm:grid grid-cols-[1fr_120px_110px_130px_100px_80px] gap-4 px-6 py-3 border-b border-gray-200 bg-gray-50">
  {['Client','Amount','Frequency','Next Payment','Status',''].map(h=>(

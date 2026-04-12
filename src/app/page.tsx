@@ -113,7 +113,7 @@ function RequestModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="relative w-full max-w-md rounded-3xl bg-white shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
+      <div className="relative w-full max-w-md rounded-3xl bg-white overflow-hidden max-h-[90vh] overflow-y-auto">
         <button
           onClick={onClose}
           className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors z-10"
@@ -254,7 +254,7 @@ function DashboardScreen() {
             { label: 'Customers', value: '18',      trend: '+3',   up: true },
             { label: 'Pending',   value: '5',       trend: '-2',   up: false },
           ].map(c => (
-            <div key={c.label} className="rounded-xl bg-white border border-gray-100 p-2 shadow-sm">
+            <div key={c.label} className="rounded-xl bg-white border border-gray-100 p-2">
               <p className="text-[7px] text-gray-400 font-semibold uppercase tracking-wider">{c.label}</p>
               <p className="text-[13px] font-bold mt-0.5" style={{ color: BRAND }}>{c.value}</p>
               <div className={`flex items-center gap-0.5 mt-0.5 ${c.up ? 'text-emerald-500' : 'text-red-400'}`}>
@@ -265,7 +265,7 @@ function DashboardScreen() {
           ))}
         </div>
 
-        <div className="rounded-xl bg-white border border-gray-100 p-2.5 shadow-sm">
+        <div className="rounded-xl bg-white border border-gray-100 p-2.5">
           <div className="flex items-center justify-between mb-1.5">
             <p className="text-[8px] font-bold text-gray-500 uppercase tracking-wider">Revenue Trend</p>
             <span className="text-[7px] text-emerald-600 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded-full">Trending Up</span>
@@ -291,7 +291,7 @@ function DashboardScreen() {
           </svg>
         </div>
 
-        <div className="rounded-xl bg-white border border-gray-100 shadow-sm overflow-hidden">
+        <div className="rounded-xl bg-white border border-gray-100 overflow-hidden">
           <div className="px-2.5 py-1.5 border-b border-gray-50 flex items-center justify-between">
             <p className="text-[8px] font-bold text-gray-500 uppercase tracking-wider">Recent Payments</p>
             <CreditCard size={9} className="text-gray-300" />
@@ -314,7 +314,7 @@ function DashboardScreen() {
           ))}
         </div>
 
-        <div className="rounded-xl bg-white border border-gray-100 p-2.5 shadow-sm">
+        <div className="rounded-xl bg-white border border-gray-100 p-2.5">
           <p className="text-[8px] font-bold text-gray-500 uppercase tracking-wider mb-2">Proposal Status</p>
           <div className="flex items-center gap-2">
             <svg viewBox="0 0 40 40" className="w-10 h-10 flex-shrink-0">
@@ -378,7 +378,7 @@ export default function LandingPage() {
         {/* Nav */}
         <nav className="mx-auto max-w-5xl px-5 sm:px-8 py-5 flex items-center justify-between">
           <Image src="/storypay-logo-dark.png" alt="StoryPay" width={110} height={26} />
-          <a href="/login" className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm">
+          <a href="/login" className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all">
             Log In
           </a>
         </nav>
@@ -402,7 +402,7 @@ export default function LandingPage() {
           {/* CTA */}
           <button
             onClick={() => setShowModal(true)}
-            className="inline-flex items-center justify-center rounded-md px-8 sm:px-12 py-4 text-base font-bold text-white shadow-md hover:opacity-90 hover:-translate-y-0.5 transition-all mb-8 sm:mb-10"
+            className="inline-flex items-center justify-center rounded-md px-8 sm:px-12 py-4 text-base font-bold text-white hover:opacity-90 hover:-translate-y-0.5 transition-all mb-8 sm:mb-10"
             style={{ backgroundColor: BRAND }}
           >
             Request Early Access Invite
@@ -412,7 +412,7 @@ export default function LandingPage() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-8 sm:mb-10">
             <div className="flex -space-x-2.5">
               {AVATARS.map((av, i) => (
-                <div key={i} className="h-9 w-9 rounded-full border-2 border-white overflow-hidden shadow-sm bg-gray-200 flex-shrink-0">
+                <div key={i} className="h-9 w-9 rounded-full border-2 border-white overflow-hidden bg-gray-200 flex-shrink-0">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={av.src}
@@ -447,7 +447,7 @@ export default function LandingPage() {
           <div className="relative mx-auto" style={{ width: 300 }}>
 
             {/* Floating payment notification */}
-            <div className="hidden sm:block absolute -left-14 top-20 z-10 rounded-2xl bg-white shadow-xl border border-gray-100 px-3.5 py-3 text-left w-44">
+            <div className="hidden sm:block absolute -left-14 top-20 z-10 rounded-2xl bg-white border border-gray-100 px-3.5 py-3 text-left w-44">
               <div className="flex items-center gap-1.5 mb-1.5">
                 <div className="h-5 sm:h-6 w-5 sm:w-6 rounded-full flex items-center justify-center text-white text-[8px] sm:text-[9px] font-bold flex-shrink-0" style={{ backgroundColor: BRAND }}>S</div>
                 <span className="text-[9px] sm:text-[10px] font-semibold text-gray-500">New Payment</span>
@@ -457,7 +457,7 @@ export default function LandingPage() {
             </div>
 
             {/* Floating trend card */}
-            <div className="hidden sm:block absolute -right-10 top-1/3 z-10 rounded-2xl bg-white shadow-xl border border-gray-100 px-3 py-2.5 text-left w-36">
+            <div className="hidden sm:block absolute -right-10 top-1/3 z-10 rounded-2xl bg-white border border-gray-100 px-3 py-2.5 text-left w-36">
               <p className="text-[9px] text-gray-400 font-medium mb-1">Monthly Revenue</p>
               <p className="text-sm font-bold text-gray-900">$48,200</p>
               <div className="flex items-center gap-1 mt-1">

@@ -107,7 +107,7 @@ export default function NotificationsPage() {
  <div className="space-y-5 max-w-2xl">
 
  {/* Email Notifications */}
- <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xl">
+ <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="flex items-center gap-2.5 px-6 py-4 border-b border-gray-200">
  <Mail size={16} className="text-gray-400"/>
  <h2 className="text-sm font-semibold text-gray-900">Email Notifications</h2>
@@ -125,7 +125,7 @@ export default function NotificationsPage() {
  </div>
 
  {/* SMS Notifications */}
- <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xl">
+ <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="flex items-center gap-2.5 px-6 py-4 border-b border-gray-200">
  <MessageSquare size={16} className="text-gray-400"/>
  <h2 className="text-sm font-semibold text-gray-900">SMS Notifications</h2>

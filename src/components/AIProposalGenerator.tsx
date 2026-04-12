@@ -66,7 +66,7 @@ export default function AIProposalGenerator({ onGenerated, onClose, prefillClien
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="relative w-full max-w-2xl rounded-3xl bg-white shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+      <div className="relative w-full max-w-2xl rounded-3xl bg-white overflow-hidden max-h-[90vh] flex flex-col">
 
         {/* Header */}
         <div className="flex items-center justify-between px-7 py-5 border-b border-gray-100" style={{ backgroundColor: BRAND }}>
@@ -232,7 +232,7 @@ export default function AIProposalGenerator({ onGenerated, onClose, prefillClien
                 <button
                   type="submit"
                   disabled={generating}
-                  className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60 transition-all shadow-sm whitespace-nowrap"
+                  className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60 transition-all whitespace-nowrap"
                   style={{ backgroundColor: BRAND }}
                 >
                   <Sparkles size={15} />

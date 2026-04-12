@@ -443,7 +443,7 @@ export default function DashboardOverview() {
  </div>
 
  {/* ── Recent proposals ── */}
- <div className="rounded-2xl bg-white overflow-hidden mb-6 shadow-xl"style={{ border: '1px solid #e5e7eb' }}>
+ <div className="rounded-2xl bg-white overflow-hidden mb-6"style={{ border: '1px solid #e5e7eb' }}>
  <div className="flex items-center justify-between px-6 py-4"style={{ borderBottom: '1px solid #e5e7eb' }}>
  <p className="text-sm font-semibold"style={{ color: B.primary }}>Recent Proposals</p>
  <Link href="/dashboard/proposals"
@@ -519,7 +519,7 @@ export default function DashboardOverview() {
  </div>
 
  {/* ── Recent Transactions ── */}
- <div className="rounded-2xl bg-white overflow-hidden shadow-xl"style={{ border: '1px solid #e5e7eb' }}>
+ <div className="rounded-2xl bg-white overflow-hidden"style={{ border: '1px solid #e5e7eb' }}>
  <div className="flex items-center justify-between px-6 py-4"style={{ borderBottom: '1px solid #e5e7eb' }}>
  <div className="flex items-center gap-2">
  <CreditCard size={15} style={{ color: B.muted }} />

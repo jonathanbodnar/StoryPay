@@ -94,7 +94,7 @@ export default function ProfilePage() {
  <p className="text-sm text-gray-500 ml-9">Update your name and contact details</p>
  </div>
 
- <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xl">
+ <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
  <div>
  <p className="text-sm font-semibold text-gray-900">

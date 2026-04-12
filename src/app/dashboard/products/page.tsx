@@ -109,7 +109,7 @@ export default function ProductsPage() {
 
  {/* Form */}
  {showForm && (
- <div className="mb-6 rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xl">
+ <div className="mb-6 rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
  <h2 className="text-sm font-semibold text-gray-900">{editing ? 'Edit Product' : 'New Product'}</h2>
  <button onClick={cancel} className="text-gray-400 hover:text-gray-600 transition-colors"><X size={16} /></button>
@@ -162,7 +162,7 @@ export default function ProductsPage() {
  )}
 
  {/* Products list */}
- <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xl">
+ <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
  <Package size={16} className="text-gray-400"/>
  <span className="text-sm font-semibold text-gray-900">Products & Services</span>

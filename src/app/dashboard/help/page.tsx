@@ -777,7 +777,7 @@ function InlineAI() {
  Listening...
  </p>
  )}
- <div className="rounded-2xl border border-gray-200 bg-gray-50 focus-within:border-gray-300 focus-within:bg-white transition-colors overflow-hidden shadow-xl">
+ <div className="rounded-2xl border border-gray-200 bg-gray-50 focus-within:border-gray-300 focus-within:bg-white transition-colors overflow-hidden">
  <textarea
  ref={inputRef}
  value={input}
@@ -1202,7 +1202,7 @@ export default function HelpPage() {
  )}
 
  {/* All topics */}
- <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xl">
+ <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="px-4 py-3 border-b border-gray-200">
  <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Topics</p>
  </div>
@@ -1231,7 +1231,7 @@ export default function HelpPage() {
 
  {/* Ask AI panel */}
  {showAI && (
- <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden mb-6 shadow-xl"style={{ height: 520 }}>
+ <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden mb-6"style={{ height: 520 }}>
  <div className="flex items-center gap-2.5 px-4 py-3.5 border-b border-gray-200 bg-gray-900">
  <div className="h-7 w-7 rounded-full bg-white/20 flex items-center justify-center">
  <Sparkles size={14} className="text-white"/>
@@ -1476,7 +1476,7 @@ export default function HelpPage() {
  const Icon = cat.icon;
  const open = expandedCats.has(cat.id);
  return (
- <div key={cat.id} className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xl">
+ <div key={cat.id} className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <button onClick={() => toggleCat(cat.id)}
  className="w-full flex items-center justify-between px-4 py-3.5">
  <div className="flex items-center gap-3">

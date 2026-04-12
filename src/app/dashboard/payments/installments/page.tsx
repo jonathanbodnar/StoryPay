@@ -76,7 +76,7 @@ export default function InstallmentsPage() {
  <Link href="/dashboard/payments/new"className="mt-4 inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white hover:opacity-90"style={{ backgroundColor: '#1b1b1b' }}>+ New</Link>
  </div>
  ) : (
- <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xl">
+ <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="hidden sm:grid grid-cols-[1fr_120px_100px_100px_100px_80px] gap-4 px-6 py-3 border-b border-gray-200 bg-gray-50">
  {['Client','Total','Payments','Per Payment','Status',''].map(h=>(
  <span key={h} className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{h}</span>
