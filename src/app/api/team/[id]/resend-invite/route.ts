@@ -69,7 +69,7 @@ export async function POST(
     .single();
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
-  const inviteUrl = `${appUrl}/invite/${member.invite_token}`;
+  const inviteUrl = `${appUrl}/api/invite/${member.invite_token}`;
 
   await sendEmail({
     to: member.email,
