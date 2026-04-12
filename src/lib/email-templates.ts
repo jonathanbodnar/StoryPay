@@ -174,18 +174,16 @@ export function buildEmailHtml({
       : `<p style="color:#374151;font-size:15px;line-height:1.7;margin:0">${line}</p>`)
     .join('\n');
 
-  // Header: when logo is present use a white background so any logo color is visible.
-  // Transparent PNGs, dark logos, and light logos all work on white.
-  // Brand color becomes an accent bar below the logo and is used on the CTA button.
-  // When no logo: full brand-color header with venue name text.
+  // Header: always white background + brand-color bottom strip.
+  // Logo shown if available, otherwise venue name text in dark gray.
+  // White header ensures any logo (dark, transparent, light) is always visible.
   const hasLogo = logoUrl && logoUrl.trim().length > 0;
-  const headerHtml = hasLogo
-    ? `<div style="background-color:#ffffff;padding:20px 32px 16px;border-radius:12px 12px 0 0;border:1px solid #e5e7eb;border-bottom:4px solid ${brandColor}">
-        <img src="${logoUrl}" alt="${venueName}" style="max-height:60px;max-width:200px;width:auto;height:auto;display:block;background-color:#ffffff">
-       </div>`
-    : `<div style="background-color:${brandColor};padding:28px 32px;border-radius:12px 12px 0 0">
-        <h1 style="color:white;font-size:22px;margin:0;font-weight:300">${venueName}</h1>
-       </div>`;
+  const headerContent = hasLogo
+    ? `<img src="${logoUrl}" alt="${venueName}" style="max-height:56px;max-width:200px;width:auto;height:auto;display:block;background-color:#ffffff">`
+    : `<span style="font-size:20px;font-weight:700;color:#111827;font-family:'Open Sans',Arial,sans-serif;">${venueName}</span>`;
+  const headerHtml = `<div style="background-color:#ffffff;padding:24px 32px 20px;border-radius:12px 12px 0 0;border:1px solid #e5e7eb;border-bottom:4px solid ${brandColor}">
+    ${headerContent}
+  </div>`;
 
   return `
 <div style="font-family:'Open Sans',Arial,sans-serif;max-width:600px;margin:0 auto;background:#ffffff">

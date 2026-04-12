@@ -99,19 +99,18 @@ function PreviewModal({ template, venueName, logoUrl, brandColor, onClose }: {
               </div>
               {/* Body */}
               <div style={{ fontFamily: 'Arial, sans-serif' }}>
-                {logoUrl
-                  ? (
-                    <div style={{ backgroundColor: '#ffffff', padding: '16px 24px 12px', borderBottom: `3px solid ${brandColor || '#1b1b1b'}` }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                {/* White header + brand-color strip — same layout as actual sent emails */}
+                <div style={{ backgroundColor: '#ffffff', padding: '20px 24px 16px', borderBottom: `4px solid ${brandColor || '#1b1b1b'}` }}>
+                  {logoUrl
+                    ? (
+                      // eslint-disable-next-line @next/next/no-img-element
                       <img src={logoUrl} alt={venueName} style={{ maxHeight: 48, maxWidth: 180, width: 'auto', height: 'auto', objectFit: 'contain', display: 'block' }} />
-                    </div>
-                  )
-                  : (
-                    <div className="px-6 py-5" style={{ backgroundColor: brandColor || '#1b1b1b' }}>
-                      <p className="text-white font-bold text-lg m-0">{venueName || 'Your Venue'}</p>
-                    </div>
-                  )
-                }
+                    )
+                    : (
+                      <p style={{ margin: 0, fontWeight: 700, fontSize: 16, color: '#111827' }}>{venueName || 'Your Venue'}</p>
+                    )
+                  }
+                </div>
                 <div className="px-6 py-6">
                   <h2 className="text-lg font-bold text-gray-900 mb-3">{fill(template.heading)}</h2>
                   <div className="text-gray-600 text-sm leading-relaxed whitespace-pre-line mb-5">

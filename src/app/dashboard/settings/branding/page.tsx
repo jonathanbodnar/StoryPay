@@ -45,34 +45,26 @@ function ColorSwatch({ color, label, selected, onClick }: { color: string; label
 }
 
 function LivePreview({ brand }: { brand: BrandState }) {
-  const hasLogo = !!brand.logo_url;
   return (
-    <div className="rounded-2xl border border-gray-200 overflow-hidden shadow-sm" style={{ backgroundColor: brand.bg || '#ffffff' }}>
-      {/* Email-style header: white + logo OR brand-color + name text */}
-      {hasLogo ? (
-        <div className="px-6 py-4 bg-white" style={{ borderBottom: `4px solid ${brand.primary}` }}>
-          <div className="flex items-center justify-between">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={brand.logo_url} alt="Logo" className="max-h-12 max-w-[160px] object-contain"
-              onError={e => (e.currentTarget.style.display = 'none')} />
-            <div className="text-right">
-              <p className="font-bold text-sm text-gray-900">INVOICE</p>
-              <p className="text-xs text-gray-400">INV-2026-0001</p>
-            </div>
+    <div className="rounded-2xl border border-gray-200 overflow-hidden shadow-sm bg-white">
+      {/* White header + brand-color strip — matches actual sent emails */}
+      <div className="px-6 py-4 bg-white" style={{ borderBottom: `4px solid ${brand.primary}` }}>
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            {brand.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={brand.logo_url} alt="Logo" className="max-h-12 max-w-[150px] object-contain"
+                onError={e => (e.currentTarget.style.display = 'none')} />
+            ) : (
+              <p className="font-bold text-gray-900 text-sm truncate">{brand.venueName || 'Your Venue'}</p>
+            )}
+          </div>
+          <div className="text-right flex-shrink-0">
+            <p className="font-bold text-sm text-gray-900">INVOICE</p>
+            <p className="text-xs text-gray-400">INV-2026-0001</p>
           </div>
         </div>
-      ) : (
-        <div className="px-6 py-5 flex items-start justify-between" style={{ backgroundColor: brand.primary }}>
-          <div>
-            <p className="text-white font-bold text-sm leading-tight">{brand.venueName || 'Your Venue'}</p>
-            {brand.email && <p className="text-white/60 text-xs mt-0.5">{brand.email}</p>}
-          </div>
-          <div className="text-right">
-            <p className="text-white font-bold text-base">INVOICE</p>
-            <p className="text-white/60 text-xs">INV-2026-0001</p>
-          </div>
-        </div>
-      )}
+      </div>
 
       {/* Invoice body */}
       <div className="px-6 py-4">
