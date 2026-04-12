@@ -4,14 +4,10 @@ import { supabaseAdmin } from '@/lib/supabase';
 /**
  * Sign-in endpoint.
  *
- * StoryPay uses magic-link auth — there are no passwords to store or hash.
- * The "password" field on the login form is the venue's login_token or a
- * team member's invite_token. Leaving it blank triggers the forgot-password
- * (send link) flow instead.
- *
- * If password is provided and matches the token → set cookie, redirect.
- * If password is blank → return error asking them to use Forgot Password.
- * If password doesn't match → generic "invalid credentials" error.
+ * StoryPay uses token-based auth — the "password" on the login form is the
+ * venue's login_token (for owners) or the team member's invite_token (for
+ * team members). Users retrieve their token via "Forgot password?" which
+ * emails them their sign-in link.
  *
  * "Remember me" extends the cookie from 30 days to 365 days.
  */
@@ -28,7 +24,7 @@ export async function POST(request: NextRequest) {
 
   if (!password?.trim()) {
     return NextResponse.json({
-      error: 'Enter your password, or click "Forgot password?" to receive a sign-in link by email.',
+      error: 'Password is required. Click "Forgot password?" if you need your sign-in link sent to your email.',
     }, { status: 400 });
   }
 
@@ -36,44 +32,59 @@ export async function POST(request: NextRequest) {
   const token = password.trim();
   const maxAge = rememberMe ? 60 * 60 * 24 * 365 : 60 * 60 * 24 * 30;
 
-  // Try venue owner — token is their login_token UUID
+  // ── Check venue owner ──────────────────────────────────────────────────────
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('id, setup_completed, onboarding_status, login_token')
+    .select('id, name, email, setup_completed, onboarding_status, login_token')
     .eq('email', normalized)
-    .single();
-
-  if (venue && venue.login_token === token) {
-    // Valid owner login
-    if (!venue.setup_completed && venue.onboarding_status === 'active') {
-      await supabaseAdmin.from('venues').update({ setup_completed: true }).eq('id', venue.id);
-    }
-    const response = NextResponse.json({ redirect: '/dashboard' });
-    response.cookies.set('venue_id', venue.id, {
-      path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge,
-    });
-    return response;
-  }
-
-  // Try team member — token is their invite_token UUID
-  const { data: member } = await supabaseAdmin
-    .from('venue_team_members')
-    .select('id, venue_id, invite_token, status')
-    .eq('email', normalized)
-    .eq('status', 'active')
     .maybeSingle();
 
-  if (member && member.invite_token === token) {
-    const response = NextResponse.json({ redirect: '/dashboard' });
-    response.cookies.set('venue_id', member.venue_id, {
-      path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge,
-    });
-    response.cookies.set('member_id', member.id, {
-      path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge,
-    });
-    return response;
+  if (venue) {
+    if (venue.login_token === token) {
+      // Valid owner login
+      if (!venue.setup_completed && venue.onboarding_status === 'active') {
+        await supabaseAdmin.from('venues').update({ setup_completed: true }).eq('id', venue.id);
+      }
+      const response = NextResponse.json({ redirect: '/dashboard' });
+      response.cookies.set('venue_id', venue.id, {
+        path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge,
+      });
+      return response;
+    }
+    // Email matched but token wrong — password is incorrect
+    return NextResponse.json({ error: 'Incorrect password. Click "Forgot password?" to receive a sign-in link by email.' }, { status: 401 });
   }
 
-  // No match
-  return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
+  // ── Check team member ──────────────────────────────────────────────────────
+  // Wrapped in try/catch — table may not exist in production until Setup DB is run
+  try {
+    const { data: member } = await supabaseAdmin
+      .from('venue_team_members')
+      .select('id, venue_id, invite_token, status, email')
+      .eq('email', normalized)
+      .maybeSingle();
+
+    if (member) {
+      if (member.status !== 'active') {
+        return NextResponse.json({ error: 'Your invitation has not been accepted yet. Check your email for the invite link.' }, { status: 401 });
+      }
+      if (member.invite_token === token) {
+        const response = NextResponse.json({ redirect: '/dashboard' });
+        response.cookies.set('venue_id', member.venue_id, {
+          path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge,
+        });
+        response.cookies.set('member_id', member.id, {
+          path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge,
+        });
+        return response;
+      }
+      // Email matched but token wrong
+      return NextResponse.json({ error: 'Incorrect password. Click "Forgot password?" to receive a sign-in link by email.' }, { status: 401 });
+    }
+  } catch {
+    // venue_team_members table missing in production — fall through to generic error
+  }
+
+  // ── No account found ───────────────────────────────────────────────────────
+  return NextResponse.json({ error: 'No account found with that email address.' }, { status: 401 });
 }
