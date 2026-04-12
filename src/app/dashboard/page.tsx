@@ -30,7 +30,7 @@ const B = {
   teal:    '#2d5a6e',
   slate:   '#444444',
   muted:   '#888888',
-  light:   '#e8ecf0',
+  light:   '#e5e7eb',
 };
 
 // ─── Proposal status — all brand-derived ─────────────────────────────────────
@@ -208,7 +208,7 @@ export default function DashboardOverview() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-6">
 
         {/* Revenue */}
-        <div className="rounded-xl bg-white shadow-sm p-5" style={{ border: `1px solid ${B.light}` }}>
+        <div className="rounded-2xl bg-white p-5">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: B.muted }}>Revenue</span>
             <IconBadge icon={DollarSign} bg="#f0fdf4" color="#16a34a" />
@@ -225,7 +225,7 @@ export default function DashboardOverview() {
         </div>
 
         {/* Proposals */}
-        <div className="rounded-xl bg-white shadow-sm p-5" style={{ border: `1px solid ${B.light}` }}>
+        <div className="rounded-2xl bg-white p-5">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: B.muted }}>Proposals</span>
             <IconBadge icon={FileText} bg="#eff6ff" color="#2563eb" />
@@ -242,7 +242,7 @@ export default function DashboardOverview() {
         </div>
 
         {/* Customers */}
-        <div className="rounded-xl bg-white shadow-sm p-5" style={{ border: `1px solid ${B.light}` }}>
+        <div className="rounded-2xl bg-white p-5">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: B.muted }}>Customers</span>
             <IconBadge icon={Users} bg="#faf5ff" color="#7c3aed" />
@@ -260,7 +260,7 @@ export default function DashboardOverview() {
         </div>
 
         {/* Pending */}
-        <div className="rounded-xl bg-white shadow-sm p-5" style={{ border: `1px solid ${B.light}` }}>
+        <div className="rounded-2xl bg-white p-5">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: B.muted }}>Pending</span>
             <IconBadge icon={Clock} bg="#fff7ed" color="#d97706" />
@@ -278,7 +278,7 @@ export default function DashboardOverview() {
         </div>
 
         {/* Failed */}
-        <div className="rounded-xl bg-white shadow-sm p-5" style={{ border: `1px solid ${(stats?.failedPayments ?? 0) > 0 ? '#fca5a5' : B.light}` }}>
+        <div className="rounded-2xl bg-white p-5" style={{ border: `1px solid ${(stats?.failedPayments ?? 0) > 0 ? '#fca5a5' : '#e5e7eb'}` }}>
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold uppercase tracking-wider text-red-400">Failed</span>
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-50">
@@ -299,7 +299,7 @@ export default function DashboardOverview() {
         </div>
 
         {/* Refunded */}
-        <div className="rounded-xl bg-white shadow-sm p-5" style={{ border: `1px solid ${B.light}` }}>
+        <div className="rounded-2xl bg-white p-5">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Refunded</span>
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-50">
@@ -330,7 +330,7 @@ export default function DashboardOverview() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6 overflow-x-hidden">
 
         {/* Revenue chart */}
-        <div className="lg:col-span-2 rounded-xl bg-white shadow-sm p-6" style={{ border: `1px solid ${B.light}` }}>
+        <div className="lg:col-span-2 rounded-2xl bg-white p-6">
           <div className="flex items-start justify-between mb-1">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: B.muted }}>Revenue</p>
@@ -386,12 +386,11 @@ export default function DashboardOverview() {
         </div>
 
         {/* Proposal status breakdown */}
-        <div className="rounded-xl bg-white shadow-sm p-6 flex flex-col" style={{ border: `1px solid ${B.light}` }}>
+        <div className="rounded-2xl bg-white p-6 flex flex-col">
           <div className="flex items-center justify-between mb-5">
             <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: B.muted }}>Proposal Status</p>
-            <Link href="/dashboard/proposals" className="text-xs flex items-center gap-0.5 transition-colors" style={{ color: B.muted }}
-              onMouseEnter={e => (e.currentTarget.style.color = B.primary)}
-              onMouseLeave={e => (e.currentTarget.style.color = B.muted)}>
+            <Link href="/dashboard/proposals"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-gray-300 hover:bg-gray-50 transition-all">
               View all <ArrowUpRight size={11} />
             </Link>
           </div>
@@ -444,19 +443,18 @@ export default function DashboardOverview() {
       </div>
 
       {/* ── Recent proposals ── */}
-      <div className="rounded-xl bg-white shadow-sm overflow-hidden mb-6" style={{ border: '1px solid #f1f5f9' }}>
-        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid #f1f5f9' }}>
+      <div className="rounded-2xl bg-white overflow-hidden mb-6" style={{ border: '1px solid #e5e7eb' }}>
+        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid #e5e7eb' }}>
           <p className="text-sm font-semibold" style={{ color: B.primary }}>Recent Proposals</p>
-          <Link href="/dashboard/proposals" className="inline-flex items-center gap-1 text-xs font-medium transition-colors" style={{ color: B.muted }}
-            onMouseEnter={e => (e.currentTarget.style.color = B.primary)}
-            onMouseLeave={e => (e.currentTarget.style.color = B.muted)}>
-            View all <ArrowUpRight size={12} />
+          <Link href="/dashboard/proposals"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-gray-300 hover:bg-gray-50 transition-all">
+            View all <ArrowUpRight size={11} />
           </Link>
         </div>
 
         <table className="w-full text-sm">
           <thead>
-            <tr style={{ backgroundColor: B.bg5, borderBottom: '1px solid #f1f5f9' }}>
+            <tr style={{ backgroundColor: '#fafafa', borderBottom: '1px solid #e5e7eb' }}>
               <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider" style={{ color: B.muted }}>Customer</th>
               <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider" style={{ color: B.muted }}>Status</th>
               <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider" style={{ color: B.muted }}>Amount</th>
@@ -467,7 +465,7 @@ export default function DashboardOverview() {
           <tbody style={{ borderTop: 'none' }}>
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                <tr key={i} style={{ borderBottom: '1px solid #e5e7eb' }}>
                   <td className="px-6 py-4"><Skeleton className="h-4 w-28 mb-1.5" /><Skeleton className="h-3 w-36" /></td>
                   <td className="px-6 py-4"><Skeleton className="h-5 w-14 rounded-full" /></td>
                   <td className="px-6 py-4"><Skeleton className="h-4 w-16" /></td>
@@ -489,8 +487,8 @@ export default function DashboardOverview() {
               proposals.map((p) => {
                 const color = getStatusColor(p.status);
                 return (
-                  <tr key={p.id} className="group transition-colors" style={{ cursor: 'default', borderBottom: '1px solid #f1f5f9' }}
-                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = B.bg5)}
+                  <tr key={p.id} className="group transition-colors" style={{ cursor: 'default', borderBottom: '1px solid #e5e7eb' }}
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#fafafa')}
                     onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}>
                     <td className="px-6 py-3.5">
                       <p className="font-medium text-gray-900 group-hover:underline transition-colors" style={{ color: B.primary }}>{p.customer_name}</p>
@@ -521,22 +519,21 @@ export default function DashboardOverview() {
       </div>
 
       {/* ── Recent Transactions ── */}
-      <div className="rounded-xl bg-white shadow-sm overflow-hidden" style={{ border: '1px solid #f1f5f9' }}>
-        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid #f1f5f9' }}>
+      <div className="rounded-2xl bg-white overflow-hidden" style={{ border: '1px solid #e5e7eb' }}>
+        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid #e5e7eb' }}>
           <div className="flex items-center gap-2">
             <CreditCard size={15} style={{ color: B.muted }} />
             <p className="text-sm font-semibold" style={{ color: B.primary }}>Recent Transactions</p>
           </div>
-          <Link href="/dashboard/transactions" className="inline-flex items-center gap-1 text-xs font-medium transition-colors" style={{ color: B.muted }}
-            onMouseEnter={e => (e.currentTarget.style.color = B.primary)}
-            onMouseLeave={e => (e.currentTarget.style.color = B.muted)}>
-            View all <ArrowUpRight size={12} />
+          <Link href="/dashboard/transactions"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-gray-300 hover:bg-gray-50 transition-all">
+            View all <ArrowUpRight size={11} />
           </Link>
         </div>
 
         <table className="w-full text-sm">
           <thead>
-            <tr style={{ backgroundColor: B.bg5, borderBottom: '1px solid #f1f5f9' }}>
+            <tr style={{ backgroundColor: '#fafafa', borderBottom: '1px solid #e5e7eb' }}>
               <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider" style={{ color: B.muted }}>Description</th>
               <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider" style={{ color: B.muted }}>Amount</th>
               <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider" style={{ color: B.muted }}>Status</th>
@@ -546,7 +543,7 @@ export default function DashboardOverview() {
           <tbody>
             {txLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                <tr key={i} style={{ borderBottom: '1px solid #e5e7eb' }}>
                   <td className="px-6 py-4"><Skeleton className="h-4 w-40" /></td>
                   <td className="px-6 py-4"><Skeleton className="h-4 w-16" /></td>
                   <td className="px-6 py-4"><Skeleton className="h-5 w-14 rounded-full" /></td>
@@ -564,8 +561,8 @@ export default function DashboardOverview() {
               transactions.map((tx) => {
                 const color = getStatusColor(tx.status);
                 return (
-                  <tr key={tx.id} className="group transition-colors" style={{ borderBottom: '1px solid #f1f5f9' }}
-                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = B.bg5)}
+                  <tr key={tx.id} className="group transition-colors" style={{ borderBottom: '1px solid #e5e7eb' }}
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#fafafa')}
                     onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}>
                     <td className="px-6 py-3.5">
                       <p className="font-medium" style={{ color: B.primary }}>{tx.description}</p>
