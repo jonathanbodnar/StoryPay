@@ -19,16 +19,20 @@ export async function POST(request: NextRequest) {
     .eq('email', normalized)
     .single();
 
-  // Check team member accounts
-  const { data: member } = await supabaseAdmin
-    .from('venue_team_members')
-    .select('id, invite_token, first_name, venue_id')
-    .eq('email', normalized)
-    .eq('status', 'active')
-    .maybeSingle();
+  // Check team member accounts (table may not exist in production — handle gracefully)
+  let member: { id: string; invite_token: string; first_name: string; venue_id: string } | null = null;
+  try {
+    const memberRes = await supabaseAdmin
+      .from('venue_team_members')
+      .select('id, invite_token, first_name, venue_id')
+      .eq('email', normalized)
+      .eq('status', 'active')
+      .maybeSingle();
+    member = memberRes.data ?? null;
+  } catch { /* table may not exist in production */ }
 
   if (!venue && !member) {
-    // Always return success — don't reveal if email exists or not
+    // Always return success — don't reveal whether the email exists or not (security)
     return NextResponse.json({ ok: true });
   }
 
