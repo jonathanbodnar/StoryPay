@@ -65,6 +65,7 @@ export default function TeamPage() {
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
 
   const [form, setForm] = useState({ first_name: '', last_name: '', email: '', role: 'member' });
 
@@ -401,6 +402,45 @@ export default function TeamPage() {
         ))}
       </div>
 
+      {/* Fixed-position actions menu — renders outside any overflow:hidden container */}
+      {menuOpenId && (() => {
+        const m = members.find(x => x.id === menuOpenId);
+        if (!m) return null;
+        return (
+          <div
+            data-menu
+            className="fixed z-50 w-52 rounded-xl border border-gray-200 bg-white shadow-xl py-1"
+            style={{ top: menuPos.top, right: menuPos.right }}
+          >
+            <button
+              onClick={() => startEdit(m)}
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              <Pencil size={14} className="text-gray-400" /> Edit Member
+            </button>
+            {(m.status === 'invited' || m.status === 'inactive') && (
+              <button
+                onClick={() => resendInvite(m.id)}
+                disabled={resendingId === m.id}
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                {resendingId === m.id ? <Loader2 size={14} className="animate-spin text-gray-400" /> : <Send size={14} className="text-gray-400" />}
+                Resend Invite
+              </button>
+            )}
+            <div className="border-t border-gray-100 my-1" />
+            <button
+              onClick={() => removeMember(m.id)}
+              disabled={deletingId === m.id}
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+            >
+              {deletingId === m.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+              Remove Member
+            </button>
+          </div>
+        );
+      })()}
+
       {/* Members list */}
       <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
@@ -459,43 +499,20 @@ export default function TeamPage() {
                   <ChevronDown size={11} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-current opacity-50 pointer-events-none" />
                 </div>
 
-                {/* Actions menu */}
-                <div className="relative flex-shrink-0" data-menu>
+                {/* Actions menu trigger */}
+                <div className="flex-shrink-0" data-menu>
                   <button
-                    onClick={(e) => { e.stopPropagation(); setMenuOpenId(menuOpenId === m.id ? null : m.id); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (menuOpenId === m.id) { setMenuOpenId(null); return; }
+                      const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                      setMenuPos({ top: rect.bottom + window.scrollY + 4, right: window.innerWidth - rect.right });
+                      setMenuOpenId(m.id);
+                    }}
                     className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
                   >
                     <MoreHorizontal size={16} />
                   </button>
-                  {menuOpenId === m.id && (
-                    <div className="absolute right-0 top-full mt-1 w-48 rounded-xl border border-gray-200 bg-white shadow-lg z-20 py-1">
-                      <button
-                        onClick={() => startEdit(m)}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                      >
-                        <Pencil size={13} /> Edit Member
-                      </button>
-                      {(m.status === 'invited' || m.status === 'inactive') && (
-                        <button
-                          onClick={() => resendInvite(m.id)}
-                          disabled={resendingId === m.id}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
-                        >
-                          {resendingId === m.id ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-                          Resend Invite
-                        </button>
-                      )}
-                      <div className="border-t border-gray-100 my-1" />
-                      <button
-                        onClick={() => removeMember(m.id)}
-                        disabled={deletingId === m.id}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
-                      >
-                        {deletingId === m.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
-                        Remove Member
-                      </button>
-                    </div>
-                  )}
                 </div>
               </div>
             ))}
