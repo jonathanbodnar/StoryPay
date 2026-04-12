@@ -268,8 +268,8 @@ export default function SettingsPage() {
  </div>
  </section>
 
- {/* ── Setup Guide (owners only) ── */}
- {isOwner && <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+ {/* ── Setup Guide (owners only, desktop only) ── */}
+ {isOwner && <section className="hidden md:block rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="flex items-center justify-between gap-4 px-6 py-5">
  <div className="flex items-center gap-3">
  <Rocket size={18} className="text-gray-400"/>

@@ -190,8 +190,10 @@ export default function DashboardOverview() {
  return (
  <div className="min-h-full bg-white">
 
- {/* ── Onboarding Checklist ── */}
- <OnboardingChecklist />
+      {/* ── Onboarding Checklist — desktop only ── */}
+      <div className="hidden md:block">
+        <OnboardingChecklist />
+      </div>
 
  {/* ── Header ── */}
  <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
