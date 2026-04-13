@@ -18,7 +18,7 @@ const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
 });
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, BarChart, Bar,
+  ResponsiveContainer, BarChart, Bar, LineChart, Line, Legend,
 } from 'recharts';
 import DateRangePicker, { DateRange, PRESETS } from '@/components/DateRangePicker';
 
@@ -2127,86 +2127,159 @@ function SeoPageTab() {
 
 
 // ─── Google Trends Tab ────────────────────────────────────────────────────────
-// Uses official Google Trends iframe embed format with both req= and eq= params,
-// exactly matching what Google's embed button generates.
 
 interface TrendWidget {
   id: string;
   title: string;
   description: string;
   keywords: string[];
-  type?: 'TIMESERIES' | 'GEO_MAP' | 'RELATED_QUERIES';
-  fixedTime?: string;
+  months?: number; // override for 5-year charts
 }
 
+const CHART_COLORS = ['#1b1b1b', '#6366f1', '#f59e0b', '#10b981', '#ef4444'];
+
 const VENUE_WIDGETS: TrendWidget[] = [
-  { id: 'v1', title: 'Wedding Venue — Overall Interest',        description: 'Search interest for "wedding venue" over your selected period.',       keywords: ['wedding venue'] },
-  { id: 'v2', title: 'Venue Styles Comparison',                 description: 'Barn vs Garden vs Ballroom vs Vineyard.',                               keywords: ['barn wedding venue', 'garden wedding venue', 'ballroom wedding venue', 'vineyard wedding venue'] },
-  { id: 'v3', title: 'Venue Search Intent',                     description: '"Near me", outdoor, rustic, and intimate venue searches.',               keywords: ['wedding venue near me', 'outdoor wedding venue', 'rustic wedding venue', 'intimate wedding venue'] },
-  { id: 'v4', title: 'Venue Pricing Searches',                  description: 'How couples research venue costs and packages.',                         keywords: ['wedding venue cost', 'wedding venue packages', 'affordable wedding venue', 'all inclusive wedding venue'] },
-  { id: 'v5', title: 'Wedding Venue — Related Queries',         description: 'Rising and breakout searches — blog content goldmine.',                 keywords: ['wedding venue'],           type: 'RELATED_QUERIES' },
-  { id: 'v6', title: 'Wedding Venue — Geographic Map (US)',     description: 'Which US states search most for wedding venues.',                        keywords: ['wedding venue'],           type: 'GEO_MAP' },
+  { id: 'v1', title: 'Wedding Venue — Overall Interest',  description: 'Search interest for "wedding venue" over time.',           keywords: ['wedding venue'] },
+  { id: 'v2', title: 'Venue Styles Comparison',           description: 'Barn vs Garden vs Ballroom vs Vineyard.',                  keywords: ['barn wedding venue', 'garden wedding venue', 'ballroom wedding venue', 'vineyard wedding venue'] },
+  { id: 'v3', title: 'Venue Search Intent',               description: '"Near me", outdoor, rustic, and intimate searches.',       keywords: ['wedding venue near me', 'outdoor wedding venue', 'rustic wedding venue', 'intimate wedding venue'] },
+  { id: 'v4', title: 'Venue Pricing Searches',            description: 'How couples research venue costs and packages.',           keywords: ['wedding venue cost', 'wedding venue packages', 'affordable wedding venue'] },
 ];
 
 const WEDDING_WIDGETS: TrendWidget[] = [
-  { id: 'w1', title: 'Wedding Planning Trends',                 description: 'Planning, elopement, micro wedding, intimate wedding.',                 keywords: ['wedding planning', 'elopement', 'micro wedding', 'intimate wedding'] },
-  { id: 'w2', title: 'What Brides Are Searching For',           description: 'Dress, flowers, photographer, hair searches.',                          keywords: ['wedding dress trends', 'wedding flowers', 'wedding photographer', 'wedding hair'] },
-  { id: 'w3', title: 'Wedding Décor & Themes',                  description: 'Boho, modern décor, centerpieces, arch trends.',                        keywords: ['boho wedding', 'modern wedding decor', 'wedding centerpieces', 'wedding arch'] },
-  { id: 'w4', title: 'Budget & Planning Tools',                 description: 'Budget, checklist, website, planner searches.',                         keywords: ['wedding budget', 'wedding checklist', 'wedding website', 'wedding planner'] },
-  { id: 'w5', title: 'Food, Catering & Cake',                   description: 'Catering, cake, food stations, bar ideas.',                             keywords: ['wedding catering', 'wedding cake trends', 'wedding food stations', 'wedding bar ideas'] },
-  { id: 'w6', title: 'Honeymoon Travel Trends',                 description: 'Top honeymoon destination searches.',                                   keywords: ['honeymoon destinations', 'all inclusive honeymoon', 'europe honeymoon', 'tropical honeymoon'] },
-  { id: 'w7', title: 'Wedding — 5-Year Seasonality',            description: 'See exactly when wedding season peaks each year.',                      keywords: ['wedding'], fixedTime: 'today 5-y' },
-  { id: 'w8', title: 'Wedding Planning — Related Queries',      description: 'Rising queries — content goldmine.',                                    keywords: ['wedding planning'], type: 'RELATED_QUERIES' },
+  { id: 'w1', title: 'Wedding Planning Trends',           description: 'Planning, elopement, micro wedding, intimate wedding.',   keywords: ['wedding planning', 'elopement', 'micro wedding', 'intimate wedding'] },
+  { id: 'w2', title: 'What Brides Are Searching For',     description: 'Dress, flowers, photographer, hair searches.',            keywords: ['wedding dress trends', 'wedding photographer', 'wedding hair'] },
+  { id: 'w3', title: 'Wedding Décor & Themes',            description: 'Boho, modern décor, centerpieces, arch trends.',          keywords: ['boho wedding', 'modern wedding decor', 'wedding centerpieces', 'wedding arch'] },
+  { id: 'w4', title: 'Budget & Planning Tools',           description: 'Budget, checklist, website, planner searches.',           keywords: ['wedding budget', 'wedding checklist', 'wedding planner'] },
+  { id: 'w5', title: 'Food, Catering & Cake',             description: 'Catering, cake, food stations, bar ideas.',               keywords: ['wedding catering', 'wedding cake trends', 'wedding food stations'] },
+  { id: 'w6', title: 'Wedding — 5-Year Seasonality',      description: 'See exactly when wedding season peaks each year.',        keywords: ['wedding'], months: 60 },
 ];
 
 const TIME_OPTIONS = [
-  { label: 'Past 7 days',    value: 'now 7-d',    dateParam: 'now+7-d' },
-  { label: 'Past 30 days',   value: 'today 1-m',  dateParam: 'today+1-m' },
-  { label: 'Past 90 days',   value: 'today 3-m',  dateParam: 'today+3-m' },
-  { label: 'Past 12 months', value: 'today 12-m', dateParam: 'today+12-m' },
-  { label: 'Past 5 years',   value: 'today 5-y',  dateParam: 'today+5-y' },
+  { label: 'Past 3 months',  value: 3 },
+  { label: 'Past 12 months', value: 12 },
+  { label: 'Past 2 years',   value: 24 },
+  { label: 'Past 5 years',   value: 60 },
 ];
 
-function buildTrendsUrl(widget: TrendWidget, timeframe: string): string {
-  const time = widget.fixedTime ?? timeframe;
-  const timeOpt = TIME_OPTIONS.find(t => t.value === time) ?? TIME_OPTIONS[3];
-  const dateParam = widget.fixedTime ? 'today+5-y' : timeOpt.dateParam;
-  const type = widget.type ?? 'TIMESERIES';
-  const geo = 'US';
+interface TrendPoint { date: string; value: number; }
+interface ChartState {
+  status: 'idle' | 'loading' | 'done' | 'error';
+  data: Record<string, TrendPoint[]>;
+  error?: string;
+}
 
-  const comparisonItem = widget.keywords.map(kw => ({ keyword: kw, geo, time }));
-  const req = encodeURIComponent(JSON.stringify({ comparisonItem, category: 0, property: '' }));
+function TrendChartCard({ widget, months }: { widget: TrendWidget; months: number }) {
+  const [state, setState] = React.useState<ChartState>({ status: 'idle', data: {} });
+  const effectiveMonths = widget.months ?? months;
 
-  // Build eq= param — mirrors the explore query string Google uses
-  const qParam = widget.keywords.map(k => encodeURIComponent(k)).join('%2C');
-  const eq = `date%3D${dateParam}%26geo%3D${geo}%26q%3D${qParam}`;
+  async function loadChart() {
+    setState({ status: 'loading', data: {} });
+    try {
+      const qs = new URLSearchParams({
+        keywords: widget.keywords.join(','),
+        months: String(effectiveMonths),
+      });
+      const res = await fetch(`/api/admin/trends?${qs}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Failed to load');
+      setState({ status: 'done', data: json.data });
+    } catch (e) {
+      setState({ status: 'error', data: {}, error: e instanceof Error ? e.message : 'Unknown error' });
+    }
+  }
 
-  return `https://trends.google.com/trends/embed/explore/${type}?req=${req}&tz=300&eq=${eq}`;
+  // Merge per-keyword series into [{date, kw1, kw2, ...}] for Recharts
+  const chartData = React.useMemo(() => {
+    const firstKw = widget.keywords[0];
+    const base = state.data[firstKw] ?? [];
+    return base.map((pt, i) => {
+      const row: Record<string, string | number> = { date: pt.date };
+      for (const kw of widget.keywords) {
+        row[kw] = state.data[kw]?.[i]?.value ?? 0;
+      }
+      return row;
+    });
+  }, [state.data, widget.keywords]);
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+      <div className="flex items-start justify-between gap-2 px-5 py-4 border-b border-gray-200">
+        <div>
+          <p className="text-sm font-semibold text-gray-900">{widget.title}</p>
+          <p className="text-xs text-gray-400 mt-0.5">{widget.description}</p>
+        </div>
+        <a href={`https://trends.google.com/trends/explore?q=${encodeURIComponent(widget.keywords[0])}&geo=US`}
+          target="_blank" rel="noreferrer"
+          className="flex-shrink-0 text-[11px] text-gray-400 hover:text-gray-600 transition-colors mt-0.5 whitespace-nowrap">
+          Open ↗
+        </a>
+      </div>
+      <div className="p-4">
+        {state.status === 'idle' && (
+          <div className="flex flex-col items-center justify-center gap-3 py-10 bg-gray-50 rounded-xl">
+            <TrendingUp size={22} className="text-gray-300" />
+            <p className="text-xs text-gray-400 text-center max-w-[200px]">{widget.description}</p>
+            <button onClick={loadChart}
+              className="rounded-xl bg-gray-900 px-5 py-2 text-xs font-semibold text-white hover:bg-gray-700 transition-colors">
+              Load Chart
+            </button>
+          </div>
+        )}
+        {state.status === 'loading' && (
+          <div className="flex items-center justify-center py-14">
+            <Loader2 size={22} className="animate-spin text-gray-400" />
+          </div>
+        )}
+        {state.status === 'error' && (
+          <div className="flex flex-col items-center justify-center gap-3 py-10 bg-red-50 rounded-xl">
+            <p className="text-xs text-red-500 text-center max-w-[240px]">{state.error}</p>
+            <button onClick={loadChart}
+              className="rounded-xl border border-red-200 px-4 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 transition-colors">
+              Retry
+            </button>
+          </div>
+        )}
+        {state.status === 'done' && chartData.length > 0 && (
+          <ResponsiveContainer width="100%" height={260}>
+            <LineChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false}
+                interval={Math.floor(chartData.length / 6)} />
+              <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} domain={[0, 100]} />
+              <Tooltip
+                contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb' }}
+                formatter={(val, name) => [val, name]}
+              />
+              {widget.keywords.length > 1 && <Legend wrapperStyle={{ fontSize: 11 }} />}
+              {widget.keywords.map((kw, i) => (
+                <Line key={kw} type="monotone" dataKey={kw} stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                  dot={false} strokeWidth={2} />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+        {state.status === 'done' && chartData.length === 0 && (
+          <p className="text-xs text-gray-400 text-center py-10">No data returned.</p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function TrendsTab() {
   const [section, setSection] = React.useState<'venues' | 'wedding'>('venues');
-  const [timeframe, setTimeframe] = React.useState('today 12-m');
-  const [loaded, setLoaded] = React.useState<Set<string>>(new Set());
+  const [months, setMonths] = React.useState(12);
+  const [sectionKey, setSectionKey] = React.useState(0); // bump to remount cards on section/time change
   const widgets = section === 'venues' ? VENUE_WIDGETS : WEDDING_WIDGETS;
-
-  function loadChart(id: string) {
-    setLoaded(prev => new Set([...prev, id]));
-  }
-
-  function loadAll() {
-    setLoaded(new Set(widgets.map(w => w.id)));
-  }
 
   function handleSectionChange(s: 'venues' | 'wedding') {
     setSection(s);
-    setLoaded(new Set());
+    setSectionKey(k => k + 1);
   }
 
-  function handleTimeChange(t: string) {
-    setTimeframe(t);
-    // Reload all currently loaded charts with new timeframe by toggling loaded set
-    setLoaded(new Set());
+  function handleTimeChange(m: number) {
+    setMonths(m);
+    setSectionKey(k => k + 1);
   }
 
   return (
@@ -2214,7 +2287,7 @@ function TrendsTab() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 className="font-heading text-xl text-gray-900">Google Trends — Wedding Industry</h2>
-          <p className="text-sm text-gray-500 mt-0.5">Live search trend data from Google. Find content angles, seasonal patterns, and what brides are searching for right now.</p>
+          <p className="text-sm text-gray-500 mt-0.5">Live search trend data pulled from Google. Find content angles, seasonal patterns, and what brides are searching for right now.</p>
         </div>
         <a href="https://trends.google.com/trends/explore?q=wedding+venue&geo=US" target="_blank" rel="noreferrer"
           className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3.5 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
@@ -2222,7 +2295,6 @@ function TrendsTab() {
         </a>
       </div>
 
-      {/* Controls */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex rounded-xl border border-gray-200 overflow-hidden">
           <button onClick={() => handleSectionChange('venues')}
@@ -2234,63 +2306,22 @@ function TrendsTab() {
             💍 Wedding Industry
           </button>
         </div>
-        <select value={timeframe} onChange={e => handleTimeChange(e.target.value)}
+        <select value={months} onChange={e => handleTimeChange(Number(e.target.value))}
           className="rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:border-gray-400 transition-colors">
           {TIME_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
-        <button onClick={loadAll}
-          className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
-          Load All Charts
-        </button>
       </div>
 
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
-        <strong>Tip:</strong> Click &ldquo;Load Chart&rdquo; to render each chart, or &ldquo;Load All Charts&rdquo; to load everything.
-        Use <strong>Related Queries</strong> charts for blog content and keyword ideas. Change the timeframe to see seasonal patterns.
+      <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-800">
+        <strong>Note:</strong> Click &ldquo;Load Chart&rdquo; on each card to fetch live data from Google. Charts are cached for 6 hours. Data is indexed 0–100 (relative search interest).
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
         {widgets.map(widget => (
-          <div key={widget.id} className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-            <div className="flex items-start justify-between gap-2 px-5 py-4 border-b border-gray-200">
-              <div>
-                <p className="text-sm font-semibold text-gray-900">{widget.title}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{widget.description}</p>
-              </div>
-              <a href={`https://trends.google.com/trends/explore?q=${encodeURIComponent(widget.keywords[0])}&geo=US`}
-                target="_blank" rel="noreferrer"
-                className="flex-shrink-0 text-[11px] text-gray-400 hover:text-gray-600 transition-colors mt-0.5 whitespace-nowrap">
-                Open ↗
-              </a>
-            </div>
-            <div className="p-3">
-              {loaded.has(widget.id) ? (
-                <iframe
-                  key={`${widget.id}-${timeframe}`}
-                  src={buildTrendsUrl(widget, timeframe)}
-                  width="100%"
-                  height={widget.type === 'RELATED_QUERIES' ? 480 : widget.type === 'GEO_MAP' ? 360 : 320}
-                  frameBorder="0"
-                  scrolling="0"
-                  style={{ display: 'block' }}
-                  title={widget.title}
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center gap-3 py-12 bg-gray-50 rounded-xl">
-                  <TrendingUp size={24} className="text-gray-300" />
-                  <p className="text-xs text-gray-400 text-center max-w-[220px]">{widget.description}</p>
-                  <button onClick={() => loadChart(widget.id)}
-                    className="rounded-xl bg-gray-900 px-5 py-2 text-xs font-semibold text-white hover:bg-gray-700 transition-colors">
-                    Load Chart
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
+          <TrendChartCard key={`${sectionKey}-${widget.id}`} widget={widget} months={months} />
         ))}
       </div>
 
-      {/* Quick links */}
       <div className="rounded-2xl border border-gray-200 bg-white p-5">
         <p className="text-sm font-semibold text-gray-900 mb-3">Quick Search — Open Directly in Google Trends</p>
         <div className="flex flex-wrap gap-2">
