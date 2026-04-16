@@ -3,109 +3,48 @@ import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 
 /**
- * DDL for the directory integration (storyvenue.com <-> StoryPay).
+ * Idempotent directory-integration migration.
  *
- * `venue_listings` holds the public directory listing for a StoryPay venue.
- * `leads` captures inquiries from the directory lead form.
+ * The `venues` table already holds every directory field (slug, location,
+ * capacity, features, cover_image_url, gallery_images, is_published, …) and
+ * `leads` already exists with a `venue_id` FK to `venues`. All this endpoint
+ * does is ensure the small set of additive pieces the dashboard needs:
  *
- * Runs the statements directly via the pg wire protocol (bypassing PostgREST
- * so the schema is immediately usable after creation).
+ *   • `leads.source`      — how the lead arrived ("directory", "manual", …)
+ *   • `leads.updated_at`  — last-modified timestamp, with a trigger
+ *   • indexes on status / created_at / email for the dashboard inbox
+ *   • a trigger that bumps `updated_at` on every UPDATE
+ *
+ * Safe to run repeatedly.
  */
 const STATEMENTS: { name: string; sql: string }[] = [
   {
-    name: 'venue_listings',
-    sql: `
-      CREATE TABLE IF NOT EXISTS public.venue_listings (
-        id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        storypay_venue_id     uuid NOT NULL UNIQUE REFERENCES public.venues(id) ON DELETE CASCADE,
-        slug                  text UNIQUE,
-        name                  text,
-        description           text,
-        venue_type            text,
-        location_full         text,
-        location_city         text,
-        location_state        text,
-        lat                   double precision,
-        lng                   double precision,
-        capacity_min          integer,
-        capacity_max          integer,
-        price_min             integer,
-        price_max             integer,
-        indoor_outdoor        text,
-        features              jsonb NOT NULL DEFAULT '[]'::jsonb,
-        cover_image_url       text,
-        gallery_images        jsonb NOT NULL DEFAULT '[]'::jsonb,
-        availability_notes    text,
-        is_published          boolean NOT NULL DEFAULT false,
-        onboarding_completed  boolean NOT NULL DEFAULT false,
-        notification_email    text,
-        email_notifications   boolean NOT NULL DEFAULT true,
-        created_at            timestamptz NOT NULL DEFAULT now(),
-        updated_at            timestamptz NOT NULL DEFAULT now()
-      );
-      ALTER TABLE public.venue_listings ENABLE ROW LEVEL SECURITY;
-      CREATE INDEX IF NOT EXISTS venue_listings_published_idx
-        ON public.venue_listings (is_published) WHERE is_published = true;
-      CREATE INDEX IF NOT EXISTS venue_listings_location_idx
-        ON public.venue_listings (location_state, location_city);
-    `,
+    name: 'leads.source',
+    sql: `ALTER TABLE public.leads ADD COLUMN IF NOT EXISTS source text NOT NULL DEFAULT 'directory'`,
   },
   {
-    name: 'venue_listings_published_select_policy',
-    sql: `
-      DROP POLICY IF EXISTS venue_listings_public_read ON public.venue_listings;
-      CREATE POLICY venue_listings_public_read
-        ON public.venue_listings
-        FOR SELECT
-        USING (is_published = true);
-    `,
+    name: 'leads.updated_at',
+    sql: `ALTER TABLE public.leads ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now()`,
   },
   {
-    name: 'leads',
-    sql: `
-      CREATE TABLE IF NOT EXISTS public.leads (
-        id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        venue_listing_id   uuid REFERENCES public.venue_listings(id) ON DELETE SET NULL,
-        storypay_venue_id  uuid NOT NULL REFERENCES public.venues(id) ON DELETE CASCADE,
-        name               text NOT NULL,
-        email              text NOT NULL,
-        phone              text,
-        event_date         date,
-        guest_count        integer,
-        booking_timeline   text,
-        message            text,
-        notes              text,
-        status             text NOT NULL DEFAULT 'new',
-        source             text NOT NULL DEFAULT 'directory',
-        created_at         timestamptz NOT NULL DEFAULT now()
-      );
-      ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;
-      CREATE INDEX IF NOT EXISTS leads_venue_listing_idx  ON public.leads (venue_listing_id);
-      CREATE INDEX IF NOT EXISTS leads_storypay_venue_idx ON public.leads (storypay_venue_id);
-      CREATE INDEX IF NOT EXISTS leads_status_idx         ON public.leads (status);
-      CREATE INDEX IF NOT EXISTS leads_created_at_idx     ON public.leads (created_at DESC);
-    `,
+    name: 'idx_leads_status',
+    sql: `CREATE INDEX IF NOT EXISTS idx_leads_status ON public.leads (status)`,
   },
   {
-    name: 'updated_at_trigger_fn',
-    sql: `
-      CREATE OR REPLACE FUNCTION public.set_current_timestamp_updated_at()
-      RETURNS trigger
-      LANGUAGE plpgsql AS $$
-      BEGIN
-        NEW.updated_at = now();
-        RETURN NEW;
-      END;
-      $$;
-    `,
+    name: 'idx_leads_created_at',
+    sql: `CREATE INDEX IF NOT EXISTS idx_leads_created_at ON public.leads (created_at DESC)`,
   },
   {
-    name: 'venue_listings_updated_at_trigger',
+    name: 'idx_leads_email',
+    sql: `CREATE INDEX IF NOT EXISTS idx_leads_email ON public.leads (email)`,
+  },
+  {
+    name: 'leads_updated_at_trigger',
     sql: `
-      DROP TRIGGER IF EXISTS venue_listings_set_updated_at ON public.venue_listings;
-      CREATE TRIGGER venue_listings_set_updated_at
-        BEFORE UPDATE ON public.venue_listings
-        FOR EACH ROW EXECUTE FUNCTION public.set_current_timestamp_updated_at();
+      DROP TRIGGER IF EXISTS leads_updated_at ON public.leads;
+      CREATE TRIGGER leads_updated_at
+        BEFORE UPDATE ON public.leads
+        FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
     `,
   },
 ];
@@ -144,7 +83,7 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   return NextResponse.json({
-    info: 'POST to this endpoint to run the directory schema migration.',
+    info: 'POST to this endpoint to ensure the additive directory-integration DDL is in place.',
     statements: STATEMENTS.map((s) => s.name),
   });
 }

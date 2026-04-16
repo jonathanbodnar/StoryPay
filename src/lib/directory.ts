@@ -1,41 +1,14 @@
 /**
- * Shared types and helpers for the directory integration.
+ * Shared helpers for the directory integration.
  *
- * - `VenueListing` matches the `venue_listings` table schema in the shared
- *   Supabase project (see src/app/api/admin/setup-directory-db/route.ts).
- * - `listingFieldsForUpdate` is the allow-list of columns the dashboard PATCH
- *   endpoint can write (keeps `id`, `storypay_venue_id`, `created_at` out of
- *   user reach).
+ * There is no separate `venue_listings` table. The `public.venues` row IS the
+ * directory listing — it already carries all the directory-facing fields
+ * (slug, location, capacity, features, cover_image_url, gallery_images,
+ * is_published, notification_email, …) alongside the StoryPay-internal ones
+ * (brand_*, lunarpay_*, onboarding_*, etc.). The dashboard PATCH endpoint
+ * writes through this allow-list so a venue owner can never touch an internal
+ * column.
  */
-
-export interface VenueListing {
-  id: string;
-  storypay_venue_id: string;
-  slug: string | null;
-  name: string | null;
-  description: string | null;
-  venue_type: string | null;
-  location_full: string | null;
-  location_city: string | null;
-  location_state: string | null;
-  lat: number | null;
-  lng: number | null;
-  capacity_min: number | null;
-  capacity_max: number | null;
-  price_min: number | null;
-  price_max: number | null;
-  indoor_outdoor: string | null;
-  features: string[];
-  cover_image_url: string | null;
-  gallery_images: string[];
-  availability_notes: string | null;
-  is_published: boolean;
-  onboarding_completed: boolean;
-  notification_email: string | null;
-  email_notifications: boolean;
-  created_at: string;
-  updated_at: string;
-}
 
 export const LISTING_WRITABLE_FIELDS = [
   'slug',
@@ -57,12 +30,24 @@ export const LISTING_WRITABLE_FIELDS = [
   'gallery_images',
   'availability_notes',
   'is_published',
-  'onboarding_completed',
   'notification_email',
   'email_notifications',
 ] as const;
 
 export type ListingWritableField = (typeof LISTING_WRITABLE_FIELDS)[number];
+
+/**
+ * The directory-facing projection of a `venues` row. API responses use this
+ * shape so the frontend never sees internal StoryPay columns.
+ */
+export const LISTING_READABLE_FIELDS = [
+  'id',
+  ...LISTING_WRITABLE_FIELDS,
+  'onboarding_completed',
+  'is_published',
+  'created_at',
+  'updated_at',
+] as const;
 
 /**
  * Convert an arbitrary name into a URL-safe slug.

@@ -6,9 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
-    "migrate:directory:data": "tsx scripts/migrate-directory-data.ts",
-    "migrate:directory:storage": "tsx scripts/migrate-directory-storage.ts"
+    "lint": "eslint"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.99.3",

@@ -4,7 +4,18 @@ import { getDb } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
-const ALLOWED_STATUSES = new Set(['new', 'contacted', 'qualified', 'archived']);
+/**
+ * Status values enforced by the DB CHECK constraint on `public.leads.status`.
+ * Keep this array in sync with the constraint.
+ */
+const ALLOWED_STATUSES = new Set([
+  'new',
+  'contacted',
+  'tour_booked',
+  'proposal_sent',
+  'booked_wedding',
+  'not_interested',
+]);
 
 async function getVenueId(): Promise<string | null> {
   const c = await cookies();
@@ -30,7 +41,10 @@ export async function PATCH(
   const updates: Record<string, unknown> = {};
   if (typeof body.status === 'string') {
     if (!ALLOWED_STATUSES.has(body.status)) {
-      return NextResponse.json({ error: `Invalid status. Allowed: ${[...ALLOWED_STATUSES].join(', ')}` }, { status: 400 });
+      return NextResponse.json(
+        { error: `Invalid status. Allowed: ${[...ALLOWED_STATUSES].join(', ')}` },
+        { status: 400 },
+      );
     }
     updates.status = body.status;
   }
@@ -44,7 +58,7 @@ export async function PATCH(
   const rows = await sql`
     UPDATE public.leads
     SET ${sql(updates)}
-    WHERE id = ${id} AND storypay_venue_id = ${venueId}
+    WHERE id = ${id} AND venue_id = ${venueId}
     RETURNING *
   `;
 
@@ -65,7 +79,7 @@ export async function DELETE(
   const sql = getDb();
   const rows = await sql`
     DELETE FROM public.leads
-    WHERE id = ${id} AND storypay_venue_id = ${venueId}
+    WHERE id = ${id} AND venue_id = ${venueId}
     RETURNING id
   `;
   if (rows.length === 0) return NextResponse.json({ error: 'Lead not found' }, { status: 404 });

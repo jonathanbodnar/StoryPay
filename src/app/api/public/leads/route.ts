@@ -22,12 +22,20 @@ function verifySignature(rawBody: string, signature: string): boolean {
 }
 
 interface LeadPayload {
+  /** Directory slug of the venue being inquired about. */
   listing_slug?: string;
+  /** Back-compat alias. */
+  venue_slug?: string;
+  /** Direct venue id (if the directory already has it). */
+  venue_id?: string;
+  /** Back-compat alias for `venue_id` — older directory builds used this name. */
   venue_listing_id?: string;
   name?: string;
   email?: string;
   phone?: string;
+  /** ISO date string. Mapped to `leads.wedding_date`. */
   event_date?: string;
+  wedding_date?: string;
   guest_count?: number;
   booking_timeline?: string;
   message?: string;
@@ -41,11 +49,8 @@ function isEmail(s: string): boolean {
 /**
  * Public inbound lead webhook. The directory site signs the raw request body
  * with HMAC-SHA256 using LEAD_WEBHOOK_SECRET and sends it as
- * `x-storypay-signature`. We resolve which StoryPay venue owns the listing,
- * insert a lead row, and email the owner (when enabled).
- *
- * Returning 2xx on known-but-unhandled cases (e.g. listing not found) is
- * intentional so misconfigurations don't make the directory form crash.
+ * `x-storypay-signature`. We resolve the StoryPay venue, insert a lead row,
+ * and (if enabled) email the owner.
  */
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
@@ -73,57 +78,67 @@ export async function POST(request: NextRequest) {
 
   const sql = getDb();
 
-  const listingRows = payload.venue_listing_id
-    ? await sql`SELECT id, storypay_venue_id, slug, name, notification_email, email_notifications FROM public.venue_listings WHERE id = ${payload.venue_listing_id} LIMIT 1`
-    : payload.listing_slug
-      ? await sql`SELECT id, storypay_venue_id, slug, name, notification_email, email_notifications FROM public.venue_listings WHERE slug = ${payload.listing_slug} LIMIT 1`
+  const slug = payload.listing_slug ?? payload.venue_slug;
+  const venueId = payload.venue_id ?? payload.venue_listing_id;
+  const venueRows = venueId
+    ? await sql`
+        SELECT id, slug, name, email, notification_email, email_notifications
+        FROM public.venues WHERE id = ${venueId} LIMIT 1
+      `
+    : slug
+      ? await sql`
+          SELECT id, slug, name, email, notification_email, email_notifications
+          FROM public.venues WHERE slug = ${slug} LIMIT 1
+        `
       : [];
 
-  if (listingRows.length === 0) {
-    console.warn('[public/leads] listing not found:', payload.venue_listing_id ?? payload.listing_slug);
-    return NextResponse.json({ error: 'Listing not found' }, { status: 404 });
+  if (venueRows.length === 0) {
+    console.warn('[public/leads] venue not found:', venueId ?? slug);
+    return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
   }
 
-  const listing = listingRows[0] as {
+  const venue = venueRows[0] as {
     id: string;
-    storypay_venue_id: string;
     slug: string | null;
     name: string | null;
+    email: string | null;
     notification_email: string | null;
-    email_notifications: boolean;
+    email_notifications: boolean | null;
   };
+
+  const weddingDate = payload.wedding_date ?? payload.event_date ?? null;
 
   const insertResult = await sql`
     INSERT INTO public.leads (
-      venue_listing_id, storypay_venue_id, name, email, phone,
-      event_date, guest_count, booking_timeline, message, source
+      venue_id, name, email, phone,
+      wedding_date, guest_count, booking_timeline, message, source
     ) VALUES (
-      ${listing.id}, ${listing.storypay_venue_id}, ${name}, ${email}, ${phone || null},
-      ${payload.event_date || null}, ${payload.guest_count ?? null}, ${payload.booking_timeline || null},
+      ${venue.id}, ${name}, ${email}, ${phone || null},
+      ${weddingDate}, ${payload.guest_count ?? null}, ${payload.booking_timeline || null},
       ${payload.message || null}, ${payload.source || 'directory'}
     )
-    RETURNING *
+    RETURNING id
   `;
 
-  const lead = insertResult[0];
+  const lead = insertResult[0] as { id: string };
 
-  if (listing.email_notifications) {
-    const notifyTo = listing.notification_email || (
-      await sql`SELECT email FROM public.venues WHERE id = ${listing.storypay_venue_id} LIMIT 1`
-    )[0]?.email as string | undefined;
+  // Notify the venue owner (default on if flag is null/true).
+  const notifyEnabled = venue.email_notifications !== false;
+  if (notifyEnabled) {
+    const notifyTo = venue.notification_email || venue.email || undefined;
 
     if (notifyTo) {
-      const listingName = listing.name ?? 'your venue';
-      const listingLink = listing.slug ? `${DIRECTORY_URL}/venue/${listing.slug}` : DIRECTORY_URL;
+      const venueName = venue.name ?? 'your venue';
+      const listingLink = venue.slug ? `${DIRECTORY_URL}/venue/${venue.slug}` : DIRECTORY_URL;
       const html = `
         <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 560px; margin: 0 auto; color: #1b1b1b;">
-          <h2 style="margin: 0 0 16px;">New lead for ${escapeHtml(listingName)}</h2>
+          <h2 style="margin: 0 0 16px;">New lead for ${escapeHtml(venueName)}</h2>
           <p style="margin: 0 0 16px;">You just received a new inquiry from the StoryVenue directory.</p>
           <table style="width: 100%; border-collapse: collapse;">
             ${row('Name', name)}
             ${row('Email', email)}
             ${phone ? row('Phone', phone) : ''}
-            ${payload.event_date ? row('Event date', payload.event_date) : ''}
+            ${weddingDate ? row('Wedding date', weddingDate) : ''}
             ${payload.guest_count ? row('Guest count', String(payload.guest_count)) : ''}
             ${payload.booking_timeline ? row('Timeline', payload.booking_timeline) : ''}
             ${payload.message ? row('Message', payload.message) : ''}
@@ -137,7 +152,7 @@ export async function POST(request: NextRequest) {
       await sendEmail({
         to: notifyTo,
         replyTo: email,
-        subject: `New lead: ${name} — ${listingName}`,
+        subject: `New lead: ${name} — ${venueName}`,
         html,
       }).catch((e) => console.error('[public/leads] email error:', e));
     }

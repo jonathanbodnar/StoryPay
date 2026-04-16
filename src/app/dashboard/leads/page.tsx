@@ -8,33 +8,53 @@ import {
 
 interface Lead {
   id: string;
-  venue_listing_id: string | null;
+  venue_id: string;
   listing_slug: string | null;
   listing_name: string | null;
   name: string;
   email: string;
   phone: string | null;
-  event_date: string | null;
+  wedding_date: string | null;
   guest_count: number | null;
   booking_timeline: string | null;
   message: string | null;
   notes: string | null;
-  status: string;
+  status: LeadStatus;
   source: string;
   created_at: string;
+  updated_at: string | null;
 }
 
-type StatusFilter = 'all' | 'new' | 'contacted' | 'qualified' | 'archived';
+type LeadStatus =
+  | 'new'
+  | 'contacted'
+  | 'tour_booked'
+  | 'proposal_sent'
+  | 'booked_wedding'
+  | 'not_interested';
+
+type StatusFilter = 'all' | LeadStatus;
 
 const DIRECTORY_URL = process.env.NEXT_PUBLIC_DIRECTORY_URL ?? 'https://storyvenue.com';
 
 const STATUS_TABS: { id: StatusFilter; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'new', label: 'New' },
-  { id: 'contacted', label: 'Contacted' },
-  { id: 'qualified', label: 'Qualified' },
-  { id: 'archived', label: 'Archived' },
+  { id: 'all',             label: 'All' },
+  { id: 'new',             label: 'New' },
+  { id: 'contacted',       label: 'Contacted' },
+  { id: 'tour_booked',     label: 'Tour booked' },
+  { id: 'proposal_sent',   label: 'Proposal sent' },
+  { id: 'booked_wedding',  label: 'Booked' },
+  { id: 'not_interested',  label: 'Not interested' },
 ];
+
+const STATUS_LABELS: Record<LeadStatus, string> = {
+  new:            'New',
+  contacted:      'Contacted',
+  tour_booked:    'Tour booked',
+  proposal_sent:  'Proposal sent',
+  booked_wedding: 'Booked',
+  not_interested: 'Not interested',
+};
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
@@ -45,11 +65,13 @@ function formatDate(iso: string | null): string {
 
 function statusPillClasses(status: string): string {
   switch (status) {
-    case 'new':       return 'bg-blue-50 text-blue-700 border-blue-200';
-    case 'contacted': return 'bg-amber-50 text-amber-700 border-amber-200';
-    case 'qualified': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-    case 'archived':  return 'bg-gray-100 text-gray-500 border-gray-200';
-    default:          return 'bg-gray-100 text-gray-700 border-gray-200';
+    case 'new':            return 'bg-blue-50 text-blue-700 border-blue-200';
+    case 'contacted':      return 'bg-amber-50 text-amber-700 border-amber-200';
+    case 'tour_booked':    return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+    case 'proposal_sent':  return 'bg-violet-50 text-violet-700 border-violet-200';
+    case 'booked_wedding': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    case 'not_interested': return 'bg-gray-100 text-gray-500 border-gray-200';
+    default:               return 'bg-gray-100 text-gray-700 border-gray-200';
   }
 }
 
@@ -166,7 +188,7 @@ export default function LeadsPage() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-gray-900">{lead.name}</span>
                         <span className={`text-[10px] font-semibold uppercase tracking-wide rounded-full border px-2 py-0.5 ${statusPillClasses(lead.status)}`}>
-                          {lead.status}
+                          {STATUS_LABELS[lead.status] ?? lead.status}
                         </span>
                         {lead.listing_name && (
                           <span className="text-xs text-gray-400">· {lead.listing_name}</span>
@@ -175,7 +197,7 @@ export default function LeadsPage() {
                       <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
                         <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> {lead.email}</span>
                         {lead.phone && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> {lead.phone}</span>}
-                        {lead.event_date && <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {formatDate(lead.event_date)}</span>}
+                        {lead.wedding_date && <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {formatDate(lead.wedding_date)}</span>}
                         {lead.guest_count != null && <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" /> {lead.guest_count} guests</span>}
                       </div>
                       {lead.message && !isOpen && (
@@ -228,7 +250,7 @@ export default function LeadsPage() {
                             <ExternalLink className="w-3.5 h-3.5" /> Listing
                           </a>
                         )}
-                        <div className="ml-auto flex items-center gap-1.5">
+                        <div className="ml-auto flex flex-wrap items-center gap-1.5">
                           {lead.status !== 'contacted' && (
                             <button
                               onClick={() => updateLead(lead.id, { status: 'contacted' })}
@@ -237,20 +259,36 @@ export default function LeadsPage() {
                               <CheckCircle2 className="w-3.5 h-3.5" /> Mark contacted
                             </button>
                           )}
-                          {lead.status !== 'qualified' && (
+                          {lead.status !== 'tour_booked' && (
                             <button
-                              onClick={() => updateLead(lead.id, { status: 'qualified' })}
+                              onClick={() => updateLead(lead.id, { status: 'tour_booked' })}
                               className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
                             >
-                              Qualified
+                              Tour booked
                             </button>
                           )}
-                          {lead.status !== 'archived' && (
+                          {lead.status !== 'proposal_sent' && (
                             <button
-                              onClick={() => updateLead(lead.id, { status: 'archived' })}
+                              onClick={() => updateLead(lead.id, { status: 'proposal_sent' })}
                               className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
                             >
-                              <Archive className="w-3.5 h-3.5" /> Archive
+                              Proposal sent
+                            </button>
+                          )}
+                          {lead.status !== 'booked_wedding' && (
+                            <button
+                              onClick={() => updateLead(lead.id, { status: 'booked_wedding' })}
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+                            >
+                              Booked
+                            </button>
+                          )}
+                          {lead.status !== 'not_interested' && (
+                            <button
+                              onClick={() => updateLead(lead.id, { status: 'not_interested' })}
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                            >
+                              <Archive className="w-3.5 h-3.5" /> Not interested
                             </button>
                           )}
                           <button
