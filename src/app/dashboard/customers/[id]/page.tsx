@@ -5,9 +5,10 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, Mail, Phone, MapPin, FileText, Loader2, ExternalLink,
-  Receipt, Pencil, Copy, RefreshCw, RotateCcw, Save, X as XIcon,
-  Plus, Check, Trash2, Upload, AlertCircle, Calendar, ClipboardList,
+  Receipt, Pencil, Copy, RefreshCw, RotateCcw, X as XIcon,
+  Plus, Check, Trash2, Upload, Calendar, ClipboardList,
   FileCheck, Activity, User, Heart, ChevronDown, ChevronUp, Info,
+  AlertCircle,
 } from 'lucide-react';
 import RefundModal from '@/components/RefundModal';
 import { formatCents, formatDate, formatDateTime, getStatusColor, classNames } from '@/lib/utils';
@@ -64,7 +65,7 @@ const CEREMONY_TYPES   = [
   { value: 'ceremony_reception',  label: 'Ceremony & Reception' },
 ];
 
-const FILE_TYPES   = ['contract','floor_plan','vendor_agreement','insurance','photo','other'];
+const FILE_TYPES    = ['contract','floor_plan','vendor_agreement','insurance','photo','other'];
 const FILE_STATUSES = ['pending','received','approved'];
 
 const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
@@ -90,7 +91,13 @@ const STAGE_COLORS: Record<string, string> = {
   post_event:     'bg-pink-100 text-pink-700',
 };
 
-type Tab = 'overview' | 'timeline' | 'payments' | 'tasks' | 'documents';
+const FILE_STATUS_COLORS: Record<string, string> = {
+  pending:  'bg-yellow-100 text-yellow-700',
+  received: 'bg-blue-100 text-blue-700',
+  approved: 'bg-emerald-100 text-emerald-700',
+};
+
+type Tab = 'overview' | 'notes' | 'timeline' | 'payments' | 'tasks' | 'documents';
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function CustomerDetailPage() {
@@ -108,18 +115,31 @@ export default function CustomerDetailPage() {
   const [activity,      setActivity]      = useState<ActivityEntry[]>([]);
   const [spaces,        setSpaces]        = useState<{ id: string; name: string; color: string }[]>([]);
 
-  const [loading,  setLoading]  = useState(true);
-  const [error,    setError]    = useState('');
+  const [loading,   setLoading]   = useState(true);
+  const [error,     setError]     = useState('');
   const [activeTab, setActiveTab] = useState<Tab>('overview');
 
-  // Edit modals
+  // Contact edit
   const [editingContact, setEditingContact] = useState(false);
-  const [editForm, setEditForm] = useState({ firstName: '', lastName: '', email: '', phone: '', address: '', city: '', state: '', zip: '' });
-  const [savingContact, setSavingContact] = useState(false);
+  const [editForm,       setEditForm]       = useState({ firstName: '', lastName: '', email: '', phone: '', address: '', city: '', state: '', zip: '' });
+  const [savingContact,  setSavingContact]  = useState(false);
+  const [contactError,   setContactError]   = useState('');
 
+  // Partner edit — separate state from wedding details
+  const [editingPartner, setEditingPartner] = useState(false);
+  const [partnerForm,    setPartnerForm]    = useState({ partner_first_name: '', partner_last_name: '', partner_email: '', partner_phone: '', referral_source: '' });
+  const [savingPartner,  setSavingPartner]  = useState(false);
+  const [partnerError,   setPartnerError]   = useState('');
+
+  // Wedding details edit — separate state
   const [editingWedding, setEditingWedding] = useState(false);
-  const [weddingForm, setWeddingForm] = useState<Partial<VenueCustomer>>({});
-  const [savingWedding, setSavingWedding] = useState(false);
+  const [weddingForm,    setWeddingForm]    = useState<{
+    wedding_date: string; rehearsal_date: string; guest_count: string;
+    coordinator_name: string; coordinator_phone: string;
+    ceremony_type: string; wedding_space_id: string; catering_notes: string;
+  }>({ wedding_date: '', rehearsal_date: '', guest_count: '', coordinator_name: '', coordinator_phone: '', ceremony_type: '', wedding_space_id: '', catering_notes: '' });
+  const [savingWedding,  setSavingWedding]  = useState(false);
+  const [weddingError,   setWeddingError]   = useState('');
 
   // Proposals
   const [proposalSearch, setProposalSearch] = useState('');
@@ -128,23 +148,25 @@ export default function CustomerDetailPage() {
   const [refundTarget,   setRefundTarget]    = useState<Proposal | null>(null);
 
   // Notes
-  const [newNote, setNewNote] = useState('');
+  const [newNote,    setNewNote]    = useState('');
   const [savingNote, setSavingNote] = useState(false);
+  const [noteError,  setNoteError]  = useState('');
 
   // Tasks
-  const [newTask,      setNewTask]      = useState('');
-  const [newTaskDue,   setNewTaskDue]   = useState('');
-  const [savingTask,   setSavingTask]   = useState(false);
+  const [newTask,       setNewTask]       = useState('');
+  const [newTaskDue,    setNewTaskDue]    = useState('');
+  const [savingTask,    setSavingTask]    = useState(false);
+  const [taskError,     setTaskError]     = useState('');
   const [showCompleted, setShowCompleted] = useState(false);
 
   // Files
-  const [uploading, setUploading] = useState(false);
-  const [uploadType, setUploadType] = useState('other');
+  const [uploading,    setUploading]    = useState(false);
+  const [uploadType,   setUploadType]   = useState('other');
+  const [uploadError,  setUploadError]  = useState('');
 
   // ── Fetch all data ─────────────────────────────────────────────────────────
   const fetchAll = useCallback(async () => {
     try {
-      // Legacy customer from GHL/LunarPay
       const cRes = await fetch(`/api/customers/${customerId}`);
       if (!cRes.ok) { setError('Customer not found'); setLoading(false); return; }
       const cData = await cRes.json();
@@ -154,32 +176,32 @@ export default function CustomerDetailPage() {
       const email = cData.customer?.email?.toLowerCase() ?? '';
 
       // Ensure local venue_customer record exists
-      let vcRes = await fetch(`/api/venue-customers?search=${encodeURIComponent(email)}`);
-      let vcList: VenueCustomer[] = vcRes.ok ? await vcRes.json() : [];
-      let vc = vcList.find(v => v.customer_email.toLowerCase() === email) ?? null;
+      let vc: VenueCustomer | null = null;
+      if (email) {
+        const vcRes  = await fetch(`/api/venue-customers?search=${encodeURIComponent(email)}`);
+        const vcList: VenueCustomer[] = vcRes.ok ? await vcRes.json() : [];
+        vc = vcList.find(v => v.customer_email.toLowerCase() === email) ?? null;
 
-      if (!vc && email) {
-        // Auto-create local record
-        const createRes = await fetch('/api/venue-customers', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            customer_email: email,
-            first_name: cData.customer?.firstName || '',
-            last_name:  cData.customer?.lastName  || '',
-            phone: cData.customer?.phone || null,
-          }),
-        });
-        if (createRes.ok) vc = await createRes.json();
+        if (!vc) {
+          const createRes = await fetch('/api/venue-customers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              customer_email: email,
+              first_name: cData.customer?.firstName || '',
+              last_name:  cData.customer?.lastName  || '',
+              phone: cData.customer?.phone || null,
+            }),
+          });
+          if (createRes.ok) vc = await createRes.json();
+        }
       }
 
       setVenueCustomer(vc);
 
-      // Load spaces
       const spRes = await fetch('/api/spaces');
       if (spRes.ok) setSpaces(await spRes.json());
 
-      // Load CRM data if we have a vc record
       if (vc?.id) {
         const [notesRes, tasksRes, filesRes, actRes] = await Promise.all([
           fetch(`/api/venue-customers/${vc.id}/notes`),
@@ -210,12 +232,13 @@ export default function CustomerDetailPage() {
       address: customer.address || '', city: customer.city || '',
       state: customer.state || '', zip: customer.zip || '',
     });
+    setContactError('');
     setEditingContact(true);
   }
 
   async function saveContact() {
-    if (!customer) return;
     setSavingContact(true);
+    setContactError('');
     const res = await fetch(`/api/customers/${customerId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -225,23 +248,91 @@ export default function CustomerDetailPage() {
       const d = await res.json();
       setCustomer(p => p ? { ...p, ...d.customer } : p);
       setEditingContact(false);
+    } else {
+      const d = await res.json().catch(() => ({}));
+      setContactError(d.error || 'Failed to save — please try again');
     }
     setSavingContact(false);
   }
 
-  // ── Wedding details save ─────────────────────────────────────────────────────
-  async function saveWedding() {
+  // ── Partner save ────────────────────────────────────────────────────────────
+  function startEditPartner() {
     if (!venueCustomer) return;
-    setSavingWedding(true);
+    setPartnerForm({
+      partner_first_name: venueCustomer.partner_first_name || '',
+      partner_last_name:  venueCustomer.partner_last_name  || '',
+      partner_email:      venueCustomer.partner_email      || '',
+      partner_phone:      venueCustomer.partner_phone      || '',
+      referral_source:    venueCustomer.referral_source    || '',
+    });
+    setPartnerError('');
+    setEditingPartner(true);
+  }
+
+  async function savePartner() {
+    if (!venueCustomer) return;
+    setSavingPartner(true);
+    setPartnerError('');
     const res = await fetch(`/api/venue-customers/${venueCustomer.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(weddingForm),
+      body: JSON.stringify(partnerForm),
+    });
+    if (res.ok) {
+      const d = await res.json();
+      setVenueCustomer(d);
+      setEditingPartner(false);
+    } else {
+      const d = await res.json().catch(() => ({}));
+      setPartnerError(d.error || 'Failed to save — please try again');
+    }
+    setSavingPartner(false);
+  }
+
+  // ── Wedding details save ─────────────────────────────────────────────────────
+  function startEditWedding() {
+    if (!venueCustomer) return;
+    setWeddingForm({
+      wedding_date:      venueCustomer.wedding_date      || '',
+      rehearsal_date:    venueCustomer.rehearsal_date    || '',
+      guest_count:       venueCustomer.guest_count != null ? String(venueCustomer.guest_count) : '',
+      coordinator_name:  venueCustomer.coordinator_name  || '',
+      coordinator_phone: venueCustomer.coordinator_phone || '',
+      ceremony_type:     venueCustomer.ceremony_type     || '',
+      wedding_space_id:  venueCustomer.wedding_space_id  || '',
+      catering_notes:    venueCustomer.catering_notes    || '',
+    });
+    setWeddingError('');
+    setEditingWedding(true);
+  }
+
+  async function saveWedding() {
+    if (!venueCustomer) return;
+    setSavingWedding(true);
+    setWeddingError('');
+    const payload = {
+      ...weddingForm,
+      guest_count:       weddingForm.guest_count ? parseInt(weddingForm.guest_count, 10) : null,
+      wedding_date:      weddingForm.wedding_date      || null,
+      rehearsal_date:    weddingForm.rehearsal_date    || null,
+      coordinator_name:  weddingForm.coordinator_name  || null,
+      coordinator_phone: weddingForm.coordinator_phone || null,
+      ceremony_type:     weddingForm.ceremony_type     || null,
+      wedding_space_id:  weddingForm.wedding_space_id  || null,
+      catering_notes:    weddingForm.catering_notes    || null,
+    };
+    const res = await fetch(`/api/venue-customers/${venueCustomer.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
     });
     if (res.ok) {
       const d = await res.json();
       setVenueCustomer(d);
       setEditingWedding(false);
+    } else {
+      const d = await res.json().catch(() => ({}));
+      setWeddingError(d.error || 'Failed to save — please try again');
     }
     setSavingWedding(false);
   }
@@ -254,16 +345,15 @@ export default function CustomerDetailPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pipeline_stage: stage }),
     });
-    if (res.ok) {
-      const d = await res.json();
-      setVenueCustomer(d);
-    }
+    if (res.ok) setVenueCustomer(await res.json());
   }
 
   // ── Notes ──────────────────────────────────────────────────────────────────
   async function addNote() {
-    if (!newNote.trim() || !venueCustomer) return;
+    if (!newNote.trim()) return;
+    if (!venueCustomer) { setNoteError('Customer profile not ready — refresh the page'); return; }
     setSavingNote(true);
+    setNoteError('');
     const res = await fetch(`/api/venue-customers/${venueCustomer.id}/notes`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -273,7 +363,13 @@ export default function CustomerDetailPage() {
       const n = await res.json();
       setNotes(p => [n, ...p]);
       setNewNote('');
-      setActivity(p => [{ id: n.id + '-act', activity_type: 'note_added', title: 'Note added', description: newNote.trim().slice(0, 80), created_at: new Date().toISOString() }, ...p]);
+      setActivity(p => [{
+        id: n.id + '-act', activity_type: 'note_added', title: 'Note added',
+        description: newNote.trim().slice(0, 80), created_at: new Date().toISOString(),
+      }, ...p]);
+    } else {
+      const d = await res.json().catch(() => ({}));
+      setNoteError(d.error || 'Failed to save note — please try again');
     }
     setSavingNote(false);
   }
@@ -286,8 +382,10 @@ export default function CustomerDetailPage() {
 
   // ── Tasks ──────────────────────────────────────────────────────────────────
   async function addTask() {
-    if (!newTask.trim() || !venueCustomer) return;
+    if (!newTask.trim()) return;
+    if (!venueCustomer) { setTaskError('Customer profile not ready — refresh the page'); return; }
     setSavingTask(true);
+    setTaskError('');
     const res = await fetch(`/api/venue-customers/${venueCustomer.id}/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -298,6 +396,9 @@ export default function CustomerDetailPage() {
       setTasks(p => [...p, t]);
       setNewTask('');
       setNewTaskDue('');
+    } else {
+      const d = await res.json().catch(() => ({}));
+      setTaskError(d.error || 'Failed to save task — please try again');
     }
     setSavingTask(false);
   }
@@ -310,10 +411,7 @@ export default function CustomerDetailPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ completed_at }),
     });
-    if (res.ok) {
-      const t = await res.json();
-      setTasks(p => p.map(x => x.id === t.id ? t : x));
-    }
+    if (res.ok) setTasks(p => p.map(x => x.id === task.id ? { ...x, completed_at } : x));
   }
 
   async function deleteTask(taskId: string) {
@@ -325,8 +423,10 @@ export default function CustomerDetailPage() {
   // ── Files ──────────────────────────────────────────────────────────────────
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file || !venueCustomer) return;
+    if (!file) return;
+    if (!venueCustomer) { setUploadError('Customer profile not ready — refresh the page'); return; }
     setUploading(true);
+    setUploadError('');
     const fd = new FormData();
     fd.append('file', file);
     fd.append('file_type', uploadType);
@@ -334,6 +434,9 @@ export default function CustomerDetailPage() {
     if (res.ok) {
       const f = await res.json();
       setFiles(p => [f, ...p]);
+    } else {
+      const d = await res.json().catch(() => ({}));
+      setUploadError(d.error || 'Upload failed — please try again');
     }
     e.target.value = '';
     setUploading(false);
@@ -382,15 +485,8 @@ export default function CustomerDetailPage() {
   const pendingProposals = proposals.filter(p => ['sent','opened','signed'].includes(p.status));
   const totalPending     = pendingProposals.reduce((s, p) => s + (p.price || 0), 0);
   const installmentProps = proposals.filter(p => p.payment_type === 'installment' && p.payment_config);
-
-  const openTasks      = tasks.filter(t => !t.completed_at);
-  const completedTasks = tasks.filter(t => !!t.completed_at);
-
-  const FILE_STATUS_COLORS: Record<string, string> = {
-    pending:  'bg-yellow-100 text-yellow-700',
-    received: 'bg-blue-100 text-blue-700',
-    approved: 'bg-emerald-100 text-emerald-700',
-  };
+  const openTasks        = tasks.filter(t => !t.completed_at);
+  const completedTasks   = tasks.filter(t => !!t.completed_at);
 
   if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="animate-spin text-gray-400" size={24} /></div>;
   if (error || !customer) return (
@@ -401,6 +497,21 @@ export default function CustomerDetailPage() {
   );
 
   const stageInfo = PIPELINE_STAGES.find(s => s.value === (venueCustomer?.pipeline_stage ?? 'inquiry'));
+
+  // ── Reusable inline-edit Save/Cancel footer ───────────────────────────────
+  function EditFooter({ onCancel, onSave, saving, error: err }: { onCancel: () => void; onSave: () => void; saving: boolean; error: string }) {
+    return (
+      <>
+        {err && <p className="text-xs text-red-600 flex items-center gap-1"><AlertCircle size={12} />{err}</p>}
+        <div className="flex gap-2 pt-1">
+          <button type="button" onClick={onCancel} className="flex-1 rounded-xl border border-gray-200 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
+          <button type="button" onClick={onSave} disabled={saving} className="flex-1 rounded-xl py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50" style={{backgroundColor:'#1b1b1b'}}>
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </>
+    );
+  }
 
   return (
     <div>
@@ -463,10 +574,10 @@ export default function CustomerDetailPage() {
         {/* Summary KPIs */}
         <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y divide-gray-100">
           {[
-            { label: 'Proposals', value: proposals.length, color: 'text-gray-900' },
-            { label: 'Total Paid', value: formatCents(totalPaid), color: 'text-emerald-600' },
-            { label: 'Pending', value: formatCents(totalPending), color: 'text-amber-600' },
-            { label: 'Open Tasks', value: openTasks.length, color: openTasks.length > 0 ? 'text-orange-600' : 'text-gray-900' },
+            { label: 'Proposals',   value: proposals.length,           color: 'text-gray-900' },
+            { label: 'Total Paid',  value: formatCents(totalPaid),     color: 'text-emerald-600' },
+            { label: 'Pending',     value: formatCents(totalPending),  color: 'text-amber-600' },
+            { label: 'Open Tasks',  value: openTasks.length,           color: openTasks.length > 0 ? 'text-orange-600' : 'text-gray-900' },
           ].map(kpi => (
             <div key={kpi.label} className="px-5 py-4">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{kpi.label}</p>
@@ -476,14 +587,55 @@ export default function CustomerDetailPage() {
         </div>
       </div>
 
+      {/* ── Contact edit modal ── */}
+      {editingContact && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="font-heading text-lg font-semibold text-gray-900">Edit Contact Info</h2>
+              <button onClick={() => setEditingContact(false)} className="text-gray-400 hover:text-gray-600"><XIcon size={18} /></button>
+            </div>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                {[{k:'firstName',l:'First Name'},{k:'lastName',l:'Last Name'}].map(f => (
+                  <div key={f.k}>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{f.l}</label>
+                    <input value={editForm[f.k as keyof typeof editForm]} onChange={e => setEditForm(p => ({...p,[f.k]:e.target.value}))}
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
+                  </div>
+                ))}
+              </div>
+              {[{k:'email',l:'Email',t:'email'},{k:'phone',l:'Phone',t:'tel'},{k:'address',l:'Address',t:'text'}].map(f => (
+                <div key={f.k}>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{f.l}</label>
+                  <input type={f.t} value={editForm[f.k as keyof typeof editForm]} onChange={e => setEditForm(p => ({...p,[f.k]:e.target.value}))}
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
+                </div>
+              ))}
+              <div className="grid grid-cols-3 gap-3">
+                {[{k:'city',l:'City'},{k:'state',l:'State'},{k:'zip',l:'ZIP'}].map(f => (
+                  <div key={f.k}>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{f.l}</label>
+                    <input value={editForm[f.k as keyof typeof editForm]} onChange={e => setEditForm(p => ({...p,[f.k]:e.target.value}))}
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
+                  </div>
+                ))}
+              </div>
+              <EditFooter onCancel={() => setEditingContact(false)} onSave={saveContact} saving={savingContact} error={contactError} />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Tabs ── */}
-      <div className="flex gap-1 mb-6 border-b border-gray-200">
+      <div className="flex flex-wrap gap-1 mb-6 border-b border-gray-200">
         {([
-          { id: 'overview',  label: 'Overview',  icon: User },
-          { id: 'timeline',  label: 'Activity',  icon: Activity },
-          { id: 'payments',  label: 'Payments',  icon: Receipt },
-          { id: 'tasks',     label: `Tasks${openTasks.length > 0 ? ` (${openTasks.length})` : ''}`, icon: ClipboardList },
-          { id: 'documents', label: `Documents${files.length > 0 ? ` (${files.length})` : ''}`, icon: FileCheck },
+          { id: 'overview',   label: 'Overview',                                                      icon: User },
+          { id: 'notes',      label: `Notes${notes.length > 0 ? ` (${notes.length})` : ''}`,         icon: ClipboardList },
+          { id: 'timeline',   label: 'Activity',                                                      icon: Activity },
+          { id: 'payments',   label: 'Payments',                                                      icon: Receipt },
+          { id: 'tasks',      label: `Tasks${openTasks.length > 0 ? ` (${openTasks.length})` : ''}`, icon: ClipboardList },
+          { id: 'documents',  label: `Documents${files.length > 0 ? ` (${files.length})` : ''}`,     icon: FileCheck },
         ] as { id: Tab; label: string; icon: React.ComponentType<{ size?: number }> }[]).map(tab => {
           const Icon = tab.icon;
           return (
@@ -498,87 +650,56 @@ export default function CustomerDetailPage() {
       {/* ── OVERVIEW TAB ── */}
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Contact info */}
+
+          {/* Contact info (read-only display — edit via modal above) */}
           <div className="rounded-2xl border border-gray-200 bg-white p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-heading text-base text-gray-900 flex items-center gap-2"><User size={15} /> Contact Info</h2>
               <button onClick={startEditContact} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"><Pencil size={11} /> Edit</button>
             </div>
-            {editingContact ? (
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  {[{k:'firstName',l:'First Name'},{k:'lastName',l:'Last Name'}].map(f => (
-                    <div key={f.k}>
-                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{f.l}</label>
-                      <input value={editForm[f.k as keyof typeof editForm]} onChange={e => setEditForm(p => ({...p,[f.k]:e.target.value}))}
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
-                    </div>
-                  ))}
-                </div>
-                {[{k:'email',l:'Email',t:'email'},{k:'phone',l:'Phone',t:'tel'}].map(f => (
-                  <div key={f.k}>
-                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{f.l}</label>
-                    <input type={f.t} value={editForm[f.k as keyof typeof editForm]} onChange={e => setEditForm(p => ({...p,[f.k]:e.target.value}))}
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
-                  </div>
-                ))}
-                <div className="flex gap-2 pt-1">
-                  <button onClick={() => setEditingContact(false)} className="flex-1 rounded-xl border border-gray-200 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
-                  <button onClick={saveContact} disabled={savingContact} className="flex-1 rounded-xl py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50" style={{backgroundColor:'#1b1b1b'}}>
-                    {savingContact ? 'Saving…' : 'Save'}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-2 text-sm">
-                {customer.email && <div className="flex items-center gap-2 text-gray-700"><Mail size={13} className="text-gray-400 flex-shrink-0" />{customer.email}</div>}
-                {customer.phone && <div className="flex items-center gap-2 text-gray-700"><Phone size={13} className="text-gray-400 flex-shrink-0" />{customer.phone}</div>}
-                {(customer.address || customer.city) && <div className="flex items-center gap-2 text-gray-700"><MapPin size={13} className="text-gray-400 flex-shrink-0" />{[customer.address, customer.city, customer.state, customer.zip].filter(Boolean).join(', ')}</div>}
-                {!customer.email && !customer.phone && <p className="text-gray-400 text-xs">No contact info</p>}
-              </div>
-            )}
+            <div className="space-y-2 text-sm">
+              {customer.email && <div className="flex items-center gap-2 text-gray-700"><Mail size={13} className="text-gray-400 flex-shrink-0" />{customer.email}</div>}
+              {customer.phone && <div className="flex items-center gap-2 text-gray-700"><Phone size={13} className="text-gray-400 flex-shrink-0" />{customer.phone}</div>}
+              {(customer.address || customer.city) && <div className="flex items-center gap-2 text-gray-700"><MapPin size={13} className="text-gray-400 flex-shrink-0" />{[customer.address, customer.city, customer.state, customer.zip].filter(Boolean).join(', ')}</div>}
+              {!customer.email && !customer.phone && <p className="text-gray-400 text-xs">No contact info</p>}
+            </div>
           </div>
 
-          {/* Partner info */}
+          {/* Partner / Second Contact */}
           <div className="rounded-2xl border border-gray-200 bg-white p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-heading text-base text-gray-900 flex items-center gap-2"><Heart size={15} /> Partner / Second Contact</h2>
-              {venueCustomer && !editingWedding && (
-                <button onClick={() => { setWeddingForm(venueCustomer); setEditingWedding(true); }} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"><Pencil size={11} /> Edit</button>
+              {venueCustomer && (
+                <button onClick={startEditPartner} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"><Pencil size={11} /> {venueCustomer.partner_first_name ? 'Edit' : 'Add'}</button>
               )}
             </div>
-            {editingWedding ? (
+            {editingPartner ? (
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   {[{k:'partner_first_name',l:'First Name'},{k:'partner_last_name',l:'Last Name'}].map(f => (
                     <div key={f.k}>
                       <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{f.l}</label>
-                      <input value={(weddingForm[f.k as keyof VenueCustomer] as string) ?? ''} onChange={e => setWeddingForm(p => ({...p,[f.k]:e.target.value}))}
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
+                      <input value={partnerForm[f.k as keyof typeof partnerForm]} onChange={e => setPartnerForm(p => ({...p,[f.k]:e.target.value}))}
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
                     </div>
                   ))}
                 </div>
                 {[{k:'partner_email',l:'Email',t:'email'},{k:'partner_phone',l:'Phone',t:'tel'}].map(f => (
                   <div key={f.k}>
                     <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{f.l}</label>
-                    <input type={f.t} value={(weddingForm[f.k as keyof VenueCustomer] as string) ?? ''} onChange={e => setWeddingForm(p => ({...p,[f.k]:e.target.value}))}
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
+                    <input type={f.t} value={partnerForm[f.k as keyof typeof partnerForm]} onChange={e => setPartnerForm(p => ({...p,[f.k]:e.target.value}))}
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
                   </div>
                 ))}
                 <div>
                   <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Referral Source</label>
-                  <select value={(weddingForm.referral_source as string) ?? ''} onChange={e => setWeddingForm(p => ({...p,referral_source:e.target.value}))}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-gray-400 focus:outline-none">
+                  <select value={partnerForm.referral_source} onChange={e => setPartnerForm(p => ({...p,referral_source:e.target.value}))}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 focus:border-gray-400 focus:outline-none">
                     <option value="">Unknown</option>
                     {REFERRAL_SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
-                <div className="flex gap-2 pt-1">
-                  <button onClick={() => setEditingWedding(false)} className="flex-1 rounded-xl border border-gray-200 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
-                  <button onClick={saveWedding} disabled={savingWedding} className="flex-1 rounded-xl py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50" style={{backgroundColor:'#1b1b1b'}}>
-                    {savingWedding ? 'Saving…' : 'Save'}
-                  </button>
-                </div>
+                <EditFooter onCancel={() => setEditingPartner(false)} onSave={savePartner} saving={savingPartner} error={partnerError} />
               </div>
             ) : venueCustomer?.partner_first_name ? (
               <div className="space-y-2 text-sm">
@@ -588,7 +709,7 @@ export default function CustomerDetailPage() {
               </div>
             ) : (
               <p className="text-xs text-gray-400">No partner info yet.{' '}
-                <button onClick={() => { setWeddingForm(venueCustomer ?? {}); setEditingWedding(true); }} className="text-blue-600 hover:underline">Add partner</button>
+                <button onClick={startEditPartner} className="text-blue-600 hover:underline">Add partner</button>
               </p>
             )}
           </div>
@@ -598,51 +719,48 @@ export default function CustomerDetailPage() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-heading text-base text-gray-900 flex items-center gap-2"><Calendar size={15} /> Wedding Details</h2>
               {venueCustomer && !editingWedding && (
-                <button onClick={() => { setWeddingForm(venueCustomer); setEditingWedding(true); }} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"><Pencil size={11} /> Edit</button>
+                <button onClick={startEditWedding} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"><Pencil size={11} /> {(venueCustomer.wedding_date || venueCustomer.guest_count) ? 'Edit' : 'Add'}</button>
               )}
             </div>
             {editingWedding ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {[
-                  { k:'wedding_date',     l:'Wedding Date',    t:'date' },
-                  { k:'rehearsal_date',   l:'Rehearsal Date',  t:'date' },
-                  { k:'guest_count',      l:'Guest Count',     t:'number' },
-                  { k:'coordinator_name', l:'Day-of Coordinator Name', t:'text' },
-                  { k:'coordinator_phone',l:'Coordinator Phone', t:'tel' },
-                ].map(f => (
-                  <div key={f.k}>
-                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{f.l}</label>
-                    <input type={f.t} value={(weddingForm[f.k as keyof VenueCustomer] as string|number) ?? ''} onChange={e => setWeddingForm(p => ({...p,[f.k]:e.target.value}))}
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {[
+                    { k:'wedding_date',      l:'Wedding Date',    t:'date' },
+                    { k:'rehearsal_date',    l:'Rehearsal Date',  t:'date' },
+                    { k:'guest_count',       l:'Guest Count',     t:'number' },
+                    { k:'coordinator_name',  l:'Day-of Coordinator Name', t:'text' },
+                    { k:'coordinator_phone', l:'Coordinator Phone',        t:'tel' },
+                  ].map(f => (
+                    <div key={f.k}>
+                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{f.l}</label>
+                      <input type={f.t} value={weddingForm[f.k as keyof typeof weddingForm]} onChange={e => setWeddingForm(p => ({...p,[f.k]:e.target.value}))}
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
+                    </div>
+                  ))}
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Ceremony Type</label>
+                    <select value={weddingForm.ceremony_type} onChange={e => setWeddingForm(p => ({...p,ceremony_type:e.target.value}))}
+                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 focus:border-gray-400 focus:outline-none">
+                      <option value="">Not set</option>
+                      {CEREMONY_TYPES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                    </select>
                   </div>
-                ))}
-                <div>
-                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Ceremony Type</label>
-                  <select value={(weddingForm.ceremony_type as string) ?? ''} onChange={e => setWeddingForm(p => ({...p,ceremony_type:e.target.value}))}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-gray-400 focus:outline-none">
-                    <option value="">Not set</option>
-                    {CEREMONY_TYPES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-                  </select>
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Space</label>
+                    <select value={weddingForm.wedding_space_id} onChange={e => setWeddingForm(p => ({...p,wedding_space_id:e.target.value}))}
+                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 focus:border-gray-400 focus:outline-none">
+                      <option value="">Not assigned</option>
+                      {spaces.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  </div>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Space</label>
-                  <select value={(weddingForm.wedding_space_id as string) ?? ''} onChange={e => setWeddingForm(p => ({...p,wedding_space_id:e.target.value}))}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-gray-400 focus:outline-none">
-                    <option value="">Not assigned</option>
-                    {spaces.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
-                </div>
-                <div className="sm:col-span-2 lg:col-span-3">
                   <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Catering Notes</label>
-                  <textarea value={(weddingForm.catering_notes as string) ?? ''} onChange={e => setWeddingForm(p => ({...p,catering_notes:e.target.value}))} rows={2}
-                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none resize-none" />
+                  <textarea value={weddingForm.catering_notes} onChange={e => setWeddingForm(p => ({...p,catering_notes:e.target.value}))} rows={2}
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none resize-none" />
                 </div>
-                <div className="sm:col-span-2 lg:col-span-3 flex gap-2">
-                  <button onClick={() => setEditingWedding(false)} className="flex-1 rounded-xl border border-gray-200 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
-                  <button onClick={saveWedding} disabled={savingWedding} className="flex-1 rounded-xl py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50" style={{backgroundColor:'#1b1b1b'}}>
-                    {savingWedding ? 'Saving…' : 'Save Wedding Details'}
-                  </button>
-                </div>
+                <EditFooter onCancel={() => setEditingWedding(false)} onSave={saveWedding} saving={savingWedding} error={weddingError} />
               </div>
             ) : venueCustomer && (venueCustomer.wedding_date || venueCustomer.guest_count || venueCustomer.ceremony_type) ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 text-sm">
@@ -656,40 +774,44 @@ export default function CustomerDetailPage() {
               </div>
             ) : (
               <p className="text-xs text-gray-400">No wedding details yet.{' '}
-                <button onClick={() => { setWeddingForm(venueCustomer ?? {}); setEditingWedding(true); }} className="text-blue-600 hover:underline">Add details</button>
+                <button onClick={startEditWedding} className="text-blue-600 hover:underline">Add details</button>
               </p>
             )}
-          </div>
-
-          {/* Notes */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 lg:col-span-2">
-            <h2 className="font-heading text-base text-gray-900 mb-4 flex items-center gap-2"><ClipboardList size={15} /> Notes</h2>
-            <div className="flex gap-2 mb-4">
-              <textarea value={newNote} onChange={e => setNewNote(e.target.value)} placeholder="Add a note…" rows={2}
-                className="flex-1 rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none resize-none" />
-              <button onClick={addNote} disabled={savingNote || !newNote.trim()}
-                className="rounded-xl px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-40 self-end"
-                style={{backgroundColor:'#1b1b1b'}}>
-                {savingNote ? <Loader2 size={14} className="animate-spin" /> : 'Add'}
-              </button>
-            </div>
-            <div className="space-y-3">
-              {notes.length === 0 && <p className="text-xs text-gray-400">No notes yet.</p>}
-              {notes.map(n => (
-                <div key={n.id} className="rounded-xl bg-gray-50 px-4 py-3 group relative">
-                  <p className="text-sm text-gray-800 whitespace-pre-wrap">{n.content}</p>
-                  <div className="flex items-center justify-between mt-1.5">
-                    <p className="text-[11px] text-gray-400">{n.author_name ? `${n.author_name} · ` : ''}{formatDateTime(n.created_at)}</p>
-                    <button onClick={() => deleteNote(n.id)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all"><Trash2 size={13} /></button>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
       )}
 
-      {/* ── TIMELINE TAB ── */}
+      {/* ── NOTES TAB ── */}
+      {activeTab === 'notes' && (
+        <div className="max-w-2xl">
+          <h2 className="font-heading text-lg text-gray-900 mb-5">Notes</h2>
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 mb-5">
+            <textarea value={newNote} onChange={e => setNewNote(e.target.value)} placeholder="Add a note…" rows={3}
+              className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none resize-none mb-3" />
+            {noteError && <p className="text-xs text-red-600 flex items-center gap-1 mb-2"><AlertCircle size={12} />{noteError}</p>}
+            <button onClick={addNote} disabled={savingNote || !newNote.trim()}
+              className="rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-colors disabled:opacity-40"
+              style={{backgroundColor:'#1b1b1b'}}>
+              {savingNote ? <Loader2 size={14} className="animate-spin inline mr-1" /> : null}
+              {savingNote ? 'Saving…' : 'Add Note'}
+            </button>
+          </div>
+          <div className="space-y-3">
+            {notes.length === 0 && <p className="text-sm text-gray-400">No notes yet.</p>}
+            {notes.map(n => (
+              <div key={n.id} className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3 group relative">
+                <p className="text-sm text-gray-800 whitespace-pre-wrap">{n.content}</p>
+                <div className="flex items-center justify-between mt-1.5">
+                  <p className="text-[11px] text-gray-400">{n.author_name ? `${n.author_name} · ` : ''}{formatDateTime(n.created_at)}</p>
+                  <button onClick={() => deleteNote(n.id)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all"><Trash2 size={13} /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── ACTIVITY TAB ── */}
       {activeTab === 'timeline' && (
         <div className="max-w-2xl">
           <h2 className="font-heading text-lg text-gray-900 mb-5">Activity Timeline</h2>
@@ -700,7 +822,7 @@ export default function CustomerDetailPage() {
               <div className="absolute left-4 top-0 bottom-0 w-px bg-gray-200" />
               <div className="space-y-4">
                 {activity.map(a => (
-                  <div key={a.id} className="flex gap-4 pl-0">
+                  <div key={a.id} className="flex gap-4">
                     <div className="relative z-10 flex-shrink-0 w-8 h-8 rounded-full border-2 border-white shadow-sm bg-gray-100 flex items-center justify-center text-gray-500">
                       {ACTIVITY_ICONS[a.activity_type] ?? <Info size={13} />}
                     </div>
@@ -753,9 +875,9 @@ export default function CustomerDetailPage() {
                         <td className="px-5 py-3.5 text-gray-500">{p.paid_at ? formatDate(p.paid_at) : '—'}</td>
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-1">
-                            <Link href={`/dashboard/proposals/${p.id}/edit`} className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors" title="Edit"><Pencil size={13} /></Link>
+                            <Link href={`/dashboard/proposals/${p.id}/edit`} className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"><Pencil size={13} /></Link>
                             {p.status !== 'paid' && <button onClick={() => handleResend(p)} disabled={resendingId === p.id} className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors disabled:opacity-50"><RefreshCw size={13} className={resendingId === p.id ? 'animate-spin' : ''} /></button>}
-                            <button onClick={() => copyLink(p)} className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors" title="Copy link"><Copy size={13} />{copiedId === p.id && <span className="ml-1 text-[10px]">Copied!</span>}</button>
+                            <button onClick={() => copyLink(p)} className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"><Copy size={13} />{copiedId === p.id && <span className="ml-1 text-[10px]">Copied!</span>}</button>
                             <Link href={`/proposal/${p.public_token}`} target="_blank" className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"><ExternalLink size={13} /></Link>
                             {p.status === 'paid' && <Link href={`/invoice/${p.id}`} target="_blank" className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"><Receipt size={13} /></Link>}
                             {p.status === 'paid' && <button onClick={() => setRefundTarget(p)} className="rounded-md p-1.5 text-red-500 hover:bg-red-50 transition-colors"><RotateCcw size={13} /></button>}
@@ -774,7 +896,7 @@ export default function CustomerDetailPage() {
               <div className="space-y-4">
                 {installmentProps.map(p => {
                   const config = p.payment_config as { installments?: { amount: number; date: string }[] } | null;
-                  const insts = config?.installments || [];
+                  const insts  = config?.installments || [];
                   return (
                     <div key={p.id} className="rounded-2xl border border-gray-200 p-5">
                       <div className="flex items-center justify-between mb-3">
@@ -804,27 +926,28 @@ export default function CustomerDetailPage() {
       {activeTab === 'tasks' && (
         <div className="max-w-2xl">
           <h2 className="font-heading text-lg text-gray-900 mb-5">Tasks</h2>
-          {/* Add task */}
           <div className="rounded-2xl border border-gray-200 bg-white p-4 mb-5">
-            <div className="flex gap-2">
+            <div className="flex gap-2 mb-2">
               <input value={newTask} onChange={e => setNewTask(e.target.value)} placeholder="New task…"
-                onKeyDown={e => e.key === 'Enter' && addTask()}
+                onKeyDown={e => e.key === 'Enter' && !savingTask && addTask()}
                 className="flex-1 rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
               <input type="date" value={newTaskDue} onChange={e => setNewTaskDue(e.target.value)}
                 className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none w-36" />
               <button onClick={addTask} disabled={savingTask || !newTask.trim()}
-                className="rounded-xl px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-40"
+                className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-colors disabled:opacity-40"
                 style={{backgroundColor:'#1b1b1b'}}>
                 {savingTask ? <Loader2 size={14} className="animate-spin" /> : <Plus size={15} />}
               </button>
             </div>
+            {taskError && <p className="text-xs text-red-600 flex items-center gap-1 mt-1"><AlertCircle size={12} />{taskError}</p>}
           </div>
-          {/* Open tasks */}
+
           <div className="space-y-2">
             {openTasks.length === 0 && <p className="text-sm text-gray-400 py-4">No open tasks.</p>}
             {openTasks.map(t => (
               <div key={t.id} className="flex items-start gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 group">
-                <button onClick={() => toggleTask(t)} className="mt-0.5 flex-shrink-0 w-4.5 h-4.5 rounded border-2 border-gray-300 hover:border-emerald-400 transition-colors flex items-center justify-center">
+                <button onClick={() => toggleTask(t)}
+                  className="mt-0.5 flex-shrink-0 w-5 h-5 rounded border-2 border-gray-300 hover:border-emerald-400 transition-colors flex items-center justify-center">
                   <span className="sr-only">Complete</span>
                 </button>
                 <div className="flex-1 min-w-0">
@@ -844,7 +967,7 @@ export default function CustomerDetailPage() {
               </div>
             ))}
           </div>
-          {/* Completed tasks toggle */}
+
           {completedTasks.length > 0 && (
             <div className="mt-5">
               <button onClick={() => setShowCompleted(v => !v)}
@@ -856,7 +979,7 @@ export default function CustomerDetailPage() {
                 <div className="mt-2 space-y-2">
                   {completedTasks.map(t => (
                     <div key={t.id} className="flex items-start gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 group opacity-60">
-                      <div className="mt-0.5 flex-shrink-0 w-4.5 h-4.5 rounded border-2 border-emerald-400 bg-emerald-50 flex items-center justify-center">
+                      <div className="mt-0.5 flex-shrink-0 w-5 h-5 rounded border-2 border-emerald-400 bg-emerald-50 flex items-center justify-center">
                         <Check size={10} className="text-emerald-500" />
                       </div>
                       <div className="flex-1">
@@ -877,12 +1000,11 @@ export default function CustomerDetailPage() {
       {activeTab === 'documents' && (
         <div>
           <h2 className="font-heading text-lg text-gray-900 mb-5">Documents</h2>
-          {/* Upload */}
           <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50/50 p-5 mb-5">
             <div className="flex flex-wrap items-center gap-3">
               <select value={uploadType} onChange={e => setUploadType(e.target.value)}
                 className="rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-700 focus:border-gray-400 focus:outline-none capitalize">
-                {FILE_TYPES.map(t => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
+                {FILE_TYPES.map(t => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
               </select>
               <label className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white cursor-pointer transition-colors ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`} style={{backgroundColor:'#1b1b1b'}}>
                 {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
@@ -892,8 +1014,9 @@ export default function CustomerDetailPage() {
               </label>
               <p className="text-xs text-gray-400">PDF, Word, Excel, images up to 10MB</p>
             </div>
+            {uploadError && <p className="text-xs text-red-600 flex items-center gap-1 mt-2"><AlertCircle size={12} />{uploadError}</p>}
           </div>
-          {/* Files list */}
+
           {files.length === 0 ? (
             <p className="text-sm text-gray-400">No documents yet.</p>
           ) : (
@@ -919,7 +1042,7 @@ export default function CustomerDetailPage() {
                         )}
                         {f.file_size && <p className="text-[11px] text-gray-400 mt-0.5">{(f.file_size / 1024).toFixed(0)} KB{f.uploaded_by ? ` · ${f.uploaded_by}` : ''}</p>}
                       </td>
-                      <td className="px-5 py-3.5 text-gray-600 capitalize">{f.file_type.replace('_', ' ')}</td>
+                      <td className="px-5 py-3.5 text-gray-600 capitalize">{f.file_type.replace(/_/g, ' ')}</td>
                       <td className="px-5 py-3.5">
                         <select value={f.file_status} onChange={e => updateFileStatus(f.id, e.target.value)}
                           className={`rounded-full border-0 px-2.5 py-1 text-xs font-semibold cursor-pointer focus:outline-none capitalize ${FILE_STATUS_COLORS[f.file_status] ?? 'bg-gray-100 text-gray-700'}`}>
