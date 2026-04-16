@@ -29,16 +29,20 @@ export async function POST(request: NextRequest) {
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await request.json();
-  const { customer_email, first_name, last_name, phone, ghl_contact_id, lunarpay_customer_id } = body;
+  const { customer_email, first_name, last_name, phone, ghl_contact_id, lunarpay_customer_id, external_id } = body;
 
-  if (!customer_email) return NextResponse.json({ error: 'customer_email is required' }, { status: 400 });
+  // Use provided email, or fall back to a stable placeholder keyed by external_id or name
+  // so customers without an email address can still have a CRM profile.
+  const email = customer_email
+    ? customer_email.toLowerCase()
+    : `no-email-${(external_id || `${first_name || ''}-${last_name || ''}`).toLowerCase().replace(/[^a-z0-9]/g, '-')}@storypay.internal`;
 
   const { data, error } = await supabaseAdmin
     .from('venue_customers')
     .upsert(
       {
         venue_id: venueId,
-        customer_email: customer_email.toLowerCase(),
+        customer_email: email,
         first_name: first_name || '',
         last_name: last_name || '',
         phone: phone || null,

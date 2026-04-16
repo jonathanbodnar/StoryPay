@@ -173,31 +173,53 @@ export default function CustomerDetailPage() {
       setCustomer(cData.customer);
       setProposals(cData.proposals || []);
 
-      const email = cData.customer?.email?.toLowerCase() ?? '';
+      const email      = cData.customer?.email?.toLowerCase() ?? '';
+      const firstName  = cData.customer?.firstName || '';
+      const lastName   = cData.customer?.lastName  || '';
+      const phone      = cData.customer?.phone     || null;
+      // Use the external customer ID as a stable key for customers without email
+      const externalId = String(cData.customer?.id || customerId);
 
-      // Ensure local venue_customer record exists.
-      // Use POST lookup to avoid URL-encoding issues with '@' in email addresses.
+      // ── Ensure a local venue_customer record always exists ─────────────────
+      // Use POST lookup (avoids @ in URL), then create if not found.
       let vc: VenueCustomer | null = null;
+
       if (email) {
+        // Customers with email: look up by email first
         const lookupRes = await fetch('/api/venue-customers/lookup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email }),
         });
         if (lookupRes.ok) vc = await lookupRes.json();
+      }
 
-        if (!vc) {
-          const createRes = await fetch('/api/venue-customers', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              customer_email: email,
-              first_name: cData.customer?.firstName || '',
-              last_name:  cData.customer?.lastName  || '',
-              phone: cData.customer?.phone || null,
-            }),
-          });
-          if (createRes.ok) vc = await createRes.json();
+      if (!vc) {
+        // Either no email, or lookup returned null — create the record
+        const createRes = await fetch('/api/venue-customers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customer_email: email || null,   // API generates placeholder if empty
+            first_name: firstName,
+            last_name:  lastName,
+            phone,
+            external_id: externalId,
+          }),
+        });
+        if (createRes.ok) {
+          vc = await createRes.json();
+        } else {
+          // Last resort: try lookup by generated placeholder email
+          if (!email) {
+            const placeholderEmail = `no-email-${externalId.toLowerCase().replace(/[^a-z0-9]/g, '-')}@storypay.internal`;
+            const retryRes = await fetch('/api/venue-customers/lookup', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: placeholderEmail }),
+            });
+            if (retryRes.ok) vc = await retryRes.json();
+          }
         }
       }
 
@@ -261,22 +283,23 @@ export default function CustomerDetailPage() {
 
   // ── Partner save ────────────────────────────────────────────────────────────
   function startEditPartner() {
-    if (!venueCustomer) return;
+    // Allow opening even if venueCustomer is null — save will attempt to create it
     setPartnerForm({
-      partner_first_name: venueCustomer.partner_first_name || '',
-      partner_last_name:  venueCustomer.partner_last_name  || '',
-      partner_email:      venueCustomer.partner_email      || '',
-      partner_phone:      venueCustomer.partner_phone      || '',
-      referral_source:    venueCustomer.referral_source    || '',
+      partner_first_name: venueCustomer?.partner_first_name || '',
+      partner_last_name:  venueCustomer?.partner_last_name  || '',
+      partner_email:      venueCustomer?.partner_email      || '',
+      partner_phone:      venueCustomer?.partner_phone      || '',
+      referral_source:    venueCustomer?.referral_source    || '',
     });
     setPartnerError('');
     setEditingPartner(true);
   }
 
   async function savePartner() {
-    if (!venueCustomer) return;
     setSavingPartner(true);
     setPartnerError('');
+    // If we still don't have a venue_customer, reload — it should exist now
+    if (!venueCustomer) { await fetchAll(); setSavingPartner(false); return; }
     const res = await fetch(`/api/venue-customers/${venueCustomer.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -295,24 +318,24 @@ export default function CustomerDetailPage() {
 
   // ── Wedding details save ─────────────────────────────────────────────────────
   function startEditWedding() {
-    if (!venueCustomer) return;
+    // Allow opening even if venueCustomer is null — save will create it
     setWeddingForm({
-      wedding_date:      venueCustomer.wedding_date      || '',
-      rehearsal_date:    venueCustomer.rehearsal_date    || '',
-      guest_count:       venueCustomer.guest_count != null ? String(venueCustomer.guest_count) : '',
-      coordinator_name:  venueCustomer.coordinator_name  || '',
-      coordinator_phone: venueCustomer.coordinator_phone || '',
-      ceremony_type:     venueCustomer.ceremony_type     || '',
-      wedding_space_id:  venueCustomer.wedding_space_id  || '',
-      catering_notes:    venueCustomer.catering_notes    || '',
+      wedding_date:      venueCustomer?.wedding_date      || '',
+      rehearsal_date:    venueCustomer?.rehearsal_date    || '',
+      guest_count:       venueCustomer?.guest_count != null ? String(venueCustomer.guest_count) : '',
+      coordinator_name:  venueCustomer?.coordinator_name  || '',
+      coordinator_phone: venueCustomer?.coordinator_phone || '',
+      ceremony_type:     venueCustomer?.ceremony_type     || '',
+      wedding_space_id:  venueCustomer?.wedding_space_id  || '',
+      catering_notes:    venueCustomer?.catering_notes    || '',
     });
     setWeddingError('');
     setEditingWedding(true);
   }
 
   async function saveWedding() {
-    if (!venueCustomer) return;
     setSavingWedding(true);
+    if (!venueCustomer) { await fetchAll(); setSavingWedding(false); return; }
     setWeddingError('');
     const payload = {
       ...weddingForm,
@@ -355,7 +378,12 @@ export default function CustomerDetailPage() {
   // ── Notes ──────────────────────────────────────────────────────────────────
   async function addNote() {
     if (!newNote.trim()) return;
-    if (!venueCustomer) { setNoteError('Customer profile not ready — refresh the page'); return; }
+    if (!venueCustomer) {
+      setNoteError('Setting up profile, please try again in a moment…');
+      await fetchAll();
+      setNoteError('');
+      return;
+    }
     setSavingNote(true);
     setNoteError('');
     const res = await fetch(`/api/venue-customers/${venueCustomer.id}/notes`, {
@@ -387,7 +415,12 @@ export default function CustomerDetailPage() {
   // ── Tasks ──────────────────────────────────────────────────────────────────
   async function addTask() {
     if (!newTask.trim()) return;
-    if (!venueCustomer) { setTaskError('Customer profile not ready — refresh the page'); return; }
+    if (!venueCustomer) {
+      setTaskError('Setting up profile, please try again in a moment…');
+      await fetchAll();
+      setTaskError('');
+      return;
+    }
     setSavingTask(true);
     setTaskError('');
     const res = await fetch(`/api/venue-customers/${venueCustomer.id}/tasks`, {
@@ -428,7 +461,12 @@ export default function CustomerDetailPage() {
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!venueCustomer) { setUploadError('Customer profile not ready — refresh the page'); return; }
+    if (!venueCustomer) {
+      setUploadError('Setting up profile, please try again in a moment…');
+      await fetchAll();
+      setUploadError('');
+      return;
+    }
     setUploading(true);
     setUploadError('');
     const fd = new FormData();
@@ -673,9 +711,7 @@ export default function CustomerDetailPage() {
           <div className="rounded-2xl border border-gray-200 bg-white p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-heading text-base text-gray-900 flex items-center gap-2"><Heart size={15} /> Partner / Second Contact</h2>
-              {venueCustomer && (
-                <button onClick={startEditPartner} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"><Pencil size={11} /> {venueCustomer.partner_first_name ? 'Edit' : 'Add'}</button>
-              )}
+              <button onClick={startEditPartner} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"><Pencil size={11} /> {venueCustomer?.partner_first_name ? 'Edit' : 'Add'}</button>
             </div>
             {editingPartner ? (
               <div className="space-y-3">
@@ -722,8 +758,8 @@ export default function CustomerDetailPage() {
           <div className="rounded-2xl border border-gray-200 bg-white p-5 lg:col-span-2">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-heading text-base text-gray-900 flex items-center gap-2"><Calendar size={15} /> Wedding Details</h2>
-              {venueCustomer && !editingWedding && (
-                <button onClick={startEditWedding} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"><Pencil size={11} /> {(venueCustomer.wedding_date || venueCustomer.guest_count) ? 'Edit' : 'Add'}</button>
+              {!editingWedding && (
+                <button onClick={startEditWedding} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"><Pencil size={11} /> {(venueCustomer?.wedding_date || venueCustomer?.guest_count) ? 'Edit' : 'Add'}</button>
               )}
             </div>
             {editingWedding ? (
