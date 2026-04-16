@@ -25,6 +25,7 @@ const menuItems = [
  { label: 'Ask AI', href: '/dashboard/ai', icon: Sparkles },
  { label: 'Home', href: '/dashboard', icon: LayoutDashboard },
  { label: 'Customers', href: '/dashboard/customers', icon: Users },
+ { label: 'Calendar', href: '/dashboard/calendar', icon: Calendar },
  { label: 'Reports', href: '/dashboard/reports', icon: BarChart2 },
  { label:"What's New", href: '/dashboard/updates', icon: Megaphone },
  { label: 'Help Center', href: '/dashboard/help', icon: BookOpen },

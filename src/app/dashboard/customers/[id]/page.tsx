@@ -1,479 +1,958 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Mail, Phone, MapPin, FileText, Loader2, ExternalLink, Receipt, Pencil, Copy, RefreshCw, RotateCcw, Save, X as XIcon, Check } from 'lucide-react';
+import {
+  ArrowLeft, Mail, Phone, MapPin, FileText, Loader2, ExternalLink,
+  Receipt, Pencil, Copy, RefreshCw, RotateCcw, Save, X as XIcon,
+  Plus, Check, Trash2, Upload, AlertCircle, Calendar, ClipboardList,
+  FileCheck, Activity, User, Heart, ChevronDown, ChevronUp, Info,
+} from 'lucide-react';
 import RefundModal from '@/components/RefundModal';
-import { formatCents, formatDate, getStatusColor, classNames } from '@/lib/utils';
+import { formatCents, formatDate, formatDateTime, getStatusColor, classNames } from '@/lib/utils';
 
+// ── Types ─────────────────────────────────────────────────────────────────────
 interface Customer {
- id: number;
- name: string;
- firstName: string;
- lastName: string;
- email: string;
- phone: string;
- address: string;
- city: string;
- state: string;
- zip: string;
+  id: number; name: string; firstName: string; lastName: string;
+  email: string; phone: string; address: string; city: string; state: string; zip: string;
+}
+
+interface VenueCustomer {
+  id: string; customer_email: string; first_name: string; last_name: string;
+  phone: string | null;
+  partner_first_name: string | null; partner_last_name: string | null;
+  partner_email: string | null; partner_phone: string | null;
+  wedding_date: string | null; wedding_space_id: string | null;
+  ceremony_type: string | null; guest_count: number | null;
+  rehearsal_date: string | null; coordinator_name: string | null;
+  coordinator_phone: string | null; catering_notes: string | null;
+  referral_source: string | null; pipeline_stage: string;
+  venue_spaces: { id: string; name: string; color: string } | null;
 }
 
 interface Proposal {
- id: string;
- customer_name: string;
- customer_email: string;
- status: string;
- price: number;
- payment_type: string;
- payment_config: Record<string, unknown> | null;
- public_token: string;
- charge_id?: string | null;
- sent_at: string | null;
- signed_at: string | null;
- paid_at: string | null;
- created_at: string;
+  id: string; customer_name: string; customer_email: string; status: string;
+  price: number; payment_type: string; payment_config: Record<string, unknown> | null;
+  public_token: string; charge_id?: string | null;
+  sent_at: string | null; signed_at: string | null; paid_at: string | null; created_at: string;
 }
 
+interface Note { id: string; content: string; author_name: string | null; created_at: string; }
+interface Task { id: string; title: string; due_date: string | null; completed_at: string | null; created_at: string; }
+interface FileRow {
+  id: string; filename: string; file_type: string; file_status: string;
+  file_size: number | null; uploaded_by: string | null; created_at: string; url: string | null;
+}
+interface ActivityEntry {
+  id: string; activity_type: string; title: string; description: string | null; created_at: string;
+}
+
+const PIPELINE_STAGES = [
+  { value: 'inquiry',          label: 'Inquiry' },
+  { value: 'tour_scheduled',   label: 'Tour Scheduled' },
+  { value: 'proposal_sent',    label: 'Proposal Sent' },
+  { value: 'booked',           label: 'Booked' },
+  { value: 'event_complete',   label: 'Event Complete' },
+  { value: 'post_event',       label: 'Post-Event Follow-up' },
+];
+
+const REFERRAL_SOURCES = ['Instagram','Google','Wedding Wire','The Knot','Referral','Venue Website','Facebook','Other'];
+const CEREMONY_TYPES   = [
+  { value: 'ceremony_only',       label: 'Ceremony Only' },
+  { value: 'reception_only',      label: 'Reception Only' },
+  { value: 'ceremony_reception',  label: 'Ceremony & Reception' },
+];
+
+const FILE_TYPES   = ['contract','floor_plan','vendor_agreement','insurance','photo','other'];
+const FILE_STATUSES = ['pending','received','approved'];
+
+const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
+  proposal_sent:     <FileText size={13} />,
+  proposal_viewed:   <ExternalLink size={13} />,
+  proposal_signed:   <FileCheck size={13} />,
+  payment_made:      <Receipt size={13} />,
+  installment_paid:  <Receipt size={13} />,
+  note_added:        <ClipboardList size={13} />,
+  file_uploaded:     <Upload size={13} />,
+  task_created:      <Plus size={13} />,
+  task_completed:    <Check size={13} />,
+  event_created:     <Calendar size={13} />,
+  stage_changed:     <Activity size={13} />,
+};
+
+const STAGE_COLORS: Record<string, string> = {
+  inquiry:        'bg-gray-100 text-gray-700',
+  tour_scheduled: 'bg-blue-100 text-blue-700',
+  proposal_sent:  'bg-yellow-100 text-yellow-700',
+  booked:         'bg-emerald-100 text-emerald-700',
+  event_complete: 'bg-purple-100 text-purple-700',
+  post_event:     'bg-pink-100 text-pink-700',
+};
+
+type Tab = 'overview' | 'timeline' | 'payments' | 'tasks' | 'documents';
+
+// ── Main component ─────────────────────────────────────────────────────────────
 export default function CustomerDetailPage() {
- const params = useParams();
- const router = useRouter();
- const customerId = params.id as string;
+  const params     = useParams();
+  const router     = useRouter();
+  const customerId = params.id as string;
 
- const [customer, setCustomer] = useState<Customer | null>(null);
- const [proposals, setProposals] = useState<Proposal[]>([]);
- const [loading, setLoading] = useState(true);
- const [error, setError] = useState('');
- const [copiedId, setCopiedId] = useState<string | null>(null);
- const [resendingId, setResendingId] = useState<string | null>(null);
- const [refundTarget, setRefundTarget] = useState<Proposal | null>(null);
- const [proposalSearch, setProposalSearch] = useState('');
- const [editing, setEditing] = useState(false);
- const [editForm, setEditForm] = useState({ firstName: '', lastName: '', email: '', phone: '', address: '', city: '', state: '', zip: '' });
- const [saving, setSaving] = useState(false);
- const [saveMsg, setSaveMsg] = useState('');
+  // Core data
+  const [customer,      setCustomer]      = useState<Customer | null>(null);
+  const [venueCustomer, setVenueCustomer] = useState<VenueCustomer | null>(null);
+  const [proposals,     setProposals]     = useState<Proposal[]>([]);
+  const [notes,         setNotes]         = useState<Note[]>([]);
+  const [tasks,         setTasks]         = useState<Task[]>([]);
+  const [files,         setFiles]         = useState<FileRow[]>([]);
+  const [activity,      setActivity]      = useState<ActivityEntry[]>([]);
+  const [spaces,        setSpaces]        = useState<{ id: string; name: string; color: string }[]>([]);
 
- useEffect(() => {
- async function fetchData() {
- try {
- const res = await fetch(`/api/customers/${customerId}`);
- if (res.ok) {
- const data = await res.json();
- setCustomer(data.customer);
- setProposals(data.proposals || []);
- } else {
- setError('Customer not found');
- }
- } catch {
- setError('Failed to load customer');
- } finally {
- setLoading(false);
- }
- }
- fetchData();
- }, [customerId]);
+  const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState('');
+  const [activeTab, setActiveTab] = useState<Tab>('overview');
 
- function copyLink(p: Proposal) {
- const url = `${window.location.origin}/proposal/${p.public_token}`;
- navigator.clipboard.writeText(url);
- setCopiedId(p.id);
- setTimeout(() => setCopiedId(null), 2000);
- }
+  // Edit modals
+  const [editingContact, setEditingContact] = useState(false);
+  const [editForm, setEditForm] = useState({ firstName: '', lastName: '', email: '', phone: '', address: '', city: '', state: '', zip: '' });
+  const [savingContact, setSavingContact] = useState(false);
 
- async function handleResend(p: Proposal) {
- setResendingId(p.id);
- try {
- const res = await fetch(`/api/proposals/${p.id}`, {
- method: 'PATCH',
- headers: { 'Content-Type': 'application/json' },
- body: JSON.stringify({ sendNow: true }),
- });
- if (res.ok) {
- alert('Proposal resent successfully.');
- } else {
- const data = await res.json();
- alert(data.error || 'Failed to resend');
- }
- } catch {
- alert('Failed to resend proposal');
- } finally {
- setResendingId(null);
- }
- }
+  const [editingWedding, setEditingWedding] = useState(false);
+  const [weddingForm, setWeddingForm] = useState<Partial<VenueCustomer>>({});
+  const [savingWedding, setSavingWedding] = useState(false);
 
- function startEdit() {
- if (!customer) return;
- setEditForm({
- firstName: customer.firstName || customer.name?.split(' ')[0] || '',
- lastName: customer.lastName || customer.name?.split(' ').slice(1).join(' ') || '',
- email: customer.email || '',
- phone: customer.phone || '',
- address: customer.address || '',
- city: customer.city || '',
- state: customer.state || '',
- zip: customer.zip || '',
- });
- setEditing(true);
- }
+  // Proposals
+  const [proposalSearch, setProposalSearch] = useState('');
+  const [copiedId,       setCopiedId]       = useState<string | null>(null);
+  const [resendingId,    setResendingId]     = useState<string | null>(null);
+  const [refundTarget,   setRefundTarget]    = useState<Proposal | null>(null);
 
- async function saveEdit() {
- if (!customer) return;
- setSaving(true);
- try {
- const res = await fetch(`/api/customers/${customerId}`, {
- method: 'PATCH',
- headers: { 'Content-Type': 'application/json' },
- body: JSON.stringify({
- firstName: editForm.firstName.trim(),
- lastName: editForm.lastName.trim(),
- email: editForm.email.trim(),
- phone: editForm.phone.trim(),
- address: editForm.address.trim(),
- city: editForm.city.trim(),
- state: editForm.state.trim(),
- zip: editForm.zip.trim(),
- }),
- });
- if (res.ok) {
- const updated = await res.json();
- setCustomer(prev => prev ? { ...prev, ...updated.customer } : prev);
- setEditing(false);
- setSaveMsg('Saved');
- setTimeout(() => setSaveMsg(''), 2500);
- } else {
- const d = await res.json();
- setSaveMsg(d.error || 'Failed to save');
- }
- } catch {
- setSaveMsg('Network error');
- } finally {
- setSaving(false);
- }
- }
+  // Notes
+  const [newNote, setNewNote] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
 
- if (loading) {
- return (
- <div className="flex items-center justify-center py-20">
- <Loader2 className="animate-spin text-gray-400"size={24} />
- </div>
- );
- }
+  // Tasks
+  const [newTask,      setNewTask]      = useState('');
+  const [newTaskDue,   setNewTaskDue]   = useState('');
+  const [savingTask,   setSavingTask]   = useState(false);
+  const [showCompleted, setShowCompleted] = useState(false);
 
- if (error || !customer) {
- return (
- <div className="py-20 text-center">
- <p className="text-gray-500">{error || 'Customer not found'}</p>
- <button onClick={() => router.back()} className="mt-4 text-sm text-brand-900 hover:underline">Go back</button>
- </div>
- );
- }
+  // Files
+  const [uploading, setUploading] = useState(false);
+  const [uploadType, setUploadType] = useState('other');
 
- const paidProposals = proposals.filter((p) => p.status === 'paid');
- const totalPaid = paidProposals.reduce((sum, p) => sum + (p.price || 0), 0);
- const pendingProposals = proposals.filter((p) => p.status === 'sent' || p.status === 'opened' || p.status === 'signed');
- const totalPending = pendingProposals.reduce((sum, p) => sum + (p.price || 0), 0);
+  // ── Fetch all data ─────────────────────────────────────────────────────────
+  const fetchAll = useCallback(async () => {
+    try {
+      // Legacy customer from GHL/LunarPay
+      const cRes = await fetch(`/api/customers/${customerId}`);
+      if (!cRes.ok) { setError('Customer not found'); setLoading(false); return; }
+      const cData = await cRes.json();
+      setCustomer(cData.customer);
+      setProposals(cData.proposals || []);
 
- const installmentProposals = proposals.filter((p) => p.payment_type === 'installment' && p.payment_config);
+      const email = cData.customer?.email?.toLowerCase() ?? '';
 
- return (
- <div>
- <button
- onClick={() => router.push('/dashboard/customers')}
- className="flex items-center gap-2 text-sm text-gray-500 hover:text-brand-900 transition-colors mb-6"
- >
- <ArrowLeft size={16} />
- Back to Customers
- </button>
+      // Ensure local venue_customer record exists
+      let vcRes = await fetch(`/api/venue-customers?search=${encodeURIComponent(email)}`);
+      let vcList: VenueCustomer[] = vcRes.ok ? await vcRes.json() : [];
+      let vc = vcList.find(v => v.customer_email.toLowerCase() === email) ?? null;
 
- {/* Customer header */}
- <div className="rounded-2xl border border-gray-200 bg-white mb-6 overflow-hidden">
- <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
- <div className="flex items-center gap-3">
- <div className="flex h-11 w-11 items-center justify-center rounded-full text-lg font-semibold text-white flex-shrink-0"style={{ backgroundColor: '#1b1b1b' }}>
- {customer.name?.charAt(0)?.toUpperCase() || '?'}
- </div>
- <div>
- <h1 className="font-heading text-xl text-gray-900">{customer.name}</h1>
- {!editing && (
- <div className="flex flex-wrap items-center gap-3 mt-0.5">
- {customer.email && <span className="flex items-center gap-1 text-sm text-gray-500"><Mail size={13} />{customer.email}</span>}
- {customer.phone && <span className="flex items-center gap-1 text-sm text-gray-500"><Phone size={13} />{customer.phone}</span>}
- {(customer.address || customer.city) && <span className="flex items-center gap-1 text-sm text-gray-400"><MapPin size={13} />{[customer.address, customer.city, customer.state, customer.zip].filter(Boolean).join(', ')}</span>}
- </div>
- )}
- </div>
- </div>
- <div className="flex items-center gap-2">
- {saveMsg && <span className="text-xs text-emerald-600 font-medium">{saveMsg}</span>}
- {editing ? (
- <>
- <button onClick={() => setEditing(false)} className="flex items-center gap-1.5 rounded-2xl border border-gray-200 px-3 py-2 text-sm text-gray-500 hover:bg-gray-50 transition-colors">
- <XIcon size={13} /> Cancel
- </button>
- <button onClick={saveEdit} disabled={saving} className="flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50 transition-all"style={{ backgroundColor: '#1b1b1b' }}>
- {saving ? <Loader2 size={13} className="animate-spin"/> : <Save size={13} />} Save
- </button>
- </>
- ) : (
- <button onClick={startEdit} className="flex items-center gap-1.5 rounded-2xl border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
- <Pencil size={13} /> Edit
- </button>
- )}
- </div>
- </div>
+      if (!vc && email) {
+        // Auto-create local record
+        const createRes = await fetch('/api/venue-customers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customer_email: email,
+            first_name: cData.customer?.firstName || '',
+            last_name:  cData.customer?.lastName  || '',
+            phone: cData.customer?.phone || null,
+          }),
+        });
+        if (createRes.ok) vc = await createRes.json();
+      }
 
- {/* Inline edit form */}
- {editing && (
- <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
- {[
- { label: 'First Name', key: 'firstName', type: 'text', placeholder: 'Jane' },
- { label: 'Last Name', key: 'lastName', type: 'text', placeholder: 'Smith' },
- { label: 'Email', key: 'email', type: 'email', placeholder: 'jane@example.com' },
- { label: 'Phone', key: 'phone', type: 'tel', placeholder: '(555) 000-0000' },
- { label: 'Address', key: 'address', type: 'text', placeholder: '123 Main St', colSpan: true },
- { label: 'City', key: 'city', type: 'text', placeholder: 'Columbus' },
- { label: 'State', key: 'state', type: 'text', placeholder: 'OH' },
- { label: 'ZIP', key: 'zip', type: 'text', placeholder: '43215' },
- ].map(f => (
- <div key={f.key} className={f.colSpan ? 'sm:col-span-2' : ''}>
- <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{f.label}</label>
- <input
- type={f.type}
- value={editForm[f.key as keyof typeof editForm]}
- onChange={e => setEditForm(p => ({ ...p, [f.key]: e.target.value }))}
- placeholder={f.placeholder}
- style={{ fontSize: 16 }}
- className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:bg-white focus:outline-none transition-colors"
- />
- </div>
- ))}
- </div>
- )}
- </div>
+      setVenueCustomer(vc);
 
- {/* Action buttons */}
- <div className="flex flex-wrap items-center gap-2 mb-8">
- <div className="flex items-center gap-3">
- <Link
- href={`/dashboard/invoices/new?email=${encodeURIComponent(customer.email || '')}&name=${encodeURIComponent(customer.name || '')}`}
- className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
- >
- <Receipt size={16} />
- Create Invoice
- </Link>
- <Link
- href={`/dashboard/proposals/new?email=${encodeURIComponent(customer.email || '')}&name=${encodeURIComponent(customer.name || '')}`}
- className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-colors"
- style={{ backgroundColor: '#1b1b1b' }}
- onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#333333')}
- onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1b1b1b')}
- >
- <FileText size={16} />
- Create Proposal
- </Link>
- </div>
- </div>
+      // Load spaces
+      const spRes = await fetch('/api/spaces');
+      if (spRes.ok) setSpaces(await spRes.json());
 
- {/* Summary cards */}
- <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
- <div className="rounded-2xl border border-gray-200 p-5">
- <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Proposals</p>
- <p className="mt-1 text-2xl font-bold text-gray-900">{proposals.length}</p>
- </div>
- <div className="rounded-2xl border border-gray-200 p-5">
- <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Total Paid</p>
- <p className="mt-1 text-2xl font-bold text-emerald-600">{formatCents(totalPaid)}</p>
- </div>
- <div className="rounded-2xl border border-gray-200 p-5">
- <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Pending</p>
- <p className="mt-1 text-2xl font-bold text-amber-600">{formatCents(totalPending)}</p>
- </div>
- <div className="rounded-2xl border border-gray-200 p-5">
- <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Payment Plans</p>
- <p className="mt-1 text-2xl font-bold text-gray-900">{installmentProposals.length}</p>
- </div>
- </div>
+      // Load CRM data if we have a vc record
+      if (vc?.id) {
+        const [notesRes, tasksRes, filesRes, actRes] = await Promise.all([
+          fetch(`/api/venue-customers/${vc.id}/notes`),
+          fetch(`/api/venue-customers/${vc.id}/tasks`),
+          fetch(`/api/venue-customers/${vc.id}/files`),
+          fetch(`/api/venue-customers/${vc.id}/activity`),
+        ]);
+        if (notesRes.ok) setNotes(await notesRes.json());
+        if (tasksRes.ok) setTasks(await tasksRes.json());
+        if (filesRes.ok) setFiles(await filesRes.json());
+        if (actRes.ok)   setActivity(await actRes.json());
+      }
+    } catch {
+      setError('Failed to load customer');
+    } finally {
+      setLoading(false);
+    }
+  }, [customerId]);
 
- {/* Proposals list */}
- <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
- <h2 className="font-heading text-lg text-gray-900">Proposals & Invoices</h2>
- <div className="flex items-center gap-3">
- <Link href="/dashboard/payments/proposals"className="text-sm text-gray-500 hover:text-gray-900 transition-colors underline">
- View All Proposals
- </Link>
- <div className="relative">
- <input
- type="text"
- value={proposalSearch}
- onChange={e => setProposalSearch(e.target.value)}
- placeholder="Search proposals..."
- className="rounded-2xl border border-gray-200 bg-white pl-3.5 pr-8 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none transition-colors w-48"
- style={{ fontSize: 16 }}
- />
- {proposalSearch && (
- <button onClick={() => setProposalSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
- <span className="text-xs">×</span>
- </button>
- )}
- </div>
- </div>
- </div>
- <div className="overflow-x-auto rounded-2xl border border-gray-200">
- <table className="w-full text-left text-sm">
- <thead>
- <tr className="border-b border-gray-200 bg-gray-50/60">
- <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Status</th>
- <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Amount</th>
- <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Type</th>
- <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Sent</th>
- <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Signed</th>
- <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Paid</th>
- <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Actions</th>
- </tr>
- </thead>
- <tbody className="divide-y divide-gray-200">
- {proposals.length === 0 ? (
- <tr><td colSpan={7} className="px-5 py-10 text-center text-gray-400">No proposals for this customer yet</td></tr>
- ) : (() => {
- const filtered = [...proposals]
- .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
- .filter(p => !proposalSearch || [p.status, p.payment_type, String(p.price/100), p.sent_at??'', p.paid_at??'', p.created_at].some(v => v.toLowerCase().includes(proposalSearch.toLowerCase())));
- if (filtered.length === 0) return <tr><td colSpan={7} className="px-5 py-10 text-center text-gray-400">No proposals match your search</td></tr>;
- return filtered.map((p) => {
- const color = getStatusColor(p.status);
- return (
- <tr key={p.id} className="hover:bg-gray-50/50 transition-colors group">
- <td className="px-5 py-3.5">
- <span className={classNames('inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize', color.bg, color.text)}>
- {p.status}
- </span>
- </td>
- <td className="px-5 py-3.5 text-gray-700">{formatCents(p.price)}</td>
- <td className="px-5 py-3.5 text-gray-700 capitalize">{p.payment_type}</td>
- <td className="px-5 py-3.5 text-gray-500">{p.sent_at ? formatDate(p.sent_at) : '---'}</td>
- <td className="px-5 py-3.5 text-gray-500">{p.signed_at ? formatDate(p.signed_at) : '---'}</td>
- <td className="px-5 py-3.5 text-gray-500">{p.paid_at ? formatDate(p.paid_at) : '---'}</td>
- <td className="px-5 py-3.5">
- <div className="flex items-center gap-1">
- <Link
- href={`/dashboard/proposals/${p.id}/edit`}
- className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
- title="View/Edit"
- >
- <Pencil size={13} />
- </Link>
- {p.status !== 'paid' && (
- <button
- onClick={() => handleResend(p)}
- disabled={resendingId === p.id}
- className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100 disabled:opacity-50"
- title="Resend"
- >
- <RefreshCw size={13} className={resendingId === p.id ? 'animate-spin' : ''} />
- </button>
- )}
- <button
- onClick={() => copyLink(p)}
- className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
- title="Copy Link"
- >
- <Copy size={13} />
- {copiedId === p.id && <span className="text-[10px]">Copied!</span>}
- </button>
- <Link
- href={`/proposal/${p.public_token}`}
- target="_blank"
- className="inline-flex items-center rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
- title="View"
- >
- <ExternalLink size={14} />
- </Link>
- {p.status === 'paid' && (
- <Link
- href={`/invoice/${p.id}`}
- target="_blank"
- className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
- title="Invoice"
- >
- <Receipt size={13} />
- </Link>
- )}
- {(p.status === 'paid') && (
- <button
- onClick={() => setRefundTarget(p)}
- className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-50"
- title="Refund"
- >
- <RotateCcw size={13} />
- </button>
- )}
- </div>
- </td>
- </tr>
- );
- });
- })()}
- </tbody>
- </table>
- </div>
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
- {/* Payment schedules */}
- {installmentProposals.length > 0 && (
- <div className="mt-8">
- <h2 className="font-heading text-lg text-gray-900 mb-4">Payment Schedules</h2>
- <div className="space-y-4">
- {installmentProposals.map((p) => {
- const config = p.payment_config as { installments?: { amount: number; date: string }[] } | null;
- const installments = config?.installments || [];
- return (
- <div key={p.id} className="rounded-2xl border border-gray-200 p-5">
- <div className="flex items-center justify-between mb-3">
- <div>
- <p className="text-sm font-medium text-gray-900">Installment Plan - {formatCents(p.price)}</p>
- <p className="text-xs text-gray-400">{installments.length} payments</p>
- </div>
- <span className={classNames('inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize', getStatusColor(p.status).bg, getStatusColor(p.status).text)}>
- {p.status}
- </span>
- </div>
- <div className="space-y-2">
- {installments.map((inst, i) => (
- <div key={i} className="flex items-center justify-between text-sm py-1.5 border-b border-gray-50 last:border-0">
- <span className="text-gray-500">Payment {i + 1}</span>
- <div className="flex items-center gap-4">
- <span className="text-gray-700">{formatCents(inst.amount)}</span>
- <span className="text-gray-400 text-xs">{inst.date ? formatDate(inst.date) : '---'}</span>
- {i === 0 && p.status === 'paid' && (
- <span className="inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">Paid</span>
- )}
- </div>
- </div>
- ))}
- </div>
- </div>
- );
- })}
- </div>
- </div>
- )}
+  // ── Contact save ────────────────────────────────────────────────────────────
+  function startEditContact() {
+    if (!customer) return;
+    setEditForm({
+      firstName: customer.firstName || '', lastName: customer.lastName || '',
+      email: customer.email || '', phone: customer.phone || '',
+      address: customer.address || '', city: customer.city || '',
+      state: customer.state || '', zip: customer.zip || '',
+    });
+    setEditingContact(true);
+  }
 
- {/* Refund Modal */}
- {refundTarget && (
- <RefundModal
- proposalId={refundTarget.id}
- chargeId={refundTarget.charge_id}
- customerName={refundTarget.customer_name || customer?.name || 'Customer'}
- originalAmount={refundTarget.price}
- onSuccess={(fullRefund) => {
- if (fullRefund) {
- setProposals(prev => prev.map(p => p.id === refundTarget.id ? { ...p, status: 'refunded' } : p));
- }
- setRefundTarget(null);
- }}
- onClose={() => setRefundTarget(null)}
- />
- )}
- </div>
- );
+  async function saveContact() {
+    if (!customer) return;
+    setSavingContact(true);
+    const res = await fetch(`/api/customers/${customerId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(editForm),
+    });
+    if (res.ok) {
+      const d = await res.json();
+      setCustomer(p => p ? { ...p, ...d.customer } : p);
+      setEditingContact(false);
+    }
+    setSavingContact(false);
+  }
+
+  // ── Wedding details save ─────────────────────────────────────────────────────
+  async function saveWedding() {
+    if (!venueCustomer) return;
+    setSavingWedding(true);
+    const res = await fetch(`/api/venue-customers/${venueCustomer.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(weddingForm),
+    });
+    if (res.ok) {
+      const d = await res.json();
+      setVenueCustomer(d);
+      setEditingWedding(false);
+    }
+    setSavingWedding(false);
+  }
+
+  // ── Pipeline stage update ────────────────────────────────────────────────────
+  async function updateStage(stage: string) {
+    if (!venueCustomer) return;
+    const res = await fetch(`/api/venue-customers/${venueCustomer.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pipeline_stage: stage }),
+    });
+    if (res.ok) {
+      const d = await res.json();
+      setVenueCustomer(d);
+    }
+  }
+
+  // ── Notes ──────────────────────────────────────────────────────────────────
+  async function addNote() {
+    if (!newNote.trim() || !venueCustomer) return;
+    setSavingNote(true);
+    const res = await fetch(`/api/venue-customers/${venueCustomer.id}/notes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: newNote.trim() }),
+    });
+    if (res.ok) {
+      const n = await res.json();
+      setNotes(p => [n, ...p]);
+      setNewNote('');
+      setActivity(p => [{ id: n.id + '-act', activity_type: 'note_added', title: 'Note added', description: newNote.trim().slice(0, 80), created_at: new Date().toISOString() }, ...p]);
+    }
+    setSavingNote(false);
+  }
+
+  async function deleteNote(noteId: string) {
+    if (!venueCustomer) return;
+    await fetch(`/api/venue-customers/${venueCustomer.id}/notes?noteId=${noteId}`, { method: 'DELETE' });
+    setNotes(p => p.filter(n => n.id !== noteId));
+  }
+
+  // ── Tasks ──────────────────────────────────────────────────────────────────
+  async function addTask() {
+    if (!newTask.trim() || !venueCustomer) return;
+    setSavingTask(true);
+    const res = await fetch(`/api/venue-customers/${venueCustomer.id}/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: newTask.trim(), due_date: newTaskDue || null }),
+    });
+    if (res.ok) {
+      const t = await res.json();
+      setTasks(p => [...p, t]);
+      setNewTask('');
+      setNewTaskDue('');
+    }
+    setSavingTask(false);
+  }
+
+  async function toggleTask(task: Task) {
+    if (!venueCustomer) return;
+    const completed_at = task.completed_at ? null : new Date().toISOString();
+    const res = await fetch(`/api/venue-customers/${venueCustomer.id}/tasks/${task.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ completed_at }),
+    });
+    if (res.ok) {
+      const t = await res.json();
+      setTasks(p => p.map(x => x.id === t.id ? t : x));
+    }
+  }
+
+  async function deleteTask(taskId: string) {
+    if (!venueCustomer) return;
+    await fetch(`/api/venue-customers/${venueCustomer.id}/tasks/${taskId}`, { method: 'DELETE' });
+    setTasks(p => p.filter(t => t.id !== taskId));
+  }
+
+  // ── Files ──────────────────────────────────────────────────────────────────
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !venueCustomer) return;
+    setUploading(true);
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('file_type', uploadType);
+    const res = await fetch(`/api/venue-customers/${venueCustomer.id}/files`, { method: 'POST', body: fd });
+    if (res.ok) {
+      const f = await res.json();
+      setFiles(p => [f, ...p]);
+    }
+    e.target.value = '';
+    setUploading(false);
+  }
+
+  async function updateFileStatus(fileId: string, file_status: string) {
+    if (!venueCustomer) return;
+    const res = await fetch(`/api/venue-customers/${venueCustomer.id}/files`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileId, file_status }),
+    });
+    if (res.ok) {
+      const f = await res.json();
+      setFiles(p => p.map(x => x.id === f.id ? { ...x, ...f } : x));
+    }
+  }
+
+  async function deleteFile(fileId: string) {
+    if (!venueCustomer) return;
+    await fetch(`/api/venue-customers/${venueCustomer.id}/files?fileId=${fileId}`, { method: 'DELETE' });
+    setFiles(p => p.filter(f => f.id !== fileId));
+  }
+
+  // ── Proposal helpers ──────────────────────────────────────────────────────
+  function copyLink(p: Proposal) {
+    navigator.clipboard.writeText(`${window.location.origin}/proposal/${p.public_token}`);
+    setCopiedId(p.id);
+    setTimeout(() => setCopiedId(null), 2000);
+  }
+
+  async function handleResend(p: Proposal) {
+    setResendingId(p.id);
+    const res = await fetch(`/api/proposals/${p.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sendNow: true }),
+    });
+    if (res.ok) alert('Proposal resent successfully.');
+    else { const d = await res.json(); alert(d.error || 'Failed to resend'); }
+    setResendingId(null);
+  }
+
+  // ── Derived ───────────────────────────────────────────────────────────────
+  const paidProposals    = proposals.filter(p => p.status === 'paid');
+  const totalPaid        = paidProposals.reduce((s, p) => s + (p.price || 0), 0);
+  const pendingProposals = proposals.filter(p => ['sent','opened','signed'].includes(p.status));
+  const totalPending     = pendingProposals.reduce((s, p) => s + (p.price || 0), 0);
+  const installmentProps = proposals.filter(p => p.payment_type === 'installment' && p.payment_config);
+
+  const openTasks      = tasks.filter(t => !t.completed_at);
+  const completedTasks = tasks.filter(t => !!t.completed_at);
+
+  const FILE_STATUS_COLORS: Record<string, string> = {
+    pending:  'bg-yellow-100 text-yellow-700',
+    received: 'bg-blue-100 text-blue-700',
+    approved: 'bg-emerald-100 text-emerald-700',
+  };
+
+  if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="animate-spin text-gray-400" size={24} /></div>;
+  if (error || !customer) return (
+    <div className="py-20 text-center">
+      <p className="text-gray-500">{error || 'Customer not found'}</p>
+      <button onClick={() => router.back()} className="mt-4 text-sm text-blue-600 hover:underline">Go back</button>
+    </div>
+  );
+
+  const stageInfo = PIPELINE_STAGES.find(s => s.value === (venueCustomer?.pipeline_stage ?? 'inquiry'));
+
+  return (
+    <div>
+      {/* Back */}
+      <button onClick={() => router.push('/dashboard/customers')}
+        className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors mb-6">
+        <ArrowLeft size={16} /> Back to Customers
+      </button>
+
+      {/* ── Header card ── */}
+      <div className="rounded-2xl border border-gray-200 bg-white mb-6 overflow-hidden">
+        <div className="flex flex-wrap items-start justify-between gap-4 px-5 py-4 border-b border-gray-200">
+          <div className="flex items-center gap-3">
+            <div className="h-12 w-12 rounded-full flex items-center justify-center text-lg font-semibold text-white flex-shrink-0"
+              style={{ backgroundColor: '#1b1b1b' }}>
+              {customer.name?.charAt(0)?.toUpperCase() || '?'}
+            </div>
+            <div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <h1 className="font-heading text-xl text-gray-900">{customer.name}</h1>
+                {venueCustomer && (
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${STAGE_COLORS[venueCustomer.pipeline_stage] ?? 'bg-gray-100 text-gray-700'}`}>
+                    {stageInfo?.label ?? venueCustomer.pipeline_stage}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-3 mt-0.5">
+                {customer.email && <span className="flex items-center gap-1 text-sm text-gray-500"><Mail size={13} />{customer.email}</span>}
+                {customer.phone && <span className="flex items-center gap-1 text-sm text-gray-500"><Phone size={13} />{customer.phone}</span>}
+                {venueCustomer?.referral_source && <span className="text-xs text-gray-400 border border-gray-200 rounded-full px-2 py-0.5">via {venueCustomer.referral_source}</span>}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={startEditContact}
+              className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+              <Pencil size={13} /> Edit
+            </button>
+            <Link href={`/dashboard/payments/new?email=${encodeURIComponent(customer.email || '')}&name=${encodeURIComponent(customer.name || '')}`}
+              className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition-colors"
+              style={{ backgroundColor: '#1b1b1b' }}>
+              <Plus size={14} /> New Proposal
+            </Link>
+          </div>
+        </div>
+
+        {/* Pipeline stage selector */}
+        {venueCustomer && (
+          <div className="px-5 py-3 flex flex-wrap items-center gap-2 border-b border-gray-100">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mr-1">Stage:</span>
+            {PIPELINE_STAGES.map(s => (
+              <button key={s.value} onClick={() => updateStage(s.value)}
+                className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${venueCustomer.pipeline_stage === s.value ? 'border-transparent ' + STAGE_COLORS[s.value] : 'border-gray-200 text-gray-500 hover:border-gray-400'}`}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Summary KPIs */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y divide-gray-100">
+          {[
+            { label: 'Proposals', value: proposals.length, color: 'text-gray-900' },
+            { label: 'Total Paid', value: formatCents(totalPaid), color: 'text-emerald-600' },
+            { label: 'Pending', value: formatCents(totalPending), color: 'text-amber-600' },
+            { label: 'Open Tasks', value: openTasks.length, color: openTasks.length > 0 ? 'text-orange-600' : 'text-gray-900' },
+          ].map(kpi => (
+            <div key={kpi.label} className="px-5 py-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{kpi.label}</p>
+              <p className={`mt-1 text-xl font-bold ${kpi.color}`}>{kpi.value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Tabs ── */}
+      <div className="flex gap-1 mb-6 border-b border-gray-200">
+        {([
+          { id: 'overview',  label: 'Overview',  icon: User },
+          { id: 'timeline',  label: 'Activity',  icon: Activity },
+          { id: 'payments',  label: 'Payments',  icon: Receipt },
+          { id: 'tasks',     label: `Tasks${openTasks.length > 0 ? ` (${openTasks.length})` : ''}`, icon: ClipboardList },
+          { id: 'documents', label: `Documents${files.length > 0 ? ` (${files.length})` : ''}`, icon: FileCheck },
+        ] as { id: Tab; label: string; icon: React.ComponentType<{ size?: number }> }[]).map(tab => {
+          const Icon = tab.icon;
+          return (
+            <button key={tab.id} onClick={() => setActiveTab(tab.id as Tab)}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${activeTab === tab.id ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+              <Icon size={14} />{tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── OVERVIEW TAB ── */}
+      {activeTab === 'overview' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Contact info */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-heading text-base text-gray-900 flex items-center gap-2"><User size={15} /> Contact Info</h2>
+              <button onClick={startEditContact} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"><Pencil size={11} /> Edit</button>
+            </div>
+            {editingContact ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  {[{k:'firstName',l:'First Name'},{k:'lastName',l:'Last Name'}].map(f => (
+                    <div key={f.k}>
+                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{f.l}</label>
+                      <input value={editForm[f.k as keyof typeof editForm]} onChange={e => setEditForm(p => ({...p,[f.k]:e.target.value}))}
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
+                    </div>
+                  ))}
+                </div>
+                {[{k:'email',l:'Email',t:'email'},{k:'phone',l:'Phone',t:'tel'}].map(f => (
+                  <div key={f.k}>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{f.l}</label>
+                    <input type={f.t} value={editForm[f.k as keyof typeof editForm]} onChange={e => setEditForm(p => ({...p,[f.k]:e.target.value}))}
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
+                  </div>
+                ))}
+                <div className="flex gap-2 pt-1">
+                  <button onClick={() => setEditingContact(false)} className="flex-1 rounded-xl border border-gray-200 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
+                  <button onClick={saveContact} disabled={savingContact} className="flex-1 rounded-xl py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50" style={{backgroundColor:'#1b1b1b'}}>
+                    {savingContact ? 'Saving…' : 'Save'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2 text-sm">
+                {customer.email && <div className="flex items-center gap-2 text-gray-700"><Mail size={13} className="text-gray-400 flex-shrink-0" />{customer.email}</div>}
+                {customer.phone && <div className="flex items-center gap-2 text-gray-700"><Phone size={13} className="text-gray-400 flex-shrink-0" />{customer.phone}</div>}
+                {(customer.address || customer.city) && <div className="flex items-center gap-2 text-gray-700"><MapPin size={13} className="text-gray-400 flex-shrink-0" />{[customer.address, customer.city, customer.state, customer.zip].filter(Boolean).join(', ')}</div>}
+                {!customer.email && !customer.phone && <p className="text-gray-400 text-xs">No contact info</p>}
+              </div>
+            )}
+          </div>
+
+          {/* Partner info */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-heading text-base text-gray-900 flex items-center gap-2"><Heart size={15} /> Partner / Second Contact</h2>
+              {venueCustomer && !editingWedding && (
+                <button onClick={() => { setWeddingForm(venueCustomer); setEditingWedding(true); }} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"><Pencil size={11} /> Edit</button>
+              )}
+            </div>
+            {editingWedding ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  {[{k:'partner_first_name',l:'First Name'},{k:'partner_last_name',l:'Last Name'}].map(f => (
+                    <div key={f.k}>
+                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{f.l}</label>
+                      <input value={(weddingForm[f.k as keyof VenueCustomer] as string) ?? ''} onChange={e => setWeddingForm(p => ({...p,[f.k]:e.target.value}))}
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
+                    </div>
+                  ))}
+                </div>
+                {[{k:'partner_email',l:'Email',t:'email'},{k:'partner_phone',l:'Phone',t:'tel'}].map(f => (
+                  <div key={f.k}>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{f.l}</label>
+                    <input type={f.t} value={(weddingForm[f.k as keyof VenueCustomer] as string) ?? ''} onChange={e => setWeddingForm(p => ({...p,[f.k]:e.target.value}))}
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
+                  </div>
+                ))}
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Referral Source</label>
+                  <select value={(weddingForm.referral_source as string) ?? ''} onChange={e => setWeddingForm(p => ({...p,referral_source:e.target.value}))}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-gray-400 focus:outline-none">
+                    <option value="">Unknown</option>
+                    {REFERRAL_SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button onClick={() => setEditingWedding(false)} className="flex-1 rounded-xl border border-gray-200 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
+                  <button onClick={saveWedding} disabled={savingWedding} className="flex-1 rounded-xl py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50" style={{backgroundColor:'#1b1b1b'}}>
+                    {savingWedding ? 'Saving…' : 'Save'}
+                  </button>
+                </div>
+              </div>
+            ) : venueCustomer?.partner_first_name ? (
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center gap-2 text-gray-700"><User size={13} className="text-gray-400" />{[venueCustomer.partner_first_name, venueCustomer.partner_last_name].filter(Boolean).join(' ')}</div>
+                {venueCustomer.partner_email && <div className="flex items-center gap-2 text-gray-700"><Mail size={13} className="text-gray-400" />{venueCustomer.partner_email}</div>}
+                {venueCustomer.partner_phone && <div className="flex items-center gap-2 text-gray-700"><Phone size={13} className="text-gray-400" />{venueCustomer.partner_phone}</div>}
+              </div>
+            ) : (
+              <p className="text-xs text-gray-400">No partner info yet.{' '}
+                <button onClick={() => { setWeddingForm(venueCustomer ?? {}); setEditingWedding(true); }} className="text-blue-600 hover:underline">Add partner</button>
+              </p>
+            )}
+          </div>
+
+          {/* Wedding details */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 lg:col-span-2">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-heading text-base text-gray-900 flex items-center gap-2"><Calendar size={15} /> Wedding Details</h2>
+              {venueCustomer && !editingWedding && (
+                <button onClick={() => { setWeddingForm(venueCustomer); setEditingWedding(true); }} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"><Pencil size={11} /> Edit</button>
+              )}
+            </div>
+            {editingWedding ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {[
+                  { k:'wedding_date',     l:'Wedding Date',    t:'date' },
+                  { k:'rehearsal_date',   l:'Rehearsal Date',  t:'date' },
+                  { k:'guest_count',      l:'Guest Count',     t:'number' },
+                  { k:'coordinator_name', l:'Day-of Coordinator Name', t:'text' },
+                  { k:'coordinator_phone',l:'Coordinator Phone', t:'tel' },
+                ].map(f => (
+                  <div key={f.k}>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{f.l}</label>
+                    <input type={f.t} value={(weddingForm[f.k as keyof VenueCustomer] as string|number) ?? ''} onChange={e => setWeddingForm(p => ({...p,[f.k]:e.target.value}))}
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
+                  </div>
+                ))}
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Ceremony Type</label>
+                  <select value={(weddingForm.ceremony_type as string) ?? ''} onChange={e => setWeddingForm(p => ({...p,ceremony_type:e.target.value}))}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-gray-400 focus:outline-none">
+                    <option value="">Not set</option>
+                    {CEREMONY_TYPES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Space</label>
+                  <select value={(weddingForm.wedding_space_id as string) ?? ''} onChange={e => setWeddingForm(p => ({...p,wedding_space_id:e.target.value}))}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-gray-400 focus:outline-none">
+                    <option value="">Not assigned</option>
+                    {spaces.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
+                <div className="sm:col-span-2 lg:col-span-3">
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Catering Notes</label>
+                  <textarea value={(weddingForm.catering_notes as string) ?? ''} onChange={e => setWeddingForm(p => ({...p,catering_notes:e.target.value}))} rows={2}
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none resize-none" />
+                </div>
+                <div className="sm:col-span-2 lg:col-span-3 flex gap-2">
+                  <button onClick={() => setEditingWedding(false)} className="flex-1 rounded-xl border border-gray-200 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
+                  <button onClick={saveWedding} disabled={savingWedding} className="flex-1 rounded-xl py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50" style={{backgroundColor:'#1b1b1b'}}>
+                    {savingWedding ? 'Saving…' : 'Save Wedding Details'}
+                  </button>
+                </div>
+              </div>
+            ) : venueCustomer && (venueCustomer.wedding_date || venueCustomer.guest_count || venueCustomer.ceremony_type) ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 text-sm">
+                {venueCustomer.wedding_date && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Wedding Date</p><p className="text-gray-900 font-medium">{formatDate(venueCustomer.wedding_date)}</p></div>}
+                {venueCustomer.ceremony_type && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Type</p><p className="text-gray-900 font-medium">{CEREMONY_TYPES.find(c => c.value === venueCustomer.ceremony_type)?.label ?? venueCustomer.ceremony_type}</p></div>}
+                {venueCustomer.guest_count && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Guests</p><p className="text-gray-900 font-medium">{venueCustomer.guest_count}</p></div>}
+                {venueCustomer.venue_spaces && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Space</p><p className="text-gray-900 font-medium flex items-center gap-1.5"><span className="inline-block w-2.5 h-2.5 rounded-full" style={{backgroundColor:venueCustomer.venue_spaces.color}} />{venueCustomer.venue_spaces.name}</p></div>}
+                {venueCustomer.rehearsal_date && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Rehearsal</p><p className="text-gray-900 font-medium">{formatDate(venueCustomer.rehearsal_date)}</p></div>}
+                {venueCustomer.coordinator_name && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Coordinator</p><p className="text-gray-900 font-medium">{venueCustomer.coordinator_name}{venueCustomer.coordinator_phone && <span className="text-gray-500 font-normal"> · {venueCustomer.coordinator_phone}</span>}</p></div>}
+                {venueCustomer.catering_notes && <div className="sm:col-span-2 lg:col-span-4"><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Catering Notes</p><p className="text-gray-700">{venueCustomer.catering_notes}</p></div>}
+              </div>
+            ) : (
+              <p className="text-xs text-gray-400">No wedding details yet.{' '}
+                <button onClick={() => { setWeddingForm(venueCustomer ?? {}); setEditingWedding(true); }} className="text-blue-600 hover:underline">Add details</button>
+              </p>
+            )}
+          </div>
+
+          {/* Notes */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 lg:col-span-2">
+            <h2 className="font-heading text-base text-gray-900 mb-4 flex items-center gap-2"><ClipboardList size={15} /> Notes</h2>
+            <div className="flex gap-2 mb-4">
+              <textarea value={newNote} onChange={e => setNewNote(e.target.value)} placeholder="Add a note…" rows={2}
+                className="flex-1 rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none resize-none" />
+              <button onClick={addNote} disabled={savingNote || !newNote.trim()}
+                className="rounded-xl px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-40 self-end"
+                style={{backgroundColor:'#1b1b1b'}}>
+                {savingNote ? <Loader2 size={14} className="animate-spin" /> : 'Add'}
+              </button>
+            </div>
+            <div className="space-y-3">
+              {notes.length === 0 && <p className="text-xs text-gray-400">No notes yet.</p>}
+              {notes.map(n => (
+                <div key={n.id} className="rounded-xl bg-gray-50 px-4 py-3 group relative">
+                  <p className="text-sm text-gray-800 whitespace-pre-wrap">{n.content}</p>
+                  <div className="flex items-center justify-between mt-1.5">
+                    <p className="text-[11px] text-gray-400">{n.author_name ? `${n.author_name} · ` : ''}{formatDateTime(n.created_at)}</p>
+                    <button onClick={() => deleteNote(n.id)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all"><Trash2 size={13} /></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TIMELINE TAB ── */}
+      {activeTab === 'timeline' && (
+        <div className="max-w-2xl">
+          <h2 className="font-heading text-lg text-gray-900 mb-5">Activity Timeline</h2>
+          {activity.length === 0 ? (
+            <p className="text-sm text-gray-400">No activity recorded yet. Activity is logged automatically as you interact with this customer.</p>
+          ) : (
+            <div className="relative">
+              <div className="absolute left-4 top-0 bottom-0 w-px bg-gray-200" />
+              <div className="space-y-4">
+                {activity.map(a => (
+                  <div key={a.id} className="flex gap-4 pl-0">
+                    <div className="relative z-10 flex-shrink-0 w-8 h-8 rounded-full border-2 border-white shadow-sm bg-gray-100 flex items-center justify-center text-gray-500">
+                      {ACTIVITY_ICONS[a.activity_type] ?? <Info size={13} />}
+                    </div>
+                    <div className="flex-1 pb-4">
+                      <p className="text-sm font-medium text-gray-900">{a.title}</p>
+                      {a.description && <p className="text-xs text-gray-500 mt-0.5">{a.description}</p>}
+                      <p className="text-[11px] text-gray-400 mt-1">{formatDateTime(a.created_at)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── PAYMENTS TAB ── */}
+      {activeTab === 'payments' && (
+        <div>
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <h2 className="font-heading text-lg text-gray-900">Proposals & Invoices</h2>
+            <input type="text" value={proposalSearch} onChange={e => setProposalSearch(e.target.value)}
+              placeholder="Search…"
+              className="rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none w-48" />
+          </div>
+          <div className="overflow-x-auto rounded-2xl border border-gray-200">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-50/60">
+                  {['Status','Amount','Type','Sent','Signed','Paid','Actions'].map(h => (
+                    <th key={h} className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {(() => {
+                  const filtered = [...proposals]
+                    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                    .filter(p => !proposalSearch || [p.status, p.payment_type, p.created_at].some(v => v?.toLowerCase().includes(proposalSearch.toLowerCase())));
+                  if (filtered.length === 0) return <tr><td colSpan={7} className="px-5 py-10 text-center text-gray-400">No proposals found</td></tr>;
+                  return filtered.map(p => {
+                    const color = getStatusColor(p.status);
+                    return (
+                      <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="px-5 py-3.5"><span className={classNames('inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize', color.bg, color.text)}>{p.status}</span></td>
+                        <td className="px-5 py-3.5 text-gray-700">{formatCents(p.price)}</td>
+                        <td className="px-5 py-3.5 text-gray-700 capitalize">{p.payment_type}</td>
+                        <td className="px-5 py-3.5 text-gray-500">{p.sent_at ? formatDate(p.sent_at) : '—'}</td>
+                        <td className="px-5 py-3.5 text-gray-500">{p.signed_at ? formatDate(p.signed_at) : '—'}</td>
+                        <td className="px-5 py-3.5 text-gray-500">{p.paid_at ? formatDate(p.paid_at) : '—'}</td>
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-1">
+                            <Link href={`/dashboard/proposals/${p.id}/edit`} className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors" title="Edit"><Pencil size={13} /></Link>
+                            {p.status !== 'paid' && <button onClick={() => handleResend(p)} disabled={resendingId === p.id} className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors disabled:opacity-50"><RefreshCw size={13} className={resendingId === p.id ? 'animate-spin' : ''} /></button>}
+                            <button onClick={() => copyLink(p)} className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors" title="Copy link"><Copy size={13} />{copiedId === p.id && <span className="ml-1 text-[10px]">Copied!</span>}</button>
+                            <Link href={`/proposal/${p.public_token}`} target="_blank" className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"><ExternalLink size={13} /></Link>
+                            {p.status === 'paid' && <Link href={`/invoice/${p.id}`} target="_blank" className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"><Receipt size={13} /></Link>}
+                            {p.status === 'paid' && <button onClick={() => setRefundTarget(p)} className="rounded-md p-1.5 text-red-500 hover:bg-red-50 transition-colors"><RotateCcw size={13} /></button>}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  });
+                })()}
+              </tbody>
+            </table>
+          </div>
+          {installmentProps.length > 0 && (
+            <div className="mt-8">
+              <h2 className="font-heading text-lg text-gray-900 mb-4">Payment Schedules</h2>
+              <div className="space-y-4">
+                {installmentProps.map(p => {
+                  const config = p.payment_config as { installments?: { amount: number; date: string }[] } | null;
+                  const insts = config?.installments || [];
+                  return (
+                    <div key={p.id} className="rounded-2xl border border-gray-200 p-5">
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-sm font-medium text-gray-900">Installment Plan — {formatCents(p.price)}</p>
+                        <span className={classNames('rounded-full px-2.5 py-0.5 text-xs font-medium capitalize', getStatusColor(p.status).bg, getStatusColor(p.status).text)}>{p.status}</span>
+                      </div>
+                      {insts.map((inst, i) => (
+                        <div key={i} className="flex items-center justify-between text-sm py-1.5 border-b border-gray-50 last:border-0">
+                          <span className="text-gray-500">Payment {i + 1}</span>
+                          <div className="flex items-center gap-4">
+                            <span className="text-gray-700">{formatCents(inst.amount)}</span>
+                            <span className="text-gray-400 text-xs">{inst.date ? formatDate(inst.date) : '—'}</span>
+                            {i === 0 && p.status === 'paid' && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">Paid</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── TASKS TAB ── */}
+      {activeTab === 'tasks' && (
+        <div className="max-w-2xl">
+          <h2 className="font-heading text-lg text-gray-900 mb-5">Tasks</h2>
+          {/* Add task */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 mb-5">
+            <div className="flex gap-2">
+              <input value={newTask} onChange={e => setNewTask(e.target.value)} placeholder="New task…"
+                onKeyDown={e => e.key === 'Enter' && addTask()}
+                className="flex-1 rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
+              <input type="date" value={newTaskDue} onChange={e => setNewTaskDue(e.target.value)}
+                className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none w-36" />
+              <button onClick={addTask} disabled={savingTask || !newTask.trim()}
+                className="rounded-xl px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-40"
+                style={{backgroundColor:'#1b1b1b'}}>
+                {savingTask ? <Loader2 size={14} className="animate-spin" /> : <Plus size={15} />}
+              </button>
+            </div>
+          </div>
+          {/* Open tasks */}
+          <div className="space-y-2">
+            {openTasks.length === 0 && <p className="text-sm text-gray-400 py-4">No open tasks.</p>}
+            {openTasks.map(t => (
+              <div key={t.id} className="flex items-start gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 group">
+                <button onClick={() => toggleTask(t)} className="mt-0.5 flex-shrink-0 w-4.5 h-4.5 rounded border-2 border-gray-300 hover:border-emerald-400 transition-colors flex items-center justify-center">
+                  <span className="sr-only">Complete</span>
+                </button>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-gray-900">{t.title}</p>
+                  {t.due_date && (
+                    <p className={`text-xs mt-0.5 ${new Date(t.due_date) < new Date() ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
+                      Due {formatDate(t.due_date)}
+                    </p>
+                  )}
+                </div>
+                <button onClick={() => toggleTask(t)} className="opacity-0 group-hover:opacity-100 text-xs text-emerald-600 hover:text-emerald-700 font-medium transition-all flex items-center gap-1">
+                  <Check size={12} /> Done
+                </button>
+                <button onClick={() => deleteTask(t.id)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all">
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+          {/* Completed tasks toggle */}
+          {completedTasks.length > 0 && (
+            <div className="mt-5">
+              <button onClick={() => setShowCompleted(v => !v)}
+                className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-600 transition-colors">
+                {showCompleted ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                {completedTasks.length} completed task{completedTasks.length !== 1 ? 's' : ''}
+              </button>
+              {showCompleted && (
+                <div className="mt-2 space-y-2">
+                  {completedTasks.map(t => (
+                    <div key={t.id} className="flex items-start gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 group opacity-60">
+                      <div className="mt-0.5 flex-shrink-0 w-4.5 h-4.5 rounded border-2 border-emerald-400 bg-emerald-50 flex items-center justify-center">
+                        <Check size={10} className="text-emerald-500" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm text-gray-500 line-through">{t.title}</p>
+                        {t.completed_at && <p className="text-xs text-gray-400 mt-0.5">Completed {formatDate(t.completed_at)}</p>}
+                      </div>
+                      <button onClick={() => deleteTask(t.id)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all"><Trash2 size={13} /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── DOCUMENTS TAB ── */}
+      {activeTab === 'documents' && (
+        <div>
+          <h2 className="font-heading text-lg text-gray-900 mb-5">Documents</h2>
+          {/* Upload */}
+          <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50/50 p-5 mb-5">
+            <div className="flex flex-wrap items-center gap-3">
+              <select value={uploadType} onChange={e => setUploadType(e.target.value)}
+                className="rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-700 focus:border-gray-400 focus:outline-none capitalize">
+                {FILE_TYPES.map(t => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
+              </select>
+              <label className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white cursor-pointer transition-colors ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`} style={{backgroundColor:'#1b1b1b'}}>
+                {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                {uploading ? 'Uploading…' : 'Upload File'}
+                <input type="file" className="hidden" disabled={uploading} onChange={handleFileUpload}
+                  accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.xlsx,.csv" />
+              </label>
+              <p className="text-xs text-gray-400">PDF, Word, Excel, images up to 10MB</p>
+            </div>
+          </div>
+          {/* Files list */}
+          {files.length === 0 ? (
+            <p className="text-sm text-gray-400">No documents yet.</p>
+          ) : (
+            <div className="rounded-2xl border border-gray-200 overflow-hidden">
+              <table className="w-full text-sm text-left">
+                <thead>
+                  <tr className="border-b border-gray-200 bg-gray-50/60">
+                    {['File','Type','Status','Uploaded','Actions'].map(h => (
+                      <th key={h} className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {files.map(f => (
+                    <tr key={f.id} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="px-5 py-3.5">
+                        {f.url ? (
+                          <a href={f.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline flex items-center gap-1.5">
+                            <FileCheck size={13} />{f.filename}
+                          </a>
+                        ) : (
+                          <span className="flex items-center gap-1.5 text-gray-700"><FileCheck size={13} />{f.filename}</span>
+                        )}
+                        {f.file_size && <p className="text-[11px] text-gray-400 mt-0.5">{(f.file_size / 1024).toFixed(0)} KB{f.uploaded_by ? ` · ${f.uploaded_by}` : ''}</p>}
+                      </td>
+                      <td className="px-5 py-3.5 text-gray-600 capitalize">{f.file_type.replace('_', ' ')}</td>
+                      <td className="px-5 py-3.5">
+                        <select value={f.file_status} onChange={e => updateFileStatus(f.id, e.target.value)}
+                          className={`rounded-full border-0 px-2.5 py-1 text-xs font-semibold cursor-pointer focus:outline-none capitalize ${FILE_STATUS_COLORS[f.file_status] ?? 'bg-gray-100 text-gray-700'}`}>
+                          {FILE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-5 py-3.5 text-gray-500">{formatDate(f.created_at)}</td>
+                      <td className="px-5 py-3.5">
+                        <button onClick={() => deleteFile(f.id)} className="text-gray-300 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Refund Modal */}
+      {refundTarget && (
+        <RefundModal
+          proposalId={refundTarget.id}
+          chargeId={refundTarget.charge_id}
+          customerName={refundTarget.customer_name || customer?.name || 'Customer'}
+          originalAmount={refundTarget.price}
+          onSuccess={(fullRefund) => {
+            if (fullRefund) setProposals(p => p.map(x => x.id === refundTarget.id ? { ...x, status: 'refunded' } : x));
+            setRefundTarget(null);
+          }}
+          onClose={() => setRefundTarget(null)}
+        />
+      )}
+    </div>
+  );
 }
