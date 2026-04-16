@@ -69,30 +69,36 @@ export default function SignupPage() {
         <div className="bg-white rounded-2xl border border-gray-200 p-8">
           {sent ? (
             <div className="text-center">
-              <div className="text-4xl mb-4">📬</div>
-              <h2 className="text-lg font-bold text-gray-900 mb-2">Check your inbox</h2>
-              <p className="text-sm text-gray-500 leading-relaxed">
-                We sent a login link to{' '}
-                <span className="font-medium text-gray-700">{sentEmail}</span>. Click it
-                to finish setting up your venue.
-              </p>
-
-              {devLoginUrl && (
-                <div className="mt-5 rounded-lg bg-amber-50 border border-amber-200 p-3 text-left">
-                  <p className="text-xs font-semibold text-amber-900 mb-1">
-                    Dev mode — direct login link:
+              {devLoginUrl ? (
+                <>
+                  <div className="text-4xl mb-4">🎉</div>
+                  <h2 className="text-lg font-bold text-gray-900 mb-2">Account created</h2>
+                  <p className="text-sm text-gray-500 leading-relaxed mb-5">
+                    We couldn&apos;t send your welcome email, but your account for{' '}
+                    <span className="font-medium text-gray-700">{sentEmail}</span> is ready.
+                    Click below to log in now.
                   </p>
                   <a
                     href={devLoginUrl}
-                    className="text-xs font-mono text-amber-800 underline break-all"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg px-6 py-3 text-sm font-semibold text-white bg-gray-900 hover:bg-gray-800 transition-colors"
                   >
-                    {devLoginUrl}
+                    Log in to your dashboard →
                   </a>
-                </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-4xl mb-4">📬</div>
+                  <h2 className="text-lg font-bold text-gray-900 mb-2">Check your inbox</h2>
+                  <p className="text-sm text-gray-500 leading-relaxed">
+                    We sent a login link to{' '}
+                    <span className="font-medium text-gray-700">{sentEmail}</span>. Click
+                    it to finish setting up your venue.
+                  </p>
+                </>
               )}
 
               <div className="mt-6 text-sm text-gray-500">
-                Didn&apos;t get it?{' '}
+                {devLoginUrl ? 'Need to start over?' : "Didn't get it?"}{' '}
                 <button
                   onClick={() => {
                     setSent(false);

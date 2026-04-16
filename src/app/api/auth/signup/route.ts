@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/lib/supabase';
 import { getDb } from '@/lib/db';
 import { sendEmail } from '@/lib/email';
 
@@ -39,10 +40,20 @@ export async function POST(request: NextRequest) {
   }
 
   const sql = getDb();
+  const fullName = `${firstName} ${lastName}`.trim();
 
   const existing = await sql`
     SELECT id FROM public.venues WHERE lower(email) = ${email} LIMIT 1
-  `;
+  `.catch((e) => {
+    console.error('[signup] existence check failed:', e);
+    return null;
+  });
+  if (existing === null) {
+    return NextResponse.json(
+      { error: 'Database unavailable. Please try again.' },
+      { status: 503 }
+    );
+  }
   if (existing.length > 0) {
     return NextResponse.json(
       { error: 'An account with that email already exists. Try signing in instead.' },
@@ -50,67 +61,103 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const fullName = `${firstName} ${lastName}`.trim();
+  let userId: string | null = null;
+  const { data: authCreate, error: authErr } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    email_confirm: true,
+    user_metadata: {
+      full_name: fullName,
+      first_name: firstName,
+      last_name:  lastName,
+      source:     'signup',
+    },
+  });
+
+  if (authErr || !authCreate?.user) {
+    console.error('[signup] auth.admin.createUser failed:', authErr);
+    return NextResponse.json(
+      { error: `Could not create user: ${authErr?.message ?? 'unknown error'}` },
+      { status: 500 }
+    );
+  }
+  userId = authCreate.user.id;
+
+  const cleanup = async (reason: string) => {
+    console.error('[signup] rolling back user', userId, 'because:', reason);
+    try {
+      await supabaseAdmin.auth.admin.deleteUser(userId!);
+    } catch (e) {
+      console.error('[signup] cleanup deleteUser failed:', e);
+    }
+  };
+
+  const { data: existingProfile } = await supabaseAdmin
+    .from('profiles')
+    .select('id')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (!existingProfile) {
+    const { error: profErr } = await supabaseAdmin.from('profiles').insert({
+      id:        userId,
+      full_name: fullName,
+      role:      'venue_owner',
+    });
+    if (profErr) {
+      console.error('[signup] profile insert failed:', profErr);
+      await cleanup(`profile insert: ${profErr.message}`);
+      return NextResponse.json(
+        { error: `Could not create profile: ${profErr.message}` },
+        { status: 500 }
+      );
+    }
+  }
 
   let venueId: string;
   let loginToken: string;
   try {
-    const result = await sql.begin(async (tx) => {
-      const [user] = await tx`
-        INSERT INTO auth.users (
-          id, aud, role, email, email_confirmed_at,
-          raw_app_meta_data, raw_user_meta_data,
-          created_at, updated_at,
-          is_sso_user, is_anonymous
-        ) VALUES (
-          gen_random_uuid(), 'authenticated', 'authenticated', ${email}, now(),
-          ${sql.json({ provider: 'storypay', providers: ['storypay'] })}::jsonb,
-          ${sql.json({ source: 'signup', full_name: fullName })}::jsonb,
-          now(), now(),
-          false, false
-        )
-        RETURNING id
-      `;
-      const userId = user.id as string;
-
-      await tx`
-        INSERT INTO public.profiles (id, full_name, role)
-        VALUES (${userId}, ${fullName}, 'venue_owner')
-      `;
-
-      const [venue] = await tx`
-        INSERT INTO public.venues (owner_id, name, email, phone)
-        VALUES (${userId}, ${venueName}, ${email}, ${phone || null})
-        RETURNING id, login_token::text AS login_token
-      `;
-
-      return { venueId: venue.id as string, loginToken: venue.login_token as string };
-    });
-    venueId = result.venueId;
-    loginToken = result.loginToken;
+    const rows = await sql`
+      INSERT INTO public.venues (owner_id, name, email, phone)
+      VALUES (${userId}, ${venueName}, ${email}, ${phone || null})
+      RETURNING id, login_token::text AS login_token
+    `;
+    const venue = rows[0] as { id: string; login_token: string };
+    venueId = venue.id;
+    loginToken = venue.login_token;
   } catch (err) {
-    console.error('[signup] insert failed:', err);
-    return NextResponse.json({ error: 'Could not create account. Please try again.' }, { status: 500 });
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[signup] venue insert failed:', err);
+    await cleanup(`venue insert: ${msg}`);
+    return NextResponse.json(
+      { error: `Could not create venue: ${msg}` },
+      { status: 500 }
+    );
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com';
   const loginUrl = `${appUrl}/login/${loginToken}`;
 
-  const emailResult = await sendEmail({
-    to: email,
-    subject: `Welcome to StoryPay — log in to finish setting up ${venueName}`,
-    html: welcomeEmailHtml({ firstName, venueName, loginUrl }),
-  }).catch((e) => {
+  let emailSent = false;
+  try {
+    const emailResult = await sendEmail({
+      to: email,
+      subject: `Welcome to StoryPay — log in to finish setting up ${venueName}`,
+      html: welcomeEmailHtml({ firstName, venueName, loginUrl }),
+    });
+    emailSent = emailResult.success !== false;
+    if (!emailSent) {
+      console.warn('[signup] email not sent:', emailResult.error);
+    }
+  } catch (e) {
     console.error('[signup] email send threw:', e);
-    return { success: false, error: String(e) };
-  });
+  }
 
   return NextResponse.json({
-    ok: true,
-    venue_id: venueId,
+    ok:         true,
+    venue_id:   venueId,
     email,
-    email_sent: emailResult.success !== false,
-    login_url: process.env.NODE_ENV === 'development' ? loginUrl : undefined,
+    email_sent: emailSent,
+    login_url:  emailSent ? undefined : loginUrl,
   });
 }
 
