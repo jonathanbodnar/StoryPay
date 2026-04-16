@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
  Loader2, CheckCircle2, XCircle, Link2, Unlink, RefreshCw,
- ArrowRight, Clock, AlertCircle, ExternalLink,
+ ArrowRight, Clock, AlertCircle, ExternalLink, Calendar,
 } from 'lucide-react';
 
 interface Integration {
@@ -29,6 +29,14 @@ interface StatusData {
  integrations: Integration[];
  recentSyncs: SyncLogEntry[];
  available: { quickbooks: boolean; freshbooks: boolean };
+}
+
+interface CalendlyStatus {
+ connected: boolean;
+ user_name?: string;
+ user_email?: string;
+ webhook_registered?: boolean;
+ error?: string;
 }
 
 const PROVIDERS = {
@@ -69,10 +77,22 @@ export default function IntegrationsPage() {
  const [syncing, setSyncing] = useState<string | null>(null);
  const [syncResult, setSyncResult] = useState<{ provider: string; message: string; type: 'success' | 'error' } | null>(null);
 
+ // Calendly state
+ const [calendly, setCalendly] = useState<CalendlyStatus | null>(null);
+ const [calendlyToken, setCalendlyToken] = useState('');
+ const [showCalendlyInput, setShowCalendlyInput] = useState(false);
+ const [calendlyConnecting, setCalendlyConnecting] = useState(false);
+ const [calendlyDisconnecting, setCalendlyDisconnecting] = useState(false);
+ const [calendlySyncing, setCalendlySyncing] = useState(false);
+
  const fetchStatus = useCallback(async () => {
  try {
- const res = await fetch('/api/integrations/status');
- if (res.ok) setData(await res.json());
+ const [intRes, calRes] = await Promise.all([
+   fetch('/api/integrations/status'),
+   fetch('/api/integrations/calendly/status'),
+ ]);
+ if (intRes.ok) setData(await intRes.json());
+ if (calRes.ok) setCalendly(await calRes.json());
  } finally { setLoading(false); }
  }, []);
 
@@ -154,6 +174,62 @@ export default function IntegrationsPage() {
  } finally { setSyncing(null); }
  }
 
+ async function connectCalendly() {
+ if (!calendlyToken.trim()) return;
+ setCalendlyConnecting(true);
+ setSyncResult(null);
+ try {
+   const res = await fetch('/api/integrations/calendly/connect', {
+     method: 'POST',
+     headers: { 'Content-Type': 'application/json' },
+     body: JSON.stringify({ access_token: calendlyToken.trim() }),
+   });
+   const json = await res.json();
+   if (res.ok) {
+     setCalendly({ connected: true, user_name: json.user_name, user_email: json.user_email, webhook_registered: json.webhook_registered });
+     setCalendlyToken('');
+     setShowCalendlyInput(false);
+     setSyncResult({ provider: 'calendly', message: `Calendly connected as ${json.user_name}!`, type: 'success' });
+   } else {
+     setSyncResult({ provider: 'calendly', message: json.error || 'Failed to connect', type: 'error' });
+   }
+ } catch {
+   setSyncResult({ provider: 'calendly', message: 'Network error', type: 'error' });
+ } finally { setCalendlyConnecting(false); }
+ }
+
+ async function disconnectCalendly() {
+ if (!confirm('Disconnect Calendly? Future bookings will no longer sync automatically.')) return;
+ setCalendlyDisconnecting(true);
+ try {
+   await fetch('/api/integrations/calendly/disconnect', { method: 'POST' });
+   setCalendly({ connected: false });
+   setSyncResult({ provider: 'calendly', message: 'Calendly disconnected.', type: 'success' });
+ } finally { setCalendlyDisconnecting(false); }
+ }
+
+ async function syncCalendly() {
+ setCalendlySyncing(true);
+ setSyncResult(null);
+ try {
+   const res = await fetch('/api/integrations/calendly/sync', { method: 'POST' });
+   const json = await res.json();
+   if (res.ok) {
+     setSyncResult({
+       provider: 'calendly',
+       message: json.created > 0
+         ? `Imported ${json.created} new event${json.created !== 1 ? 's' : ''} from Calendly${json.skipped > 0 ? ` (${json.skipped} already existed)` : ''}`
+         : `All ${json.total} upcoming Calendly events already imported`,
+       type: 'success',
+     });
+   } else {
+     setSyncResult({ provider: 'calendly', message: json.error || 'Sync failed', type: 'error' });
+   }
+ } catch {
+   setSyncResult({ provider: 'calendly', message: 'Network error', type: 'error' });
+ } finally { setCalendlySyncing(false); }
+ }
+
  function getIntegration(provider: string) {
  return data?.integrations.find(i => i.provider === provider) || null;
  }
@@ -163,7 +239,7 @@ export default function IntegrationsPage() {
  <div className="mb-8">
  <h1 className="font-heading text-2xl text-gray-900">Integrations</h1>
  <p className="mt-1 text-sm text-gray-500">
- Connect your accounting software to sync StoryPay transactions one-way into your books.
+ Connect your tools to sync data automatically with StoryPay.
  </p>
  </div>
 
@@ -183,6 +259,129 @@ export default function IntegrationsPage() {
  <div className="flex justify-center py-16"><Loader2 size={24} className="animate-spin text-gray-400"/></div>
  ) : (
  <div className="space-y-4">
+
+ {/* ── Calendly ── */}
+ <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+   <div className="px-6 py-5">
+     <div className="flex items-start gap-4">
+       <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-2xl"
+         style={{ backgroundColor: '#006BFF18' }}>
+         <Calendar size={22} style={{ color: '#006BFF' }} />
+       </div>
+       <div className="flex-1 min-w-0">
+         <div className="flex items-center gap-2 flex-wrap">
+           <h3 className="text-base font-semibold text-gray-900">Calendly</h3>
+           {calendly?.connected ? (
+             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+               <CheckCircle2 size={10} /> Connected
+             </span>
+           ) : (
+             <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-500">
+               Not connected
+             </span>
+           )}
+           {calendly?.connected && !calendly.webhook_registered && (
+             <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+               Webhooks inactive
+             </span>
+           )}
+         </div>
+         <p className="mt-1 text-sm text-gray-500">
+           Sync Calendly bookings to your StoryPay calendar automatically. When someone books a tour or meeting in Calendly, it appears instantly on your calendar.
+         </p>
+         {calendly?.connected && (
+           <p className="mt-2 text-xs text-gray-400">
+             Connected as <span className="text-gray-600 font-medium">{calendly.user_name}</span>
+             {calendly.user_email && <> ({calendly.user_email})</>}
+             {calendly.webhook_registered
+               ? ' · Real-time sync active'
+               : ' · Manual sync only (webhook not registered — check your app URL env var)'}
+           </p>
+         )}
+         {calendly?.error && <p className="mt-1 text-xs text-amber-600">{calendly.error}</p>}
+       </div>
+
+       <div className="flex items-center gap-2 shrink-0">
+         {calendly?.connected ? (
+           <>
+             <button
+               onClick={syncCalendly}
+               disabled={calendlySyncing}
+               className="flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60 transition-all"
+               style={{ backgroundColor: '#006BFF' }}
+             >
+               {calendlySyncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+               {calendlySyncing ? 'Syncing…' : 'Sync Now'}
+             </button>
+             <button
+               onClick={disconnectCalendly}
+               disabled={calendlyDisconnecting}
+               className="flex items-center gap-1.5 rounded-2xl border border-gray-200 px-3 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-60"
+             >
+               {calendlyDisconnecting ? <Loader2 size={14} className="animate-spin" /> : <Unlink size={14} />}
+               Disconnect
+             </button>
+           </>
+         ) : (
+           <button
+             onClick={() => setShowCalendlyInput(v => !v)}
+             className="flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90 transition-all"
+             style={{ backgroundColor: '#006BFF' }}
+           >
+             <Link2 size={14} /> Connect
+           </button>
+         )}
+       </div>
+     </div>
+
+     {/* PAT input form */}
+     {showCalendlyInput && !calendly?.connected && (
+       <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+         <p className="text-xs font-semibold text-gray-700 mb-1">Personal Access Token</p>
+         <p className="text-xs text-gray-500 mb-3">
+           Generate a token at{' '}
+           <a href="https://calendly.com/integrations/api_webhooks" target="_blank" rel="noreferrer"
+             className="text-blue-600 hover:underline inline-flex items-center gap-1">
+             calendly.com/integrations/api_webhooks <ExternalLink size={10} />
+           </a>
+           {' '}→ API & Webhooks → Personal Access Tokens → Generate New Token.
+         </p>
+         <div className="flex gap-2">
+           <input
+             type="password"
+             value={calendlyToken}
+             onChange={e => setCalendlyToken(e.target.value)}
+             placeholder="eyJhbGciOiJIUzI1NiJ9..."
+             className="flex-1 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 font-mono focus:border-gray-400 focus:outline-none"
+           />
+           <button
+             onClick={connectCalendly}
+             disabled={calendlyConnecting || !calendlyToken.trim()}
+             className="flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50 transition-all"
+             style={{ backgroundColor: '#006BFF' }}
+           >
+             {calendlyConnecting ? <Loader2 size={14} className="animate-spin" /> : null}
+             {calendlyConnecting ? 'Connecting…' : 'Connect'}
+           </button>
+           <button onClick={() => { setShowCalendlyInput(false); setCalendlyToken(''); }}
+             className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-500 hover:bg-gray-100 transition-colors">
+             Cancel
+           </button>
+         </div>
+       </div>
+     )}
+   </div>
+   {calendly?.connected && (
+     <div className="border-t border-gray-200 bg-gray-50/50 px-6 py-3">
+       <div className="flex items-center gap-2 text-xs text-gray-400">
+         <ArrowRight size={11} />
+         <span>Calendly bookings sync one-way into your StoryPay calendar as events. Customer profiles are created automatically.</span>
+       </div>
+     </div>
+   )}
+ </div>
+
+ {/* ── Accounting integrations ── */}
  {(Object.entries(PROVIDERS) as [keyof typeof PROVIDERS, typeof PROVIDERS[keyof typeof PROVIDERS]][]).map(([key, provider]) => {
  const integration = getIntegration(key);
  const isConnected = !!integration;
