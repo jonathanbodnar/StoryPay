@@ -46,7 +46,8 @@ export function getDb(): ReturnType<typeof postgres> {
       max: 5,
       idle_timeout: 20,
       connect_timeout: 10,
-      prepare: false, // required for PgBouncer transaction mode
+      prepare: false,   // required for PgBouncer transaction mode
+      ssl: 'require',   // Supabase requires SSL on all connections
     });
   }
   return _sql;
