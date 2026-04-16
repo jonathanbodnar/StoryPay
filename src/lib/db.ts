@@ -6,11 +6,18 @@
  * after a DDL event or restart — this causes "table not found in schema cache"
  * errors for any table created after PostgREST last loaded.
  *
- * This client connects directly to the Postgres wire protocol, so it works
- * immediately with any table regardless of PostgREST cache state.
+ * This client connects directly to the Postgres wire protocol, bypassing
+ * PostgREST and its schema cache entirely.
  *
- * Required env var: DATABASE_URL (Supabase → Project Settings → Database → Connection string → URI)
- * Format: postgres://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres
+ * Required env var: DATABASE_URL
+ * Your project URL: postgres://postgres.blclfnsztrxfhcfauzer:[PASSWORD]@aws-0-us-east-1.pooler.supabase.com:6543/postgres
+ *
+ * To find your password:
+ *   Supabase dashboard → Project Settings → Database → Database password
+ *
+ * To add the env var:
+ *   Vercel:  vercel.com → your project → Settings → Environment Variables
+ *   Railway: railway.app → your service → Variables tab
  */
 
 import postgres from 'postgres';
@@ -19,14 +26,22 @@ let _sql: ReturnType<typeof postgres> | null = null;
 
 export function getDb(): ReturnType<typeof postgres> {
   if (!_sql) {
-    const connectionString = process.env.DATABASE_URL;
+    const connectionString =
+      process.env.DATABASE_URL ||
+      process.env.POSTGRES_URL ||
+      process.env.POSTGRES_PRISMA_URL;   // Vercel sometimes injects this name
+
     if (!connectionString) {
-      throw new Error(
-        'DATABASE_URL is not set. ' +
-        'Add it from: Supabase dashboard → Project Settings → Database → ' +
-        'Connection string → URI (use the pooler/transaction URL on port 6543).'
-      );
+      const msg =
+        'DATABASE_URL is not set.\n' +
+        'Add this to your hosting environment variables:\n' +
+        '  DATABASE_URL=postgres://postgres.blclfnsztrxfhcfauzer:[PASSWORD]@aws-0-us-east-1.pooler.supabase.com:6543/postgres\n' +
+        'Get [PASSWORD] from: Supabase dashboard → Project Settings → Database → Database password\n' +
+        'Add the variable in: Vercel → Settings → Environment Variables  OR  Railway → Variables';
+      console.error('[db]', msg);
+      throw new Error(msg);
     }
+
     _sql = postgres(connectionString, {
       max: 5,
       idle_timeout: 20,
