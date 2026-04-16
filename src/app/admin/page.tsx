@@ -783,6 +783,35 @@ export default function AdminPage() {
                 >
                   🛠 Setup DB
                 </button>
+                <button
+                  onClick={async () => {
+                    const res = await fetch('/api/admin/setup-directory-db', { method: 'POST' });
+                    const data = await res.json();
+                    if (data.ok) {
+                      alert(`Directory schema OK:\n${(data.results ?? []).map((r: { name: string; status: string }) => `• ${r.name}: ${r.status}`).join('\n')}`);
+                    } else {
+                      const errs = (data.results ?? []).filter((r: { status: string }) => r.status === 'error');
+                      alert(`Directory schema had errors:\n${errs.map((r: { name: string; error: string }) => `• ${r.name}: ${r.error}`).join('\n')}`);
+                    }
+                  }}
+                  className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  🌐 Setup Directory Schema
+                </button>
+                <button
+                  onClick={async () => {
+                    const res = await fetch('/api/admin/setup-directory-storage', { method: 'POST' });
+                    const data = await res.json();
+                    if (res.ok) {
+                      alert(`Storage bucket: ${data.bucket}\n${data.created ? 'Created new bucket.' : (data.note ?? 'Already existed.')}`);
+                    } else {
+                      alert(`Failed to provision bucket: ${data.error ?? 'unknown error'}`);
+                    }
+                  }}
+                  className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  🖼 Setup Directory Bucket
+                </button>
                 <DateRangePicker value={dateRange} onChange={r => { setDateRange(r); fetchStats(r); }} />
               </div>
             </div>
