@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getDb } from '@/lib/db';
 import { sendEmail } from '@/lib/email';
 
 export const dynamic = 'force-dynamic';
@@ -39,34 +38,33 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'A valid email address is required.' }, { status: 400 });
   }
 
-  const sql = getDb();
   const fullName = `${firstName} ${lastName}`.trim();
 
-  const existing = await sql`
-    SELECT id FROM public.venues WHERE lower(email) = ${email} LIMIT 1
-  `.catch((e) => {
-    console.error('[signup] existence check failed:', e);
-    return null;
-  });
-  if (existing === null) {
+  const { data: existing, error: existingErr } = await supabaseAdmin
+    .from('venues')
+    .select('id')
+    .ilike('email', email)
+    .maybeSingle();
+
+  if (existingErr && existingErr.code !== 'PGRST116') {
+    console.error('[signup] existence check failed:', existingErr);
     return NextResponse.json(
-      { error: 'Database unavailable. Please try again.' },
-      { status: 503 }
+      { error: `Could not verify email: ${existingErr.message}` },
+      { status: 500 }
     );
   }
-  if (existing.length > 0) {
+  if (existing) {
     return NextResponse.json(
       { error: 'An account with that email already exists. Try signing in instead.' },
       { status: 409 }
     );
   }
 
-  let userId: string | null = null;
   const { data: authCreate, error: authErr } = await supabaseAdmin.auth.admin.createUser({
     email,
     email_confirm: true,
     user_metadata: {
-      full_name: fullName,
+      full_name:  fullName,
       first_name: firstName,
       last_name:  lastName,
       source:     'signup',
@@ -80,14 +78,14 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-  userId = authCreate.user.id;
+  const userId = authCreate.user.id;
 
-  const cleanup = async (reason: string) => {
+  const rollback = async (reason: string) => {
     console.error('[signup] rolling back user', userId, 'because:', reason);
     try {
-      await supabaseAdmin.auth.admin.deleteUser(userId!);
+      await supabaseAdmin.auth.admin.deleteUser(userId);
     } catch (e) {
-      console.error('[signup] cleanup deleteUser failed:', e);
+      console.error('[signup] rollback deleteUser failed:', e);
     }
   };
 
@@ -105,7 +103,7 @@ export async function POST(request: NextRequest) {
     });
     if (profErr) {
       console.error('[signup] profile insert failed:', profErr);
-      await cleanup(`profile insert: ${profErr.message}`);
+      await rollback(`profile insert: ${profErr.message}`);
       return NextResponse.json(
         { error: `Could not create profile: ${profErr.message}` },
         { status: 500 }
@@ -113,29 +111,28 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  let venueId: string;
-  let loginToken: string;
-  try {
-    const rows = await sql`
-      INSERT INTO public.venues (owner_id, name, email, phone)
-      VALUES (${userId}, ${venueName}, ${email}, ${phone || null})
-      RETURNING id, login_token::text AS login_token
-    `;
-    const venue = rows[0] as { id: string; login_token: string };
-    venueId = venue.id;
-    loginToken = venue.login_token;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error('[signup] venue insert failed:', err);
-    await cleanup(`venue insert: ${msg}`);
+  const { data: venue, error: venueErr } = await supabaseAdmin
+    .from('venues')
+    .insert({
+      owner_id: userId,
+      name:     venueName,
+      email,
+      phone:    phone || null,
+    })
+    .select('id, login_token')
+    .single();
+
+  if (venueErr || !venue) {
+    console.error('[signup] venue insert failed:', venueErr);
+    await rollback(`venue insert: ${venueErr?.message ?? 'unknown'}`);
     return NextResponse.json(
-      { error: `Could not create venue: ${msg}` },
+      { error: `Could not create venue: ${venueErr?.message ?? 'unknown error'}` },
       { status: 500 }
     );
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com';
-  const loginUrl = `${appUrl}/login/${loginToken}`;
+  const appUrl   = process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com';
+  const loginUrl = `${appUrl}/login/${venue.login_token}`;
 
   let emailSent = false;
   try {
@@ -154,7 +151,7 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     ok:         true,
-    venue_id:   venueId,
+    venue_id:   venue.id,
     email,
     email_sent: emailSent,
     login_url:  emailSent ? undefined : loginUrl,
