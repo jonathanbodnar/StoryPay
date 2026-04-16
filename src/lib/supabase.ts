@@ -17,8 +17,24 @@ function getSupabaseAdmin(): SupabaseClient {
   if (!_supabaseAdmin) {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || anonKey;
-    _supabaseAdmin = createClient(url, serviceKey);
+    // Try multiple common env var names for the service role key
+    const serviceKey =
+      process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.SUPABASE_SERVICE_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!serviceKey) {
+      console.error(
+        '[supabase] SUPABASE_SERVICE_ROLE_KEY is not set. ' +
+        'Falling back to anon key — new tables will hit PostgREST schema cache. ' +
+        'Add SUPABASE_SERVICE_ROLE_KEY to your hosting environment variables.'
+      );
+    }
+
+    _supabaseAdmin = createClient(url, serviceKey ?? anonKey, {
+      db: { schema: 'public' },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
   }
   return _supabaseAdmin;
 }
