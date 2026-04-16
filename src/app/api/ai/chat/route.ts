@@ -7,25 +7,79 @@ const PLATFORM_DOCS = `
 # StoryPay Platform Documentation
 
 ## Overview
-StoryPay is an all-in-one platform for wedding venues to manage proposals, invoices, payments, customers, email templates, branding, and team members — all from one place.
+StoryPay is an all-in-one platform for wedding venues to manage proposals, invoices, payments, a booking calendar, customer CRM profiles, email templates, branding, integrations, and team members — all from one place.
 
 ## Navigation / Sections
 - Home (Dashboard): Revenue overview, KPI cards, recent proposals and transactions, date range filter.
-- Customers: Manage your client database. Add, view, and create proposals/invoices from a customer profile.
-- Reports: 6 downloadable financial reports (CSV, Excel, PDF).
+- Customers: Full CRM — manage contacts, customer profiles with wedding details, tasks, notes, documents, activity timeline, partner info, pipeline stage, and referral source.
+- Calendar: Book and track all venue events (tours, weddings, receptions, tastings, meetings, rehearsals, holds, blocked dates). Syncs with Calendly, Google Calendar, Outlook, and Apple Calendar.
+- Reports: 7 downloadable financial reports (CSV, Excel, PDF). Owners and admins only.
 - Payments: Create proposals/invoices, manage templates, installments, subscriptions, transactions.
 - Help Center: Searchable documentation with AI-assisted answers.
 - What's New: Changelog and Feature Requests board.
-- Settings: General, Branding, Email Templates, Integrations, Team, Notifications.
+- Settings: General, Branding, Email Templates, Integrations (Calendly, Google Calendar, QuickBooks, FreshBooks), Team, Notifications.
 - Ask AI: This assistant — answers questions about your account in real time.
+
+## Calendar
+- Go to Calendar in the sidebar.
+- Add events: click any day or click "+ Add Event". Event types: Wedding, Reception, Tour, Tasting, Meeting, Rehearsal, Hold, Blocked, Other.
+- Statuses: Confirmed, Tentative/Hold, Cancelled.
+- Assign events to a specific bookable space (e.g. Barn, Garden, Ballroom) — manage spaces via "Manage Spaces" button.
+- Double-booking protection: if a space already has an event during that time window, you get a conflict warning with details. You can override it if needed (e.g. back-to-back setup times).
+- Revenue View: 12-month grid showing wedding/tour counts per month at a glance — click a month to jump to it.
+- iCal sync: subscribe from Google Calendar, Outlook, or Apple Calendar using the iCal URL in Settings → Integrations.
+- Calendly sync: connect Calendly in Settings → Integrations — new bookings appear on the calendar automatically.
+- Public availability page: shareable link showing open/booked dates with no customer info exposed — find it in Settings → Integrations.
+
+## Customer Profiles (CRM)
+- Go to Customers → click a customer name to open their full profile.
+- 5 tabs: Overview, Activity, Payments, Tasks, Documents.
+- Overview: edit contact info; add partner/second contact (name, email, phone — important for wedding couples); Wedding Details (wedding date, ceremony type, guest count, space, rehearsal date, coordinator, catering notes); internal notes with timestamps.
+- Activity: unified reverse-chronological timeline — proposal sent/viewed/signed, payment made, note added, file uploaded, task created/completed, Calendly booking received.
+- Payments: all proposals and invoices for this customer; installment schedules; copy link, resend, refund.
+- Tasks: create tasks with due dates; check off when done; completed tasks collapse but stay visible; overdue tasks show in red.
+- Documents: upload files (PDF, Word, images, etc., max 10MB); file types: Contract, Floor Plan, Vendor Agreement, Insurance, Photo, Other; statuses: Pending, Received, Approved; click to download.
+- Pipeline stage (header): Inquiry → Tour Scheduled → Proposal Sent → Booked → Event Complete → Post-Event. Click any stage to update.
+- Referral source: Instagram, Google, Wedding Wire, The Knot, Referral, Venue Website, Facebook, Other.
+
+## Integrations
+
+### Calendly
+- Connect at Settings → Integrations → Calendly → Connect.
+- Requires a Personal Access Token from calendly.com/integrations/api_webhooks.
+- Once connected: new bookings appear on StoryPay calendar in real time; customer profiles auto-created; cancellations auto-update.
+- Sync Now button imports all upcoming Calendly events on demand.
+
+### Google Calendar / Outlook / Apple Calendar (iCal)
+- One-way sync: StoryPay events appear in your calendar app.
+- Find your iCal URL: Settings → Integrations → Google Calendar / Outlook & Apple Calendar card.
+- Google Calendar: + next to Other calendars → From URL → paste → Add calendar.
+- Outlook: Add calendar → Subscribe from web → paste URL → Import.
+- Apple Calendar: File → New Calendar Subscription → paste URL → set refresh to Every Hour.
+- iPhone: Settings → Calendar → Accounts → Add Account → Other → Add Subscribed Calendar.
+- Updates may take up to 24 hours depending on the app.
+
+### Public Availability Page
+- Shareable link showing open/booked dates — no customer names exposed.
+- Find it: Settings → Integrations → Google Calendar card → Public Availability Page section.
+- Share on your website or with prospects to let them check date availability.
+
+### QuickBooks Online
+- Connect at Settings → Integrations → QuickBooks card → Connect.
+- Redirects to Intuit for authorization. Once connected, paid transactions sync as sales receipts.
+- Sync Now forces an immediate sync. Disconnect anytime.
+
+### FreshBooks
+- Connect at Settings → Integrations → FreshBooks card → Connect.
+- Redirects to FreshBooks for authorization. Charges sync as invoices automatically.
 
 ## Proposals
 - Go to Payments → New to create a proposal or invoice.
-- Proposals require a template. Invoices do not.
+- Proposals require a template and include an e-signature step. Invoices do not.
 - Payment types: Full Payment, Installment Plan, Subscription.
-- Clients receive an email/SMS with a link to review, sign, and pay.
-- Proposal statuses: Draft, Sent, Opened, Signed, Paid, Refunded.
-- Resend a proposal from the Proposals list using the refresh icon.
+- Clients receive an email/SMS with a link to review, sign (if proposal), and pay.
+- Proposal statuses: Draft, Sent, Opened, Signed, Paid, Refunded, Cancelled.
+- Resend a proposal from the Proposals list or customer profile using the refresh icon.
 
 ## Proposal Templates
 - Go to Payments → Proposal Templates to create and manage templates.
@@ -38,19 +92,13 @@ StoryPay is an all-in-one platform for wedding venues to manage proposals, invoi
 - Add multiple line items; total auto-calculates.
 - Clients receive it via email/SMS and pay online.
 
-## Customers
-- Go to Customers to view all clients.
-- Add Customer to create a new record manually.
-- Each row has View, Create Proposal, and Create Invoice actions.
-- Click a customer name to see their full history and total spend.
-
 ## Transactions
 - Charges tab: All paid transactions. Click Refund to issue a refund.
 - Payment Schedules tab: Installment plans.
 - Subscriptions tab: Recurring payments.
 
 ## Reports
-- 6 report types: Revenue, Proposals, Customer Summary, AR Aging, Payment Method Breakdown, Refunds.
+- 7 report types: Revenue, Proposals, Customer Summary, AR Aging, Payment Method Breakdown, Refunds, Bank Reconciliation.
 - Filter by date range. Download as CSV, Excel, or PDF.
 
 ## Branding & Customization
@@ -59,49 +107,31 @@ StoryPay is an all-in-one platform for wedding venues to manage proposals, invoi
 - Color presets available (Default, Ivory & Gold, Sage & Stone, etc.) — click a preset to apply and save instantly.
 - Custom colors: Primary/button color, background color, button text color.
 - Contact info (email, phone, address) shown on documents.
-- All emails use the venue logo in a white header with a brand-color strip underneath.
 
 ## Email Templates
 - Go to Settings → Email Templates to customize every type of outgoing email.
 - Template types: Invoice, Proposal, Payment Confirmation, Payment Notification, Subscription Confirmation, Subscription Cancelled, Payment Failed.
-- Each template has: Subject Line, Email Heading, Body Text, Button Text (optional), Footer Text (optional).
+- Each template has: Subject Line, Email Heading, Body Text, Button Text, Footer Text.
 - Click Preview to see exactly what the email will look like.
 - Click Send Test to send a test version to any email address.
-- Toggle Enable/Disable to turn a template on or off.
-- All emails use your venue branding (logo, brand color).
-
-## Settings → General
-- Payment Processing: Shows LunarPay merchant account status.
-- Setup Guide: Restart the Getting Started checklist on your dashboard (owners only).
-- Messaging: Connect GHL (Go High Level) for SMS notifications.
 
 ## Team Members
 - Go to Settings → Team to manage who has access to your account.
 - Three roles:
-  - Owner: Full access to everything including settings, team management, branding.
-  - Admin: Access to proposals, customers, reports, branding, email templates. Cannot manage team or general settings.
-  - Member: Can only view and manage proposals and customers. No access to settings or reports.
+  - Owner: Full access to everything including Calendar, Settings, Reports, team management, and integrations.
+  - Admin: Access to proposals, customers, calendar, most settings. Cannot manage team, general settings, or integrations.
+  - Member: Can only view proposals, customers, and calendar. No access to Settings or Reports.
 - Click Add Team Member to invite someone by email.
 - They receive a branded invite email with an Accept Invitation link.
-- Click the ... menu on any member to Edit, Resend Invite, or Remove.
-- Team members can update their own profile (name, email) at Settings → Profile.
 
 ## Get Started Checklist (Onboarding)
 - New accounts see a Get Started bubble on the dashboard (owners only).
-- Click the bubble to open a modal with 6 setup steps:
-  1. Create Your Profile and Branding
-  2. Customize Email Templates
-  3. Create Your First Proposal Template
-  4. Create Your First Proposal
-  5. Send Your First Proposal
-  6. Invite a Team Member
-- Check off each step manually as you complete it.
-- Once all steps are checked, click "I'm Ready" to dismiss the bubble permanently.
-- To restart the guide, go to Settings → General → Restart Setup Guide.
+- 6 steps: Branding, Email Templates, First Template, First Proposal, Send Proposal, Invite Team Member.
+- To restart: Settings → General → Restart Setup Guide.
 
 ## SMS Notifications
 - SMS is sent automatically when proposals and invoices are created (if customer has a phone number).
-- Phone numbers must be in US format — the system auto-formats them to +1XXXXXXXXXX (E.164).
+- Phone numbers must be in US format — auto-formatted to E.164.
 - SMS routes through your GHL sub-account's A2P approved phone number.
 
 ## Refunds
@@ -117,7 +147,6 @@ StoryPay is an all-in-one platform for wedding venues to manage proposals, invoi
 - Go to Help Center for searchable documentation.
 - Use voice search (mic icon) to speak your question.
 - Each article has related articles at the bottom.
-- Click Ask AI in the Help Center to chat with the AI assistant.
 - Rate articles with thumbs up/down to help improve documentation.
 
 ## Common Questions
@@ -126,11 +155,17 @@ StoryPay is an all-in-one platform for wedding venues to manage proposals, invoi
 - How do I refund a payment? Transactions → Charges → click Refund.
 - Why can't I accept payments? LunarPay account may be pending. Check Settings → Payment Processing.
 - How do I add my logo? Settings → Branding → upload logo file.
-- How do I change my brand colors? Settings → Branding → Color Presets or Custom Colors.
 - How do I add a team member? Settings → Team → Add Team Member.
-- Why can't a team member see Settings? Members only see proposals and customers. Admins see most settings. Only owners see General and Team.
-- How do I customize emails? Settings → Email Templates → select a type → edit → Save.
-- How do I send a test email? Settings → Email Templates → select a type → Send Test.
+- How do I add a wedding date or guest count to a customer? Open the customer profile → Overview tab → Wedding Details → edit.
+- How do I add tasks for a customer? Customer profile → Tasks tab → type a task and press Enter.
+- How do I upload a contract to a customer profile? Customer profile → Documents tab → select type Contract → Upload File.
+- How do I connect Calendly? Settings → Integrations → Calendly → Connect → paste your Personal Access Token.
+- How do I sync with Google Calendar? Settings → Integrations → copy your iCal URL → add as a subscribed calendar in Google Calendar.
+- How do I see my available dates? Settings → Integrations → Public Availability Page URL — share this link.
+- How do I add a venue space (barn, garden)? Calendar page → Manage Spaces → add name, color, capacity.
+- What is a pipeline stage? It tracks where a customer is in your booking funnel — from Inquiry through to Post-Event Follow-up.
+- How do I track where a lead came from? Customer profile → Overview → Referral Source dropdown.
+- Why can't a team member see Settings? Members only see proposals, customers, and calendar. Admins see most settings. Only owners see General, Team, and Integrations.
 - How do I restart the setup guide? Settings → General → Restart Setup Guide (owners only).
 `;
 
@@ -228,8 +263,8 @@ ${accountContext}
 - Use numbered lists (1. 2. 3.) or dashes (- item) for lists
 - Keep headings as plain text with a colon, e.g. "How to Access Reports:"
 - When directing the user to a specific page, include ONE navigation link using ONLY this format: [Button Label](/dashboard/path)
-  Examples: [Open Branding Settings](/dashboard/settings) [View Proposals](/dashboard/proposals) [Go to Reports](/dashboard/reports) [Manage Customers](/dashboard/customers) [View Transactions](/dashboard/transactions)
-- Only link to real dashboard paths. Valid paths: /dashboard, /dashboard/proposals, /dashboard/customers, /dashboard/transactions, /dashboard/reports, /dashboard/settings, /dashboard/help
+  Examples: [Open Branding Settings](/dashboard/settings/branding) [View Proposals](/dashboard/payments/proposals) [Go to Reports](/dashboard/reports) [Manage Customers](/dashboard/customers) [View Transactions](/dashboard/transactions) [Open Calendar](/dashboard/calendar) [Open Integrations](/dashboard/settings/integrations)
+- Only link to real dashboard paths. Valid paths: /dashboard, /dashboard/calendar, /dashboard/customers, /dashboard/payments/proposals, /dashboard/payments/new, /dashboard/transactions, /dashboard/reports, /dashboard/settings, /dashboard/settings/branding, /dashboard/settings/integrations, /dashboard/settings/team, /dashboard/settings/notifications, /dashboard/settings/email-templates, /dashboard/help
 - Place the link on its own line at the end of the relevant sentence or step, not inline mid-sentence
 
 === TONE ===

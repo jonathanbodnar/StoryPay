@@ -27,18 +27,19 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         id: 'gs-overview',
         title: 'Platform overview',
-        tags: ['overview', 'intro', 'dashboard', 'what is'],
-        body: `StoryPay is an all-in-one platform for wedding venues to manage proposals, invoices, payments, customers, branding, email templates, and team members — all from one place.
+        tags: ['overview', 'intro', 'dashboard', 'what is', 'storypay'],
+        body: `StoryPay is an all-in-one platform for wedding venues to manage proposals, invoices, payments, customers, a booking calendar, branding, email templates, and team members — all from one place.
 
 After logging in you land on the Home dashboard which shows your revenue, pipeline, recent proposals, and recent transactions at a glance.
 
 Navigation lives in the left sidebar (or the hamburger menu on mobile). The main sections are:
 - Home — your live snapshot
-- Customers — manage contacts
+- Customers — manage contacts and full customer profiles
+- Calendar — book and track tours, weddings, and events
 - Reports — 6 downloadable financial report types (owners and admins only)
 - Payments — proposals, invoices, installments, subscriptions, transactions
 - Help Center — searchable documentation with AI-powered answers
-- Settings — branding, email templates, integrations, team, notifications
+- Settings — branding, email templates, integrations (including Calendly, Google Calendar), team, notifications
 
 What you see in the sidebar depends on your role. Owners see everything. Admins see most things. Members only see Payments and Customers.
 
@@ -69,7 +70,7 @@ Note: The setup guide is only visible to account owners. Admins and Members do n
         id: 'gs-login',
         title: 'Logging in and your login link',
         tags: ['login', 'link', 'access', 'sign in', 'token'],
-        body: `StoryVenue uses magic-link login. You receive a personalised login URL from your account manager. Opening that link sets your session automatically — no password needed.
+        body: `StoryPay uses magic-link login. You receive a personalised login URL from your account manager. Opening that link sets your session automatically — no password needed.
 
 Your session lasts 30 days. If it expires, contact support or your account manager for a fresh link.
 
@@ -111,6 +112,150 @@ The two tables at the bottom show your 5 most recent proposals (with links to vi
     ],
   },
   {
+    id: 'calendar',
+    label: 'Calendar',
+    iconName: 'Calendar',
+    color: '#ec4899',
+    articles: [
+      {
+        id: 'cal-overview',
+        title: 'Calendar overview',
+        tags: ['calendar', 'events', 'booking', 'schedule', 'tour', 'wedding'],
+        body: `The Calendar (sidebar → Calendar) is your central view for all venue events — tours, weddings, receptions, tastings, meetings, rehearsals, holds, and blocked dates.
+
+The month view shows all events as color-coded chips on each day. Click any empty day to add a new event. Click any event chip to see its details or delete it.
+
+Event types are color-coded:
+- Wedding (pink), Reception (purple), Tour (blue), Tasting (amber)
+- Meeting (green), Rehearsal (indigo), Hold/Tentative (gray), Blocked (dark gray)
+
+Use the Month view for day-to-day scheduling. Switch to Revenue View for a 12-month grid showing how many weddings and tours are booked in each month — click any month to jump to it.
+
+The "Today" button snaps back to the current month.`,
+      },
+      {
+        id: 'cal-spaces',
+        title: 'Managing venue spaces',
+        tags: ['spaces', 'barn', 'garden', 'ballroom', 'room', 'venue space'],
+        body: `If your venue has multiple bookable spaces (e.g. Barn, Garden, Ballroom, Vineyard), set them up first so you can track bookings per space and prevent double-bookings.
+
+To add a space:
+1. Click "Manage Spaces" (top-right of the Calendar page)
+2. Enter a name, choose a color (used for event chips on the calendar), and optionally set a capacity
+3. Click Add Space
+
+Spaces appear as filter pills above the calendar. Click a space pill to filter the calendar to that space only. Click "All Spaces" to show everything.
+
+To remove a space, open Manage Spaces and click Remove next to it.`,
+      },
+      {
+        id: 'cal-add-event',
+        title: 'Adding and editing events',
+        tags: ['add event', 'new event', 'book', 'schedule', 'create event'],
+        body: `To add an event, click the "+ Add Event" button or click directly on any day in the calendar grid.
+
+Fill in:
+- Event Title (e.g. "Smith & Johnson Wedding")
+- Type — Wedding, Reception, Tour, Tasting, Meeting, Rehearsal, Hold, Blocked, Other
+- Status — Confirmed, Tentative/Hold, Cancelled
+- Space — select which bookable space (optional)
+- Customer Email — links the event to a customer profile (optional)
+- Date, Start Time, End Time (or check All Day)
+- Notes
+
+Click Save Event.
+
+To view or delete an event, click its chip on the calendar. A detail panel shows all info and offers a Delete button.
+
+To edit an event after creation, delete it and re-create it (full edit coming soon).`,
+      },
+      {
+        id: 'cal-conflicts',
+        title: 'Double-booking protection',
+        tags: ['conflict', 'double booking', 'overlap', 'same date', 'protection'],
+        body: `StoryPay checks for booking conflicts at the database level, not just in the UI. If you try to add an event to a space that already has another event during that time window, you will see a conflict warning.
+
+The warning shows:
+- The conflicting event name
+- Its start and end time
+
+You have two options:
+1. Change the date, time, or space to avoid the conflict
+2. Click "Override & Book Anyway" — this books despite the overlap (useful for back-to-back events with shared setup time, or if a space can handle simultaneous events)
+
+Conflict detection only applies when you select a specific space. Events with no space assigned never trigger conflicts.`,
+      },
+      {
+        id: 'cal-ical',
+        title: 'Syncing with Google Calendar, Outlook, and Apple Calendar',
+        tags: ['ical', 'google calendar', 'outlook', 'apple calendar', 'sync', 'subscribe', 'phone'],
+        body: `StoryPay provides an iCal subscription feed so your events appear in any calendar app on your phone or computer.
+
+To set it up: go to Settings → Integrations → scroll to the "Google Calendar, Outlook & Apple Calendar" card. Copy your iCal URL.
+
+Google Calendar:
+1. Open Google Calendar on desktop (not mobile)
+2. Click + next to "Other calendars"
+3. Choose "From URL"
+4. Paste your iCal URL
+5. Click Add calendar
+
+Outlook / Microsoft 365:
+1. Open Outlook Calendar
+2. Click Add calendar → Subscribe from web
+3. Paste your iCal URL
+4. Click Import
+
+Apple Calendar (Mac):
+1. Open Calendar app
+2. File → New Calendar Subscription
+3. Paste your iCal URL
+4. Set auto-refresh to Every Hour
+5. Click OK
+
+iPhone: Settings → Calendar → Accounts → Add Account → Other → Add Subscribed Calendar → paste the URL.
+
+Note: This is a one-way sync — StoryPay events appear in your personal calendar. Events you add in Google/Outlook do NOT flow back into StoryPay. Updates may take up to 24 hours to appear depending on the calendar app.`,
+      },
+      {
+        id: 'cal-calendly',
+        title: 'Connecting Calendly',
+        tags: ['calendly', 'sync', 'booking', 'tour booking', 'integration', 'connect calendly'],
+        body: `Connect Calendly so that when someone books a tour (or any appointment) through your Calendly link, it automatically appears on your StoryPay calendar and creates a customer profile.
+
+To connect:
+1. Go to Settings → Integrations → Calendly card → click Connect
+2. Go to calendly.com/integrations/api_webhooks → API & Webhooks → Personal Access Tokens → Generate New Token
+3. Copy the token and paste it into StoryPay → click Connect
+
+Once connected:
+- New Calendly bookings appear on your StoryPay calendar instantly (real-time via webhook)
+- A customer profile is created automatically for each booking
+- Cancellations in Calendly automatically mark the event cancelled in StoryPay
+
+Use Sync Now to import all upcoming Calendly events at any time (useful after first connecting).
+
+To disconnect, click Disconnect on the Calendly card. Your existing calendar events are not deleted.`,
+      },
+      {
+        id: 'cal-availability',
+        title: 'Public availability page',
+        tags: ['availability', 'public', 'share', 'open dates', 'prospects', 'widget'],
+        body: `StoryPay generates a public availability page for your venue that shows which dates are open or booked — without revealing any customer names or details.
+
+Find your availability URL at Settings → Integrations → Google Calendar / Outlook & Apple Calendar card → Public Availability Page.
+
+Share this link on your venue website, social media, or with prospects so they can check date availability without calling you.
+
+The page shows a month-by-month calendar with:
+- Open dates (green)
+- Booked / unavailable dates (red, labeled Booked or Tour)
+
+Prospects can navigate forward and back through months. No customer information is ever shown on this page.`,
+      },
+    ],
+  },
+  {
     id: 'customers',
     label: 'Customers',
     iconName: 'Users',
@@ -143,17 +288,93 @@ Results are paginated (20 per page). Use the Previous / Next buttons at the bott
       },
       {
         id: 'cust-profile',
-        title: 'Customer profile and proposal history',
-        tags: ['customer profile', 'proposals', 'history', 'refund'],
-        body: `Click a customer's name to open their profile. From here you can:
+        title: 'Customer profile — overview and tabs',
+        tags: ['customer profile', 'crm', 'profile', 'tabs', 'overview', 'history'],
+        body: `Click a customer's name to open their full profile. The profile has 5 tabs:
 
-- Edit contact details inline
-- See all proposals linked to that customer
-- Copy a proposal's public link
-- Resend a proposal email
-- Issue a refund on a completed payment (click Refund on the relevant proposal row, enter the amount, and confirm)
+Overview
+- Edit contact info inline (name, email, phone, address)
+- Add and view a partner / second contact (important for wedding couples)
+- Wedding Details block: wedding date, ceremony type (ceremony only / reception only / both), guest count, assigned venue space, rehearsal date, day-of coordinator name and phone, catering notes
+- Notes: add timestamped internal notes on this customer
 
-All changes save automatically.`,
+Activity
+- Unified reverse-chronological timeline of every interaction: proposal sent, viewed, signed, payment made, note added, file uploaded, task created/completed, Calendly booking received
+
+Payments
+- All proposals and invoices linked to this customer
+- Installment schedules with payment breakdown
+- Copy link, resend, view invoice, issue refund
+
+Tasks
+- Create tasks with optional due dates (e.g. "Collect final guest count")
+- Check off completed tasks — they collapse but remain visible
+- Overdue tasks show in red
+
+Documents
+- Upload files: contracts, floor plans, vendor agreements, insurance certificates, photos, or other
+- Each file has a type and a status (Pending / Received / Approved)
+- Click a filename to download; update status inline; delete files
+
+The header shows:
+- Pipeline stage (Inquiry → Tour Scheduled → Proposal Sent → Booked → Event Complete → Post-Event Follow-up) — click any stage to update it
+- Referral source badge (how this lead found you)
+- KPI row: total proposals, total paid, pending amount, open tasks`,
+      },
+      {
+        id: 'cust-pipeline',
+        title: 'Pipeline stages and referral source',
+        tags: ['pipeline', 'stage', 'lead', 'referral', 'source', 'funnel', 'crm'],
+        body: `Each customer has a pipeline stage that tracks where they are in your booking funnel:
+
+- Inquiry — first contact, not yet qualified
+- Tour Scheduled — a tour has been booked
+- Proposal Sent — a proposal or invoice has been sent
+- Booked — proposal signed and paid
+- Event Complete — the wedding or event has taken place
+- Post-Event Follow-up — following up for reviews, referrals, etc.
+
+Click any stage button on the customer profile header to update it. The stage is visible on the customer list as a colored badge.
+
+Referral Source tracks how this couple found you: Instagram, Google, Wedding Wire, The Knot, Referral, Venue Website, Facebook, or Other. Set it in the Overview tab → partner/contact edit section.`,
+      },
+      {
+        id: 'cust-tasks',
+        title: 'Customer tasks',
+        tags: ['tasks', 'todo', 'checklist', 'follow up', 'reminder'],
+        body: `The Tasks tab on a customer profile lets you create action items specific to that customer.
+
+To add a task:
+1. Open the customer profile → Tasks tab
+2. Type the task title in the input box
+3. Optionally set a due date
+4. Press Enter or click the + button
+
+Tasks show in order of creation. Overdue tasks (past due date) display the due date in red.
+
+To mark a task done: hover the task row and click the check mark, or click "Done". Completed tasks collapse — click "X completed tasks" at the bottom to expand and review them. Completed tasks can also be permanently deleted.
+
+Tasks are visible only to your team — they are not shared with the customer.`,
+      },
+      {
+        id: 'cust-documents',
+        title: 'Customer documents and files',
+        tags: ['documents', 'files', 'upload', 'contract', 'floor plan', 'insurance', 'attachment'],
+        body: `The Documents tab lets you attach files to a customer profile: signed contracts, floor plans, vendor agreements, insurance certificates, photos, and more.
+
+To upload a file:
+1. Open the customer profile → Documents tab
+2. Select the file type from the dropdown (Contract, Floor Plan, Vendor Agreement, Insurance, Photo, Other)
+3. Click "Upload File" and select the file from your device
+4. Accepted formats: PDF, Word, Excel, images (PNG, JPG) — max 10MB
+
+Each file shows:
+- Filename (click to download)
+- File type
+- Status: Pending, Received, or Approved — update inline by clicking the status dropdown
+- Upload date and who uploaded it
+
+Files are stored securely and are only accessible to your team. Delete a file by clicking the trash icon on its row.`,
       },
     ],
   },
@@ -175,7 +396,7 @@ Step 2 — Find or create the customer. Type their name or email in the customer
 
 Step 3 — For proposals, choose a template (or start from scratch) and edit the contract text. The AI Proposal Generator can draft contract language for you — click the "Generate with AI" button and describe your event.
 
-Step 4 — Add line items. Type a product name (autocompletes from your saved products) or enter a custom item. Each line has a description, quantity, and price.
+Step 4 — Add line items. Type a product name (autocompletes from your saved products) or enter a custom item. Each line has a description, quantity, and price. A processing fee line is added automatically.
 
 Step 5 — Choose a payment type:
 - Full payment — customer pays the full amount at once
@@ -306,7 +527,7 @@ Downloads happen instantly in your browser — no email required. For large date
     id: 'branding',
     label: 'Branding',
     iconName: 'Palette',
-    color: '#ec4899',
+    color: '#f97316',
     articles: [
       {
         id: 'brand-setup',
@@ -334,7 +555,7 @@ Note: Branding settings are visible to owners and admins only.`,
     id: 'email-templates',
     label: 'Email Templates',
     iconName: 'Mail',
-    color: '#f97316',
+    color: '#14b8a6',
     articles: [
       {
         id: 'email-types',
@@ -391,15 +612,60 @@ Preview your template using the Preview button — it shows a sample email with 
     id: 'integrations',
     label: 'Integrations',
     iconName: 'Link2',
-    color: '#14b8a6',
+    color: '#6366f1',
     articles: [
+      {
+        id: 'int-calendly',
+        title: 'Connecting Calendly',
+        tags: ['calendly', 'booking', 'sync', 'tour booking', 'integration', 'connect'],
+        body: `Calendly integration automatically syncs bookings (tours, meetings, tastings) from Calendly into your StoryPay calendar and customer profiles.
+
+To connect:
+1. Go to Settings → Integrations → Calendly card → click Connect
+2. Go to calendly.com/integrations/api_webhooks
+3. Click API & Webhooks → Personal Access Tokens → Generate New Token
+4. Copy the token and paste it into StoryPay → click Connect
+
+After connecting:
+- New Calendly bookings appear on your calendar automatically in real time
+- A customer profile is auto-created for the invitee's email
+- Cancellations in Calendly mark the event cancelled in StoryPay
+- Use Sync Now to import all upcoming Calendly events at any time
+
+To disconnect: click Disconnect on the Calendly card.`,
+      },
+      {
+        id: 'int-google-cal',
+        title: 'Google Calendar, Outlook & Apple Calendar sync',
+        tags: ['google calendar', 'outlook', 'apple calendar', 'ical', 'sync', 'subscribe', 'phone calendar'],
+        body: `Sync your StoryPay calendar to any calendar app using an iCal subscription feed. This is one-way: StoryPay events appear in your calendar app. Events added in Google/Outlook do not flow back into StoryPay.
+
+Find your iCal URL: Settings → Integrations → Google Calendar / Outlook & Apple Calendar card.
+
+Google Calendar:
+1. Open Google Calendar on desktop
+2. Click + next to "Other calendars" → From URL
+3. Paste your iCal URL → Add calendar
+
+Outlook / Microsoft 365:
+1. Calendar → Add calendar → Subscribe from web
+2. Paste your iCal URL → Import
+
+Apple Calendar (Mac):
+1. File → New Calendar Subscription
+2. Paste your iCal URL → set refresh to Every Hour → OK
+
+iPhone: Settings → Calendar → Accounts → Add Account → Other → Add Subscribed Calendar.
+
+Updates may take up to 24 hours depending on the calendar app.`,
+      },
       {
         id: 'int-quickbooks',
         title: 'Connecting QuickBooks Online',
         tags: ['quickbooks', 'accounting', 'integration', 'sync', 'qbo'],
         body: `Go to Settings → Integrations. Click Connect on the QuickBooks Online card.
 
-You'll be redirected to Intuit to authorise the connection. After approving, you're returned to StoryVenue and the integration shows as Connected.
+You'll be redirected to Intuit to authorise the connection. After approving, you're returned to StoryPay and the integration shows as Connected.
 
 Once connected:
 - Invoices and payments sync automatically to QuickBooks
@@ -459,20 +725,20 @@ Note: Only owners and admins can manage team members.`,
 
 Owner
 - Full access to everything
-- Sees all sidebar items including Reports, What's New, and all Settings
+- Sees all sidebar items including Calendar, Reports, What's New, and all Settings
 - Can manage branding, email templates, team, integrations, general settings
 - Sees the Get Started onboarding checklist and can restart it
 - Can manage billing and payment processing
 
 Admin
-- Access to proposals, customers, invoices, payments, and most settings
+- Access to proposals, customers, calendar, invoices, payments, and most settings
 - Can manage branding and email templates
 - Cannot access General settings, Team management, or Integrations
 - Does not see the onboarding checklist
 
 Member
 - Can only view and manage proposals and customers
-- Sees Home, Customers, Payments, Help Center, and Ask AI
+- Sees Home, Customers, Calendar, Payments, Help Center, and Ask AI
 - Cannot access Settings, Reports, or What's New
 - Does not see the onboarding checklist
 
@@ -547,6 +813,8 @@ You can ask questions like:
 - "Show me my open proposals"
 - "How do I issue a refund?"
 - "What reports are available?"
+- "How do I connect Calendly?"
+- "How do I sync my calendar with Google Calendar?"
 
 Ask AI answers in plain language without jargon. It uses your real account data to give accurate, personalised answers.`,
       },
@@ -603,7 +871,10 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard': ['dash-kpis', 'dash-chart', 'gs-onboarding'],
 
   // Customers
-  '/dashboard/customers': ['cust-add', 'cust-search', 'cust-profile'],
+  '/dashboard/customers': ['cust-add', 'cust-search', 'cust-profile', 'cust-tasks', 'cust-documents'],
+
+  // Calendar
+  '/dashboard/calendar': ['cal-overview', 'cal-spaces', 'cal-add-event', 'cal-conflicts'],
 
   // Payments — new proposal / invoice
   '/dashboard/payments/new':        ['pay-new', 'pay-templates', 'pay-installments'],
@@ -627,9 +898,9 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   // Settings
   '/dashboard/settings/branding':        ['brand-setup'],
   '/dashboard/settings/email-templates': ['email-types', 'email-variables'],
-  '/dashboard/settings/integrations':    ['int-quickbooks', 'int-freshbooks'],
+  '/dashboard/settings/integrations':    ['int-calendly', 'int-google-cal', 'int-quickbooks', 'int-freshbooks'],
   '/dashboard/settings/team':            ['team-invite', 'team-roles'],
-  '/dashboard/settings/notifications':   ['notif-settings'],
+  '/dashboard/settings/notifications':   ['notif-settings', 'sms-notifications'],
   '/dashboard/settings':                 ['gs-overview', 'gs-onboarding'],
 
   // What's New / Updates
@@ -637,7 +908,7 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
 
   // AI
   '/dashboard/ai':   ['ai-overview', 'ai-screenshot', 'ai-voice', 'ai-escalate'],
-  '/dashboard/help': ['gs-overview', 'ai-overview'],
+  '/dashboard/help': ['gs-overview', 'cal-overview', 'ai-overview'],
 };
 
 // Returns the best-matching article IDs for a given pathname.
