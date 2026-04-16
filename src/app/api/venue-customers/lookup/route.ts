@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { getDb } from '@/lib/db';
 import { getVenueId } from '@/lib/auth-helpers';
 
-// POST body lookup to avoid URL-encoding issues with email addresses containing '@'
 export async function POST(request: NextRequest) {
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -10,13 +9,20 @@ export async function POST(request: NextRequest) {
   const { email } = await request.json();
   if (!email) return NextResponse.json({ error: 'email is required' }, { status: 400 });
 
-  const { data, error } = await supabaseAdmin
-    .from('venue_customers')
-    .select('*, venue_spaces(id, name, color)')
-    .eq('venue_id', venueId)
-    .eq('customer_email', email.toLowerCase())
-    .maybeSingle();
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data ?? null);
+  try {
+    const sql = getDb();
+    const [row] = await sql`
+      SELECT vc.*,
+        CASE WHEN s.id IS NOT NULL THEN
+          json_build_object('id', s.id, 'name', s.name, 'color', s.color)
+        ELSE NULL END AS venue_spaces
+      FROM venue_customers vc
+      LEFT JOIN venue_spaces s ON s.id = vc.wedding_space_id
+      WHERE vc.venue_id = ${venueId}
+        AND vc.customer_email = ${email.toLowerCase()}
+    `;
+    return NextResponse.json(row ?? null);
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
 }

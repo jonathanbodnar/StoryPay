@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { getDb } from '@/lib/db';
 import { getVenueId, getMemberName } from '@/lib/auth-helpers';
 
 export async function GET(
@@ -10,15 +10,17 @@ export async function GET(
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { id } = await params;
 
-  const { data, error } = await supabaseAdmin
-    .from('customer_notes')
-    .select('*')
-    .eq('customer_id', id)
-    .eq('venue_id', venueId)
-    .order('created_at', { ascending: false });
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data ?? []);
+  try {
+    const sql = getDb();
+    const rows = await sql`
+      SELECT * FROM customer_notes
+      WHERE customer_id = ${id} AND venue_id = ${venueId}
+      ORDER BY created_at DESC
+    `;
+    return NextResponse.json(rows);
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
 }
 
 export async function POST(
@@ -34,24 +36,21 @@ export async function POST(
 
   const authorName = await getMemberName();
 
-  const { data, error } = await supabaseAdmin
-    .from('customer_notes')
-    .insert({ customer_id: id, venue_id: venueId, content: content.trim(), author_name: authorName })
-    .select()
-    .single();
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  // Log activity
-  await supabaseAdmin.from('customer_activity').insert({
-    venue_id: venueId,
-    customer_id: id,
-    activity_type: 'note_added',
-    title: 'Note added',
-    description: content.trim().slice(0, 120),
-  });
-
-  return NextResponse.json(data, { status: 201 });
+  try {
+    const sql = getDb();
+    const [row] = await sql`
+      INSERT INTO customer_notes (customer_id, venue_id, content, author_name)
+      VALUES (${id}, ${venueId}, ${content.trim()}, ${authorName})
+      RETURNING *
+    `;
+    await sql`
+      INSERT INTO customer_activity (venue_id, customer_id, activity_type, title, description)
+      VALUES (${venueId}, ${id}, 'note_added', 'Note added', ${content.trim().slice(0, 120)})
+    `;
+    return NextResponse.json(row, { status: 201 });
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
 }
 
 export async function DELETE(
@@ -61,17 +60,17 @@ export async function DELETE(
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { id: customerId } = await params;
-  const { searchParams } = request.nextUrl;
-  const noteId = searchParams.get('noteId');
+  const noteId = request.nextUrl.searchParams.get('noteId');
   if (!noteId) return NextResponse.json({ error: 'noteId required' }, { status: 400 });
 
-  const { error } = await supabaseAdmin
-    .from('customer_notes')
-    .delete()
-    .eq('id', noteId)
-    .eq('customer_id', customerId)
-    .eq('venue_id', venueId);
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ success: true });
+  try {
+    const sql = getDb();
+    await sql`
+      DELETE FROM customer_notes
+      WHERE id = ${noteId} AND customer_id = ${customerId} AND venue_id = ${venueId}
+    `;
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
 }

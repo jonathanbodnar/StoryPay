@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { getDb } from '@/lib/db';
 import { getVenueId } from '@/lib/auth-helpers';
 
 export async function PATCH(
@@ -9,27 +9,24 @@ export async function PATCH(
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { id } = await params;
+  const { name, color, capacity, description, active } = await request.json();
 
-  const body = await request.json();
-  const { name, color, capacity, description, active } = body;
-
-  const update: Record<string, unknown> = {};
-  if (name !== undefined) update.name = name.trim();
-  if (color !== undefined) update.color = color;
-  if (capacity !== undefined) update.capacity = capacity;
-  if (description !== undefined) update.description = description;
-  if (active !== undefined) update.active = active;
-
-  const { data, error } = await supabaseAdmin
-    .from('venue_spaces')
-    .update(update)
-    .eq('id', id)
-    .eq('venue_id', venueId)
-    .select()
-    .single();
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data);
+  try {
+    const sql = getDb();
+    const [row] = await sql`
+      UPDATE venue_spaces SET
+        name        = CASE WHEN ${name        !== undefined} THEN ${name?.trim() ?? name}    ELSE name        END,
+        color       = CASE WHEN ${color       !== undefined} THEN ${color        ?? null}     ELSE color       END,
+        capacity    = CASE WHEN ${capacity    !== undefined} THEN ${capacity     ?? null}     ELSE capacity    END,
+        description = CASE WHEN ${description !== undefined} THEN ${description  ?? null}     ELSE description END,
+        active      = CASE WHEN ${active      !== undefined} THEN ${active       ?? true}     ELSE active      END
+      WHERE id = ${id} AND venue_id = ${venueId}
+      RETURNING *
+    `;
+    return NextResponse.json(row);
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
 }
 
 export async function DELETE(
@@ -40,12 +37,11 @@ export async function DELETE(
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { id } = await params;
 
-  const { error } = await supabaseAdmin
-    .from('venue_spaces')
-    .delete()
-    .eq('id', id)
-    .eq('venue_id', venueId);
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ success: true });
+  try {
+    const sql = getDb();
+    await sql`DELETE FROM venue_spaces WHERE id = ${id} AND venue_id = ${venueId}`;
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
 }

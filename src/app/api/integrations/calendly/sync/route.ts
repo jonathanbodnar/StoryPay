@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { getDb } from '@/lib/db';
 import { getVenueId } from '@/lib/auth-helpers';
 import { listScheduledEvents, getEventInvitees, mapEventType } from '@/lib/calendly';
 
@@ -19,10 +20,8 @@ export async function POST() {
 
   const token  = venue.calendly_access_token;
   const orgUri = venue.calendly_org_uri;
-
-  // Import upcoming events from now → 6 months out
-  const from = new Date().toISOString();
-  const to   = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString();
+  const from   = new Date().toISOString();
+  const to     = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString();
 
   let events;
   try {
@@ -31,61 +30,40 @@ export async function POST() {
     return NextResponse.json({ error: `Failed to fetch Calendly events: ${err instanceof Error ? err.message : err}` }, { status: 502 });
   }
 
-  let created = 0;
-  let skipped = 0;
+  const sql = getDb();
+  let created = 0, skipped = 0;
 
   for (const evt of events) {
     const calendlyEventId = evt.uri.split('/').pop()!;
 
-    // Check if already imported (we store the calendly event URI in notes field)
-    const { data: existing } = await supabaseAdmin
-      .from('calendar_events')
-      .select('id')
-      .eq('venue_id', venueId)
-      .like('notes', `%calendly_event_id:${calendlyEventId}%`)
-      .maybeSingle();
+    const existing = await sql`
+      SELECT id FROM calendar_events
+      WHERE venue_id = ${venueId} AND notes LIKE ${'%calendly_event_id:' + calendlyEventId + '%'}
+      LIMIT 1
+    `;
+    if (existing.length > 0) { skipped++; continue; }
 
-    if (existing) { skipped++; continue; }
-
-    // Fetch the first invitee for customer email
-    const invitees = await getEventInvitees(token, evt.uri);
+    const invitees       = await getEventInvitees(token, evt.uri);
     const primaryInvitee = invitees[0];
     const customerEmail  = primaryInvitee?.email ?? null;
-    const eventTitle     = primaryInvitee?.name
-      ? `${primaryInvitee.name} — ${evt.name}`
-      : evt.name;
+    const eventTitle     = primaryInvitee?.name ? `${primaryInvitee.name} — ${evt.name}` : evt.name;
+    const eventType      = mapEventType(evt.name);
+    const evtStatus      = evt.status === 'canceled' ? 'cancelled' : 'confirmed';
 
-    const eventType = mapEventType(evt.name);
+    await sql`
+      INSERT INTO calendar_events (venue_id, title, event_type, status, start_at, end_at, all_day, customer_email, notes)
+      VALUES (${venueId}, ${eventTitle}, ${eventType}, ${evtStatus},
+              ${evt.start_time}::timestamptz, ${evt.end_time}::timestamptz,
+              false, ${customerEmail}, ${'Imported from Calendly\ncalendly_event_id:' + calendlyEventId})
+    `;
 
-    await supabaseAdmin.from('calendar_events').insert({
-      venue_id:       venueId,
-      title:          eventTitle,
-      event_type:     eventType,
-      status:         evt.status === 'canceled' ? 'cancelled' : 'confirmed',
-      start_at:       evt.start_time,
-      end_at:         evt.end_time,
-      all_day:        false,
-      customer_email: customerEmail,
-      notes:          `Imported from Calendly\ncalendly_event_id:${calendlyEventId}`,
-    });
-
-    // Auto-create / update local venue_customer record
     if (customerEmail) {
       const nameParts = (primaryInvitee?.name ?? '').trim().split(' ');
-      const firstName = nameParts[0] ?? '';
-      const lastName  = nameParts.slice(1).join(' ');
-      await supabaseAdmin
-        .from('venue_customers')
-        .upsert(
-          {
-            venue_id: venueId,
-            customer_email: customerEmail.toLowerCase(),
-            first_name: firstName,
-            last_name:  lastName,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'venue_id,customer_email', ignoreDuplicates: false }
-        );
+      await sql`
+        INSERT INTO venue_customers (venue_id, customer_email, first_name, last_name, updated_at)
+        VALUES (${venueId}, ${customerEmail.toLowerCase()}, ${nameParts[0] ?? ''}, ${nameParts.slice(1).join(' ')}, now())
+        ON CONFLICT (venue_id, customer_email) DO UPDATE SET updated_at = now()
+      `;
     }
 
     created++;

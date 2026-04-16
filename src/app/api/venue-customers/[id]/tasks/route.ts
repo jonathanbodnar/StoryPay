@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { getDb } from '@/lib/db';
 import { getVenueId } from '@/lib/auth-helpers';
 
 export async function GET(
@@ -10,15 +10,17 @@ export async function GET(
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { id } = await params;
 
-  const { data, error } = await supabaseAdmin
-    .from('customer_tasks')
-    .select('*')
-    .eq('customer_id', id)
-    .eq('venue_id', venueId)
-    .order('created_at', { ascending: true });
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data ?? []);
+  try {
+    const sql = getDb();
+    const rows = await sql`
+      SELECT * FROM customer_tasks
+      WHERE customer_id = ${id} AND venue_id = ${venueId}
+      ORDER BY created_at ASC
+    `;
+    return NextResponse.json(rows);
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
 }
 
 export async function POST(
@@ -32,21 +34,19 @@ export async function POST(
   const { title, due_date } = await request.json();
   if (!title?.trim()) return NextResponse.json({ error: 'Title is required' }, { status: 400 });
 
-  const { data, error } = await supabaseAdmin
-    .from('customer_tasks')
-    .insert({ customer_id: id, venue_id: venueId, title: title.trim(), due_date: due_date || null })
-    .select()
-    .single();
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  await supabaseAdmin.from('customer_activity').insert({
-    venue_id: venueId,
-    customer_id: id,
-    activity_type: 'task_created',
-    title: 'Task created',
-    description: title.trim(),
-  });
-
-  return NextResponse.json(data, { status: 201 });
+  try {
+    const sql = getDb();
+    const [row] = await sql`
+      INSERT INTO customer_tasks (customer_id, venue_id, title, due_date)
+      VALUES (${id}, ${venueId}, ${title.trim()}, ${due_date || null})
+      RETURNING *
+    `;
+    await sql`
+      INSERT INTO customer_activity (venue_id, customer_id, activity_type, title, description)
+      VALUES (${venueId}, ${id}, 'task_created', 'Task created', ${title.trim()})
+    `;
+    return NextResponse.json(row, { status: 201 });
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
 }
