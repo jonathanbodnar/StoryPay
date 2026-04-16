@@ -110,10 +110,7 @@ export default function CalendarPage() {
   const [selectedEvent, setSelectedEvent] = useState<CalEvent | null>(null);
   const [deleting,      setDeleting]      = useState(false);
 
-  // Space management
-  const [showSpaceModal, setShowSpaceModal] = useState(false);
-  const [spaceForm,      setSpaceForm]      = useState({ name: '', color: '#6366f1', capacity: '' });
-  const [savingSpace,    setSavingSpace]    = useState(false);
+  // Space management (spaces managed in Customer Profile → Overview → Venue Spaces)
 
   const [icalCopied, setIcalCopied] = useState(false);
 
@@ -401,10 +398,6 @@ export default function CalendarPage() {
             <button onClick={handlePrint}
               className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
               <Printer size={13} /> Print
-            </button>
-            <button onClick={() => setShowSpaceModal(true)}
-              className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
-              Manage Spaces
             </button>
             <button onClick={() => openNewEvent()}
               className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition-colors"
@@ -718,65 +711,6 @@ export default function CalendarPage() {
         </div>
       )}
 
-      {/* ── Space management modal ── */}
-      {showSpaceModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="relative w-full max-w-md rounded-2xl bg-white p-6">
-            <button onClick={() => setShowSpaceModal(false)} className="absolute right-4 top-4 text-gray-400 hover:text-gray-600"><X size={20} /></button>
-            <h2 className="font-heading text-lg font-semibold text-gray-900 mb-5">Manage Spaces</h2>
-            <div className="space-y-2 mb-5">
-              {spaces.length === 0 && <p className="text-sm text-gray-400">No spaces yet.</p>}
-              {spaces.map(s => (
-                <div key={s.id} className="flex items-center justify-between rounded-xl border border-gray-200 px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <span className="w-3.5 h-3.5 rounded-full inline-block flex-shrink-0" style={{ backgroundColor: s.color }} />
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{s.name}</p>
-                      {s.capacity && <p className="text-xs text-gray-400">Capacity: {s.capacity}</p>}
-                    </div>
-                  </div>
-                  <button onClick={async () => {
-                    await fetch(`/api/spaces/${s.id}`, { method: 'DELETE' });
-                    setSpaces(prev => prev.filter(sp => sp.id !== s.id));
-                  }} className="text-xs text-red-500 hover:text-red-700 transition-colors">Remove</button>
-                </div>
-              ))}
-            </div>
-            <div className="border-t border-gray-200 pt-4">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-3">Add New Space</p>
-              <div className="space-y-3">
-                <input value={spaceForm.name} onChange={e => setSpaceForm(p => ({ ...p, name: e.target.value }))}
-                  placeholder="e.g. Barn, Garden, Ballroom"
-                  className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
-                <div className="flex gap-3">
-                  <div className="flex items-center gap-2 flex-1">
-                    <label className="text-xs text-gray-500">Color</label>
-                    <input type="color" value={spaceForm.color} onChange={e => setSpaceForm(p => ({ ...p, color: e.target.value }))}
-                      className="h-8 w-12 rounded border border-gray-200 cursor-pointer" />
-                  </div>
-                  <input type="number" value={spaceForm.capacity} onChange={e => setSpaceForm(p => ({ ...p, capacity: e.target.value }))}
-                    placeholder="Capacity (optional)"
-                    className="flex-1 rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
-                </div>
-                <button disabled={!spaceForm.name.trim() || savingSpace}
-                  onClick={async () => {
-                    setSavingSpace(true);
-                    const res = await fetch('/api/spaces', {
-                      method: 'POST', headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ name: spaceForm.name, color: spaceForm.color, capacity: spaceForm.capacity ? Number(spaceForm.capacity) : null }),
-                    });
-                    if (res.ok) { const s = await res.json(); setSpaces(prev => [...prev, s]); setSpaceForm({ name: '', color: '#6366f1', capacity: '' }); }
-                    setSavingSpace(false);
-                  }}
-                  className="w-full rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-colors disabled:opacity-50"
-                  style={{ backgroundColor: '#1b1b1b' }}>
-                  {savingSpace ? 'Adding...' : 'Add Space'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }

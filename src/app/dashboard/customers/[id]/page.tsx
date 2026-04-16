@@ -113,7 +113,7 @@ export default function CustomerDetailPage() {
   const [tasks,         setTasks]         = useState<Task[]>([]);
   const [files,         setFiles]         = useState<FileRow[]>([]);
   const [activity,      setActivity]      = useState<ActivityEntry[]>([]);
-  const [spaces,        setSpaces]        = useState<{ id: string; name: string; color: string }[]>([]);
+  const [spaces,        setSpaces]        = useState<{ id: string; name: string; color: string; capacity?: number | null }[]>([]);
 
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState('');
@@ -163,6 +163,13 @@ export default function CustomerDetailPage() {
   const [uploading,    setUploading]    = useState(false);
   const [uploadType,   setUploadType]   = useState('other');
   const [uploadError,  setUploadError]  = useState('');
+
+  // Venue Spaces management (venue-level, shown on overview)
+  const [showSpaceManager, setShowSpaceManager] = useState(false);
+  const [newSpaceName,     setNewSpaceName]     = useState('');
+  const [newSpaceColor,    setNewSpaceColor]    = useState('#6366f1');
+  const [newSpaceCap,      setNewSpaceCap]      = useState('');
+  const [savingSpace,      setSavingSpace]      = useState(false);
 
   // ── Fetch all data ─────────────────────────────────────────────────────────
   const fetchAll = useCallback(async () => {
@@ -503,6 +510,30 @@ export default function CustomerDetailPage() {
     setFiles(p => p.filter(f => f.id !== fileId));
   }
 
+  // ── Venue Spaces CRUD ─────────────────────────────────────────────────────
+  async function addSpace() {
+    if (!newSpaceName.trim()) return;
+    setSavingSpace(true);
+    const res = await fetch('/api/spaces', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newSpaceName.trim(), color: newSpaceColor, capacity: newSpaceCap ? Number(newSpaceCap) : null }),
+    });
+    if (res.ok) {
+      const s = await res.json();
+      setSpaces(prev => [...prev, s]);
+      setNewSpaceName(''); setNewSpaceColor('#6366f1'); setNewSpaceCap('');
+    }
+    setSavingSpace(false);
+  }
+
+  async function removeSpace(id: string) {
+    await fetch(`/api/spaces/${id}`, { method: 'DELETE' });
+    setSpaces(prev => prev.filter(s => s.id !== id));
+    // If this space was selected in wedding form, clear it
+    if (weddingForm.wedding_space_id === id) setWeddingForm(p => ({ ...p, wedding_space_id: '' }));
+  }
+
   // ── Proposal helpers ──────────────────────────────────────────────────────
   function copyLink(p: Proposal) {
     navigator.clipboard.writeText(`${window.location.origin}/proposal/${p.public_token}`);
@@ -816,6 +847,70 @@ export default function CustomerDetailPage() {
               <p className="text-xs text-gray-400">No wedding details yet.{' '}
                 <button onClick={startEditWedding} className="text-blue-600 hover:underline">Add details</button>
               </p>
+            )}
+          </div>
+
+          {/* ── Venue Spaces ── */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 lg:col-span-2">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-heading text-base text-gray-900 flex items-center gap-2">
+                <Calendar size={15} /> Venue Spaces
+              </h2>
+              <button onClick={() => setShowSpaceManager(v => !v)}
+                className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1 transition-colors">
+                <Pencil size={11} /> {showSpaceManager ? 'Done' : 'Manage'}
+              </button>
+            </div>
+
+            {/* Space list */}
+            {spaces.length === 0 && !showSpaceManager && (
+              <p className="text-xs text-gray-400">
+                No spaces yet.{' '}
+                <button onClick={() => setShowSpaceManager(true)} className="text-blue-600 hover:underline">Add a space</button>
+              </p>
+            )}
+            {spaces.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-3">
+                {spaces.map(s => (
+                  <div key={s.id} className="flex items-center gap-1.5 rounded-full border border-gray-200 pl-2 pr-1 py-1">
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
+                    <span className="text-xs text-gray-700 font-medium">{s.name}</span>
+                    {s.capacity ? <span className="text-[10px] text-gray-400">({s.capacity})</span> : null}
+                    {showSpaceManager && (
+                      <button onClick={() => removeSpace(s.id)}
+                        className="ml-0.5 rounded-full w-4 h-4 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+                        <XIcon size={10} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add space form */}
+            {showSpaceManager && (
+              <div className="border-t border-gray-100 pt-3 mt-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-2">Add Space</p>
+                <div className="flex flex-wrap gap-2 items-end">
+                  <input value={newSpaceName} onChange={e => setNewSpaceName(e.target.value)}
+                    placeholder="e.g. Barn, Garden, Ballroom"
+                    onKeyDown={e => e.key === 'Enter' && addSpace()}
+                    className="flex-1 min-w-[140px] rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
+                  <div className="flex items-center gap-1.5">
+                    <label className="text-xs text-gray-400">Color</label>
+                    <input type="color" value={newSpaceColor} onChange={e => setNewSpaceColor(e.target.value)}
+                      className="h-8 w-10 rounded border border-gray-200 cursor-pointer" />
+                  </div>
+                  <input type="number" value={newSpaceCap} onChange={e => setNewSpaceCap(e.target.value)}
+                    placeholder="Capacity"
+                    className="w-24 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
+                  <button onClick={addSpace} disabled={!newSpaceName.trim() || savingSpace}
+                    className="rounded-xl px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-40"
+                    style={{ backgroundColor: '#1b1b1b' }}>
+                    {savingSpace ? <Loader2 size={14} className="animate-spin inline" /> : 'Add'}
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         </div>
