@@ -85,14 +85,26 @@ export default function IntegrationsPage() {
  const [calendlyDisconnecting, setCalendlyDisconnecting] = useState(false);
  const [calendlySyncing, setCalendlySyncing] = useState(false);
 
+ // iCal state
+ const [icalUrl, setIcalUrl] = useState('');
+ const [availabilityUrl, setAvailabilityUrl] = useState('');
+ const [icalCopied, setIcalCopied] = useState<string | null>(null);
+
  const fetchStatus = useCallback(async () => {
  try {
- const [intRes, calRes] = await Promise.all([
+ const [intRes, calRes, venueRes] = await Promise.all([
    fetch('/api/integrations/status'),
    fetch('/api/integrations/calendly/status'),
+   fetch('/api/venues/me'),
  ]);
  if (intRes.ok) setData(await intRes.json());
  if (calRes.ok) setCalendly(await calRes.json());
+ if (venueRes.ok) {
+   const venue = await venueRes.json();
+   const base = window.location.origin;
+   setIcalUrl(`${base}/api/calendar/ical?token=${venue.id}`);
+   setAvailabilityUrl(`${base}/availability/${venue.id}`);
+ }
  } finally { setLoading(false); }
  }, []);
 
@@ -379,6 +391,144 @@ export default function IntegrationsPage() {
        </div>
      </div>
    )}
+ </div>
+
+ {/* ── Google Calendar / Outlook / Apple Calendar — iCal subscription ── */}
+ <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+   <div className="px-6 py-5">
+     <div className="flex items-start gap-4">
+       <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-2xl"
+         style={{ backgroundColor: '#EA433518' }}>
+         📅
+       </div>
+       <div className="flex-1 min-w-0">
+         <div className="flex items-center gap-2 flex-wrap">
+           <h3 className="text-base font-semibold text-gray-900">Google Calendar, Outlook & Apple Calendar</h3>
+           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+             <CheckCircle2 size={10} /> Always Active
+           </span>
+         </div>
+         <p className="mt-1 text-sm text-gray-500">
+           Subscribe to your StoryPay calendar from any calendar app. Your events sync automatically — no login required.
+           This is a <strong>one-way</strong> feed: StoryPay events appear in your personal calendar.
+         </p>
+       </div>
+     </div>
+
+     {icalUrl && (
+       <div className="mt-5 space-y-5">
+         {/* iCal URL */}
+         <div>
+           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Your iCal Subscription URL</p>
+           <div className="flex items-center gap-2">
+             <code className="flex-1 truncate rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-mono text-gray-700">
+               {icalUrl}
+             </code>
+             <button
+               onClick={() => { navigator.clipboard.writeText(icalUrl); setIcalCopied('ical'); setTimeout(() => setIcalCopied(null), 2500); }}
+               className="shrink-0 flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+             >
+               {icalCopied === 'ical' ? <CheckCircle2 size={13} className="text-emerald-500" /> : <ExternalLink size={13} />}
+               {icalCopied === 'ical' ? 'Copied!' : 'Copy'}
+             </button>
+           </div>
+         </div>
+
+         {/* Step-by-step instructions */}
+         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+           {/* Google Calendar */}
+           <div className="rounded-xl border border-gray-200 p-4">
+             <div className="flex items-center gap-2 mb-3">
+               <span className="text-lg">🗓️</span>
+               <p className="text-sm font-semibold text-gray-900">Google Calendar</p>
+             </div>
+             <ol className="space-y-1.5 text-xs text-gray-600 list-decimal list-inside">
+               <li>Open Google Calendar on desktop</li>
+               <li>Click <strong>+</strong> next to &ldquo;Other calendars&rdquo;</li>
+               <li>Choose <strong>From URL</strong></li>
+               <li>Paste your iCal URL above</li>
+               <li>Click <strong>Add calendar</strong></li>
+             </ol>
+             <a
+               href="https://calendar.google.com/calendar/r/settings/addbyurl"
+               target="_blank"
+               rel="noreferrer"
+               className="mt-3 inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+             >
+               Open Google Calendar <ExternalLink size={10} />
+             </a>
+           </div>
+
+           {/* Outlook */}
+           <div className="rounded-xl border border-gray-200 p-4">
+             <div className="flex items-center gap-2 mb-3">
+               <span className="text-lg">📘</span>
+               <p className="text-sm font-semibold text-gray-900">Outlook / Microsoft 365</p>
+             </div>
+             <ol className="space-y-1.5 text-xs text-gray-600 list-decimal list-inside">
+               <li>Open Outlook Calendar</li>
+               <li>Click <strong>Add calendar</strong></li>
+               <li>Choose <strong>Subscribe from web</strong></li>
+               <li>Paste your iCal URL above</li>
+               <li>Click <strong>Import</strong></li>
+             </ol>
+             <a
+               href="https://outlook.live.com/calendar/0/addfromweb"
+               target="_blank"
+               rel="noreferrer"
+               className="mt-3 inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+             >
+               Open Outlook Calendar <ExternalLink size={10} />
+             </a>
+           </div>
+
+           {/* Apple Calendar */}
+           <div className="rounded-xl border border-gray-200 p-4">
+             <div className="flex items-center gap-2 mb-3">
+               <span className="text-lg">🍎</span>
+               <p className="text-sm font-semibold text-gray-900">Apple Calendar (Mac / iPhone)</p>
+             </div>
+             <ol className="space-y-1.5 text-xs text-gray-600 list-decimal list-inside">
+               <li>Open Calendar on Mac</li>
+               <li>Click <strong>File → New Calendar Subscription</strong></li>
+               <li>Paste your iCal URL above</li>
+               <li>Set auto-refresh to <strong>Every hour</strong></li>
+               <li>Click <strong>OK</strong></li>
+             </ol>
+             <p className="mt-3 text-[11px] text-gray-400">iPhone: Settings → Calendar → Accounts → Add Account → Other → Add Subscribed Calendar</p>
+           </div>
+         </div>
+
+         {/* Availability page */}
+         <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+           <p className="text-xs font-semibold text-blue-800 mb-1">Public Availability Page</p>
+           <p className="text-xs text-blue-700 mb-2">Share this link with prospects so they can check which dates are open — no customer info is exposed.</p>
+           <div className="flex items-center gap-2">
+             <code className="flex-1 truncate rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-mono text-blue-800">
+               {availabilityUrl}
+             </code>
+             <button
+               onClick={() => { navigator.clipboard.writeText(availabilityUrl); setIcalCopied('avail'); setTimeout(() => setIcalCopied(null), 2500); }}
+               className="shrink-0 flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50 transition-colors"
+             >
+               {icalCopied === 'avail' ? <CheckCircle2 size={12} className="text-emerald-500" /> : <ExternalLink size={12} />}
+               {icalCopied === 'avail' ? 'Copied!' : 'Copy'}
+             </button>
+             <a href={availabilityUrl} target="_blank" rel="noreferrer"
+               className="shrink-0 flex items-center gap-1 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50 transition-colors">
+               Preview <ExternalLink size={11} />
+             </a>
+           </div>
+         </div>
+       </div>
+     )}
+   </div>
+   <div className="border-t border-gray-200 bg-gray-50/50 px-6 py-3">
+     <div className="flex items-center gap-2 text-xs text-gray-400">
+       <ArrowRight size={11} />
+       <span>Events update automatically in your calendar app. Refresh interval depends on the app (Google Calendar updates within ~12 hours; Outlook within a few hours).</span>
+     </div>
+   </div>
  </div>
 
  {/* ── Accounting integrations ── */}

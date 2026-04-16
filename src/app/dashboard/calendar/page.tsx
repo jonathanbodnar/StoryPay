@@ -223,19 +223,16 @@ export default function CalendarPage() {
   }
 
   async function copyIcal() {
-    // Resolve venue ID from session cookie context via a lightweight endpoint
-    let venueId = '';
     try {
-      const r = await fetch('/api/spaces'); // any authed route; we just need the cookie to resolve
-      // venue_id is not returned here, so fetch it from a dedicated endpoint
-      const settingsRes = await fetch('/api/venues/me');
-      if (settingsRes.ok) { const d = await settingsRes.json(); venueId = d.id ?? ''; }
+      const res = await fetch('/api/venues/me');
+      if (res.ok) {
+        const venue = await res.json();
+        const url = `${window.location.origin}/api/calendar/ical?token=${venue.id}`;
+        await navigator.clipboard.writeText(url);
+      }
     } catch { /* ignore */ }
-    const url = `${window.location.origin}/api/calendar/ical?token=${venueId}`;
-    navigator.clipboard.writeText(url).then(() => {
-      setIcalCopied(true);
-      setTimeout(() => setIcalCopied(false), 2500);
-    });
+    setIcalCopied(true);
+    setTimeout(() => setIcalCopied(false), 2500);
   }
 
   const currentMonthEventCount = events.filter(e => activeSpaceFilter === 'all' || e.space_id === activeSpaceFilter).length;
@@ -646,7 +643,3 @@ export default function CalendarPage() {
   );
 }
 
-// Attach venue ID for iCal URL generation
-declare global {
-  interface Window { __VENUE_ID__: string; }
-}
