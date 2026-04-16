@@ -175,12 +175,16 @@ export default function CustomerDetailPage() {
 
       const email = cData.customer?.email?.toLowerCase() ?? '';
 
-      // Ensure local venue_customer record exists
+      // Ensure local venue_customer record exists.
+      // Use POST lookup to avoid URL-encoding issues with '@' in email addresses.
       let vc: VenueCustomer | null = null;
       if (email) {
-        const vcRes  = await fetch(`/api/venue-customers?search=${encodeURIComponent(email)}`);
-        const vcList: VenueCustomer[] = vcRes.ok ? await vcRes.json() : [];
-        vc = vcList.find(v => v.customer_email.toLowerCase() === email) ?? null;
+        const lookupRes = await fetch('/api/venue-customers/lookup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+        if (lookupRes.ok) vc = await lookupRes.json();
 
         if (!vc) {
           const createRes = await fetch('/api/venue-customers', {
