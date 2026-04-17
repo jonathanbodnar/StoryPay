@@ -5,6 +5,7 @@ import { listCustomers, createCustomer } from '@/lib/lunarpay';
 import { ghlRequest, refreshAccessToken } from '@/lib/ghl';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
   const cookieStore = await cookies();
@@ -101,6 +102,38 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // ── Pull from our own venue_customers table (StoryPay-native CRM) ────────
+  // Ensures customers that were created before LunarPay/GHL were connected
+  // (or without them at all) still show up in the list.
+  try {
+    const { data: rows, error } = await supabaseAdmin
+      .from('venue_customers')
+      .select('id, customer_email, first_name, last_name, phone, ghl_contact_id, lunarpay_customer_id')
+      .eq('venue_id', venueId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[customers] venue_customers fetch error:', error);
+    } else {
+      for (const c of rows ?? []) {
+        const email = (c.customer_email || '').toLowerCase();
+        if (email && seenEmails.has(email)) continue;
+        merged.push({
+          id:        c.lunarpay_customer_id || c.ghl_contact_id || c.id,
+          name:      [c.first_name, c.last_name].filter(Boolean).join(' ') || c.customer_email || 'Unknown',
+          firstName: c.first_name || '',
+          lastName:  c.last_name  || '',
+          email:     c.customer_email || '',
+          phone:     c.phone || '',
+          source:    'storypay',
+        });
+        if (email) seenEmails.add(email);
+      }
+    }
+  } catch (err) {
+    console.error('[customers] venue_customers fetch error:', err);
+  }
+
   // Client-side search filter when GHL doesn't support it natively
   const filtered = search
     ? merged.filter(c => {
@@ -121,16 +154,6 @@ export async function POST(request: NextRequest) {
   const venueId = cookieStore.get('venue_id')?.value;
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { data: venue } = await supabaseAdmin
-    .from('venues')
-    .select('lunarpay_secret_key')
-    .eq('id', venueId)
-    .single();
-
-  if (!venue?.lunarpay_secret_key) {
-    return NextResponse.json({ error: 'LunarPay not configured' }, { status: 400 });
-  }
-
   const body = await request.json();
   const { firstName, lastName, email, phone, address, city, state, zip } = body;
 
@@ -138,19 +161,72 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'firstName, lastName, and email are required' }, { status: 400 });
   }
 
-  try {
-    const customer = await createCustomer(venue.lunarpay_secret_key, {
-      name: `${firstName} ${lastName}`,
-      email,
-      phone:   phone   || undefined,
-      address: address || undefined,
-      city:    city    || undefined,
-      state:   state   || undefined,
-      zip:     zip     || undefined,
-    });
-    return NextResponse.json(customer, { status: 201 });
-  } catch (err) {
-    console.error('Customer creation error:', err);
-    return NextResponse.json({ error: 'Failed to create customer' }, { status: 500 });
+  const { data: venue } = await supabaseAdmin
+    .from('venues')
+    .select('lunarpay_secret_key')
+    .eq('id', venueId)
+    .single();
+
+  // Best-effort LunarPay sync (only when the venue has connected it).
+  let lunarpayCustomerId: string | null = null;
+  let lunarpayError: string | null = null;
+  if (venue?.lunarpay_secret_key) {
+    try {
+      const lp = await createCustomer(venue.lunarpay_secret_key, {
+        name: `${firstName} ${lastName}`,
+        email,
+        phone:   phone   || undefined,
+        address: address || undefined,
+        city:    city    || undefined,
+        state:   state   || undefined,
+        zip:     zip     || undefined,
+      });
+      lunarpayCustomerId = String((lp as { id?: string | number })?.id ?? '') || null;
+    } catch (err) {
+      lunarpayError = err instanceof Error ? err.message : 'LunarPay sync failed';
+      console.error('[customers] LunarPay sync error:', err);
+    }
   }
+
+  // Always persist to StoryPay's own venue_customers table. This is the source
+  // of truth inside the dashboard — LunarPay / GHL are downstream sinks.
+  const { data: row, error: dbErr } = await supabaseAdmin
+    .from('venue_customers')
+    .upsert(
+      {
+        venue_id:             venueId,
+        customer_email:       email.toLowerCase(),
+        first_name:           firstName,
+        last_name:            lastName,
+        phone:                phone || null,
+        lunarpay_customer_id: lunarpayCustomerId,
+        updated_at:           new Date().toISOString(),
+      },
+      { onConflict: 'venue_id,customer_email' },
+    )
+    .select('id, customer_email, first_name, last_name, phone, lunarpay_customer_id, ghl_contact_id')
+    .single();
+
+  if (dbErr || !row) {
+    console.error('[customers] venue_customers upsert error:', dbErr);
+    return NextResponse.json(
+      { error: `Failed to save customer: ${dbErr?.message ?? 'unknown error'}` },
+      { status: 500 },
+    );
+  }
+
+  const customer = {
+    id:        row.lunarpay_customer_id || row.ghl_contact_id || row.id,
+    name:      [row.first_name, row.last_name].filter(Boolean).join(' ') || row.customer_email,
+    firstName: row.first_name,
+    lastName:  row.last_name,
+    email:     row.customer_email,
+    phone:     row.phone || '',
+    source:    row.lunarpay_customer_id ? 'lunarpay' : 'storypay',
+  };
+
+  return NextResponse.json(
+    { ...customer, warnings: lunarpayError ? [lunarpayError] : undefined },
+    { status: 201 },
+  );
 }

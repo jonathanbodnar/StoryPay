@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Inbox, Loader2, Search, Mail, Phone, Calendar, Users, MessageSquare,
-  CheckCircle2, Archive, Trash2, ExternalLink,
+  CheckCircle2, Archive, Trash2, ExternalLink, UserPlus,
 } from 'lucide-react';
 
 interface Lead {
@@ -75,12 +75,21 @@ function statusPillClasses(status: string): string {
   }
 }
 
+function splitName(full: string): { firstName: string; lastName: string } {
+  const parts = (full || '').trim().split(/\s+/);
+  if (parts.length === 0) return { firstName: '', lastName: '' };
+  if (parts.length === 1) return { firstName: parts[0], lastName: '' };
+  return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
+}
+
 export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [query, setQuery] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [converting, setConverting] = useState<string | null>(null);
+  const [converted, setConverted] = useState<Record<string, 'ok' | string>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -113,6 +122,43 @@ export default function LeadsPage() {
     if (!confirm('Delete this lead?')) return;
     const res = await fetch(`/api/leads/${id}`, { method: 'DELETE' });
     if (res.ok) setLeads((prev) => prev.filter(l => l.id !== id));
+  }
+
+  async function convertToCustomer(lead: Lead) {
+    if (converting === lead.id || converted[lead.id] === 'ok') return;
+    setConverting(lead.id);
+    setConverted((prev) => { const next = { ...prev }; delete next[lead.id]; return next; });
+
+    const { firstName, lastName } = splitName(lead.name);
+    try {
+      const res = await fetch('/api/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstName,
+          lastName: lastName || firstName, // API requires both — fall back if only one word
+          email: lead.email,
+          phone: lead.phone ?? '',
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setConverted((prev) => ({ ...prev, [lead.id]: data.error || `Failed (HTTP ${res.status})` }));
+        return;
+      }
+
+      setConverted((prev) => ({ ...prev, [lead.id]: 'ok' }));
+
+      // Nudge the lead to "contacted" if it's still sitting in "new"
+      if (lead.status === 'new') {
+        void updateLead(lead.id, { status: 'contacted' });
+      }
+    } catch (e) {
+      setConverted((prev) => ({ ...prev, [lead.id]: e instanceof Error ? e.message : 'Network error' }));
+    } finally {
+      setConverting(null);
+    }
   }
 
   const counts = useMemo(() => {
@@ -249,6 +295,28 @@ export default function LeadsPage() {
                           >
                             <ExternalLink className="w-3.5 h-3.5" /> Listing
                           </a>
+                        )}
+                        {converted[lead.id] === 'ok' ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Customer created
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => convertToCustomer(lead)}
+                            disabled={converting === lead.id}
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-60"
+                            title="Save this lead as a customer"
+                          >
+                            {converting === lead.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <UserPlus className="w-3.5 h-3.5" />
+                            )}
+                            Create customer
+                          </button>
+                        )}
+                        {converted[lead.id] && converted[lead.id] !== 'ok' && (
+                          <span className="text-xs text-red-500">{converted[lead.id]}</span>
                         )}
                         <div className="ml-auto flex flex-wrap items-center gap-1.5">
                           {lead.status !== 'contacted' && (
