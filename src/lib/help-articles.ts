@@ -173,7 +173,7 @@ Four views (top-right toggle):
 Click any empty day (or hour slot in Week/Day view) to add a new event. Click any event chip to open its details where you can Edit or Delete it.
 
 Event types are color-coded:
-- Wedding (pink), Reception (purple), Tour (blue), Tasting (amber)
+- Wedding (pink), Reception (purple), Tour (blue), Phone call (cyan), Tasting (amber)
 - Meeting (green), Rehearsal (indigo), Hold/Tentative (gray), Blocked (dark gray)
 
 Events can be single-day, multi-day (for wedding weekends), or recurring (for weekly tastings, monthly maintenance days, etc.). Multi-day events render on every day they span; continuation days in Week/Day view show small left/right arrows to indicate the event extends before or after.
@@ -203,7 +203,7 @@ To remove a space, open Manage Spaces and click Remove next to it.`,
 
 Fill in:
 - Event Title (e.g. "Smith & Johnson Wedding")
-- Type — Wedding, Reception, Tour, Tasting, Meeting, Rehearsal, Hold, Blocked, Other
+- Type — Wedding, Reception, Tour, Phone call, Tasting, Meeting, Rehearsal, Hold, Blocked, Other
 - Status — Confirmed, Tentative/Hold, Cancelled
 - Space — which bookable space this event uses (optional; enables conflict detection)
 - Customer Email — links the event to a customer profile (optional)

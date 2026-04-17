@@ -31,16 +31,44 @@ interface CalEvent {
 
 interface ConflictInfo { id: string; title: string; start_at: string; end_at: string; }
 
-const EVENT_TYPE_LABELS: Record<string, string> = {
-  wedding: 'Wedding', reception: 'Reception', tour: 'Tour',
-  tasting: 'Tasting', meeting: 'Meeting', rehearsal: 'Rehearsal',
-  hold: 'Hold', blocked: 'Blocked', other: 'Other',
+/** Dropdown + legend order (keep phone_call after tour). */
+const EVENT_TYPE_ORDER = [
+  'wedding',
+  'reception',
+  'tour',
+  'phone_call',
+  'tasting',
+  'meeting',
+  'rehearsal',
+  'hold',
+  'blocked',
+  'other',
+] as const;
+
+const EVENT_TYPE_LABELS: Record<(typeof EVENT_TYPE_ORDER)[number], string> = {
+  wedding: 'Wedding',
+  reception: 'Reception',
+  tour: 'Tour',
+  phone_call: 'Phone call',
+  tasting: 'Tasting',
+  meeting: 'Meeting',
+  rehearsal: 'Rehearsal',
+  hold: 'Hold',
+  blocked: 'Blocked',
+  other: 'Other',
 };
 
-const EVENT_COLORS: Record<string, string> = {
-  wedding: '#ec4899', reception: '#8b5cf6', tour: '#3b82f6',
-  tasting: '#f59e0b', meeting: '#10b981', rehearsal: '#6366f1',
-  hold: '#94a3b8', blocked: '#64748b', other: '#6b7280',
+const EVENT_COLORS: Record<(typeof EVENT_TYPE_ORDER)[number], string> = {
+  wedding: '#ec4899',
+  reception: '#8b5cf6',
+  tour: '#3b82f6',
+  phone_call: '#0891b2',
+  tasting: '#f59e0b',
+  meeting: '#10b981',
+  rehearsal: '#6366f1',
+  hold: '#94a3b8',
+  blocked: '#64748b',
+  other: '#6b7280',
 };
 
 const MONTHS    = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -65,7 +93,8 @@ function fmtHour(h: number) {
 
 // Event color helper
 function evtColor(evt: CalEvent) {
-  return evt.venue_spaces?.color ?? EVENT_COLORS[evt.event_type] ?? '#6b7280';
+  const typeColor = EVENT_COLORS[evt.event_type as keyof typeof EVENT_COLORS];
+  return evt.venue_spaces?.color ?? typeColor ?? '#6b7280';
 }
 
 // Fractional hour position (0 = top of hour slot)
@@ -703,6 +732,7 @@ export default function CalendarPage() {
                 const monthEvts = events.filter(e => { const d = new Date(e.start_at); return d.getFullYear() === y && d.getMonth() === m; });
                 const weddings  = monthEvts.filter(e => e.event_type === 'wedding' || e.event_type === 'reception');
                 const tours     = monthEvts.filter(e => e.event_type === 'tour');
+                const phoneCalls = monthEvts.filter(e => e.event_type === 'phone_call');
                 const isCurrent = m === today.getMonth() && y === today.getFullYear();
                 return (
                   <button key={m}
@@ -711,6 +741,7 @@ export default function CalendarPage() {
                     <p className={`text-xs font-semibold mb-1.5 ${isCurrent ? 'text-gray-900' : 'text-gray-500'}`}>{MONTHS[m].slice(0,3)}</p>
                     {weddings.length > 0 && <p className="text-[11px] font-medium text-pink-600">{weddings.length} wedding{weddings.length !== 1 ? 's' : ''}</p>}
                     {tours.length    > 0 && <p className="text-[11px] text-blue-600">{tours.length} tour{tours.length !== 1 ? 's' : ''}</p>}
+                    {phoneCalls.length > 0 && <p className="text-[11px] text-cyan-600">{phoneCalls.length} phone call{phoneCalls.length !== 1 ? 's' : ''}</p>}
                     {monthEvts.length === 0 && <p className="text-[11px] text-gray-300">—</p>}
                   </button>
                 );
@@ -722,10 +753,10 @@ export default function CalendarPage() {
 
         {/* Legend */}
         <div className="mt-4 flex flex-wrap gap-3">
-          {Object.entries(EVENT_TYPE_LABELS).map(([key, label]) => (
+          {EVENT_TYPE_ORDER.map((key) => (
             <div key={key} className="flex items-center gap-1.5 text-xs text-gray-500">
               <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: EVENT_COLORS[key] }} />
-              {label}
+              {EVENT_TYPE_LABELS[key]}
             </div>
           ))}
         </div>
@@ -775,7 +806,9 @@ export default function CalendarPage() {
                   <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Type</label>
                   <select value={form.event_type} onChange={e => setForm(p => ({ ...p, event_type: e.target.value }))}
                     className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-700 focus:border-gray-400 focus:outline-none">
-                    {Object.entries(EVENT_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    {EVENT_TYPE_ORDER.map((k) => (
+                      <option key={k} value={k}>{EVENT_TYPE_LABELS[k]}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -970,7 +1003,9 @@ export default function CalendarPage() {
               </div>
               <div>
                 <p className="font-semibold text-gray-900">{selectedEvent.title}</p>
-                <p className="text-xs text-gray-400 capitalize">{EVENT_TYPE_LABELS[selectedEvent.event_type]} · {selectedEvent.status}</p>
+                <p className="text-xs text-gray-400 capitalize">
+                  {EVENT_TYPE_LABELS[selectedEvent.event_type as keyof typeof EVENT_TYPE_LABELS] ?? selectedEvent.event_type} · {selectedEvent.status}
+                </p>
               </div>
             </div>
             <div className="space-y-2 text-sm text-gray-700">

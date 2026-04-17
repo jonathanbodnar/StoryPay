@@ -11,7 +11,7 @@ async function getVenueId(): Promise<string | null> {
 }
 
 const EVENT_TYPES = new Set([
-  'wedding', 'reception', 'tour', 'tasting',
+  'wedding', 'reception', 'tour', 'phone_call', 'tasting',
   'meeting', 'rehearsal', 'hold', 'blocked', 'other',
 ]);
 

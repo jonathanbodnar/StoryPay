@@ -9,7 +9,7 @@ import {
  Sparkles, Megaphone, Settings, Palette, Mail, UsersRound,
  Bell, Package, Receipt, Link2, RefreshCw, DollarSign, Plus, Calendar,
  ArrowLeft, Menu, X, ChevronDown,
- HelpCircle, LogOut, BookOpen, Store, Inbox,
+ HelpCircle, LogOut, BookOpen, Store, Inbox, Share2,
 } from 'lucide-react';
 
 interface Venue { id: string; name: string; ghl_location_id: string; }
@@ -42,6 +42,10 @@ const paymentsItems = [
  { label: 'Transactions', href: '/dashboard/transactions', icon: CreditCard },
 ];
 
+const marketingItems = [
+ { label: 'Trigger Links', href: '/dashboard/marketing/trigger-links', icon: Link2 },
+];
+
 const settingsItems = [
  { label: 'General', href: '/dashboard/settings', icon: Settings },
  { label: 'Branding', href: '/dashboard/settings/branding', icon: Palette },
@@ -58,6 +62,7 @@ export default function Sidebar({ venue, role = 'owner', memberName, memberEmail
  const [mobileOpen, setMobileOpen] = useState(false);
 
  const isOnSettings = pathname.startsWith('/dashboard/settings');
+ const isOnMarketing = pathname.startsWith('/dashboard/marketing');
  const isOnPayments = pathname.startsWith('/dashboard/payments')
  || pathname.startsWith('/dashboard/transactions')
  || pathname.startsWith('/dashboard/invoices')
@@ -66,12 +71,13 @@ export default function Sidebar({ venue, role = 'owner', memberName, memberEmail
   // Only one dropdown group can be open at a time. Clicking a different
   // group's header closes whichever was open and opens the new one; clicking
   // the currently-open group's header collapses it.
-  type OpenGroup = 'payments' | 'settings' | null;
-  const initialGroup: OpenGroup = isOnPayments ? 'payments' : isOnSettings ? 'settings' : null;
+  type OpenGroup = 'payments' | 'settings' | 'marketing' | null;
+  const initialGroup: OpenGroup = isOnPayments ? 'payments' : isOnSettings ? 'settings' : isOnMarketing ? 'marketing' : null;
   const [openGroup, setOpenGroup] = useState<OpenGroup>(initialGroup);
 
   const paymentsOpen = openGroup === 'payments';
   const settingsOpen = openGroup === 'settings';
+  const marketingOpen = openGroup === 'marketing';
 
   // Sync the open group to the active route. When the user navigates to a
   // page that lives outside both dropdown sections (e.g. Home, Customers,
@@ -82,7 +88,8 @@ export default function Sidebar({ venue, role = 'owner', memberName, memberEmail
   // on navigation, not on every toggle click, so clicking a dropdown header
   // while parked on an unrelated page still works as a plain toggle.
   useEffect(() => {
-    if (isOnPayments)      setOpenGroup('payments');
+    if (isOnMarketing)     setOpenGroup('marketing');
+    else if (isOnPayments) setOpenGroup('payments');
     else if (isOnSettings) setOpenGroup('settings');
     else                    setOpenGroup(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -107,6 +114,7 @@ export default function Sidebar({ venue, role = 'owner', memberName, memberEmail
  if (isOnPayments) return false;
  // If we're inside Settings section, no top-level item is"active"— Settings parent gets the pill
  if (isOnSettings) return false;
+ if (isOnMarketing) return false;
  return pathname.startsWith(href);
  };
 
@@ -205,6 +213,33 @@ export default function Sidebar({ venue, role = 'owner', memberName, memberEmail
  </div>
  )}
  </div>
+
+ {/* Marketing — owner / admin */}
+ {isAdmin && (
+ <div>
+              <button type="button" onClick={() => toggleGroup('marketing')} className={groupBtn(isOnMarketing && marketingOpen)} style={groupBtnStyle(isOnMarketing && marketingOpen)}>
+ <div className="flex items-center gap-3">
+ <Share2 size={16} />
+ <span>Marketing</span>
+ </div>
+ <ChevronDown size={13} className={`transition-transform duration-200 ${marketingOpen ? 'rotate-180' : ''} ${isOnMarketing && marketingOpen ? 'text-white/50' : 'text-gray-400'}`} />
+ </button>
+ {marketingOpen && (
+ <div className="mt-0.5 ml-3 pl-3 border-l border-gray-200 space-y-0.5 py-0.5">
+ {marketingItems.map(sub => {
+ const SubIcon = sub.icon;
+ const active = isSubActive(sub.href);
+ return (
+ <Link key={sub.label} href={sub.href} className={subItem(active)} style={subItemStyle(active)}>
+ <SubIcon size={14} />
+ <span>{sub.label}</span>
+ </Link>
+ );
+ })}
+ </div>
+ )}
+ </div>
+ )}
 
  {/* Products — hidden for now */}
 

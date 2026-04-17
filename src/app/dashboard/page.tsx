@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { DollarSign, FileText, Users, Clock, TrendingUp, TrendingDown, ArrowUpRight, Receipt, ArrowRight, CheckCircle2, Send, PenLine, Eye, XCircle, CreditCard, RotateCcw } from 'lucide-react';
+import {
+  DollarSign, FileText, Users, Clock, TrendingUp, TrendingDown, ArrowUpRight, Receipt, ArrowRight,
+  CheckCircle2, Send, PenLine, Eye, XCircle, CreditCard, RotateCcw, CalendarDays,
+} from 'lucide-react';
 import { formatCents, formatDate, getStatusColor, classNames } from '@/lib/utils';
 import Link from 'next/link';
 import DateRangePicker, { DateRange, PRESETS } from '@/components/DateRangePicker';
@@ -14,6 +17,10 @@ import {
  CartesianGrid,
  Tooltip,
  ResponsiveContainer,
+ ComposedChart,
+ Bar,
+ Line,
+ Legend,
 } from 'recharts';
 
 // ─── Brand palette ────────────────────────────────────────────────────────────
@@ -94,6 +101,48 @@ interface Transaction {
  customerName?: string | null;
 }
 
+interface BookingTrendMonth {
+ month: string;
+ label: string;
+ weddingsBooked: number;
+ incomeCents: number;
+ weddingsPrevYear: number;
+ incomePrevYearCents: number;
+ weddingsMomPct: number | null;
+ incomeMomPct: number | null;
+ weddingsYoyPct: number | null;
+ incomeYoyPct: number | null;
+}
+
+interface BookingTrendsPayload {
+ series: BookingTrendMonth[];
+ thisMonth: {
+  month: string;
+  label: string;
+  weddingsBooked: number;
+  incomeCents: number;
+  weddingsMomPct: number | null;
+  incomeMomPct: number | null;
+  weddingsYoyPct: number | null;
+  incomeYoyPct: number | null;
+ };
+ lastMonth: {
+  month: string;
+  label: string;
+  weddingsBooked: number;
+  incomeCents: number;
+ } | null;
+ ytd: {
+  year: number;
+  weddingsBooked: number;
+  incomeCents: number;
+  weddingsPrevYear: number;
+  incomePrevYearCents: number;
+  weddingsYoyPct: number | null;
+  incomeYoyPct: number | null;
+ };
+}
+
 function formatShortCurrency(cents: number) {
  const dollars = cents / 100;
  if (dollars >= 1000000) return `$${(dollars / 1000000).toFixed(1)}M`;
@@ -108,6 +157,25 @@ function TrendBadge({ value }: { value: number | null | undefined }) {
  <span className={classNames('inline-flex items-center gap-0.5 text-[11px] font-semibold', up ? 'text-emerald-600' : 'text-red-500')}>
  {up ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
  {Math.abs(Math.round(value))}%
+ </span>
+ );
+}
+
+function formatPctOne(v: number | null | undefined) {
+ if (v === null || v === undefined || !Number.isFinite(v)) return '—';
+ const rounded = Math.round(v * 10) / 10;
+ const sign = rounded > 0 ? '+' : '';
+ return `${sign}${rounded}%`;
+}
+
+function MomYoyChip({ label, pct }: { label: string; pct: number | null | undefined }) {
+ if (pct === null || pct === undefined || !Number.isFinite(pct)) {
+  return <span className="text-[11px] text-gray-400">{label} —</span>;
+ }
+ const up = pct > 0;
+ return (
+ <span className={classNames('text-[11px] font-semibold', up ? 'text-emerald-600' : pct < 0 ? 'text-red-500' : 'text-gray-400')}>
+  {label} {formatPctOne(pct)}
  </span>
  );
 }
@@ -148,6 +216,8 @@ export default function DashboardOverview() {
  const [loading, setLoading] = useState(true);
  const [txLoading, setTxLoading] = useState(true);
  const [dateRange, setDateRange] = useState<DateRange>(getDefaultRange);
+ const [bookingTrends, setBookingTrends] = useState<BookingTrendsPayload | null>(null);
+ const [trendsLoading, setTrendsLoading] = useState(true);
 
  const fetchData = useCallback(async (range: DateRange) => {
  setLoading(true);
@@ -180,6 +250,15 @@ export default function DashboardOverview() {
  }, []);
 
  useEffect(() => { fetchData(dateRange); }, [fetchData, dateRange]);
+
+ useEffect(() => {
+  setTrendsLoading(true);
+  fetch('/api/dashboard/booking-trends')
+   .then((r) => (r.ok ? r.json() : null))
+   .then((d) => setBookingTrends(d))
+   .catch(() => setBookingTrends(null))
+   .finally(() => setTrendsLoading(false));
+ }, []);
 
  const revenueChange = stats?.trends?.revenueChange ?? null;
  const proposalChange = stats?.trends?.proposalChange ?? null;
@@ -326,6 +405,174 @@ export default function DashboardOverview() {
  </>
  )}
  </div>
+ </div>
+
+ {/* ── Weddings vs income — rolling 12 months (MoM / YoY) ── */}
+ <div className="rounded-2xl border border-gray-200 bg-white p-6 mb-6 overflow-x-hidden">
+  <div className="flex flex-wrap items-start justify-between gap-4 mb-5">
+   <div className="flex items-start gap-3">
+    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-pink-50">
+     <CalendarDays size={20} className="text-pink-600" />
+    </div>
+    <div>
+     <h2 className="font-heading text-lg font-semibold text-gray-900">Weddings & income trends</h2>
+     <p className="mt-0.5 text-xs text-gray-500 max-w-xl">
+      Wedding and reception events on your calendar by <span className="font-medium text-gray-700">event month</span> (UTC), compared to{' '}
+      <span className="font-medium text-gray-700">paid proposal income</span> attributed to the month payment was recorded. Same-month prior-year
+      columns show year-over-year; the table includes month-over-month where applicable.
+     </p>
+    </div>
+   </div>
+  </div>
+
+  {trendsLoading || !bookingTrends ? (
+   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+    {Array.from({ length: 3 }).map((_, i) => (
+     <div key={i} className="rounded-xl border border-gray-100 p-4">
+      <Skeleton className="h-3 w-24 mb-3" />
+      <Skeleton className="h-8 w-20 mb-2" />
+      <Skeleton className="h-3 w-32" />
+     </div>
+    ))}
+   </div>
+  ) : (
+   <>
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+     <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">This month · {bookingTrends.thisMonth.label}</p>
+      <p className="mt-2 text-2xl font-bold text-gray-900">{bookingTrends.thisMonth.weddingsBooked}</p>
+      <p className="text-xs text-gray-500">wedding / reception events</p>
+      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+       <MomYoyChip label="MoM" pct={bookingTrends.thisMonth.weddingsMomPct} />
+       <MomYoyChip label="YoY" pct={bookingTrends.thisMonth.weddingsYoyPct} />
+      </div>
+      <p className="mt-3 text-lg font-semibold text-gray-900">{formatCents(bookingTrends.thisMonth.incomeCents)}</p>
+      <p className="text-xs text-gray-500">paid proposal income</p>
+      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+       <MomYoyChip label="MoM" pct={bookingTrends.thisMonth.incomeMomPct} />
+       <MomYoyChip label="YoY" pct={bookingTrends.thisMonth.incomeYoyPct} />
+      </div>
+     </div>
+     <div className="rounded-xl border border-gray-100 p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Last month</p>
+      {bookingTrends.lastMonth ? (
+       <>
+        <p className="mt-2 text-2xl font-bold text-gray-900">{bookingTrends.lastMonth.weddingsBooked}</p>
+        <p className="text-xs text-gray-500">events · {bookingTrends.lastMonth.label}</p>
+        <p className="mt-3 text-lg font-semibold text-gray-900">{formatCents(bookingTrends.lastMonth.incomeCents)}</p>
+        <p className="text-xs text-gray-500">income</p>
+       </>
+      ) : (
+       <p className="mt-3 text-sm text-gray-400">No prior month in range</p>
+      )}
+     </div>
+     <div className="rounded-xl border border-gray-100 p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Year to date · {bookingTrends.ytd.year}</p>
+      <p className="mt-2 text-2xl font-bold text-gray-900">{bookingTrends.ytd.weddingsBooked}</p>
+      <p className="text-xs text-gray-500">
+       events Jan →{' '}
+       {new Date(`${bookingTrends.thisMonth.month}-01T12:00:00.000Z`).toLocaleDateString('en-US', { month: 'long', timeZone: 'UTC' })}
+      </p>
+      <p className="mt-1 text-[11px]">
+       <MomYoyChip label="vs same period last year" pct={bookingTrends.ytd.weddingsYoyPct} />
+      </p>
+      <p className="mt-3 text-lg font-semibold text-gray-900">{formatCents(bookingTrends.ytd.incomeCents)}</p>
+      <p className="text-xs text-gray-500">paid income (same window)</p>
+      <p className="mt-1 text-[11px]">
+       <MomYoyChip label="vs same period last year" pct={bookingTrends.ytd.incomeYoyPct} />
+      </p>
+     </div>
+    </div>
+
+    <div className="h-72 w-full min-w-0 mb-6">
+     <ResponsiveContainer width="100%" height="100%">
+      <ComposedChart data={bookingTrends.series} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+       <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#888' }} axisLine={false} tickLine={false} interval={0} angle={-32} textAnchor="end" height={52} />
+       <YAxis yAxisId="w" allowDecimals={false} tick={{ fontSize: 10, fill: '#888' }} axisLine={false} tickLine={false} width={32} />
+       <YAxis
+        yAxisId="$"
+        orientation="right"
+        tick={{ fontSize: 10, fill: '#888' }}
+        axisLine={false}
+        tickLine={false}
+        width={44}
+        tickFormatter={(v) => formatShortCurrency(v)}
+       />
+       <Tooltip
+        content={({ active, payload, label }) => {
+         if (!active || !payload?.length) return null;
+         const row = payload[0]?.payload as BookingTrendMonth | undefined;
+         if (!row) return null;
+         return (
+          <div className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-xs shadow-sm max-w-xs">
+           <p className="font-semibold text-gray-900 mb-1.5">{label}</p>
+           <p className="text-gray-600">
+            Events this month: <span className="font-semibold text-gray-900">{row.weddingsBooked}</span>
+            <span className="text-gray-400"> · same month prior yr: {row.weddingsPrevYear}</span>
+           </p>
+           <p className="text-gray-600 mt-0.5">
+            Income: <span className="font-semibold text-gray-900">{formatCents(row.incomeCents)}</span>
+            <span className="text-gray-400"> · prior yr: {formatCents(row.incomePrevYearCents)}</span>
+           </p>
+          </div>
+         );
+        }}
+       />
+       <Legend wrapperStyle={{ fontSize: 11 }} />
+       <Bar yAxisId="w" stackId="a" dataKey="weddingsBooked" name="Events (wedding + reception)" fill="#ec4899" radius={[4, 4, 0, 0]} maxBarSize={28} />
+       <Bar yAxisId="w" stackId="b" dataKey="weddingsPrevYear" name="Same month prior year" fill="#fbcfe8" radius={[4, 4, 0, 0]} maxBarSize={28} />
+       <Line yAxisId="$" type="monotone" dataKey="incomeCents" name="Income" stroke="#15803d" strokeWidth={2} dot={{ r: 2 }} />
+       <Line yAxisId="$" type="monotone" dataKey="incomePrevYearCents" name="Income prior year" stroke="#86efac" strokeWidth={2} strokeDasharray="4 4" dot={false} />
+      </ComposedChart>
+     </ResponsiveContainer>
+    </div>
+
+    <div className="overflow-x-auto rounded-xl border border-gray-100">
+     <table className="w-full min-w-[640px] text-sm">
+      <thead>
+       <tr className="bg-gray-50 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+        <th className="px-4 py-3">Month</th>
+        <th className="px-4 py-3 text-right">Events</th>
+        <th className="px-4 py-3 text-right">MoM</th>
+        <th className="px-4 py-3 text-right">YoY</th>
+        <th className="px-4 py-3 text-right">Prior yr events</th>
+        <th className="px-4 py-3 text-right">Income</th>
+        <th className="px-4 py-3 text-right">MoM</th>
+        <th className="px-4 py-3 text-right">YoY</th>
+        <th className="px-4 py-3 text-right">Prior yr income</th>
+       </tr>
+      </thead>
+      <tbody>
+       {bookingTrends.series.map((row) => (
+        <tr key={row.month} className="border-t border-gray-100 hover:bg-gray-50/80">
+         <td className="px-4 py-2.5 font-medium text-gray-900">{row.label}</td>
+         <td className="px-4 py-2.5 text-right tabular-nums">{row.weddingsBooked}</td>
+         <td className="px-4 py-2.5 text-right tabular-nums text-xs text-gray-600">{formatPctOne(row.weddingsMomPct)}</td>
+         <td className="px-4 py-2.5 text-right tabular-nums text-xs text-gray-600">{formatPctOne(row.weddingsYoyPct)}</td>
+         <td className="px-4 py-2.5 text-right tabular-nums text-gray-500">{row.weddingsPrevYear}</td>
+         <td className="px-4 py-2.5 text-right tabular-nums font-medium text-gray-900">{formatCents(row.incomeCents)}</td>
+         <td className="px-4 py-2.5 text-right tabular-nums text-xs text-gray-600">{formatPctOne(row.incomeMomPct)}</td>
+         <td className="px-4 py-2.5 text-right tabular-nums text-xs text-gray-600">{formatPctOne(row.incomeYoyPct)}</td>
+         <td className="px-4 py-2.5 text-right tabular-nums text-gray-500">{formatCents(row.incomePrevYearCents)}</td>
+        </tr>
+       ))}
+      </tbody>
+     </table>
+    </div>
+
+    <p className="mt-4 text-[11px] text-gray-400">
+     <Link href="/dashboard/calendar" className="font-medium text-gray-600 hover:text-gray-900 underline-offset-2 hover:underline">
+      Calendar
+     </Link>{' '}
+     drives event counts; income matches paid proposals on the{' '}
+     <Link href="/dashboard/proposals" className="font-medium text-gray-600 hover:text-gray-900 underline-offset-2 hover:underline">
+      Proposals
+     </Link>{' '}
+     page.
+    </p>
+   </>
+  )}
  </div>
 
  {/* ── Revenue chart + status breakdown ── */}

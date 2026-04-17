@@ -9,7 +9,7 @@ import {
   MessageSquare, Trash2, ExternalLink, UserPlus,
   LayoutGrid, List as ListIcon, Plus, Settings2, X, Pencil, DollarSign,
   Globe, CalendarPlus, Clock, GripVertical, ArrowLeft, ArrowRight,
-  ChevronDown, Filter,
+  ChevronDown, Filter, MousePointer2, Eye,
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -69,11 +69,34 @@ interface Lead {
 }
 
 interface LeadNote {
-  id: string;
+   id: string;
   lead_id: string;
   content: string;
   author_name: string | null;
   created_at: string;
+}
+
+interface MarketingTriggerLinkMeta {
+  name: string;
+  short_code: string;
+  target_url: string;
+}
+
+interface LeadMarketingEventRow {
+  id: string;
+  event_type: 'trigger_link_click' | 'page_view';
+  page_path: string | null;
+  page_title: string | null;
+  referrer: string | null;
+  created_at: string;
+  trigger_link_id: string | null;
+  trigger_links: MarketingTriggerLinkMeta | MarketingTriggerLinkMeta[] | null;
+}
+
+function triggerLinkMeta(e: LeadMarketingEventRow): MarketingTriggerLinkMeta | null {
+  const x = e.trigger_links;
+  if (!x) return null;
+  return Array.isArray(x) ? x[0] ?? null : x;
 }
 
 interface Space { id: string; name: string; color: string; }
@@ -928,10 +951,24 @@ function LeadDrawer({
   const [notes, setNotes] = useState<LeadNote[]>([]);
   const [newNote, setNewNote] = useState('');
   const [loadingNotes, setLoadingNotes] = useState(true);
+  const [marketingEvents, setMarketingEvents] = useState<LeadMarketingEventRow[]>([]);
+  const [loadingMarketing, setLoadingMarketing] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState('');
   const [appointmentOpen, setAppointmentOpen] = useState(false);
   const [savingField, setSavingField] = useState<string | null>(null);
+
+  const loadMarketing = useCallback(async () => {
+    setLoadingMarketing(true);
+    const res = await fetch(`/api/leads/${lead.id}/marketing-activity`, { cache: 'no-store' });
+    if (res.ok) {
+      const data = await res.json();
+      setMarketingEvents(data.events ?? []);
+    } else {
+      setMarketingEvents([]);
+    }
+    setLoadingMarketing(false);
+  }, [lead.id]);
 
   const loadNotes = useCallback(async () => {
     setLoadingNotes(true);
@@ -945,6 +982,8 @@ function LeadDrawer({
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadNotes(); }, [loadNotes]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void loadMarketing(); }, [loadMarketing]);
 
   async function addNote() {
     const content = newNote.trim();
@@ -1143,6 +1182,77 @@ function LeadDrawer({
             >
               <Trash2 className="w-3.5 h-3.5" /> Delete
             </button>
+          </section>
+
+          {/* Activity — trigger links, page views */}
+          <section>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+                <Eye className="w-4 h-4" /> Activity
+              </h3>
+              <span className="text-[11px] text-gray-400">{marketingEvents.length} events</span>
+            </div>
+            <p className="text-[11px] text-gray-400 mb-3 break-words">
+              Trigger link clicks are saved when the short URL includes this query (same venue only):{' '}
+              <code className="text-[10px] bg-gray-100 px-1 rounded break-all">?l={lead.id}</code>
+              . Page views appear when your site calls the marketing track API for this lead.
+            </p>
+            <div className="rounded-2xl border border-gray-200 bg-gray-50/40 p-3 min-h-[4rem]">
+              {loadingMarketing ? (
+                <div className="text-xs text-gray-400 py-3 flex items-center gap-2">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading activity…
+                </div>
+              ) : marketingEvents.length === 0 ? (
+                <p className="text-xs text-gray-400 italic py-2">No tracked activity yet.</p>
+              ) : (
+                <ul className="space-y-0 border-l-2 border-pink-200 ml-1.5 pl-3">
+                  {marketingEvents.map((ev) => {
+                    const tl = triggerLinkMeta(ev);
+                    return (
+                      <li key={ev.id} className="relative pb-4 last:pb-0">
+                        <span className="absolute -left-[calc(0.375rem+5px)] top-1.5 h-2 w-2 rounded-full bg-pink-500 ring-2 ring-white" />
+                        <p className="text-[11px] text-gray-400 flex items-center gap-1">
+                          <Clock className="w-3 h-3 shrink-0" />
+                          {formatDateTime(ev.created_at)}
+                        </p>
+                        {ev.event_type === 'trigger_link_click' && tl && (
+                          <p className="text-sm text-gray-800 mt-0.5 flex items-start gap-1.5">
+                            <MousePointer2 className="w-3.5 h-3.5 text-pink-600 shrink-0 mt-0.5" />
+                            <span>
+                              Clicked trigger link{' '}
+                              <span className="font-semibold">{tl.name}</span>
+                              <span className="text-gray-500 text-xs block mt-0.5 font-mono">
+                                /t/{tl.short_code}
+                              </span>
+                            </span>
+                          </p>
+                        )}
+                        {ev.event_type === 'trigger_link_click' && !tl && (
+                          <p className="text-sm text-gray-800 mt-0.5">Trigger link click (link removed)</p>
+                        )}
+                        {ev.event_type === 'page_view' && (
+                          <p className="text-sm text-gray-800 mt-0.5 flex items-start gap-1.5">
+                            <Globe className="w-3.5 h-3.5 text-sky-600 shrink-0 mt-0.5" />
+                            <span>
+                              Viewed page{' '}
+                              <span className="font-medium">{ev.page_title || ev.page_path || '—'}</span>
+                              {ev.page_path && ev.page_path !== ev.page_title && (
+                                <span className="text-gray-500 text-xs block mt-0.5 break-all">{ev.page_path}</span>
+                              )}
+                            </span>
+                          </p>
+                        )}
+                        {ev.referrer && (
+                          <p className="text-[10px] text-gray-400 mt-1 truncate" title={ev.referrer}>
+                            From: {ev.referrer}
+                          </p>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
           </section>
 
           {/* Notes */}
@@ -1376,6 +1486,7 @@ function AppointmentModal({
                 className="w-full rounded-xl border border-gray-200 px-3 py-1.5 text-sm focus:border-gray-400 focus:outline-none"
               >
                 <option value="tour">Tour</option>
+                <option value="phone_call">Phone call</option>
                 <option value="meeting">Meeting</option>
                 <option value="tasting">Tasting</option>
                 <option value="rehearsal">Rehearsal</option>

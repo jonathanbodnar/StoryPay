@@ -119,6 +119,7 @@ export function mapEventType(name: string): string {
   if (lower.includes('tasting') || lower.includes('taste')) return 'tasting';
   if (lower.includes('rehearsal')) return 'rehearsal';
   if (lower.includes('reception')) return 'reception';
+  if (lower.includes('phone call') || lower.includes('phone-call') || lower.includes('call with')) return 'phone_call';
   if (lower.includes('meeting') || lower.includes('consult') || lower.includes('call')) return 'meeting';
   return 'tour'; // default for Calendly bookings is usually a tour
 }

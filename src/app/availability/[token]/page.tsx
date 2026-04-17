@@ -15,14 +15,10 @@ interface AvailabilityData {
   month: number;
 }
 
-const EVENT_TYPE_LABELS: Record<string, string> = {
-  wedding: 'Booked — Wedding',
-  reception: 'Booked — Reception',
+/** Short label under the day number when the day is booked (fits tiny cell). */
+const BOOKED_DAY_SUBLABEL: Record<string, string> = {
   tour: 'Tour',
-  tasting: 'Tasting',
-  hold: 'Hold',
-  blocked: 'Unavailable',
-  other: 'Unavailable',
+  phone_call: 'Call',
 };
 
 export default function AvailabilityPage() {
@@ -126,7 +122,7 @@ export default function AvailabilityPage() {
                     </span>
                     {isBooked && !past && (
                       <span className="text-[9px] font-semibold text-red-500 leading-none">
-                        {booked[0]?.event_type === 'tour' ? 'Tour' : 'Booked'}
+                        {BOOKED_DAY_SUBLABEL[booked[0]?.event_type ?? ''] ?? 'Booked'}
                       </span>
                     )}
                     {!isBooked && !past && (
