@@ -33,7 +33,15 @@ export async function generateMetadata(): Promise<Metadata> {
       images: [ogImage], creator: '@storypay',
     },
     alternates: { canonical: seo?.canonical || APP_URL },
-    icons: { icon: [{ url: '/favicon.ico' }], apple: '/apple-touch-icon.png' },
+    // The main app (app.storyvenue.com and all its subsections — dashboard,
+    // directory, leads, listings, etc.) uses the StoryVenue favicon. The
+    // separate storypay.io marketing homepage lives under /homepage and has
+    // its own layout + favicon.ico, so it's unaffected by this change.
+    icons: {
+      icon: [{ url: '/storyvenue-favicon.png', type: 'image/png' }],
+      shortcut: '/storyvenue-favicon.png',
+      apple: '/apple-touch-icon.png',
+    },
     verification: { google: process.env.GOOGLE_SITE_VERIFICATION || '' },
   };
 }
