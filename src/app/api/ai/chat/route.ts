@@ -178,10 +178,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'AI not configured.' }, { status: 503 });
   }
 
-  const { messages } = await request.json();
+  const { messages, pathname } = await request.json();
   if (!messages || !Array.isArray(messages)) {
     return NextResponse.json({ error: 'messages array required' }, { status: 400 });
   }
+
+  const onLeadsPage = typeof pathname === 'string' && pathname.startsWith('/dashboard/leads');
 
   // Fetch venue + live data context
   const [{ data: venue }, { data: proposals }, { data: customers }] = await Promise.all([
@@ -230,6 +232,132 @@ RECENT PROPOSALS (last 10):
 ${allProposals.slice(0, 10).map(p => `- ${p.customer_name || 'Unknown'} | ${p.status} | ${fmt(p.price ?? 0)} | ${p.payment_type} | ${(p.sent_at || p.created_at || '').slice(0, 10)}`).join('\n')}
 `.trim();
 
+  // --- Leads page context -------------------------------------------------
+  //
+  // When the user is on /dashboard/leads (or asks about leads), we pull a
+  // dense snapshot of their lead pipeline so Ask AI can answer questions
+  // like "how many leads this month?", "most requested wedding months?",
+  // "find a lead named Smith", etc. We keep this scoped to when the user is
+  // actually on the leads page so we don't pay this cost on every call.
+  interface LeadSnapshot {
+    id: string;
+    name: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    email: string;
+    phone: string | null;
+    venue_name: string | null;
+    venue_website_url: string | null;
+    wedding_date: string | null;
+    guest_count: number | null;
+    booking_timeline: string | null;
+    message: string | null;
+    opportunity_value: number | null;
+    pipeline_id: string | null;
+    stage_id: string | null;
+    status: string;
+    source: string;
+    created_at: string;
+  }
+  interface StageSnapshot { id: string; name: string; kind: string; }
+  interface NoteSnapshot { lead_id: string; content: string; created_at: string; }
+
+  let leadsContext = '';
+  if (onLeadsPage) {
+    const [{ data: leads }, { data: stages }, { data: notes }] = await Promise.all([
+      supabaseAdmin
+        .from('leads')
+        .select(
+          'id, name, first_name, last_name, email, phone, venue_name, venue_website_url, ' +
+          'wedding_date, guest_count, booking_timeline, message, opportunity_value, ' +
+          'pipeline_id, stage_id, status, source, created_at',
+        )
+        .eq('venue_id', venueId)
+        .order('created_at', { ascending: false })
+        .limit(500),
+      supabaseAdmin
+        .from('lead_pipeline_stages')
+        .select('id, name, kind')
+        .eq('venue_id', venueId),
+      supabaseAdmin
+        .from('lead_notes')
+        .select('lead_id, content, created_at')
+        .eq('venue_id', venueId)
+        .order('created_at', { ascending: false })
+        .limit(200),
+    ]);
+
+    const allLeads  = (leads  ?? []) as unknown as LeadSnapshot[];
+    const allStages = (stages ?? []) as unknown as StageSnapshot[];
+    const allNotes  = (notes  ?? []) as unknown as NoteSnapshot[];
+    const stagesById = new Map<string, { name: string; kind: string }>();
+    for (const s of allStages) stagesById.set(s.id, { name: s.name, kind: s.kind });
+
+    const thisMonthLeads = allLeads.filter((l) => (l.created_at || '').startsWith(thisMonth)).length;
+    const lastMonthLeads = allLeads.filter((l) => (l.created_at || '').startsWith(lastMonth)).length;
+
+    // Counts by stage name
+    const byStage = new Map<string, number>();
+    for (const l of allLeads) {
+      const s = l.stage_id ? stagesById.get(l.stage_id) : null;
+      const name = s?.name ?? '(no stage)';
+      byStage.set(name, (byStage.get(name) ?? 0) + 1);
+    }
+
+    // Total pipeline value (open + won stages)
+    const pipelineValue = allLeads.reduce((sum, l) => sum + Number(l.opportunity_value ?? 0), 0);
+
+    // Most common wedding months
+    const monthCounts = new Map<string, number>();
+    for (const l of allLeads) {
+      if (!l.wedding_date) continue;
+      const m = l.wedding_date.slice(0, 7);
+      monthCounts.set(m, (monthCounts.get(m) ?? 0) + 1);
+    }
+    const topMonths = [...monthCounts.entries()]
+      .sort((a, b) => b[1] - a[1]).slice(0, 5)
+      .map(([m, c]) => `${m} (${c})`).join(', ');
+
+    // Notes per lead (useful for "find leads who mentioned X")
+    const notesByLead = new Map<string, string[]>();
+    for (const n of allNotes) {
+      const arr = notesByLead.get(n.lead_id) ?? [];
+      if (arr.length < 3) arr.push(n.content.slice(0, 140));
+      notesByLead.set(n.lead_id, arr);
+    }
+
+    leadsContext = `
+=== LEADS ===
+TOTALS:
+- All leads: ${allLeads.length}
+- New this month (${thisMonth}): ${thisMonthLeads}
+- New last month (${lastMonth}): ${lastMonthLeads}
+- Total pipeline value: ${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(pipelineValue)}
+
+BY STAGE:
+${[...byStage.entries()].map(([n, c]) => `- ${n}: ${c}`).join('\n') || '- (no leads yet)'}
+
+TOP REQUESTED WEDDING MONTHS: ${topMonths || 'none yet'}
+
+RECENT LEADS (most recent first, up to 30):
+${allLeads.slice(0, 30).map((l) => {
+  const stage = l.stage_id ? stagesById.get(l.stage_id) : null;
+  const name = [l.first_name, l.last_name].filter(Boolean).join(' ').trim() || l.name || 'Unnamed';
+  const val = l.opportunity_value != null ? ` · $${Number(l.opportunity_value).toLocaleString()}` : '';
+  const wed = l.wedding_date ? ` · wedding ${l.wedding_date}` : '';
+  const venue = l.venue_name ? ` · venue: ${l.venue_name}` : '';
+  const url = l.venue_website_url ? ` · ${l.venue_website_url}` : '';
+  const stageLabel = stage ? ` [${stage.name}]` : '';
+  const leadNotes = notesByLead.get(l.id);
+  const notesLine = leadNotes && leadNotes.length > 0
+    ? `\n    notes: ${leadNotes.map((n) => `"${n.replace(/\s+/g, ' ').trim()}"`).join('; ')}`
+    : '';
+  const inquiry = l.message ? `\n    inquiry: "${l.message.slice(0, 140).replace(/\s+/g, ' ').trim()}"` : '';
+  return `- ${name}${stageLabel} · ${l.email}${l.phone ? ` · ${l.phone}` : ''}${val}${wed}${venue}${url}${inquiry}${notesLine}`;
+}).join('\n')}
+`.trim();
+  }
+
   const systemPrompt = `You are Ask AI, the intelligent support assistant built into StoryPay — a proposal and payment platform for wedding venues.
 
 You help venue owners with:
@@ -244,7 +372,7 @@ ${PLATFORM_DOCS}
 
 === CLIENT ACCOUNT DATA ===
 ${accountContext}
-
+${leadsContext ? '\n' + leadsContext + '\n' : ''}
 === BEHAVIOR RULES ===
 1. Always try to answer using the documentation and account data above
 2. When asked about account data (revenue, proposals, customers), use the real numbers above
@@ -256,6 +384,8 @@ ${accountContext}
 8. After your answer, if it's a complex issue, you can gently add: "Still need help? I can connect you with our support team."
 9. Format responses clearly — use numbered lists or dashes for steps, plain text only
 10. Keep responses under 250 words unless a detailed walkthrough is needed
+11. When the user is on the Leads page (you'll see "=== LEADS ===" above), use that data to answer things like "how many leads do I have this month?", "find the lead named Smith", "what's the most requested wedding month?", "total pipeline value", "who hasn't been contacted in 7 days?", etc. If they ask to find a specific lead, repeat the lead's name, stage, email, phone, wedding date and value in your answer so they don't have to scroll.
+12. When referring to leads, suggest the user open the Leads page using this link: [Open Leads](/dashboard/leads)
 
 === FORMATTING ===
 - NEVER use any markdown whatsoever: absolutely no **bold**, no *italic*, no __underline__, no ### headers, no # symbols, no backticks, no asterisks around words
@@ -264,7 +394,7 @@ ${accountContext}
 - Keep headings as plain text with a colon, e.g. "How to Access Reports:"
 - When directing the user to a specific page, include ONE navigation link using ONLY this format: [Button Label](/dashboard/path)
   Examples: [Open Branding Settings](/dashboard/settings/branding) [View Proposals](/dashboard/payments/proposals) [Go to Reports](/dashboard/reports) [Manage Customers](/dashboard/customers) [View Transactions](/dashboard/transactions) [Open Calendar](/dashboard/calendar) [Open Integrations](/dashboard/settings/integrations)
-- Only link to real dashboard paths. Valid paths: /dashboard, /dashboard/calendar, /dashboard/customers, /dashboard/payments/proposals, /dashboard/payments/new, /dashboard/transactions, /dashboard/reports, /dashboard/settings, /dashboard/settings/branding, /dashboard/settings/integrations, /dashboard/settings/team, /dashboard/settings/notifications, /dashboard/settings/email-templates, /dashboard/help
+- Only link to real dashboard paths. Valid paths: /dashboard, /dashboard/calendar, /dashboard/customers, /dashboard/leads, /dashboard/payments/proposals, /dashboard/payments/new, /dashboard/transactions, /dashboard/reports, /dashboard/settings, /dashboard/settings/branding, /dashboard/settings/integrations, /dashboard/settings/team, /dashboard/settings/notifications, /dashboard/settings/email-templates, /dashboard/help
 - Place the link on its own line at the end of the relevant sentence or step, not inline mid-sentence
 
 === TONE ===

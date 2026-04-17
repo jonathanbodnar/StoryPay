@@ -7,6 +7,8 @@ export const runtime = 'nodejs';
 
 /**
  * Status values enforced by the DB CHECK constraint on `public.leads.status`.
+ * We keep updating this alongside stage_id for backwards compatibility with
+ * older inboxes that still use the enum.
  */
 const ALLOWED_STATUSES = new Set([
   'new',
@@ -31,7 +33,25 @@ export async function PATCH(
 
   const { id } = await context.params;
 
-  let body: { status?: string; notes?: string };
+  let body: {
+    status?: string;
+    notes?: string;
+    firstName?: string;
+    lastName?: string;
+    name?: string;
+    email?: string;
+    phone?: string;
+    venueName?: string;
+    venueWebsiteUrl?: string;
+    opportunityValue?: number | string | null;
+    weddingDate?: string | null;
+    guestCount?: number | null;
+    bookingTimeline?: string | null;
+    message?: string | null;
+    pipelineId?: string | null;
+    stageId?: string | null;
+    position?: number;
+  };
   try {
     body = await request.json();
   } catch {
@@ -48,7 +68,36 @@ export async function PATCH(
     }
     updates.status = body.status;
   }
-  if (typeof body.notes === 'string') updates.notes = body.notes;
+  if (typeof body.notes === 'string')              updates.notes = body.notes;
+  if (typeof body.firstName === 'string')          updates.first_name = body.firstName.trim() || null;
+  if (typeof body.lastName === 'string')           updates.last_name  = body.lastName.trim()  || null;
+  if (typeof body.name === 'string')               updates.name = body.name.trim();
+  if (typeof body.email === 'string')              updates.email = body.email.trim();
+  if (typeof body.phone === 'string')              updates.phone = body.phone.trim();
+  if (typeof body.venueName === 'string')          updates.venue_name = body.venueName.trim() || null;
+  if (typeof body.venueWebsiteUrl === 'string')    updates.venue_website_url = body.venueWebsiteUrl.trim() || null;
+  if (typeof body.bookingTimeline === 'string' || body.bookingTimeline === null) updates.booking_timeline = body.bookingTimeline || null;
+  if (typeof body.message === 'string' || body.message === null) updates.message = body.message;
+  if (body.weddingDate === null || typeof body.weddingDate === 'string') updates.wedding_date = body.weddingDate || null;
+  if (body.guestCount === null || typeof body.guestCount === 'number') updates.guest_count = body.guestCount;
+  if (body.opportunityValue === null || body.opportunityValue === '' || body.opportunityValue === undefined) {
+    if (body.opportunityValue !== undefined) updates.opportunity_value = null;
+  } else if (typeof body.opportunityValue === 'number' || typeof body.opportunityValue === 'string') {
+    const n = Number(body.opportunityValue);
+    if (!Number.isNaN(n)) updates.opportunity_value = n;
+  }
+  if (body.pipelineId === null || typeof body.pipelineId === 'string') updates.pipeline_id = body.pipelineId || null;
+  if (body.stageId === null || typeof body.stageId === 'string')       updates.stage_id    = body.stageId    || null;
+  if (typeof body.position === 'number')           updates.position = body.position;
+
+  // If the caller built a new first/last but didn't also send a full name,
+  // keep the legacy `name` column in sync so old UIs still render correctly.
+  if ((updates.first_name !== undefined || updates.last_name !== undefined) && updates.name === undefined) {
+    const first = typeof updates.first_name === 'string' ? updates.first_name : body.firstName;
+    const last  = typeof updates.last_name  === 'string' ? updates.last_name  : body.lastName;
+    const rebuilt = `${first ?? ''} ${last ?? ''}`.trim();
+    if (rebuilt) updates.name = rebuilt;
+  }
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });

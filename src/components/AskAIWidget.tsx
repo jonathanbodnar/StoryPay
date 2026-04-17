@@ -294,10 +294,10 @@ export default function AskAIWidget() {
  });
 
  try {
- const res = await fetch('/api/ai/chat', {
- method: 'POST', headers: { 'Content-Type': 'application/json' },
- body: JSON.stringify({ messages: apiMessages }),
- });
+		 const res = await fetch('/api/ai/chat', {
+			 method: 'POST', headers: { 'Content-Type': 'application/json' },
+			 body: JSON.stringify({ messages: apiMessages, pathname }),
+		 });
  const data = await res.json();
  if (!res.ok) { setError(data.error || 'Something went wrong.'); return; }
  setMessages(prev => [...prev, { role: 'assistant', content: data.reply, timestamp: new Date() }]);

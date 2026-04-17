@@ -500,66 +500,187 @@ Caution: changing the slug changes your public URL. Any links on your website, I
     articles: [
       {
         id: 'leads-overview',
-        title: 'Leads inbox overview',
-        tags: ['leads', 'inquiries', 'inbox', 'requests', 'directory leads', 'form'],
-        body: `The Leads page (sidebar → Leads) is your inbox for inquiries submitted through your storyvenue.com directory listing.
+        title: 'Leads and sales pipeline overview',
+        tags: ['leads', 'pipeline', 'kanban', 'sales', 'inbox', 'directory leads', 'form'],
+        body: `The Leads page is your sales pipeline. Open it from the sidebar → Leads.
 
-Each time a couple fills out the Request Info form on your public venue page, a lead appears here instantly and the notification email is delivered to the inbox you configured on the Directory Listing page.
+Two ways leads arrive:
+- Inquiries submitted through your storyvenue.com directory listing show up automatically.
+- You can add leads by hand with the "+ Add Lead" button in the top-right (paste in contact info from a phone call, Instagram DM, referral, wedding show, etc.)
 
-Each lead row shows at a glance:
-- Name, status pill (New / Contacted / Tour booked / Proposal sent / Booked / Not interested)
-- Linked listing name (useful if your account ever manages multiple listings)
-- Email, phone, wedding date, guest count
-- A short preview of their message
-- Date received
+Two views:
+- Kanban — your pipeline as columns. Each stage is a column; each lead is a card. Drag a card between columns to change its stage.
+- List — a scannable table view. Use the Stage filter and the search box to narrow down.
 
-Click a row to expand and see the full message, booking timeline, and source. You'll also see quick-action buttons for Reply (opens your email client), Call (tap to dial on mobile), View Listing, and status changes.
+Every lead shows:
+- First and last name
+- Email, phone
+- Venue name and venue website URL (the couple's preferred venue or the venue you're pitching)
+- Wedding date, guest count
+- Opportunity value (your expected deal size)
+- Date created
+- Note count
 
-Leads are sorted newest first and up to 500 are loaded at once.`,
+Click any card (or list row) to open the full lead drawer — edit any field, add timestamped notes, schedule an appointment, create a customer from the lead, or delete it.
+
+The pipeline picker (top-right) lets you switch between multiple pipelines. Everyone starts with a default "Sales Pipeline" with 8 stages: Lead, Conversations Started, Lead Contacted, Tour Booked, Proposal Sent, Wedding Booked, Follow up, Not Interested. You can rename, add, remove, and reorder stages — or create a brand-new pipeline — with the Edit button.`,
+      },
+      {
+        id: 'leads-kanban',
+        title: 'Using the Kanban board',
+        tags: ['kanban', 'pipeline', 'drag and drop', 'stages', 'board', 'move leads'],
+        body: `The Kanban view is the default on the Leads page. Each column is a stage in your pipeline.
+
+To move a lead:
+- Grab a card (click-and-hold anywhere on the card)
+- Drag it over the target column — the column will highlight
+- Drop to commit
+
+The change saves instantly. There's no "undo" in the UI, but dragging the card back will fix it.
+
+Each column shows at the top:
+- Stage name and its color dot
+- Lead count
+- Total opportunity value of the cards in that column
+
+Cards show the lead's name, venue, email, phone, wedding date, note count, opportunity value, and date created.
+
+Scroll horizontally if you have many stages — the board always fits a single row of columns, even on wide pipelines.
+
+If a lead has no stage assigned (e.g. a brand-new inquiry from the directory that hasn't been placed yet), it's automatically shown in the first column so nothing falls off the board.`,
+      },
+      {
+        id: 'leads-edit-pipelines',
+        title: 'Editing and creating pipelines',
+        tags: ['edit pipeline', 'rename stage', 'add stage', 'delete stage', 'multiple pipelines', 'custom pipeline'],
+        body: `Every account starts with a default pipeline: "Sales Pipeline" with 8 stages (Lead, Conversations Started, Lead Contacted, Tour Booked, Proposal Sent, Wedding Booked, Follow up, Not Interested). You can customize it or create additional pipelines for different brands, properties, or sales processes.
+
+Open the editor:
+- Top-right of the Leads page, pipeline dropdown → Edit button
+- A modal opens with your pipelines listed on the left, stages on the right.
+
+Editing stages (right panel):
+- Rename — click a stage name and type a new one; it saves when you tab/click away.
+- Change color — click the color swatch next to the stage name.
+- Stage kind — each stage is classified as Active (open), Won, or Lost. Won stages count as booked revenue in stats; Lost stages are excluded. Change the dropdown next to each stage.
+- Reorder — use the up/down arrow buttons.
+- Delete — trash icon. Any leads in that stage become unassigned and show in the first column.
+- Add — type a name in the "New stage" box and click Add stage.
+
+Creating a new pipeline:
+- Type a name in the "New pipeline name" box on the left panel → Add pipeline
+- New pipelines start with the default 8-stage template — edit freely from there.
+
+Making a pipeline default:
+- The default pipeline is what new leads land in. Pick any pipeline → Make default.
+
+Deleting a pipeline:
+- You can't delete the default pipeline. Make another pipeline the default first, then delete the old one. Leads in the deleted pipeline aren't deleted — they just become unassigned.
+
+Use "Use this pipeline" to make a pipeline the one you're viewing on the Leads page and close the editor in one click.`,
+      },
+      {
+        id: 'leads-detail-notes',
+        title: 'Lead details, editing fields, and timestamped notes',
+        tags: ['notes', 'timestamped', 'edit lead', 'lead details', 'activity'],
+        body: `Click any lead card or list row to open the lead drawer.
+
+At the top you'll see the lead's name and the date they were added.
+
+Stage picker
+- Tap any stage chip to move this lead to that stage. The chip lights up in the stage's color.
+
+Editable fields (click to edit, blur or press Enter to save)
+- First name, Last name
+- Email, Phone
+- Opportunity value — expected deal size in dollars
+- Venue name, Venue website (URL)
+- Wedding date, Guest count
+
+Inquiry message
+- If the lead came from the directory, their original message is shown here as read-only context.
+
+Timestamped notes
+- Type in the "Add a note…" box and click Add note.
+- Every note is stamped with the exact time it was created.
+- Edit (pencil) or delete (trash) your own notes. System-generated notes (like "Appointment scheduled") can't be edited, but you can delete them.
+- Notes are sorted newest-first.
+- The Kanban cards show a small "3" badge next to the message icon when a lead has notes.
+
+Quick actions
+- Reply (opens your email client with the lead's email pre-filled)
+- Call (tap-to-dial on mobile)
+- Listing (jumps to the directory page the lead came from)
+- Create customer (saves this lead as a customer in your CRM)
+- Schedule appointment (see next article)
+- Delete (permanent — requires confirmation)`,
+      },
+      {
+        id: 'leads-schedule-appointment',
+        title: 'Scheduling an appointment from a lead',
+        tags: ['appointment', 'schedule', 'tour', 'calendar', 'meeting'],
+        body: `You can book a tour, tasting, meeting, or any event directly from a lead — no copy-pasting into the Calendar page.
+
+How to schedule:
+1. Open the lead (click a card or list row)
+2. Click "Schedule appointment"
+3. Pick the event type (Tour is the default — it's what most lead interactions become)
+4. Set the date and start/end time
+5. Optionally pick a specific space (Barn, Garden, Ballroom, etc.) — we'll warn you if it conflicts with an existing event
+6. Add notes (optional)
+7. Click "Add to calendar"
+
+What happens:
+- A new event is created on your Calendar, stamped with the lead's email so it links up with any customer profile created from this lead.
+- A timestamped system note is auto-added to the lead: "Appointment scheduled (tour) for …". It'll show in the notes thread so your team has an audit trail.
+- If the event type is "Tour" and your pipeline has a "Tour Booked" stage, the lead is automatically moved to that stage. (Other event types don't auto-move the card — you stay in control.)
+
+Conflict detection:
+- If you picked a space and another event is already in it during that time, you'll see a conflict warning and the appointment won't be created. Pick a different time, a different space, or leave the space blank.
+
+To edit the appointment later, open it from the Calendar page.`,
       },
       {
         id: 'leads-filter-search',
-        title: 'Filtering and searching leads',
-        tags: ['filter', 'search', 'status', 'find lead', 'leads filter'],
-        body: `The Leads page has two tools for finding a specific inquiry:
+        title: 'Searching and filtering leads',
+        tags: ['filter', 'search', 'stage filter', 'find lead', 'leads filter'],
+        body: `The Leads page has two tools for finding a specific lead:
 
-Status tabs (top-left)
-- All, New, Contacted, Tour booked, Proposal sent, Booked, Not interested
-- Click a tab to filter to that status. The "All" tab shows counts per status as little badges.
-
-Search box (top-right)
-- Type any part of a name, email, or phone number
-- Results filter in real time as you type
+Search box (top)
+- Type any part of: first/last name, email, phone number, venue name, venue website URL, inquiry message, or note content
+- Results update as you type (a short debounce prevents flicker)
 - Clear the box to restore the full list
 
-Filters and search combine — e.g. show only "New" leads whose email contains "@gmail".
+Stage filter (List view only)
+- A dropdown next to the search box lets you filter to a single stage
+- In Kanban view, the stages are columns — no separate filter needed
 
-If no leads match, you'll see an empty state with a helpful message. That's not an error — just widen your filters.`,
+The search also looks inside timestamped notes. That means you can find a lead by something you typed into a note — e.g. "referral from Sarah" — even if the word isn't in any other field.
+
+Search and filter combine — e.g. "All leads in 'Tour Booked' whose email contains gmail".
+
+If no leads match, you'll see an empty state. That's not an error — just widen your filters.`,
       },
       {
-        id: 'leads-manage',
-        title: 'Replying, updating status, and deleting leads',
-        tags: ['reply', 'status', 'contacted', 'booked', 'delete', 'lead status'],
-        body: `Click any lead row to expand it. From there:
+        id: 'leads-ask-ai',
+        title: 'Asking AI about your leads',
+        tags: ['ai', 'ask ai', 'stats', 'report', 'intelligence'],
+        body: `The Ask AI widget (bottom-right of every page) knows about your leads when you're on the Leads page.
 
-Reply — opens your default email client with the lead's email pre-filled. Once you've replied, click "Mark contacted" so your inbox reflects reality.
+Things to ask:
+- "How many leads do I have this month?"
+- "How many leads were new last month?"
+- "What's my total pipeline value?"
+- "What are the top requested wedding months?"
+- "Find the lead named Smith" — AI will repeat their email, phone, wedding date, and stage so you don't have to scroll.
+- "Which leads haven't been contacted yet?"
+- "Show me leads with wedding dates in June"
+- "How many leads did I convert to Booked this month?"
+- "What's the average opportunity value of my leads in Proposal Sent?"
 
-Call — if a phone number was provided, tap to dial on mobile or click to open your desktop's phone handler.
+AI only sees aggregate stats plus recent leads' details — it can't see financial data not already visible on your dashboard. It also doesn't edit leads for you; use the Kanban board or drawer for changes.
 
-View Listing — jump to the public storyvenue.com page this lead came from.
-
-Change status — click any of the status buttons:
-- Mark contacted — you've responded
-- Tour booked — they're coming in for a walk-through
-- Proposal sent — you've sent them a quote (tip: hand off to Payments → New Proposal and link the customer)
-- Booked — congrats, they signed and paid
-- Not interested — they've passed, or it's a bad fit
-
-Statuses are for your team — the lead never sees them.
-
-Delete — red trash button inside the expanded view. This permanently removes the lead. Deletion confirmation is required.
-
-All status/delete actions take effect instantly.`,
+If AI gives a stale answer, refresh the page to reset the context.`,
       },
       {
         id: 'leads-notifications',
