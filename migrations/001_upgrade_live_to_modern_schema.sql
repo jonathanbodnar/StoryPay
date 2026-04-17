@@ -14,25 +14,7 @@
 BEGIN;
 
 -- ---------------------------------------------------------------------------
--- 1. Helper: is_admin() used by RLS policies
--- ---------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.is_admin()
-RETURNS boolean
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.profiles p
-    WHERE p.id = auth.uid() AND p.role = 'admin'
-  );
-$$;
-
-GRANT EXECUTE ON FUNCTION public.is_admin() TO anon, authenticated, service_role;
-
--- ---------------------------------------------------------------------------
--- 2. profiles table
+-- 1. profiles table (must exist before is_admin() references it)
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.profiles (
   id         uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -41,6 +23,30 @@ CREATE TABLE IF NOT EXISTS public.profiles (
              CHECK (role IN ('venue_owner','admin')),
   created_at timestamptz DEFAULT now()
 );
+
+-- ---------------------------------------------------------------------------
+-- 2. Helper: is_admin() used by RLS policies
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS boolean
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.profiles p
+    WHERE p.id = auth.uid() AND p.role = 'admin'
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.is_admin() TO anon, authenticated, service_role;
+
+-- ---------------------------------------------------------------------------
+-- 2b. profiles RLS
+-- ---------------------------------------------------------------------------
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
