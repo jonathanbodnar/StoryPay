@@ -623,10 +623,14 @@ export default function CustomerDetailPage() {
               className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
               <Pencil size={13} /> Edit
             </button>
-            <Link href={`/dashboard/payments/new?email=${encodeURIComponent(customer.email || '')}&name=${encodeURIComponent(customer.name || '')}`}
+            <Link href={`/dashboard/payments/new?type=proposal&email=${encodeURIComponent(customer.email || '')}&name=${encodeURIComponent(customer.name || '')}`}
               className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition-colors"
               style={{ backgroundColor: '#1b1b1b' }}>
               <Plus size={14} /> New Proposal
+            </Link>
+            <Link href={`/dashboard/payments/new?type=invoice&email=${encodeURIComponent(customer.email || '')}&name=${encodeURIComponent(customer.name || '')}`}
+              className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
+              <Plus size={14} /> New Invoice
             </Link>
           </div>
         </div>
