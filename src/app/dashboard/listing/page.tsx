@@ -4,8 +4,9 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Loader2, Save, CheckCircle2, Store, Globe, MapPin, Users, DollarSign,
-  Image as ImageIcon, ExternalLink, Eye, EyeOff, AlertCircle,
+  Image as ImageIcon, ExternalLink, Eye, EyeOff, AlertCircle, RotateCcw,
 } from 'lucide-react';
+import { slugify } from '@/lib/directory';
 
 interface Listing {
   id: string | null;
@@ -69,6 +70,9 @@ export default function ListingPage() {
   const [status, setStatus] = useState<SaveStatus>('idle');
   const [error, setError] = useState('');
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  // True until the user manually edits the slug field. While true, the slug
+  // auto-tracks the venue name (e.g. "The Barn at New Albany" → "the-barn-at-new-albany").
+  const [autoSlug, setAutoSlug] = useState(false);
 
   // Refs that always point at the latest listing / loading state so the
   // debounced save doesn't have to be recreated on every edit.
@@ -88,12 +92,19 @@ export default function ListingPage() {
         if (res.ok) {
           const data = await res.json();
           if (data.listing) {
-            setListing({
+            const next: Listing = {
               ...emptyListing(),
               ...data.listing,
               features: Array.isArray(data.listing.features) ? data.listing.features : [],
               gallery_images: Array.isArray(data.listing.gallery_images) ? data.listing.gallery_images : [],
-            });
+            };
+            setListing(next);
+            // If slug is blank or already matches slugify(name), keep auto-mode on
+            // so further name edits continue updating the URL. If the user (or a
+            // previous session) hand-edited the slug, leave auto-mode off so we
+            // don't clobber their choice.
+            const expected = next.name ? slugify(next.name) : '';
+            setAutoSlug(!next.slug || next.slug === expected);
           }
         } else {
           const data = await res.json().catch(() => ({}));
@@ -167,6 +178,37 @@ export default function ListingPage() {
 
   function update<K extends keyof Listing>(key: K, value: Listing[K]) {
     setListing((prev) => ({ ...prev, [key]: value }));
+    scheduleAutosave();
+  }
+
+  function updateName(value: string) {
+    setListing((prev) => {
+      const next = { ...prev, name: value };
+      if (autoSlug) next.slug = slugify(value);
+      return next;
+    });
+    scheduleAutosave();
+  }
+
+  function updateSlug(value: string) {
+    // Sanitize as the user types so they can never end up with spaces / weird
+    // characters / uppercase, but DON'T force a final hyphen collapse yet so
+    // "the-barn-" is still editable into "the-barn-at-new-albany".
+    const cleaned = value
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9-]+/g, '-')
+      .replace(/-{2,}/g, '-')
+      .slice(0, 80);
+    setAutoSlug(false);
+    setListing((prev) => ({ ...prev, slug: cleaned }));
+    scheduleAutosave();
+  }
+
+  function resetSlugFromName() {
+    setAutoSlug(true);
+    setListing((prev) => ({ ...prev, slug: prev.name ? slugify(prev.name) : null }));
     scheduleAutosave();
   }
 
@@ -281,22 +323,39 @@ export default function ListingPage() {
               type="text"
               className={INPUT}
               value={listing.name ?? ''}
-              onChange={(e) => update('name', e.target.value)}
+              onChange={(e) => updateName(e.target.value)}
               placeholder="The Maple Barn"
             />
           </div>
           <div>
-            <label className={LABEL}>URL slug</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className={`${LABEL} mb-0`}>URL slug</label>
+              {!autoSlug && listing.name && (
+                <button
+                  type="button"
+                  onClick={resetSlugFromName}
+                  className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400 hover:text-gray-700"
+                  title="Reset slug from venue name"
+                >
+                  <RotateCcw className="w-3 h-3" /> Auto
+                </button>
+              )}
+            </div>
             <div className="flex items-center rounded-2xl border border-gray-200 bg-gray-50 focus-within:border-gray-400 focus-within:bg-white transition-colors">
               <span className="pl-3.5 pr-1 text-sm text-gray-400 whitespace-nowrap">{DIRECTORY_URL.replace(/^https?:\/\//, '')}/venue/</span>
               <input
                 type="text"
                 className="flex-1 bg-transparent px-1 py-2.5 text-sm text-gray-900 focus:outline-none"
                 value={listing.slug ?? ''}
-                onChange={(e) => update('slug', e.target.value)}
+                onChange={(e) => updateSlug(e.target.value)}
                 placeholder="the-maple-barn"
               />
             </div>
+            <p className="mt-1.5 text-xs text-gray-400">
+              {autoSlug
+                ? 'Auto-generated from your venue name.'
+                : 'Lowercase letters, numbers, and dashes only.'}
+            </p>
           </div>
           <div>
             <label className={LABEL}>Venue type</label>
