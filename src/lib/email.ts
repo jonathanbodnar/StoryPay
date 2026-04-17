@@ -5,14 +5,19 @@ export async function sendEmail({
   replyTo,
   subject,
   html,
+  from,
 }: {
   to: string;
   replyTo?: string;
   subject: string;
   html: string;
+  /** Optional sender display (still uses platform from-address unless you verify a custom domain). */
+  from?: { email?: string; name?: string };
 }): Promise<{ success: boolean; error?: string }> {
   const sendgridKey = process.env.SENDGRID_API_KEY;
   const resendKey   = process.env.RESEND_API_KEY;
+  const fromEmail = from?.email?.trim() || 'noreply@storypay.io';
+  const fromName = from?.name?.trim() || 'StoryPay';
 
   // Try SendGrid
   if (sendgridKey) {
@@ -25,7 +30,7 @@ export async function sendEmail({
         },
         body: JSON.stringify({
           personalizations: [{ to: [{ email: to }] }],
-          from: { email: 'noreply@storypay.io', name: 'StoryPay' },
+          from: { email: fromEmail, name: fromName },
           reply_to: replyTo ? { email: replyTo } : undefined,
           subject,
           content: [{ type: 'text/html', value: html }],
@@ -49,7 +54,7 @@ export async function sendEmail({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: 'StoryPay <noreply@storypay.io>',
+          from: `${fromName} <${fromEmail}>`,
           to: [to],
           reply_to: replyTo,
           subject,

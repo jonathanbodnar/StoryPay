@@ -43,6 +43,7 @@ const paymentsItems = [
 ];
 
 const marketingItems = [
+ { label: 'Email & campaigns', href: '/dashboard/marketing/email', icon: Mail },
  { label: 'Trigger Links & Tags', href: '/dashboard/marketing/trigger-links', icon: Link2 },
  { label: 'Form builder', href: '/dashboard/marketing/form-builder', icon: LayoutTemplate },
 ];

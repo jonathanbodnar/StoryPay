@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { legacyStatusForStageName } from '@/lib/pipelines';
 import { leadRowWithTags, setLeadTagIds } from '@/lib/lead-tags';
+import { onMarketingStageChanged, onMarketingTagAdded } from '@/lib/marketing-email-worker';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -117,6 +118,27 @@ export async function PATCH(
 
   const hasTagPatch = body.tagIds !== undefined;
 
+  let previousStageId: string | null | undefined;
+  if (body.stageId !== undefined) {
+    const { data: cur } = await supabaseAdmin
+      .from('leads')
+      .select('stage_id')
+      .eq('id', id)
+      .eq('venue_id', venueId)
+      .maybeSingle();
+    previousStageId = (cur?.stage_id as string | null) ?? null;
+  }
+
+  const previousTagIds = new Set<string>();
+  if (hasTagPatch) {
+    const { data: tagRows } = await supabaseAdmin
+      .from('lead_tag_assignments')
+      .select('tag_id')
+      .eq('lead_id', id)
+      .eq('venue_id', venueId);
+    for (const r of tagRows ?? []) previousTagIds.add(String((r as { tag_id: string }).tag_id));
+  }
+
   if (Object.keys(updates).length === 0 && !hasTagPatch) {
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
   }
@@ -165,6 +187,20 @@ export async function PATCH(
   }
 
   const withTags = await leadRowWithTags(venueId, leadRow as Record<string, unknown>);
+
+  if (body.stageId !== undefined && previousStageId !== undefined) {
+    const nextStageId = (leadRow.stage_id as string | null) ?? null;
+    if (nextStageId && nextStageId !== previousStageId) {
+      void onMarketingStageChanged(venueId, id, nextStageId);
+    }
+  }
+
+  if (hasTagPatch) {
+    const arr = Array.isArray(body.tagIds) ? body.tagIds.filter((x): x is string => typeof x === 'string') : [];
+    const added = arr.filter((tid) => !previousTagIds.has(tid));
+    if (added.length) void onMarketingTagAdded(venueId, id, added);
+  }
+
   return NextResponse.json({ lead: withTags });
 }
 

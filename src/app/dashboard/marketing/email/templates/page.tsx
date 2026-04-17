@@ -3,20 +3,19 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, LayoutTemplate, Loader2, Plus, Pencil } from 'lucide-react';
+import { ArrowLeft, FileStack, Loader2, Plus, Pencil } from 'lucide-react';
 
-interface FormRow {
+interface TemplateRow {
   id: string;
   name: string;
-  embed_token: string;
-  published: boolean;
+  subject: string;
   created_at: string;
   updated_at: string;
 }
 
-export default function FormBuilderListPage() {
+export default function EmailTemplatesListPage() {
   const router = useRouter();
-  const [forms, setForms] = useState<FormRow[]>([]);
+  const [rows, setRows] = useState<TemplateRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [newName, setNewName] = useState('');
@@ -25,11 +24,11 @@ export default function FormBuilderListPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await fetch('/api/marketing/forms', { cache: 'no-store' });
+    const res = await fetch('/api/marketing/email-templates', { cache: 'no-store' });
     if (res.ok) {
       const d = await res.json();
-      setForms(d.forms ?? []);
-    } else setForms([]);
+      setRows(d.templates ?? []);
+    } else setRows([]);
     setLoading(false);
   }, []);
 
@@ -39,7 +38,7 @@ export default function FormBuilderListPage() {
     });
   }, [load]);
 
-  async function createForm() {
+  async function createTemplate() {
     const name = newName.trim();
     if (!name) {
       setErr('Enter a name');
@@ -47,21 +46,21 @@ export default function FormBuilderListPage() {
     }
     setCreating(true);
     setErr(null);
-    const res = await fetch('/api/marketing/forms', {
+    const res = await fetch('/api/marketing/email-templates', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name }),
     });
-    const j = (await res.json().catch(() => ({}))) as { form?: { id: string }; error?: string };
+    const j = (await res.json().catch(() => ({}))) as { template?: { id: string }; error?: string };
     setCreating(false);
     if (!res.ok) {
-      setErr(j.error || 'Could not create form');
+      setErr(j.error || 'Could not create template');
       return;
     }
-    if (j.form?.id) {
+    if (j.template?.id) {
       setModalOpen(false);
       setNewName('');
-      router.push(`/dashboard/marketing/form-builder/${j.form.id}`);
+      router.push(`/dashboard/marketing/email/templates/${j.template.id}`);
     }
   }
 
@@ -77,11 +76,11 @@ export default function FormBuilderListPage() {
             Marketing email
           </Link>
           <h1 className="flex items-center gap-2 text-2xl font-semibold text-gray-900">
-            <LayoutTemplate className="text-brand-600" size={28} />
-            Form builder
+            <FileStack className="text-brand-600" size={28} />
+            Email templates
           </h1>
           <p className="mt-1 text-sm text-gray-600">
-            Build embeddable forms for your venue site. Drag blocks to reorder; copy the iframe when you are ready to go live.
+            Build reusable layouts with blocks and merge fields. Campaigns and automations reference these templates.
           </p>
         </div>
         <button
@@ -94,7 +93,7 @@ export default function FormBuilderListPage() {
           className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
         >
           <Plus size={18} />
-          New form
+          New template
         </button>
       </div>
 
@@ -102,33 +101,24 @@ export default function FormBuilderListPage() {
         <div className="flex justify-center py-16 text-gray-500">
           <Loader2 className="animate-spin" size={28} />
         </div>
-      ) : forms.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-gray-200 bg-white py-16 text-center text-gray-600">
-          <p className="mb-4">No forms yet.</p>
-          <button
-            type="button"
-            onClick={() => setModalOpen(true)}
-            className="text-brand-600 hover:underline"
-          >
-            Create your first form
-          </button>
-        </div>
+      ) : rows.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-gray-200 py-12 text-center text-sm text-gray-600">
+          No templates yet. Create one to open the drag-and-drop editor.
+        </p>
       ) : (
-        <ul className="space-y-2">
-          {forms.map((f) => (
-            <li key={f.id}>
+        <ul className="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white shadow-sm">
+          {rows.map((t) => (
+            <li key={t.id} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-gray-50/80">
+              <div className="min-w-0">
+                <p className="truncate font-medium text-gray-900">{t.name}</p>
+                <p className="truncate text-xs text-gray-500">{t.subject || 'No subject'}</p>
+              </div>
               <Link
-                href={`/dashboard/marketing/form-builder/${f.id}`}
-                className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm transition hover:border-brand-200 hover:bg-brand-50/40"
+                href={`/dashboard/marketing/email/templates/${t.id}`}
+                className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
               >
-                <div>
-                  <p className="font-medium text-gray-900">{f.name}</p>
-                  <p className="text-xs text-gray-500">
-                    {f.published ? 'Published' : 'Draft'} · updated{' '}
-                    {new Date(f.updated_at).toLocaleString()}
-                  </p>
-                </div>
-                <Pencil size={18} className="text-gray-400" />
+                <Pencil size={14} />
+                Edit
               </Link>
             </li>
           ))}
@@ -136,19 +126,19 @@ export default function FormBuilderListPage() {
       )}
 
       {modalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
-            <h2 className="text-lg font-semibold text-gray-900">New form</h2>
-            <p className="mt-1 text-sm text-gray-600">Choose a name you will recognize in the dashboard.</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog">
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
+            <h2 className="text-lg font-semibold text-gray-900">New email template</h2>
+            <label className="mt-4 block text-sm font-medium text-gray-700">Name</label>
             <input
-              className="mt-4 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-              placeholder="e.g. Wedding inquiry"
+              className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
+              placeholder="e.g. Weekly newsletter"
               autoFocus
             />
             {err ? <p className="mt-2 text-sm text-red-600">{err}</p> : null}
-            <div className="mt-6 flex justify-end gap-2">
+            <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
                 className="rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
@@ -160,9 +150,9 @@ export default function FormBuilderListPage() {
                 type="button"
                 disabled={creating}
                 className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
-                onClick={() => void createForm()}
+                onClick={() => void createTemplate()}
               >
-                {creating ? <Loader2 size={16} className="animate-spin" /> : null}
+                {creating ? <Loader2 className="animate-spin" size={16} /> : null}
                 Create
               </button>
             </div>

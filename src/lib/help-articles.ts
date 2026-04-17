@@ -1361,6 +1361,9 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   // Leads
   '/dashboard/leads': ['leads-overview', 'leads-filter-search', 'leads-manage', 'leads-notifications', 'leads-to-proposal'],
 
+  // Marketing — native email
+  '/dashboard/marketing/email': ['leads-overview', 'email-types', 'gs-overview'],
+
   // Payments — new proposal / invoice
   '/dashboard/payments/new':        ['pay-new', 'pay-templates', 'pay-installments'],
   '/dashboard/invoices/new':        ['pay-new', 'pay-installments', 'pay-subscriptions'],

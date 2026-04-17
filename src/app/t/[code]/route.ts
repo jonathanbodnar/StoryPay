@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { onMarketingTriggerLinkClick } from '@/lib/marketing-email-worker';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -88,6 +89,12 @@ export async function GET(
     referrer: ref,
     user_agent: ua,
   });
+
+  void onMarketingTriggerLinkClick(
+    link.venue_id as string,
+    leadId,
+    String(link.id),
+  );
 
   const nextCount = Number(link.click_count ?? 0) + 1;
   await supabaseAdmin.from('trigger_links').update({ click_count: nextCount }).eq('id', link.id);
