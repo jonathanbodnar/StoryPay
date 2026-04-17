@@ -148,16 +148,23 @@ export default function CustomerDetailPage() {
   const [refundTarget,   setRefundTarget]    = useState<Proposal | null>(null);
 
   // Notes
-  const [newNote,    setNewNote]    = useState('');
-  const [savingNote, setSavingNote] = useState(false);
-  const [noteError,  setNoteError]  = useState('');
+  const [newNote,         setNewNote]         = useState('');
+  const [savingNote,      setSavingNote]      = useState(false);
+  const [noteError,       setNoteError]       = useState('');
+  const [editingNoteId,   setEditingNoteId]   = useState<string | null>(null);
+  const [editNoteContent, setEditNoteContent] = useState('');
+  const [savingEditNote,  setSavingEditNote]  = useState(false);
 
   // Tasks
-  const [newTask,       setNewTask]       = useState('');
-  const [newTaskDue,    setNewTaskDue]    = useState('');
-  const [savingTask,    setSavingTask]    = useState(false);
-  const [taskError,     setTaskError]     = useState('');
-  const [showCompleted, setShowCompleted] = useState(false);
+  const [newTask,         setNewTask]         = useState('');
+  const [newTaskDue,      setNewTaskDue]      = useState('');
+  const [savingTask,      setSavingTask]      = useState(false);
+  const [taskError,       setTaskError]       = useState('');
+  const [showCompleted,   setShowCompleted]   = useState(false);
+  const [editingTaskId,   setEditingTaskId]   = useState<string | null>(null);
+  const [editTaskTitle,   setEditTaskTitle]   = useState('');
+  const [editTaskDue,     setEditTaskDue]     = useState('');
+  const [savingEditTask,  setSavingEditTask]  = useState(false);
 
   // Files
   const [uploading,    setUploading]    = useState(false);
@@ -419,6 +426,25 @@ export default function CustomerDetailPage() {
     setNotes(p => p.filter(n => n.id !== noteId));
   }
 
+  async function saveEditNote() {
+    if (!venueCustomer || !editingNoteId) return;
+    const trimmed = editNoteContent.trim();
+    if (!trimmed) return;
+    setSavingEditNote(true);
+    const res = await fetch(`/api/venue-customers/${venueCustomer.id}/notes`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ noteId: editingNoteId, content: trimmed }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setNotes(p => p.map(n => n.id === editingNoteId ? { ...n, content: updated.content ?? trimmed } : n));
+      setEditingNoteId(null);
+      setEditNoteContent('');
+    }
+    setSavingEditNote(false);
+  }
+
   // ── Tasks ──────────────────────────────────────────────────────────────────
   async function addTask() {
     if (!newTask.trim()) return;
@@ -462,6 +488,27 @@ export default function CustomerDetailPage() {
     if (!venueCustomer) return;
     await fetch(`/api/venue-customers/${venueCustomer.id}/tasks/${taskId}`, { method: 'DELETE' });
     setTasks(p => p.filter(t => t.id !== taskId));
+  }
+
+  async function saveEditTask() {
+    if (!venueCustomer || !editingTaskId) return;
+    const trimmed = editTaskTitle.trim();
+    if (!trimmed) return;
+    setSavingEditTask(true);
+    const res = await fetch(`/api/venue-customers/${venueCustomer.id}/tasks/${editingTaskId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: trimmed, due_date: editTaskDue || null }),
+    });
+    if (res.ok) {
+      setTasks(p => p.map(t => t.id === editingTaskId
+        ? { ...t, title: trimmed, due_date: editTaskDue || null }
+        : t));
+      setEditingTaskId(null);
+      setEditTaskTitle('');
+      setEditTaskDue('');
+    }
+    setSavingEditTask(false);
   }
 
   // ── Files ──────────────────────────────────────────────────────────────────
@@ -939,11 +986,49 @@ export default function CustomerDetailPage() {
             {notes.length === 0 && <p className="text-sm text-gray-400">No notes yet.</p>}
             {notes.map(n => (
               <div key={n.id} className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3 group relative">
-                <p className="text-sm text-gray-800 whitespace-pre-wrap">{n.content}</p>
-                <div className="flex items-center justify-between mt-1.5">
-                  <p className="text-[11px] text-gray-400">{n.author_name ? `${n.author_name} · ` : ''}{formatDateTime(n.created_at)}</p>
-                  <button onClick={() => deleteNote(n.id)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all"><Trash2 size={13} /></button>
-                </div>
+                {editingNoteId === n.id ? (
+                  <>
+                    <textarea
+                      value={editNoteContent}
+                      onChange={e => setEditNoteContent(e.target.value)}
+                      rows={3}
+                      autoFocus
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-500 focus:outline-none resize-none"
+                    />
+                    <div className="flex items-center gap-2 mt-2">
+                      <button
+                        onClick={saveEditNote}
+                        disabled={savingEditNote || !editNoteContent.trim()}
+                        className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-gray-700 transition-colors disabled:opacity-40"
+                      >
+                        {savingEditNote ? 'Saving…' : 'Save'}
+                      </button>
+                      <button
+                        onClick={() => { setEditingNoteId(null); setEditNoteContent(''); }}
+                        className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-gray-800 whitespace-pre-wrap">{n.content}</p>
+                    <div className="flex items-center justify-between mt-1.5">
+                      <p className="text-[11px] text-gray-400">{n.author_name ? `${n.author_name} · ` : ''}{formatDateTime(n.created_at)}</p>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => { setEditingNoteId(n.id); setEditNoteContent(n.content); }}
+                          className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-700 transition-all"
+                          title="Edit note"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                        <button onClick={() => deleteNote(n.id)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all"><Trash2 size={13} /></button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             ))}
           </div>
@@ -1089,20 +1174,67 @@ export default function CustomerDetailPage() {
                   className="mt-0.5 flex-shrink-0 w-5 h-5 rounded border-2 border-gray-300 hover:border-emerald-400 transition-colors flex items-center justify-center">
                   <span className="sr-only">Complete</span>
                 </button>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-900">{t.title}</p>
-                  {t.due_date && (
-                    <p className={`text-xs mt-0.5 ${new Date(t.due_date) < new Date() ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
-                      Due {formatDate(t.due_date)}
-                    </p>
-                  )}
-                </div>
-                <button onClick={() => toggleTask(t)} className="opacity-0 group-hover:opacity-100 text-xs text-emerald-600 hover:text-emerald-700 font-medium transition-all flex items-center gap-1">
-                  <Check size={12} /> Done
-                </button>
-                <button onClick={() => deleteTask(t.id)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all">
-                  <Trash2 size={13} />
-                </button>
+                {editingTaskId === t.id ? (
+                  <div className="flex-1 min-w-0 flex flex-wrap gap-2">
+                    <input
+                      value={editTaskTitle}
+                      onChange={e => setEditTaskTitle(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && !savingEditTask) saveEditTask();
+                        if (e.key === 'Escape') { setEditingTaskId(null); setEditTaskTitle(''); setEditTaskDue(''); }
+                      }}
+                      autoFocus
+                      className="flex-1 min-w-[140px] rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:border-gray-500 focus:outline-none"
+                    />
+                    <input
+                      type="date"
+                      value={editTaskDue}
+                      onChange={e => setEditTaskDue(e.target.value)}
+                      className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm text-gray-900 focus:border-gray-500 focus:outline-none w-36"
+                    />
+                    <button
+                      onClick={saveEditTask}
+                      disabled={savingEditTask || !editTaskTitle.trim()}
+                      className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-gray-700 transition-colors disabled:opacity-40"
+                    >
+                      {savingEditTask ? 'Saving…' : 'Save'}
+                    </button>
+                    <button
+                      onClick={() => { setEditingTaskId(null); setEditTaskTitle(''); setEditTaskDue(''); }}
+                      className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-900">{t.title}</p>
+                      {t.due_date && (
+                        <p className={`text-xs mt-0.5 ${new Date(t.due_date) < new Date() ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
+                          Due {formatDate(t.due_date)}
+                        </p>
+                      )}
+                    </div>
+                    <button onClick={() => toggleTask(t)} className="opacity-0 group-hover:opacity-100 text-xs text-emerald-600 hover:text-emerald-700 font-medium transition-all flex items-center gap-1">
+                      <Check size={12} /> Done
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditingTaskId(t.id);
+                        setEditTaskTitle(t.title);
+                        setEditTaskDue(t.due_date ?? '');
+                      }}
+                      className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-700 transition-all"
+                      title="Edit task"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                    <button onClick={() => deleteTask(t.id)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all">
+                      <Trash2 size={13} />
+                    </button>
+                  </>
+                )}
               </div>
             ))}
           </div>
