@@ -4,6 +4,12 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { lpFetch } from '@/lib/lunarpay';
 import { ghlRequest, refreshAccessToken } from '@/lib/ghl';
 
+export const runtime = 'nodejs';
+
+// UUID v4 regex — tells a StoryPay-native (venue_customers.id) ID apart from
+// LunarPay (numeric) and GHL (alphanumeric) IDs.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -36,13 +42,40 @@ export async function GET(
     } catch { /* use existing token */ }
   }
 
-  // Determine source: LunarPay IDs are numeric, GHL IDs are alphanumeric strings
+  // Source detection: UUID → venue_customers (StoryPay-native);
+  // numeric → LunarPay; anything else alphanumeric → GHL.
+  const isStoryPayId = UUID_RE.test(id);
   const isLunarPayId = /^\d+$/.test(id);
 
   let customer: Record<string, unknown> | null = null;
   let customerEmail = '';
 
-  if (isLunarPayId && venue.lunarpay_secret_key) {
+  // StoryPay-native customers (created in-dashboard without LunarPay/GHL yet)
+  if (isStoryPayId) {
+    const { data: row } = await supabaseAdmin
+      .from('venue_customers')
+      .select('id, customer_email, first_name, last_name, phone, lunarpay_customer_id, ghl_contact_id')
+      .eq('id', id)
+      .eq('venue_id', venueId)
+      .maybeSingle();
+    if (row) {
+      customerEmail = row.customer_email || '';
+      customer = {
+        id: row.id,
+        name: [row.first_name, row.last_name].filter(Boolean).join(' ') || row.customer_email || 'Unknown',
+        firstName: row.first_name || '',
+        lastName:  row.last_name  || '',
+        email:     row.customer_email || '',
+        phone:     row.phone || '',
+        address:   '',
+        city:      '',
+        state:     '',
+        zip:       '',
+      };
+    }
+  }
+
+  if (!customer && isLunarPayId && venue.lunarpay_secret_key) {
     try {
       const result = await lpFetch(`/api/v1/customers/${id}`, { method: 'GET', key: venue.lunarpay_secret_key });
       const c = result.data || result;
@@ -137,9 +170,27 @@ export async function PATCH(
   }
 
   const errors: string[] = [];
+  const isStoryPayId = UUID_RE.test(id);
+  const isLunarPayId = /^\d+$/.test(id);
+
+  // Update in our own venue_customers when the id is a UUID
+  if (isStoryPayId) {
+    const { error } = await supabaseAdmin
+      .from('venue_customers')
+      .update({
+        first_name:     firstName,
+        last_name:      lastName,
+        customer_email: email ? String(email).toLowerCase() : undefined,
+        phone:          phone || null,
+        updated_at:     new Date().toISOString(),
+      })
+      .eq('id', id)
+      .eq('venue_id', venueId);
+    if (error) errors.push(`StoryPay: ${error.message}`);
+  }
 
   // Update in LunarPay if numeric ID
-  if (venue.lunarpay_secret_key && /^\d+$/.test(id)) {
+  if (venue.lunarpay_secret_key && isLunarPayId) {
     try {
       await lpFetch(`/api/v1/customers/${id}`, {
         method: 'PUT',
@@ -151,8 +202,8 @@ export async function PATCH(
     }
   }
 
-  // Update in GHL if alphanumeric ID
-  if (venue.ghl_connected && ghlToken && venue.ghl_location_id && !/^\d+$/.test(id)) {
+  // Update in GHL if alphanumeric (non-UUID, non-numeric) ID
+  if (venue.ghl_connected && ghlToken && venue.ghl_location_id && !isStoryPayId && !isLunarPayId) {
     try {
       await ghlRequest(`/contacts/${id}`, ghlToken, {
         method: 'PUT',
