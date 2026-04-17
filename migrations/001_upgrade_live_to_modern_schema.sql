@@ -102,9 +102,33 @@ UPDATE public.venues
 SET login_token = gen_random_uuid()
 WHERE login_token IS NULL;
 
-UPDATE public.venues
-SET slug = lower(regexp_replace(regexp_replace(name, '[^a-zA-Z0-9\s-]', '', 'g'), '\s+', '-', 'g'))
-WHERE slug IS NULL AND name IS NOT NULL;
+-- Backfill slug from name for existing venues, deduplicating by appending
+-- a short suffix from the id to any collisions.
+WITH base AS (
+  SELECT
+    id,
+    NULLIF(
+      lower(regexp_replace(regexp_replace(COALESCE(name, ''), '[^a-zA-Z0-9\s-]', '', 'g'), '\s+', '-', 'g')),
+      ''
+    ) AS raw_slug
+  FROM public.venues
+  WHERE slug IS NULL
+),
+ranked AS (
+  SELECT
+    id,
+    raw_slug,
+    row_number() OVER (PARTITION BY raw_slug ORDER BY id) AS rn
+  FROM base
+  WHERE raw_slug IS NOT NULL
+)
+UPDATE public.venues v
+SET slug = CASE
+  WHEN r.rn = 1 THEN r.raw_slug
+  ELSE r.raw_slug || '-' || substr(r.id::text, 1, 8)
+END
+FROM ranked r
+WHERE v.id = r.id;
 
 CREATE UNIQUE INDEX IF NOT EXISTS venues_slug_unique    ON public.venues (slug) WHERE slug IS NOT NULL;
 CREATE INDEX        IF NOT EXISTS venues_login_token_idx ON public.venues (login_token);
