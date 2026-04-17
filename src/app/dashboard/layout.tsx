@@ -15,14 +15,9 @@ export default async function DashboardLayout({
  redirect('/');
  }
 
- // Check setup_completed via the venue (owners only need to complete setup)
- if (user.isOwner) {
- const { getVenueFromSession } = await import('@/lib/session');
- const venue = await getVenueFromSession();
- if (venue && !venue.setup_completed) {
- redirect('/setup');
- }
- }
+ // Venues can access the dashboard (directory listing, leads, etc.) without
+ // having finished LunarPay payment onboarding. If they want to take payments
+ // they can opt into /setup from the dashboard itself.
 
  return (
  <div className="min-h-screen"style={{ backgroundColor: '#ffffff' }}>
