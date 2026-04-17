@@ -161,18 +161,24 @@ The two tables at the bottom show your 5 most recent proposals (with links to vi
       {
         id: 'cal-overview',
         title: 'Calendar overview',
-        tags: ['calendar', 'events', 'booking', 'schedule', 'tour', 'wedding'],
+        tags: ['calendar', 'events', 'booking', 'schedule', 'tour', 'wedding', 'views', 'month', 'week', 'day'],
         body: `The Calendar (sidebar → Calendar) is your central view for all venue events — tours, weddings, receptions, tastings, meetings, rehearsals, holds, and blocked dates.
 
-The month view shows all events as color-coded chips on each day. Click any empty day to add a new event. Click any event chip to see its details or delete it.
+Four views (top-right toggle):
+- Month — traditional grid, best for scheduling at a glance
+- Week — seven columns with an hour-by-hour timeline
+- Day — single-column timeline for a chosen date
+- Year — 12-month grid showing how many weddings and tours fall in each month; click any month to jump to it
+
+Click any empty day (or hour slot in Week/Day view) to add a new event. Click any event chip to open its details where you can Edit or Delete it.
 
 Event types are color-coded:
 - Wedding (pink), Reception (purple), Tour (blue), Tasting (amber)
 - Meeting (green), Rehearsal (indigo), Hold/Tentative (gray), Blocked (dark gray)
 
-Use the Month view for day-to-day scheduling. Switch to Revenue View for a 12-month grid showing how many weddings and tours are booked in each month — click any month to jump to it.
+Events can be single-day, multi-day (for wedding weekends), or recurring (for weekly tastings, monthly maintenance days, etc.). Multi-day events render on every day they span; continuation days in Week/Day view show small left/right arrows to indicate the event extends before or after.
 
-The "Today" button snaps back to the current month.`,
+The "Today" button snaps back to the current date. The Prev / Next arrows move forward or back by one month, week, or day depending on the active view.`,
       },
       {
         id: 'cal-spaces',
@@ -191,24 +197,77 @@ To remove a space, open Manage Spaces and click Remove next to it.`,
       },
       {
         id: 'cal-add-event',
-        title: 'Adding and editing events',
-        tags: ['add event', 'new event', 'book', 'schedule', 'create event'],
-        body: `To add an event, click the "+ Add Event" button or click directly on any day in the calendar grid.
+        title: 'Adding, editing, and deleting events',
+        tags: ['add event', 'new event', 'book', 'schedule', 'create event', 'edit event', 'update event', 'change event', 'delete event'],
+        body: `To add an event, click the "+ Add Event" button or click directly on any day (or hour slot in Week/Day view) in the calendar grid.
 
 Fill in:
 - Event Title (e.g. "Smith & Johnson Wedding")
 - Type — Wedding, Reception, Tour, Tasting, Meeting, Rehearsal, Hold, Blocked, Other
 - Status — Confirmed, Tentative/Hold, Cancelled
-- Space — select which bookable space (optional)
+- Space — which bookable space this event uses (optional; enables conflict detection)
 - Customer Email — links the event to a customer profile (optional)
-- Date, Start Time, End Time (or check All Day)
+- Start Date + End Date — End Date auto-fills to match Start Date for single-day events. Change it to a later date for a multi-day event (e.g. a three-day wedding weekend).
+- Start Time + End Time (or check All Day)
+- Repeats — keep at "Does not repeat" for a one-off event, or pick Daily / Weekly / Monthly / Yearly for a recurring event (see the dedicated recurring events article for details)
 - Notes
 
 Click Save Event.
 
-To view or delete an event, click its chip on the calendar. A detail panel shows all info and offers a Delete button.
+To edit an event: click the event chip on the calendar to open the detail panel, then click Edit. The form re-opens pre-filled with all current values — change any field and click Save Changes. For recurring events, edits apply to the entire series (all past and future occurrences).
 
-To edit an event after creation, delete it and re-create it (full edit coming soon).`,
+To delete an event: click the event chip, then click Delete Event. If the event is recurring, the button says Delete Series and will prompt for confirmation because deletion removes every occurrence — past and future.`,
+      },
+      {
+        id: 'cal-multi-day',
+        title: 'Multi-day events (wedding weekends)',
+        tags: ['multi-day', 'multi day', 'multiday', 'wedding weekend', 'two day', 'three day', 'span days', 'spans', 'end date'],
+        body: `Multi-day events are perfect for wedding weekends, festivals, corporate retreats, or any booking that occupies the venue across multiple consecutive dates.
+
+To create a multi-day event:
+1. Click "+ Add Event"
+2. Pick the Start Date
+3. Change the End Date to the last day of the event — End Date defaults to match Start Date, so you only adjust this when you want multi-day
+4. Set Start Time (time of day on the first day) and End Time (time of day on the last day)
+5. Fill in the rest normally (title, type, space, etc.)
+6. Click Save Event
+
+A small label confirms "Multi-day event spanning N days." below the date fields once End Date is after Start Date.
+
+How multi-day events render:
+- Month view: the same event chip appears on every day it occupies
+- Week / Day view: the event bar runs from Start Time on the first day down through the end of each intermediate day, then stops at End Time on the last day. Continuation days show small arrows (← or →) indicating the event extends before or after that day.
+- Conflict detection checks the full date-and-time window against every other event in the same space.
+
+To shorten or extend a multi-day event later, click the chip → Edit → change Start Date or End Date → Save Changes.`,
+      },
+      {
+        id: 'cal-recurring',
+        title: 'Recurring events (weekly, monthly, yearly)',
+        tags: ['recurring', 'repeat', 'repeating', 'weekly', 'daily', 'monthly', 'yearly', 'series', 'every week', 'every month', 'schedule', 'staff meeting', 'tasting'],
+        body: `Recurring events are great for anything that happens on a schedule: a weekly staff meeting, a monthly maintenance block, a bi-weekly tasting, or an annual venue closure.
+
+To create a recurring event:
+1. Click "+ Add Event"
+2. Fill in Title, Start Date, End Date (same as start for a single-day event), times, and other fields as normal
+3. In the Repeats block, pick a frequency: Daily, Weekly, Monthly, or Yearly
+4. Set the interval — "every 1 week" or "every 2 weeks", etc.
+5. Pick when the series Ends:
+   - On — the recurrence stops on a specific date (this is the default)
+   - After — the recurrence stops after a specific number of occurrences
+   - Never — the event repeats indefinitely (you will see an amber warning; we recommend always setting an end)
+6. Click Save Event
+
+The recurrence end date is pre-filled with a sensible default when you pick a frequency — three months out for Daily, a year out for Weekly or Monthly, five years out for Yearly. Adjust it to match your needs.
+
+Important: the recurrence end date is SEPARATE from the event's End Date. The event End Date controls how many days one occurrence lasts (e.g. a weekend-long event); the recurrence end date controls when the series as a whole stops.
+
+How recurring events render:
+- Every occurrence appears on the calendar as a separate chip
+- Clicking any occurrence opens the same detail panel — editing or deleting always operates on the whole series
+- Occurrences are generated on the fly when the calendar loads, so changing the rule (e.g. switching from Weekly to Monthly, or moving the end date) instantly updates every future occurrence
+
+To edit or stop a series: click any occurrence → Edit → change the Repeats options → Save Changes. To cancel the whole series, click Delete Series.`,
       },
       {
         id: 'cal-conflicts',
@@ -577,14 +636,14 @@ Results are paginated (20 per page). Use the Previous / Next buttons at the bott
       {
         id: 'cust-profile',
         title: 'Customer profile — overview and tabs',
-        tags: ['customer profile', 'crm', 'profile', 'tabs', 'overview', 'history'],
-        body: `Click a customer's name to open their full profile. The profile has 5 tabs:
+        tags: ['customer profile', 'crm', 'profile', 'tabs', 'overview', 'history', 'edit note', 'edit notes', 'new proposal', 'new invoice'],
+        body: `Click a customer's name to open their full profile. Customers you see on this list come from three sources — storyvenue.com signups, LunarPay integration, and GoHighLevel imports — all unified into one record per person. The profile has 5 tabs:
 
 Overview
 - Edit contact info inline (name, email, phone, address)
 - Add and view a partner / second contact (important for wedding couples)
 - Wedding Details block: wedding date, ceremony type (ceremony only / reception only / both), guest count, assigned venue space, rehearsal date, day-of coordinator name and phone, catering notes
-- Notes: add timestamped internal notes on this customer
+- Notes: add timestamped internal notes on this customer. Each note has a pencil icon — click it to edit the note inline after it was created, with Save and Cancel buttons.
 
 Activity
 - Unified reverse-chronological timeline of every interaction: proposal sent, viewed, signed, payment made, note added, file uploaded, task created/completed, Calendly booking received
@@ -593,10 +652,12 @@ Payments
 - All proposals and invoices linked to this customer
 - Installment schedules with payment breakdown
 - Copy link, resend, view invoice, issue refund
+- Use the "New Proposal" and "New Invoice" buttons at the top of this tab to jump straight to the proposal/invoice builder with the customer's name and email pre-filled
 
 Tasks
 - Create tasks with optional due dates (e.g. "Collect final guest count")
-- Check off completed tasks — they collapse but remain visible
+- Check off completed tasks — they collapse but remain visible, and can be unchecked or reopened later
+- Edit a task title or due date inline via the pencil icon
 - Overdue tasks show in red
 
 Documents
@@ -607,7 +668,9 @@ Documents
 The header shows:
 - Pipeline stage (Inquiry → Tour Scheduled → Proposal Sent → Booked → Event Complete → Post-Event Follow-up) — click any stage to update it
 - Referral source badge (how this lead found you)
-- KPI row: total proposals, total paid, pending amount, open tasks`,
+- KPI row: total proposals, total paid, pending amount, open tasks
+
+On the Customers list page itself, each row also has "Create Proposal" and "Create Invoice" shortcut buttons that do the same thing — open the payment builder with the customer pre-selected.`,
       },
       {
         id: 'cust-pipeline',
@@ -628,8 +691,8 @@ Referral Source tracks how this couple found you: Instagram, Google, Wedding Wir
       },
       {
         id: 'cust-tasks',
-        title: 'Customer tasks',
-        tags: ['tasks', 'todo', 'checklist', 'follow up', 'reminder'],
+        title: 'Customer tasks — create, edit, reopen',
+        tags: ['tasks', 'todo', 'checklist', 'follow up', 'reminder', 'edit task', 'reopen task', 'uncheck task', 'update task'],
         body: `The Tasks tab on a customer profile lets you create action items specific to that customer.
 
 To add a task:
@@ -640,7 +703,13 @@ To add a task:
 
 Tasks show in order of creation. Overdue tasks (past due date) display the due date in red.
 
-To mark a task done: hover the task row and click the check mark, or click "Done". Completed tasks collapse — click "X completed tasks" at the bottom to expand and review them. Completed tasks can also be permanently deleted.
+To mark a task done: click the checkbox next to the task. Completed tasks collapse into a "X completed tasks" section at the bottom of the list — click it to expand and review.
+
+To reopen a completed task (move it back into the active list): expand the completed section, then either uncheck its checkbox or click the "Reopen" button on the task row.
+
+To edit a task after it has been created: hover the task row and click the pencil icon. The title (and due date) become editable inline. Click Save to commit the change or Cancel to discard.
+
+To permanently delete a task: open a completed task row and click the trash icon.
 
 Tasks are visible only to your team — they are not shared with the customer.`,
       },
