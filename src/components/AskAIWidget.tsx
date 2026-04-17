@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, type RefObject } from 'react';
 import {
  Sparkles, X, Send, Loader2, ChevronDown,
  LifeBuoy, RotateCcw, CheckCircle2, AlertCircle,
@@ -154,6 +154,115 @@ function renderArticleBody(text: string) {
 function formatTime(d?: Date) {
  if (!d) return '';
  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+/**
+ * Must be declared OUTSIDE AskAIWidget. An inline `const InputBar = () => …`
+ * inside the parent creates a new component type every render, so React
+ * remounts the textarea after each keystroke and focus is lost.
+ */
+function AskAIInputBar({
+ input,
+ onInputChange,
+ inputRef,
+ pendingImage,
+ onClearImage,
+ isListening,
+ showEmoji,
+ onToggleEmoji,
+ speechSupported,
+ onToggleVoice,
+ fileRef,
+ onImagePick,
+ placeholder,
+ loading,
+ onSend,
+ onEmojiSelect,
+ onEmojiClose,
+}: {
+ input: string;
+ onInputChange: (v: string) => void;
+ inputRef: RefObject<HTMLTextAreaElement | null>;
+ pendingImage: string | null;
+ onClearImage: () => void;
+ isListening: boolean;
+ showEmoji: boolean;
+ onToggleEmoji: () => void;
+ speechSupported: boolean;
+ onToggleVoice: () => void;
+ fileRef: RefObject<HTMLInputElement | null>;
+ onImagePick: (e: React.ChangeEvent<HTMLInputElement>) => void;
+ placeholder: string;
+ loading: boolean;
+ onSend: () => void;
+ onEmojiSelect: (emoji: string) => void;
+ onEmojiClose: () => void;
+}) {
+ return (
+ <div className="relative z-10 flex-shrink-0 border-t border-gray-200 bg-white p-3 pointer-events-auto">
+ {pendingImage && (
+ <div className="relative mb-2 inline-block">
+ {/* eslint-disable-next-line @next/next/no-img-element */}
+ <img src={pendingImage} alt="attachment"className="h-16 rounded-xl object-cover border border-gray-200"/>
+ <button type="button" onClick={onClearImage}
+ className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-gray-700 text-white">
+ <X size={10} />
+ </button>
+ </div>
+ )}
+ {isListening && (
+ <div className="flex items-center gap-2 mb-2 text-xs text-red-500 font-medium">
+ <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse"/>
+ Listening… speak now
+ </div>
+ )}
+ <div className="rounded-2xl border border-gray-200 bg-gray-50 focus-within:border-gray-300 focus-within:bg-white transition-colors overflow-hidden">
+ <textarea
+ ref={inputRef}
+ value={input}
+ onChange={e => onInputChange(e.target.value)}
+ onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); } }}
+ placeholder={placeholder}
+ rows={1}
+ className="w-full bg-transparent px-3.5 pt-3 pb-1 text-gray-900 placeholder:text-gray-400 focus:outline-none resize-none"
+ style={{ maxHeight: 80, lineHeight: '1.4', fontSize: 16 }}
+ onInput={e => {
+ const t = e.target as HTMLTextAreaElement;
+ t.style.height = 'auto';
+ t.style.height = Math.min(t.scrollHeight, 80) + 'px';
+ }}
+ />
+ <div className="flex items-center justify-between px-2 pb-2">
+ <div className="flex items-center gap-0.5">
+ <button type="button" onClick={onToggleEmoji}
+ className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${showEmoji ? 'bg-gray-200 text-gray-700' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
+ title="Emoji">
+ <Smile size={17} />
+ </button>
+ <button type="button" onClick={() => fileRef.current?.click()}
+ className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+ title="Attach screenshot">
+ <Paperclip size={16} />
+ </button>
+ <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onImagePick} />
+ {speechSupported && (
+ <button type="button" onClick={onToggleVoice}
+ className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${isListening ? 'bg-red-100 text-red-500' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
+ title={isListening ? 'Stop recording' : 'Voice input'}>
+ {isListening ? <MicOff size={16} /> : <Mic size={16} />}
+ </button>
+ )}
+ </div>
+ <button type="button" onClick={onSend} disabled={(!input.trim() && !pendingImage) || loading}
+ className="flex h-8 w-8 items-center justify-center rounded-full text-white disabled:opacity-40 transition-all"
+ style={{ backgroundColor: BRAND }}>
+ {loading ? <Loader2 size={14} className="animate-spin"/> : <Send size={14} />}
+ </button>
+ </div>
+ </div>
+ {showEmoji && <EmojiPicker onSelect={onEmojiSelect} onClose={onEmojiClose} />}
+ </div>
+ );
 }
 
 // ─── Main widget ───────────────────────────────────────────────────────────────
@@ -356,73 +465,6 @@ export default function AskAIWidget() {
  setPendingImage(null); setShowEmoji(false);
  setInlineArticleId(null);
  }
-
- // ── Input bar (shared) ────────────────────────────────────────────────────────
- const InputBar = () => (
- <div className="relative z-10 flex-shrink-0 border-t border-gray-200 bg-white p-3 pointer-events-auto">
- {pendingImage && (
- <div className="relative mb-2 inline-block">
- {/* eslint-disable-next-line @next/next/no-img-element */}
- <img src={pendingImage} alt="attachment"className="h-16 rounded-xl object-cover border border-gray-200"/>
- <button onClick={() => setPendingImage(null)}
- className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-gray-700 text-white">
- <X size={10} />
- </button>
- </div>
- )}
- {isListening && (
- <div className="flex items-center gap-2 mb-2 text-xs text-red-500 font-medium">
- <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse"/>
- Listening… speak now
- </div>
- )}
- <div className="rounded-2xl border border-gray-200 bg-gray-50 focus-within:border-gray-300 focus-within:bg-white transition-colors overflow-hidden">
- <textarea
- ref={inputRef}
- value={input}
- onChange={e => setInput(e.target.value)}
- onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
- placeholder={inlineArticle ? 'Ask a follow-up question…' : 'Message…'}
- rows={1}
- className="w-full bg-transparent px-3.5 pt-3 pb-1 text-gray-900 placeholder:text-gray-400 focus:outline-none resize-none"
- style={{ maxHeight: 80, lineHeight: '1.4', fontSize: 16 }}
- onInput={e => {
- const t = e.target as HTMLTextAreaElement;
- t.style.height = 'auto';
- t.style.height = Math.min(t.scrollHeight, 80) + 'px';
- }}
- />
- <div className="flex items-center justify-between px-2 pb-2">
- <div className="flex items-center gap-0.5">
- <button type="button"onClick={() => setShowEmoji(v => !v)}
- className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${showEmoji ? 'bg-gray-200 text-gray-700' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
- title="Emoji">
- <Smile size={17} />
- </button>
- <button type="button"onClick={() => fileRef.current?.click()}
- className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
- title="Attach screenshot">
- <Paperclip size={16} />
- </button>
- <input ref={fileRef} type="file"accept="image/*"className="hidden"onChange={handleImagePick} />
- {speechSupported && (
- <button type="button"onClick={toggleVoice}
- className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${isListening ? 'bg-red-100 text-red-500' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
- title={isListening ? 'Stop recording' : 'Voice input'}>
- {isListening ? <MicOff size={16} /> : <Mic size={16} />}
- </button>
- )}
- </div>
- <button onClick={() => send()} disabled={(!input.trim() && !pendingImage) || loading}
- className="flex h-8 w-8 items-center justify-center rounded-full text-white disabled:opacity-40 transition-all"
- style={{ backgroundColor: BRAND }}>
- {loading ? <Loader2 size={14} className="animate-spin"/> : <Send size={14} />}
- </button>
- </div>
- </div>
- {showEmoji && <EmojiPicker onSelect={e => setInput(p => p + e)} onClose={() => setShowEmoji(false)} />}
- </div>
- );
 
  return (
  <>
@@ -628,8 +670,26 @@ export default function AskAIWidget() {
  )}
  </div>
 
- {/* ── Input bar ── */}
- <InputBar />
+ {/* ── Input bar (stable component — do not define inline in parent) ── */}
+ <AskAIInputBar
+ input={input}
+ onInputChange={setInput}
+ inputRef={inputRef}
+ pendingImage={pendingImage}
+ onClearImage={() => setPendingImage(null)}
+ isListening={isListening}
+ showEmoji={showEmoji}
+ onToggleEmoji={() => setShowEmoji(v => !v)}
+ speechSupported={speechSupported}
+ onToggleVoice={toggleVoice}
+ fileRef={fileRef}
+ onImagePick={handleImagePick}
+ placeholder={inlineArticle ? 'Ask a follow-up question…' : 'Message…'}
+ loading={loading}
+ onSend={() => { void send(); }}
+ onEmojiSelect={e => setInput(p => p + e)}
+ onEmojiClose={() => setShowEmoji(false)}
+ />
  </div>
  )}
  </>
