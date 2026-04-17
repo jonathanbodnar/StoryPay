@@ -203,6 +203,10 @@ export default function NewProposalInvoicePage() {
  useEffect(() => {
  const name = searchParams.get('name');
  const email = searchParams.get('email');
+ const type = searchParams.get('type');
+ if (type === 'invoice' || type === 'proposal') {
+ setMode(type);
+ }
  if (name) {
  const parts = name.trim().split(' ');
  setClientFirst(parts[0] || '');

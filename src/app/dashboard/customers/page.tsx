@@ -186,17 +186,17 @@ export default function CustomersPage() {
  <span className="hidden sm:inline">View Customer</span>
  </Link>
  <Link
- href={`/dashboard/proposals/new?email=${encodeURIComponent(c.email || '')}&name=${encodeURIComponent(c.name || '')}`}
- className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
- title="Create Proposal"
+href={`/dashboard/payments/new?type=proposal&email=${encodeURIComponent(c.email || '')}&name=${encodeURIComponent(c.name || '')}`}
+className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
+title="Create Proposal"
  >
  <FileText size={13} />
  <span className="hidden lg:inline">Create Proposal</span>
  </Link>
  <Link
- href={`/dashboard/invoices/new?email=${encodeURIComponent(c.email || '')}&name=${encodeURIComponent(c.name || '')}`}
- className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
- title="Create Invoice"
+href={`/dashboard/payments/new?type=invoice&email=${encodeURIComponent(c.email || '')}&name=${encodeURIComponent(c.name || '')}`}
+className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
+title="Create Invoice"
  >
  <Receipt size={13} />
  <span className="hidden lg:inline">Create Invoice</span>
