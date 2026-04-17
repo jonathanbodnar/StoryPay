@@ -1,6 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback, useEffect, useMemo, useRef, useState,
+  type CSSProperties,
+} from 'react';
 import {
   Inbox, Loader2, Search, Mail, Phone, Calendar as CalendarIcon, Users,
   MessageSquare, Trash2, ExternalLink, UserPlus,
@@ -62,6 +65,7 @@ interface Lead {
   stage_id: string | null;
   position: number;
   note_count: number;
+  booking_badge?: { iso: string; variant: 'wedding' | 'appointment' } | null;
 }
 
 interface LeadNote {
@@ -126,6 +130,34 @@ function readableOn(hex: string): string {
   return yiq >= 150 ? '#111827' : '#ffffff';
 }
 
+/** Pill text like "Apr 20th, 9:30 am" (appointment) or "Apr 20, 2026" (wedding date). */
+function formatBookingPillText(iso: string, variant: 'wedding' | 'appointment'): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  if (variant === 'wedding') {
+    const dayPart = iso.slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dayPart)) {
+      const [y, m, day] = dayPart.split('-').map(Number);
+      return new Date(y, m - 1, day).toLocaleDateString(undefined, {
+        month: 'short', day: 'numeric', year: 'numeric',
+      });
+    }
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  const day = d.getDate();
+  const ord =
+    day % 10 === 1 && day !== 11 ? 'st'
+      : day % 10 === 2 && day !== 12 ? 'nd'
+        : day % 10 === 3 && day !== 13 ? 'rd'
+          : 'th';
+  const month = d.toLocaleString(undefined, { month: 'short' });
+  const t = d
+    .toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true })
+    .replace(/\s/g, ' ')
+    .toLowerCase();
+  return `${month} ${day}${ord}, ${t}`;
+}
+
 // ─── Default empty draft for the new-lead form ───────────────────────────────
 
 type LeadDraft = {
@@ -138,14 +170,19 @@ type LeadDraft = {
   opportunityValue: string;
   weddingDate: string;
   guestCount: string;
+  bookingTimeline: string;
   message: string;
+  pipelineId: string;
+  stageId: string;
 };
 
-const EMPTY_DRAFT: LeadDraft = {
+const emptyDraft = (pipelineId: string): LeadDraft => ({
   firstName: '', lastName: '', email: '', phone: '',
   venueName: '', venueWebsiteUrl: '', opportunityValue: '',
-  weddingDate: '', guestCount: '', message: '',
-};
+  weddingDate: '', guestCount: '', bookingTimeline: '', message: '',
+  pipelineId,
+  stageId: '',
+});
 
 // ─── Main page ───────────────────────────────────────────────────────────────
 
@@ -241,17 +278,19 @@ export default function LeadsPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        firstName:        draft.firstName,
-        lastName:         draft.lastName,
-        email:            draft.email,
-        phone:            draft.phone,
-        venueName:        draft.venueName,
-        venueWebsiteUrl:  draft.venueWebsiteUrl,
+        firstName:         draft.firstName,
+        lastName:          draft.lastName,
+        email:             draft.email,
+        phone:             draft.phone,
+        venueName:         draft.venueName,
+        venueWebsiteUrl:   draft.venueWebsiteUrl,
         opportunityValue: draft.opportunityValue ? Number(draft.opportunityValue) : null,
-        weddingDate:      draft.weddingDate || null,
-        guestCount:       draft.guestCount ? Number(draft.guestCount) : null,
-        message:          draft.message,
-        pipelineId:       activePipelineId,
+        weddingDate:       draft.weddingDate || null,
+        guestCount:        draft.guestCount ? Number(draft.guestCount) : null,
+        bookingTimeline:   draft.bookingTimeline.trim() || undefined,
+        message:           draft.message,
+        pipelineId:        draft.pipelineId || activePipelineId,
+        stageId:           draft.stageId || undefined,
       }),
     });
     if (!res.ok) {
@@ -353,7 +392,7 @@ export default function LeadsPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <PipelinePicker
+          <PipelineControls
             pipelines={pipelines}
             activeId={activePipelineId}
             onChange={setActivePipelineId}
@@ -386,6 +425,14 @@ export default function LeadsPage() {
           </button>
         </div>
       </header>
+
+      {pipelines.length > 1 && (
+        <PipelineTabs
+          pipelines={pipelines}
+          activeId={activePipelineId}
+          onChange={setActivePipelineId}
+        />
+      )}
 
       {/* Search + filter bar */}
       <div className="flex flex-wrap items-center gap-2">
@@ -457,7 +504,12 @@ export default function LeadsPage() {
       {selectedLead && (
         <LeadDrawer
           lead={selectedLead}
-          stages={activePipeline?.stages ?? []}
+          pipelines={pipelines}
+          stages={
+            pipelines.find((p) => p.id === selectedLead.pipeline_id)?.stages
+            ?? activePipeline?.stages
+            ?? []
+          }
           onClose={() => setSelectedLead(null)}
           onUpdate={(patch) => updateLead(selectedLead.id, patch)}
           onDelete={() => deleteLead(selectedLead.id)}
@@ -478,8 +530,11 @@ export default function LeadsPage() {
       )}
 
       {/* Add-lead modal */}
-      {addingOpen && (
+      {addingOpen && activePipelineId && (
         <AddLeadModal
+          key={activePipelineId}
+          pipelines={pipelines}
+          defaultPipelineId={activePipelineId}
           onClose={() => setAddingOpen(false)}
           onSave={createLead}
         />
@@ -488,9 +543,9 @@ export default function LeadsPage() {
   );
 }
 
-// ─── Pipeline picker (dropdown + manage) ─────────────────────────────────────
+// ─── Pipeline: compact control in header + friendly tabs when multiple ───────
 
-function PipelinePicker({
+function PipelineControls({
   pipelines, activeId, onChange, onManage,
 }: {
   pipelines: Pipeline[];
@@ -498,30 +553,90 @@ function PipelinePicker({
   onChange: (id: string) => void;
   onManage: () => void;
 }) {
+  const active = pipelines.find((p) => p.id === activeId) ?? pipelines[0];
+  if (pipelines.length <= 1) {
+    return (
+      <div className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-3 py-2">
+        <span className="text-xs font-medium text-gray-800 max-w-[200px] truncate">
+          {active?.name ?? 'Pipeline'}
+        </span>
+        <button
+          type="button"
+          onClick={onManage}
+          title="Edit pipelines"
+          className="inline-flex items-center gap-1 rounded-xl border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-100"
+        >
+          <Settings2 className="w-3.5 h-3.5" /> Edit
+        </button>
+      </div>
+    );
+  }
   return (
-    <div className="inline-flex items-center rounded-2xl border border-gray-200 bg-white">
+    <div className="inline-flex items-center gap-2">
       <div className="relative">
         <select
           value={activeId ?? ''}
           onChange={(e) => onChange(e.target.value)}
-          className="appearance-none rounded-l-2xl bg-transparent pl-3 pr-8 py-2 text-xs font-medium text-gray-800 focus:outline-none"
+          className="appearance-none rounded-2xl border border-gray-200 bg-white pl-3 pr-9 py-2 text-xs font-medium text-gray-800 focus:outline-none min-w-[140px]"
+          aria-label="Switch pipeline"
         >
-          {pipelines.length === 0 && <option value="">No pipelines yet</option>}
           {pipelines.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}{p.is_default ? ' (default)' : ''}
             </option>
           ))}
         </select>
-        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
       </div>
       <button
+        type="button"
         onClick={onManage}
         title="Edit pipelines"
-        className="inline-flex items-center gap-1 border-l border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 rounded-r-2xl"
+        className="inline-flex items-center gap-1 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
       >
         <Settings2 className="w-3.5 h-3.5" /> Edit
       </button>
+    </div>
+  );
+}
+
+function PipelineTabs({
+  pipelines, activeId, onChange,
+}: {
+  pipelines: Pipeline[];
+  activeId: string | null;
+  onChange: (id: string) => void;
+}) {
+  return (
+    <div
+      className="flex flex-wrap gap-2 rounded-2xl border border-gray-200 bg-gray-50/80 p-1.5"
+      role="tablist"
+      aria-label="Sales pipelines"
+    >
+      {pipelines.map((p) => {
+        const active = p.id === activeId;
+        return (
+          <button
+            key={p.id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(p.id)}
+            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
+              active
+                ? 'bg-white text-gray-900 shadow-sm border border-gray-200'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-white/60 border border-transparent'
+            }`}
+          >
+            <span className="truncate max-w-[200px]">{p.name}</span>
+            {p.is_default && (
+              <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                Default
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -545,7 +660,10 @@ function KanbanBoard({
   onDropStage: (e: React.DragEvent, stageId: string) => void;
 }) {
   return (
-    <div className="overflow-x-auto -mx-4 sm:-mx-6 px-4 sm:px-6 pb-2">
+    <div
+      className="overflow-x-auto -mx-4 sm:-mx-6 px-4 sm:px-6 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      style={{ msOverflowStyle: 'none' } as CSSProperties}
+    >
       <div className="flex gap-3 min-w-max">
         {pipeline.stages.map((stage) => {
           const list = leadsByStage.get(stage.id) ?? [];
@@ -586,6 +704,7 @@ function KanbanBoard({
                     <KanbanCard
                       key={lead.id}
                       lead={lead}
+                      bookingBadge={lead.booking_badge ?? null}
                       isDragging={dragLeadId === lead.id}
                       onClick={() => onCardClick(lead)}
                       onDragStart={(e) => onDragStartCard(e, lead.id)}
@@ -603,9 +722,10 @@ function KanbanBoard({
 }
 
 function KanbanCard({
-  lead, isDragging, onClick, onDragStart, onDragEnd,
+  lead, bookingBadge, isDragging, onClick, onDragStart, onDragEnd,
 }: {
   lead: Lead;
+  bookingBadge: { iso: string; variant: 'wedding' | 'appointment' } | null;
   isDragging: boolean;
   onClick: () => void;
   onDragStart: (e: React.DragEvent) => void;
@@ -648,6 +768,18 @@ function KanbanCard({
           </div>
         )}
       </div>
+
+      {bookingBadge && (
+        <div className="mt-2 flex justify-end">
+          <div
+            className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-900 shadow-sm"
+            title={bookingBadge.variant === 'wedding' ? 'Wedding booked' : 'Upcoming appointment'}
+          >
+            <CalendarPlus className="w-3.5 h-3.5 shrink-0 text-sky-700" />
+            <span className="tabular-nums">{formatBookingPillText(bookingBadge.iso, bookingBadge.variant)}</span>
+          </div>
+        </div>
+      )}
 
       <div className="mt-2 flex items-center justify-between gap-2 pt-2 border-t border-gray-100">
         <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
@@ -742,7 +874,13 @@ function ListBoard({
                     <p className="mt-1 text-xs text-gray-500 line-clamp-1">{lead.message}</p>
                   )}
                 </div>
-                <div className="flex items-center gap-3 shrink-0">
+                <div className="flex items-center gap-3 shrink-0 flex-wrap justify-end">
+                  {lead.booking_badge && (
+                    <div className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-900">
+                      <CalendarPlus className="w-3 h-3 shrink-0" />
+                      {formatBookingPillText(lead.booking_badge.iso, lead.booking_badge.variant)}
+                    </div>
+                  )}
                   {lead.opportunity_value != null && (
                     <span className="text-sm font-semibold text-gray-800 tabular-nums">
                       {formatMoney(lead.opportunity_value)}
@@ -776,9 +914,10 @@ function ListBoard({
 // ─── Lead detail drawer ──────────────────────────────────────────────────────
 
 function LeadDrawer({
-  lead, stages, onClose, onUpdate, onDelete, onConvert, onRefresh,
+  lead, pipelines, stages, onClose, onUpdate, onDelete, onConvert, onRefresh,
 }: {
   lead: Lead;
+  pipelines: Pipeline[];
   stages: Stage[];
   onClose: () => void;
   onUpdate: (patch: Record<string, unknown>) => void;
@@ -869,6 +1008,35 @@ function LeadDrawer({
         </div>
 
         <div className="flex-1 p-6 space-y-6">
+          {/* Pipeline (multiple venues / processes) */}
+          {pipelines.length > 0 && (
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">
+                Pipeline
+              </label>
+              <select
+                value={lead.pipeline_id ?? pipelines[0]?.id ?? ''}
+                onChange={(e) => {
+                  const pid = e.target.value;
+                  if (!pid) return;
+                  const p = pipelines.find((x) => x.id === pid);
+                  const first = p?.stages?.[0];
+                  if (first) onUpdate({ pipelineId: pid, stageId: first.id });
+                }}
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-800 focus:border-gray-400 focus:outline-none"
+              >
+                {pipelines.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}{p.is_default ? ' (default)' : ''}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[11px] text-gray-400">
+                Leads stay in one pipeline at a time. Changing pipeline moves this card and sets its stage to the first column of the new pipeline — adjust stage below if needed.
+              </p>
+            </div>
+          )}
+
           {/* Stage picker */}
           {stages.length > 0 && (
             <div>
@@ -1646,13 +1814,25 @@ function StageRow({
 // ─── Add-lead modal ──────────────────────────────────────────────────────────
 
 function AddLeadModal({
-  onClose, onSave,
+  pipelines, defaultPipelineId, onClose, onSave,
 }: {
+  pipelines: Pipeline[];
+  defaultPipelineId: string;
   onClose: () => void;
   onSave: (draft: LeadDraft) => void;
 }) {
-  const [draft, setDraft] = useState<LeadDraft>(EMPTY_DRAFT);
+  const initialPipeline = pipelines.find((p) => p.id === defaultPipelineId) ?? pipelines[0];
+  const [draft, setDraft] = useState<LeadDraft>(() => {
+    const d = emptyDraft(initialPipeline?.id ?? defaultPipelineId);
+    const first = initialPipeline?.stages?.[0];
+    return { ...d, stageId: first?.id ?? '' };
+  });
   const [saving, setSaving] = useState(false);
+
+  const stagesForPipeline = useMemo(() => {
+    const p = pipelines.find((x) => x.id === draft.pipelineId);
+    return p?.stages ?? [];
+  }, [pipelines, draft.pipelineId]);
 
   async function submit() {
     if (!draft.firstName.trim() && !draft.lastName.trim()) {
@@ -1678,7 +1858,7 @@ function AddLeadModal({
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="absolute inset-0 flex items-center justify-center p-4">
-        <div className="relative w-full max-w-lg max-h-[90vh] rounded-3xl border border-gray-200 bg-white shadow-2xl overflow-hidden flex flex-col">
+        <div className="relative w-full max-w-2xl max-h-[90vh] rounded-3xl border border-gray-200 bg-white shadow-2xl overflow-hidden flex flex-col">
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
             <h3 className="font-heading text-lg text-gray-900 flex items-center gap-2">
               <UserPlus className="w-4.5 h-4.5" /> New lead
@@ -1688,6 +1868,43 @@ function AddLeadModal({
             </button>
           </div>
           <div className="p-6 overflow-y-auto space-y-3">
+            {pipelines.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Pipeline</label>
+                  <select
+                    value={draft.pipelineId}
+                    onChange={(e) => {
+                      const pid = e.target.value;
+                      const p = pipelines.find((x) => x.id === pid);
+                      const first = p?.stages?.[0];
+                      setDraft((prev) => ({
+                        ...prev,
+                        pipelineId: pid,
+                        stageId: first?.id ?? '',
+                      }));
+                    }}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+                  >
+                    {pipelines.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}{p.is_default ? ' (default)' : ''}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Stage</label>
+                  <select
+                    value={draft.stageId}
+                    onChange={(e) => set('stageId', e.target.value)}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+                  >
+                    {stagesForPipeline.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <DraftField label="First name" value={draft.firstName} onChange={(v) => set('firstName', v)} />
               <DraftField label="Last name" value={draft.lastName} onChange={(v) => set('lastName', v)} />
@@ -1702,7 +1919,10 @@ function AddLeadModal({
               <DraftField label="Opportunity value" prefix={<DollarSign className="w-3.5 h-3.5 text-gray-400" />} value={draft.opportunityValue} type="number" onChange={(v) => set('opportunityValue', v)} />
               <DraftField label="Wedding date" value={draft.weddingDate} type="date" onChange={(v) => set('weddingDate', v)} />
             </div>
-            <DraftField label="Guest count" value={draft.guestCount} type="number" onChange={(v) => set('guestCount', v)} />
+            <div className="grid grid-cols-2 gap-3">
+              <DraftField label="Guest count" value={draft.guestCount} type="number" onChange={(v) => set('guestCount', v)} />
+              <DraftField label="Booking timeline" value={draft.bookingTimeline} onChange={(v) => set('bookingTimeline', v)} />
+            </div>
             <div>
               <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Message / inquiry</label>
               <textarea

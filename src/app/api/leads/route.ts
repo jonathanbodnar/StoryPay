@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { ensureDefaultPipeline } from '@/lib/pipelines';
+import { ensureDefaultPipeline, legacyStatusForStageName } from '@/lib/pipelines';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -168,11 +168,68 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const leads = [...leadRows, ...extraLeads].map((l) => ({
+  const merged = [...leadRows, ...extraLeads];
+  const seen = new Set<string>();
+  const uniqueMerged = merged.filter((l) => {
+    if (seen.has(l.id)) return false;
+    seen.add(l.id);
+    return true;
+  });
+
+  const [{ data: allStages }, { data: calEvents }] = await Promise.all([
+    supabaseAdmin
+      .from('lead_pipeline_stages')
+      .select('id, name, kind')
+      .eq('venue_id', venueId),
+    supabaseAdmin
+      .from('calendar_events')
+      .select('customer_email, start_at, event_type')
+      .eq('venue_id', venueId)
+      .neq('status', 'cancelled')
+      .not('customer_email', 'is', null)
+      .gte('start_at', new Date(Date.now() - 30 * 60 * 1000).toISOString())
+      .order('start_at', { ascending: true })
+      .limit(500),
+  ]);
+
+  type StageMini = { name: string; kind: string };
+  const stageById = new Map<string, StageMini>(
+    ((allStages ?? []) as Array<{ id: string; name: string; kind: string }>).map((s) => [
+      s.id,
+      { name: s.name, kind: s.kind },
+    ]),
+  );
+
+  const nextEventByEmail = new Map<string, { start_at: string; event_type: string }>();
+  for (const ev of (calEvents ?? []) as Array<{ customer_email: string; start_at: string; event_type: string }>) {
+    const key = (ev.customer_email || '').trim().toLowerCase();
+    if (!key || nextEventByEmail.has(key)) continue;
+    nextEventByEmail.set(key, { start_at: ev.start_at, event_type: ev.event_type });
+  }
+
+  function bookingBadge(l: LeadRow): { iso: string; variant: 'wedding' | 'appointment' } | null {
+    const st = l.stage_id ? stageById.get(l.stage_id) : undefined;
+    const won = st?.kind === 'won' || l.status === 'booked_wedding';
+    const emailKey = (l.email || '').trim().toLowerCase();
+    if (won) {
+      if (l.wedding_date) return { iso: `${l.wedding_date}T12:00:00.000Z`, variant: 'wedding' };
+      const ev = nextEventByEmail.get(emailKey);
+      if (ev && (ev.event_type === 'wedding' || ev.event_type === 'reception')) {
+        return { iso: ev.start_at, variant: 'wedding' };
+      }
+      return null;
+    }
+    const ev = nextEventByEmail.get(emailKey);
+    if (ev) return { iso: ev.start_at, variant: 'appointment' };
+    return null;
+  }
+
+  const leads = uniqueMerged.map((l) => ({
     ...l,
-    listing_slug: venue?.slug ?? null,
-    listing_name: venue?.name ?? null,
-    note_count:   noteCounts[l.id] ?? 0,
+    listing_slug:  venue?.slug ?? null,
+    listing_name:  venue?.name ?? null,
+    note_count:    noteCounts[l.id] ?? 0,
+    booking_badge: bookingBadge(l),
   }));
 
   return NextResponse.json({ leads });
@@ -204,6 +261,7 @@ export async function POST(request: NextRequest) {
     weddingDate?: string;
     guestCount?: number;
     message?: string;
+    bookingTimeline?: string;
     pipelineId?: string;
     stageId?: string;
   };
@@ -238,6 +296,17 @@ export async function POST(request: NextRequest) {
     stageId = firstStage?.id;
   }
 
+  let initialStatus = 'new';
+  if (stageId) {
+    const { data: stRow } = await supabaseAdmin
+      .from('lead_pipeline_stages')
+      .select('name')
+      .eq('id', stageId)
+      .eq('venue_id', venueId)
+      .maybeSingle();
+    if (stRow?.name) initialStatus = legacyStatusForStageName(stRow.name);
+  }
+
   const opportunityValue =
     body.opportunityValue === undefined || body.opportunityValue === '' || body.opportunityValue === null
       ? null
@@ -257,9 +326,10 @@ export async function POST(request: NextRequest) {
       opportunity_value:  opportunityValue,
       wedding_date:       body.weddingDate || null,
       guest_count:        body.guestCount ?? null,
+      booking_timeline:   body.bookingTimeline?.trim() || null,
       message:            body.message || null,
       source:             'manual',
-      status:             'new',
+      status:             initialStatus,
       pipeline_id:        pipelineId,
       stage_id:           stageId ?? null,
       position:           0,

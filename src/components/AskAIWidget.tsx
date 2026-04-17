@@ -183,6 +183,7 @@ export default function AskAIWidget() {
  // eslint-disable-next-line @typescript-eslint/no-explicit-any
  const recognitionRef = useRef<any>(null);
  const bottomRef = useRef<HTMLDivElement>(null);
+ const scrollContainerRef = useRef<HTMLDivElement>(null);
  const inputRef = useRef<HTMLTextAreaElement>(null);
  const fileRef = useRef<HTMLInputElement>(null);
 
@@ -225,7 +226,10 @@ export default function AskAIWidget() {
  }, [open]);
 
  useEffect(() => {
- bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+ // scrollIntoView can steal focus / scroll the wrong ancestor on mobile.
+ // Keep the message list pinned to the bottom inside our panel only.
+ const el = scrollContainerRef.current;
+ if (el) el.scrollTop = el.scrollHeight;
  }, [messages, loading, inlineArticleId]);
 
  // Close article view when navigating to a new page
@@ -308,7 +312,7 @@ export default function AskAIWidget() {
  } finally {
  setLoading(false);
  }
- }, [input, pendingImage, loading, messages, open]);
+ }, [input, pendingImage, loading, messages, open, pathname]);
 
  // ── Escalate ─────────────────────────────────────────────────────────────────
  async function escalate() {
@@ -355,7 +359,7 @@ export default function AskAIWidget() {
 
  // ── Input bar (shared) ────────────────────────────────────────────────────────
  const InputBar = () => (
- <div className="flex-shrink-0 border-t border-gray-200 bg-white p-3 relative">
+ <div className="relative z-10 flex-shrink-0 border-t border-gray-200 bg-white p-3 pointer-events-auto">
  {pendingImage && (
  <div className="relative mb-2 inline-block">
  {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -380,8 +384,7 @@ export default function AskAIWidget() {
  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
  placeholder={inlineArticle ? 'Ask a follow-up question…' : 'Message…'}
  rows={1}
- disabled={loading}
- className="w-full bg-transparent px-3.5 pt-3 pb-1 text-gray-900 placeholder:text-gray-400 focus:outline-none resize-none disabled:opacity-50"
+ className="w-full bg-transparent px-3.5 pt-3 pb-1 text-gray-900 placeholder:text-gray-400 focus:outline-none resize-none"
  style={{ maxHeight: 80, lineHeight: '1.4', fontSize: 16 }}
  onInput={e => {
  const t = e.target as HTMLTextAreaElement;
@@ -426,7 +429,7 @@ export default function AskAIWidget() {
  {/* ── Floating bubble ── */}
  <button
  onClick={() => setOpen(v => !v)}
- className="fixed bottom-6 right-4 sm:right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full text-white transition-all hover:scale-105 active:scale-95"
+ className="fixed bottom-6 right-4 sm:right-6 z-[100] flex h-14 w-14 items-center justify-center rounded-full text-white transition-all hover:scale-105 active:scale-95"
  style={{ backgroundColor: BRAND }}
  aria-label="Open Ask AI"
  >
@@ -441,7 +444,7 @@ export default function AskAIWidget() {
  {/* ── Chat panel ── */}
  {open && (
  <div
- className="fixed z-50 flex flex-col overflow-hidden bg-white border border-gray-200 bottom-0 left-0 right-0 rounded-t-2xl sm:bottom-24 sm:right-6 sm:left-auto sm:rounded-2xl sm:w-[380px]"
+ className="fixed z-[100] flex flex-col min-h-0 overflow-hidden bg-white border border-gray-200 bottom-0 left-0 right-0 rounded-t-2xl sm:bottom-24 sm:right-6 sm:left-auto sm:rounded-2xl sm:w-[380px]"
  style={{ height: 'min(680px, 88vh)' }}
  >
  {/* ── Header ── */}
@@ -483,7 +486,7 @@ export default function AskAIWidget() {
  </div>
 
  {/* ── Content area ── */}
- <div className="flex-1 overflow-y-auto min-h-0"style={{ backgroundColor: '#f9fafb' }}>
+ <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain" style={{ backgroundColor: '#f9fafb' }}>
 
  {/* ── STATE A: Article inline view ── */}
  {isEmpty && inlineArticle && (

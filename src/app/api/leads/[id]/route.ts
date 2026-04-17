@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { legacyStatusForStageName } from '@/lib/pipelines';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -89,6 +90,18 @@ export async function PATCH(
   if (body.pipelineId === null || typeof body.pipelineId === 'string') updates.pipeline_id = body.pipelineId || null;
   if (body.stageId === null || typeof body.stageId === 'string')       updates.stage_id    = body.stageId    || null;
   if (typeof body.position === 'number')           updates.position = body.position;
+
+  // When the stage changes (and the client didn't send an explicit status),
+  // keep `leads.status` aligned with the stage name for legacy filters.
+  if (typeof body.stageId === 'string' && body.stageId && typeof body.status !== 'string') {
+    const { data: st } = await supabaseAdmin
+      .from('lead_pipeline_stages')
+      .select('name')
+      .eq('id', body.stageId)
+      .eq('venue_id', venueId)
+      .maybeSingle();
+    if (st?.name) updates.status = legacyStatusForStageName(st.name);
+  }
 
   // If the caller built a new first/last but didn't also send a full name,
   // keep the legacy `name` column in sync so old UIs still render correctly.

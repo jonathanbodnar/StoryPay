@@ -50,6 +50,28 @@ export const LEGACY_STATUS_TO_STAGE: Record<string, string> = {
   not_interested:  'Not Interested',
 };
 
+export type LegacyLeadStatus =
+  | 'new' | 'contacted' | 'tour_booked' | 'proposal_sent' | 'booked_wedding' | 'not_interested';
+
+/**
+ * Best-effort map from a pipeline stage display name → legacy `leads.status`
+ * CHECK constraint. Keeps reporting / old filters aligned when cards move.
+ */
+export function legacyStatusForStageName(stageName: string): LegacyLeadStatus {
+  const n = stageName.toLowerCase();
+  if (n.includes('not interested')) return 'not_interested';
+  if (n.includes('wedding booked')) return 'booked_wedding';
+  if (n.includes('proposal') && n.includes('sent')) return 'proposal_sent';
+  if (n.includes('proposal')) return 'proposal_sent';
+  if (n.includes('tour booked') || n === 'tour') return 'tour_booked';
+  if (n.includes('contacted')) return 'contacted';
+  if (n.includes('follow up')) return 'contacted';
+  if (n.includes('conversation')) return 'new';
+  if (n === 'lead' || n.startsWith('lead ')) return 'new';
+  if (n.includes('booked')) return 'booked_wedding';
+  return 'new';
+}
+
 export interface PipelineRow {
   id: string;
   venue_id: string;
