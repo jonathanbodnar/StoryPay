@@ -1,8 +1,9 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { supabaseAdmin } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 async function getVenueId(): Promise<string | null> {
   const c = await cookies();
@@ -12,9 +13,8 @@ async function getVenueId(): Promise<string | null> {
 /**
  * GET /api/leads?status=<status>&q=<text>
  *
- * Returns leads for the current logged-in venue, newest first. Joins
- * `venues` so the UI can surface the listing slug/name alongside each lead
- * (handy when a single account ever manages multiple listings in the future).
+ * Returns leads for the current logged-in venue, newest first. We also fetch
+ * the venue once so the UI can show the listing slug/name alongside each lead.
  */
 export async function GET(request: NextRequest) {
   const venueId = await getVenueId();
@@ -24,24 +24,39 @@ export async function GET(request: NextRequest) {
   const status = searchParams.get('status');
   const q = searchParams.get('q')?.trim() ?? '';
 
-  const sql = getDb();
+  let query = supabaseAdmin
+    .from('leads')
+    .select(
+      'id, venue_id, name, email, phone, wedding_date, guest_count, booking_timeline, message, notes, status, source, created_at, updated_at',
+    )
+    .eq('venue_id', venueId)
+    .order('created_at', { ascending: false })
+    .limit(500);
 
-  const rows = await sql`
-    SELECT
-      l.id, l.venue_id, l.name, l.email, l.phone,
-      l.wedding_date, l.guest_count, l.booking_timeline,
-      l.message, l.notes, l.status, l.source,
-      l.created_at, l.updated_at,
-      v.slug AS listing_slug,
-      v.name AS listing_name
-    FROM public.leads l
-    LEFT JOIN public.venues v ON v.id = l.venue_id
-    WHERE l.venue_id = ${venueId}
-      ${status ? sql`AND l.status = ${status}` : sql``}
-      ${q ? sql`AND (l.name ILIKE ${'%' + q + '%'} OR l.email ILIKE ${'%' + q + '%'} OR l.phone ILIKE ${'%' + q + '%'})` : sql``}
-    ORDER BY l.created_at DESC
-    LIMIT 500
-  `;
+  if (status) query = query.eq('status', status);
+  if (q) {
+    const pat = `%${q}%`;
+    query = query.or(`name.ilike.${pat},email.ilike.${pat},phone.ilike.${pat}`);
+  }
 
-  return NextResponse.json({ leads: rows });
+  const { data: rows, error } = await query;
+  if (error) {
+    console.error('[GET /api/leads] failed:', error);
+    return NextResponse.json({ error: `Failed to load leads: ${error.message}` }, { status: 500 });
+  }
+
+  // Pull the venue's slug/name once so each lead row can display it.
+  const { data: venue } = await supabaseAdmin
+    .from('venues')
+    .select('slug, name')
+    .eq('id', venueId)
+    .maybeSingle();
+
+  const leads = (rows ?? []).map((l) => ({
+    ...l,
+    listing_slug: venue?.slug ?? null,
+    listing_name: venue?.name ?? null,
+  }));
+
+  return NextResponse.json({ leads });
 }

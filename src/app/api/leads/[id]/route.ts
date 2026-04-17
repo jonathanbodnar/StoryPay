@@ -1,12 +1,12 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { supabaseAdmin } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 /**
  * Status values enforced by the DB CHECK constraint on `public.leads.status`.
- * Keep this array in sync with the constraint.
  */
 const ALLOWED_STATUSES = new Set([
   'new',
@@ -54,18 +54,21 @@ export async function PATCH(
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
   }
 
-  const sql = getDb();
-  const rows = await sql`
-    UPDATE public.leads
-    SET ${sql(updates)}
-    WHERE id = ${id} AND venue_id = ${venueId}
-    RETURNING *
-  `;
+  const { data, error } = await supabaseAdmin
+    .from('leads')
+    .update(updates)
+    .eq('id', id)
+    .eq('venue_id', venueId)
+    .select('*')
+    .maybeSingle();
 
-  if (rows.length === 0) {
-    return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
+  if (error) {
+    console.error('[PATCH /api/leads/[id]] failed:', error);
+    return NextResponse.json({ error: `Update failed: ${error.message}` }, { status: 500 });
   }
-  return NextResponse.json({ lead: rows[0] });
+  if (!data) return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
+
+  return NextResponse.json({ lead: data });
 }
 
 export async function DELETE(
@@ -76,12 +79,20 @@ export async function DELETE(
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id } = await context.params;
-  const sql = getDb();
-  const rows = await sql`
-    DELETE FROM public.leads
-    WHERE id = ${id} AND venue_id = ${venueId}
-    RETURNING id
-  `;
-  if (rows.length === 0) return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
+
+  const { data, error } = await supabaseAdmin
+    .from('leads')
+    .delete()
+    .eq('id', id)
+    .eq('venue_id', venueId)
+    .select('id')
+    .maybeSingle();
+
+  if (error) {
+    console.error('[DELETE /api/leads/[id]] failed:', error);
+    return NextResponse.json({ error: `Delete failed: ${error.message}` }, { status: 500 });
+  }
+  if (!data) return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
+
   return NextResponse.json({ ok: true });
 }
