@@ -8,6 +8,7 @@ import {
  Calendar, RefreshCw, Palette, Mail, UsersRound, Bell, Link2,
  Settings, HelpCircle, Mic, MicOff, Smile, Paperclip,
  BookOpen, Zap, DollarSign, Package, ThumbsUp, ThumbsDown,
+ Store, Inbox,
 } from 'lucide-react';
 import {
  HELP_CATEGORIES,
@@ -24,6 +25,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
  Zap, LayoutDashboard, Users, BarChart2, CreditCard, FileText, Receipt,
  Calendar, RefreshCw, Palette, Mail, UsersRound, Bell, Link2,
  Settings, HelpCircle, BookOpen, Sparkles, DollarSign, Package,
+ Store, Inbox,
 };
 
 // ─── Local type aliases ───────────────────────────────────────────────────────

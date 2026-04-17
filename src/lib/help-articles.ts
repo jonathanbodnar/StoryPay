@@ -27,8 +27,8 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         id: 'gs-overview',
         title: 'Platform overview',
-        tags: ['overview', 'intro', 'dashboard', 'what is', 'storypay'],
-        body: `StoryPay is an all-in-one platform for wedding venues to manage proposals, invoices, payments, customers, a booking calendar, branding, email templates, and team members — all from one place.
+        tags: ['overview', 'intro', 'dashboard', 'what is', 'storypay', 'storyvenue'],
+        body: `StoryPay (at app.storyvenue.com) is the all-in-one command center for wedding venues. From one dashboard you manage your public directory listing on storyvenue.com, the leads it generates, customer profiles, proposals, invoices, payments, a booking calendar, branding, email templates, and your team.
 
 After logging in you land on the Home dashboard which shows your revenue, pipeline, recent proposals, and recent transactions at a glance.
 
@@ -36,14 +36,45 @@ Navigation lives in the left sidebar (or the hamburger menu on mobile). The main
 - Home — your live snapshot
 - Customers — manage contacts and full customer profiles
 - Calendar — book and track tours, weddings, and events
-- Reports — 6 downloadable financial report types (owners and admins only)
+- Directory Listing — manage how your venue appears on storyvenue.com (photos, description, capacity, pricing, amenities, publish on/off)
+- Leads — inquiries submitted from your storyvenue.com listing
+- Reports — 7 downloadable financial report types (owners and admins only)
 - Payments — proposals, invoices, installments, subscriptions, transactions
 - Help Center — searchable documentation with AI-powered answers
 - Settings — branding, email templates, integrations (including Calendly, Google Calendar), team, notifications
 
-What you see in the sidebar depends on your role. Owners see everything. Admins see most things. Members only see Payments and Customers.
+What you see in the sidebar depends on your role. Owners see everything. Admins see most things. Members only see Payments, Customers, Calendar, Leads, and their directory listing.
+
+How the two sites fit together:
+- storyvenue.com is the public-facing directory browsed by couples looking for a venue
+- app.storyvenue.com is the private admin dashboard where you run your business
+
+Couples browse your listing on storyvenue.com → submit an inquiry → the lead lands in your Leads inbox here → you reply, book a tour, send a proposal, and collect payment — all without leaving StoryPay.
 
 The floating sparkle button (bottom-right) opens Ask AI, which can answer questions about your account in real time.`,
+      },
+      {
+        id: 'gs-signup',
+        title: 'Signing up for a new venue account',
+        tags: ['signup', 'register', 'create account', 'new venue', 'join', 'sign up'],
+        body: `New venues create an account themselves at storyvenue.com/signup (or app.storyvenue.com/signup).
+
+On the signup page:
+1. Enter your venue name and the email address that will own the account
+2. Pick a plan
+3. Click Create Account
+
+You'll see a "Check your inbox" confirmation. We email a magic login link to the address you entered — open it on the same device and you are logged straight into a brand-new dashboard with a blank directory listing ready to fill in.
+
+First things to do after signing up:
+- Go to Directory Listing in the sidebar and fill in your venue name, description, location, capacity, pricing, amenities, and photos
+- Toggle the Publish switch on when you're ready for couples to find you on storyvenue.com
+- Head to Settings → Branding to upload your logo and brand colors (these appear on proposals and outgoing emails)
+- Invite team members at Settings → Team
+
+If you didn't receive the login email: check spam, wait 30 seconds, or use the direct login URL shown on the success screen. You can also re-request a magic link from the main login page.
+
+One email address = one venue account. If you already have an account and try to sign up again with the same email, the system tells you and points you to the login page instead.`,
       },
       {
         id: 'gs-onboarding',
@@ -51,16 +82,17 @@ The floating sparkle button (bottom-right) opens Ask AI, which can answer questi
         tags: ['checklist', 'onboarding', 'setup', 'first steps', 'restart'],
         body: `When you first access your dashboard as an owner you'll see a "Get Started" bubble near the top of the page.
 
-Click the bubble to open the setup checklist. It tracks 6 steps:
+Click the bubble to open the setup checklist. It tracks the core setup steps:
 
-1. Create Your Profile and Branding — upload your logo and set brand colors (Settings → Branding)
-2. Customize Email Templates — personalize the emails sent to clients (Settings → Email Templates)
-3. Create Your First Proposal Template — build a reusable contract template (Payments → Proposal Templates)
-4. Create Your First Proposal — use a template to create a proposal for a client
-5. Send Your First Proposal — send it to a client so they can sign and pay
-6. Invite a Team Member — add staff to your account (Settings → Team)
+1. Publish your Directory Listing — fill in your venue details and flip Publish on (Sidebar → Directory Listing)
+2. Create Your Profile and Branding — upload your logo and set brand colors (Settings → Branding)
+3. Customize Email Templates — personalize the emails sent to clients (Settings → Email Templates)
+4. Create Your First Proposal Template — build a reusable contract template (Payments → Proposal Templates)
+5. Create Your First Proposal — use a template to create a proposal for a client
+6. Send Your First Proposal — send it to a client so they can sign and pay
+7. Invite a Team Member — add staff to your account (Settings → Team)
 
-Check off each step manually as you complete it. When all steps are checked, click "I'm Ready — Start Using StoryPay" to dismiss the bubble permanently.
+Check off each step manually as you complete it. When all steps are checked, click "I'm Ready — Start Using StoryPay" to dismiss the bubble permanently. You can also skip the wizard at any time and come straight to the dashboard — payment processing setup is optional and can be completed later.
 
 To restart the checklist at any time, go to Settings → General → Restart Setup Guide. This only clears the checkmarks — it does not delete any data.
 
@@ -69,12 +101,21 @@ Note: The setup guide is only visible to account owners. Admins and Members do n
       {
         id: 'gs-login',
         title: 'Logging in and your login link',
-        tags: ['login', 'link', 'access', 'sign in', 'token'],
-        body: `StoryPay uses magic-link login. You receive a personalised login URL from your account manager. Opening that link sets your session automatically — no password needed.
+        tags: ['login', 'link', 'access', 'sign in', 'token', 'magic link', 'forgot password'],
+        body: `StoryPay uses magic-link login at app.storyvenue.com/login — no password needed.
 
-Your session lasts 30 days. If it expires, contact support or your account manager for a fresh link.
+Enter the email address on your account and click Send Login Link. We email a personalised login URL that signs you in with a single click. The link is valid for one hour.
 
-To log out, click Logout at the bottom of the sidebar.`,
+Your session lasts 30 days on that device. If the session expires, just request a new magic link from the login page.
+
+New venues can create an account themselves at storyvenue.com/signup (or app.storyvenue.com/signup). See the "Signing up for a new venue account" article for details.
+
+To log out, click Logout at the bottom of the sidebar.
+
+Troubleshooting:
+- Didn't receive the email? Check spam, wait 30 seconds and try again, or contact support.
+- "Account not found"? The email isn't registered yet — create an account via /signup.
+- Team member who never received their invite? Have an owner resend it from Settings → Team → ⋯ → Resend Invite.`,
       },
     ],
   },
@@ -252,6 +293,253 @@ The page shows a month-by-month calendar with:
 - Booked / unavailable dates (red, labeled Booked or Tour)
 
 Prospects can navigate forward and back through months. No customer information is ever shown on this page.`,
+      },
+    ],
+  },
+  {
+    id: 'listing',
+    label: 'Directory Listing',
+    iconName: 'Store',
+    color: '#0ea5e9',
+    articles: [
+      {
+        id: 'listing-overview',
+        title: 'Your storyvenue.com directory listing',
+        tags: ['directory', 'listing', 'public page', 'storyvenue', 'venue page', 'seo'],
+        body: `Your Directory Listing is your public venue profile on storyvenue.com. It's what couples see when they browse the directory or land on your page from a Google search.
+
+Open it from the sidebar → Directory Listing. Everything on this page mirrors what appears at storyvenue.com/venue/<your-slug>.
+
+The listing has these sections:
+
+Basics
+- Venue name — headline shown at the top of your page and in search results
+- URL slug — the readable end of your public URL (e.g. "the-barn-at-new-albany" → storyvenue.com/venue/the-barn-at-new-albany). The slug is auto-generated from the name as you type. You can hand-edit it if needed; click "Reset from name" to re-sync it.
+- Venue type — barn, ballroom, garden, winery, beach, estate, rustic, modern, historic, other
+- Indoor / Outdoor / Both
+
+Location
+- Full location line (e.g. "New Albany, Ohio")
+- City and State (used for search filters)
+
+Capacity & Pricing
+- Minimum and maximum guest capacity
+- Starting and top price point (displayed as a range on your listing)
+
+Description
+- The long-form narrative describing your venue — this is the heart of the page. Talk about atmosphere, signature spaces, what sets you apart, and the couple's experience from arrival to send-off.
+
+Amenities
+- Check off the features your venue offers: Ceremony site, Reception site, Bridal suite, Groom's suite, On-site parking, Wheelchair accessible, In-house catering, BYO catering allowed, Bar service, Dance floor, Overnight accommodations, Pet friendly, Outdoor ceremony, Tented options, etc.
+
+Photos — see the "Uploading photos" article.
+
+Availability notes
+- Free-form text shown on your listing (e.g. "Booking 2026-2027 now, limited Saturdays in fall").
+
+Inquiry notifications
+- Notification email — where new leads are sent (defaults to your account email)
+- Email notifications toggle — turn off if you don't want an email for every inquiry (leads still appear in the dashboard)
+
+Publish toggle — at the top of the page. Off = not visible to the public. On = live on storyvenue.com within seconds.`,
+      },
+      {
+        id: 'listing-autosave',
+        title: 'Autosave and how changes are saved',
+        tags: ['save', 'autosave', 'draft', 'saving', 'unsaved'],
+        body: `The Directory Listing page saves automatically as you edit — there is no "lose your work if you forget to click Save" moment.
+
+How it works:
+- Every change you make (typing, toggling a feature, uploading a photo) queues up an autosave
+- After you stop typing for about a second, your changes are sent to the server
+- The status indicator near the top of the page shows: Saved · a moment ago / Saving… / Unsaved changes / Save failed
+
+The visible Save button is kept as a belt-and-braces backup. You can click it any time to force an immediate save (useful if you're about to close your laptop lid).
+
+If you try to leave the page with unsaved changes, the browser will ask you to confirm.
+
+If a save fails (e.g. you lose internet), the status shows "Save failed" and the change stays in the form — reconnect and click Save, or just keep editing; the autosave will retry.
+
+Tip: this makes it safe to start the description, switch tabs to upload photos to a cloud service, come back, and paste them in — the description won't be lost.`,
+      },
+      {
+        id: 'listing-photos',
+        title: 'Uploading cover photo and gallery images',
+        tags: ['photos', 'images', 'upload', 'gallery', 'cover image', 'hero', 'pictures'],
+        body: `Your listing supports one cover photo (the hero at the top of the page) and an unlimited gallery below.
+
+To upload:
+1. Go to Directory Listing → scroll to the Photos section
+2. Drag and drop an image into the upload area, or click to pick from your device
+3. Images upload to secure cloud storage and appear on your listing immediately
+
+Best practices:
+- Cover photo: wide landscape, 1600–2400 px wide, showing your signature space
+- Gallery: mix of ceremony, reception, details, outdoor, bridal suite
+- Accepted formats: JPG, PNG, WebP (max 10MB each)
+
+Manage existing images:
+- Drag a gallery image to re-order it
+- Click the trash icon on any image to remove it
+- "Set as cover" promotes a gallery image to the cover slot
+
+Troubleshooting:
+- If uploads silently fail on the first try right after a fresh account, reload the page — the image bucket is auto-provisioned on first use, then works normally afterwards.
+- Large files may take 15–30 seconds on slower connections. The status indicator shows "Saving…" while uploads are in flight.
+
+Uploaded photos are public — they're served directly from a CDN so your listing stays fast.`,
+      },
+      {
+        id: 'listing-publish',
+        title: 'Publishing and unpublishing your listing',
+        tags: ['publish', 'unpublish', 'live', 'visible', 'hidden', 'public'],
+        body: `The Publish toggle (top of the Directory Listing page) controls whether couples can find your venue on storyvenue.com.
+
+Off (default for new accounts)
+- Your listing page returns "not found" to the public
+- Your venue does not appear in directory search or browse
+- You can continue to edit freely — nothing you save is visible until you flip Publish on
+
+On
+- Your page goes live at storyvenue.com/venue/<your-slug> within a few seconds
+- Your venue appears in directory search results and browse filters
+- The public contact form starts accepting leads
+
+If your page doesn't appear after publishing:
+- Confirm the Publish toggle is actually on (the status pill next to it reads "Live")
+- Hard-refresh storyvenue.com
+- Check the URL uses your exact slug (Directory Listing → URL slug field)
+- If you recently changed the slug, the old URL now 404s — update any links you've shared
+
+Unpublishing is immediate — flip the toggle off and your public page returns 404. Leads already in your inbox are unaffected.`,
+      },
+      {
+        id: 'listing-slug',
+        title: 'URL slug — pretty venue URLs',
+        tags: ['slug', 'url', 'link', 'seo', 'permalink'],
+        body: `Your slug is the end of your public URL — storyvenue.com/venue/<slug>. A clean slug like "the-barn-at-new-albany" is easier to remember, share on a business card, and ranks better in search.
+
+How it works:
+- The slug field is auto-populated from your venue name as you type (e.g. "The Barn at New Albany" becomes "the-barn-at-new-albany").
+- Once you hand-edit the slug, auto-mode turns off so we don't overwrite your choice. Click "Reset from name" to re-sync it.
+- Slugs are sanitized in real time: lowercased, spaces become hyphens, special characters stripped, max 80 chars.
+
+Rules:
+- Lowercase letters, numbers, and hyphens only
+- Must be unique across all venues on storyvenue.com
+- If the slug you want is already taken, the save will fail with a helpful message — pick a different one
+
+Caution: changing the slug changes your public URL. Any links on your website, Instagram bio, or printed materials will break unless you update them. Do this rarely, and ideally before you share the URL widely.`,
+      },
+    ],
+  },
+  {
+    id: 'leads',
+    label: 'Leads',
+    iconName: 'Inbox',
+    color: '#7c3aed',
+    articles: [
+      {
+        id: 'leads-overview',
+        title: 'Leads inbox overview',
+        tags: ['leads', 'inquiries', 'inbox', 'requests', 'directory leads', 'form'],
+        body: `The Leads page (sidebar → Leads) is your inbox for inquiries submitted through your storyvenue.com directory listing.
+
+Each time a couple fills out the Request Info form on your public venue page, a lead appears here instantly and the notification email is delivered to the inbox you configured on the Directory Listing page.
+
+Each lead row shows at a glance:
+- Name, status pill (New / Contacted / Tour booked / Proposal sent / Booked / Not interested)
+- Linked listing name (useful if your account ever manages multiple listings)
+- Email, phone, wedding date, guest count
+- A short preview of their message
+- Date received
+
+Click a row to expand and see the full message, booking timeline, and source. You'll also see quick-action buttons for Reply (opens your email client), Call (tap to dial on mobile), View Listing, and status changes.
+
+Leads are sorted newest first and up to 500 are loaded at once.`,
+      },
+      {
+        id: 'leads-filter-search',
+        title: 'Filtering and searching leads',
+        tags: ['filter', 'search', 'status', 'find lead', 'leads filter'],
+        body: `The Leads page has two tools for finding a specific inquiry:
+
+Status tabs (top-left)
+- All, New, Contacted, Tour booked, Proposal sent, Booked, Not interested
+- Click a tab to filter to that status. The "All" tab shows counts per status as little badges.
+
+Search box (top-right)
+- Type any part of a name, email, or phone number
+- Results filter in real time as you type
+- Clear the box to restore the full list
+
+Filters and search combine — e.g. show only "New" leads whose email contains "@gmail".
+
+If no leads match, you'll see an empty state with a helpful message. That's not an error — just widen your filters.`,
+      },
+      {
+        id: 'leads-manage',
+        title: 'Replying, updating status, and deleting leads',
+        tags: ['reply', 'status', 'contacted', 'booked', 'delete', 'lead status'],
+        body: `Click any lead row to expand it. From there:
+
+Reply — opens your default email client with the lead's email pre-filled. Once you've replied, click "Mark contacted" so your inbox reflects reality.
+
+Call — if a phone number was provided, tap to dial on mobile or click to open your desktop's phone handler.
+
+View Listing — jump to the public storyvenue.com page this lead came from.
+
+Change status — click any of the status buttons:
+- Mark contacted — you've responded
+- Tour booked — they're coming in for a walk-through
+- Proposal sent — you've sent them a quote (tip: hand off to Payments → New Proposal and link the customer)
+- Booked — congrats, they signed and paid
+- Not interested — they've passed, or it's a bad fit
+
+Statuses are for your team — the lead never sees them.
+
+Delete — red trash button inside the expanded view. This permanently removes the lead. Deletion confirmation is required.
+
+All status/delete actions take effect instantly.`,
+      },
+      {
+        id: 'leads-notifications',
+        title: 'Lead notification emails',
+        tags: ['notification', 'email', 'lead email', 'alert', 'inquiry email', 'not receiving'],
+        body: `When a new lead comes in, StoryPay emails you a formatted summary so you don't need to open the dashboard every hour.
+
+The email includes the couple's name, contact info, wedding date (if given), estimated guest count, booking timeline, and their full message. A "View in dashboard" link jumps straight to the lead.
+
+Configure the notification email:
+- Sidebar → Directory Listing → Inquiry notifications section
+- Notification email — defaults to your account email; change it to a shared inbox (e.g. bookings@yourvenue.com) so the whole team sees new leads
+- Email notifications — toggle off if you only want leads to appear in the dashboard with no email
+
+Not receiving emails?
+- Check spam / promotions folder
+- Confirm the notification email address is correct and receives mail
+- Make sure Email notifications is toggled on
+- Leads are still saved in the dashboard even if the email fails — open /dashboard/leads to see them
+
+SMS for high-value leads is not currently on by default; contact support if you want to enable it.`,
+      },
+      {
+        id: 'leads-to-proposal',
+        title: 'Turning a lead into a customer and proposal',
+        tags: ['convert', 'proposal', 'customer', 'lead to customer', 'book', 'quote'],
+        body: `Leads are the top of your funnel. Once a lead is qualified, here's the recommended path through StoryPay:
+
+1. Leads → open the inquiry, review details
+2. Mark contacted once you've replied
+3. Add them to Customers — Sidebar → Customers → + Add Customer — paste in their name, email, phone, and wedding date. Set the pipeline stage to "Tour Scheduled" or "Proposal Sent" as appropriate.
+4. Book their tour on the Calendar — use Type: Tour, link to the customer's email
+5. After the tour, go to Payments → New Proposal → pick them from the customer list → apply a proposal template → send
+6. Back on the Leads page, mark the lead "Proposal sent"
+7. When they sign and pay, mark the lead "Booked" and update the customer's pipeline stage to Booked
+
+The lead stays in your Leads inbox as a permanent record of where this customer came from, even after they become a paying customer.
+
+Note: auto-conversion of a lead into a customer profile with a single click is a planned enhancement — for now, create the customer manually. All the lead info is visible in the expanded view for easy copy/paste.`,
       },
     ],
   },
@@ -876,6 +1164,13 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   // Calendar
   '/dashboard/calendar': ['cal-overview', 'cal-spaces', 'cal-add-event', 'cal-conflicts'],
 
+  // Directory Listing
+  '/dashboard/listing/images': ['listing-photos', 'listing-overview', 'listing-publish'],
+  '/dashboard/listing':        ['listing-overview', 'listing-autosave', 'listing-photos', 'listing-publish', 'listing-slug'],
+
+  // Leads
+  '/dashboard/leads': ['leads-overview', 'leads-filter-search', 'leads-manage', 'leads-notifications', 'leads-to-proposal'],
+
   // Payments — new proposal / invoice
   '/dashboard/payments/new':        ['pay-new', 'pay-templates', 'pay-installments'],
   '/dashboard/invoices/new':        ['pay-new', 'pay-installments', 'pay-subscriptions'],
@@ -908,7 +1203,11 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
 
   // AI
   '/dashboard/ai':   ['ai-overview', 'ai-screenshot', 'ai-voice', 'ai-escalate'],
-  '/dashboard/help': ['gs-overview', 'cal-overview', 'ai-overview'],
+  '/dashboard/help': ['gs-overview', 'listing-overview', 'leads-overview', 'ai-overview'],
+
+  // Signup / login (public pages — harmless if never hit via dashboard)
+  '/signup': ['gs-signup', 'gs-login'],
+  '/login':  ['gs-login', 'gs-signup'],
 };
 
 // Returns the best-matching article IDs for a given pathname.
