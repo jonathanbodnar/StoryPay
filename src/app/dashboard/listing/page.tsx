@@ -1,10 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Loader2, Save, CheckCircle2, Store, Globe, MapPin, Users, DollarSign,
-  Image as ImageIcon, ExternalLink, Eye, EyeOff,
+  Image as ImageIcon, ExternalLink, Eye, EyeOff, AlertCircle,
 } from 'lucide-react';
 
 interface Listing {
@@ -59,12 +59,25 @@ function emptyListing(): Listing {
   };
 }
 
+type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
+
+const AUTOSAVE_DEBOUNCE_MS = 800;
+
 export default function ListingPage() {
   const [listing, setListing] = useState<Listing>(emptyListing());
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [status, setStatus] = useState<SaveStatus>('idle');
   const [error, setError] = useState('');
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+
+  // Refs that always point at the latest listing / loading state so the
+  // debounced save doesn't have to be recreated on every edit.
+  const listingRef = useRef(listing);
+  listingRef.current = listing;
+  const loadingRef = useRef(loading);
+  loadingRef.current = loading;
+  const inFlightRef = useRef<AbortController | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -82,7 +95,14 @@ export default function ListingPage() {
               gallery_images: Array.isArray(data.listing.gallery_images) ? data.listing.gallery_images : [],
             });
           }
+        } else {
+          const data = await res.json().catch(() => ({}));
+          setError(data.error ?? `Failed to load listing (HTTP ${res.status})`);
+          setStatus('error');
         }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load listing');
+        setStatus('error');
       } finally {
         if (alive) setLoading(false);
       }
@@ -90,8 +110,64 @@ export default function ListingPage() {
     return () => { alive = false; };
   }, []);
 
+  // Abort any in-flight request when unmounting so we don't leak network.
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (inFlightRef.current) inFlightRef.current.abort();
+    };
+  }, []);
+
+  const doSave = useCallback(async (overrides?: Partial<Listing>): Promise<boolean> => {
+    if (loadingRef.current) return false;
+
+    if (inFlightRef.current) inFlightRef.current.abort();
+    const controller = new AbortController();
+    inFlightRef.current = controller;
+
+    setStatus('saving');
+    setError('');
+
+    const payload = { ...listingRef.current, ...(overrides ?? {}) };
+
+    try {
+      const res = await fetch('/api/listing/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? `Failed to save (HTTP ${res.status})`);
+      setListing({
+        ...emptyListing(),
+        ...data.listing,
+        features: Array.isArray(data.listing.features) ? data.listing.features : [],
+        gallery_images: Array.isArray(data.listing.gallery_images) ? data.listing.gallery_images : [],
+      });
+      setStatus('saved');
+      setLastSavedAt(new Date());
+      return true;
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return false;
+      setError(e instanceof Error ? e.message : 'Failed to save');
+      setStatus('error');
+      return false;
+    } finally {
+      if (inFlightRef.current === controller) inFlightRef.current = null;
+    }
+  }, []);
+
+  const scheduleAutosave = useCallback(() => {
+    if (loadingRef.current) return;
+    setStatus('dirty');
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => { void doSave(); }, AUTOSAVE_DEBOUNCE_MS);
+  }, [doSave]);
+
   function update<K extends keyof Listing>(key: K, value: Listing[K]) {
     setListing((prev) => ({ ...prev, [key]: value }));
+    scheduleAutosave();
   }
 
   function toggleFeature(feat: string) {
@@ -99,36 +175,34 @@ export default function ListingPage() {
       const has = prev.features.includes(feat);
       return { ...prev, features: has ? prev.features.filter(f => f !== feat) : [...prev.features, feat] };
     });
+    scheduleAutosave();
   }
 
-  async function save(nextPublished?: boolean) {
-    setSaving(true);
-    setError('');
-    try {
-      const payload = {
-        ...listing,
-        is_published: typeof nextPublished === 'boolean' ? nextPublished : listing.is_published,
-      };
-      const res = await fetch('/api/listing/me', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Failed to save');
-      setListing({
-        ...emptyListing(),
-        ...data.listing,
-        features: Array.isArray(data.listing.features) ? data.listing.features : [],
-        gallery_images: Array.isArray(data.listing.gallery_images) ? data.listing.gallery_images : [],
-      });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save');
-    } finally {
-      setSaving(false);
+  // Flush a pending autosave and save immediately (e.g. button clicks, page leave).
+  const flushAndSave = useCallback(async (overrides?: Partial<Listing>): Promise<boolean> => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
     }
+    return doSave(overrides);
+  }, [doSave]);
+
+  // Best-effort flush on tab close / navigate away.
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (status === 'dirty' || status === 'saving') {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [status]);
+
+  async function save(nextPublished?: boolean) {
+    await flushAndSave(
+      typeof nextPublished === 'boolean' ? { is_published: nextPublished } : undefined,
+    );
   }
 
   const publicUrl = useMemo(() => {
@@ -168,7 +242,7 @@ export default function ListingPage() {
           )}
           <button
             onClick={() => save(!listing.is_published)}
-            disabled={saving}
+            disabled={status === 'saving'}
             className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium transition-colors ${
               listing.is_published
                 ? 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
@@ -182,15 +256,18 @@ export default function ListingPage() {
         </div>
       </header>
 
-      {error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      {saved && (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4" /> Saved
+      {status === 'error' && error && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-start justify-between gap-3">
+          <span className="flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+            <span>{error}</span>
+          </span>
+          <button
+            onClick={() => { void flushAndSave(); }}
+            className="text-xs font-semibold underline underline-offset-2 hover:no-underline"
+          >
+            Retry
+          </button>
         </div>
       )}
 
@@ -412,17 +489,66 @@ export default function ListingPage() {
         </div>
       </section>
 
-      <div className="sticky bottom-4 flex justify-end">
+      <div className="sticky bottom-4 flex items-center justify-end gap-3">
+        <StatusBadge status={status} lastSavedAt={lastSavedAt} />
         <button
           onClick={() => save()}
-          disabled={saving}
-          className="inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-medium text-white shadow-lg hover:opacity-90"
+          disabled={status === 'saving'}
+          className="inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-medium text-white shadow-lg hover:opacity-90 disabled:opacity-60"
           style={{ backgroundColor: '#1b1b1b' }}
         >
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          {saving ? 'Saving…' : 'Save changes'}
+          {status === 'saving' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          {status === 'saving' ? 'Saving…' : 'Save changes'}
         </button>
       </div>
     </div>
   );
+}
+
+function StatusBadge({
+  status,
+  lastSavedAt,
+}: {
+  status: SaveStatus;
+  lastSavedAt: Date | null;
+}) {
+  if (status === 'saving') {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-900/5 px-3 py-1.5 text-xs font-medium text-gray-600">
+        <Loader2 className="w-3 h-3 animate-spin" /> Saving…
+      </span>
+    );
+  }
+  if (status === 'dirty') {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700">
+        Unsaved changes
+      </span>
+    );
+  }
+  if (status === 'error') {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700">
+        <AlertCircle className="w-3 h-3" /> Save failed
+      </span>
+    );
+  }
+  if (status === 'saved' && lastSavedAt) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700">
+        <CheckCircle2 className="w-3 h-3" /> Saved {formatRelative(lastSavedAt)}
+      </span>
+    );
+  }
+  return null;
+}
+
+function formatRelative(d: Date): string {
+  const now = Date.now();
+  const diff = Math.max(0, Math.floor((now - d.getTime()) / 1000));
+  if (diff < 5) return 'just now';
+  if (diff < 60) return `${diff}s ago`;
+  const mins = Math.floor(diff / 60);
+  if (mins < 60) return `${mins}m ago`;
+  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
