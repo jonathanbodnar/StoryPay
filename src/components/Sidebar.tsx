@@ -63,11 +63,25 @@ export default function Sidebar({ venue, role = 'owner', memberName, memberEmail
  || pathname.startsWith('/dashboard/invoices')
  || pathname.startsWith('/dashboard/proposals');
 
- const [settingsOpen, setSettingsOpen] = useState(isOnSettings);
- const [paymentsOpen, setPaymentsOpen] = useState(isOnPayments);
+  // Only one dropdown group can be open at a time. Clicking a different
+  // group's header closes whichever was open and opens the new one; clicking
+  // the currently-open group's header collapses it.
+  type OpenGroup = 'payments' | 'settings' | null;
+  const initialGroup: OpenGroup = isOnPayments ? 'payments' : isOnSettings ? 'settings' : null;
+  const [openGroup, setOpenGroup] = useState<OpenGroup>(initialGroup);
 
- useEffect(() => { if (isOnSettings) setSettingsOpen(true); }, [isOnSettings]);
- useEffect(() => { if (isOnPayments) setPaymentsOpen(true); }, [isOnPayments]);
+  const paymentsOpen = openGroup === 'payments';
+  const settingsOpen = openGroup === 'settings';
+
+  // Auto-expand the group that matches the current route. We don't auto-close
+  // the other here — the click handler already enforces "one at a time" —
+  // because the user may have deliberately opened a different group while
+  // parked on a payments/settings page.
+  useEffect(() => { if (isOnSettings) setOpenGroup('settings'); }, [isOnSettings]);
+  useEffect(() => { if (isOnPayments) setOpenGroup('payments'); }, [isOnPayments]);
+
+  const toggleGroup = (group: Exclude<OpenGroup, null>) =>
+    setOpenGroup(curr => (curr === group ? null : group));
  useEffect(() => { setMobileOpen(false); }, [pathname]);
  useEffect(() => {
  document.body.style.overflow = mobileOpen ? 'hidden' : '';
@@ -161,7 +175,7 @@ export default function Sidebar({ venue, role = 'owner', memberName, memberEmail
 
  {/* Payments collapsible */}
  <div>
- <button type="button"onClick={() => setPaymentsOpen(v => !v)} className={groupBtn(isOnPayments && paymentsOpen)} style={groupBtnStyle(isOnPayments && paymentsOpen)}>
+              <button type="button"onClick={() => toggleGroup('payments')} className={groupBtn(isOnPayments && paymentsOpen)} style={groupBtnStyle(isOnPayments && paymentsOpen)}>
  <div className="flex items-center gap-3">
  <CreditCard size={16} />
  <span>Payments</span>
@@ -189,7 +203,7 @@ export default function Sidebar({ venue, role = 'owner', memberName, memberEmail
  {/* Settings collapsible — role-filtered */}
  {isAdmin && (
  <div>
- <button type="button"onClick={() => setSettingsOpen(v => !v)} className={groupBtn(isOnSettings && settingsOpen)} style={groupBtnStyle(isOnSettings && settingsOpen)}>
+                <button type="button"onClick={() => toggleGroup('settings')} className={groupBtn(isOnSettings && settingsOpen)} style={groupBtnStyle(isOnSettings && settingsOpen)}>
  <div className="flex items-center gap-3">
  <Settings size={16} />
  <span>Settings</span>
