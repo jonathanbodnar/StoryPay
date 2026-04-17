@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { ensureDefaultPipeline, legacyStatusForStageName } from '@/lib/pipelines';
+import { fetchTagsForLeadIds, leadRowWithTags, setLeadTagIds } from '@/lib/lead-tags';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -12,7 +13,7 @@ export const runtime = 'nodejs';
 interface LeadRow {
   id: string;
   venue_id: string;
-  track_token: string;
+  track_token?: string;
   first_name: string | null;
   last_name: string | null;
   name: string;
@@ -225,12 +226,18 @@ export async function GET(request: NextRequest) {
     return null;
   }
 
+  const tagMap = await fetchTagsForLeadIds(
+    venueId,
+    uniqueMerged.map((l) => l.id),
+  );
+
   const leads = uniqueMerged.map((l) => ({
     ...l,
     listing_slug:  venue?.slug ?? null,
     listing_name:  venue?.name ?? null,
     note_count:    noteCounts[l.id] ?? 0,
     booking_badge: bookingBadge(l),
+    tags:          tagMap.get(l.id) ?? [],
   }));
 
   return NextResponse.json({ leads });
@@ -265,6 +272,7 @@ export async function POST(request: NextRequest) {
     bookingTimeline?: string;
     pipelineId?: string;
     stageId?: string;
+    tagIds?: string[];
   };
   try {
     body = await request.json();
@@ -343,5 +351,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ lead: data });
+  const newId = data.id as string;
+  if (Array.isArray(body.tagIds) && body.tagIds.length > 0) {
+    await setLeadTagIds(
+      venueId,
+      newId,
+      body.tagIds.filter((x): x is string => typeof x === 'string'),
+    );
+  }
+
+  const withTags = await leadRowWithTags(venueId, data as Record<string, unknown>);
+  return NextResponse.json({ lead: withTags });
 }

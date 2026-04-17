@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { legacyStatusForStageName } from '@/lib/pipelines';
+import { leadRowWithTags, setLeadTagIds } from '@/lib/lead-tags';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -52,6 +53,8 @@ export async function PATCH(
     pipelineId?: string | null;
     stageId?: string | null;
     position?: number;
+    /** Full replacement of tag ids for this lead. */
+    tagIds?: string[];
   };
   try {
     body = await request.json();
@@ -112,25 +115,57 @@ export async function PATCH(
     if (rebuilt) updates.name = rebuilt;
   }
 
-  if (Object.keys(updates).length === 0) {
+  const hasTagPatch = body.tagIds !== undefined;
+
+  if (Object.keys(updates).length === 0 && !hasTagPatch) {
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
   }
 
-  const { data, error } = await supabaseAdmin
+  if (Object.keys(updates).length > 0) {
+    const { data, error } = await supabaseAdmin
+      .from('leads')
+      .update(updates)
+      .eq('id', id)
+      .eq('venue_id', venueId)
+      .select('*')
+      .maybeSingle();
+
+    if (error) {
+      console.error('[PATCH /api/leads/[id]] failed:', error);
+      return NextResponse.json({ error: `Update failed: ${error.message}` }, { status: 500 });
+    }
+    if (!data) return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
+  } else {
+    const { data: exists, error: exErr } = await supabaseAdmin
+      .from('leads')
+      .select('id')
+      .eq('id', id)
+      .eq('venue_id', venueId)
+      .maybeSingle();
+    if (exErr) {
+      return NextResponse.json({ error: exErr.message }, { status: 500 });
+    }
+    if (!exists) return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
+  }
+
+  if (hasTagPatch) {
+    const arr = Array.isArray(body.tagIds) ? body.tagIds.filter((x): x is string => typeof x === 'string') : [];
+    await setLeadTagIds(venueId, id, arr);
+  }
+
+  const { data: leadRow, error: loadErr } = await supabaseAdmin
     .from('leads')
-    .update(updates)
+    .select('*')
     .eq('id', id)
     .eq('venue_id', venueId)
-    .select('*')
-    .maybeSingle();
+    .single();
 
-  if (error) {
-    console.error('[PATCH /api/leads/[id]] failed:', error);
-    return NextResponse.json({ error: `Update failed: ${error.message}` }, { status: 500 });
+  if (loadErr || !leadRow) {
+    return NextResponse.json({ error: loadErr?.message ?? 'Lead not found' }, { status: 500 });
   }
-  if (!data) return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
 
-  return NextResponse.json({ lead: data });
+  const withTags = await leadRowWithTags(venueId, leadRow as Record<string, unknown>);
+  return NextResponse.json({ lead: withTags });
 }
 
 export async function DELETE(

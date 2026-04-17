@@ -43,7 +43,7 @@ const paymentsItems = [
 ];
 
 const marketingItems = [
- { label: 'Trigger Links', href: '/dashboard/marketing/trigger-links', icon: Link2 },
+ { label: 'Trigger Links & Tags', href: '/dashboard/marketing/trigger-links', icon: Link2 },
 ];
 
 const settingsItems = [

@@ -40,11 +40,19 @@ type LeadStatus =
   | 'new' | 'contacted' | 'tour_booked' | 'proposal_sent'
   | 'booked_wedding' | 'not_interested';
 
+interface MarketingTag {
+  id: string;
+  name: string;
+  icon: string;
+  color?: string | null;
+}
+
 interface Lead {
   id: string;
   venue_id: string;
   /** Stable token for trigger links: `/t/CODE?t=<track_token>` attributes clicks to this lead. */
   track_token?: string | null;
+  tags?: MarketingTag[];
   listing_slug: string | null;
   listing_name: string | null;
   name: string;
@@ -209,6 +217,7 @@ type LeadDraft = {
   message: string;
   pipelineId: string;
   stageId: string;
+  tagIds: string[];
 };
 
 const emptyDraft = (pipelineId: string): LeadDraft => ({
@@ -217,6 +226,7 @@ const emptyDraft = (pipelineId: string): LeadDraft => ({
   weddingDate: '', guestCount: '', bookingTimeline: '', message: '',
   pipelineId,
   stageId: '',
+  tagIds: [],
 });
 
 // ─── Main page ───────────────────────────────────────────────────────────────
@@ -233,6 +243,17 @@ export default function LeadsPage() {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [addingOpen, setAddingOpen] = useState(false);
+  const [allTags, setAllTags] = useState<MarketingTag[]>([]);
+
+  const loadTags = useCallback(async () => {
+    const res = await fetch('/api/marketing/tags', { cache: 'no-store' });
+    if (!res.ok) return;
+    const d = await res.json();
+    setAllTags((d.tags ?? []) as MarketingTag[]);
+  }, []);
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void loadTags(); }, [loadTags]);
 
   const activePipeline = useMemo(
     () => pipelines.find((p) => p.id === activePipelineId) ?? null,
@@ -284,8 +305,33 @@ export default function LeadsPage() {
   // ─── Lead mutations ────────────────────────────────────────────────────────
 
   async function updateLead(id: string, patch: Record<string, unknown>, optimistic = true) {
+    const tagIds = patch.tagIds;
+    const rest = { ...patch } as Record<string, unknown>;
+    delete rest.tagIds;
+
     if (optimistic) {
-      setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } as Lead : l)));
+      setLeads((prev) =>
+        prev.map((l) => {
+          if (l.id !== id) return l;
+          let next = { ...l, ...rest } as Lead;
+          if (Array.isArray(tagIds)) {
+            const idset = new Set(tagIds as string[]);
+            next = { ...next, tags: allTags.filter((t) => idset.has(t.id)) };
+          }
+          return next;
+        }),
+      );
+      if (selectedLead?.id === id) {
+        setSelectedLead((prev) => {
+          if (!prev || prev.id !== id) return prev;
+          let next = { ...prev, ...rest } as Lead;
+          if (Array.isArray(tagIds)) {
+            const idset = new Set(tagIds as string[]);
+            next = { ...next, tags: allTags.filter((t) => idset.has(t.id)) };
+          }
+          return next;
+        });
+      }
     }
     const res = await fetch(`/api/leads/${id}`, {
       method: 'PATCH',
@@ -296,7 +342,18 @@ export default function LeadsPage() {
       const data = await res.json();
       setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, ...data.lead } as Lead : l)));
       if (selectedLead?.id === id) setSelectedLead((prev) => (prev ? { ...prev, ...data.lead } : prev));
+    } else {
+      void loadLeads();
     }
+  }
+
+  function setLeadTagSelection(leadId: string, tagId: string) {
+    const lead = leads.find((l) => l.id === leadId);
+    if (!lead) return;
+    const set = new Set((lead.tags ?? []).map((t) => t.id));
+    if (set.has(tagId)) set.delete(tagId);
+    else set.add(tagId);
+    void updateLead(leadId, { tagIds: [...set] });
   }
 
   async function deleteLead(id: string) {
@@ -326,6 +383,7 @@ export default function LeadsPage() {
         message:           draft.message,
         pipelineId:        draft.pipelineId || activePipelineId,
         stageId:           draft.stageId || undefined,
+        tagIds:            draft.tagIds,
       }),
     });
     if (!res.ok) {
@@ -334,6 +392,7 @@ export default function LeadsPage() {
       return;
     }
     await loadLeads();
+    await loadTags();
     setAddingOpen(false);
   }
 
@@ -518,11 +577,13 @@ export default function LeadsPage() {
           totalValueByStage={totalValueByStage}
           dragLeadId={dragLeadId}
           dragOverStage={dragOverStage}
+          allTags={allTags}
           onCardClick={(l) => setSelectedLead(l)}
           onDragStartCard={onDragStart}
           onDragEndCard={onDragEnd}
           onDragOverStage={onDragOverStage}
           onDropStage={onDropStage}
+          onToggleLeadTag={setLeadTagSelection}
         />
       )}
 
@@ -530,8 +591,10 @@ export default function LeadsPage() {
         <ListBoard
           leads={leads}
           stages={activePipeline.stages}
+          allTags={allTags}
           onRowClick={(l) => setSelectedLead(l)}
           onQuickStageChange={(id, stageId) => updateLead(id, { stageId })}
+          onToggleLeadTag={setLeadTagSelection}
         />
       )}
 
@@ -540,6 +603,7 @@ export default function LeadsPage() {
         <LeadDrawer
           lead={selectedLead}
           pipelines={pipelines}
+          allTags={allTags}
           stages={
             pipelines.find((p) => p.id === selectedLead.pipeline_id)?.stages
             ?? activePipeline?.stages
@@ -550,6 +614,7 @@ export default function LeadsPage() {
           onDelete={() => deleteLead(selectedLead.id)}
           onConvert={() => convertToCustomer(selectedLead)}
           onRefresh={loadLeads}
+          onToggleLeadTag={setLeadTagSelection}
         />
       )}
 
@@ -569,6 +634,7 @@ export default function LeadsPage() {
         <AddLeadModal
           key={activePipelineId}
           pipelines={pipelines}
+          allTags={allTags}
           defaultPipelineId={activePipelineId}
           onClose={() => setAddingOpen(false)}
           onSave={createLead}
@@ -676,23 +742,105 @@ function PipelineTabs({
   );
 }
 
+// ─── Tag toggles (shared: Kanban, List, drawer, new lead) ─────────────────────
+
+function TagPicker({
+  allTags,
+  selectedIds,
+  dense,
+  onToggle,
+}: {
+  allTags: MarketingTag[];
+  selectedIds: Set<string>;
+  dense?: boolean;
+  onToggle: (tagId: string) => void;
+}) {
+  if (allTags.length === 0) {
+    return (
+      <p className="text-[10px] text-gray-400">
+        No tags yet — add under Marketing → Trigger Links and Tags.
+      </p>
+    );
+  }
+  return (
+    <div className="flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
+      {allTags.map((t) => {
+        const on = selectedIds.has(t.id);
+        const tinted = on && t.color && /^#[0-9a-fA-F]{3,8}$/.test(t.color);
+        return (
+          <button
+            key={t.id}
+            type="button"
+            title={t.name}
+            onClick={() => onToggle(t.id)}
+            style={
+              tinted
+                ? { borderColor: t.color!, backgroundColor: `${t.color}26`, color: '#111827' }
+                : undefined
+            }
+            className={`inline-flex items-center justify-center rounded-full border transition-colors ${
+              dense ? 'h-7 w-7 p-0 text-base' : 'gap-1 px-2 py-0.5 text-[11px] font-medium'
+            } ${
+              on && !tinted
+                ? 'border-gray-900 bg-gray-900 text-white shadow-sm'
+                : !on
+                  ? 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50'
+                  : ''
+            }`}
+          >
+            <span className="leading-none" aria-hidden>
+              {t.icon || '🏷️'}
+            </span>
+            {!dense && <span className="max-w-[72px] truncate">{t.name}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function LeadTagToggles({
+  allTags,
+  lead,
+  dense,
+  onToggleTag,
+}: {
+  allTags: MarketingTag[];
+  lead: Lead;
+  dense?: boolean;
+  onToggleTag: (leadId: string, tagId: string) => void;
+}) {
+  const selected = new Set((lead.tags ?? []).map((t) => t.id));
+  return (
+    <TagPicker
+      allTags={allTags}
+      selectedIds={selected}
+      dense={dense}
+      onToggle={(tagId) => onToggleTag(lead.id, tagId)}
+    />
+  );
+}
+
 // ─── Kanban board ────────────────────────────────────────────────────────────
 
 function KanbanBoard({
   pipeline, leadsByStage, totalValueByStage,
   dragLeadId, dragOverStage,
-  onCardClick, onDragStartCard, onDragEndCard, onDragOverStage, onDropStage,
+  allTags,
+  onCardClick, onDragStartCard, onDragEndCard, onDragOverStage, onDropStage, onToggleLeadTag,
 }: {
   pipeline: Pipeline;
   leadsByStage: Map<string, Lead[]>;
   totalValueByStage: Map<string, number>;
   dragLeadId: string | null;
   dragOverStage: string | null;
+  allTags: MarketingTag[];
   onCardClick: (l: Lead) => void;
   onDragStartCard: (e: React.DragEvent, id: string) => void;
   onDragEndCard: () => void;
   onDragOverStage: (e: React.DragEvent, stageId: string) => void;
   onDropStage: (e: React.DragEvent, stageId: string) => void;
+  onToggleLeadTag: (leadId: string, tagId: string) => void;
 }) {
   return (
     <div
@@ -739,11 +887,13 @@ function KanbanBoard({
                     <KanbanCard
                       key={lead.id}
                       lead={lead}
+                      allTags={allTags}
                       bookingBadge={lead.booking_badge ?? null}
                       isDragging={dragLeadId === lead.id}
                       onClick={() => onCardClick(lead)}
                       onDragStart={(e) => onDragStartCard(e, lead.id)}
                       onDragEnd={onDragEndCard}
+                      onToggleLeadTag={onToggleLeadTag}
                     />
                   ))
                 )}
@@ -757,14 +907,16 @@ function KanbanBoard({
 }
 
 function KanbanCard({
-  lead, bookingBadge, isDragging, onClick, onDragStart, onDragEnd,
+  lead, allTags, bookingBadge, isDragging, onClick, onDragStart, onDragEnd, onToggleLeadTag,
 }: {
   lead: Lead;
+  allTags: MarketingTag[];
   bookingBadge: { iso: string; variant: 'wedding' | 'appointment' } | null;
   isDragging: boolean;
   onClick: () => void;
   onDragStart: (e: React.DragEvent) => void;
   onDragEnd: () => void;
+  onToggleLeadTag: (leadId: string, tagId: string) => void;
 }) {
   return (
     <div
@@ -804,6 +956,10 @@ function KanbanCard({
         )}
       </div>
 
+      <div className="mt-2 pt-2 border-t border-gray-100">
+        <LeadTagToggles allTags={allTags} lead={lead} dense onToggleTag={onToggleLeadTag} />
+      </div>
+
       {bookingBadge && (
         <div className="mt-2 flex justify-end">
           <div
@@ -840,12 +996,14 @@ function KanbanCard({
 // ─── List view ───────────────────────────────────────────────────────────────
 
 function ListBoard({
-  leads, stages, onRowClick, onQuickStageChange,
+  leads, stages, allTags, onRowClick, onQuickStageChange, onToggleLeadTag,
 }: {
   leads: Lead[];
   stages: Stage[];
+  allTags: MarketingTag[];
   onRowClick: (l: Lead) => void;
   onQuickStageChange: (id: string, stageId: string) => void;
+  onToggleLeadTag: (leadId: string, tagId: string) => void;
 }) {
   if (leads.length === 0) {
     return (
@@ -908,6 +1066,9 @@ function ListBoard({
                   {lead.message && (
                     <p className="mt-1 text-xs text-gray-500 line-clamp-1">{lead.message}</p>
                   )}
+                  <div className="mt-2">
+                    <LeadTagToggles allTags={allTags} lead={lead} onToggleTag={onToggleLeadTag} />
+                  </div>
                 </div>
                 <div className="flex items-center gap-3 shrink-0 flex-wrap justify-end">
                   {lead.booking_badge && (
@@ -949,16 +1110,18 @@ function ListBoard({
 // ─── Lead detail drawer ──────────────────────────────────────────────────────
 
 function LeadDrawer({
-  lead, pipelines, stages, onClose, onUpdate, onDelete, onConvert, onRefresh,
+  lead, pipelines, allTags, stages, onClose, onUpdate, onDelete, onConvert, onRefresh, onToggleLeadTag,
 }: {
   lead: Lead;
   pipelines: Pipeline[];
+  allTags: MarketingTag[];
   stages: Stage[];
   onClose: () => void;
   onUpdate: (patch: Record<string, unknown>) => void;
   onDelete: () => void;
   onConvert: () => void;
   onRefresh: () => void;
+  onToggleLeadTag: (leadId: string, tagId: string) => void;
 }) {
   const [notes, setNotes] = useState<LeadNote[]>([]);
   const [newNote, setNewNote] = useState('');
@@ -1138,6 +1301,17 @@ function LeadDrawer({
               </div>
             </div>
           )}
+
+          {/* Tags */}
+          <section>
+            <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">
+              Tags
+            </label>
+            <p className="text-[11px] text-gray-400 mb-2">
+              Tap to add or remove. Tags are managed under Marketing → Trigger Links and Tags.
+            </p>
+            <LeadTagToggles allTags={allTags} lead={lead} onToggleTag={onToggleLeadTag} />
+          </section>
 
           {/* Contact */}
           <section className="grid grid-cols-2 gap-3">
@@ -2028,9 +2202,10 @@ function StageRow({
 // ─── Add-lead modal ──────────────────────────────────────────────────────────
 
 function AddLeadModal({
-  pipelines, defaultPipelineId, onClose, onSave,
+  pipelines, allTags, defaultPipelineId, onClose, onSave,
 }: {
   pipelines: Pipeline[];
+  allTags: MarketingTag[];
   defaultPipelineId: string;
   onClose: () => void;
   onSave: (draft: LeadDraft) => void;
@@ -2144,6 +2319,21 @@ function AddLeadModal({
                 value={draft.message}
                 onChange={(e) => set('message', e.target.value)}
                 className="w-full rounded-xl border border-gray-200 px-3 py-1.5 text-sm focus:border-gray-400 focus:outline-none resize-none"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Tags</label>
+              <TagPicker
+                allTags={allTags}
+                selectedIds={new Set(draft.tagIds)}
+                onToggle={(tagId) => {
+                  setDraft((prev) => {
+                    const s = new Set(prev.tagIds);
+                    if (s.has(tagId)) s.delete(tagId);
+                    else s.add(tagId);
+                    return { ...prev, tagIds: [...s] };
+                  });
+                }}
               />
             </div>
           </div>
