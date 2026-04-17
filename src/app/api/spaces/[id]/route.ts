@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 export async function PATCH(
   request: NextRequest,
@@ -9,24 +12,38 @@ export async function PATCH(
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { id } = await params;
-  const { name, color, capacity, description, active } = await request.json();
+  const body = await request.json();
 
-  try {
-    const sql = getDb();
-    const [row] = await sql`
-      UPDATE venue_spaces SET
-        name        = CASE WHEN ${name        !== undefined} THEN ${name?.trim() ?? name}    ELSE name        END,
-        color       = CASE WHEN ${color       !== undefined} THEN ${color        ?? null}     ELSE color       END,
-        capacity    = CASE WHEN ${capacity    !== undefined} THEN ${capacity     ?? null}     ELSE capacity    END,
-        description = CASE WHEN ${description !== undefined} THEN ${description  ?? null}     ELSE description END,
-        active      = CASE WHEN ${active      !== undefined} THEN ${active       ?? true}     ELSE active      END
-      WHERE id = ${id} AND venue_id = ${venueId}
-      RETURNING *
-    `;
-    return NextResponse.json(row);
-  } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+  const updates: Record<string, unknown> = {};
+  if ('name'        in body) updates.name        = body.name?.trim() || body.name;
+  if ('color'       in body) updates.color       = body.color ?? null;
+  if ('capacity'    in body) updates.capacity    = body.capacity ?? null;
+  if ('description' in body) updates.description = body.description ?? null;
+  if ('active'      in body) updates.active      = body.active ?? true;
+
+  if (Object.keys(updates).length === 0) {
+    const { data: current } = await supabaseAdmin
+      .from('venue_spaces')
+      .select('*')
+      .eq('id', id)
+      .eq('venue_id', venueId)
+      .maybeSingle();
+    return NextResponse.json(current ?? null);
   }
+
+  const { data: row, error } = await supabaseAdmin
+    .from('venue_spaces')
+    .update(updates)
+    .eq('id', id)
+    .eq('venue_id', venueId)
+    .select('*')
+    .maybeSingle();
+
+  if (error) {
+    console.error('[spaces PATCH]', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  return NextResponse.json(row);
 }
 
 export async function DELETE(
@@ -37,11 +54,15 @@ export async function DELETE(
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { id } = await params;
 
-  try {
-    const sql = getDb();
-    await sql`DELETE FROM venue_spaces WHERE id = ${id} AND venue_id = ${venueId}`;
-    return NextResponse.json({ success: true });
-  } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+  const { error } = await supabaseAdmin
+    .from('venue_spaces')
+    .delete()
+    .eq('id', id)
+    .eq('venue_id', venueId);
+
+  if (error) {
+    console.error('[spaces DELETE]', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  return NextResponse.json({ success: true });
 }

@@ -1,20 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 export async function GET() {
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  try {
-    const sql = getDb();
-    const rows = await sql`
-      SELECT * FROM venue_spaces WHERE venue_id = ${venueId} ORDER BY created_at ASC
-    `;
-    return NextResponse.json(rows);
-  } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+  const { data, error } = await supabaseAdmin
+    .from('venue_spaces')
+    .select('*')
+    .eq('venue_id', venueId)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.error('[spaces GET]', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  return NextResponse.json(data ?? []);
 }
 
 export async function POST(request: NextRequest) {
@@ -24,15 +29,21 @@ export async function POST(request: NextRequest) {
   const { name, color, capacity, description } = await request.json();
   if (!name?.trim()) return NextResponse.json({ error: 'Name is required' }, { status: 400 });
 
-  try {
-    const sql = getDb();
-    const [row] = await sql`
-      INSERT INTO venue_spaces (venue_id, name, color, capacity, description)
-      VALUES (${venueId}, ${name.trim()}, ${color || '#6366f1'}, ${capacity || null}, ${description || null})
-      RETURNING *
-    `;
-    return NextResponse.json(row, { status: 201 });
-  } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+  const { data: row, error } = await supabaseAdmin
+    .from('venue_spaces')
+    .insert({
+      venue_id:    venueId,
+      name:        name.trim(),
+      color:       color || '#6366f1',
+      capacity:    capacity || null,
+      description: description || null,
+    })
+    .select('*')
+    .single();
+
+  if (error || !row) {
+    console.error('[spaces POST]', error);
+    return NextResponse.json({ error: error?.message ?? 'Failed to save space' }, { status: 500 });
   }
+  return NextResponse.json(row, { status: 201 });
 }
