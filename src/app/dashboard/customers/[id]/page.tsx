@@ -8,7 +8,7 @@ import {
   Receipt, Pencil, Copy, RefreshCw, RotateCcw, X as XIcon,
   Plus, Check, Trash2, Upload, Calendar, ClipboardList,
   FileCheck, Activity, User, Heart, ChevronDown, ChevronUp, Info,
-  AlertCircle,
+  AlertCircle, Undo2,
 } from 'lucide-react';
 import RefundModal from '@/components/RefundModal';
 import { formatCents, formatDate, formatDateTime, getStatusColor, classNames } from '@/lib/utils';
@@ -1117,14 +1117,20 @@ export default function CustomerDetailPage() {
               {showCompleted && (
                 <div className="mt-2 space-y-2">
                   {completedTasks.map(t => (
-                    <div key={t.id} className="flex items-start gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 group opacity-60">
-                      <div className="mt-0.5 flex-shrink-0 w-5 h-5 rounded border-2 border-emerald-400 bg-emerald-50 flex items-center justify-center">
-                        <Check size={10} className="text-emerald-500" />
-                      </div>
+                    <div key={t.id} className="flex items-start gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 group opacity-60 hover:opacity-100 transition-opacity">
+                      <button onClick={() => toggleTask(t)}
+                        title="Reopen task"
+                        className="mt-0.5 flex-shrink-0 w-5 h-5 rounded border-2 border-emerald-400 bg-emerald-50 hover:bg-white hover:border-gray-400 flex items-center justify-center transition-colors">
+                        <Check size={10} className="text-emerald-500 group-hover:opacity-40 transition-opacity" />
+                        <span className="sr-only">Reopen task</span>
+                      </button>
                       <div className="flex-1">
-                        <p className="text-sm text-gray-500 line-through">{t.title}</p>
+                        <p className="text-sm text-gray-500 line-through group-hover:no-underline group-hover:text-gray-700 transition-colors">{t.title}</p>
                         {t.completed_at && <p className="text-xs text-gray-400 mt-0.5">Completed {formatDate(t.completed_at)}</p>}
                       </div>
+                      <button onClick={() => toggleTask(t)} className="opacity-0 group-hover:opacity-100 text-xs text-gray-600 hover:text-gray-900 font-medium transition-all flex items-center gap-1">
+                        <Undo2 size={12} /> Reopen
+                      </button>
                       <button onClick={() => deleteTask(t.id)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all"><Trash2 size={13} /></button>
                     </div>
                   ))}
