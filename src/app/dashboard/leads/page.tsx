@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import {
   useCallback, useEffect, useMemo, useRef, useState,
   type CSSProperties,
@@ -9,7 +10,7 @@ import {
   MessageSquare, Trash2, ExternalLink, UserPlus,
   LayoutGrid, List as ListIcon, Plus, Settings2, X, Pencil, DollarSign,
   Globe, CalendarPlus, Clock, GripVertical, ArrowLeft, ArrowRight,
-  ChevronDown, Filter, MousePointer2, Eye,
+  ChevronDown, Filter, MousePointer2, Eye, Link2, Copy,
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -42,6 +43,8 @@ type LeadStatus =
 interface Lead {
   id: string;
   venue_id: string;
+  /** Stable token for trigger links: `/t/CODE?t=<track_token>` attributes clicks to this lead. */
+  track_token?: string | null;
   listing_slug: string | null;
   listing_name: string | null;
   name: string;
@@ -104,6 +107,15 @@ interface Space { id: string; name: string; color: string; }
 type ViewMode = 'kanban' | 'list';
 
 const DIRECTORY_URL = process.env.NEXT_PUBLIC_DIRECTORY_URL ?? 'https://storyvenue.com';
+
+function appOriginForLinks(): string {
+  if (typeof window === 'undefined') return (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '');
+  return (process.env.NEXT_PUBLIC_APP_URL || window.location.origin).replace(/\/$/, '');
+}
+
+function personalizedTriggerUrl(shortCode: string, trackToken: string): string {
+  return `${appOriginForLinks()}/t/${shortCode}?t=${encodeURIComponent(trackToken)}`;
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -953,6 +965,9 @@ function LeadDrawer({
   const [loadingNotes, setLoadingNotes] = useState(true);
   const [marketingEvents, setMarketingEvents] = useState<LeadMarketingEventRow[]>([]);
   const [loadingMarketing, setLoadingMarketing] = useState(true);
+  const [triggerLinks, setTriggerLinks] = useState<Array<{ id: string; name: string; short_code: string }>>([]);
+  const [loadingTriggerLinks, setLoadingTriggerLinks] = useState(true);
+  const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState('');
   const [appointmentOpen, setAppointmentOpen] = useState(false);
@@ -984,6 +999,28 @@ function LeadDrawer({
   useEffect(() => { void loadNotes(); }, [loadNotes]);
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadMarketing(); }, [loadMarketing]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingTriggerLinks(true);
+    fetch('/api/marketing/trigger-links', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : { links: [] }))
+      .then((d) => {
+        if (!cancelled) {
+          const raw = (d.links ?? []) as Array<{ id: string; name: string; short_code: string }>;
+          setTriggerLinks(raw.map((x) => ({ id: x.id, name: x.name, short_code: x.short_code })));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setTriggerLinks([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingTriggerLinks(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [lead.id]);
 
   async function addNote() {
     const content = newNote.trim();
@@ -1184,6 +1221,70 @@ function LeadDrawer({
             </button>
           </section>
 
+          {/* Personalized trigger links (automatic attribution via ?t=) */}
+          <section>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+                <Link2 className="w-4 h-4" /> Trigger links for this lead
+              </h3>
+              <Link
+                href="/dashboard/marketing/trigger-links"
+                className="text-[11px] font-medium text-pink-700 hover:text-pink-900"
+              >
+                Manage links
+              </Link>
+            </div>
+            <p className="text-[11px] text-gray-500 mb-3">
+              Each lead has a stable <strong className="text-gray-700">track token</strong>. Copy a link below to send in
+              email or SMS — clicks are attributed to this lead automatically (no need to paste their UUID).
+            </p>
+            {!lead.track_token ? (
+              <p className="text-xs text-amber-700 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                This lead has no track token yet. Run migration <code className="text-[10px]">011_leads_track_token.sql</code>{' '}
+                on your database, then refresh leads.
+              </p>
+            ) : loadingTriggerLinks ? (
+              <div className="text-xs text-gray-400 py-2 flex items-center gap-2">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading trigger links…
+              </div>
+            ) : triggerLinks.length === 0 ? (
+              <p className="text-xs text-gray-400 italic">
+                No trigger links yet. Create one under Marketing → Trigger links.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {triggerLinks.map((tl) => {
+                  const url = personalizedTriggerUrl(tl.short_code, lead.track_token!);
+                  return (
+                    <li
+                      key={tl.id}
+                      className="flex items-start justify-between gap-2 rounded-xl border border-gray-200 bg-gray-50/60 px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-gray-900">{tl.name}</p>
+                        <p className="text-[10px] text-gray-500 font-mono truncate mt-0.5" title={url}>
+                          {url}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void navigator.clipboard.writeText(url);
+                          setCopiedLinkId(tl.id);
+                          setTimeout(() => setCopiedLinkId(null), 2000);
+                        }}
+                        className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        <Copy className="w-3 h-3" />
+                        {copiedLinkId === tl.id ? 'Copied' : 'Copy'}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+
           {/* Activity — trigger links, page views */}
           <section>
             <div className="flex items-center justify-between mb-2">
@@ -1193,9 +1294,11 @@ function LeadDrawer({
               <span className="text-[11px] text-gray-400">{marketingEvents.length} events</span>
             </div>
             <p className="text-[11px] text-gray-400 mb-3 break-words">
-              Trigger link clicks are saved when the short URL includes this query (same venue only):{' '}
-              <code className="text-[10px] bg-gray-100 px-1 rounded break-all">?l={lead.id}</code>
-              . Page views appear when your site calls the marketing track API for this lead.
+              Trigger clicks are logged when the URL uses this lead’s token{' '}
+              <code className="text-[10px] bg-gray-100 px-1 rounded break-all">?t={lead.track_token ?? '…'}</code> (see
+              above) or legacy{' '}
+              <code className="text-[10px] bg-gray-100 px-1 rounded break-all">?l={lead.id}</code>. Page views appear when
+              your site POSTs to the marketing track API for this lead.
             </p>
             <div className="rounded-2xl border border-gray-200 bg-gray-50/40 p-3 min-h-[4rem]">
               {loadingMarketing ? (

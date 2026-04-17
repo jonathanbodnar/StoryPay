@@ -17,9 +17,15 @@ function safeRedirectUrl(url: string): string | null {
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/** 32 hex chars — matches leads.track_token (no dashes). */
+const TRACK_TOKEN_RE = /^[0-9a-f]{32}$/i;
+
 /**
  * Public short link: logs optional lead-attributed click, bumps stats, 302 to target_url.
- * Append ?l=<lead_uuid> when sending to a known lead (must belong to the same venue).
+ *
+ * Attribution (same venue as the trigger link):
+ * - ?t=<track_token> — preferred; each lead has a stable token (see Leads UI / API).
+ * - ?l=<lead_uuid> — legacy; raw lead id still supported.
  */
 export async function GET(
   request: NextRequest,
@@ -46,18 +52,29 @@ export async function GET(
     return NextResponse.json({ error: 'Invalid destination' }, { status: 502 });
   }
 
-  let leadId: string | null = request.nextUrl.searchParams.get('l');
-  if (leadId && !UUID_RE.test(leadId)) {
-    leadId = null;
-  }
-  if (leadId) {
-    const { data: lead } = await supabaseAdmin
+  const rawT = request.nextUrl.searchParams.get('t')?.trim().toLowerCase() ?? '';
+  const rawL = request.nextUrl.searchParams.get('l')?.trim() ?? '';
+
+  let leadId: string | null = null;
+
+  if (rawT && TRACK_TOKEN_RE.test(rawT)) {
+    const { data: byToken } = await supabaseAdmin
       .from('leads')
       .select('id')
-      .eq('id', leadId)
+      .eq('track_token', rawT)
       .eq('venue_id', link.venue_id)
       .maybeSingle();
-    if (!lead) leadId = null;
+    if (byToken?.id) leadId = byToken.id;
+  }
+
+  if (!leadId && rawL && UUID_RE.test(rawL)) {
+    const { data: byId } = await supabaseAdmin
+      .from('leads')
+      .select('id')
+      .eq('id', rawL)
+      .eq('venue_id', link.venue_id)
+      .maybeSingle();
+    if (byId?.id) leadId = byId.id;
   }
 
   const ua = request.headers.get('user-agent');

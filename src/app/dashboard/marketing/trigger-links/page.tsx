@@ -135,9 +135,11 @@ export default function TriggerLinksPage() {
           <h1 className="font-heading text-2xl text-gray-900">Trigger links</h1>
           <p className="mt-1 text-sm text-gray-500 max-w-xl">
             Each link gets a permanent short URL (<code className="text-xs bg-gray-100 px-1 rounded">/t/…</code>). You can
-            change where it points anytime — the short code never changes, so emails and automations stay valid. Add{' '}
-            <code className="text-xs bg-gray-100 px-1 rounded">?l=LEAD_UUID</code> to attribute clicks to a lead (same
-            venue only).
+            change where it points anytime — the short code never changes, so emails and automations stay valid.{' '}
+            <strong className="text-gray-700">Automatic attribution:</strong> open a lead in Leads and use &quot;Trigger
+            links for this lead&quot; to copy a URL that already includes their{' '}
+            <code className="text-xs bg-gray-100 px-1 rounded">?t=TRACK_TOKEN</code>. Legacy{' '}
+            <code className="text-xs bg-gray-100 px-1 rounded">?l=LEAD_UUID</code> still works.
           </p>
         </div>
         <button

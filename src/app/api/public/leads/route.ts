@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
       message: payload.message || null,
       source: payload.source || 'directory',
     })
-    .select('id')
+    .select('id, track_token')
     .single();
 
   if (insertErr || !lead) {
@@ -159,7 +159,10 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, lead_id: lead.id }, { status: 201 });
+  return NextResponse.json(
+    { ok: true, lead_id: lead.id, track_token: (lead as { track_token?: string }).track_token ?? null },
+    { status: 201 },
+  );
 }
 
 function row(label: string, value: string): string {

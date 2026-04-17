@@ -12,6 +12,7 @@ export const runtime = 'nodejs';
 interface LeadRow {
   id: string;
   venue_id: string;
+  track_token: string;
   first_name: string | null;
   last_name: string | null;
   name: string;
@@ -72,7 +73,7 @@ export async function GET(request: NextRequest) {
   let query = supabaseAdmin
     .from('leads')
     .select(
-      'id, venue_id, first_name, last_name, name, email, phone, wedding_date, guest_count, ' +
+      'id, venue_id, track_token, first_name, last_name, name, email, phone, wedding_date, guest_count, ' +
       'booking_timeline, message, notes, status, source, created_at, updated_at, ' +
       'venue_name, venue_website_url, opportunity_value, pipeline_id, stage_id, position',
     )
@@ -158,7 +159,7 @@ export async function GET(request: NextRequest) {
       const { data: more } = await supabaseAdmin
         .from('leads')
         .select(
-          'id, venue_id, first_name, last_name, name, email, phone, wedding_date, guest_count, ' +
+          'id, venue_id, track_token, first_name, last_name, name, email, phone, wedding_date, guest_count, ' +
           'booking_timeline, message, notes, status, source, created_at, updated_at, ' +
           'venue_name, venue_website_url, opportunity_value, pipeline_id, stage_id, position',
         )
