@@ -9,7 +9,7 @@ import {
  Sparkles, Megaphone, Settings, Palette, Mail, UsersRound,
  Bell, Package, Receipt, Link2, RefreshCw, DollarSign, Plus, Calendar,
  ArrowLeft, Menu, X, ChevronDown,
- HelpCircle, LogOut, BookOpen, Store, Inbox, Share2,
+ HelpCircle, LogOut, BookOpen, Store, Inbox, Share2, LayoutTemplate,
 } from 'lucide-react';
 
 interface Venue { id: string; name: string; ghl_location_id: string; }
@@ -44,6 +44,7 @@ const paymentsItems = [
 
 const marketingItems = [
  { label: 'Trigger Links & Tags', href: '/dashboard/marketing/trigger-links', icon: Link2 },
+ { label: 'Form builder', href: '/dashboard/marketing/form-builder', icon: LayoutTemplate },
 ];
 
 const settingsItems = [

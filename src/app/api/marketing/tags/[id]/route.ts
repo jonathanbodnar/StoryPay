@@ -18,7 +18,7 @@ export async function PATCH(
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { id } = await context.params;
 
-  let body: { name?: string; icon?: string; color?: string | null; position?: number };
+  let body: { name?: string; position?: number };
   try {
     body = await request.json();
   } catch {
@@ -30,14 +30,6 @@ export async function PATCH(
     const n = body.name.trim();
     if (!n) return NextResponse.json({ error: 'Name cannot be empty' }, { status: 400 });
     updates.name = n;
-  }
-  if (typeof body.icon === 'string') {
-    const i = body.icon.trim().slice(0, 16);
-    if (!i) return NextResponse.json({ error: 'Icon cannot be empty' }, { status: 400 });
-    updates.icon = i;
-  }
-  if (body.color === null || typeof body.color === 'string') {
-    updates.color = body.color === null || body.color === '' ? null : body.color.trim().slice(0, 32);
   }
   if (typeof body.position === 'number' && Number.isFinite(body.position)) {
     updates.position = body.position;

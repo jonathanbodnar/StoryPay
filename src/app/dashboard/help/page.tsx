@@ -16,8 +16,20 @@ import {
  getArticlesForPath,
  getArticleById,
  type HelpArticle,
+ type HelpCategory,
 } from '@/lib/help-articles';
 import { normaliseHelpQuery } from '@/lib/help-search';
+
+const GETTING_STARTED_CATEGORY_ID = 'getting-started';
+
+/** Help Center cards: Getting Started first, then every other category A–Z by label. */
+function sortHelpCategoriesForDisplay(categories: HelpCategory[]): HelpCategory[] {
+  const first = categories.find((c) => c.id === GETTING_STARTED_CATEGORY_ID);
+  const rest = categories
+    .filter((c) => c.id !== GETTING_STARTED_CATEGORY_ID)
+    .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+  return first ? [first, ...rest] : rest;
+}
 
 // ─── Icon map (help-articles stores icon names as strings) ────────────────────
 
@@ -40,7 +52,7 @@ interface Category {
 }
 
 // Map shared data to local shape (inject resolved icon)
-const CATEGORIES: Category[] = HELP_CATEGORIES.map(c => ({
+const CATEGORIES: Category[] = sortHelpCategoriesForDisplay(HELP_CATEGORIES).map((c) => ({
  ...c,
  icon: ICON_MAP[c.iconName] ?? HelpCircle,
 }));

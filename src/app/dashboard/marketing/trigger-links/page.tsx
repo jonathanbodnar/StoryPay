@@ -51,8 +51,6 @@ export default function TriggerLinksPage() {
   const [tagModalOpen, setTagModalOpen] = useState(false);
   const [tagEdit, setTagEdit] = useState<MarketingTagRow | null>(null);
   const [tagName, setTagName] = useState('');
-  const [tagIcon, setTagIcon] = useState('🏷️');
-  const [tagColor, setTagColor] = useState('');
   const [tagSaving, setTagSaving] = useState(false);
 
   const loadTags = useCallback(async () => {
@@ -150,27 +148,19 @@ export default function TriggerLinksPage() {
   function openTagCreate() {
     setTagEdit(null);
     setTagName('');
-    setTagIcon('🏷️');
-    setTagColor('');
     setTagModalOpen(true);
   }
 
   function openTagEdit(row: MarketingTagRow) {
     setTagEdit(row);
     setTagName(row.name);
-    setTagIcon(row.icon || '🏷️');
-    setTagColor(row.color ?? '');
     setTagModalOpen(true);
   }
 
   async function saveTagModal() {
     setTagSaving(true);
     try {
-      const payload = {
-        name: tagName.trim(),
-        icon: tagIcon.trim().slice(0, 16) || '🏷️',
-        color: tagColor.trim() || null,
-      };
+      const payload = { name: tagName.trim() };
       if (tagEdit) {
         const res = await fetch(`/api/marketing/tags/${tagEdit.id}`, {
           method: 'PATCH',
@@ -339,7 +329,7 @@ export default function TriggerLinksPage() {
           </div>
           <p className="text-sm text-gray-500 max-w-xl">
             Tags appear on lead cards in Kanban and List views. Use them to segment leads now; later they can drive
-            automations. Each tag has a short label and an icon (emoji works well).
+            automations. Tags use your StoryPay accent styling on the board.
           </p>
         </div>
         <button
@@ -373,29 +363,14 @@ export default function TriggerLinksPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-200">
-                <th className="px-4 py-3 w-16">Icon</th>
                 <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3 hidden sm:table-cell">Color</th>
                 <th className="px-4 py-3 w-28" />
               </tr>
             </thead>
             <tbody>
               {tags.map((row) => (
                 <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50/80">
-                  <td className="px-4 py-3 text-xl leading-none" title={row.name}>
-                    {row.icon || '🏷️'}
-                  </td>
                   <td className="px-4 py-3 font-medium text-gray-900">{row.name}</td>
-                  <td className="px-4 py-3 hidden sm:table-cell">
-                    {row.color ? (
-                      <span className="inline-flex items-center gap-2 text-xs text-gray-500">
-                        <span className="h-5 w-5 rounded-full border border-gray-200" style={{ backgroundColor: row.color }} />
-                        {row.color}
-                      </span>
-                    ) : (
-                      <span className="text-gray-400">—</span>
-                    )}
-                  </td>
                   <td className="px-4 py-3 text-right">
                     <button
                       type="button"
@@ -509,29 +484,6 @@ export default function TriggerLinksPage() {
                   onChange={(e) => setTagName(e.target.value)}
                   className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
                   placeholder="VIP tour"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">
-                  Icon (emoji)
-                </label>
-                <input
-                  value={tagIcon}
-                  onChange={(e) => setTagIcon(e.target.value.slice(0, 16))}
-                  maxLength={16}
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
-                  placeholder="💍"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">
-                  Chip color (optional)
-                </label>
-                <input
-                  value={tagColor}
-                  onChange={(e) => setTagColor(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
-                  placeholder="#7c3aed"
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
