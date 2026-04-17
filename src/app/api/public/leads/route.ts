@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { getDb } from '@/lib/db';
+import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 const LEAD_WEBHOOK_SECRET = process.env.LEAD_WEBHOOK_SECRET || '';
 const DIRECTORY_URL = process.env.NEXT_PUBLIC_DIRECTORY_URL || 'https://storyvenue.com';
@@ -22,18 +23,13 @@ function verifySignature(rawBody: string, signature: string): boolean {
 }
 
 interface LeadPayload {
-  /** Directory slug of the venue being inquired about. */
   listing_slug?: string;
-  /** Back-compat alias. */
   venue_slug?: string;
-  /** Direct venue id (if the directory already has it). */
   venue_id?: string;
-  /** Back-compat alias for `venue_id` — older directory builds used this name. */
   venue_listing_id?: string;
   name?: string;
   email?: string;
   phone?: string;
-  /** ISO date string. Mapped to `leads.wedding_date`. */
   event_date?: string;
   wedding_date?: string;
   guest_count?: number;
@@ -76,53 +72,58 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'name and valid email required' }, { status: 400 });
   }
 
-  const sql = getDb();
-
   const slug = payload.listing_slug ?? payload.venue_slug;
   const venueId = payload.venue_id ?? payload.venue_listing_id;
-  const venueRows = venueId
-    ? await sql`
-        SELECT id, slug, name, email, notification_email, email_notifications
-        FROM public.venues WHERE id = ${venueId} LIMIT 1
-      `
-    : slug
-      ? await sql`
-          SELECT id, slug, name, email, notification_email, email_notifications
-          FROM public.venues WHERE slug = ${slug} LIMIT 1
-        `
-      : [];
 
-  if (venueRows.length === 0) {
+  const venueQuery = supabaseAdmin
+    .from('venues')
+    .select('id, slug, name, email, notification_email, email_notifications');
+
+  const { data: venue, error: venueErr } = venueId
+    ? await venueQuery.eq('id', venueId).maybeSingle()
+    : slug
+      ? await venueQuery.eq('slug', slug).maybeSingle()
+      : { data: null, error: null };
+
+  if (venueErr) {
+    console.error('[public/leads] venue lookup failed:', venueErr);
+    return NextResponse.json(
+      { error: `Lookup failed: ${venueErr.message}` },
+      { status: 500 },
+    );
+  }
+
+  if (!venue) {
     console.warn('[public/leads] venue not found:', venueId ?? slug);
     return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
   }
 
-  const venue = venueRows[0] as {
-    id: string;
-    slug: string | null;
-    name: string | null;
-    email: string | null;
-    notification_email: string | null;
-    email_notifications: boolean | null;
-  };
-
   const weddingDate = payload.wedding_date ?? payload.event_date ?? null;
 
-  const insertResult = await sql`
-    INSERT INTO public.leads (
-      venue_id, name, email, phone,
-      wedding_date, guest_count, booking_timeline, message, source
-    ) VALUES (
-      ${venue.id}, ${name}, ${email}, ${phone || null},
-      ${weddingDate}, ${payload.guest_count ?? null}, ${payload.booking_timeline || null},
-      ${payload.message || null}, ${payload.source || 'directory'}
-    )
-    RETURNING id
-  `;
+  const { data: lead, error: insertErr } = await supabaseAdmin
+    .from('leads')
+    .insert({
+      venue_id: venue.id,
+      name,
+      email,
+      phone: phone || null,
+      wedding_date: weddingDate,
+      guest_count: payload.guest_count ?? null,
+      booking_timeline: payload.booking_timeline || null,
+      message: payload.message || null,
+      source: payload.source || 'directory',
+    })
+    .select('id')
+    .single();
 
-  const lead = insertResult[0] as { id: string };
+  if (insertErr || !lead) {
+    console.error('[public/leads] insert failed:', insertErr);
+    return NextResponse.json(
+      { error: `Failed to save lead: ${insertErr?.message ?? 'unknown error'}` },
+      { status: 500 },
+    );
+  }
 
-  // Notify the venue owner (default on if flag is null/true).
   const notifyEnabled = venue.email_notifications !== false;
   if (notifyEnabled) {
     const notifyTo = venue.notification_email || venue.email || undefined;
