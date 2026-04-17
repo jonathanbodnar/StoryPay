@@ -132,8 +132,10 @@ export default function CalendarPage() {
   const [activeSpaceFilter, setActiveSpaceFilter] = useState<string>('all');
   const [view, setView] = useState<CalView>('month');
 
-  // New event modal
+  // Event modal (create + edit share the same form). When editingId is set,
+  // the modal is in "Edit" mode and the save handler PATCHes instead of POSTs.
   const [showModal,    setShowModal]    = useState(false);
+  const [editingId,    setEditingId]    = useState<string | null>(null);
   const [form,         setForm]         = useState(emptyForm());
   const [saving,       setSaving]       = useState(false);
   const [saveError,    setSaveError]    = useState('');
@@ -277,6 +279,25 @@ export default function CalendarPage() {
     // actually picked a frequency — a missing/null rule keeps the event one-off.
     let recurrence_rule: RecurrenceRule | null = null;
     if (form.repeat !== 'none') {
+      // Validate the end-condition BEFORE we build the rule, otherwise a
+      // half-filled form (e.g. "Ends on" radio selected but no date picked)
+      // silently produces a never-ending series.
+      if (form.repeat_end === 'on' && !form.repeat_until) {
+        setSaveError('Pick an end date for the recurrence, or change "Ends" to Never or After.');
+        setSaving(false);
+        return;
+      }
+      if (form.repeat_end === 'after' && (!form.repeat_count || form.repeat_count < 1)) {
+        setSaveError('Enter how many times the event should repeat, or change "Ends" to Never or On.');
+        setSaving(false);
+        return;
+      }
+      if (form.repeat_end === 'on' && form.repeat_until < (form.end_date || form.date)) {
+        setSaveError('Recurrence end date must be on or after the event end date.');
+        setSaving(false);
+        return;
+      }
+
       const rule: RecurrenceRule = { freq: form.repeat };
       if (form.repeat_interval && form.repeat_interval > 1) {
         rule.interval = Math.floor(form.repeat_interval);
@@ -289,17 +310,28 @@ export default function CalendarPage() {
       recurrence_rule = rule;
     }
 
-    const res = await fetch('/api/calendar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: form.title, event_type: form.event_type, status: form.status,
-        space_id: form.space_id || null, customer_email: form.customer_email || null,
-        start_at: startLocal.toISOString(), end_at: endLocal.toISOString(), all_day: form.all_day,
-        notes: form.notes || null, override_conflict: override,
-        recurrence_rule,
-      }),
-    });
+    const payload = {
+      title: form.title, event_type: form.event_type, status: form.status,
+      space_id: form.space_id || null, customer_email: form.customer_email || null,
+      start_at: startLocal.toISOString(), end_at: endLocal.toISOString(), all_day: form.all_day,
+      notes: form.notes || null, override_conflict: override,
+      recurrence_rule,
+    };
+
+    // POST to create, PATCH when editing an existing event. PATCH always
+    // targets the parent id (edit affects the whole series), which matches
+    // the "MVP contract" on the API side.
+    const res = editingId
+      ? await fetch(`/api/calendar/${editingId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+      : await fetch('/api/calendar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
 
     const json = await res.json();
     if (!res.ok) {
@@ -323,6 +355,7 @@ export default function CalendarPage() {
     // dependency on year/month/anchor, so we don't call it manually here.
 
     setShowModal(false);
+    setEditingId(null);
     setForm(emptyForm());
     setConflicts([]);
     setSaving(false);
@@ -345,7 +378,43 @@ export default function CalendarPage() {
     const f = emptyForm();
     if (dateStr) { f.date = dateStr; f.end_date = dateStr; }
     if (time)    { f.start_time = time; f.end_time = `${String(Math.min(23, parseInt(time) + 1)).padStart(2, '0')}:00`; }
+    setEditingId(null);
     setForm(f);
+    setConflicts([]);
+    setSaveError('');
+    setShowModal(true);
+  }
+
+  // Open the modal in Edit mode, pre-populated from an existing event. We
+  // always edit the parent of the series (never a single occurrence) — the
+  // API enforces this by stripping the `@YYYY-MM-DD` suffix server-side.
+  function openEditEvent(e: CalEvent) {
+    const s = new Date(e.start_at);
+    const en = new Date(e.end_at);
+    const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    const rule = e.recurrence_rule ?? null;
+    setForm({
+      title: e.title,
+      event_type: e.event_type,
+      status: e.status,
+      space_id: e.space_id ?? '',
+      customer_email: e.customer_email ?? '',
+      date:     localDateStr(e.start_at),
+      end_date: localDateStr(e.end_at),
+      start_time: hhmm(s),
+      end_time:   hhmm(en),
+      all_day: !!e.all_day,
+      notes: e.notes ?? '',
+      repeat:          (rule?.freq ?? 'none') as RepeatOpt,
+      repeat_interval: rule?.interval ?? 1,
+      repeat_end:      (rule?.until ? 'on' : rule?.count ? 'after' : 'never') as RepeatEnd,
+      repeat_until:    rule?.until ?? '',
+      repeat_count:    rule?.count ?? 10,
+    });
+    // Edit always targets the parent row — occurrence ids contain an `@`.
+    const parentId = e.id.includes('@') ? e.id.split('@')[0] : e.id;
+    setEditingId(parentId);
+    setSelectedEvent(null);
     setConflicts([]);
     setSaveError('');
     setShowModal(true);
@@ -662,13 +731,18 @@ export default function CalendarPage() {
         </div>
       </div>{/* end cal-print-area */}
 
-      {/* ── Add Event Modal ── */}
+      {/* ── Create / Edit Event Modal ── */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 max-h-[90vh] overflow-y-auto">
-            <button onClick={() => { setShowModal(false); setConflicts([]); setSaveError(''); }}
+            <button onClick={() => { setShowModal(false); setEditingId(null); setConflicts([]); setSaveError(''); }}
               className="absolute right-4 top-4 text-gray-400 hover:text-gray-600"><X size={20} /></button>
-            <h2 className="font-heading text-lg font-semibold text-gray-900 mb-5">New Event</h2>
+            <h2 className="font-heading text-lg font-semibold text-gray-900 mb-5">{editingId ? 'Edit Event' : 'New Event'}</h2>
+            {editingId && form.repeat !== 'none' && (
+              <p className="-mt-3 mb-4 text-[11px] text-gray-500 flex items-center gap-1.5">
+                <Info size={12} /> Changes apply to the entire series.
+              </p>
+            )}
 
             {conflicts.length > 0 && (
               <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
@@ -784,7 +858,24 @@ export default function CalendarPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <select value={form.repeat}
-                    onChange={e => setForm(p => ({ ...p, repeat: e.target.value as RepeatOpt }))}
+                    onChange={e => setForm(p => {
+                      const next = e.target.value as RepeatOpt;
+                      // When the user FIRST picks a frequency (from "none"),
+                      // flip the default end condition from Never to On and
+                      // pre-fill a sensible end date so they can't forget and
+                      // accidentally create a forever-series. Daily defaults
+                      // to +3 months, weekly/monthly/yearly default to +1 year.
+                      if (p.repeat === 'none' && next !== 'none' && p.repeat_end === 'never' && !p.repeat_until) {
+                        const base = new Date(p.end_date || p.date || new Date().toISOString().slice(0, 10));
+                        if (next === 'daily') base.setMonth(base.getMonth() + 3);
+                        else if (next === 'weekly')  base.setMonth(base.getMonth() + 12);
+                        else if (next === 'monthly') base.setFullYear(base.getFullYear() + 2);
+                        else                          base.setFullYear(base.getFullYear() + 5);
+                        const defaultUntil = `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}-${String(base.getDate()).padStart(2, '0')}`;
+                        return { ...p, repeat: next, repeat_end: 'on' as RepeatEnd, repeat_until: defaultUntil };
+                      }
+                      return { ...p, repeat: next };
+                    })}
                     className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-gray-400 focus:outline-none">
                     <option value="none">Does not repeat</option>
                     <option value="daily">Daily</option>
@@ -835,6 +926,12 @@ export default function CalendarPage() {
                         className="w-16 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700 focus:border-gray-400 focus:outline-none disabled:opacity-40" />
                       <span className="text-xs text-gray-500">occurrences</span>
                     </div>
+                    {form.repeat_end === 'never' && (
+                      <p className="flex items-start gap-1.5 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                        <AlertTriangle size={12} className="flex-shrink-0 mt-0.5" />
+                        This event will repeat forever. Pick "On" or "After" to set an end.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -848,13 +945,13 @@ export default function CalendarPage() {
 
             {saveError && <p className="mt-3 text-sm text-red-600">{saveError}</p>}
             <div className="flex justify-end gap-3 mt-5">
-              <button onClick={() => { setShowModal(false); setConflicts([]); setSaveError(''); }}
+              <button onClick={() => { setShowModal(false); setEditingId(null); setConflicts([]); setSaveError(''); }}
                 className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
               <button onClick={() => handleSave(false)} disabled={saving || !form.title || !form.date}
                 className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-colors disabled:opacity-50"
                 style={{ backgroundColor: '#1b1b1b' }}>
                 {saving && <Loader2 size={14} className="animate-spin" />}
-                Save Event
+                {editingId ? 'Save Changes' : 'Save Event'}
               </button>
             </div>
           </div>
@@ -909,7 +1006,12 @@ export default function CalendarPage() {
               )}
               {selectedEvent.notes && <p><span className="text-gray-400">Notes:</span> {selectedEvent.notes}</p>}
             </div>
-            <div className="flex justify-end mt-5">
+            <div className="flex justify-between items-center mt-5 gap-3">
+              <button
+                onClick={() => openEditEvent(selectedEvent)}
+                className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                Edit
+              </button>
               <button
                 onClick={() => {
                   if (selectedEvent.recurrence_rule) {
