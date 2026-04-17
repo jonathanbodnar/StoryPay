@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
+import { normalizeRule } from '@/lib/recurrence';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -13,18 +14,28 @@ function flattenSpace<T extends { venue_spaces?: SpaceLite | SpaceLite[] | null 
   return { ...row, venue_spaces: flat };
 }
 
+// Occurrences come back from GET with a synthetic id like
+// `<uuid>@YYYY-MM-DD`. Edits/deletes apply to the parent series as the MVP
+// contract, so strip the suffix before hitting the DB.
+function parentIdOf(id: string): string {
+  const at = id.indexOf('@');
+  return at === -1 ? id : id.slice(0, at);
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const { id } = await params;
+  const { id: rawId } = await params;
+  const id = parentIdOf(rawId);
 
   const body = await request.json();
   const {
     space_id, customer_email, title, event_type, status,
     start_at, end_at, all_day, notes, override_conflict,
+    recurrence_rule,
   } = body;
 
   // Conflict detection on reschedule: pull the current start/end for columns
@@ -77,6 +88,18 @@ export async function PATCH(
   if ('all_day'           in body) updates.all_day           = all_day ?? false;
   if ('notes'             in body) updates.notes             = notes || null;
   if ('override_conflict' in body) updates.override_conflict = override_conflict ?? false;
+  if ('recurrence_rule'   in body) {
+    // `null` explicitly clears the rule; anything else must normalize cleanly.
+    if (recurrence_rule === null) {
+      updates.recurrence_rule = null;
+    } else {
+      const normalized = normalizeRule(recurrence_rule);
+      if (!normalized) {
+        return NextResponse.json({ error: 'Invalid recurrence_rule' }, { status: 400 });
+      }
+      updates.recurrence_rule = normalized;
+    }
+  }
 
   if (Object.keys(updates).length === 0) {
     const { data: current } = await supabaseAdmin
@@ -109,7 +132,8 @@ export async function DELETE(
 ) {
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const { id } = await params;
+  const { id: rawId } = await params;
+  const id = parentIdOf(rawId);
 
   const { error } = await supabaseAdmin
     .from('calendar_events')

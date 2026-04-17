@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
+import {
+  expandEvent,
+  isRecurrenceRule,
+  normalizeRule,
+  type RecurrenceRule,
+} from '@/lib/recurrence';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -23,6 +29,10 @@ export async function GET(request: NextRequest) {
   const from = searchParams.get('from');
   const to   = searchParams.get('to');
 
+  // We fetch the superset of rows that *could* contribute occurrences to the
+  // visible window, then filter/expand in-code. A recurring event might have
+  // been created years ago but still produce occurrences today, so we can't
+  // use the old simple `.gte('start_at', from)` filter anymore.
   let query = supabaseAdmin
     .from('calendar_events')
     .select('*, venue_spaces:space_id(id, name, color)')
@@ -30,8 +40,10 @@ export async function GET(request: NextRequest) {
     .neq('status', 'cancelled')
     .order('start_at', { ascending: true });
 
-  if (from) query = query.gte('start_at', from);
-  if (to)   query = query.lte('start_at', to);
+  // Upper bound still applies — an event starting after `to` can't appear in
+  // the window. We intentionally don't add a lower bound here so recurring
+  // events whose base row is old still come through.
+  if (to) query = query.lte('start_at', to);
 
   const { data, error } = await query;
 
@@ -44,14 +56,51 @@ export async function GET(request: NextRequest) {
       .eq('venue_id', venueId)
       .neq('status', 'cancelled')
       .order('start_at', { ascending: true });
-    if (from) plain = plain.gte('start_at', from);
-    if (to)   plain = plain.lte('start_at', to);
+    if (to) plain = plain.lte('start_at', to);
     const { data: rows, error: plainErr } = await plain;
     if (plainErr) return NextResponse.json({ error: plainErr.message }, { status: 500 });
-    return NextResponse.json(rows ?? []);
+    return NextResponse.json(expandRows(rows ?? [], from, to));
   }
 
-  return NextResponse.json((data ?? []).map(flattenSpace));
+  return NextResponse.json(expandRows((data ?? []).map(flattenSpace), from, to));
+}
+
+// Expand every row into the set of occurrences that land in [from, to].
+// For non-recurring rows, also filter out events whose end_at falls before
+// the window (the SQL query doesn't handle that because it only bounds
+// start_at, so a multi-day event ending before `from` could leak through if
+// it started within the window — but we prefer to keep the query simple).
+function expandRows(rows: Array<Record<string, unknown>>, from: string | null, to: string | null) {
+  const rangeStart = from ? new Date(from) : new Date(-8640000000000000); // min date
+  const rangeEnd   = to   ? new Date(to)   : new Date( 8640000000000000); // max date
+
+  const out: Array<Record<string, unknown>> = [];
+  for (const row of rows) {
+    const baseStart = String(row.start_at);
+    const baseEnd   = String(row.end_at);
+    const rule = isRecurrenceRule(row.recurrence_rule)
+      ? row.recurrence_rule as RecurrenceRule
+      : null;
+
+    const occurrences = expandEvent(
+      { id: String(row.id), start_at: baseStart, end_at: baseEnd, recurrence_rule: rule },
+      rangeStart,
+      rangeEnd,
+    );
+
+    for (const occ of occurrences) {
+      out.push({
+        ...row,
+        id: occ.id,
+        parent_id: occ.parent_id,
+        start_at: occ.start_at,
+        end_at: occ.end_at,
+        is_occurrence: occ.is_occurrence,
+      });
+    }
+  }
+  out.sort((a, b) => String(a.start_at).localeCompare(String(b.start_at)));
+  return out;
 }
 
 export async function POST(request: NextRequest) {
@@ -62,6 +111,7 @@ export async function POST(request: NextRequest) {
   const {
     space_id, customer_email, title, event_type, status,
     start_at, end_at, all_day, proposal_id, notes, override_conflict,
+    recurrence_rule,
   } = body;
 
   if (!title?.trim()) return NextResponse.json({ error: 'Title is required' }, { status: 400 });
@@ -70,7 +120,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'end_at must be after start_at' }, { status: 400 });
   }
 
-  // Conflict detection: any overlapping non-cancelled event in the same space
+  const rule = recurrence_rule ? normalizeRule(recurrence_rule) : null;
+  // User sent a rule but it was malformed — bail loudly instead of silently
+  // dropping it, otherwise they'd create a one-off without realizing.
+  if (recurrence_rule && !rule) {
+    return NextResponse.json({ error: 'Invalid recurrence_rule' }, { status: 400 });
+  }
+
+  // Conflict detection only checks the first occurrence — recurring conflicts
+  // across months are expensive to compute and almost never what the user
+  // actually wants warned about at create time.
   if (space_id && !override_conflict) {
     const { data: conflicts, error: conflictErr } = await supabaseAdmin
       .from('calendar_events')
@@ -108,6 +167,7 @@ export async function POST(request: NextRequest) {
       proposal_id:       proposal_id || null,
       notes:             notes || null,
       override_conflict: override_conflict ?? false,
+      recurrence_rule:   rule,
     })
     .select('*, venue_spaces:space_id(id, name, color)')
     .single();

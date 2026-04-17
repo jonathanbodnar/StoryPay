@@ -4,8 +4,9 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import {
   ChevronLeft, ChevronRight, Plus, X, Loader2, Calendar,
-  AlertTriangle, ExternalLink, Download, Info, Printer,
+  AlertTriangle, ExternalLink, Download, Info, Printer, Repeat,
 } from 'lucide-react';
+import { describeRule, type RecurrenceRule } from '@/lib/recurrence';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface VenueSpace { id: string; name: string; color: string; capacity?: number | null; }
@@ -22,6 +23,10 @@ interface CalEvent {
   customer_email: string | null;
   notes: string | null;
   venue_spaces: { id: string; name: string; color: string } | null;
+  // Recurrence fields (present after API expansion)
+  recurrence_rule?: RecurrenceRule | null;
+  parent_id?: string;
+  is_occurrence?: boolean;
 }
 
 interface ConflictInfo { id: string; title: string; start_at: string; end_at: string; }
@@ -74,11 +79,39 @@ function heightPct(start: string, end: string) {
   return (mins / 60) * 100;
 }
 
+type RepeatOpt  = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly';
+type RepeatEnd  = 'never' | 'on' | 'after';
+
 const emptyForm = () => ({
   title: '', event_type: 'wedding', status: 'confirmed',
-  space_id: '', customer_email: '', date: '',
+  space_id: '', customer_email: '',
+  // start & end dates — end defaults to start for single-day events
+  date: '', end_date: '',
   start_time: '10:00', end_time: '18:00', all_day: false, notes: '',
+  // recurrence
+  repeat:          'none'  as RepeatOpt,
+  repeat_interval: 1,
+  repeat_end:      'never' as RepeatEnd,
+  repeat_until:    '',
+  repeat_count:    10,
 });
+
+// Local-time date string (YYYY-MM-DD) from an ISO. Using this instead of
+// iso.slice(0, 10) avoids the timezone off-by-one that bit us before: an
+// event at 10 PM local on the 15th is stored as 02:00 UTC on the 16th, and
+// .slice(0,10) would then bucket it on the wrong day.
+function localDateStr(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// Does this event occupy the given YYYY-MM-DD (local)? Handles multi-day by
+// checking whether the date sits within [localStartDate, localEndDate].
+function eventSpansDate(e: CalEvent, dateStr: string): boolean {
+  const s = localDateStr(e.start_at);
+  const end = localDateStr(e.end_at);
+  return dateStr >= s && dateStr <= end;
+}
 
 type CalView = 'month' | 'week' | 'day' | 'revenue';
 
@@ -190,7 +223,7 @@ export default function CalendarPage() {
     const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     return events.filter(e => {
       if (activeSpaceFilter !== 'all' && e.space_id !== activeSpaceFilter) return false;
-      return e.start_at.slice(0, 10) === dateStr;
+      return eventSpansDate(e, dateStr);
     });
   }
 
@@ -203,7 +236,7 @@ export default function CalendarPage() {
     const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     return events.filter(e => {
       if (activeSpaceFilter !== 'all' && e.space_id !== activeSpaceFilter) return false;
-      return e.start_at.slice(0, 10) === dateStr;
+      return eventSpansDate(e, dateStr);
     });
   }
 
@@ -217,16 +250,43 @@ export default function CalendarPage() {
     // were appending "Z" to the raw form values, which silently interpreted a
     // 10:00 AM form entry as 10:00 AM UTC (6 AM EDT).
     const [yy, mm, dd] = form.date.split('-').map(Number);
+    // End date defaults to start date (single-day); multi-day users set it
+    // explicitly. We always validate that end >= start before building the
+    // Date objects so timezone math can't produce a negative duration.
+    const endDateStr = form.end_date || form.date;
+    const [ey, em_, ed] = endDateStr.split('-').map(Number);
     let startLocal: Date;
     let endLocal:   Date;
     if (form.all_day) {
-      startLocal = new Date(yy, (mm || 1) - 1, dd || 1, 0, 0, 0);
-      endLocal   = new Date(yy, (mm || 1) - 1, dd || 1, 23, 59, 59);
+      startLocal = new Date(yy,      (mm  || 1) - 1, dd || 1,  0,  0,  0);
+      endLocal   = new Date(ey || yy,(em_ || mm || 1) - 1, ed || dd || 1, 23, 59, 59);
     } else {
       const [sh, sm] = form.start_time.split(':').map(Number);
-      const [eh, em] = form.end_time.split(':').map(Number);
-      startLocal = new Date(yy, (mm || 1) - 1, dd || 1, sh || 0, sm || 0, 0);
-      endLocal   = new Date(yy, (mm || 1) - 1, dd || 1, eh || 0, em || 0, 0);
+      const [eh, en] = form.end_time.split(':').map(Number);
+      startLocal = new Date(yy,      (mm  || 1) - 1, dd || 1,  sh || 0, sm || 0, 0);
+      endLocal   = new Date(ey || yy,(em_ || mm || 1) - 1, ed || dd || 1, eh || 0, en || 0, 0);
+    }
+
+    if (endLocal <= startLocal) {
+      setSaveError('End must be after start.');
+      setSaving(false);
+      return;
+    }
+
+    // Build recurrence_rule from the form. We only send a rule when the user
+    // actually picked a frequency — a missing/null rule keeps the event one-off.
+    let recurrence_rule: RecurrenceRule | null = null;
+    if (form.repeat !== 'none') {
+      const rule: RecurrenceRule = { freq: form.repeat };
+      if (form.repeat_interval && form.repeat_interval > 1) {
+        rule.interval = Math.floor(form.repeat_interval);
+      }
+      if (form.repeat_end === 'on' && form.repeat_until) {
+        rule.until = form.repeat_until;
+      } else if (form.repeat_end === 'after' && form.repeat_count > 0) {
+        rule.count = Math.floor(form.repeat_count);
+      }
+      recurrence_rule = rule;
     }
 
     const res = await fetch('/api/calendar', {
@@ -237,6 +297,7 @@ export default function CalendarPage() {
         space_id: form.space_id || null, customer_email: form.customer_email || null,
         start_at: startLocal.toISOString(), end_at: endLocal.toISOString(), all_day: form.all_day,
         notes: form.notes || null, override_conflict: override,
+        recurrence_rule,
       }),
     });
 
@@ -255,10 +316,12 @@ export default function CalendarPage() {
     setMonth(eventDate.getMonth());
     setAnchorDate(new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate()));
 
-    setEvents(prev => {
-      if (prev.some(e => e.id === json.id)) return prev;
-      return [...prev, json];
-    });
+    // For recurring events the API expands occurrences at GET time, so a
+    // local splice of just the base row would miss every occurrence past the
+    // current month. Refetch to let the server hand back the whole series.
+    // The view state changed above will retrigger fetchAll via the useEffect
+    // dependency on year/month/anchor, so we don't call it manually here.
+
     setShowModal(false);
     setForm(emptyForm());
     setConflicts([]);
@@ -268,14 +331,19 @@ export default function CalendarPage() {
   async function handleDelete(id: string) {
     setDeleting(true);
     await fetch(`/api/calendar/${id}`, { method: 'DELETE' });
-    setEvents(prev => prev.filter(e => e.id !== id));
+    // Occurrences share a parent_id; stripping by parent_id removes the
+    // whole series in one pass, and also handles the non-recurring case
+    // because we set parent_id === id for those in the API.
+    const gone = events.find(e => e.id === id);
+    const parent = gone?.parent_id ?? id;
+    setEvents(prev => prev.filter(e => e.id !== id && e.parent_id !== parent));
     setSelectedEvent(null);
     setDeleting(false);
   }
 
   function openNewEvent(dateStr?: string, time?: string) {
     const f = emptyForm();
-    if (dateStr) f.date = dateStr;
+    if (dateStr) { f.date = dateStr; f.end_date = dateStr; }
     if (time)    { f.start_time = time; f.end_time = `${String(Math.min(23, parseInt(time) + 1)).padStart(2, '0')}:00`; }
     setForm(f);
     setConflicts([]);
@@ -350,22 +418,35 @@ export default function CalendarPage() {
                     className="border-b border-gray-50 hover:bg-gray-50/50 cursor-pointer transition-colors"
                     onClick={() => openNewEvent(dateStr, `${String(h).padStart(2,'0')}:00`)} />
                 ))}
-                {/* Position events absolutely */}
+                {/* Position events absolutely. For multi-day events, we clip
+                    the render window to this specific day: day 1 renders
+                    start→midnight, middle days render full 0–24, last day
+                    renders 0→end. */}
                 {dayEvts.filter(e => !e.all_day).map(e => {
-                  const startH = new Date(e.start_at).getHours() + new Date(e.start_at).getMinutes() / 60;
-                  const endH   = new Date(e.end_at).getHours()   + new Date(e.end_at).getMinutes()   / 60;
+                  const evStart  = new Date(e.start_at);
+                  const evEnd    = new Date(e.end_at);
+                  const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
+                  const dayEnd   = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59);
+                  const winStart = evStart < dayStart ? dayStart : evStart;
+                  const winEnd   = evEnd   > dayEnd   ? dayEnd   : evEnd;
+                  const startH = winStart.getHours() + winStart.getMinutes() / 60;
+                  const endH   = winEnd.getHours()   + winEnd.getMinutes()   / 60;
                   const clampedStart = Math.max(HOURS[0], startH);
                   const clampedEnd   = Math.min(HOURS[HOURS.length - 1] + 1, endH);
                   const top    = (clampedStart - HOURS[0]) * SLOT_H;
                   const height = Math.max(22, (clampedEnd - clampedStart) * SLOT_H - 2);
+                  const isContinuation = evStart < dayStart;
+                  const endsLater = evEnd > dayEnd;
                   return (
                     <button
-                      key={e.id}
+                      key={`${e.id}-${dateStr}`}
                       onClick={ev => { ev.stopPropagation(); setSelectedEvent(e); }}
                       className="absolute left-0.5 right-0.5 rounded text-white text-[10px] font-medium px-1 py-0.5 text-left overflow-hidden leading-tight hover:opacity-90 transition-opacity"
                       style={{ top, height, backgroundColor: evtColor(e), zIndex: 2 }}
                     >
-                      <span className="block truncate">{e.title}</span>
+                      <span className="block truncate">
+                        {isContinuation && '← '}{e.title}{endsLater && ' →'}
+                      </span>
                       {height > 28 && <span className="block text-[9px] opacity-80 truncate">{fmtTime(e.start_at)} – {fmtTime(e.end_at)}</span>}
                     </button>
                   );
@@ -647,11 +728,35 @@ export default function CalendarPage() {
                   placeholder="couple@example.com"
                   className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
               </div>
-              <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Date *</label>
-                <input type="date" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))}
-                  className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Start Date *</label>
+                  <input type="date" value={form.date}
+                    onChange={e => setForm(p => ({
+                      ...p,
+                      date: e.target.value,
+                      // Snap end date forward if the new start is after it,
+                      // and also auto-fill end_date on first pick.
+                      end_date: (!p.end_date || p.end_date < e.target.value) ? e.target.value : p.end_date,
+                    }))}
+                    className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">End Date</label>
+                  <input type="date" value={form.end_date} min={form.date || undefined}
+                    onChange={e => setForm(p => ({ ...p, end_date: e.target.value }))}
+                    className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
+                </div>
               </div>
+              {form.end_date && form.date && form.end_date !== form.date && (
+                <p className="-mt-2 text-[11px] text-gray-500">
+                  Multi-day event spanning {(() => {
+                    const a = new Date(form.date);
+                    const b = new Date(form.end_date);
+                    return Math.round((b.getTime() - a.getTime()) / 86400000) + 1;
+                  })()} days.
+                </p>
+              )}
               <div className="flex items-center gap-2">
                 <input type="checkbox" id="allday" checked={form.all_day} onChange={e => setForm(p => ({ ...p, all_day: e.target.checked }))} className="rounded" />
                 <label htmlFor="allday" className="text-sm text-gray-700">All day</label>
@@ -670,6 +775,70 @@ export default function CalendarPage() {
                   </div>
                 </div>
               )}
+
+              {/* ── Recurrence ──────────────────────────────────────────── */}
+              <div className="rounded-xl border border-gray-200 bg-gray-50/50 p-3.5 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Repeat size={14} className="text-gray-500" />
+                  <label className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Repeats</label>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <select value={form.repeat}
+                    onChange={e => setForm(p => ({ ...p, repeat: e.target.value as RepeatOpt }))}
+                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-gray-400 focus:outline-none">
+                    <option value="none">Does not repeat</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                  {form.repeat !== 'none' && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500">every</span>
+                      <input type="number" min={1} max={99} value={form.repeat_interval}
+                        onChange={e => setForm(p => ({ ...p, repeat_interval: Math.max(1, parseInt(e.target.value) || 1) }))}
+                        className="w-16 rounded-lg border border-gray-200 bg-white px-2 py-2 text-sm text-gray-700 focus:border-gray-400 focus:outline-none" />
+                      <span className="text-xs text-gray-500">
+                        {form.repeat === 'daily'   ? (form.repeat_interval === 1 ? 'day'   : 'days')
+                        : form.repeat === 'weekly'  ? (form.repeat_interval === 1 ? 'week'  : 'weeks')
+                        : form.repeat === 'monthly' ? (form.repeat_interval === 1 ? 'month' : 'months')
+                        : (form.repeat_interval === 1 ? 'year' : 'years')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                {form.repeat !== 'none' && (
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Ends</p>
+                    <div className="flex items-center gap-2 text-sm text-gray-700">
+                      <input type="radio" id="end-never" name="repeat-end" checked={form.repeat_end === 'never'}
+                        onChange={() => setForm(p => ({ ...p, repeat_end: 'never' }))} />
+                      <label htmlFor="end-never">Never</label>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-gray-700">
+                      <input type="radio" id="end-on" name="repeat-end" checked={form.repeat_end === 'on'}
+                        onChange={() => setForm(p => ({ ...p, repeat_end: 'on' }))} />
+                      <label htmlFor="end-on">On</label>
+                      <input type="date" value={form.repeat_until}
+                        min={form.end_date || form.date || undefined}
+                        disabled={form.repeat_end !== 'on'}
+                        onChange={e => setForm(p => ({ ...p, repeat_until: e.target.value, repeat_end: 'on' }))}
+                        className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-700 focus:border-gray-400 focus:outline-none disabled:opacity-40" />
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-gray-700">
+                      <input type="radio" id="end-after" name="repeat-end" checked={form.repeat_end === 'after'}
+                        onChange={() => setForm(p => ({ ...p, repeat_end: 'after' }))} />
+                      <label htmlFor="end-after">After</label>
+                      <input type="number" min={1} max={500} value={form.repeat_count}
+                        disabled={form.repeat_end !== 'after'}
+                        onChange={e => setForm(p => ({ ...p, repeat_count: Math.max(1, parseInt(e.target.value) || 1), repeat_end: 'after' }))}
+                        className="w-16 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700 focus:border-gray-400 focus:outline-none disabled:opacity-40" />
+                      <span className="text-xs text-gray-500">occurrences</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Notes</label>
                 <textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={2}
@@ -708,9 +877,25 @@ export default function CalendarPage() {
               </div>
             </div>
             <div className="space-y-2 text-sm text-gray-700">
-              <p><span className="text-gray-400">Date:</span> {new Date(selectedEvent.start_at).toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' })}</p>
+              {localDateStr(selectedEvent.start_at) === localDateStr(selectedEvent.end_at) ? (
+                <p><span className="text-gray-400">Date:</span> {new Date(selectedEvent.start_at).toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' })}</p>
+              ) : (
+                <p><span className="text-gray-400">Dates:</span>{' '}
+                  {new Date(selectedEvent.start_at).toLocaleDateString('en-US', { month:'short', day:'numeric' })}
+                  {' – '}
+                  {new Date(selectedEvent.end_at).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })}
+                </p>
+              )}
               {!selectedEvent.all_day && (
                 <p><span className="text-gray-400">Time:</span> {fmtTime(selectedEvent.start_at)} – {fmtTime(selectedEvent.end_at)}</p>
+              )}
+              {selectedEvent.recurrence_rule && (
+                <p className="flex items-center gap-1.5">
+                  <Repeat size={12} className="text-gray-400" />
+                  <span className="text-gray-400">Repeats:</span>{' '}
+                  {describeRule(selectedEvent.recurrence_rule)}
+                  {selectedEvent.is_occurrence && <span className="text-[10px] text-gray-400">(occurrence)</span>}
+                </p>
               )}
               {selectedEvent.venue_spaces && <p><span className="text-gray-400">Space:</span> {selectedEvent.venue_spaces.name}</p>}
               {selectedEvent.customer_email && (
@@ -725,10 +910,20 @@ export default function CalendarPage() {
               {selectedEvent.notes && <p><span className="text-gray-400">Notes:</span> {selectedEvent.notes}</p>}
             </div>
             <div className="flex justify-end mt-5">
-              <button onClick={() => handleDelete(selectedEvent.id)} disabled={deleting}
+              <button
+                onClick={() => {
+                  if (selectedEvent.recurrence_rule) {
+                    // Deleting the parent nukes every occurrence. Warn the
+                    // user before they accidentally wipe a weekly series.
+                    const ok = window.confirm('This is a repeating event. Deleting it will remove every occurrence in the series. Continue?');
+                    if (!ok) return;
+                  }
+                  handleDelete(selectedEvent.id);
+                }}
+                disabled={deleting}
                 className="flex items-center gap-1.5 rounded-xl border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
                 {deleting && <Loader2 size={13} className="animate-spin" />}
-                Delete Event
+                {selectedEvent.recurrence_rule ? 'Delete Series' : 'Delete Event'}
               </button>
             </div>
           </div>
