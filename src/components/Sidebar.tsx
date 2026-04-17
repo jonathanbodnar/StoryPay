@@ -73,12 +73,20 @@ export default function Sidebar({ venue, role = 'owner', memberName, memberEmail
   const paymentsOpen = openGroup === 'payments';
   const settingsOpen = openGroup === 'settings';
 
-  // Auto-expand the group that matches the current route. We don't auto-close
-  // the other here — the click handler already enforces "one at a time" —
-  // because the user may have deliberately opened a different group while
-  // parked on a payments/settings page.
-  useEffect(() => { if (isOnSettings) setOpenGroup('settings'); }, [isOnSettings]);
-  useEffect(() => { if (isOnPayments) setOpenGroup('payments'); }, [isOnPayments]);
+  // Sync the open group to the active route. When the user navigates to a
+  // page that lives outside both dropdown sections (e.g. Home, Customers,
+  // Calendar), we collapse whichever dropdown was open — there's no reason
+  // to keep an accordion expanded while the active item is elsewhere.
+  // When they navigate INTO a payments or settings page, we expand the
+  // matching group. Using `pathname` as the sole dep means this runs only
+  // on navigation, not on every toggle click, so clicking a dropdown header
+  // while parked on an unrelated page still works as a plain toggle.
+  useEffect(() => {
+    if (isOnPayments)      setOpenGroup('payments');
+    else if (isOnSettings) setOpenGroup('settings');
+    else                    setOpenGroup(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
 
   const toggleGroup = (group: Exclude<OpenGroup, null>) =>
     setOpenGroup(curr => (curr === group ? null : group));
