@@ -213,8 +213,21 @@ export default function CalendarPage() {
     setSaveError('');
     setConflicts([]);
 
-    const startIso = form.all_day ? `${form.date}T00:00:00.000Z` : `${form.date}T${form.start_time}:00.000Z`;
-    const endIso   = form.all_day ? `${form.date}T23:59:59.999Z` : `${form.date}T${form.end_time}:00.000Z`;
+    // Build start/end as LOCAL times, then serialize to UTC ISO. Previously we
+    // were appending "Z" to the raw form values, which silently interpreted a
+    // 10:00 AM form entry as 10:00 AM UTC (6 AM EDT).
+    const [yy, mm, dd] = form.date.split('-').map(Number);
+    let startLocal: Date;
+    let endLocal:   Date;
+    if (form.all_day) {
+      startLocal = new Date(yy, (mm || 1) - 1, dd || 1, 0, 0, 0);
+      endLocal   = new Date(yy, (mm || 1) - 1, dd || 1, 23, 59, 59);
+    } else {
+      const [sh, sm] = form.start_time.split(':').map(Number);
+      const [eh, em] = form.end_time.split(':').map(Number);
+      startLocal = new Date(yy, (mm || 1) - 1, dd || 1, sh || 0, sm || 0, 0);
+      endLocal   = new Date(yy, (mm || 1) - 1, dd || 1, eh || 0, em || 0, 0);
+    }
 
     const res = await fetch('/api/calendar', {
       method: 'POST',
@@ -222,7 +235,7 @@ export default function CalendarPage() {
       body: JSON.stringify({
         title: form.title, event_type: form.event_type, status: form.status,
         space_id: form.space_id || null, customer_email: form.customer_email || null,
-        start_at: startIso, end_at: endIso, all_day: form.all_day,
+        start_at: startLocal.toISOString(), end_at: endLocal.toISOString(), all_day: form.all_day,
         notes: form.notes || null, override_conflict: override,
       }),
     });
@@ -234,7 +247,18 @@ export default function CalendarPage() {
       setSaving(false);
       return;
     }
-    setEvents(prev => [...prev, json]);
+
+    // Jump the view to wherever the saved event lives so the user immediately
+    // sees the block — otherwise future-dated events disappear silently.
+    const eventDate = new Date(json.start_at);
+    setYear(eventDate.getFullYear());
+    setMonth(eventDate.getMonth());
+    setAnchorDate(new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate()));
+
+    setEvents(prev => {
+      if (prev.some(e => e.id === json.id)) return prev;
+      return [...prev, json];
+    });
     setShowModal(false);
     setForm(emptyForm());
     setConflicts([]);
