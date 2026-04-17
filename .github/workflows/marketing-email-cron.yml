@@ -1,0 +1,30 @@
+# Optional: ping production marketing cron every 5 minutes (no Railway Cron needed).
+# Enable: GitHub repo → Settings → Secrets and variables → Actions → New repository secret:
+#   MARKETING_CRON_URL     = https://your-app.up.railway.app   (no path)
+#   MARKETING_CRON_SECRET  = same value as MARKETING_CRON_SECRET (or CRON_SECRET) on Railway
+#
+# Manual run: Actions tab → "Marketing email cron" → Run workflow
+
+name: Marketing email cron
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit /api/cron/marketing-email
+        env:
+          MARKETING_CRON_URL: ${{ secrets.MARKETING_CRON_URL }}
+          MARKETING_CRON_SECRET: ${{ secrets.MARKETING_CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${MARKETING_CRON_URL:-}" ] || [ -z "${MARKETING_CRON_SECRET:-}" ]; then
+            echo "Set repository secrets MARKETING_CRON_URL and MARKETING_CRON_SECRET (see workflow file header)."
+            exit 1
+          fi
+          ORIGIN="${MARKETING_CRON_URL%/}"
+          curl -fsS -H "Authorization: Bearer ${MARKETING_CRON_SECRET}" "${ORIGIN}/api/cron/marketing-email"

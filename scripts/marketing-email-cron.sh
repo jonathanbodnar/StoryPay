@@ -1,5 +1,6 @@
 #!/usr/bin/env sh
 # Hit the marketing email cron endpoint (campaign sends + automation steps).
+# Prefer (same env vars): npm run cron:marketing-email
 # Use on Railway: add a Cron job with schedule */5 * * * * and command:
 #   sh scripts/marketing-email-cron.sh
 # Required env on that service:
