@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -127,6 +127,7 @@ export default function CustomerDetailPage() {
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState('');
   const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const [pipelineActionError, setPipelineActionError] = useState('');
 
   // Contact edit
   const [editingContact, setEditingContact] = useState(false);
@@ -401,34 +402,6 @@ export default function CustomerDetailPage() {
     setSavingWedding(false);
   }
 
-  // ── Pipeline / stage (synced with Leads Kanban via shared pipeline + stage ids) ─
-  async function applyPipelineAndStage(pipelineId: string, stageId: string) {
-    if (!venueCustomer) return;
-    const res = await fetch(`/api/venue-customers/${venueCustomer.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pipelineId, stageId }),
-    });
-    if (res.ok) setVenueCustomer(await res.json());
-  }
-
-  async function changePipeline(newPipelineId: string) {
-    const pipe = pipelines.find((p) => p.id === newPipelineId);
-    const first = pipe?.stages?.[0];
-    if (!first) return;
-    await applyPipelineAndStage(newPipelineId, first.id);
-  }
-
-  async function updateStage(stageId: string) {
-    const pid =
-      venueCustomer?.pipeline_id
-      ?? venueCustomer?.pipeline_context?.pipelineId
-      ?? pipelines.find((p) => p.is_default)?.id
-      ?? pipelines[0]?.id;
-    if (!venueCustomer || !pid) return;
-    await applyPipelineAndStage(pid, stageId);
-  }
-
   // ── Notes ──────────────────────────────────────────────────────────────────
   async function addNote() {
     if (!newNote.trim()) return;
@@ -648,6 +621,68 @@ export default function CustomerDetailPage() {
   const openTasks        = tasks.filter(t => !t.completed_at);
   const completedTasks   = tasks.filter(t => !!t.completed_at);
 
+  const pipelineUi = useMemo(() => {
+    const fallbackPipelineId =
+      pipelines.find((p) => p.is_default)?.id ?? pipelines[0]?.id ?? '';
+    const rawPipelineId =
+      venueCustomer?.pipeline_id
+      ?? venueCustomer?.pipeline_context?.pipelineId
+      ?? fallbackPipelineId;
+    const hasMatch = pipelines.some((p) => p.id === rawPipelineId);
+    const safePipelineId = hasMatch ? rawPipelineId : fallbackPipelineId;
+    const activePipe = pipelines.find((p) => p.id === safePipelineId);
+    const activeStages = activePipe?.stages ?? [];
+    const rawStageId =
+      venueCustomer?.stage_id
+      ?? venueCustomer?.pipeline_context?.stageId
+      ?? null;
+    const stageInPipeline = !!rawStageId && activeStages.some((s) => s.id === rawStageId);
+    const resolvedStageId = stageInPipeline ? rawStageId : (activeStages[0]?.id ?? null);
+    const currentStageMeta = resolvedStageId
+      ? activeStages.find((s) => s.id === resolvedStageId)
+      : undefined;
+    return {
+      safePipelineId,
+      activeStages,
+      resolvedStageId,
+      currentStageMeta,
+    };
+  }, [venueCustomer, pipelines]);
+
+  async function applyPipelineAndStage(pipelineId: string, stageId: string) {
+    if (!venueCustomer) return;
+    setPipelineActionError('');
+    const res = await fetch(`/api/venue-customers/${venueCustomer.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pipelineId, stageId }),
+    });
+    if (res.ok) {
+      setVenueCustomer(await res.json());
+      return;
+    }
+    let msg = 'Could not update pipeline.';
+    try {
+      const d = (await res.json()) as { error?: unknown };
+      if (d.error != null) msg = typeof d.error === 'string' ? d.error : JSON.stringify(d.error);
+    } catch { /* ignore */ }
+    setPipelineActionError(msg);
+  }
+
+  async function changePipeline(newPipelineId: string) {
+    const pipe = pipelines.find((p) => p.id === newPipelineId);
+    const first = pipe?.stages?.[0];
+    if (!first) return;
+    await applyPipelineAndStage(newPipelineId, first.id);
+  }
+
+  async function updateStage(stageId: string) {
+    if (!venueCustomer) return;
+    const pid = pipelineUi.safePipelineId;
+    if (!pid) return;
+    await applyPipelineAndStage(pid, stageId);
+  }
+
   if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="animate-spin text-gray-400" size={24} /></div>;
   if (error || !customer) return (
     <div className="py-20 text-center">
@@ -655,22 +690,6 @@ export default function CustomerDetailPage() {
       <button onClick={() => router.back()} className="mt-4 text-sm text-blue-600 hover:underline">Go back</button>
     </div>
   );
-
-  const activePipelineId =
-    venueCustomer?.pipeline_id
-    ?? venueCustomer?.pipeline_context?.pipelineId
-    ?? pipelines.find((p) => p.is_default)?.id
-    ?? pipelines[0]?.id;
-
-  const activeStages =
-    pipelines.find((p) => p.id === activePipelineId)?.stages ?? [];
-
-  const currentStageId =
-    venueCustomer?.stage_id
-    ?? venueCustomer?.pipeline_context?.stageId
-    ?? null;
-
-  const currentStageMeta = activeStages.find((s) => s.id === currentStageId);
 
   // ── Reusable inline-edit Save/Cancel footer ───────────────────────────────
   function EditFooter({ onCancel, onSave, saving, error: err }: { onCancel: () => void; onSave: () => void; saving: boolean; error: string }) {
@@ -696,7 +715,7 @@ export default function CustomerDetailPage() {
       </button>
 
       {/* ── Header card ── */}
-      <div className="rounded-2xl border border-gray-200 bg-white mb-6 overflow-hidden">
+      <div className="rounded-2xl border border-gray-200 bg-white mb-6">
         <div className="flex flex-wrap items-start justify-between gap-4 px-5 py-4 border-b border-gray-200">
           <div className="flex items-center gap-3">
             <div className="h-12 w-12 rounded-full flex items-center justify-center text-lg font-semibold text-white flex-shrink-0"
@@ -708,18 +727,18 @@ export default function CustomerDetailPage() {
                 <h1 className="font-heading text-xl text-gray-900">{customer.name}</h1>
                 {venueCustomer && (
                   <span
-                    className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border ${currentStageMeta ? 'border-transparent' : 'border-gray-200 bg-gray-100 text-gray-700'}`}
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border ${pipelineUi.currentStageMeta ? 'border-transparent' : 'border-gray-200 bg-gray-100 text-gray-700'}`}
                     style={
-                      currentStageMeta
+                      pipelineUi.currentStageMeta
                         ? {
-                          backgroundColor: `${currentStageMeta.color}22`,
-                          color: currentStageMeta.color,
-                          borderColor: `${currentStageMeta.color}44`,
+                          backgroundColor: `${pipelineUi.currentStageMeta.color}22`,
+                          color: pipelineUi.currentStageMeta.color,
+                          borderColor: `${pipelineUi.currentStageMeta.color}44`,
                         }
                         : undefined
                     }
                   >
-                    {currentStageMeta?.name ?? venueCustomer.pipeline_stage.replace(/_/g, ' ')}
+                    {pipelineUi.currentStageMeta?.name ?? venueCustomer.pipeline_stage.replace(/_/g, ' ')}
                   </span>
                 )}
               </div>
@@ -749,11 +768,11 @@ export default function CustomerDetailPage() {
 
         {/* Pipeline + stage (same data as Leads Kanban; default pipeline until changed) */}
         {venueCustomer && pipelines.length > 0 && (
-          <div className="px-5 py-3 border-b border-gray-100 space-y-2">
+          <div className="relative z-10 px-5 py-3 border-b border-gray-100 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Pipeline</span>
               <select
-                value={activePipelineId ?? ''}
+                value={pipelineUi.safePipelineId}
                 onChange={(e) => void changePipeline(e.target.value)}
                 className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 focus:border-gray-400 focus:outline-none max-w-[220px]"
               >
@@ -769,8 +788,8 @@ export default function CustomerDetailPage() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mr-1">Stage</span>
-              {activeStages.map((st) => {
-                const active = currentStageId === st.id;
+              {pipelineUi.activeStages.map((st) => {
+                const active = pipelineUi.resolvedStageId === st.id;
                 return (
                   <button
                     key={st.id}
@@ -792,6 +811,12 @@ export default function CustomerDetailPage() {
                 );
               })}
             </div>
+            {pipelineActionError && (
+              <p className="text-xs text-red-600 flex items-center gap-1">
+                <AlertCircle size={12} />
+                {pipelineActionError}
+              </p>
+            )}
           </div>
         )}
 
