@@ -90,8 +90,22 @@ export interface StageRow {
   color: string;
   kind: StageKind;
   position: number;
+  /** 0–100 for weighted pipeline; null uses kind-based defaults in insights */
+  win_probability?: number | null;
   created_at: string;
   updated_at: string;
+}
+
+/** Effective win % for weighted pipeline (0–100). */
+export function effectiveWinProbability(stage: Pick<StageRow, 'kind' | 'win_probability'>): number {
+  const wp = stage.win_probability;
+  if (wp != null && !Number.isNaN(Number(wp))) {
+    const n = Number(wp);
+    return Math.min(100, Math.max(0, n));
+  }
+  if (stage.kind === 'won') return 100;
+  if (stage.kind === 'lost') return 0;
+  return 25;
 }
 
 /**

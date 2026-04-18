@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { getSessionUser } from '@/lib/session';
 
 async function getVenueId() {
   const c = await cookies();
@@ -17,12 +18,21 @@ export async function PATCH(
   const { id } = await params;
   const body = await request.json();
 
-  const updates: Record<string, string> = {};
+  const session = await getSessionUser();
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const updates: Record<string, string | boolean> = {};
   if (body.first_name != null) updates.first_name = body.first_name;
   if (body.last_name  != null) updates.last_name  = body.last_name;
   if (body.email      != null) updates.email      = body.email;
   if (body.role       != null) updates.role       = body.role;
   if (body.status     != null) updates.status     = body.status;
+  if (body.hide_revenue !== undefined && typeof body.hide_revenue === 'boolean') {
+    if (session.memberId !== null) {
+      return NextResponse.json({ error: 'Only the venue owner can change revenue visibility' }, { status: 403 });
+    }
+    updates.hide_revenue = body.hide_revenue;
+  }
 
   // Keep the denormalised name column in sync
   if (updates.first_name != null || updates.last_name != null) {

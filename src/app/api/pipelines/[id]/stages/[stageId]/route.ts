@@ -15,7 +15,7 @@ const VALID_KINDS = new Set(['open', 'won', 'lost']);
 
 /**
  * PATCH /api/pipelines/[id]/stages/[stageId]
- *   body: { name?, color?, kind? }
+ *   body: { name?, color?, kind?, winProbability? }
  *
  * Rename a stage / change its color / change its kind (open|won|lost).
  */
@@ -28,7 +28,7 @@ export async function PATCH(
 
   const { id: pipelineId, stageId } = await context.params;
 
-  let body: { name?: string; color?: string; kind?: string };
+  let body: { name?: string; color?: string; kind?: string; winProbability?: number | null };
   try {
     body = await request.json();
   } catch {
@@ -43,6 +43,10 @@ export async function PATCH(
   }
   if (typeof body.color === 'string' && body.color.trim()) updates.color = body.color.trim();
   if (typeof body.kind === 'string' && VALID_KINDS.has(body.kind)) updates.kind = body.kind;
+  if (body.winProbability === null) updates.win_probability = null;
+  else if (typeof body.winProbability === 'number' && !Number.isNaN(body.winProbability)) {
+    updates.win_probability = Math.min(100, Math.max(0, body.winProbability));
+  }
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });

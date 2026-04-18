@@ -37,6 +37,7 @@ interface LeadRow {
   lost_reason?: string | null;
   referral_source?: string | null;
   first_touch_utm?: Record<string, unknown> | null;
+  assigned_member_id?: string | null;
 }
 
 async function getVenueId(): Promise<string | null> {
@@ -80,7 +81,7 @@ export async function GET(request: NextRequest) {
       'id, venue_id, track_token, first_name, last_name, name, email, phone, wedding_date, guest_count, ' +
       'booking_timeline, message, notes, status, source, created_at, updated_at, ' +
       'venue_name, venue_website_url, opportunity_value, pipeline_id, stage_id, position, ' +
-      'lost_reason, referral_source, first_touch_utm',
+      'lost_reason, referral_source, first_touch_utm, assigned_member_id',
     )
     .eq('venue_id', venueId)
     .order('position', { ascending: true })
@@ -167,7 +168,7 @@ export async function GET(request: NextRequest) {
           'id, venue_id, track_token, first_name, last_name, name, email, phone, wedding_date, guest_count, ' +
           'booking_timeline, message, notes, status, source, created_at, updated_at, ' +
           'venue_name, venue_website_url, opportunity_value, pipeline_id, stage_id, position, ' +
-          'lost_reason, referral_source, first_touch_utm',
+          'lost_reason, referral_source, first_touch_utm, assigned_member_id',
         )
         .eq('venue_id', venueId)
         .in('id', missingNoteLeadIds);
@@ -236,14 +237,40 @@ export async function GET(request: NextRequest) {
     uniqueMerged.map((l) => l.id),
   );
 
-  const leads = uniqueMerged.map((l) => ({
-    ...l,
-    listing_slug:  venue?.slug ?? null,
-    listing_name:  venue?.name ?? null,
-    note_count:    noteCounts[l.id] ?? 0,
-    booking_badge: bookingBadge(l),
-    tags:          tagMap.get(l.id) ?? [],
-  }));
+  const memberIds = [
+    ...new Set(
+      uniqueMerged
+        .map((l) => (l as LeadRow).assigned_member_id)
+        .filter((x): x is string => typeof x === 'string' && x.length > 0),
+    ),
+  ];
+  const memberMap = new Map<string, { id: string; name: string; initials: string }>();
+  if (memberIds.length > 0) {
+    const { data: members } = await supabaseAdmin
+      .from('venue_team_members')
+      .select('id, first_name, last_name, name')
+      .eq('venue_id', venueId)
+      .in('id', memberIds);
+    for (const m of members ?? []) {
+      const mm = m as { id: string; first_name: string | null; last_name: string | null; name: string | null };
+      const name = [mm.first_name, mm.last_name].filter(Boolean).join(' ') || mm.name || 'Member';
+      const initials = `${mm.first_name?.[0] ?? ''}${mm.last_name?.[0] ?? mm.name?.[0] ?? '?'}`.slice(0, 2).toUpperCase() || '?';
+      memberMap.set(mm.id, { id: mm.id, name, initials });
+    }
+  }
+
+  const leads = uniqueMerged.map((l) => {
+    const aid = (l as LeadRow).assigned_member_id;
+    return {
+      ...l,
+      listing_slug:  venue?.slug ?? null,
+      listing_name:  venue?.name ?? null,
+      note_count:    noteCounts[l.id] ?? 0,
+      booking_badge: bookingBadge(l),
+      tags:          tagMap.get(l.id) ?? [],
+      assigned_member: aid ? memberMap.get(aid) ?? null : null,
+    };
+  });
 
   return NextResponse.json({ leads });
 }

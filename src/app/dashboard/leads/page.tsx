@@ -11,8 +11,10 @@ import {
   LayoutGrid, List as ListIcon, Plus, Settings2, X, DollarSign,
   Globe, CalendarPlus, Clock, GripVertical, ArrowLeft, ArrowRight,
   ChevronDown, Filter, Link2, Copy, Tags,
-  History, ListTodo, CheckSquare, Square, Send,
+  History, ListTodo, CheckSquare, Square, Send, Activity,
 } from 'lucide-react';
+import LeadInsightsStrip, { type LeadInsightsPayload } from '@/components/leads/LeadInsightsStrip';
+import { effectiveWinProbability } from '@/lib/pipelines';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -26,6 +28,8 @@ interface Stage {
   color: string;
   kind: StageKind;
   position: number;
+  /** 0–100; drives weighted pipeline on cards and column totals */
+  win_probability?: number | null;
 }
 
 interface Pipeline {
@@ -81,6 +85,8 @@ interface Lead {
   lost_reason?: string | null;
   referral_source?: string | null;
   first_touch_utm?: Record<string, unknown> | null;
+  assigned_member_id?: string | null;
+  assigned_member?: { id: string; name: string; initials: string } | null;
 }
 
 interface TimelineItem {
@@ -132,7 +138,8 @@ function formatDateTime(iso: string): string {
   });
 }
 
-function formatMoney(n: number | null): string {
+function formatMoney(n: number | null, hideRevenue = false): string {
+  if (hideRevenue) return '•••';
   if (n === null || n === undefined) return '—';
   return new Intl.NumberFormat(undefined, {
     style: 'currency', currency: 'USD', maximumFractionDigits: 0,
@@ -233,6 +240,9 @@ export default function LeadsPage() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [addingOpen, setAddingOpen] = useState(false);
   const [allTags, setAllTags] = useState<MarketingTag[]>([]);
+  const [hideRevenue, setHideRevenue] = useState(false);
+  const [insights, setInsights] = useState<LeadInsightsPayload | null>(null);
+  const [insightsLoading, setInsightsLoading] = useState(true);
 
   const loadTags = useCallback(async () => {
     const res = await fetch('/api/marketing/tags', { cache: 'no-store' });
@@ -243,6 +253,17 @@ export default function LeadsPage() {
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadTags(); }, [loadTags]);
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => {
+    void (async () => {
+      const res = await fetch('/api/session/me', { cache: 'no-store' });
+      if (res.ok) {
+        const s = await res.json();
+        setHideRevenue(Boolean(s.hideRevenue));
+      }
+    })();
+  }, []);
 
   const activePipeline = useMemo(
     () => pipelines.find((p) => p.id === activePipelineId) ?? null,
@@ -282,6 +303,28 @@ export default function LeadsPage() {
   useEffect(() => { void loadPipelines(); }, [loadPipelines]);
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadLeads(); }, [loadLeads]);
+
+  const loadInsights = useCallback(async () => {
+    if (!activePipelineId) {
+      setInsights(null);
+      setInsightsLoading(false);
+      return;
+    }
+    setInsightsLoading(true);
+    const res = await fetch(`/api/leads/insights?pipeline_id=${encodeURIComponent(activePipelineId)}`, {
+      cache: 'no-store',
+    });
+    if (res.ok) {
+      const d = await res.json();
+      setInsights(d as LeadInsightsPayload);
+    } else {
+      setInsights(null);
+    }
+    setInsightsLoading(false);
+  }, [activePipelineId]);
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void loadInsights(); }, [loadInsights]);
 
   // Debounce search — we don't want to refetch on every keystroke.
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -346,6 +389,7 @@ export default function LeadsPage() {
       const data = await res.json();
       setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, ...data.lead } as Lead : l)));
       if (selectedLead?.id === id) setSelectedLead((prev) => (prev ? { ...prev, ...data.lead } : prev));
+      void loadInsights();
     } else {
       void loadLeads();
     }
@@ -419,6 +463,7 @@ export default function LeadsPage() {
       return;
     }
     await loadLeads();
+    void loadInsights();
     await loadTags();
     setAddingOpen(false);
   }
@@ -499,6 +544,21 @@ export default function LeadsPage() {
     return tot;
   }, [leadsByStage]);
 
+  const weightedValueByStage = useMemo(() => {
+    if (!activePipeline) return new Map<string, number>();
+    const stageMap = new Map(activePipeline.stages.map((s) => [s.id, s]));
+    const w = new Map<string, number>();
+    for (const [stageId, list] of leadsByStage) {
+      const stage = stageMap.get(stageId);
+      const p = stage ? effectiveWinProbability(stage) / 100 : 0.25;
+      w.set(
+        stageId,
+        list.reduce((s, l) => s + (l.opportunity_value ?? 0) * p, 0),
+      );
+    }
+    return w;
+  }, [leadsByStage, activePipeline]);
+
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -555,6 +615,8 @@ export default function LeadsPage() {
         />
       )}
 
+      <LeadInsightsStrip data={insights} hideRevenue={hideRevenue} loading={insightsLoading} />
+
       {/* Search + filter bar */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[240px]">
@@ -602,6 +664,8 @@ export default function LeadsPage() {
           pipeline={activePipeline}
           leadsByStage={leadsByStage}
           totalValueByStage={totalValueByStage}
+          weightedValueByStage={weightedValueByStage}
+          hideRevenue={hideRevenue}
           dragLeadId={dragLeadId}
           dragOverStage={dragOverStage}
           allTags={allTags}
@@ -620,6 +684,7 @@ export default function LeadsPage() {
           leads={leads}
           stages={activePipeline.stages}
           allTags={allTags}
+          hideRevenue={hideRevenue}
           onRowClick={(l) => setSelectedLead(l)}
           onQuickStageChange={(id, stageId) => updateLead(id, { stageId })}
           onToggleLeadTag={setLeadTagSelection}
@@ -633,6 +698,7 @@ export default function LeadsPage() {
           lead={selectedLead}
           pipelines={pipelines}
           allTags={allTags}
+          hideRevenue={hideRevenue}
           stages={
             pipelines.find((p) => p.id === selectedLead.pipeline_id)?.stages
             ?? activePipeline?.stages
@@ -962,7 +1028,8 @@ function LeadTagPopover({
 // ─── Kanban board ────────────────────────────────────────────────────────────
 
 function KanbanBoard({
-  pipeline, leadsByStage, totalValueByStage,
+  pipeline, leadsByStage, totalValueByStage, weightedValueByStage,
+  hideRevenue,
   dragLeadId, dragOverStage,
   allTags,
   onCardClick, onDragStartCard, onDragEndCard, onDragOverStage, onDropStage, onToggleLeadTag,
@@ -971,6 +1038,8 @@ function KanbanBoard({
   pipeline: Pipeline;
   leadsByStage: Map<string, Lead[]>;
   totalValueByStage: Map<string, number>;
+  weightedValueByStage: Map<string, number>;
+  hideRevenue: boolean;
   dragLeadId: string | null;
   dragOverStage: string | null;
   allTags: MarketingTag[];
@@ -991,6 +1060,8 @@ function KanbanBoard({
         {pipeline.stages.map((stage) => {
           const list = leadsByStage.get(stage.id) ?? [];
           const total = totalValueByStage.get(stage.id) ?? 0;
+          const weighted = weightedValueByStage.get(stage.id) ?? 0;
+          const winPct = effectiveWinProbability(stage);
           const isOver = dragOverStage === stage.id;
           return (
             <div
@@ -1011,9 +1082,16 @@ function KanbanBoard({
                   </span>
                 </div>
                 {total > 0 && (
-                  <span className="text-[11px] font-medium text-gray-500 tabular-nums">
-                    {formatMoney(total)}
-                  </span>
+                  <div className="flex flex-col items-end gap-0.5 shrink-0 text-right">
+                    <span className="text-[11px] font-medium text-gray-600 tabular-nums">
+                      {formatMoney(total, hideRevenue)}
+                    </span>
+                    {!hideRevenue && weighted > 0 && (
+                      <span className="text-[10px] font-medium text-gray-400 tabular-nums" title="Weighted by stage probability">
+                        wtd {formatMoney(weighted)}
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -1029,6 +1107,8 @@ function KanbanBoard({
                       lead={lead}
                       allTags={allTags}
                       bookingBadge={lead.booking_badge ?? null}
+                      stageWinPct={winPct}
+                      hideRevenue={hideRevenue}
                       isDragging={dragLeadId === lead.id}
                       onClick={() => onCardClick(lead)}
                       onDragStart={(e) => onDragStartCard(e, lead.id)}
@@ -1048,12 +1128,14 @@ function KanbanBoard({
 }
 
 function KanbanCard({
-  lead, allTags, bookingBadge, isDragging, onClick, onDragStart, onDragEnd, onToggleLeadTag,
+  lead, allTags, bookingBadge, stageWinPct, hideRevenue, isDragging, onClick, onDragStart, onDragEnd, onToggleLeadTag,
   onCreateTagForLead,
 }: {
   lead: Lead;
   allTags: MarketingTag[];
   bookingBadge: { iso: string; variant: 'wedding' | 'appointment' } | null;
+  stageWinPct: number;
+  hideRevenue: boolean;
   isDragging: boolean;
   onClick: () => void;
   onDragStart: (e: React.DragEvent) => void;
@@ -1061,13 +1143,15 @@ function KanbanCard({
   onToggleLeadTag: (leadId: string, tagId: string) => void;
   onCreateTagForLead: (leadId: string, name: string) => Promise<void>;
 }) {
+  const weighted =
+    lead.opportunity_value != null ? lead.opportunity_value * (stageWinPct / 100) : null;
   return (
     <div
       draggable
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onClick={onClick}
-      className={`group rounded-xl border bg-white p-3 shadow-sm cursor-pointer hover:border-gray-300 transition-all ${
+      className={`group rounded-xl border bg-white p-3 min-h-[72px] shadow-sm cursor-pointer hover:border-gray-300 transition-all active:scale-[0.99] ${
         isDragging ? 'opacity-50 border-gray-400' : 'border-gray-200'
       }`}
     >
@@ -1078,7 +1162,15 @@ function KanbanCard({
             <p className="text-xs text-gray-500 truncate mt-0.5">{lead.venue_name}</p>
           )}
         </div>
-        <div className="flex shrink-0 items-start gap-1">
+        <div className="flex shrink-0 items-start gap-1.5">
+          {lead.assigned_member && (
+            <span
+              className="inline-flex h-8 min-w-[2rem] items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-[11px] font-semibold text-gray-700"
+              title={lead.assigned_member.name}
+            >
+              {lead.assigned_member.initials}
+            </span>
+          )}
           <LeadTagPopover
             lead={lead}
             allTags={allTags}
@@ -1136,8 +1228,15 @@ function KanbanCard({
             </span>
           )}
           {lead.opportunity_value != null && (
-            <span className="inline-flex items-center gap-1 font-semibold text-gray-800 tabular-nums">
-              {formatMoney(lead.opportunity_value)}
+            <span className="inline-flex flex-col items-end gap-0.5 font-semibold text-gray-800 tabular-nums">
+              <span className="inline-flex items-center gap-1">
+                {formatMoney(lead.opportunity_value, hideRevenue)}
+              </span>
+              {!hideRevenue && weighted != null && weighted > 0 && (
+                <span className="text-[10px] font-medium text-gray-400 tabular-nums">
+                  wtd {formatMoney(weighted)}
+                </span>
+              )}
             </span>
           )}
         </div>
@@ -1149,11 +1248,12 @@ function KanbanCard({
 // ─── List view ───────────────────────────────────────────────────────────────
 
 function ListBoard({
-  leads, stages, allTags, onRowClick, onQuickStageChange, onToggleLeadTag, onCreateTagForLead,
+  leads, stages, allTags, hideRevenue, onRowClick, onQuickStageChange, onToggleLeadTag, onCreateTagForLead,
 }: {
   leads: Lead[];
   stages: Stage[];
   allTags: MarketingTag[];
+  hideRevenue: boolean;
   onRowClick: (l: Lead) => void;
   onQuickStageChange: (id: string, stageId: string) => void;
   onToggleLeadTag: (leadId: string, tagId: string) => void;
@@ -1237,7 +1337,7 @@ function ListBoard({
                   )}
                   {lead.opportunity_value != null && (
                     <span className="text-sm font-semibold text-gray-800 tabular-nums">
-                      {formatMoney(lead.opportunity_value)}
+                      {formatMoney(lead.opportunity_value, hideRevenue)}
                     </span>
                   )}
                   <div className="text-[11px] text-gray-400 whitespace-nowrap pt-1">
@@ -1248,7 +1348,7 @@ function ListBoard({
                       value={lead.stage_id ?? ''}
                       onClick={(e) => e.stopPropagation()}
                       onChange={(e) => onQuickStageChange(lead.id, e.target.value)}
-                      className="rounded-xl border border-gray-200 bg-white px-2 py-1 text-xs focus:border-gray-400 focus:outline-none"
+                      className="rounded-xl border border-gray-200 bg-white px-3 min-h-[44px] text-xs focus:border-gray-400 focus:outline-none touch-manipulation"
                     >
                       {stages.map((s) => (
                         <option key={s.id} value={s.id}>{s.name}</option>
@@ -1267,16 +1367,33 @@ function ListBoard({
 
 // ─── Lead detail drawer ──────────────────────────────────────────────────────
 
+type TeamMemberRow = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  name: string;
+  status: string;
+};
+
+type LeadActivityRow = {
+  id: string;
+  action: string;
+  details: Record<string, unknown>;
+  created_at: string;
+  actor_label: string;
+};
+
 function LeadDrawer({
-  lead, pipelines, allTags, stages, onClose, onUpdate, onDelete, onConvert, onRefresh, onToggleLeadTag,
+  lead, pipelines, allTags, stages, hideRevenue, onClose, onUpdate, onDelete, onConvert, onRefresh, onToggleLeadTag,
   onCreateTagForLead,
 }: {
   lead: Lead;
   pipelines: Pipeline[];
   allTags: MarketingTag[];
   stages: Stage[];
+  hideRevenue: boolean;
   onClose: () => void;
-  onUpdate: (patch: Record<string, unknown>) => void;
+  onUpdate: (patch: Record<string, unknown>) => void | Promise<void>;
   onDelete: () => void;
   onConvert: () => void;
   onRefresh: () => void;
@@ -1297,6 +1414,69 @@ function LeadDrawer({
   const [editingContent, setEditingContent] = useState('');
   const [appointmentOpen, setAppointmentOpen] = useState(false);
   const [savingField, setSavingField] = useState<string | null>(null);
+  const [teamMembers, setTeamMembers] = useState<TeamMemberRow[]>([]);
+  const [activityRows, setActivityRows] = useState<LeadActivityRow[]>([]);
+  const [loadingActivity, setLoadingActivity] = useState(true);
+  const [callSummary, setCallSummary] = useState('');
+  const [loggingCall, setLoggingCall] = useState(false);
+
+  const loadActivity = useCallback(async () => {
+    setLoadingActivity(true);
+    const res = await fetch(`/api/leads/${lead.id}/activity`, { cache: 'no-store' });
+    if (res.ok) {
+      const data = await res.json();
+      setActivityRows((data.activity ?? []) as LeadActivityRow[]);
+    } else {
+      setActivityRows([]);
+    }
+    setLoadingActivity(false);
+  }, [lead.id]);
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => {
+    void (async () => {
+      const res = await fetch('/api/team', { cache: 'no-store' });
+      const d = await res.json().catch(() => []);
+      setTeamMembers(Array.isArray(d) ? (d as TeamMemberRow[]) : []);
+    })();
+  }, []);
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void loadActivity(); }, [loadActivity]);
+
+  const memberNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const tm of teamMembers) {
+      const label = [tm.first_name, tm.last_name].filter(Boolean).join(' ') || tm.name;
+      m.set(tm.id, label);
+    }
+    return m;
+  }, [teamMembers]);
+
+  const describeActivity = useCallback((row: LeadActivityRow): string => {
+    const d = row.details;
+    switch (row.action) {
+      case 'stage_changed':
+        return `Stage: ${(d.from_stage_name as string) || '—'} → ${(d.to_stage_name as string) || '—'}`;
+      case 'value_changed': {
+        if (hideRevenue) return 'Opportunity value updated';
+        const from = d.from;
+        const to = d.to;
+        return `Value: ${formatMoney(typeof from === 'number' ? from : null)} → ${formatMoney(typeof to === 'number' ? to : null)}`;
+      }
+      case 'assigned_changed': {
+        const fromId = d.from_member_id as string | null;
+        const toId = d.to_member_id as string | null;
+        const fromL = fromId ? memberNameById.get(fromId) ?? 'Member' : 'Unassigned';
+        const toL = toId ? memberNameById.get(toId) ?? 'Member' : 'Unassigned';
+        return `Owner: ${fromL} → ${toL}`;
+      }
+      case 'call_logged':
+        return typeof d.summary === 'string' ? d.summary : 'Call logged';
+      default:
+        return row.action.replace(/_/g, ' ');
+    }
+  }, [hideRevenue, memberNameById]);
 
   const loadTimeline = useCallback(async () => {
     setLoadingTimeline(true);
@@ -1427,8 +1607,29 @@ function LeadDrawer({
   // Small inline-saving helper so each field shows a brief "saved" state.
   async function saveField(key: string, value: unknown) {
     setSavingField(key);
-    onUpdate({ [key]: value });
-    setTimeout(() => setSavingField(null), 400);
+    try {
+      await Promise.resolve(onUpdate({ [key]: value }));
+    } finally {
+      setSavingField(null);
+      void loadActivity();
+    }
+  }
+
+  async function logCall() {
+    const summary = callSummary.trim();
+    if (!summary) return;
+    setLoggingCall(true);
+    const res = await fetch(`/api/leads/${lead.id}/activity`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ summary }),
+    });
+    setLoggingCall(false);
+    if (res.ok) {
+      setCallSummary('');
+      void loadActivity();
+      void loadTimeline();
+    }
   }
 
   return (
@@ -1459,7 +1660,11 @@ function LeadDrawer({
                   if (!pid) return;
                   const p = pipelines.find((x) => x.id === pid);
                   const first = p?.stages?.[0];
-                  if (first) onUpdate({ pipelineId: pid, stageId: first.id });
+                  if (first) {
+                    void Promise.resolve(onUpdate({ pipelineId: pid, stageId: first.id })).then(() => {
+                      void loadActivity();
+                    });
+                  }
                 }}
                 className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-800 focus:border-gray-400 focus:outline-none"
               >
@@ -1485,8 +1690,8 @@ function LeadDrawer({
                   return (
                     <button
                       key={s.id}
-                      onClick={() => saveField('stageId', s.id)}
-                      className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors"
+                      onClick={() => void saveField('stageId', s.id)}
+                      className="inline-flex items-center gap-1.5 rounded-full border px-3 py-2.5 min-h-[44px] text-xs font-medium transition-colors touch-manipulation"
                       style={
                         active
                           ? { backgroundColor: s.color, borderColor: s.color, color: readableOn(s.color) }
@@ -1519,38 +1724,71 @@ function LeadDrawer({
             />
           </section>
 
+          {/* Owner */}
+          <section>
+            <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">
+              Owner
+            </label>
+            <select
+              value={lead.assigned_member_id ?? lead.assigned_member?.id ?? ''}
+              onChange={(e) => {
+                const v = e.target.value;
+                void saveField('assignedMemberId', v === '' ? null : v);
+              }}
+              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-3 min-h-[48px] text-sm font-medium text-gray-800 focus:border-gray-400 focus:outline-none touch-manipulation"
+            >
+              <option value="">Unassigned</option>
+              {teamMembers.filter((m) => m.status === 'active').map((m) => (
+                <option key={m.id} value={m.id}>
+                  {[m.first_name, m.last_name].filter(Boolean).join(' ') || m.name}
+                </option>
+              ))}
+            </select>
+          </section>
+
           {/* Contact */}
           <section className="grid grid-cols-2 gap-3">
             <Field label="First name" value={lead.first_name ?? ''}
-              onSave={(v) => saveField('firstName', v)} saving={savingField === 'firstName'} />
+              onSave={(v) => void saveField('firstName', v)} saving={savingField === 'firstName'} />
             <Field label="Last name" value={lead.last_name ?? ''}
-              onSave={(v) => saveField('lastName', v)} saving={savingField === 'lastName'} />
+              onSave={(v) => void saveField('lastName', v)} saving={savingField === 'lastName'} />
             <Field label="Email" value={lead.email} type="email" className="col-span-2"
-              onSave={(v) => saveField('email', v)} saving={savingField === 'email'} />
+              onSave={(v) => void saveField('email', v)} saving={savingField === 'email'} />
             <Field label="Phone" value={lead.phone ?? ''} type="tel"
-              onSave={(v) => saveField('phone', v)} saving={savingField === 'phone'} />
-            <Field label="Opportunity value" value={lead.opportunity_value?.toString() ?? ''} type="number" prefix="$"
-              onSave={(v) => saveField('opportunityValue', v === '' ? null : Number(v))} saving={savingField === 'opportunityValue'} />
+              onSave={(v) => void saveField('phone', v)} saving={savingField === 'phone'} />
+            {hideRevenue ? (
+              <div className="col-span-2">
+                <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">
+                  Opportunity value
+                </label>
+                <p className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                  Hidden for your role
+                </p>
+              </div>
+            ) : (
+              <Field label="Opportunity value" value={lead.opportunity_value?.toString() ?? ''} type="number" prefix="$"
+                onSave={(v) => void saveField('opportunityValue', v === '' ? null : Number(v))} saving={savingField === 'opportunityValue'} />
+            )}
           </section>
 
           {/* Venue */}
           <section className="grid grid-cols-2 gap-3">
             <Field label="Venue name" value={lead.venue_name ?? ''} className="col-span-2"
-              onSave={(v) => saveField('venueName', v)} saving={savingField === 'venueName'} />
+              onSave={(v) => void saveField('venueName', v)} saving={savingField === 'venueName'} />
             <Field label="Venue website" value={lead.venue_website_url ?? ''} type="url" className="col-span-2"
-              onSave={(v) => saveField('venueWebsiteUrl', v)} saving={savingField === 'venueWebsiteUrl'} />
+              onSave={(v) => void saveField('venueWebsiteUrl', v)} saving={savingField === 'venueWebsiteUrl'} />
             <Field label="Wedding date" value={lead.wedding_date ?? ''} type="date"
-              onSave={(v) => saveField('weddingDate', v || null)} saving={savingField === 'weddingDate'} />
+              onSave={(v) => void saveField('weddingDate', v || null)} saving={savingField === 'weddingDate'} />
             <Field label="Guest count" value={lead.guest_count?.toString() ?? ''} type="number"
-              onSave={(v) => saveField('guestCount', v === '' ? null : Number(v))} saving={savingField === 'guestCount'} />
+              onSave={(v) => void saveField('guestCount', v === '' ? null : Number(v))} saving={savingField === 'guestCount'} />
           </section>
 
           <section className="grid grid-cols-2 gap-3">
             <Field label="Referral / partner" value={lead.referral_source ?? ''} className="col-span-2"
-              onSave={(v) => saveField('referralSource', v)} saving={savingField === 'referralSource'} />
+              onSave={(v) => void saveField('referralSource', v)} saving={savingField === 'referralSource'} />
             {stages.find((s) => s.id === lead.stage_id)?.kind === 'lost' ? (
               <Field label="Loss reason" value={lead.lost_reason ?? ''} className="col-span-2"
-                onSave={(v) => saveField('lostReason', v)} saving={savingField === 'lostReason'} />
+                onSave={(v) => void saveField('lostReason', v)} saving={savingField === 'lostReason'} />
             ) : null}
           </section>
 
@@ -1750,6 +1988,62 @@ function LeadDrawer({
                       <button type="button" onClick={() => void deleteTask(t.id)} className="text-gray-400 hover:text-red-600 p-1">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
+
+          {/* Audit trail + quick call log */}
+          <section>
+            <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5 mb-2">
+              <Activity className="w-4 h-4" /> Activity &amp; audit
+            </h3>
+            <p className="text-[11px] text-gray-400 mb-3">
+              Stage, value, and owner changes are recorded automatically. Log a call to capture what was said.
+            </p>
+            <div className="rounded-2xl border border-gray-200 bg-white p-3 mb-3 space-y-2">
+              <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                Log a call
+              </label>
+              <textarea
+                value={callSummary}
+                onChange={(e) => setCallSummary(e.target.value)}
+                placeholder="Who you spoke with, next steps…"
+                rows={2}
+                className="w-full rounded-xl border border-gray-200 p-3 min-h-[88px] text-sm focus:border-gray-400 focus:outline-none resize-none touch-manipulation"
+              />
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => void logCall()}
+                  disabled={!callSummary.trim() || loggingCall}
+                  className="inline-flex items-center gap-1.5 rounded-xl px-4 py-3 min-h-[48px] text-xs font-medium text-white disabled:opacity-40 touch-manipulation"
+                  style={{ backgroundColor: '#1b1b1b' }}
+                >
+                  {loggingCall ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Phone className="w-3.5 h-3.5" />}
+                  Log call
+                </button>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-gray-100 bg-gray-50/60 p-3 max-h-56 overflow-y-auto">
+              {loadingActivity ? (
+                <p className="text-xs text-gray-400 flex items-center gap-2 py-2">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…
+                </p>
+              ) : activityRows.length === 0 ? (
+                <p className="text-xs text-gray-400 italic py-1">No audit entries yet.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {activityRows.map((row) => (
+                    <li key={row.id} className="text-xs border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                      <p className="text-[11px] text-gray-400 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                        <Clock className="w-3 h-3 shrink-0" />
+                        {formatDateTime(row.created_at)}
+                        <span className="font-medium text-gray-600">{row.actor_label}</span>
+                      </p>
+                      <p className="text-sm text-gray-800 mt-0.5">{describeActivity(row)}</p>
                     </li>
                   ))}
                 </ul>

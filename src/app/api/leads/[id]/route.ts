@@ -5,6 +5,8 @@ import { legacyStatusForStageName } from '@/lib/pipelines';
 import { leadRowWithTags, setLeadTagIds } from '@/lib/lead-tags';
 import { onMarketingStageChanged, onMarketingTagAdded } from '@/lib/marketing-email-worker';
 import { syncVenueCustomerFromLeadRow } from '@/lib/venue-customer-pipeline-sync';
+import { getSessionUser } from '@/lib/session';
+import { insertLeadActivity } from '@/lib/lead-activity';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -60,6 +62,9 @@ export async function PATCH(
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   const { id } = await context.params;
 
   let body: {
@@ -85,12 +90,24 @@ export async function PATCH(
     lostReason?: string | null;
     referralSource?: string | null;
     firstTouchUtm?: Record<string, unknown> | null;
+    assignedMemberId?: string | null;
   };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
+
+  const { data: prevSnap } = await supabaseAdmin
+    .from('leads')
+    .select('stage_id, opportunity_value, assigned_member_id')
+    .eq('id', id)
+    .eq('venue_id', venueId)
+    .maybeSingle();
+
+  const previousStageId = (prevSnap?.stage_id as string | null) ?? null;
+  const prevOpp = prevSnap?.opportunity_value;
+  const prevAssign = (prevSnap?.assigned_member_id as string | null) ?? null;
 
   const updates: Record<string, unknown> = {};
   if (typeof body.status === 'string') {
@@ -134,6 +151,23 @@ export async function PATCH(
       body.firstTouchUtm && typeof body.firstTouchUtm === 'object' ? body.firstTouchUtm : {};
   }
 
+  if (body.assignedMemberId !== undefined) {
+    if (body.assignedMemberId === null || body.assignedMemberId === '') {
+      updates.assigned_member_id = null;
+    } else if (typeof body.assignedMemberId === 'string') {
+      const { data: mem } = await supabaseAdmin
+        .from('venue_team_members')
+        .select('id')
+        .eq('id', body.assignedMemberId)
+        .eq('venue_id', venueId)
+        .maybeSingle();
+      if (!mem) {
+        return NextResponse.json({ error: 'Invalid assignee' }, { status: 400 });
+      }
+      updates.assigned_member_id = body.assignedMemberId;
+    }
+  }
+
   // When the stage changes (and the client didn't send an explicit status),
   // keep `leads.status` aligned with the stage name for legacy filters.
   if (typeof body.stageId === 'string' && body.stageId && typeof body.status !== 'string') {
@@ -156,17 +190,6 @@ export async function PATCH(
   }
 
   const hasTagPatch = body.tagIds !== undefined;
-
-  let previousStageId: string | null | undefined;
-  if (body.stageId !== undefined) {
-    const { data: cur } = await supabaseAdmin
-      .from('leads')
-      .select('stage_id')
-      .eq('id', id)
-      .eq('venue_id', venueId)
-      .maybeSingle();
-    previousStageId = (cur?.stage_id as string | null) ?? null;
-  }
 
   const previousTagIds = new Set<string>();
   if (hasTagPatch) {
@@ -227,9 +250,9 @@ export async function PATCH(
 
   const withTags = await leadRowWithTags(venueId, leadRow as Record<string, unknown>);
 
-  if (body.stageId !== undefined && previousStageId !== undefined) {
+  {
     const nextStageId = (leadRow.stage_id as string | null) ?? null;
-    if (nextStageId && nextStageId !== previousStageId) {
+    if (nextStageId !== previousStageId) {
       void onMarketingStageChanged(venueId, id, nextStageId);
     }
   }
@@ -247,6 +270,60 @@ export async function PATCH(
       pipeline_id: lr.pipeline_id,
       stage_id: lr.stage_id,
     });
+  }
+
+  if (Object.keys(updates).length > 0) {
+    async function stageLabel(sid: string | null): Promise<string | null> {
+      if (!sid) return null;
+      const { data } = await supabaseAdmin
+        .from('lead_pipeline_stages')
+        .select('name')
+        .eq('id', sid)
+        .eq('venue_id', venueId)
+        .maybeSingle();
+      return (data?.name as string) ?? null;
+    }
+
+    const nextStage = (leadRow.stage_id as string | null) ?? null;
+    const nextOpp = leadRow.opportunity_value;
+    const nextAssign = (leadRow as { assigned_member_id?: string | null }).assigned_member_id ?? null;
+
+    if (body.stageId !== undefined && previousStageId !== nextStage) {
+      const [fromN, toN] = await Promise.all([stageLabel(previousStageId), stageLabel(nextStage)]);
+      void insertLeadActivity({
+        venueId,
+        leadId: id,
+        actorMemberId: user.memberId,
+        actorIsOwner: !user.memberId,
+        action: 'stage_changed',
+        details: {
+          from_stage_id: previousStageId,
+          to_stage_id: nextStage,
+          from_stage_name: fromN,
+          to_stage_name: toN,
+        },
+      });
+    }
+    if (body.opportunityValue !== undefined && Number(prevOpp ?? 0) !== Number(nextOpp ?? 0)) {
+      void insertLeadActivity({
+        venueId,
+        leadId: id,
+        actorMemberId: user.memberId,
+        actorIsOwner: !user.memberId,
+        action: 'value_changed',
+        details: { from: prevOpp, to: nextOpp },
+      });
+    }
+    if (body.assignedMemberId !== undefined && prevAssign !== nextAssign) {
+      void insertLeadActivity({
+        venueId,
+        leadId: id,
+        actorMemberId: user.memberId,
+        actorIsOwner: !user.memberId,
+        action: 'assigned_changed',
+        details: { from_member_id: prevAssign, to_member_id: nextAssign },
+      });
+    }
   }
 
   return NextResponse.json({ lead: withTags });

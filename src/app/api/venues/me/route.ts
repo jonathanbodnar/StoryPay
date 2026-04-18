@@ -54,6 +54,7 @@ export async function PATCH(request: Request) {
     brand_zip:         true,
     brand_footer_note: true,
     monthly_booking_goal: true,
+    listing_marketing_monthly_spend: true,
   };
   const updates: Record<string, unknown> = {};
 
@@ -83,7 +84,8 @@ export async function PATCH(request: Request) {
     const safeUpdates: Record<string, unknown> = {};
     const knownCols = ['name', 'service_fee_rate', 'brand_logo_url', 'brand_color',
       'brand_tagline', 'brand_website', 'brand_email', 'brand_phone',
-      'brand_address', 'brand_city', 'brand_state', 'brand_zip', 'brand_footer_note', 'monthly_booking_goal'];
+      'brand_address', 'brand_city', 'brand_state', 'brand_zip', 'brand_footer_note', 'monthly_booking_goal',
+      'listing_marketing_monthly_spend'];
     for (const k of knownCols) {
       if (k in updates) safeUpdates[k] = updates[k];
     }

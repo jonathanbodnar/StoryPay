@@ -61,7 +61,30 @@ export async function setLeadTagIds(venueId: string, leadId: string, tagIds: str
   );
 }
 
+async function assignedMemberSummary(
+  venueId: string,
+  memberId: string,
+): Promise<{ id: string; name: string; initials: string } | null> {
+  const { data: mm } = await supabaseAdmin
+    .from('venue_team_members')
+    .select('id, first_name, last_name, name')
+    .eq('venue_id', venueId)
+    .eq('id', memberId)
+    .maybeSingle();
+  if (!mm) return null;
+  const row = mm as { id: string; first_name: string | null; last_name: string | null; name: string | null };
+  const name = [row.first_name, row.last_name].filter(Boolean).join(' ') || row.name || 'Member';
+  const initials = `${row.first_name?.[0] ?? ''}${row.last_name?.[0] ?? row.name?.[0] ?? '?'}`.slice(0, 2).toUpperCase() || '?';
+  return { id: row.id, name, initials };
+}
+
 export async function leadRowWithTags(venueId: string, lead: Record<string, unknown>) {
   const m = await fetchTagsForLeadIds(venueId, [String(lead.id)]);
-  return { ...lead, tags: m.get(String(lead.id)) ?? [] };
+  const tags = m.get(String(lead.id)) ?? [];
+  const aid = lead.assigned_member_id as string | null | undefined;
+  let assigned_member: { id: string; name: string; initials: string } | null = null;
+  if (typeof aid === 'string' && aid.length > 0) {
+    assigned_member = await assignedMemberSummary(venueId, aid);
+  }
+  return { ...lead, tags, assigned_member };
 }

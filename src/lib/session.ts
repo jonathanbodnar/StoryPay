@@ -12,6 +12,8 @@ export interface SessionUser {
   memberEmail: string | null;
   isOwner: boolean;
   isAdmin: boolean;               // owner OR admin
+  /** When true (team members), hide revenue/opportunity dollar amounts in CRM UI */
+  hideRevenue: boolean;
 }
 
 export async function getVenueFromSession() {
@@ -52,7 +54,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     // Team member session
     const { data: member } = await supabaseAdmin
       .from('venue_team_members')
-      .select('id, first_name, last_name, name, email, role')
+      .select('id, first_name, last_name, name, email, role, hide_revenue')
       .eq('id', memberId)
       .eq('venue_id', venueId)
       .single();
@@ -63,10 +65,12 @@ export async function getSessionUser(): Promise<SessionUser | null> {
         venueId, venueName: venue.name, role: 'owner',
         memberId: null, memberName: null, memberEmail: null,
         isOwner: true, isAdmin: true,
+        hideRevenue: false,
       };
     }
 
     const role = (member.role as UserRole) || 'member';
+    const hideRev = Boolean((member as { hide_revenue?: boolean }).hide_revenue);
     return {
       venueId,
       venueName: venue.name,
@@ -76,6 +80,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       memberEmail: member.email || null,
       isOwner: role === 'owner',
       isAdmin: role === 'owner' || role === 'admin',
+      hideRevenue: hideRev,
     };
   }
 
@@ -89,6 +94,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     memberEmail: null,
     isOwner: true,
     isAdmin: true,
+    hideRevenue: false,
   };
 }
 

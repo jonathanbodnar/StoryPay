@@ -16,6 +16,8 @@ interface TeamMember {
  status: 'active' | 'invited' | 'inactive';
  created_at: string;
  invited_at: string | null;
+ /** When true, CRM hides opportunity amounts for this team member */
+ hide_revenue?: boolean;
 }
 
 const ROLES = [
@@ -66,6 +68,7 @@ export default function TeamPage() {
  const [editError, setEditError] = useState('');
  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
  const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
+ const [venueOwnerSession, setVenueOwnerSession] = useState(false);
 
  const [form, setForm] = useState({ first_name: '', last_name: '', email: '', role: 'member' });
 
@@ -95,6 +98,38 @@ export default function TeamPage() {
  function showSaved(msg: string) {
  setSaved(msg);
  setTimeout(() => setSaved(''), 3000);
+ }
+
+ useEffect(() => {
+ void (async () => {
+ try {
+ const res = await fetch('/api/session/me', { cache: 'no-store' });
+ if (!res.ok) return;
+ const s = await res.json();
+ setVenueOwnerSession(s.memberId == null);
+ } catch { /* ignore */ }
+ })();
+ }, []);
+
+ async function toggleHideRevenue(id: string, next: boolean) {
+ const prev = members;
+ setMembers(m => m.map(x => x.id === id ? { ...x, hide_revenue: next } : x));
+ try {
+ const res = await fetch(`/api/team/${id}`, {
+ method: 'PATCH',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({ hide_revenue: next }),
+ });
+ if (!res.ok) {
+ setMembers(prev);
+ return;
+ }
+ const data = await res.json();
+ setMembers(m => m.map(x => x.id === id ? data : x));
+ showSaved('Saved revenue visibility');
+ } catch {
+ setMembers(prev);
+ }
  }
 
  async function addMember(e: React.FormEvent) {
@@ -488,7 +523,19 @@ export default function TeamPage() {
  </span>
 
  {/* Role selector */}
- <div className="relative flex-shrink-0">
+ <div className="relative flex-shrink-0 flex items-center gap-2">
+ {venueOwnerSession && m.role !== 'owner' && m.status === 'active' && (
+ <label className="flex items-center gap-1.5 text-[11px] text-gray-500 whitespace-nowrap cursor-pointer" title="Hide pipeline dollar amounts for this person">
+ <input
+ type="checkbox"
+ checked={Boolean(m.hide_revenue)}
+ onChange={e => void toggleHideRevenue(m.id, e.target.checked)}
+ className="rounded border-gray-300 text-gray-900 focus:ring-gray-400"
+ />
+ <span>Hide $</span>
+ </label>
+ )}
+ <div className="relative">
  <select
  value={m.role}
  onChange={e => changeRole(m.id, e.target.value)}
@@ -500,7 +547,7 @@ export default function TeamPage() {
  </div>
 
  {/* Actions menu trigger */}
- <div className="flex-shrink-0"data-menu>
+ <div className="flex-shrink-0" data-menu>
  <button
  onClick={(e) => {
  e.stopPropagation();
@@ -513,6 +560,7 @@ export default function TeamPage() {
  >
  <MoreHorizontal size={16} />
  </button>
+ </div>
  </div>
  </div>
  ))}
