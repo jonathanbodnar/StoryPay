@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { legacyStatusForStageName } from '@/lib/pipelines';
 import { leadRowWithTags, setLeadTagIds } from '@/lib/lead-tags';
 import { onMarketingStageChanged, onMarketingTagAdded } from '@/lib/marketing-email-worker';
+import { syncVenueCustomerFromLeadRow } from '@/lib/venue-customer-pipeline-sync';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -237,6 +238,15 @@ export async function PATCH(
     const arr = Array.isArray(body.tagIds) ? body.tagIds.filter((x): x is string => typeof x === 'string') : [];
     const added = arr.filter((tid) => !previousTagIds.has(tid));
     if (added.length) void onMarketingTagAdded(venueId, id, added);
+  }
+
+  const lr = leadRow as { email: string | null; pipeline_id: string | null; stage_id: string | null };
+  if (lr.email && lr.pipeline_id && lr.stage_id) {
+    void syncVenueCustomerFromLeadRow(venueId, {
+      email: lr.email,
+      pipeline_id: lr.pipeline_id,
+      stage_id: lr.stage_id,
+    });
   }
 
   return NextResponse.json({ lead: withTags });

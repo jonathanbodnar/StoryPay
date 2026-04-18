@@ -19,6 +19,29 @@ interface Customer {
   email: string; phone: string; address: string; city: string; state: string; zip: string;
 }
 
+interface PipelineContext {
+  pipelineId: string;
+  stageId: string;
+  linkedLeadId: string | null;
+  resolvedFromLead: boolean;
+}
+
+interface PipelineStageRow {
+  id: string;
+  pipeline_id: string;
+  name: string;
+  color: string;
+  kind: string;
+  position: number;
+}
+
+interface VenuePipeline {
+  id: string;
+  name: string;
+  is_default: boolean;
+  stages: PipelineStageRow[];
+}
+
 interface VenueCustomer {
   id: string; customer_email: string; first_name: string; last_name: string;
   phone: string | null;
@@ -29,6 +52,9 @@ interface VenueCustomer {
   rehearsal_date: string | null; coordinator_name: string | null;
   coordinator_phone: string | null; catering_notes: string | null;
   referral_source: string | null; pipeline_stage: string;
+  pipeline_id?: string | null;
+  stage_id?: string | null;
+  pipeline_context?: PipelineContext;
   venue_spaces: { id: string; name: string; color: string } | null;
 }
 
@@ -48,15 +74,6 @@ interface FileRow {
 interface ActivityEntry {
   id: string; activity_type: string; title: string; description: string | null; created_at: string;
 }
-
-const PIPELINE_STAGES = [
-  { value: 'inquiry',          label: 'Inquiry' },
-  { value: 'tour_scheduled',   label: 'Tour Scheduled' },
-  { value: 'proposal_sent',    label: 'Proposal Sent' },
-  { value: 'booked',           label: 'Booked' },
-  { value: 'event_complete',   label: 'Event Complete' },
-  { value: 'post_event',       label: 'Post-Event Follow-up' },
-];
 
 const REFERRAL_SOURCES = ['Instagram','Google','Wedding Wire','The Knot','Referral','Venue Website','Facebook','Other'];
 const CEREMONY_TYPES   = [
@@ -82,15 +99,6 @@ const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
   stage_changed:     <Activity size={13} />,
 };
 
-const STAGE_COLORS: Record<string, string> = {
-  inquiry:        'bg-gray-100 text-gray-700',
-  tour_scheduled: 'bg-blue-100 text-blue-700',
-  proposal_sent:  'bg-yellow-100 text-yellow-700',
-  booked:         'bg-emerald-100 text-emerald-700',
-  event_complete: 'bg-purple-100 text-purple-700',
-  post_event:     'bg-pink-100 text-pink-700',
-};
-
 const FILE_STATUS_COLORS: Record<string, string> = {
   pending:  'bg-yellow-100 text-yellow-700',
   received: 'bg-blue-100 text-blue-700',
@@ -114,6 +122,7 @@ export default function CustomerDetailPage() {
   const [files,         setFiles]         = useState<FileRow[]>([]);
   const [activity,      setActivity]      = useState<ActivityEntry[]>([]);
   const [spaces,        setSpaces]        = useState<{ id: string; name: string; color: string; capacity?: number | null }[]>([]);
+  const [pipelines,     setPipelines]     = useState<VenuePipeline[]>([]);
 
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState('');
@@ -181,7 +190,14 @@ export default function CustomerDetailPage() {
   // ── Fetch all data ─────────────────────────────────────────────────────────
   const fetchAll = useCallback(async () => {
     try {
-      const cRes = await fetch(`/api/customers/${customerId}`);
+      const [cRes, pipeRes] = await Promise.all([
+        fetch(`/api/customers/${customerId}`),
+        fetch('/api/pipelines', { cache: 'no-store' }),
+      ]);
+      if (pipeRes.ok) {
+        const pd = await pipeRes.json();
+        setPipelines(Array.isArray(pd.pipelines) ? pd.pipelines : []);
+      }
       if (!cRes.ok) { setError('Customer not found'); setLoading(false); return; }
       const cData = await cRes.json();
       setCustomer(cData.customer);
@@ -234,6 +250,13 @@ export default function CustomerDetailPage() {
             });
             if (retryRes.ok) vc = await retryRes.json();
           }
+        }
+      }
+
+      if (vc?.id) {
+        const detailRes = await fetch(`/api/venue-customers/${vc.id}`, { cache: 'no-store' });
+        if (detailRes.ok) {
+          vc = await detailRes.json();
         }
       }
 
@@ -378,15 +401,32 @@ export default function CustomerDetailPage() {
     setSavingWedding(false);
   }
 
-  // ── Pipeline stage update ────────────────────────────────────────────────────
-  async function updateStage(stage: string) {
+  // ── Pipeline / stage (synced with Leads Kanban via shared pipeline + stage ids) ─
+  async function applyPipelineAndStage(pipelineId: string, stageId: string) {
     if (!venueCustomer) return;
     const res = await fetch(`/api/venue-customers/${venueCustomer.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pipeline_stage: stage }),
+      body: JSON.stringify({ pipelineId, stageId }),
     });
     if (res.ok) setVenueCustomer(await res.json());
+  }
+
+  async function changePipeline(newPipelineId: string) {
+    const pipe = pipelines.find((p) => p.id === newPipelineId);
+    const first = pipe?.stages?.[0];
+    if (!first) return;
+    await applyPipelineAndStage(newPipelineId, first.id);
+  }
+
+  async function updateStage(stageId: string) {
+    const pid =
+      venueCustomer?.pipeline_id
+      ?? venueCustomer?.pipeline_context?.pipelineId
+      ?? pipelines.find((p) => p.is_default)?.id
+      ?? pipelines[0]?.id;
+    if (!venueCustomer || !pid) return;
+    await applyPipelineAndStage(pid, stageId);
   }
 
   // ── Notes ──────────────────────────────────────────────────────────────────
@@ -616,7 +656,21 @@ export default function CustomerDetailPage() {
     </div>
   );
 
-  const stageInfo = PIPELINE_STAGES.find(s => s.value === (venueCustomer?.pipeline_stage ?? 'inquiry'));
+  const activePipelineId =
+    venueCustomer?.pipeline_id
+    ?? venueCustomer?.pipeline_context?.pipelineId
+    ?? pipelines.find((p) => p.is_default)?.id
+    ?? pipelines[0]?.id;
+
+  const activeStages =
+    pipelines.find((p) => p.id === activePipelineId)?.stages ?? [];
+
+  const currentStageId =
+    venueCustomer?.stage_id
+    ?? venueCustomer?.pipeline_context?.stageId
+    ?? null;
+
+  const currentStageMeta = activeStages.find((s) => s.id === currentStageId);
 
   // ── Reusable inline-edit Save/Cancel footer ───────────────────────────────
   function EditFooter({ onCancel, onSave, saving, error: err }: { onCancel: () => void; onSave: () => void; saving: boolean; error: string }) {
@@ -653,8 +707,19 @@ export default function CustomerDetailPage() {
               <div className="flex items-center gap-3 flex-wrap">
                 <h1 className="font-heading text-xl text-gray-900">{customer.name}</h1>
                 {venueCustomer && (
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${STAGE_COLORS[venueCustomer.pipeline_stage] ?? 'bg-gray-100 text-gray-700'}`}>
-                    {stageInfo?.label ?? venueCustomer.pipeline_stage}
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border ${currentStageMeta ? 'border-transparent' : 'border-gray-200 bg-gray-100 text-gray-700'}`}
+                    style={
+                      currentStageMeta
+                        ? {
+                          backgroundColor: `${currentStageMeta.color}22`,
+                          color: currentStageMeta.color,
+                          borderColor: `${currentStageMeta.color}44`,
+                        }
+                        : undefined
+                    }
+                  >
+                    {currentStageMeta?.name ?? venueCustomer.pipeline_stage.replace(/_/g, ' ')}
                   </span>
                 )}
               </div>
@@ -682,16 +747,51 @@ export default function CustomerDetailPage() {
           </div>
         </div>
 
-        {/* Pipeline stage selector */}
-        {venueCustomer && (
-          <div className="px-5 py-3 flex flex-wrap items-center gap-2 border-b border-gray-100">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mr-1">Stage:</span>
-            {PIPELINE_STAGES.map(s => (
-              <button key={s.value} onClick={() => updateStage(s.value)}
-                className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${venueCustomer.pipeline_stage === s.value ? 'border-transparent ' + STAGE_COLORS[s.value] : 'border-gray-200 text-gray-500 hover:border-gray-400'}`}>
-                {s.label}
-              </button>
-            ))}
+        {/* Pipeline + stage (same data as Leads Kanban; default pipeline until changed) */}
+        {venueCustomer && pipelines.length > 0 && (
+          <div className="px-5 py-3 border-b border-gray-100 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Pipeline</span>
+              <select
+                value={activePipelineId ?? ''}
+                onChange={(e) => void changePipeline(e.target.value)}
+                className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 focus:border-gray-400 focus:outline-none max-w-[220px]"
+              >
+                {pipelines.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}{p.is_default ? ' (default)' : ''}
+                  </option>
+                ))}
+              </select>
+              {venueCustomer.pipeline_context?.linkedLeadId && (
+                <span className="text-[10px] text-gray-400">Linked to lead — stage syncs both ways</span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mr-1">Stage</span>
+              {activeStages.map((st) => {
+                const active = currentStageId === st.id;
+                return (
+                  <button
+                    key={st.id}
+                    type="button"
+                    onClick={() => void updateStage(st.id)}
+                    className="rounded-full px-3 py-1 text-xs font-medium border transition-colors"
+                    style={
+                      active
+                        ? {
+                          backgroundColor: `${st.color}22`,
+                          color: st.color,
+                          borderColor: `${st.color}55`,
+                        }
+                        : { borderColor: '#e5e7eb', color: '#6b7280' }
+                    }
+                  >
+                    {st.name}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
 
