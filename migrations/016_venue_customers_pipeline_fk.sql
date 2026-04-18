@@ -1,10 +1,15 @@
 -- =============================================================================
 -- 016_venue_customers_pipeline_fk.sql
 -- Links venue_customers to lead pipelines so profile stages stay in sync with Leads.
+--
+-- REQUIRED on every Supabase project that runs this app: Dashboard → SQL →
+-- paste this file → Run. Without these columns, /api/venue-customers PATCH fails.
 -- =============================================================================
 
 ALTER TABLE public.venue_customers
-  ADD COLUMN IF NOT EXISTS pipeline_id uuid REFERENCES public.lead_pipelines(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS pipeline_id uuid REFERENCES public.lead_pipelines(id) ON DELETE SET NULL;
+
+ALTER TABLE public.venue_customers
   ADD COLUMN IF NOT EXISTS stage_id uuid REFERENCES public.lead_pipeline_stages(id) ON DELETE SET NULL;
 
 CREATE INDEX IF NOT EXISTS venue_customers_pipeline_stage_idx

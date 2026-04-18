@@ -7,6 +7,10 @@ import {
   slugifyStageLabel,
   syncLeadFromVenueCustomerRow,
 } from '@/lib/venue-customer-pipeline-sync';
+import {
+  isMissingVenueCustomerPipelineColumns,
+  VENUE_CUSTOMERS_PIPELINE_MIGRATION_HINT,
+} from '@/lib/venue-customer-db-error';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -51,7 +55,11 @@ export async function GET(
     return NextResponse.json(ctx ? { ...row, pipeline_context: ctx } : row);
   } catch (err) {
     console.error('[venue-customers GET by id]', err);
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    const msg = err instanceof Error ? err.message : String(err);
+    if (isMissingVenueCustomerPipelineColumns(msg)) {
+      return NextResponse.json({ error: VENUE_CUSTOMERS_PIPELINE_MIGRATION_HINT }, { status: 503 });
+    }
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
 
@@ -145,6 +153,9 @@ export async function PATCH(
 
   if (updErr) {
     console.error('[venue-customers PATCH]', updErr);
+    if (isMissingVenueCustomerPipelineColumns(updErr.message)) {
+      return NextResponse.json({ error: VENUE_CUSTOMERS_PIPELINE_MIGRATION_HINT }, { status: 503 });
+    }
     return NextResponse.json({ error: updErr.message }, { status: 500 });
   }
 
@@ -170,6 +181,10 @@ export async function PATCH(
     return NextResponse.json(ctx ? { ...refreshed, pipeline_context: ctx } : refreshed);
   } catch (err) {
     console.error('[venue-customers PATCH refetch]', err);
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    const msg = err instanceof Error ? err.message : String(err);
+    if (isMissingVenueCustomerPipelineColumns(msg)) {
+      return NextResponse.json({ error: VENUE_CUSTOMERS_PIPELINE_MIGRATION_HINT }, { status: 503 });
+    }
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
