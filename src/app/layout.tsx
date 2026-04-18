@@ -33,10 +33,15 @@ export async function generateMetadata(): Promise<Metadata> {
       images: [ogImage], creator: '@storypay',
     },
     alternates: { canonical: seo?.canonical || APP_URL },
-    // Favicons: `src/app/icon.png` + `apple-icon.png` (same asset as
-    // `public/storyvenue-favicon.png`) so Next emits proper link tags and
-    // replaces host defaults (e.g. Railway triangle). Homepage under /homepage
-    // keeps its own layout.
+    // 2-letter mark in public/ — also copied to src/app/icon.png for Next file convention
+    icons: {
+      icon: [
+        { url: '/storyvenue-sidebar-mark.png', type: 'image/png', sizes: '32x32' },
+        { url: '/storyvenue-sidebar-mark.png', type: 'image/png', sizes: 'any' },
+      ],
+      shortcut: '/storyvenue-sidebar-mark.png',
+      apple: '/storyvenue-sidebar-mark.png',
+    },
     verification: { google: process.env.GOOGLE_SITE_VERIFICATION || '' },
   };
 }
@@ -99,6 +104,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <head>
+        {/* Explicit favicon links override platform defaults (e.g. Railway) that ignore metadata alone */}
+        <link rel="icon" href="/storyvenue-sidebar-mark.png" type="image/png" sizes="any" />
+        <link rel="shortcut icon" href="/storyvenue-sidebar-mark.png" type="image/png" />
+        <link rel="apple-touch-icon" href="/storyvenue-sidebar-mark.png" />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(orgSchema) }} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareSchema) }} />

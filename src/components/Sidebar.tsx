@@ -199,11 +199,12 @@ export default function Sidebar({
           >
             {rail ? (
               <Image
-                src="/storyvenue-favicon.png"
+                src="/storyvenue-sidebar-mark.png"
                 alt="StoryPay"
-                width={36}
-                height={36}
+                width={40}
+                height={40}
                 className="object-contain opacity-90"
+                priority
               />
             ) : (
               <Image
