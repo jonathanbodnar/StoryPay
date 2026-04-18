@@ -1,17 +1,9 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { ensureDefaultPipeline, legacyStatusForStageName, loadPipelinesWithStages } from '@/lib/pipelines';
 import { onMarketingStageChanged } from '@/lib/marketing-email-worker';
+import { slugifyStageLabel } from '@/lib/pipeline-stage-slug';
 
-/** Stable slug stored in venue_customers.pipeline_stage for legacy readers */
-export function slugifyStageLabel(name: string): string {
-  return (
-    name
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9]+/g, '_')
-      .replace(/^_+|_+$/g, '') || 'stage'
-  );
-}
+export { slugifyStageLabel } from '@/lib/pipeline-stage-slug';
 
 export async function fetchStageRow(venueId: string, stageId: string) {
   const { data } = await supabaseAdmin

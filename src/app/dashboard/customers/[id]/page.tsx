@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import RefundModal from '@/components/RefundModal';
 import { formatCents, formatDate, formatDateTime, getStatusColor, classNames } from '@/lib/utils';
+import { slugifyStageLabel } from '@/lib/pipeline-stage-slug';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Customer {
@@ -652,13 +653,29 @@ export default function CustomerDetailPage() {
   async function applyPipelineAndStage(pipelineId: string, stageId: string) {
     if (!venueCustomer) return;
     setPipelineActionError('');
+
+    const stageRow = pipelines
+      .find((p) => p.id === pipelineId)
+      ?.stages?.find((s) => s.id === stageId);
+    const slug = stageRow ? slugifyStageLabel(stageRow.name) : venueCustomer.pipeline_stage;
+    const snapshot = venueCustomer;
+
+    setVenueCustomer((vc) =>
+      vc
+        ? { ...vc, pipeline_id: pipelineId, stage_id: stageId, pipeline_stage: slug }
+        : vc,
+    );
+
     const res = await fetch(`/api/venue-customers/${venueCustomer.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pipelineId, stageId }),
     });
     if (res.ok) {
-      setVenueCustomer(await res.json());
+      const body = (await res.json()) as VenueCustomer;
+      setVenueCustomer((current) =>
+        current?.pipeline_id === pipelineId && current?.stage_id === stageId ? body : current,
+      );
       return;
     }
     let msg = 'Could not update pipeline.';
@@ -666,6 +683,9 @@ export default function CustomerDetailPage() {
       const d = (await res.json()) as { error?: unknown };
       if (d.error != null) msg = typeof d.error === 'string' ? d.error : JSON.stringify(d.error);
     } catch { /* ignore */ }
+    setVenueCustomer((current) =>
+      current?.pipeline_id === pipelineId && current?.stage_id === stageId ? snapshot : current,
+    );
     setPipelineActionError(msg);
   }
 
