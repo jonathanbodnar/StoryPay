@@ -7,7 +7,7 @@ import {
 } from '@/lib/marketing-email-schema';
 import { mergeMarketingFields, renderMarketingEmailHtml, type MergeFieldRecord } from '@/lib/marketing-email-render';
 import { resolveCampaignRecipients } from '@/lib/marketing-email-audience';
-import { signMarketingUnsubscribeToken } from '@/lib/marketing-email-tokens';
+import { signMarketingOpenToken, signMarketingUnsubscribeToken } from '@/lib/marketing-email-tokens';
 
 const BATCH = 25;
 
@@ -86,7 +86,7 @@ export async function onMarketingTriggerLinkClick(
   }
 }
 
-async function buildMergeVars(
+export async function buildMergeVars(
   venueId: string,
   leadId: string,
   appOrigin: string,
@@ -94,7 +94,7 @@ async function buildMergeVars(
   const { data: venue } = await supabaseAdmin.from('venues').select('name').eq('id', venueId).maybeSingle();
   const { data: lead } = await supabaseAdmin
     .from('leads')
-    .select('id, email, first_name, last_name, name')
+    .select('id, email, first_name, last_name, name, wedding_date, guest_count')
     .eq('id', leadId)
     .eq('venue_id', venueId)
     .maybeSingle();
@@ -103,12 +103,34 @@ async function buildMergeVars(
   const ln = (lead.last_name as string | null)?.trim() || '';
   const token = signMarketingUnsubscribeToken(venueId, leadId);
   const unsub = `${appOrigin.replace(/\/$/, '')}/api/public/marketing/unsubscribe?token=${encodeURIComponent(token)}`;
+  const wd = lead.wedding_date as string | null;
+  let wedding_date_nice = '';
+  let wedding_month = '';
+  if (wd) {
+    try {
+      const d = new Date(`${wd}T12:00:00Z`);
+      wedding_date_nice = d.toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      });
+      wedding_month = d.toLocaleDateString('en-US', { month: 'long' });
+    } catch {
+      wedding_date_nice = wd;
+      wedding_month = '';
+    }
+  }
+  const gc = lead.guest_count as number | null;
   return {
     first_name: fn,
     last_name: ln,
     email: String(lead.email),
     venue_name: (venue?.name as string) || 'Your venue',
     unsubscribe_url: unsub,
+    wedding_date: wd || '',
+    wedding_date_nice: wedding_date_nice || '',
+    wedding_month: wedding_month || '',
+    guest_count: gc != null ? String(gc) : '',
   };
 }
 
@@ -118,6 +140,7 @@ async function sendTemplateToLead(
   definition: MarketingEmailDefinition,
   subject: string,
   preheader: string,
+  opts?: { campaignRecipientId?: string },
 ): Promise<{ ok: boolean; error?: string }> {
   const appOrigin = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
   const vars = await buildMergeVars(venueId, leadId, appOrigin);
@@ -129,7 +152,12 @@ async function sendTemplateToLead(
     .eq('lead_id', leadId)
     .maybeSingle();
   if (sup) return { ok: false, error: 'suppressed' };
-  const html = renderMarketingEmailHtml(definition, vars);
+  let html = renderMarketingEmailHtml(definition, vars);
+  if (opts?.campaignRecipientId) {
+    const t = signMarketingOpenToken(opts.campaignRecipientId);
+    const pixel = `${appOrigin.replace(/\/$/, '')}/api/public/marketing/email-open?t=${encodeURIComponent(t)}`;
+    html = html.replace('</body>', `<img src="${pixel}" width="1" height="1" alt="" style="display:block;border:0" /></body>`);
+  }
   const mergedSubject = mergeMarketingFields(subject, vars);
   const mergedPre = mergeMarketingFields(preheader, vars);
   const fullHtml =
@@ -233,7 +261,7 @@ async function processOneEnrollment(en: {
       return true;
     }
     const def = parseEmailDefinition(tmpl.definition_json);
-    const send = await sendTemplateToLead(en.venue_id, en.lead_id, def, tmpl.subject as string, tmpl.preheader as string);
+    const send = await sendTemplateToLead(en.venue_id, en.lead_id, def, tmpl.subject as string, tmpl.preheader as string, undefined);
     if (!send.ok && send.error !== 'suppressed') {
       await supabaseAdmin
         .from('marketing_automation_enrollments')
@@ -344,7 +372,9 @@ export async function processCampaignsCron(): Promise<{ campaigns: number; recip
       continue;
     }
     const def = parseEmailDefinition(tmpl.definition_json);
-    const send = await sendTemplateToLead(row.venue_id, row.lead_id, def, tmpl.subject as string, tmpl.preheader as string);
+    const send = await sendTemplateToLead(row.venue_id, row.lead_id, def, tmpl.subject as string, tmpl.preheader as string, {
+      campaignRecipientId: row.id,
+    });
     if (send.ok) {
       await supabaseAdmin
         .from('marketing_campaign_recipients')

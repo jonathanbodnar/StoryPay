@@ -8,9 +8,10 @@ import {
 import {
   Inbox, Loader2, Search, Mail, Phone, Calendar as CalendarIcon, Users,
   MessageSquare, Trash2, ExternalLink, UserPlus,
-  LayoutGrid, List as ListIcon, Plus, Settings2, X, Pencil, DollarSign,
+  LayoutGrid, List as ListIcon, Plus, Settings2, X, DollarSign,
   Globe, CalendarPlus, Clock, GripVertical, ArrowLeft, ArrowRight,
-  ChevronDown, Filter, MousePointer2, Eye, Link2, Copy, Tags,
+  ChevronDown, Filter, Link2, Copy, Tags,
+  History, ListTodo, CheckSquare, Square, Send,
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -77,37 +78,25 @@ interface Lead {
   position: number;
   note_count: number;
   booking_badge?: { iso: string; variant: 'wedding' | 'appointment' } | null;
+  lost_reason?: string | null;
+  referral_source?: string | null;
+  first_touch_utm?: Record<string, unknown> | null;
 }
 
-interface LeadNote {
-   id: string;
-  lead_id: string;
-  content: string;
-  author_name: string | null;
-  created_at: string;
-}
-
-interface MarketingTriggerLinkMeta {
-  name: string;
-  short_code: string;
-  target_url: string;
-}
-
-interface LeadMarketingEventRow {
+interface TimelineItem {
   id: string;
-  event_type: 'trigger_link_click' | 'page_view';
-  page_path: string | null;
-  page_title: string | null;
-  referrer: string | null;
+  kind: string;
+  title: string;
+  detail?: string | null;
   created_at: string;
-  trigger_link_id: string | null;
-  trigger_links: MarketingTriggerLinkMeta | MarketingTriggerLinkMeta[] | null;
 }
 
-function triggerLinkMeta(e: LeadMarketingEventRow): MarketingTriggerLinkMeta | null {
-  const x = e.trigger_links;
-  if (!x) return null;
-  return Array.isArray(x) ? x[0] ?? null : x;
+interface LeadTaskRow {
+  id: string;
+  title: string;
+  due_at: string | null;
+  completed_at: string | null;
+  created_at: string;
 }
 
 interface Space { id: string; name: string; color: string; }
@@ -1117,6 +1106,11 @@ function KanbanCard({
             <CalendarIcon className="w-3 h-3 shrink-0" /> {formatDate(lead.wedding_date)}
           </div>
         )}
+        {lead.guest_count != null && (
+          <div className="flex items-center gap-1.5">
+            <Users className="w-3 h-3 shrink-0" /> {lead.guest_count} guests
+          </div>
+        )}
       </div>
 
       {bookingBadge && (
@@ -1289,11 +1283,13 @@ function LeadDrawer({
   onToggleLeadTag: (leadId: string, tagId: string) => void;
   onCreateTagForLead: (leadId: string, name: string) => Promise<void>;
 }) {
-  const [notes, setNotes] = useState<LeadNote[]>([]);
   const [newNote, setNewNote] = useState('');
-  const [loadingNotes, setLoadingNotes] = useState(true);
-  const [marketingEvents, setMarketingEvents] = useState<LeadMarketingEventRow[]>([]);
-  const [loadingMarketing, setLoadingMarketing] = useState(true);
+  const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([]);
+  const [loadingTimeline, setLoadingTimeline] = useState(true);
+  const [tasks, setTasks] = useState<LeadTaskRow[]>([]);
+  const [loadingTasks, setLoadingTasks] = useState(true);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskDue, setNewTaskDue] = useState('');
   const [triggerLinks, setTriggerLinks] = useState<Array<{ id: string; name: string; short_code: string }>>([]);
   const [loadingTriggerLinks, setLoadingTriggerLinks] = useState(true);
   const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
@@ -1302,32 +1298,34 @@ function LeadDrawer({
   const [appointmentOpen, setAppointmentOpen] = useState(false);
   const [savingField, setSavingField] = useState<string | null>(null);
 
-  const loadMarketing = useCallback(async () => {
-    setLoadingMarketing(true);
-    const res = await fetch(`/api/leads/${lead.id}/marketing-activity`, { cache: 'no-store' });
+  const loadTimeline = useCallback(async () => {
+    setLoadingTimeline(true);
+    const res = await fetch(`/api/leads/${lead.id}/timeline`, { cache: 'no-store' });
     if (res.ok) {
       const data = await res.json();
-      setMarketingEvents(data.events ?? []);
+      setTimelineItems(data.items ?? []);
     } else {
-      setMarketingEvents([]);
+      setTimelineItems([]);
     }
-    setLoadingMarketing(false);
+    setLoadingTimeline(false);
   }, [lead.id]);
 
-  const loadNotes = useCallback(async () => {
-    setLoadingNotes(true);
-    const res = await fetch(`/api/leads/${lead.id}/notes`, { cache: 'no-store' });
+  const loadTasks = useCallback(async () => {
+    setLoadingTasks(true);
+    const res = await fetch(`/api/leads/${lead.id}/tasks`, { cache: 'no-store' });
     if (res.ok) {
       const data = await res.json();
-      setNotes(data.notes ?? []);
+      setTasks(data.tasks ?? []);
+    } else {
+      setTasks([]);
     }
-    setLoadingNotes(false);
+    setLoadingTasks(false);
   }, [lead.id]);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void loadNotes(); }, [loadNotes]);
+  useEffect(() => { void loadTimeline(); }, [loadTimeline]);
   // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void loadMarketing(); }, [loadMarketing]);
+  useEffect(() => { void loadTasks(); }, [loadTasks]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1360,9 +1358,8 @@ function LeadDrawer({
       body: JSON.stringify({ content }),
     });
     if (res.ok) {
-      const data = await res.json();
-      setNotes((prev) => [data.note, ...prev]);
       setNewNote('');
+      void loadTimeline();
       onRefresh();
     }
   }
@@ -1375,10 +1372,9 @@ function LeadDrawer({
       body: JSON.stringify({ content: editingContent }),
     });
     if (res.ok) {
-      const data = await res.json();
-      setNotes((prev) => prev.map((n) => (n.id === editingId ? data.note : n)));
       setEditingId(null);
       setEditingContent('');
+      void loadTimeline();
     }
   }
 
@@ -1386,8 +1382,45 @@ function LeadDrawer({
     if (!confirm('Delete this note?')) return;
     const res = await fetch(`/api/leads/${lead.id}/notes/${noteId}`, { method: 'DELETE' });
     if (res.ok) {
-      setNotes((prev) => prev.filter((n) => n.id !== noteId));
+      void loadTimeline();
       onRefresh();
+    }
+  }
+
+  async function addTask() {
+    const title = newTaskTitle.trim();
+    if (!title) return;
+    const res = await fetch(`/api/leads/${lead.id}/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, dueAt: newTaskDue || null }),
+    });
+    if (res.ok) {
+      setNewTaskTitle('');
+      setNewTaskDue('');
+      void loadTasks();
+      void loadTimeline();
+    }
+  }
+
+  async function toggleTaskDone(task: LeadTaskRow) {
+    const res = await fetch(`/api/leads/${lead.id}/tasks/${task.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ completed: !task.completed_at }),
+    });
+    if (res.ok) {
+      void loadTasks();
+      void loadTimeline();
+    }
+  }
+
+  async function deleteTask(taskId: string) {
+    if (!confirm('Delete this task?')) return;
+    const res = await fetch(`/api/leads/${lead.id}/tasks/${taskId}`, { method: 'DELETE' });
+    if (res.ok) {
+      void loadTasks();
+      void loadTimeline();
     }
   }
 
@@ -1512,6 +1545,26 @@ function LeadDrawer({
               onSave={(v) => saveField('guestCount', v === '' ? null : Number(v))} saving={savingField === 'guestCount'} />
           </section>
 
+          <section className="grid grid-cols-2 gap-3">
+            <Field label="Referral / partner" value={lead.referral_source ?? ''} className="col-span-2"
+              onSave={(v) => saveField('referralSource', v)} saving={savingField === 'referralSource'} />
+            {stages.find((s) => s.id === lead.stage_id)?.kind === 'lost' ? (
+              <Field label="Loss reason" value={lead.lost_reason ?? ''} className="col-span-2"
+                onSave={(v) => saveField('lostReason', v)} saving={savingField === 'lostReason'} />
+            ) : null}
+          </section>
+
+          {lead.first_touch_utm && typeof lead.first_touch_utm === 'object' && Object.keys(lead.first_touch_utm).length > 0 ? (
+            <section>
+              <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">
+                First-touch UTM
+              </label>
+              <pre className="rounded-2xl bg-gray-50 p-3 text-[11px] text-gray-700 overflow-x-auto whitespace-pre-wrap">
+                {JSON.stringify(lead.first_touch_utm, null, 2)}
+              </pre>
+            </section>
+          ) : null}
+
           {/* Inquiry message */}
           {lead.message && (
             <section>
@@ -1524,6 +1577,12 @@ function LeadDrawer({
 
           {/* Actions */}
           <section className="flex flex-wrap gap-2">
+            <Link
+              href={`/dashboard/payments/new?leadId=${encodeURIComponent(lead.id)}&type=proposal`}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-gray-900 bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-800"
+            >
+              <Send className="w-3.5 h-3.5" /> Send proposal
+            </Link>
             <button
               onClick={() => setAppointmentOpen(true)}
               className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
@@ -1632,93 +1691,89 @@ function LeadDrawer({
             )}
           </section>
 
-          {/* Activity — trigger links, page views */}
+          {/* Tasks */}
           <section>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
-                <Eye className="w-4 h-4" /> Activity
-              </h3>
-              <span className="text-[11px] text-gray-400">{marketingEvents.length} events</span>
-            </div>
-            <p className="text-[11px] text-gray-400 mb-3 break-words">
-              Trigger clicks are logged when the URL uses this lead’s token{' '}
-              <code className="text-[10px] bg-gray-100 px-1 rounded break-all">?t={lead.track_token ?? '…'}</code> (see
-              above) or legacy{' '}
-              <code className="text-[10px] bg-gray-100 px-1 rounded break-all">?l={lead.id}</code>. Page views appear when
-              your site POSTs to the marketing track API for this lead.
-            </p>
-            <div className="rounded-2xl border border-gray-200 bg-gray-50/40 p-3 min-h-[4rem]">
-              {loadingMarketing ? (
-                <div className="text-xs text-gray-400 py-3 flex items-center gap-2">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading activity…
-                </div>
-              ) : marketingEvents.length === 0 ? (
-                <p className="text-xs text-gray-400 italic py-2">No tracked activity yet.</p>
+            <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5 mb-2">
+              <ListTodo className="w-4 h-4" /> Tasks & follow-ups
+            </h3>
+            <div className="rounded-2xl border border-gray-200 bg-white p-3 space-y-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                <input
+                  value={newTaskTitle}
+                  onChange={(e) => setNewTaskTitle(e.target.value)}
+                  placeholder="e.g. Follow up after tour"
+                  className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                />
+                <input
+                  type="datetime-local"
+                  value={newTaskDue}
+                  onChange={(e) => setNewTaskDue(e.target.value)}
+                  className="rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => void addTask()}
+                  disabled={!newTaskTitle.trim()}
+                  className="rounded-xl bg-gray-900 px-3 py-2 text-xs font-medium text-white disabled:opacity-40"
+                >
+                  Add task
+                </button>
+              </div>
+              {loadingTasks ? (
+                <p className="text-xs text-gray-400 py-2 flex items-center gap-2">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…
+                </p>
+              ) : tasks.length === 0 ? (
+                <p className="text-xs text-gray-400 italic py-1">No tasks yet.</p>
               ) : (
-                <ul className="space-y-0 border-l-2 border-pink-200 ml-1.5 pl-3">
-                  {marketingEvents.map((ev) => {
-                    const tl = triggerLinkMeta(ev);
-                    return (
-                      <li key={ev.id} className="relative pb-4 last:pb-0">
-                        <span className="absolute -left-[calc(0.375rem+5px)] top-1.5 h-2 w-2 rounded-full bg-pink-500 ring-2 ring-white" />
-                        <p className="text-[11px] text-gray-400 flex items-center gap-1">
-                          <Clock className="w-3 h-3 shrink-0" />
-                          {formatDateTime(ev.created_at)}
-                        </p>
-                        {ev.event_type === 'trigger_link_click' && tl && (
-                          <p className="text-sm text-gray-800 mt-0.5 flex items-start gap-1.5">
-                            <MousePointer2 className="w-3.5 h-3.5 text-pink-600 shrink-0 mt-0.5" />
-                            <span>
-                              Clicked trigger link{' '}
-                              <span className="font-semibold">{tl.name}</span>
-                              <span className="text-gray-500 text-xs block mt-0.5 font-mono">
-                                /t/{tl.short_code}
-                              </span>
-                            </span>
-                          </p>
+                <ul className="space-y-2">
+                  {tasks.map((t) => (
+                    <li key={t.id} className="flex items-start justify-between gap-2 rounded-xl border border-gray-100 bg-gray-50/80 px-3 py-2">
+                      <button
+                        type="button"
+                        onClick={() => void toggleTaskDone(t)}
+                        className="mt-0.5 shrink-0 text-gray-400 hover:text-gray-700"
+                        aria-label={t.completed_at ? 'Mark incomplete' : 'Mark done'}
+                      >
+                        {t.completed_at ? (
+                          <CheckSquare className="w-4 h-4 text-green-600" />
+                        ) : (
+                          <Square className="w-4 h-4 text-gray-400" />
                         )}
-                        {ev.event_type === 'trigger_link_click' && !tl && (
-                          <p className="text-sm text-gray-800 mt-0.5">Trigger link click (link removed)</p>
-                        )}
-                        {ev.event_type === 'page_view' && (
-                          <p className="text-sm text-gray-800 mt-0.5 flex items-start gap-1.5">
-                            <Globe className="w-3.5 h-3.5 text-sky-600 shrink-0 mt-0.5" />
-                            <span>
-                              Viewed page{' '}
-                              <span className="font-medium">{ev.page_title || ev.page_path || '—'}</span>
-                              {ev.page_path && ev.page_path !== ev.page_title && (
-                                <span className="text-gray-500 text-xs block mt-0.5 break-all">{ev.page_path}</span>
-                              )}
-                            </span>
-                          </p>
-                        )}
-                        {ev.referrer && (
-                          <p className="text-[10px] text-gray-400 mt-1 truncate" title={ev.referrer}>
-                            From: {ev.referrer}
-                          </p>
-                        )}
-                      </li>
-                    );
-                  })}
+                      </button>
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-sm ${t.completed_at ? 'text-gray-500 line-through' : 'text-gray-900'}`}>{t.title}</p>
+                        {t.due_at ? (
+                          <p className="text-[11px] text-gray-400 mt-0.5">{formatDateTime(t.due_at)}</p>
+                        ) : null}
+                      </div>
+                      <button type="button" onClick={() => void deleteTask(t.id)} className="text-gray-400 hover:text-red-600 p-1">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </li>
+                  ))}
                 </ul>
               )}
             </div>
           </section>
 
-          {/* Notes */}
+          {/* Unified timeline */}
           <section>
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
-                <MessageSquare className="w-4 h-4" /> Notes
+                <History className="w-4 h-4" /> Timeline
               </h3>
-              <span className="text-[11px] text-gray-400">{notes.length} total</span>
+              <span className="text-[11px] text-gray-400">{timelineItems.length} items</span>
             </div>
+            <p className="text-[11px] text-gray-400 mb-3">
+              Emails, link clicks, notes, and tasks in one feed (newest first).
+            </p>
 
-            <div className="rounded-2xl border border-gray-200 bg-white p-3">
+            <div className="rounded-2xl border border-gray-200 bg-white p-3 mb-3">
               <textarea
                 value={newNote}
                 onChange={(e) => setNewNote(e.target.value)}
-                placeholder="Add a note… (timestamped)"
+                placeholder="Add a note… (appears in the timeline)"
                 rows={2}
                 className="w-full rounded-xl border border-gray-200 p-2 text-sm focus:border-gray-400 focus:outline-none resize-none"
               />
@@ -1734,65 +1789,80 @@ function LeadDrawer({
               </div>
             </div>
 
-            <div className="mt-3 space-y-2">
-              {loadingNotes ? (
+            <div className="rounded-2xl border border-gray-200 bg-gray-50/40 p-3 min-h-[4rem]">
+              {loadingTimeline ? (
                 <div className="text-xs text-gray-400 py-3 flex items-center gap-2">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading notes…
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading timeline…
                 </div>
-              ) : notes.length === 0 ? (
-                <p className="text-xs text-gray-400 italic py-2">No notes yet.</p>
+              ) : timelineItems.length === 0 ? (
+                <p className="text-xs text-gray-400 italic py-2">No activity yet.</p>
               ) : (
-                notes.map((n) => (
-                  <div key={n.id} className="rounded-xl border border-gray-200 bg-white p-3">
-                    <div className="flex items-center justify-between text-[11px] text-gray-400 mb-1">
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" /> {formatDateTime(n.created_at)}
-                        {n.author_name === 'system' && (
-                          <span className="ml-1 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">system</span>
-                        )}
-                      </span>
-                      {n.author_name !== 'system' && (
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => { setEditingId(n.id); setEditingContent(n.content); }}
-                            className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-                          >
-                            <Pencil className="w-3 h-3" />
-                          </button>
-                          <button
-                            onClick={() => deleteNote(n.id)}
-                            className="rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    {editingId === n.id ? (
-                      <>
-                        <textarea
-                          value={editingContent}
-                          onChange={(e) => setEditingContent(e.target.value)}
-                          rows={2}
-                          className="w-full rounded-xl border border-gray-200 p-2 text-sm focus:border-gray-400 focus:outline-none resize-none"
-                        />
-                        <div className="flex justify-end gap-2 mt-2">
-                          <button
-                            onClick={() => { setEditingId(null); setEditingContent(''); }}
-                            className="rounded-xl border border-gray-200 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                          >Cancel</button>
-                          <button
-                            onClick={saveNoteEdit}
-                            className="rounded-xl px-2.5 py-1 text-xs font-medium text-white"
-                            style={{ backgroundColor: '#1b1b1b' }}
-                          >Save</button>
-                        </div>
-                      </>
-                    ) : (
-                      <p className="text-sm text-gray-800 whitespace-pre-wrap">{n.content}</p>
-                    )}
-                  </div>
-                ))
+                <ul className="space-y-0 border-l-2 border-gray-300 ml-1.5 pl-3">
+                  {timelineItems.map((item) => {
+                    const noteMatch = item.kind === 'note' && item.id.startsWith('note-') ? item.id.slice(5) : null;
+                    return (
+                      <li key={item.id} className="relative pb-4 last:pb-0">
+                        <span className="absolute -left-[calc(0.375rem+5px)] top-1.5 h-2 w-2 rounded-full bg-gray-600 ring-2 ring-white" />
+                        <p className="text-[11px] text-gray-400 flex items-center gap-1">
+                          <Clock className="w-3 h-3 shrink-0" />
+                          {formatDateTime(item.created_at)}
+                        </p>
+                        <p className="text-sm font-medium text-gray-900 mt-0.5">{item.title}</p>
+                        {item.detail ? (
+                          noteMatch && editingId === noteMatch ? (
+                            <>
+                              <textarea
+                                value={editingContent}
+                                onChange={(e) => setEditingContent(e.target.value)}
+                                rows={3}
+                                className="mt-2 w-full rounded-xl border border-gray-200 p-2 text-sm"
+                              />
+                              <div className="flex justify-end gap-2 mt-2">
+                                <button
+                                  type="button"
+                                  onClick={() => { setEditingId(null); setEditingContent(''); }}
+                                  className="rounded-xl border border-gray-200 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={saveNoteEdit}
+                                  className="rounded-xl px-2.5 py-1 text-xs font-medium text-white"
+                                  style={{ backgroundColor: '#1b1b1b' }}
+                                >
+                                  Save
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="mt-1">
+                              <p className="text-sm text-gray-700 whitespace-pre-wrap">{item.detail}</p>
+                              {noteMatch ? (
+                                <div className="mt-1 flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => { setEditingId(noteMatch); setEditingContent(item.detail || ''); }}
+                                    className="text-[11px] text-gray-500 hover:text-gray-800"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void deleteNote(noteMatch)}
+                                    className="text-[11px] text-gray-500 hover:text-red-600"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              ) : null}
+                            </div>
+                          )
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
               )}
             </div>
           </section>
@@ -1804,7 +1874,7 @@ function LeadDrawer({
             onClose={() => setAppointmentOpen(false)}
             onScheduled={() => {
               setAppointmentOpen(false);
-              loadNotes();
+              void loadTimeline();
               onRefresh();
             }}
           />

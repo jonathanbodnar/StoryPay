@@ -109,6 +109,15 @@ export async function POST(
     if (str) payload[block.id] = str;
   }
 
+  const utm: Record<string, string> = {};
+  for (const k of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'] as const) {
+    const v = fd.get(k);
+    if (typeof v === 'string' && v.trim()) utm[k] = v.trim();
+  }
+  if (Object.keys(utm).length > 0) {
+    (payload as Record<string, unknown>)._utm = utm;
+  }
+
   for (const key of new Set(fd.keys())) {
     const m = key.match(NAME_RE);
     if (!m) continue;

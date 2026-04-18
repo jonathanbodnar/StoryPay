@@ -183,18 +183,49 @@ export interface CampaignSegment {
   type: SegmentType;
   tag_ids?: string[];
   stage_ids?: string[];
+  /** Exclude leads currently in any of these pipeline stages */
+  exclude_stage_ids?: string[];
+  /** Only leads with a wedding date set */
+  require_wedding_date?: boolean;
+  /** Lead must have clicked at least one of these trigger links (ever) */
+  clicked_trigger_link_ids?: string[];
+  /** When true, exclude leads in booked_stage_ids (need booked_stage_ids set) */
+  require_not_booked?: boolean;
+  /** Stage IDs that count as “booked” for require_not_booked */
+  booked_stage_ids?: string[];
 }
 
 export function parseSegment(raw: unknown): CampaignSegment {
   if (!isObject(raw)) return { type: 'all_leads' };
   const t = raw.type;
+  const extra = {
+    exclude_stage_ids: Array.isArray(raw.exclude_stage_ids)
+      ? raw.exclude_stage_ids.filter((x): x is string => typeof x === 'string')
+      : undefined,
+    require_wedding_date: raw.require_wedding_date === true,
+    clicked_trigger_link_ids: Array.isArray(raw.clicked_trigger_link_ids)
+      ? raw.clicked_trigger_link_ids.filter((x): x is string => typeof x === 'string')
+      : undefined,
+    require_not_booked: raw.require_not_booked === true,
+    booked_stage_ids: Array.isArray(raw.booked_stage_ids)
+      ? raw.booked_stage_ids.filter((x): x is string => typeof x === 'string')
+      : undefined,
+  };
   if (t === 'tags_any' && Array.isArray(raw.tag_ids)) {
-    return { type: 'tags_any', tag_ids: raw.tag_ids.filter((x): x is string => typeof x === 'string') };
+    return {
+      type: 'tags_any',
+      tag_ids: raw.tag_ids.filter((x): x is string => typeof x === 'string'),
+      ...extra,
+    };
   }
   if (t === 'stages' && Array.isArray(raw.stage_ids)) {
-    return { type: 'stages', stage_ids: raw.stage_ids.filter((x): x is string => typeof x === 'string') };
+    return {
+      type: 'stages',
+      stage_ids: raw.stage_ids.filter((x): x is string => typeof x === 'string'),
+      ...extra,
+    };
   }
-  return { type: 'all_leads' };
+  return { type: 'all_leads', ...extra };
 }
 
 export type AutomationTriggerType = 'tag_added' | 'stage_changed' | 'trigger_link_click';

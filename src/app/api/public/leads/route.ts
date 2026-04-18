@@ -36,6 +36,12 @@ interface LeadPayload {
   booking_timeline?: string;
   message?: string;
   source?: string;
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+  utm_term?: string;
+  utm_content?: string;
+  referral_source?: string;
 }
 
 function isEmail(s: string): boolean {
@@ -100,6 +106,12 @@ export async function POST(request: NextRequest) {
 
   const weddingDate = payload.wedding_date ?? payload.event_date ?? null;
 
+  const utm: Record<string, string> = {};
+  for (const k of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'] as const) {
+    const v = payload[k];
+    if (typeof v === 'string' && v.trim()) utm[k] = v.trim();
+  }
+
   const { data: lead, error: insertErr } = await supabaseAdmin
     .from('leads')
     .insert({
@@ -112,6 +124,8 @@ export async function POST(request: NextRequest) {
       booking_timeline: payload.booking_timeline || null,
       message: payload.message || null,
       source: payload.source || 'directory',
+      first_touch_utm: Object.keys(utm).length ? utm : {},
+      referral_source: typeof payload.referral_source === 'string' ? payload.referral_source.trim() || null : null,
     })
     .select('id, track_token')
     .single();

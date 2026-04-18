@@ -437,6 +437,13 @@ export function MarketingFormView({
       }
       setStatus('loading');
       const fd = new FormData(form);
+      if (typeof window !== 'undefined') {
+        const u = new URLSearchParams(window.location.search);
+        for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'] as const) {
+          const v = u.get(key);
+          if (v) fd.append(key, v);
+        }
+      }
       try {
         const res = await fetch(`/api/public/forms/${embedToken}/submit`, {
           method: 'POST',

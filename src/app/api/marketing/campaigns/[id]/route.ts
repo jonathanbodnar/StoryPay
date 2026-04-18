@@ -3,9 +3,9 @@ import { getVenueId } from '@/lib/auth-helpers';
 import { supabaseAdmin } from '@/lib/supabase';
 import type { CampaignSegment } from '@/lib/marketing-email-schema';
 import { parseEmailDefinition } from '@/lib/marketing-email-schema';
-import { mergeMarketingFields, renderMarketingEmailHtml } from '@/lib/marketing-email-render';
+import { mergeMarketingFields, renderMarketingEmailHtml, type MergeFieldRecord } from '@/lib/marketing-email-render';
 import { sendEmail } from '@/lib/email';
-import { signMarketingUnsubscribeToken } from '@/lib/marketing-email-tokens';
+import { buildMergeVars } from '@/lib/marketing-email-worker';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -190,35 +190,21 @@ export async function POST(
 
   const { data: venue } = await supabaseAdmin.from('venues').select('name').eq('id', venueId).single();
   const appOrigin = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
-  let vars: Record<string, string> = {
+  const previewUnsub = `${appOrigin.replace(/\/$/, '')}/api/public/marketing/unsubscribe?token=preview`;
+  let vars: MergeFieldRecord = {
     first_name: 'Alex',
     last_name: 'Preview',
     email: to,
     venue_name: (venue?.name as string) || 'Your venue',
-    unsubscribe_url: `${appOrigin.replace(/\/$/, '')}/api/public/marketing/unsubscribe?token=preview`,
+    unsubscribe_url: previewUnsub,
+    wedding_date: '',
+    wedding_date_nice: '',
+    wedding_month: '',
+    guest_count: '',
   };
   if (body.leadId) {
-    const { data: lead } = await supabaseAdmin
-      .from('leads')
-      .select('id, email, first_name, last_name, name')
-      .eq('id', body.leadId)
-      .eq('venue_id', venueId)
-      .maybeSingle();
-    if (lead?.email) {
-      const fn =
-        (lead.first_name as string | null)?.trim() ||
-        (lead.name as string | null)?.split(/\s+/)[0] ||
-        'there';
-      const ln = (lead.last_name as string | null)?.trim() || '';
-      const token = signMarketingUnsubscribeToken(venueId, lead.id as string);
-      vars = {
-        first_name: fn,
-        last_name: ln,
-        email: String(lead.email),
-        venue_name: (venue?.name as string) || 'Your venue',
-        unsubscribe_url: `${appOrigin.replace(/\/$/, '')}/api/public/marketing/unsubscribe?token=${encodeURIComponent(token)}`,
-      };
-    }
+    const merged = await buildMergeVars(venueId, body.leadId, appOrigin);
+    if (merged) vars = merged;
   }
 
   const def = parseEmailDefinition(tmpl.definition_json);

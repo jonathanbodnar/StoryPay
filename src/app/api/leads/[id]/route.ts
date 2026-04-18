@@ -27,6 +27,31 @@ async function getVenueId(): Promise<string | null> {
   return c.get('venue_id')?.value ?? null;
 }
 
+export async function GET(
+  _request: NextRequest,
+  context: { params: Promise<{ id: string }> },
+) {
+  const venueId = await getVenueId();
+  if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { id } = await context.params;
+
+  const { data: leadRow, error } = await supabaseAdmin
+    .from('leads')
+    .select('*')
+    .eq('id', id)
+    .eq('venue_id', venueId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('[GET /api/leads/[id]] failed:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  if (!leadRow) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  const withTags = await leadRowWithTags(venueId, leadRow as Record<string, unknown>);
+  return NextResponse.json({ lead: withTags });
+}
+
 export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
@@ -56,6 +81,9 @@ export async function PATCH(
     position?: number;
     /** Full replacement of tag ids for this lead. */
     tagIds?: string[];
+    lostReason?: string | null;
+    referralSource?: string | null;
+    firstTouchUtm?: Record<string, unknown> | null;
   };
   try {
     body = await request.json();
@@ -94,6 +122,16 @@ export async function PATCH(
   if (body.pipelineId === null || typeof body.pipelineId === 'string') updates.pipeline_id = body.pipelineId || null;
   if (body.stageId === null || typeof body.stageId === 'string')       updates.stage_id    = body.stageId    || null;
   if (typeof body.position === 'number')           updates.position = body.position;
+  if (body.lostReason === null || typeof body.lostReason === 'string') {
+    updates.lost_reason = body.lostReason?.trim() || null;
+  }
+  if (body.referralSource === null || typeof body.referralSource === 'string') {
+    updates.referral_source = body.referralSource?.trim() || null;
+  }
+  if (body.firstTouchUtm !== undefined) {
+    updates.first_touch_utm =
+      body.firstTouchUtm && typeof body.firstTouchUtm === 'object' ? body.firstTouchUtm : {};
+  }
 
   // When the stage changes (and the client didn't send an explicit status),
   // keep `leads.status` aligned with the stage name for legacy filters.

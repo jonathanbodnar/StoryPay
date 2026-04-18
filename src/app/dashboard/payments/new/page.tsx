@@ -216,6 +216,40 @@ export default function NewProposalInvoicePage() {
  if (name || email) setCustomerMode('new');
  }, [searchParams]);
 
+ const leadIdParam = searchParams.get('leadId');
+ useEffect(() => {
+   if (!leadIdParam) return;
+   let cancelled = false;
+   void fetch(`/api/leads/${leadIdParam}`, { cache: 'no-store' })
+     .then((r) => (r.ok ? r.json() : null))
+     .then((d: { lead?: {
+       first_name: string | null;
+       last_name: string | null;
+       name: string;
+       email: string;
+       phone: string | null;
+     } } | null) => {
+       if (cancelled || !d?.lead) return;
+       const lead = d.lead;
+       const fn = (lead.first_name || '').trim();
+       const ln = (lead.last_name || '').trim();
+       if (fn || ln) {
+         setClientFirst(fn);
+         setClientLast(ln);
+       } else {
+         const parts = (lead.name || '').trim().split(/\s+/);
+         setClientFirst(parts[0] || '');
+         setClientLast(parts.slice(1).join(' ') || '');
+       }
+       if (lead.email) setClientEmail(lead.email);
+       if (lead.phone) setClientPhone(lead.phone);
+       setCustomerMode('new');
+     });
+   return () => {
+     cancelled = true;
+   };
+ }, [leadIdParam]);
+
  // Load templates + products + branding
  useEffect(() => {
  fetch('/api/templates').then(r=>r.json()).then(d=>setTemplates(Array.isArray(d)?d:[]));

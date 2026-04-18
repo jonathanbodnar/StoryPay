@@ -34,6 +34,9 @@ interface LeadRow {
   pipeline_id: string | null;
   stage_id: string | null;
   position: number;
+  lost_reason?: string | null;
+  referral_source?: string | null;
+  first_touch_utm?: Record<string, unknown> | null;
 }
 
 async function getVenueId(): Promise<string | null> {
@@ -76,7 +79,8 @@ export async function GET(request: NextRequest) {
     .select(
       'id, venue_id, track_token, first_name, last_name, name, email, phone, wedding_date, guest_count, ' +
       'booking_timeline, message, notes, status, source, created_at, updated_at, ' +
-      'venue_name, venue_website_url, opportunity_value, pipeline_id, stage_id, position',
+      'venue_name, venue_website_url, opportunity_value, pipeline_id, stage_id, position, ' +
+      'lost_reason, referral_source, first_touch_utm',
     )
     .eq('venue_id', venueId)
     .order('position', { ascending: true })
@@ -162,7 +166,8 @@ export async function GET(request: NextRequest) {
         .select(
           'id, venue_id, track_token, first_name, last_name, name, email, phone, wedding_date, guest_count, ' +
           'booking_timeline, message, notes, status, source, created_at, updated_at, ' +
-          'venue_name, venue_website_url, opportunity_value, pipeline_id, stage_id, position',
+          'venue_name, venue_website_url, opportunity_value, pipeline_id, stage_id, position, ' +
+          'lost_reason, referral_source, first_touch_utm',
         )
         .eq('venue_id', venueId)
         .in('id', missingNoteLeadIds);

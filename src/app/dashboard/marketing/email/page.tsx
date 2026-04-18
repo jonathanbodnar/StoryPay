@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Mail, Megaphone, Workflow, FileStack } from 'lucide-react';
+import { Mail, Megaphone, Workflow, FileStack, BarChart3 } from 'lucide-react';
 import { getVenueId } from '@/lib/auth-helpers';
 
 export const dynamic = 'force-dynamic';
@@ -11,6 +11,12 @@ export default async function MarketingEmailHubPage() {
   if (!venueId) redirect('/dashboard');
 
   const cards = [
+    {
+      href: '/dashboard/marketing/analytics',
+      title: 'Analytics',
+      desc: 'Campaign sends and opens, form volume, pipeline value, and loss reasons.',
+      icon: BarChart3,
+    },
     {
       href: '/dashboard/marketing/email/templates',
       title: 'Email templates',
