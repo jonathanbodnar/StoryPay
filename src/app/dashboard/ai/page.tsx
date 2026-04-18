@@ -19,7 +19,7 @@ export default function AskAIPage() {
  </div>
  <h1 className="font-heading text-2xl text-gray-900 mb-3">Ask AI</h1>
  <p className="text-sm text-gray-500 max-w-sm leading-relaxed mb-6">
- Ask AI is available on every page as a floating chat bubble in the bottom-right corner of your dashboard.
+ Ask AI is available on every page as a floating chat bubble in the bottom-right corner of your dashboard. It uses live account data and product help — on the <strong>Leads</strong> page it also sees your pipeline snapshot (totals, stages, recent leads).
  </p>
  <div className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4 text-sm text-gray-600 max-w-sm">
  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-white"style={{ backgroundColor: '#1b1b1b' }}>

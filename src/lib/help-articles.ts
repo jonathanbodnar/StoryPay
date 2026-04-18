@@ -538,7 +538,36 @@ Click any card (or list row) to open the full lead drawer — edit any field, ad
 
 The pipeline picker (top-right) lets you switch between multiple pipelines. Everyone starts with a default "Sales Pipeline" with 8 stages: Lead, Conversations Started, Lead Contacted, Tour Booked, Proposal Sent, Wedding Booked, Follow up, Not Interested. You can rename, add, remove, and reorder stages — or create a brand-new pipeline — with the Edit button.
 
-When a **customer profile** exists with the same email as a lead, updating the stage on the customer profile or moving the card on the Kanban can keep both in sync (see the customer profile pipeline section).`,
+When a **customer profile** exists with the same email as a lead, updating the stage on the customer profile or moving the card on the Kanban can keep both in sync (see the customer profile pipeline section).
+
+**Pipeline intelligence** — Below the page header, an insights strip summarizes **open pipeline** (sum of opportunity values), **weighted pipeline** (deal value × each stage's win probability; see next articles), rough **booked revenue** by referral label vs **directory**-sourced leads (from paid proposals matched by email), and a simple **ROI** vs optional **listing marketing monthly spend** when that budget is stored on your venue. This is directional, not accounting-grade.
+
+**Tags & attribution** — Leads support **marketing tags** and **trigger links** (Marketing) for attribution; the drawer can show personalized trigger URLs for this lead.`,
+      },
+      {
+        id: 'leads-crm-intelligence',
+        title: 'Pipeline intelligence, owners, audit trail, and revenue visibility',
+        tags: ['weighted', 'forecast', 'roi', 'audit', 'owner', 'assign', 'hide revenue', 'permissions', 'log call', 'insights', 'listing spend'],
+        body: `The Leads page includes tools for forecasting, accountability, and team permissions.
+
+**Weighted pipeline**
+- Each stage has a **win probability** (0–100%). If unset, StoryPay uses sensible defaults from the stage **kind** (open vs won vs lost).
+- **Weighted** amounts multiply opportunity value by that probability. You'll see **wtd** on Kanban column headers and on cards, plus a venue-wide weighted total in the insights strip.
+
+**Deal value**
+- Set **Opportunity value** on the lead (drawer or when adding a lead). Cards and list rows show the amount unless hidden by role (below).
+
+**Assigning an owner**
+- Open the lead drawer → **Owner** → choose an active team member or **Unassigned**. Initials can appear on Kanban cards.
+
+**Activity & audit**
+- The drawer includes **Activity & audit** — a chronological log when someone changes **stage**, **opportunity value**, or **owner**, and when someone uses **Log a call** (free-text summary). This is separate from the **Timeline** (notes, tasks, marketing events, etc.).
+
+**Who can see dollar amounts**
+- The **venue owner** can enable **Hide $** per team member on **Settings → Team** (for active members who are not the Owner role). Those users see **•••** instead of opportunity and weighted money lines in Leads.
+
+**Listing spend & ROI**
+- Venues can store an optional **listing marketing monthly spend** on the account. When present, the Leads insights strip compares rough **directory-attributed booked revenue** to that budget as a simple ROI hint.`,
       },
       {
         id: 'leads-kanban',
@@ -556,9 +585,9 @@ The change saves instantly. There's no "undo" in the UI, but dragging the card b
 Each column shows at the top:
 - Stage name and its color dot
 - Lead count
-- Total opportunity value of the cards in that column
+- **Total opportunity value** for that column, and a **weighted (wtd)** line derived from each card's value × stage win probability (unless dollars are hidden for your role)
 
-Cards show the lead's name, venue, email, phone, wedding date, note count, opportunity value, and date created.
+Cards show the lead's name, venue, email, phone, wedding date, note count, **assignee initials** when an owner is set, **opportunity value** with a **wtd** line under it, marketing **tags**, and date created.
 
 Scroll horizontally if you have many stages — the board always fits a single row of columns, even on wide pipelines.
 
@@ -578,6 +607,7 @@ Editing stages (right panel):
 - Rename — click a stage name and type a new one; it saves when you tab/click away.
 - Change color — click the color swatch next to the stage name.
 - Stage kind — each stage is classified as Active (open), Won, or Lost. Won stages count as booked revenue in stats; Lost stages are excluded. Change the dropdown next to each stage.
+- **Win probability** — used for weighted pipeline totals on the board and in insights. Advanced accounts may set a 0–100% value per stage (API); otherwise defaults apply from the stage kind.
 - Reorder — use the up/down arrow buttons.
 - Delete — trash icon. Any leads in that stage become unassigned and show in the first column.
 - Add — type a name in the "New stage" box and click Add stage.
@@ -603,14 +633,21 @@ Use "Use this pipeline" to make a pipeline the one you're viewing on the Leads p
 At the top you'll see the lead's name and the date they were added.
 
 Stage picker
-- Tap any stage chip to move this lead to that stage. The chip lights up in the stage's color.
+- Tap any stage chip to move this lead to that stage. The chip lights up in the stage's color. Stage changes are recorded under **Activity & audit**.
+
+**Owner**
+- Use the **Owner** dropdown to assign the lead to an active team member (or leave unassigned).
 
 Editable fields (click to edit, blur or press Enter to save)
 - First name, Last name
 - Email, Phone
-- Opportunity value — expected deal size in dollars
+- Opportunity value — expected deal size in dollars (may show as hidden if your role has **Hide $** enabled by the venue owner)
 - Venue name, Venue website (URL)
 - Wedding date, Guest count
+- Referral / partner (free text)
+
+**Marketing tags**
+- Add or remove tags; create new tags from the lead or manage them under Marketing → Trigger Links & Tags.
 
 Inquiry message
 - If the lead came from the directory, their original message is shown here as read-only context.
@@ -621,6 +658,10 @@ Timestamped notes
 - Edit (pencil) or delete (trash) your own notes. System-generated notes (like "Appointment scheduled") can't be edited, but you can delete them.
 - Notes are sorted newest-first.
 - The Kanban cards show a small "3" badge next to the message icon when a lead has notes.
+
+**Activity & audit** (above the timeline)
+- Lists **who** changed **stage**, **opportunity value**, or **owner**, plus **Log a call** entries you add here.
+- Type a short summary and click **Log a call** — it appears in this feed and helps with handoffs.
 
 Quick actions
 - Reply (opens your email client with the lead's email pre-filled)
@@ -692,8 +733,10 @@ Things to ask:
 - "Show me leads with wedding dates in June"
 - "How many leads did I convert to Booked this month?"
 - "What's the average opportunity value of my leads in Proposal Sent?"
+- "Explain weighted pipeline vs open pipeline"
+- "What's my directory vs referral booked revenue?" (insights strip uses your data; Ask AI also has leads context when you're on this page)
 
-AI only sees aggregate stats plus recent leads' details — it can't see financial data not already visible on your dashboard. It also doesn't edit leads for you; use the Kanban board or drawer for changes.
+Ask AI uses **server-side** pipeline data when you're on the Leads page (totals, recent leads, notes snippets). It does not change leads for you — use the Kanban board or drawer. If your user session **hides revenue** in the UI, you may still get numeric answers in chat depending on backend context; treat the **dashboard** as the source of truth for what your role may view.
 
 If AI gives a stale answer, refresh the page to reset the context.`,
       },
@@ -1209,7 +1252,9 @@ To manage a team member: click the three-dot (...) menu on their row to:
 
 Team members can update their own name and email at any time by clicking their name in the sidebar footer → My Profile.
 
-Note: Only owners and admins can manage team members.`,
+Note: Only owners and admins can manage team members.
+
+**Hide pipeline dollars (CRM)** — When you are logged in as the **venue owner** (not as an invited team member), each active team member who is **not** assigned the Owner role may show a **Hide $** checkbox on their row. Turning it on hides opportunity amounts, weighted totals, and related money lines for that person in Leads.`,
       },
       {
         id: 'team-roles',
@@ -1238,7 +1283,9 @@ Member
 
 To change a member's role: click the three-dot menu (...) on their row → Edit Member → change the Role field.
 
-Team members can update their own profile (name, email) by clicking their name in the sidebar footer.`,
+Team members can update their own profile (name, email) by clicking their name in the sidebar footer.
+
+**Pipeline revenue visibility** — The **venue owner** can enable **Hide $** for individual team members (Settings → Team) so those users see masked amounts (•••) on Leads instead of dollar figures. Owners always see full amounts.`,
       },
     ],
   },
@@ -1298,7 +1345,7 @@ Note: SMS uses your GHL sub-account's verified A2P phone number automatically �
         id: 'ai-overview',
         title: 'What is Ask AI?',
         tags: ['ask ai', 'ai', 'chat', 'assistant', 'help'],
-        body: `Ask AI is your built-in assistant, powered by your live account data and an internal summary of the StoryPay product (navigation, CRM, Leads pipelines, calendar, payments, marketing tools, settings, etc.). It knows your current revenue, recent proposals, pipeline context, and more.
+        body: `Ask AI is your built-in assistant, powered by your live account data and an internal summary of the StoryPay product (navigation, CRM, Leads pipelines and intelligence, calendar, payments, marketing tools, team permissions, settings, etc.). It knows your current revenue, recent proposals, and — when you're on the **Leads** page — a detailed snapshot of leads, stages, and notes.
 
 Open it by clicking the sparkle button (bottom-right corner of any page) or by clicking Ask AI in the sidebar.
 
@@ -1309,8 +1356,9 @@ You can ask questions like:
 - "What reports are available?"
 - "How do I connect Calendly?"
 - "How do I sync my calendar with Google Calendar?"
+- On Leads: "What's my total pipeline value?", "Which leads have wedding dates in June?", "Explain weighted vs open pipeline"
 
-Ask AI answers in plain language without jargon. It uses your real account data to give accurate, personalised answers.`,
+Ask AI answers in plain language without jargon. It uses your real account data to give accurate, personalised answers. The in-app documentation it reads includes weighted pipeline, audit logs, assignable owners, and team **Hide $** settings.`,
       },
       {
         id: 'ai-screenshot',
@@ -1375,7 +1423,7 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/listing':        ['listing-overview', 'listing-autosave', 'listing-photos', 'listing-publish', 'listing-slug'],
 
   // Leads
-  '/dashboard/leads': ['leads-overview', 'leads-filter-search', 'leads-manage', 'leads-notifications', 'leads-to-proposal'],
+  '/dashboard/leads': ['leads-overview', 'leads-crm-intelligence', 'leads-kanban', 'leads-filter-search', 'leads-notifications', 'leads-to-proposal'],
 
   // Marketing — native email
   '/dashboard/marketing/email': ['leads-overview', 'email-types', 'gs-overview'],
@@ -1412,7 +1460,7 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
 
   // AI
   '/dashboard/ai':   ['ai-overview', 'ai-screenshot', 'ai-voice', 'ai-escalate'],
-  '/dashboard/help': ['gs-overview', 'gs-sidebar-chrome', 'listing-overview', 'leads-overview', 'ai-overview', 'cust-pipeline'],
+  '/dashboard/help': ['gs-overview', 'gs-sidebar-chrome', 'listing-overview', 'leads-overview', 'leads-crm-intelligence', 'ai-overview', 'cust-pipeline'],
 
   // Signup / login (public pages — harmless if never hit via dashboard)
   '/signup': ['gs-signup', 'gs-login'],

@@ -558,7 +558,9 @@ export default function AskAIWidget() {
  <span className="text-sm font-semibold text-gray-900">Hi! I&apos;m Ask AI 👋</span>
  </div>
  <p className="text-sm text-gray-600 leading-relaxed">
- I know your account data in real time — revenue, proposals, customers. Ask me anything, or attach a screenshot.
+ {pathname?.startsWith('/dashboard/leads')
+ ? 'I know your account data and, on this page, your lead pipeline snapshot (stages, totals, recent leads). Ask about weighted pipeline, owners, or anything else — or attach a screenshot.'
+ : 'I know your account data in real time — revenue, proposals, customers. Ask me anything, or attach a screenshot.'}
  </p>
  </div>
 

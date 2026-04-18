@@ -15,13 +15,13 @@ StoryPay is an all-in-one platform for wedding venues to manage proposals, invoi
 - Customers: Full CRM — customer profiles with Overview, Notes, Activity timeline, Payments, Tasks, Documents; configurable sales pipeline and stages in the profile header (aligned with Leads when email matches).
 - Calendar: Book and track all venue events (tours, weddings, receptions, tastings, meetings, rehearsals, holds, blocked dates). Syncs with Calendly, Google Calendar, Outlook, and Apple Calendar.
 - Directory Listing: Manage how the venue appears on storyvenue.com (photos, description, capacity, publish on/off).
-- Leads: Kanban and list views for inquiries — same configurable sales pipelines and stages as customer profiles.
+- Leads: Kanban and list views for inquiries — same configurable sales pipelines and stages as customer profiles. Includes pipeline intelligence (open pipeline vs weighted forecast, rough referral/directory revenue vs listing spend), per-lead opportunity value on cards, assignable owners, marketing tags, trigger links, an audit trail (stage/value/owner changes and logged calls), and mobile-friendly actions (drag cards, log call, quick note).
 - Reports: 7 downloadable financial reports (CSV, Excel, PDF). Owners and admins only.
 - Payments (sidebar flyout): New, Proposals, Proposal Templates, Installments, Subscriptions, Transactions.
 - Marketing (sidebar flyout): Email & campaigns, Trigger Links & Tags, Form builder (availability depends on role).
 - Help Center: Searchable documentation, related articles, ratings.
 - What's New: Changelog and Feature Requests board.
-- Settings (sidebar flyout): General, Branding, Email Templates, Integrations (Calendly, Google Calendar, QuickBooks, FreshBooks), Team, Notifications.
+- Settings (sidebar flyout): General (venue info, service fee), Branding, Email Templates, Integrations (Calendly, Google Calendar, QuickBooks, FreshBooks), Team (roles, invites, **Hide $** for team members — owners only), Notifications. Venues may also store **listing marketing monthly spend** on the account for Leads ROI — when that value exists, insights use it.
 - Sidebar collapse (desktop): Chevron next to the logo narrows the sidebar to an icon rail and shows a compact mark; preference is saved in the browser.
 
 ## Calendar
@@ -49,7 +49,11 @@ StoryPay is an all-in-one platform for wedding venues to manage proposals, invoi
 - Referral source: Instagram, Google, Wedding Wire, The Knot, Referral, Venue Website, Facebook, Other.
 
 ## Leads (sales pipeline)
-- Leads → Kanban (columns = stages) or List. Switch pipelines with the pipeline picker; edit stages/pipelines from Leads.
+- Leads → Kanban (columns = stages) or List. Switch pipelines with the pipeline picker; edit stages/pipelines from Leads (gear / Edit).
+- **Insights strip** (below the header): summarizes **open pipeline** (sum of opportunity values), **weighted pipeline** (each deal × stage win probability; default probabilities by stage kind if a stage has no custom %), **booked revenue** attributed to directory vs referrals (matched from paid proposals by customer email), and a simple **ROI hint** vs **listing marketing monthly spend** when that monthly budget exists on the venue account.
+- **Cards and columns** show opportunity value; columns and cards also show **weighted (wtd)** amounts. **Assignee** initials can appear on cards when a lead has an owner.
+- **Lead drawer**: edit fields; **Owner** dropdown (team members); **Activity & audit** (who changed stage, opportunity value, or owner; **Log a call** posts to the audit feed); **Timeline** for notes, tasks, emails, etc.; **Hide $**: some team roles never see dollar amounts (see Team).
+- **Trust / permissions**: Stage, value, and assignment changes are logged with actor (owner vs team member). Venue owners can mark team members **Hide $** under Settings → Team so those users see masked amounts (•••) in CRM.
 - Moving a lead or updating a linked customer profile stage keeps CRM and pipeline consistent when emails match.
 
 ## Integrations
@@ -133,6 +137,7 @@ StoryPay is an all-in-one platform for wedding venues to manage proposals, invoi
   - Member: Can only view proposals, customers, and calendar. No access to Settings or Reports.
 - Click Add Team Member to invite someone by email.
 - They receive a branded invite email with an Accept Invitation link.
+- **Hide pipeline revenue (Leads / CRM)**: When logged in as the **venue owner** (not a team-member session), each active non-owner member row can show a **Hide $** control. Enabling it hides opportunity amounts, weighted totals, and related money lines for that person while they use the dashboard.
 
 ## Get Started Checklist (Onboarding)
 - New accounts see a Get Started bubble on the dashboard (owners only).
@@ -179,6 +184,11 @@ StoryPay is an all-in-one platform for wedding venues to manage proposals, invoi
 - How do I track where a lead came from? Customer profile → Overview → Referral Source dropdown.
 - Why can't a team member see Settings? Members only see proposals, customers, and calendar. Admins see most settings. Only owners see General, Team, and Integrations.
 - How do I restart the setup guide? Settings → General → Restart Setup Guide (owners only).
+- What is weighted pipeline on Leads? Each opportunity value is multiplied by the **win probability** of its stage (defaults by stage kind; venues can store 0–100% per stage). Weighted totals appear as **wtd** on columns and cards and in the insights strip.
+- How do I assign a lead to someone? Open the lead drawer → **Owner** → pick an active team member (or Unassigned).
+- Where is the audit trail for a lead? Lead drawer → **Activity & audit** — stage, value, and owner changes; use **Log a call** to record a conversation.
+- Why can't someone see dollar amounts on leads? An owner may have enabled **Hide $** for that team member under Settings → Team.
+- What is listing marketing spend for? An optional monthly budget stored on the venue — when set, the Leads insights strip compares rough directory-attributed booked revenue to it for a simple ROI figure.
 `;
 
 export async function POST(request: NextRequest) {
