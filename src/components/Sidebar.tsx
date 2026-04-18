@@ -197,13 +197,23 @@ export default function Sidebar({
             className={rail ? 'flex justify-center' : 'block min-w-0'}
             onClick={onCloseMobile}
           >
-            <Image
-              src="/storyvenue-dark-logo.png"
-              alt="StoryPay"
-              width={rail ? 40 : 148}
-              height={rail ? 40 : 38}
-              className={`opacity-90 ${rail ? 'object-contain max-h-10' : ''}`}
-            />
+            {rail ? (
+              <Image
+                src="/storyvenue-favicon.png"
+                alt="StoryPay"
+                width={36}
+                height={36}
+                className="object-contain opacity-90"
+              />
+            ) : (
+              <Image
+                src="/storyvenue-dark-logo.png"
+                alt="StoryPay"
+                width={148}
+                height={38}
+                className="opacity-90"
+              />
+            )}
           </Link>
           {!rail && onToggleCollapsed && (
             <button

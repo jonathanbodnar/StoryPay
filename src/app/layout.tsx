@@ -33,15 +33,10 @@ export async function generateMetadata(): Promise<Metadata> {
       images: [ogImage], creator: '@storypay',
     },
     alternates: { canonical: seo?.canonical || APP_URL },
-    // The main app (app.storyvenue.com and all its subsections — dashboard,
-    // directory, leads, listings, etc.) uses the StoryVenue favicon. The
-    // separate storypay.io marketing homepage lives under /homepage and has
-    // its own layout + favicon.ico, so it's unaffected by this change.
-    icons: {
-      icon: [{ url: '/storyvenue-favicon.png', type: 'image/png' }],
-      shortcut: '/storyvenue-favicon.png',
-      apple: '/apple-touch-icon.png',
-    },
+    // Favicons: `src/app/icon.png` + `apple-icon.png` (same asset as
+    // `public/storyvenue-favicon.png`) so Next emits proper link tags and
+    // replaces host defaults (e.g. Railway triangle). Homepage under /homepage
+    // keeps its own layout.
     verification: { google: process.env.GOOGLE_SITE_VERIFICATION || '' },
   };
 }
