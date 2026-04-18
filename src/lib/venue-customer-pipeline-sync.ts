@@ -57,30 +57,38 @@ export async function syncLeadFromVenueCustomerRow(
   const stage = await fetchStageRow(venueId, vc.stage_id);
   if (!stage || stage.pipeline_id !== vc.pipeline_id) return;
 
-  const { data: lead } = await supabaseAdmin
+  // Multiple leads can share the same email (imports, duplicates). `.maybeSingle()` fails
+  // when >1 row exists, which skipped sync — customer profile showed the right stage but
+  // `leads` stayed on another pipeline and disappeared from the active pipeline view.
+  const { data: leadRows, error: leadErr } = await supabaseAdmin
     .from('leads')
     .select('id, stage_id')
     .eq('venue_id', venueId)
-    .ilike('email', email)
-    .maybeSingle();
-  if (!lead) return;
+    .ilike('email', email);
 
-  const prevStageId = (lead as { stage_id: string | null }).stage_id ?? null;
-  const leadId = (lead as { id: string }).id;
+  if (leadErr || !leadRows?.length) return;
 
-  await supabaseAdmin
-    .from('leads')
-    .update({
-      pipeline_id: vc.pipeline_id,
-      stage_id: vc.stage_id,
-      status: legacyStatusForStageName(stage.name),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', leadId)
-    .eq('venue_id', venueId);
+  const status = legacyStatusForStageName(stage.name);
+  const updatedAt = new Date().toISOString();
 
-  if (prevStageId && vc.stage_id && prevStageId !== vc.stage_id) {
-    void onMarketingStageChanged(venueId, leadId, vc.stage_id);
+  for (const row of leadRows as Array<{ id: string; stage_id: string | null }>) {
+    const prevStageId = row.stage_id ?? null;
+    const leadId = row.id;
+
+    await supabaseAdmin
+      .from('leads')
+      .update({
+        pipeline_id: vc.pipeline_id,
+        stage_id: vc.stage_id,
+        status,
+        updated_at: updatedAt,
+      })
+      .eq('id', leadId)
+      .eq('venue_id', venueId);
+
+    if (prevStageId && vc.stage_id && prevStageId !== vc.stage_id) {
+      void onMarketingStageChanged(venueId, leadId, vc.stage_id);
+    }
   }
 }
 
@@ -99,12 +107,14 @@ export async function resolveVenueCustomerPipelineContext(
   await ensureDefaultPipeline(venueId);
 
   const email = vc.customer_email.trim().toLowerCase();
-  const { data: lead } = await supabaseAdmin
+  const { data: leadList } = await supabaseAdmin
     .from('leads')
     .select('id, pipeline_id, stage_id')
     .eq('venue_id', venueId)
     .ilike('email', email)
-    .maybeSingle();
+    .order('updated_at', { ascending: false })
+    .limit(1);
+  const lead = leadList?.[0] ?? null;
 
   let pipelineId = vc.pipeline_id;
   let stageId = vc.stage_id;
