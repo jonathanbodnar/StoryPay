@@ -11,14 +11,18 @@ StoryPay is an all-in-one platform for wedding venues to manage proposals, invoi
 
 ## Navigation / Sections
 - Home (Dashboard): Revenue overview, KPI cards, recent proposals and transactions, date range filter.
-- Customers: Full CRM — manage contacts, customer profiles with wedding details, tasks, notes, documents, activity timeline, partner info, pipeline stage, and referral source.
+- Ask AI: Sidebar entry plus floating sparkle (bottom-right) — answers questions using live account data and this documentation.
+- Customers: Full CRM — customer profiles with Overview, Notes, Activity timeline, Payments, Tasks, Documents; configurable sales pipeline and stages in the profile header (aligned with Leads when email matches).
 - Calendar: Book and track all venue events (tours, weddings, receptions, tastings, meetings, rehearsals, holds, blocked dates). Syncs with Calendly, Google Calendar, Outlook, and Apple Calendar.
+- Directory Listing: Manage how the venue appears on storyvenue.com (photos, description, capacity, publish on/off).
+- Leads: Kanban and list views for inquiries — same configurable sales pipelines and stages as customer profiles.
 - Reports: 7 downloadable financial reports (CSV, Excel, PDF). Owners and admins only.
-- Payments: Create proposals/invoices, manage templates, installments, subscriptions, transactions.
-- Help Center: Searchable documentation with AI-assisted answers.
+- Payments (sidebar flyout): New, Proposals, Proposal Templates, Installments, Subscriptions, Transactions.
+- Marketing (sidebar flyout): Email & campaigns, Trigger Links & Tags, Form builder (availability depends on role).
+- Help Center: Searchable documentation, related articles, ratings.
 - What's New: Changelog and Feature Requests board.
-- Settings: General, Branding, Email Templates, Integrations (Calendly, Google Calendar, QuickBooks, FreshBooks), Team, Notifications.
-- Ask AI: This assistant — answers questions about your account in real time.
+- Settings (sidebar flyout): General, Branding, Email Templates, Integrations (Calendly, Google Calendar, QuickBooks, FreshBooks), Team, Notifications.
+- Sidebar collapse (desktop): Chevron next to the logo narrows the sidebar to an icon rail and shows a compact mark; preference is saved in the browser.
 
 ## Calendar
 - Go to Calendar in the sidebar.
@@ -33,14 +37,20 @@ StoryPay is an all-in-one platform for wedding venues to manage proposals, invoi
 
 ## Customer Profiles (CRM)
 - Go to Customers → click a customer name to open their full profile.
-- 5 tabs: Overview, Activity, Payments, Tasks, Documents.
-- Overview: edit contact info; add partner/second contact (name, email, phone — important for wedding couples); Wedding Details (wedding date, ceremony type, guest count, space, rehearsal date, coordinator, catering notes); internal notes with timestamps.
-- Activity: unified reverse-chronological timeline — proposal sent/viewed/signed, payment made, note added, file uploaded, task created/completed, Calendly booking received.
-- Payments: all proposals and invoices for this customer; installment schedules; copy link, resend, refund.
-- Tasks: create tasks with due dates; check off when done; completed tasks collapse but stay visible; overdue tasks show in red.
-- Documents: upload files (PDF, Word, images, etc., max 10MB); file types: Contract, Floor Plan, Vendor Agreement, Insurance, Photo, Other; statuses: Pending, Received, Approved; click to download.
-- Pipeline stage (header): Inquiry → Tour Scheduled → Proposal Sent → Booked → Event Complete → Post-Event. Click any stage to update.
+- Tabs: Overview, Notes, Activity (timeline), Payments, Tasks, Documents.
+- Overview: edit contact info; partner/second contact; Wedding Details (date, ceremony type, guest count, space, rehearsal, coordinator, catering notes); referral source.
+- Notes: timestamped internal notes (editable after creation).
+- Activity: unified reverse-chronological timeline — proposals, payments, notes, files, tasks, Calendly, pipeline stage changes, etc.
+- Payments: proposals and invoices; installments; copy link, resend, refund.
+- Tasks: due dates, complete/reopen, inline edit; overdue highlighted.
+- Documents: upload (max 10MB); types Contract, Floor Plan, Vendor Agreement, Insurance, Photo, Other; statuses Pending, Received, Approved.
+- Pipeline (card below header): Use the **Pipeline** dropdown to pick one of your venue's sales pipelines (same pipelines as Leads / Kanban). **Stage** pills list that pipeline's stages with colors from your setup — click a pill to move the customer; saves to the server (UI updates immediately). If a lead exists with the same email, you may see "Linked to lead — stage syncs both ways". Default template stages often include Lead, Conversations Started, Lead Contacted, Tour Booked, Proposal Sent, Wedding Booked, Follow up, Not Interested — venues can rename, add, or reorder stages on the Leads page.
+- Legacy pipeline_stage slug may still appear in older integrations; the Kanban pipeline IDs are the source of truth for the dashboard UI.
 - Referral source: Instagram, Google, Wedding Wire, The Knot, Referral, Venue Website, Facebook, Other.
+
+## Leads (sales pipeline)
+- Leads → Kanban (columns = stages) or List. Switch pipelines with the pipeline picker; edit stages/pipelines from Leads.
+- Moving a lead or updating a linked customer profile stage keeps CRM and pipeline consistent when emails match.
 
 ## Integrations
 
@@ -163,7 +173,9 @@ StoryPay is an all-in-one platform for wedding venues to manage proposals, invoi
 - How do I sync with Google Calendar? Settings → Integrations → copy your iCal URL → add as a subscribed calendar in Google Calendar.
 - How do I see my available dates? Settings → Integrations → Public Availability Page URL — share this link.
 - How do I add a venue space (barn, garden)? Calendar page → Manage Spaces → add name, color, capacity.
-- What is a pipeline stage? It tracks where a customer is in your booking funnel — from Inquiry through to Post-Event Follow-up.
+- What is a pipeline / stage? Venues use configurable **sales pipelines** (see Leads). On a customer profile, pick a pipeline and click **stage pills** to move someone through your funnel; stages match your Kanban columns. Linked leads with the same email can stay in sync.
+- How do I collapse the sidebar? Desktop: click the chevron beside the logo (narrow icon rail + compact mark). Preference saves for this browser.
+- The browser tab shows the StoryVenue icon; if it looks outdated after an update, hard-refresh or clear site data (favicons cache aggressively).
 - How do I track where a lead came from? Customer profile → Overview → Referral Source dropdown.
 - Why can't a team member see Settings? Members only see proposals, customers, and calendar. Admins see most settings. Only owners see General, Team, and Integrations.
 - How do I restart the setup guide? Settings → General → Restart Setup Guide (owners only).

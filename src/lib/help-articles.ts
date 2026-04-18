@@ -32,18 +32,21 @@ export const HELP_CATEGORIES: HelpCategory[] = [
 
 After logging in you land on the Home dashboard which shows your revenue, pipeline, recent proposals, and recent transactions at a glance.
 
-Navigation lives in the left sidebar (or the hamburger menu on mobile). The main sections are:
-- Home — your live snapshot
-- Customers — manage contacts and full customer profiles
-- Calendar — book and track tours, weddings, and events
-- Directory Listing — manage how your venue appears on storyvenue.com (photos, description, capacity, pricing, amenities, publish on/off)
-- Leads — inquiries submitted from your storyvenue.com listing
-- Reports — 7 downloadable financial report types (owners and admins only)
-- Payments — proposals, invoices, installments, subscriptions, transactions
-- Help Center — searchable documentation with AI-powered answers
-- Settings — branding, email templates, integrations (including Calendly, Google Calendar), team, notifications
+Navigation lives in the left sidebar (or the hamburger menu on mobile). Top-level items include Home, Ask AI, Customers, Calendar, Directory Listing, Leads, Reports, What's New, and Help Center. **Payments**, **Marketing** (email & campaigns, trigger links & tags, form builder), and **Settings** open as flyout submenus. On desktop you can **collapse** the sidebar with the chevron next to the logo — it becomes a narrow icon rail with a compact mark; your choice is remembered in the browser.
 
-What you see in the sidebar depends on your role. Owners see everything. Admins see most things. Members only see Payments, Customers, Calendar, Leads, and their directory listing.
+The main areas:
+- Home — revenue snapshot and recent activity
+- Customers — CRM profiles with tabs (Overview, Notes, Activity, Payments, Tasks, Documents) and a **pipeline + stage** control in the header (same sales pipelines as Leads)
+- Calendar — tours, weddings, and events
+- Directory Listing — how you appear on storyvenue.com (photos, description, publish)
+- Leads — Kanban/list pipeline for inquiries; editable stages and pipelines
+- Reports — financial exports (owners and admins)
+- Payments flyout — new proposal/invoice, proposals list, templates, installments, subscriptions, transactions
+- Marketing flyout — email campaigns, trigger links & tags, form builder
+- Help Center — searchable docs and Ask AI–style help
+- Settings flyout — general, branding, email templates, integrations, team, notifications
+
+What you see depends on your role. Owners see everything. Admins see most areas. Members have a narrower set (e.g. proposals, customers, calendar, leads, listing — no Reports or most Settings).
 
 How the two sites fit together:
 - storyvenue.com is the public-facing directory browsed by couples looking for a venue
@@ -51,7 +54,17 @@ How the two sites fit together:
 
 Couples browse your listing on storyvenue.com → submit an inquiry → the lead lands in your Leads inbox here → you reply, book a tour, send a proposal, and collect payment — all without leaving StoryPay.
 
-The floating sparkle button (bottom-right) opens Ask AI, which can answer questions about your account in real time.`,
+The floating sparkle button (bottom-right) opens Ask AI, which can answer questions about your account in real time.
+
+The browser tab shows the StoryVenue icon. If it still looks wrong after an app update, try a hard refresh (Ctrl+Shift+R / Cmd+Shift+R) or clear site data — browsers cache favicons aggressively.`,
+      },
+      {
+        id: 'gs-sidebar-chrome',
+        title: 'Sidebar collapse and browser tab icon',
+        tags: ['sidebar', 'collapse', 'narrow', 'rail', 'favicon', 'tab icon', 'icon', 'chevron'],
+        body: `On large screens, the left sidebar can be collapsed: click the **chevron** next to the StoryVenue logo (points left when expanded, right when collapsed). The sidebar shrinks to a narrow **icon rail** so you gain horizontal space for the main content. The logo switches to a **compact mark** instead of the full wordmark. Your preference is saved in this browser.
+
+The **browser tab** uses the StoryVenue icon (favicon), not the full logo. Hosting platforms sometimes show a default icon until the app loads — if you still see an old icon after an update, hard-refresh the page or clear cached data for app.storyvenue.com.`,
       },
       {
         id: 'gs-signup',
@@ -523,7 +536,9 @@ Every lead shows:
 
 Click any card (or list row) to open the full lead drawer — edit any field, add timestamped notes, schedule an appointment, create a customer from the lead, or delete it.
 
-The pipeline picker (top-right) lets you switch between multiple pipelines. Everyone starts with a default "Sales Pipeline" with 8 stages: Lead, Conversations Started, Lead Contacted, Tour Booked, Proposal Sent, Wedding Booked, Follow up, Not Interested. You can rename, add, remove, and reorder stages — or create a brand-new pipeline — with the Edit button.`,
+The pipeline picker (top-right) lets you switch between multiple pipelines. Everyone starts with a default "Sales Pipeline" with 8 stages: Lead, Conversations Started, Lead Contacted, Tour Booked, Proposal Sent, Wedding Booked, Follow up, Not Interested. You can rename, add, remove, and reorder stages — or create a brand-new pipeline — with the Edit button.
+
+When a **customer profile** exists with the same email as a lead, updating the stage on the customer profile or moving the card on the Kanban can keep both in sync (see the customer profile pipeline section).`,
       },
       {
         id: 'leads-kanban',
@@ -758,16 +773,19 @@ Results are paginated (20 per page). Use the Previous / Next buttons at the bott
         id: 'cust-profile',
         title: 'Customer profile — overview and tabs',
         tags: ['customer profile', 'crm', 'profile', 'tabs', 'overview', 'history', 'edit note', 'edit notes', 'new proposal', 'new invoice'],
-        body: `Click a customer's name to open their full profile. Customers you see on this list come from three sources — storyvenue.com signups, LunarPay integration, and GoHighLevel imports — all unified into one record per person. The profile has 5 tabs:
+        body: `Click a customer's name to open their full profile. Customers you see on this list come from three sources — storyvenue.com signups, LunarPay integration, and GoHighLevel imports — all unified into one record per person. The profile has six tabs:
 
 Overview
 - Edit contact info inline (name, email, phone, address)
 - Add and view a partner / second contact (important for wedding couples)
 - Wedding Details block: wedding date, ceremony type (ceremony only / reception only / both), guest count, assigned venue space, rehearsal date, day-of coordinator name and phone, catering notes
-- Notes: add timestamped internal notes on this customer. Each note has a pencil icon — click it to edit the note inline after it was created, with Save and Cancel buttons.
+- Referral source (how they found you)
+
+Notes
+- Timestamped internal notes. Each note can be edited inline (pencil icon) with Save / Cancel.
 
 Activity
-- Unified reverse-chronological timeline of every interaction: proposal sent, viewed, signed, payment made, note added, file uploaded, task created/completed, Calendly booking received
+- Unified reverse-chronological timeline of every interaction: proposals, payments, notes, files, tasks, Calendly bookings, pipeline stage changes, and more.
 
 Payments
 - All proposals and invoices linked to this customer
@@ -786,29 +804,27 @@ Documents
 - Each file has a type and a status (Pending / Received / Approved)
 - Click a filename to download; update status inline; delete files
 
-The header shows:
-- Pipeline stage (Inquiry → Tour Scheduled → Proposal Sent → Booked → Event Complete → Post-Event Follow-up) — click any stage to update it
-- Referral source badge (how this lead found you)
-- KPI row: total proposals, total paid, pending amount, open tasks
+Below the main header row, the **Pipeline** section lets you choose which **sales pipeline** applies (same pipelines you manage under Leads — e.g. default "Sales Pipeline") and shows **stage pills** for that pipeline. Click a pill to move the customer to that stage; the selection saves to the server and the UI updates right away. If a lead exists with the **same email**, you may see a note that the profile is linked to a lead and stages can stay in sync both ways.
 
-On the Customers list page itself, each row also has "Create Proposal" and "Create Invoice" shortcut buttons that do the same thing — open the payment builder with the customer pre-selected.`,
+The header also shows a stage badge, referral source when set, and KPIs: proposals count, total paid, pending amount, open tasks.
+
+On the Customers list page itself, each row also has "Create Proposal" and "Create Invoice" shortcut buttons that open the payment builder with the customer pre-selected.`,
       },
       {
         id: 'cust-pipeline',
-        title: 'Pipeline stages and referral source',
-        tags: ['pipeline', 'stage', 'lead', 'referral', 'source', 'funnel', 'crm'],
-        body: `Each customer has a pipeline stage that tracks where they are in your booking funnel:
+        title: 'Sales pipeline, stages, and referral source',
+        tags: ['pipeline', 'stage', 'lead', 'referral', 'source', 'funnel', 'crm', 'kanban', 'sales pipeline'],
+        body: `Customer profiles use the same **configurable sales pipelines** as the Leads page (Kanban). Your venue can have one or more pipelines; each pipeline has ordered **stages** with names and colors (the default template often includes stages like Lead, Conversations Started, Lead Contacted, Tour Booked, Proposal Sent, Wedding Booked, Follow up, and Not Interested — you can rename, add, remove, or reorder them from Leads).
 
-- Inquiry — first contact, not yet qualified
-- Tour Scheduled — a tour has been booked
-- Proposal Sent — a proposal or invoice has been sent
-- Booked — proposal signed and paid
-- Event Complete — the wedding or event has taken place
-- Post-Event Follow-up — following up for reviews, referrals, etc.
+On the customer profile:
+1. Choose the **Pipeline** from the dropdown (e.g. "Sales Pipeline").
+2. Click a **stage pill** to move the customer to that stage. The UI updates immediately and the change is saved.
 
-Click any stage button on the customer profile header to update it. The stage is visible on the customer list as a colored badge.
+If a **lead** in your inbox shares the same email as this customer, the profile may show that it is linked to a lead — **stage can sync both ways** between Leads and the customer record.
 
-Referral Source tracks how this couple found you: Instagram, Google, Wedding Wire, The Knot, Referral, Venue Website, Facebook, or Other. Set it in the Overview tab → partner/contact edit section.`,
+**Referral source** (how the couple found you) is separate from pipeline: Instagram, Google, Wedding Wire, The Knot, Referral, Venue Website, Facebook, or Other. Set it from the Overview tab / contact area.
+
+If pipeline or stage changes fail with a database-related error, your environment may need the latest database migration applied — contact whoever manages your StoryPay database or support.`,
       },
       {
         id: 'cust-tasks',
@@ -1282,9 +1298,9 @@ Note: SMS uses your GHL sub-account's verified A2P phone number automatically �
         id: 'ai-overview',
         title: 'What is Ask AI?',
         tags: ['ask ai', 'ai', 'chat', 'assistant', 'help'],
-        body: `Ask AI is your built-in assistant, powered by your live account data. It knows your current revenue, recent proposals, customer pipeline, and more.
+        body: `Ask AI is your built-in assistant, powered by your live account data and an internal summary of the StoryPay product (navigation, CRM, Leads pipelines, calendar, payments, marketing tools, settings, etc.). It knows your current revenue, recent proposals, pipeline context, and more.
 
-Open it by clicking the sparkle button (bottom-right corner of any page) or by clicking Ask AI or Support in the sidebar.
+Open it by clicking the sparkle button (bottom-right corner of any page) or by clicking Ask AI in the sidebar.
 
 You can ask questions like:
 - "How much revenue did I make last month?"
@@ -1346,10 +1362,10 @@ export function getArticleById(id: string) {
 
 export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   // Home
-  '/dashboard': ['dash-kpis', 'dash-chart', 'gs-onboarding'],
+  '/dashboard': ['dash-kpis', 'dash-chart', 'gs-onboarding', 'gs-sidebar-chrome'],
 
   // Customers
-  '/dashboard/customers': ['cust-add', 'cust-search', 'cust-profile', 'cust-tasks', 'cust-documents'],
+  '/dashboard/customers': ['cust-add', 'cust-search', 'cust-profile', 'cust-pipeline', 'cust-tasks', 'cust-documents'],
 
   // Calendar
   '/dashboard/calendar': ['cal-overview', 'cal-spaces', 'cal-add-event', 'cal-conflicts'],
@@ -1396,7 +1412,7 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
 
   // AI
   '/dashboard/ai':   ['ai-overview', 'ai-screenshot', 'ai-voice', 'ai-escalate'],
-  '/dashboard/help': ['gs-overview', 'listing-overview', 'leads-overview', 'ai-overview'],
+  '/dashboard/help': ['gs-overview', 'gs-sidebar-chrome', 'listing-overview', 'leads-overview', 'ai-overview', 'cust-pipeline'],
 
   // Signup / login (public pages — harmless if never hit via dashboard)
   '/signup': ['gs-signup', 'gs-login'],
