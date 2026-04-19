@@ -37,21 +37,41 @@ import {
   AlignLeft,
   AlignRight,
   ArrowLeft,
+  Building2,
+  Calendar,
   ChevronDown,
+  CircleDot,
   Code2,
   Copy,
+  Eye,
+  FileText,
   GripVertical,
+  Hash,
+  Heading,
+  Image as ImageIcon,
   LayoutTemplate,
+  Link2,
+  ListChecks,
+  ListFilter,
   Loader2,
   Mail,
+  MapPin,
   Minus,
   Monitor,
+  MousePointerClick,
+  Phone as PhoneIcon,
   Plus,
   Redo2,
   Save,
+  Send,
+  Settings,
   Smartphone,
   Undo2,
+  Upload,
+  User,
+  UserRound,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import RichTextEditor from '@/components/RichTextEditor';
 import {
   MarketingFormView,
@@ -86,7 +106,29 @@ type EditorSnapshot = {
 
 type PaletteDrag = { kind: 'palette'; blockType: FormBlockType; label: string };
 
-const PALETTE: { type: FormBlockType; label: string; icon?: string }[] = [
+const BLOCK_TYPE_ICONS: Record<FormBlockType, LucideIcon> = {
+  heading: Heading,
+  rich_text: FileText,
+  first_name: User,
+  last_name: UserRound,
+  email: Mail,
+  phone: PhoneIcon,
+  url: Link2,
+  number: Hash,
+  date: Calendar,
+  address: MapPin,
+  image: ImageIcon,
+  file: Upload,
+  radio: CircleDot,
+  select: ListFilter,
+  checkbox_group: ListChecks,
+  venue_contact: Building2,
+  submit: Send,
+  button: MousePointerClick,
+  html: Code2,
+};
+
+const PALETTE: { type: FormBlockType; label: string }[] = [
   { type: 'heading', label: 'Heading' },
   { type: 'rich_text', label: 'Rich text' },
   { type: 'first_name', label: 'First name' },
@@ -201,7 +243,7 @@ function PaletteDraggable({
     id: `palette:${type}`,
     data: { kind: 'palette', blockType: type, label } satisfies PaletteDrag,
   });
-  const badge = label.replace(/[^a-zA-Z]/g, '').slice(0, 1).toUpperCase() || '?';
+  const Icon = BLOCK_TYPE_ICONS[type];
   return (
     <div
       ref={setNodeRef}
@@ -211,8 +253,8 @@ function PaletteDraggable({
         isDragging ? 'opacity-50' : ''
       }`}
     >
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-gray-200 bg-[#fafafa] text-xs font-semibold text-gray-600">
-        {badge}
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-gray-200 bg-[#fafafa] text-gray-600">
+        <Icon size={16} strokeWidth={1.75} aria-hidden />
       </span>
       <span className="min-w-0 flex-1 truncate">{label}</span>
       <button
@@ -868,16 +910,32 @@ function ThemeInspector({
 function PostSubmitInspector({
   postSubmit,
   onChange,
+  onPreviewThankYou,
 }: {
   postSubmit: PostSubmitConfig | undefined;
   onChange: (p: PostSubmitConfig) => void;
+  onPreviewThankYou?: () => void;
 }) {
   const p = { ...defaultPostSubmit(), ...postSubmit };
   const mode = p.mode ?? 'default';
 
   return (
     <div className="text-[13px] text-gray-900">
-      <SettingsPanelTitle>Thank you</SettingsPanelTitle>
+      <div className="mb-5">
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="text-[15px] font-medium tracking-tight text-gray-900">After submit</h3>
+          {onPreviewThankYou ? (
+            <button
+              type="button"
+              onClick={onPreviewThankYou}
+              className="shrink-0 text-[12px] font-medium text-gray-500 underline decoration-gray-300 underline-offset-2 transition hover:text-gray-900"
+            >
+              Preview thanks
+            </button>
+          ) : null}
+        </div>
+        <div className="mt-3 h-px w-full bg-gray-200/90" />
+      </div>
       <SettingsRow label="After submit">
         <SettingsSelectWrap>
           <select
@@ -952,9 +1010,10 @@ export function FormBuilderEditor({
   const [viewport, setViewport] = useState<Viewport>('desktop');
   const [embedOpen, setEmbedOpen] = useState(false);
   const [thankYouOpen, setThankYouOpen] = useState(false);
-  const [rightTab, setRightTab] = useState<'block' | 'form' | 'theme' | 'submissions' | 'versions'>(
-    'block'
-  );
+  const [rightTab, setRightTab] = useState<
+    'block' | 'settings' | 'theme' | 'submissions' | 'versions'
+  >('block');
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [activeDrag, setActiveDrag] = useState<PaletteDrag | null>(null);
   const [dropOverId, setDropOverId] = useState<string | null>(null);
   const [canvasDragId, setCanvasDragId] = useState<string | null>(null);
@@ -1320,18 +1379,19 @@ export function FormBuilderEditor({
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2">
             <button
               type="button"
-              onClick={() => setThankYouOpen(true)}
+              onClick={() => setPreviewOpen(true)}
               className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-medium text-gray-800 shadow-sm transition hover:bg-gray-50"
             >
-              <Mail size={15} strokeWidth={2} />
+              <Eye size={15} strokeWidth={2} />
               <span className="hidden sm:inline">Preview</span>
             </button>
             <button
               type="button"
-              onClick={() => setRightTab('form')}
+              onClick={() => setRightTab('settings')}
               className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-medium text-gray-800 shadow-sm transition hover:bg-gray-50"
             >
-              Thank you
+              <Settings size={15} strokeWidth={2} />
+              <span className="hidden sm:inline">Settings</span>
             </button>
             <button
               type="button"
@@ -1374,21 +1434,19 @@ export function FormBuilderEditor({
             onDragEnd={onDragEnd}
           >
             <aside className="flex min-h-0 max-h-[min(44vh,22rem)] w-full shrink-0 flex-col border-b border-gray-200 bg-white lg:max-h-none lg:min-h-0 lg:w-[280px] lg:shrink-0 lg:overflow-hidden lg:border-b-0 lg:border-r">
-              <div className="shrink-0 border-b border-gray-100 px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <LayoutTemplate size={16} className="text-gray-400" strokeWidth={1.75} />
-                  <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-500">
-                    Sections
-                  </h2>
-                </div>
-                <p className="mt-1 text-[12px] leading-snug text-gray-400">
-                  Drag modules to the canvas or use + to add.
-                </p>
+              <div className="flex h-14 shrink-0 items-center gap-2 border-b border-gray-100 px-4">
+                <LayoutTemplate size={16} className="shrink-0 text-gray-400" strokeWidth={1.75} />
+                <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-500">
+                  Sections
+                </h2>
               </div>
               <div
                 ref={modulesScroll.ref}
                 className={`min-h-0 grow overflow-y-auto overscroll-contain px-3 pb-4 pt-2 ${modulesScroll.className}`}
               >
+                <p className="mb-2 px-1 text-[12px] leading-snug text-gray-400">
+                  Drag modules to the canvas or use + to add.
+                </p>
                 <div className="flex flex-col gap-1.5">
                   {PALETTE.map((p) => (
                     <PaletteDraggable
@@ -1403,7 +1461,7 @@ export function FormBuilderEditor({
             </aside>
 
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-white lg:min-h-0">
-              <div className="flex shrink-0 justify-center border-b border-gray-100 bg-white px-4 py-3">
+              <div className="flex h-14 shrink-0 items-center justify-center border-b border-gray-100 bg-white px-4">
                 <div className="inline-flex rounded-full border border-gray-200 bg-white p-0.5">
                   {(
                     [
@@ -1464,8 +1522,12 @@ export function FormBuilderEditor({
 
                 <DragOverlay dropAnimation={null}>
                   {activeDrag ? (
-                    <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-[13px] shadow-lg">
-                      {activeDrag.label}
+                    <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[13px] shadow-lg">
+                      {(() => {
+                        const Ic = BLOCK_TYPE_ICONS[activeDrag.blockType];
+                        return <Ic size={16} strokeWidth={1.75} className="shrink-0 text-gray-600" aria-hidden />;
+                      })()}
+                      <span>{activeDrag.label}</span>
                     </div>
                   ) : null}
                 </DragOverlay>
@@ -1473,11 +1535,12 @@ export function FormBuilderEditor({
             </div>
 
             <aside className="flex min-h-[min(50vh,28rem)] w-full shrink-0 flex-col border-t border-gray-200 bg-[#f9f9f9] lg:min-h-0 lg:w-[320px] lg:shrink-0 lg:overflow-hidden lg:border-l lg:border-t-0">
-          <div className="shrink-0 border-b border-gray-200/80 bg-white px-1 pt-2">
-            <div className="flex gap-0 px-2">
+          <div className="flex h-14 shrink-0 items-stretch border-b border-gray-100 bg-white px-1">
+            <div className="flex min-h-0 w-full items-stretch px-1">
               {(
                 [
                   ['block', 'Design'],
+                  ['settings', 'Settings'],
                   ['theme', 'Theme'],
                   ['submissions', 'Inbox'],
                   ['versions', 'History'],
@@ -1487,13 +1550,13 @@ export function FormBuilderEditor({
                   key={id}
                   type="button"
                   onClick={() => setRightTab(id)}
-                  className={`relative min-w-0 flex-1 px-2 pb-2.5 pt-1 text-center text-[13px] font-medium transition ${
+                  className={`relative min-w-0 flex-1 px-1.5 text-center text-[12px] font-medium transition sm:text-[13px] ${
                     rightTab === id
-                      ? 'text-gray-900 after:absolute after:bottom-0 after:left-2 after:right-2 after:h-0.5 after:bg-gray-900'
-                      : 'text-gray-400 hover:text-gray-600'
+                      ? 'border-b-2 border-gray-900 text-gray-900'
+                      : 'border-b-2 border-transparent text-gray-400 hover:text-gray-600'
                   }`}
                 >
-                  {lab}
+                  <span className="flex h-full items-center justify-center leading-tight">{lab}</span>
                 </button>
               ))}
             </div>
@@ -1527,8 +1590,12 @@ export function FormBuilderEditor({
               </div>
             ) : null}
 
-            {rightTab === 'form' ? (
-              <PostSubmitInspector postSubmit={definition.postSubmit} onChange={patchPostSubmit} />
+            {rightTab === 'settings' ? (
+              <PostSubmitInspector
+                postSubmit={definition.postSubmit}
+                onChange={patchPostSubmit}
+                onPreviewThankYou={() => setThankYouOpen(true)}
+              />
             ) : null}
 
             {rightTab === 'theme' ? (
@@ -1638,6 +1705,49 @@ export function FormBuilderEditor({
           </DndContext>
         </div>
       </div>
+
+      {previewOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="form-preview-title"
+          onClick={() => setPreviewOpen(false)}
+        >
+          <div
+            className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 id="form-preview-title" className="text-lg font-semibold text-gray-900">
+                  Form preview
+                </h2>
+                <p className="mt-1 text-sm text-gray-600">
+                  How visitors see your form (theme, labels, and fields). Submit is disabled.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewOpen(false)}
+                className="shrink-0 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                Close
+              </button>
+            </div>
+            <div className="mt-6 rounded-xl border border-gray-100 bg-[#f3f4f6] p-4 sm:p-6">
+              <MarketingFormView
+                definition={definition}
+                embedToken={embedToken}
+                preview
+                formTitle={name}
+                venueContact={venueContact}
+                onPreviewSubmit={() => setSaveMsg('Preview only — not submitted')}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {embedOpen ? (
         <div
