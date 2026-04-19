@@ -3,9 +3,76 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
 import { getSessionUser } from '@/lib/session';
 import { conversationReaderRef } from '@/lib/conversation-reader';
+import { conversationHttpError } from '@/lib/conversation-db-errors';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+
+/** List threads + contact fields without PostgREST embeds (avoids FK/cache issues). */
+async function fetchThreadsListManual(venueId: string) {
+  const { data: rows, error: qErr } = await supabaseAdmin
+    .from('conversation_threads')
+    .select(
+      'id, venue_id, venue_customer_id, subject, last_message_at, last_message_preview, last_message_visibility',
+    )
+    .eq('venue_id', venueId)
+    .order('last_message_at', { ascending: false })
+    .limit(120);
+
+  if (qErr) return { ok: false as const, error: qErr };
+
+  const customerIds = [
+    ...new Set((rows ?? []).map((r) => r.venue_customer_id as string).filter(Boolean)),
+  ];
+
+  const byCustomer = new Map<
+    string,
+    { first_name?: string; last_name?: string; customer_email?: string }
+  >();
+
+  if (customerIds.length > 0) {
+    const { data: contacts, error: cErr } = await supabaseAdmin
+      .from('venue_customers')
+      .select('id, first_name, last_name, customer_email')
+      .eq('venue_id', venueId)
+      .in('id', customerIds);
+
+    if (cErr) return { ok: false as const, error: cErr };
+
+    for (const c of contacts ?? []) {
+      const row = c as {
+        id: string;
+        first_name?: string;
+        last_name?: string;
+        customer_email?: string;
+      };
+      byCustomer.set(row.id, {
+        first_name: row.first_name,
+        last_name: row.last_name,
+        customer_email: row.customer_email,
+      });
+    }
+  }
+
+  const mapped = (rows ?? []).map((r) => {
+    const vc = byCustomer.get(r.venue_customer_id as string);
+    return {
+      thread_id: r.id,
+      venue_id: r.venue_id,
+      venue_customer_id: r.venue_customer_id,
+      subject: r.subject,
+      last_message_at: r.last_message_at,
+      last_message_preview: r.last_message_preview,
+      last_message_visibility: r.last_message_visibility,
+      unread_count: 0,
+      contact_first_name: vc?.first_name ?? '',
+      contact_last_name: vc?.last_name ?? '',
+      contact_email: vc?.customer_email ?? '',
+    };
+  });
+
+  return { ok: true as const, data: mapped };
+}
 
 export async function GET(request: NextRequest) {
   const venueId = await getVenueId();
@@ -26,48 +93,12 @@ export async function GET(request: NextRequest) {
 
   if (error) {
     console.error('[conversations/threads GET rpc]', error);
-    const { data: rows, error: qErr } = await supabaseAdmin
-      .from('conversation_threads')
-      .select(
-        `
-        id,
-        venue_id,
-        venue_customer_id,
-        subject,
-        last_message_at,
-        last_message_preview,
-        last_message_visibility,
-        venue_customers ( first_name, last_name, customer_email )
-      `,
-      )
-      .eq('venue_id', venueId)
-      .order('last_message_at', { ascending: false })
-      .limit(120);
-
-    if (qErr) {
-      return NextResponse.json({ error: qErr.message }, { status: 500 });
+    const manual = await fetchThreadsListManual(venueId);
+    if (!manual.ok) {
+      const { status, body } = conversationHttpError(manual.error);
+      return NextResponse.json(body, { status });
     }
-
-    const mapped = (rows ?? []).map((r: Record<string, unknown>) => {
-      const rawVc = r.venue_customers;
-      const vc = (
-        Array.isArray(rawVc) ? rawVc[0] : rawVc
-      ) as { first_name?: string; last_name?: string; customer_email?: string } | null;
-      return {
-        thread_id: r.id,
-        venue_id: r.venue_id,
-        venue_customer_id: r.venue_customer_id,
-        subject: r.subject,
-        last_message_at: r.last_message_at,
-        last_message_preview: r.last_message_preview,
-        last_message_visibility: r.last_message_visibility,
-        unread_count: 0,
-        contact_first_name: vc?.first_name ?? '',
-        contact_last_name: vc?.last_name ?? '',
-        contact_email: vc?.customer_email ?? '',
-      };
-    });
-    return NextResponse.json(mapped);
+    return NextResponse.json(manual.data);
   }
 
   return NextResponse.json(data ?? []);
@@ -108,7 +139,8 @@ export async function POST(request: NextRequest) {
 
   if (insErr || !thread) {
     console.error('[conversations/threads POST]', insErr);
-    return NextResponse.json({ error: insErr?.message ?? 'Failed to create thread' }, { status: 500 });
+    const { status, body } = conversationHttpError(insErr);
+    return NextResponse.json(body, { status });
   }
 
   return NextResponse.json({ id: thread.id }, { status: 201 });

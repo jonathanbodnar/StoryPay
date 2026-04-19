@@ -86,6 +86,7 @@ export default function ConversationsPage() {
   const [contactSearch, setContactSearch] = useState('');
   const [contactResults, setContactResults] = useState<{ id: string; first_name: string; last_name: string; customer_email: string }[]>([]);
   const [creatingThread, setCreatingThread] = useState(false);
+  const [newConversationError, setNewConversationError] = useState('');
   const listRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -233,6 +234,7 @@ export default function ConversationsPage() {
 
   async function createThreadForContact(venueCustomerId: string) {
     setCreatingThread(true);
+    setNewConversationError('');
     try {
       const res = await fetch('/api/conversations/threads', {
         method: 'POST',
@@ -241,7 +243,9 @@ export default function ConversationsPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setSendError(data.error || 'Could not start conversation');
+        const msg = data.error || 'Could not start conversation';
+        setNewConversationError(msg);
+        setSendError(msg);
         return;
       }
       setShowNew(false);
@@ -265,7 +269,10 @@ export default function ConversationsPage() {
         </div>
         <button
           type="button"
-          onClick={() => setShowNew(true)}
+          onClick={() => {
+            setShowNew(true);
+            setNewConversationError('');
+          }}
           className="inline-flex items-center gap-2 rounded-xl bg-[#1b1b1b] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-neutral-800"
         >
           <Plus size={18} />
@@ -603,6 +610,7 @@ export default function ConversationsPage() {
                 onClick={() => {
                   setShowNew(false);
                   setContactSearch('');
+                  setNewConversationError('');
                 }}
                 className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"
                 aria-label="Close"
@@ -611,6 +619,11 @@ export default function ConversationsPage() {
               </button>
             </div>
             <div className="p-4">
+              {newConversationError && (
+                <p className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+                  {newConversationError}
+                </p>
+              )}
               <div className="relative mb-3">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
