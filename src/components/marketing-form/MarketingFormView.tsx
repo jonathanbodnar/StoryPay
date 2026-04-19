@@ -501,6 +501,8 @@ interface MarketingFormViewProps {
   wrapBlock?: (block: FormBlock, node: ReactNode) => ReactNode;
   /** Shown inside the form when there are no blocks (e.g. builder drop zone) */
   emptyCanvasSlot?: ReactNode | null;
+  /** Builder only: single flat white surface (no theme grey shell or card frame). */
+  flatCanvas?: boolean;
 }
 
 export function MarketingFormView({
@@ -513,6 +515,7 @@ export function MarketingFormView({
   builder = null,
   wrapBlock,
   emptyCanvasSlot = null,
+  flatCanvas = false,
 }: MarketingFormViewProps) {
   const theme = useMemo(() => mergeTheme(definition.theme), [definition.theme]);
   const googleFontFamilies = useMemo(
@@ -590,11 +593,14 @@ export function MarketingFormView({
     [embedToken, preview, onPreviewSubmit, definition.blocks]
   );
 
+  const shellBg = flatCanvas ? '#ffffff' : theme.background;
+  const cardBg = flatCanvas ? '#ffffff' : theme.surface;
+
   return (
     <div
-      className="min-h-0 w-full py-6"
+      className={`min-h-0 w-full ${flatCanvas ? 'py-2' : 'py-6'}`}
       style={{
-        background: theme.background,
+        background: shellBg,
         fontFamily: theme.fontFamily,
         color: theme.labelColor,
       }}
@@ -602,11 +608,12 @@ export function MarketingFormView({
       <GoogleFontsLoader families={googleFontFamilies} />
       <div className="mx-auto w-full px-4" style={{ maxWidth: theme.maxWidth }}>
         <div
-          className="border px-5 py-6 shadow-sm"
+          className={flatCanvas ? 'px-2 py-2 sm:px-4 sm:py-4' : 'border px-5 py-6 shadow-sm'}
           style={{
-            borderRadius: theme.borderRadius,
-            borderColor: theme.inputBorder,
-            background: theme.surface,
+            borderRadius: flatCanvas ? 0 : theme.borderRadius,
+            borderColor: flatCanvas ? 'transparent' : theme.inputBorder,
+            background: cardBg,
+            boxShadow: flatCanvas ? 'none' : undefined,
           }}
         >
           {formTitle ? (

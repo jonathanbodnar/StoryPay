@@ -47,7 +47,6 @@ import {
   Redo2,
   Save,
   Smartphone,
-  Tablet,
   Undo2,
 } from 'lucide-react';
 import RichTextEditor from '@/components/RichTextEditor';
@@ -74,7 +73,7 @@ const APP_ORIGIN =
     ? (process.env.NEXT_PUBLIC_APP_URL || window.location.origin).replace(/\/$/, '')
     : (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '');
 
-type Viewport = 'mobile' | 'tablet' | 'desktop';
+type Viewport = 'mobile' | 'desktop';
 
 type EditorSnapshot = {
   definition: MarketingFormDefinition;
@@ -203,23 +202,20 @@ function PaletteDraggable({
   return (
     <div
       ref={setNodeRef}
-      className={`group flex items-center gap-2 rounded-md border border-gray-200/80 bg-white px-2 py-2 text-[13px] text-gray-800 shadow-sm transition hover:border-gray-300 ${
+      {...listeners}
+      {...attributes}
+      className={`group flex cursor-grab touch-none items-center gap-2 rounded-md border border-gray-200/80 bg-white px-2 py-2 text-[13px] text-gray-800 shadow-sm transition hover:border-gray-300 active:cursor-grabbing ${
         isDragging ? 'opacity-50' : ''
       }`}
     >
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-gray-200 bg-[#fafafa] text-xs font-semibold text-gray-600">
         {badge}
       </span>
-      <span
-        className="min-w-0 flex-1 cursor-grab truncate active:cursor-grabbing"
-        {...listeners}
-        {...attributes}
-      >
-        {label}
-      </span>
+      <span className="min-w-0 flex-1 truncate">{label}</span>
       <button
         type="button"
         title={`Add ${label}`}
+        onPointerDown={(e) => e.stopPropagation()}
         onClick={() => onQuickAdd(type)}
         className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-gray-400 opacity-0 transition hover:bg-gray-100 hover:text-gray-800 group-hover:opacity-100"
       >
@@ -1222,8 +1218,7 @@ export function FormBuilderEditor({
 
   const emptySlot = useMemo(() => <CanvasEmptyDrop />, []);
 
-  const viewportMax =
-    viewport === 'mobile' ? 390 : viewport === 'tablet' ? 768 : 1200;
+  const viewportMax = viewport === 'mobile' ? 390 : 1200;
 
   const resolvedThankYou = useMemo(
     () => resolvePostSubmit(definition),
@@ -1231,7 +1226,7 @@ export function FormBuilderEditor({
   );
 
   return (
-    <div className="flex min-h-0 w-full min-w-0 max-w-none flex-1 flex-col overflow-x-hidden bg-[#f3f4f6]">
+    <div className="flex min-h-0 w-full min-w-0 max-w-none flex-1 flex-col overflow-x-hidden bg-white">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 sm:px-6">
           <div className="flex min-w-0 flex-1 items-center gap-2 text-[12px] text-gray-500 sm:gap-3">
@@ -1257,14 +1252,21 @@ export function FormBuilderEditor({
               aria-label="Form name"
             />
           </div>
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2">
             <button
               type="button"
               onClick={() => setThankYouOpen(true)}
-              className="hidden items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-medium text-gray-800 shadow-sm transition hover:bg-gray-50 sm:inline-flex"
+              className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-medium text-gray-800 shadow-sm transition hover:bg-gray-50"
             >
               <Mail size={15} strokeWidth={2} />
-              Preview
+              <span className="hidden sm:inline">Preview</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setRightTab('form')}
+              className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-medium text-gray-800 shadow-sm transition hover:bg-gray-50"
+            >
+              Thank you
             </button>
             <button
               type="button"
@@ -1298,65 +1300,64 @@ export function FormBuilderEditor({
         </header>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:h-[calc(100dvh-9rem)] lg:max-h-[calc(100dvh-9rem)] lg:flex-row lg:items-stretch">
-          <aside className="flex max-h-[min(44vh,22rem)] min-h-0 w-full shrink-0 flex-col overflow-hidden border-b border-gray-200/90 bg-[#f7f7f8] lg:max-h-none lg:h-full lg:w-[280px] lg:shrink-0 lg:border-b-0 lg:border-r">
-            <div className="shrink-0 border-b border-gray-200/70 px-4 py-3">
-              <div className="flex items-center gap-2">
-                <LayoutTemplate size={16} className="text-gray-400" strokeWidth={1.75} />
-                <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-500">
-                  Sections
-                </h2>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+          >
+            <aside className="flex max-h-[min(44vh,22rem)] min-h-0 w-full shrink-0 flex-col overflow-hidden border-b border-gray-200 bg-white lg:max-h-none lg:h-full lg:w-[280px] lg:shrink-0 lg:border-b-0 lg:border-r">
+              <div className="shrink-0 border-b border-gray-100 px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <LayoutTemplate size={16} className="text-gray-400" strokeWidth={1.75} />
+                  <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-500">
+                    Sections
+                  </h2>
+                </div>
+                <p className="mt-1 text-[12px] leading-snug text-gray-400">
+                  Drag modules to the canvas or use + to add.
+                </p>
               </div>
-              <p className="mt-1 text-[12px] leading-snug text-gray-400">
-                Drag modules to the canvas or use + to add.
-              </p>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4 pt-2">
-              <div className="flex flex-col gap-1.5">
-                {PALETTE.map((p) => (
-                  <PaletteDraggable
-                    key={p.type}
-                    type={p.type}
-                    label={p.label}
-                    onQuickAdd={addBlock}
-                  />
-                ))}
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-4 pt-2 touch-pan-y">
+                <div className="flex flex-col gap-1.5">
+                  {PALETTE.map((p) => (
+                    <PaletteDraggable
+                      key={p.type}
+                      type={p.type}
+                      label={p.label}
+                      onQuickAdd={addBlock}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
-          </aside>
+            </aside>
 
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#e8e7e5]">
-            <div className="flex shrink-0 justify-center border-b border-gray-300/25 bg-[#e8e7e5] px-4 py-3">
-              <div className="inline-flex rounded-full border border-gray-300/50 bg-white/95 p-0.5 shadow-sm">
-                {(
-                  [
-                    ['desktop', 'Desktop', Monitor] as const,
-                    ['tablet', 'Tablet', Tablet] as const,
-                    ['mobile', 'Mobile', Smartphone] as const,
-                  ]
-                ).map(([id, label, Icon]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setViewport(id)}
-                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition sm:px-4 ${
-                      viewport === id
-                        ? 'bg-gray-900 text-white shadow-sm'
-                        : 'text-gray-600 hover:bg-gray-100/80'
-                    }`}
-                  >
-                    <Icon size={14} strokeWidth={2} className="opacity-80" />
-                    <span className="hidden sm:inline">{label}</span>
-                  </button>
-                ))}
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white">
+              <div className="flex shrink-0 justify-center border-b border-gray-100 bg-white px-4 py-3">
+                <div className="inline-flex rounded-full border border-gray-200 bg-white p-0.5">
+                  {(
+                    [
+                      ['desktop', 'Desktop', Monitor] as const,
+                      ['mobile', 'Mobile', Smartphone] as const,
+                    ]
+                  ).map(([id, label, Icon]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setViewport(id)}
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition sm:px-4 ${
+                        viewport === id
+                          ? 'bg-gray-900 text-white shadow-sm'
+                          : 'text-gray-600 hover:bg-gray-100'
+                      }`}
+                    >
+                      <Icon size={14} strokeWidth={2} className="opacity-80" />
+                      <span className="hidden sm:inline">{label}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-8">
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragStart={onDragStart}
-                onDragEnd={onDragEnd}
-              >
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-white px-4 py-4 sm:px-6 touch-pan-y">
                 <SortableContext
                   items={definition.blocks.map((b) => b.id)}
                   strategy={verticalListSortingStrategy}
@@ -1365,11 +1366,12 @@ export function FormBuilderEditor({
                     className="mx-auto w-full transition-[max-width] duration-300 ease-out"
                     style={{ maxWidth: viewportMax }}
                   >
-                    <div className="rounded-lg border border-gray-200/90 bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
+                    <div className="bg-white">
                       <MarketingFormView
                         definition={definition}
                         embedToken={embedToken}
                         preview
+                        flatCanvas
                         formTitle={name}
                         venueContact={venueContact}
                         builder={builderOpts}
@@ -1389,17 +1391,15 @@ export function FormBuilderEditor({
                     </div>
                   ) : null}
                 </DragOverlay>
-              </DndContext>
+              </div>
             </div>
-          </div>
 
-        <aside className="flex min-h-[min(50vh,28rem)] w-full shrink-0 flex-col overflow-hidden border-t border-gray-200/90 bg-[#f9f9f9] lg:min-h-0 lg:h-full lg:w-[320px] lg:shrink-0 lg:border-l lg:border-t-0">
+            <aside className="flex min-h-[min(50vh,28rem)] w-full shrink-0 flex-col overflow-hidden border-t border-gray-200 bg-[#f9f9f9] lg:min-h-0 lg:h-full lg:w-[320px] lg:shrink-0 lg:border-l lg:border-t-0">
           <div className="shrink-0 border-b border-gray-200/80 bg-white px-1 pt-2">
             <div className="flex gap-0 px-2">
               {(
                 [
                   ['block', 'Design'],
-                  ['form', 'Thank you'],
                   ['theme', 'Theme'],
                   ['submissions', 'Inbox'],
                   ['versions', 'History'],
@@ -1430,7 +1430,7 @@ export function FormBuilderEditor({
             ))}
           </datalist>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 touch-pan-y">
             {rightTab === 'block' ? (
               <div>
                 {selected ? (
@@ -1554,6 +1554,7 @@ export function FormBuilderEditor({
             </div>
           </div>
         </aside>
+          </DndContext>
         </div>
       </div>
 
