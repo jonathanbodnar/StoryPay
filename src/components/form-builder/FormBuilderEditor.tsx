@@ -1231,23 +1231,30 @@ export function FormBuilderEditor({
   );
 
   return (
-    <div className="relative left-1/2 w-screen max-w-[100vw] -translate-x-1/2 overflow-x-clip bg-[#f7f7f8]">
-      <div className="flex min-h-[calc(100vh-5rem)] flex-col">
+    <div className="relative left-1/2 flex min-h-0 w-screen max-w-[100vw] flex-1 -translate-x-1/2 flex-col overflow-x-clip bg-[#f3f4f6]">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 sm:px-6">
-          <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-8">
+          <div className="flex min-w-0 flex-1 items-center gap-2 text-[12px] text-gray-500 sm:gap-3">
             <Link
               href="/dashboard/marketing/form-builder"
-              className="inline-flex shrink-0 items-center gap-1.5 text-[13px] font-medium text-gray-500 transition hover:text-gray-900"
+              className="inline-flex shrink-0 items-center gap-1.5 font-medium transition hover:text-gray-900"
             >
               <ArrowLeft size={15} strokeWidth={2} />
               <span className="hidden sm:inline">Forms</span>
             </Link>
-            <span className="hidden text-[13px] font-semibold text-gray-900 lg:inline">Form builder</span>
+            <span className="text-gray-300" aria-hidden>
+              ›
+            </span>
+            <span className="hidden font-medium text-gray-600 sm:inline">Form builder</span>
+            <span className="text-gray-300" aria-hidden>
+              ›
+            </span>
             <input
-              className="min-w-0 max-w-[10rem] flex-1 border-0 border-b border-transparent bg-transparent py-1 text-sm font-semibold text-gray-900 placeholder:text-gray-400 focus:border-gray-300 focus:outline-none sm:max-w-xs md:max-w-md"
+              className="min-w-0 max-w-[11rem] border-0 border-b border-transparent bg-transparent py-0.5 text-[12px] font-semibold text-gray-900 placeholder:text-gray-400 focus:border-gray-300 focus:outline-none sm:max-w-xs md:max-w-md"
               value={name}
-              placeholder="Untitled form"
+              placeholder="Untitled"
               onChange={(e) => setSnapshot((s) => ({ ...s, name: e.target.value }))}
+              aria-label="Form name"
             />
           </div>
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
@@ -1290,8 +1297,8 @@ export function FormBuilderEditor({
           </div>
         </header>
 
-        <div className="flex min-h-0 flex-1 flex-col xl:flex-row">
-          <aside className="flex max-h-[40vh] min-h-0 w-full shrink-0 flex-col border-b border-gray-200/90 bg-[#f7f7f8] xl:max-h-none xl:h-auto xl:w-[280px] xl:border-b-0 xl:border-r">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:h-[calc(100dvh-9rem)] lg:max-h-[calc(100dvh-9rem)] lg:flex-row lg:items-stretch">
+          <aside className="flex max-h-[min(44vh,22rem)] min-h-0 w-full shrink-0 flex-col overflow-hidden border-b border-gray-200/90 bg-[#f7f7f8] lg:max-h-none lg:h-full lg:w-[280px] lg:shrink-0 lg:border-b-0 lg:border-r">
             <div className="shrink-0 border-b border-gray-200/70 px-4 py-3">
               <div className="flex items-center gap-2">
                 <LayoutTemplate size={16} className="text-gray-400" strokeWidth={1.75} />
@@ -1317,7 +1324,7 @@ export function FormBuilderEditor({
             </div>
           </aside>
 
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#e8e7e5]">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#e8e7e5]">
             <div className="flex shrink-0 justify-center border-b border-gray-300/25 bg-[#e8e7e5] px-4 py-3">
               <div className="inline-flex rounded-full border border-gray-300/50 bg-white/95 p-0.5 shadow-sm">
                 {(
@@ -1386,7 +1393,7 @@ export function FormBuilderEditor({
             </div>
           </div>
 
-        <aside className="flex min-h-[50vh] w-full shrink-0 flex-col border-t border-gray-200/90 bg-[#f9f9f9] xl:min-h-0 xl:w-[320px] xl:border-l xl:border-t-0">
+        <aside className="flex min-h-[min(50vh,28rem)] w-full shrink-0 flex-col overflow-hidden border-t border-gray-200/90 bg-[#f9f9f9] lg:min-h-0 lg:h-full lg:w-[320px] lg:shrink-0 lg:border-l lg:border-t-0">
           <div className="shrink-0 border-b border-gray-200/80 bg-white px-1 pt-2">
             <div className="flex gap-0 px-2">
               {(

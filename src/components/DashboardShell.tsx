@@ -71,7 +71,7 @@ export default function DashboardShell({
       >
         <div className="h-14 lg:hidden" />
         <AnnouncementTicker />
-        <main className="min-h-screen pt-6 lg:pt-[68px] px-6 sm:px-8 lg:px-10 pb-10 max-w-7xl mx-auto">
+        <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-6 pb-10 pt-6 sm:px-8 lg:px-10 lg:pt-[68px]">
           {children}
         </main>
       </div>
