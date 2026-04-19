@@ -305,11 +305,9 @@ export default function ListingReviewsPage() {
       <div className="mx-auto max-w-5xl px-4 pt-8 sm:px-6">
         {listingSlug && publicOrigin && (
           <div className="mb-8 rounded-2xl border border-sky-200/80 bg-gradient-to-br from-sky-50/90 to-white px-4 py-4 sm:px-5 sm:py-5">
-            <p className="text-sm font-semibold text-sky-950">Show reviews on storyvenue.com</p>
+            <p className="text-sm font-semibold text-sky-950">Show reviews on your website.</p>
             <p className="mt-1 text-xs leading-relaxed text-sky-900/85">
-              The live directory site (e.g.{' '}
-              <span className="font-mono text-[11px]">storyvenue.com/venue/{listingSlug}</span>) is built separately.
-              Paste this iframe where you want reviews to appear (Webflow, custom HTML, etc.):
+              Paste this iframe where you want reviews to appear (Wordpress, custom HTML, etc.)
             </p>
             <pre className="mt-3 max-h-40 overflow-x-auto overflow-y-auto rounded-xl border border-sky-100 bg-white/90 p-3 text-[11px] leading-relaxed text-gray-800">
               {`<iframe\n  src="${publicOrigin}/embed/listing-reviews/${listingSlug}"\n  title="Reviews"\n  style="width:100%;min-height:420px;border:0;border-radius:12px"\n  loading="lazy"\n/>`}
