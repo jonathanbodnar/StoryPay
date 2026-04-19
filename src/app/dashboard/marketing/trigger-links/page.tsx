@@ -203,12 +203,12 @@ export default function TriggerLinksPage() {
   }
 
   return (
-    <div className="min-h-full bg-white max-w-4xl">
+    <div className="mx-auto min-h-full max-w-4xl bg-white px-4 py-8">
       <Link
-        href="/dashboard"
-        className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 mb-6"
+        href="/dashboard/marketing/analytics"
+        className="mb-6 inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900"
       >
-        <ArrowLeft className="w-4 h-4" /> Back to Home
+        <ArrowLeft className="h-4 w-4" /> Marketing
       </Link>
 
       <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
@@ -230,10 +230,9 @@ export default function TriggerLinksPage() {
         <button
           type="button"
           onClick={openCreate}
-          className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-white"
-          style={{ backgroundColor: '#1b1b1b' }}
+          className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-800"
         >
-          <Plus className="w-4 h-4" /> New trigger link
+          <Plus className="h-4 w-4" /> New trigger link
         </button>
       </div>
 
@@ -250,9 +249,9 @@ export default function TriggerLinksPage() {
             <button
               type="button"
               onClick={openCreate}
-              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"
             >
-              <Plus className="w-4 h-4" /> Create trigger link
+              <Plus className="h-4 w-4" /> Create trigger link
             </button>
           </div>
         ) : (
@@ -335,9 +334,9 @@ export default function TriggerLinksPage() {
         <button
           type="button"
           onClick={openTagCreate}
-          className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 hover:bg-gray-50"
+          className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-800"
         >
-          <Plus className="w-4 h-4" /> New tag
+          <Plus className="h-4 w-4" /> New tag
         </button>
       </div>
 
@@ -354,9 +353,9 @@ export default function TriggerLinksPage() {
             <button
               type="button"
               onClick={openTagCreate}
-              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"
             >
-              <Plus className="w-4 h-4" /> Create tag
+              <Plus className="h-4 w-4" /> Create tag
             </button>
           </div>
         ) : (
@@ -452,8 +451,7 @@ export default function TriggerLinksPage() {
                   type="button"
                   disabled={saving || !formName.trim() || !formUrl.trim()}
                   onClick={() => void saveModal()}
-                  className="rounded-xl px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
-                  style={{ backgroundColor: '#1b1b1b' }}
+                  className="rounded-xl bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800 disabled:opacity-40"
                 >
                   {saving ? <Loader2 className="w-4 h-4 animate-spin inline" /> : editRow ? 'Save' : 'Create'}
                 </button>
@@ -498,8 +496,7 @@ export default function TriggerLinksPage() {
                   type="button"
                   disabled={tagSaving || !tagName.trim()}
                   onClick={() => void saveTagModal()}
-                  className="rounded-xl px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
-                  style={{ backgroundColor: '#1b1b1b' }}
+                  className="rounded-xl bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800 disabled:opacity-40"
                 >
                   {tagSaving ? <Loader2 className="w-4 h-4 animate-spin inline" /> : tagEdit ? 'Save' : 'Create'}
                 </button>

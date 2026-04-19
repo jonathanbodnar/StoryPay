@@ -70,11 +70,11 @@ export default function FormBuilderListPage() {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <Link
-            href="/dashboard/marketing/email"
+            href="/dashboard/marketing/analytics"
             className="mb-2 inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900"
           >
             <ArrowLeft size={16} />
-            Marketing email
+            Marketing
           </Link>
           <h1 className="flex items-center gap-2 text-2xl font-semibold text-gray-900">
             <LayoutTemplate className="text-brand-600" size={28} />
@@ -91,7 +91,7 @@ export default function FormBuilderListPage() {
             setErr(null);
             setModalOpen(true);
           }}
-          className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+          className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"
         >
           <Plus size={18} />
           New form
@@ -159,7 +159,7 @@ export default function FormBuilderListPage() {
               <button
                 type="button"
                 disabled={creating}
-                className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800 disabled:opacity-50"
                 onClick={() => void createForm()}
               >
                 {creating ? <Loader2 size={16} className="animate-spin" /> : null}

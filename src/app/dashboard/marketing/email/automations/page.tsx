@@ -74,18 +74,18 @@ export default function AutomationsListPage() {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <Link
-            href="/dashboard/marketing/email"
+            href="/dashboard/marketing/analytics"
             className="mb-2 inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900"
           >
             <ArrowLeft size={16} />
-            Marketing email
+            Marketing
           </Link>
           <h1 className="flex items-center gap-2 text-2xl font-semibold text-gray-900">
             <Workflow className="text-brand-600" size={28} />
-            Automations
+            Email workflows
           </h1>
           <p className="mt-1 text-sm text-gray-600">
-            Active automations enroll leads when tags, stages, or trigger-link clicks match. Steps run on the marketing
+            Active workflows enroll leads when tags, stages, or trigger-link clicks match. Steps run on the marketing
             email cron.
           </p>
         </div>
@@ -97,10 +97,10 @@ export default function AutomationsListPage() {
             setErr(null);
             setModalOpen(true);
           }}
-          className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+          className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"
         >
           <Plus size={18} />
-          New automation
+          New workflow
         </button>
       </div>
 
@@ -133,7 +133,7 @@ export default function AutomationsListPage() {
       {modalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog">
           <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-5">
-            <h2 className="text-lg font-semibold text-gray-900">New automation</h2>
+            <h2 className="text-lg font-semibold text-gray-900">New workflow</h2>
             <label className="mt-4 block text-sm font-medium text-gray-700">Name</label>
             <input
               className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
@@ -159,7 +159,7 @@ export default function AutomationsListPage() {
               <button
                 type="button"
                 disabled={creating}
-                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+                className="rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800 disabled:opacity-50"
                 onClick={() => void create()}
               >
                 {creating ? <Loader2 className="animate-spin inline" size={16} /> : 'Create'}

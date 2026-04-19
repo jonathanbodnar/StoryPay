@@ -512,7 +512,7 @@ export default function CampaignDetailPage() {
             type="button"
             disabled={!editable || busy}
             onClick={() => void schedule()}
-            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+            className="rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800 disabled:opacity-50"
           >
             Schedule
           </button>
@@ -520,7 +520,7 @@ export default function CampaignDetailPage() {
             type="button"
             disabled={!editable || busy}
             onClick={() => void sendNow()}
-            className="rounded-lg border border-brand-600 px-4 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-50"
+            className="rounded-lg border border-brand-900 px-4 py-2 text-sm font-medium text-brand-900 hover:bg-gray-50 disabled:opacity-50"
           >
             Send now
           </button>
@@ -565,7 +565,7 @@ export default function CampaignDetailPage() {
               <button
                 type="button"
                 disabled={busy}
-                className="rounded-lg bg-brand-600 px-3 py-2 text-sm text-white disabled:opacity-50"
+                className="rounded-lg bg-brand-900 px-3 py-2 text-sm text-white transition hover:bg-brand-800 disabled:opacity-50"
                 onClick={() => void sendTest()}
               >
                 Send

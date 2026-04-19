@@ -11,6 +11,7 @@ import {
   Bell, Receipt, Link2, RefreshCw, Plus, Calendar,
   Menu, X, ChevronDown, ChevronLeft, ChevronRight,
   HelpCircle, LogOut, BookOpen, Store, Inbox, Share2, LayoutTemplate,
+  BarChart3, FileStack, Workflow,
 } from 'lucide-react';
 
 interface Venue { id: string; name: string; ghl_location_id: string; }
@@ -47,9 +48,12 @@ const paymentsItems = [
 ];
 
 const marketingItems = [
-  { label: 'Email & campaigns', href: '/dashboard/marketing/email', icon: Mail },
-  { label: 'Trigger Links & Tags', href: '/dashboard/marketing/trigger-links', icon: Link2 },
+  { label: 'Marketing analytics', href: '/dashboard/marketing/analytics', icon: BarChart3 },
   { label: 'Form builder', href: '/dashboard/marketing/form-builder', icon: LayoutTemplate },
+  { label: 'Email templates', href: '/dashboard/marketing/email/templates', icon: FileStack },
+  { label: 'Email campaigns', href: '/dashboard/marketing/email/campaigns', icon: Megaphone },
+  { label: 'Email workflows', href: '/dashboard/marketing/email/automations', icon: Workflow },
+  { label: 'Trigger links & tags', href: '/dashboard/marketing/trigger-links', icon: Link2 },
 ];
 
 const settingsItems = [

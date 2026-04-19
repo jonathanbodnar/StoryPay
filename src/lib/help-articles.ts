@@ -1426,6 +1426,7 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/leads': ['leads-overview', 'leads-crm-intelligence', 'leads-kanban', 'leads-filter-search', 'leads-notifications', 'leads-to-proposal'],
 
   // Marketing — native email
+  '/dashboard/marketing/analytics': ['leads-overview', 'email-types', 'gs-overview'],
   '/dashboard/marketing/email': ['leads-overview', 'email-types', 'gs-overview'],
 
   // Payments — new proposal / invoice

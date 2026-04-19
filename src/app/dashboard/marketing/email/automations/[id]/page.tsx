@@ -172,7 +172,7 @@ export default function AutomationEditPage() {
   }
 
   async function removeAutomation() {
-    if (!confirm('Delete this automation and its enrollments?')) return;
+    if (!confirm('Delete this workflow and its enrollments?')) return;
     const res = await fetch(`/api/marketing/automations/${id}`, { method: 'DELETE' });
     if (res.ok) router.push('/dashboard/marketing/email/automations');
     else setErr('Delete failed');
@@ -201,7 +201,7 @@ export default function AutomationEditPage() {
   if (!auto) {
     return (
       <div className="mx-auto max-w-lg px-4 py-16 text-center">
-        <p className="text-gray-600">Automation not found.</p>
+        <p className="text-gray-600">Workflow not found.</p>
         <Link href="/dashboard/marketing/email/automations" className="mt-4 inline-block text-brand-700 hover:underline">
           Back
         </Link>
@@ -216,11 +216,11 @@ export default function AutomationEditPage() {
         className="mb-4 inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900"
       >
         <ArrowLeft size={16} />
-        Automations
+        Email workflows
       </Link>
 
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-gray-900">Edit automation</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Edit workflow</h1>
         <button type="button" onClick={() => void removeAutomation()} className="text-sm text-red-600 hover:underline">
           Delete
         </button>
@@ -253,7 +253,7 @@ export default function AutomationEditPage() {
         <div>
           <p className="text-xs font-medium text-gray-500">Trigger type</p>
           <p className="mt-1 text-sm capitalize text-gray-800">{auto.trigger_type.replace(/_/g, ' ')}</p>
-          <p className="mt-1 text-xs text-gray-500">Trigger type is fixed after creation. Create a new automation to switch.</p>
+          <p className="mt-1 text-xs text-gray-500">Trigger type is fixed after creation. Create a new workflow to switch.</p>
         </div>
 
         {auto.trigger_type === 'tag_added' ? (
@@ -400,10 +400,10 @@ export default function AutomationEditPage() {
         type="button"
         disabled={saving}
         onClick={() => void saveAll()}
-        className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+        className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-brand-800 disabled:opacity-50"
       >
         {saving ? <Loader2 className="animate-spin" size={16} /> : null}
-        Save automation
+        Save workflow
       </button>
     </div>
   );
