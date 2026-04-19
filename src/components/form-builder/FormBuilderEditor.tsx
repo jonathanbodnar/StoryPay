@@ -1231,7 +1231,7 @@ export function FormBuilderEditor({
   );
 
   return (
-    <div className="relative left-1/2 flex min-h-0 w-screen max-w-[100vw] flex-1 -translate-x-1/2 flex-col overflow-x-clip bg-[#f3f4f6]">
+    <div className="flex min-h-0 w-full min-w-0 max-w-none flex-1 flex-col overflow-x-hidden bg-[#f3f4f6]">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 sm:px-6">
           <div className="flex min-w-0 flex-1 items-center gap-2 text-[12px] text-gray-500 sm:gap-3">
