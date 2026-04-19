@@ -10,7 +10,7 @@ import {
   Sparkles, Megaphone, Settings, Palette, Mail, UsersRound,
   Bell, Receipt, Link2, RefreshCw, Plus, Calendar,
   Menu, X, ChevronDown, ChevronLeft, ChevronRight,
-  HelpCircle, LogOut, BookOpen, Store, Inbox, Share2, LayoutTemplate,
+  HelpCircle, LogOut, BookOpen, Store, Inbox, Share2, LayoutTemplate, MessageCircle,
   BarChart3, FileStack, Workflow,
 } from 'lucide-react';
 
@@ -30,6 +30,7 @@ const menuItems = [
   { label: 'Ask AI', href: '/dashboard/ai', icon: Sparkles },
   { label: 'Home', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Contacts', href: '/dashboard/contacts', icon: Users },
+  { label: 'Conversations', href: '/dashboard/conversations', icon: MessageCircle },
   { label: 'Calendar', href: '/dashboard/calendar', icon: Calendar },
   { label: 'Directory Listing', href: '/dashboard/listing', icon: Store },
   { label: 'Leads', href: '/dashboard/leads', icon: Inbox },

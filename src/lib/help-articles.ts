@@ -1415,6 +1415,9 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   // Contacts
   '/dashboard/contacts': ['cust-add', 'cust-search', 'cust-profile', 'cust-pipeline', 'cust-tasks', 'cust-documents'],
 
+  // Conversations (unified inbox)
+  '/dashboard/conversations': ['cust-profile', 'cust-add', 'gs-overview'],
+
   // Calendar
   '/dashboard/calendar': ['cal-overview', 'cal-spaces', 'cal-add-event', 'cal-conflicts'],
 
