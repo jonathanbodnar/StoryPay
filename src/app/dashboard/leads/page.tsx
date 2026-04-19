@@ -14,6 +14,8 @@ import {
   History, ListTodo, CheckSquare, Square, Send, Activity,
 } from 'lucide-react';
 import LeadInsightsStrip, { type LeadInsightsPayload } from '@/components/leads/LeadInsightsStrip';
+import { TimezoneSelect } from '@/components/TimezoneSelect';
+import { DEFAULT_VENUE_TIMEZONE, resolveVenueTimezone, wallClockToUtc } from '@/lib/venue-timezone';
 import { effectiveWinProbability } from '@/lib/pipelines';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -2229,6 +2231,7 @@ function AppointmentModal({
   onScheduled: () => void;
 }) {
   const [spaces, setSpaces] = useState<Space[]>([]);
+  const [venueTz, setVenueTz] = useState(DEFAULT_VENUE_TIMEZONE);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [startTime, setStartTime] = useState('10:00');
   const [endTime, setEndTime] = useState('11:00');
@@ -2237,6 +2240,7 @@ function AppointmentModal({
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const tzSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     fetch('/api/spaces', { cache: 'no-store' })
@@ -2244,12 +2248,34 @@ function AppointmentModal({
       .then((data) => setSpaces(Array.isArray(data) ? data : []));
   }, []);
 
+  useEffect(() => {
+    fetch('/api/venues/me', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.timezone != null) setVenueTz(resolveVenueTimezone(d.timezone));
+      })
+      .catch(() => {});
+  }, []);
+
+  function patchVenueTimezone(next: string) {
+    setVenueTz(next);
+    if (tzSaveTimer.current) clearTimeout(tzSaveTimer.current);
+    tzSaveTimer.current = setTimeout(() => {
+      fetch('/api/venues/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timezone: next }),
+      }).catch(() => {});
+    }, 500);
+  }
+
   async function schedule() {
     setError(null);
     setSaving(true);
     try {
-      const start = new Date(`${date}T${startTime}:00`);
-      const end   = new Date(`${date}T${endTime}:00`);
+      const tz = resolveVenueTimezone(venueTz);
+      const start = wallClockToUtc(date, startTime, tz);
+      const end   = wallClockToUtc(date, endTime, tz);
       if (end <= start) {
         setError('End time must be after start time.');
         return;
@@ -2309,6 +2335,14 @@ function AppointmentModal({
                 <option value="hold">Hold</option>
                 <option value="other">Other</option>
               </select>
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Time zone</label>
+              <TimezoneSelect
+                value={venueTz}
+                onChange={patchVenueTimezone}
+                className="w-full rounded-xl border border-gray-200 px-3 py-1.5 text-sm focus:border-gray-400 focus:outline-none"
+              />
             </div>
             <div>
               <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Date</label>

@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Loader2, Save, Upload, ImageIcon, X, CheckCircle2, FileText, Link2, FileBadge, Mail } from 'lucide-react';
+import { Loader2, Save, Upload, ImageIcon, X, CheckCircle2, FileText, Link2, FileBadge, Mail, Globe } from 'lucide-react';
+import { TimezoneSelect } from '@/components/TimezoneSelect';
+import { DEFAULT_VENUE_TIMEZONE, resolveVenueTimezone } from '@/lib/venue-timezone';
 
 const COLOR_PRESETS = [
  { label: 'Default', primary: '#1b1b1b', bg: '#ffffff', btnText: '#ffffff' },
@@ -27,6 +29,7 @@ interface BrandState {
  state: string;
  zip: string;
  footer_note: string;
+ timezone: string;
 }
 
 function ColorSwatch({ color, label, selected, onClick }: { color: string; label: string; selected: boolean; onClick: () => void }) {
@@ -133,6 +136,7 @@ export default function BrandingPage() {
  logo_url: '', primary: '#1b1b1b', bg: '#ffffff', btnText: '#ffffff',
  venueName: '', email: '', phone: '', website: '',
  address: '', city: '', state: '', zip: '', footer_note: '',
+ timezone: DEFAULT_VENUE_TIMEZONE,
  });
 
  useEffect(() => {
@@ -151,6 +155,7 @@ export default function BrandingPage() {
  state: d.brand_state || '',
  zip: d.brand_zip || '',
  footer_note: d.brand_footer_note || '',
+ timezone: resolveVenueTimezone(d.timezone),
  });
  }).finally(() => setLoading(false));
  }, []);
@@ -241,6 +246,7 @@ export default function BrandingPage() {
  brand_state: brand.state,
  brand_zip: brand.zip,
  brand_footer_note: brand.footer_note,
+ timezone: brand.timezone,
  }),
  });
  // Parse body once regardless of status
@@ -256,6 +262,7 @@ export default function BrandingPage() {
  bg: data.brand_bg_color || b.bg,
  btnText: data.brand_btn_text || b.btnText,
  logo_url: data.brand_logo_url ?? '',
+ timezone: resolveVenueTimezone(data.timezone ?? b.timezone),
  }));
  setSaved(true);
  setTimeout(() => setSaved(false), 3000);
@@ -398,6 +405,29 @@ export default function BrandingPage() {
  </div>
  ))}
  </div>
+ </div>
+ </div>
+
+ {/* Time zone — scheduling & calendar */}
+ <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+ <div className="px-6 py-4 border-b border-gray-200">
+ <h2 className="text-base font-semibold text-gray-900">Time zone</h2>
+ <p className="text-xs text-gray-400 mt-0.5">Used for appointments, calendar times, and scheduling</p>
+ </div>
+ <div className="px-6 py-5">
+ <label className={LABEL}>
+ <span className="inline-flex items-center gap-1.5"><Globe size={14} className="text-gray-400" /> Venue time zone</span>
+ </label>
+ <TimezoneSelect
+ value={brand.timezone}
+ onChange={(tz) => {
+ setBrand((b) => ({ ...b, timezone: tz }));
+ if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+ autoSaveTimer.current = setTimeout(() => {
+ saveNow({ timezone: tz });
+ }, 600);
+ }}
+ />
  </div>
  </div>
 

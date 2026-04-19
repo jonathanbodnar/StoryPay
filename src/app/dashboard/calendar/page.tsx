@@ -7,6 +7,19 @@ import {
   AlertTriangle, ExternalLink, Download, Info, Printer, Repeat,
 } from 'lucide-react';
 import { describeRule, type RecurrenceRule } from '@/lib/recurrence';
+import { formatInTimeZone, toDate } from 'date-fns-tz';
+import { TimezoneSelect } from '@/components/TimezoneSelect';
+import {
+  addCalendarDaysYmd,
+  dateStrInTimeZone,
+  DEFAULT_VENUE_TIMEZONE,
+  hourFloatInTimeZone,
+  resolveVenueTimezone,
+  sun0WeekdayInTimeZone,
+  timeStrInTimeZone,
+  venueDayBoundsUtc,
+  wallClockToUtc,
+} from '@/lib/venue-timezone';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface VenueSpace { id: string; name: string; color: string; capacity?: number | null; }
@@ -78,11 +91,13 @@ const DAYS_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 // Hours shown in week/day views (6 AM – 10 PM)
 const HOURS = Array.from({ length: 17 }, (_, i) => i + 6); // 6..22
 
-function fmtConflict(iso: string) {
-  return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+function fmtConflict(iso: string, tz: string) {
+  const z = resolveVenueTimezone(tz);
+  return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: z });
 }
-function fmtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+function fmtTime(iso: string, tz: string) {
+  const z = resolveVenueTimezone(tz);
+  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: z });
 }
 function fmtHour(h: number) {
   if (h === 0)  return '12 AM';
@@ -95,17 +110,6 @@ function fmtHour(h: number) {
 function evtColor(evt: CalEvent) {
   const typeColor = EVENT_COLORS[evt.event_type as keyof typeof EVENT_COLORS];
   return evt.venue_spaces?.color ?? typeColor ?? '#6b7280';
-}
-
-// Fractional hour position (0 = top of hour slot)
-function topPct(iso: string) {
-  const d = new Date(iso);
-  return (d.getMinutes() / 60) * 100;
-}
-function heightPct(start: string, end: string) {
-  const s = new Date(start), e = new Date(end);
-  const mins = Math.max(30, (e.getTime() - s.getTime()) / 60000);
-  return (mins / 60) * 100;
 }
 
 type RepeatOpt  = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly';
@@ -125,20 +129,10 @@ const emptyForm = () => ({
   repeat_count:    10,
 });
 
-// Local-time date string (YYYY-MM-DD) from an ISO. Using this instead of
-// iso.slice(0, 10) avoids the timezone off-by-one that bit us before: an
-// event at 10 PM local on the 15th is stored as 02:00 UTC on the 16th, and
-// .slice(0,10) would then bucket it on the wrong day.
-function localDateStr(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-// Does this event occupy the given YYYY-MM-DD (local)? Handles multi-day by
-// checking whether the date sits within [localStartDate, localEndDate].
-function eventSpansDate(e: CalEvent, dateStr: string): boolean {
-  const s = localDateStr(e.start_at);
-  const end = localDateStr(e.end_at);
+function eventSpansDate(e: CalEvent, dateStr: string, tz: string): boolean {
+  const z = resolveVenueTimezone(tz);
+  const s = dateStrInTimeZone(e.start_at, z);
+  const end = dateStrInTimeZone(e.end_at, z);
   return dateStr >= s && dateStr <= end;
 }
 
@@ -148,6 +142,8 @@ type CalView = 'month' | 'week' | 'day' | 'revenue';
 export default function CalendarPage() {
   const today     = new Date();
   const printRef  = useRef<HTMLDivElement>(null);
+  const didInitCalFromVenue = useRef(false);
+  const tzSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [year,  setYear]  = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
@@ -160,6 +156,9 @@ export default function CalendarPage() {
 
   const [activeSpaceFilter, setActiveSpaceFilter] = useState<string>('all');
   const [view, setView] = useState<CalView>('month');
+
+  const [venueTz, setVenueTz] = useState(DEFAULT_VENUE_TIMEZONE);
+  const [venueLoaded, setVenueLoaded] = useState(false);
 
   // Event modal (create + edit share the same form). When editingId is set,
   // the modal is in "Edit" mode and the save handler PATCHes instead of POSTs.
@@ -178,22 +177,64 @@ export default function CalendarPage() {
 
   const [icalCopied, setIcalCopied] = useState(false);
 
+  const tzResolved = resolveVenueTimezone(venueTz);
+
+  useEffect(() => {
+    fetch('/api/venues/me', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.timezone != null) setVenueTz(resolveVenueTimezone(d.timezone));
+      })
+      .finally(() => setVenueLoaded(true));
+  }, []);
+
+  useEffect(() => {
+    if (!venueLoaded || didInitCalFromVenue.current) return;
+    didInitCalFromVenue.current = true;
+    const tz = resolveVenueTimezone(venueTz);
+    const now = new Date();
+    const y = Number(formatInTimeZone(now, tz, 'yyyy'));
+    const m = Number(formatInTimeZone(now, tz, 'M')) - 1;
+    const d = Number(formatInTimeZone(now, tz, 'd'));
+    setYear(y);
+    setMonth(m);
+    setAnchorDate(new Date(y, m, d));
+  }, [venueLoaded, venueTz]);
+
+  function patchVenueTimezone(next: string) {
+    setVenueTz(next);
+    if (tzSaveTimer.current) clearTimeout(tzSaveTimer.current);
+    tzSaveTimer.current = setTimeout(() => {
+      fetch('/api/venues/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timezone: next }),
+      }).catch(() => {});
+    }, 500);
+  }
+
   // ── Data fetch — widens range for week/day views ─────────────────────────
   const fetchAll = useCallback(async () => {
     setLoading(true);
+    const tz = resolveVenueTimezone(venueTz);
     let from: string, to: string;
     if (view === 'week') {
-      const dow  = anchorDate.getDay();
-      const sun  = new Date(anchorDate); sun.setDate(sun.getDate() - dow);
-      const sat  = new Date(sun);        sat.setDate(sat.getDate() + 6);
-      from = new Date(sun.getFullYear(), sun.getMonth(), sun.getDate()).toISOString();
-      to   = new Date(sat.getFullYear(), sat.getMonth(), sat.getDate(), 23, 59, 59).toISOString();
+      const anchorYmd = formatInTimeZone(anchorDate, tz, 'yyyy-MM-dd');
+      const dow = sun0WeekdayInTimeZone(toDate(`${anchorYmd}T12:00:00`, { timeZone: tz }), tz);
+      const weekStartYmd = addCalendarDaysYmd(anchorYmd, -dow, tz);
+      const weekEndYmd = addCalendarDaysYmd(weekStartYmd, 6, tz);
+      from = toDate(`${weekStartYmd}T00:00:00`, { timeZone: tz }).toISOString();
+      to = toDate(`${weekEndYmd}T23:59:59.999`, { timeZone: tz }).toISOString();
     } else if (view === 'day') {
-      from = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), anchorDate.getDate()).toISOString();
-      to   = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), anchorDate.getDate(), 23, 59, 59).toISOString();
+      const dayYmd = formatInTimeZone(anchorDate, tz, 'yyyy-MM-dd');
+      from = toDate(`${dayYmd}T00:00:00`, { timeZone: tz }).toISOString();
+      to = toDate(`${dayYmd}T23:59:59.999`, { timeZone: tz }).toISOString();
     } else {
-      from = new Date(year, month, 1).toISOString();
-      to   = new Date(year, month + 1, 0, 23, 59, 59).toISOString();
+      const ymdStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+      const lastD = new Date(year, month + 1, 0).getDate();
+      const ymdEnd = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastD).padStart(2, '0')}`;
+      from = toDate(`${ymdStart}T00:00:00`, { timeZone: tz }).toISOString();
+      to = toDate(`${ymdEnd}T23:59:59.999`, { timeZone: tz }).toISOString();
     }
     const [evRes, spRes] = await Promise.all([
       fetch(`/api/calendar?from=${from}&to=${to}`),
@@ -202,35 +243,62 @@ export default function CalendarPage() {
     if (evRes.ok) setEvents(await evRes.json());
     if (spRes.ok) setSpaces(await spRes.json());
     setLoading(false);
-  }, [year, month, view, anchorDate]);
+  }, [year, month, view, anchorDate, venueTz]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   // ── Navigation ─────────────────────────────────────────────────────────────
   function prev() {
+    const tz = tzResolved;
     if (view === 'month' || view === 'revenue') {
       if (month === 0) { setYear(y => y - 1); setMonth(11); }
       else setMonth(m => m - 1);
     } else if (view === 'week') {
-      setAnchorDate(d => { const n = new Date(d); n.setDate(n.getDate() - 7); return n; });
+      setAnchorDate((d) => {
+        const ymd = formatInTimeZone(d, tz, 'yyyy-MM-dd');
+        const prevYmd = addCalendarDaysYmd(ymd, -7, tz);
+        const [yy, mm, dd] = prevYmd.split('-').map(Number);
+        return new Date(yy, mm - 1, dd);
+      });
     } else {
-      setAnchorDate(d => { const n = new Date(d); n.setDate(n.getDate() - 1); return n; });
+      setAnchorDate((d) => {
+        const ymd = formatInTimeZone(d, tz, 'yyyy-MM-dd');
+        const prevYmd = addCalendarDaysYmd(ymd, -1, tz);
+        const [yy, mm, dd] = prevYmd.split('-').map(Number);
+        return new Date(yy, mm - 1, dd);
+      });
     }
   }
   function next() {
+    const tz = tzResolved;
     if (view === 'month' || view === 'revenue') {
       if (month === 11) { setYear(y => y + 1); setMonth(0); }
       else setMonth(m => m + 1);
     } else if (view === 'week') {
-      setAnchorDate(d => { const n = new Date(d); n.setDate(n.getDate() + 7); return n; });
+      setAnchorDate((d) => {
+        const ymd = formatInTimeZone(d, tz, 'yyyy-MM-dd');
+        const nextYmd = addCalendarDaysYmd(ymd, 7, tz);
+        const [yy, mm, dd] = nextYmd.split('-').map(Number);
+        return new Date(yy, mm - 1, dd);
+      });
     } else {
-      setAnchorDate(d => { const n = new Date(d); n.setDate(n.getDate() + 1); return n; });
+      setAnchorDate((d) => {
+        const ymd = formatInTimeZone(d, tz, 'yyyy-MM-dd');
+        const nextYmd = addCalendarDaysYmd(ymd, 1, tz);
+        const [yy, mm, dd] = nextYmd.split('-').map(Number);
+        return new Date(yy, mm - 1, dd);
+      });
     }
   }
   function goToday() {
-    setYear(today.getFullYear());
-    setMonth(today.getMonth());
-    setAnchorDate(new Date(today.getFullYear(), today.getMonth(), today.getDate()));
+    const tz = tzResolved;
+    const now = new Date();
+    const y = Number(formatInTimeZone(now, tz, 'yyyy'));
+    const m = Number(formatInTimeZone(now, tz, 'M')) - 1;
+    const d = Number(formatInTimeZone(now, tz, 'd'));
+    setYear(y);
+    setMonth(m);
+    setAnchorDate(new Date(y, m, d));
   }
 
   // Keep month/year in sync with anchorDate when switching views
@@ -242,7 +310,11 @@ export default function CalendarPage() {
   }
 
   // ── Month grid helpers ─────────────────────────────────────────────────────
-  const firstDay    = new Date(year, month, 1).getDay();
+  const firstDay    = (() => {
+    const ymd = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const noon = toDate(`${ymd}T12:00:00`, { timeZone: tzResolved });
+    return sun0WeekdayInTimeZone(noon, tzResolved);
+  })();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const cells: (number | null)[] = [
     ...Array(firstDay).fill(null),
@@ -254,20 +326,20 @@ export default function CalendarPage() {
     const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     return events.filter(e => {
       if (activeSpaceFilter !== 'all' && e.space_id !== activeSpaceFilter) return false;
-      return eventSpansDate(e, dateStr);
+      return eventSpansDate(e, dateStr, tzResolved);
     });
   }
 
-  // ── Week view helpers ──────────────────────────────────────────────────────
-  const weekDow    = anchorDate.getDay();
-  const weekStart  = new Date(anchorDate); weekStart.setDate(weekStart.getDate() - weekDow);
-  const weekDays   = Array.from({ length: 7 }, (_, i) => { const d = new Date(weekStart); d.setDate(d.getDate() + i); return d; });
+  // ── Week view helpers (venue-local week, Sunday–Saturday) ─────────────────
+  const anchorYmdWeek = formatInTimeZone(anchorDate, tzResolved, 'yyyy-MM-dd');
+  const weekDowVenue = sun0WeekdayInTimeZone(toDate(`${anchorYmdWeek}T12:00:00`, { timeZone: tzResolved }), tzResolved);
+  const weekStartYmd = addCalendarDaysYmd(anchorYmdWeek, -weekDowVenue, tzResolved);
+  const weekDaysYmd = Array.from({ length: 7 }, (_, i) => addCalendarDaysYmd(weekStartYmd, i, tzResolved));
 
-  function eventsForWeekDay(d: Date): CalEvent[] {
-    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  function eventsForDayYmd(dateStr: string): CalEvent[] {
     return events.filter(e => {
       if (activeSpaceFilter !== 'all' && e.space_id !== activeSpaceFilter) return false;
-      return eventSpansDate(e, dateStr);
+      return eventSpansDate(e, dateStr, tzResolved);
     });
   }
 
@@ -280,22 +352,19 @@ export default function CalendarPage() {
     // Build start/end as LOCAL times, then serialize to UTC ISO. Previously we
     // were appending "Z" to the raw form values, which silently interpreted a
     // 10:00 AM form entry as 10:00 AM UTC (6 AM EDT).
-    const [yy, mm, dd] = form.date.split('-').map(Number);
+    const tz = tzResolved;
     // End date defaults to start date (single-day); multi-day users set it
     // explicitly. We always validate that end >= start before building the
     // Date objects so timezone math can't produce a negative duration.
     const endDateStr = form.end_date || form.date;
-    const [ey, em_, ed] = endDateStr.split('-').map(Number);
     let startLocal: Date;
     let endLocal:   Date;
     if (form.all_day) {
-      startLocal = new Date(yy,      (mm  || 1) - 1, dd || 1,  0,  0,  0);
-      endLocal   = new Date(ey || yy,(em_ || mm || 1) - 1, ed || dd || 1, 23, 59, 59);
+      startLocal = toDate(`${form.date}T00:00:00`, { timeZone: tz });
+      endLocal = venueDayBoundsUtc(endDateStr, tz).end;
     } else {
-      const [sh, sm] = form.start_time.split(':').map(Number);
-      const [eh, en] = form.end_time.split(':').map(Number);
-      startLocal = new Date(yy,      (mm  || 1) - 1, dd || 1,  sh || 0, sm || 0, 0);
-      endLocal   = new Date(ey || yy,(em_ || mm || 1) - 1, ed || dd || 1, eh || 0, en || 0, 0);
+      startLocal = wallClockToUtc(form.date, form.start_time, tz);
+      endLocal = wallClockToUtc(endDateStr, form.end_time, tz);
     }
 
     if (endLocal <= startLocal) {
@@ -372,10 +441,13 @@ export default function CalendarPage() {
 
     // Jump the view to wherever the saved event lives so the user immediately
     // sees the block — otherwise future-dated events disappear silently.
-    const eventDate = new Date(json.start_at);
-    setYear(eventDate.getFullYear());
-    setMonth(eventDate.getMonth());
-    setAnchorDate(new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate()));
+    const z = tzResolved;
+    const y = Number(formatInTimeZone(new Date(json.start_at), z, 'yyyy'));
+    const m = Number(formatInTimeZone(new Date(json.start_at), z, 'M')) - 1;
+    const d = Number(formatInTimeZone(new Date(json.start_at), z, 'd'));
+    setYear(y);
+    setMonth(m);
+    setAnchorDate(new Date(y, m, d));
 
     // For recurring events the API expands occurrences at GET time, so a
     // local splice of just the base row would miss every occurrence past the
@@ -418,9 +490,7 @@ export default function CalendarPage() {
   // always edit the parent of the series (never a single occurrence) — the
   // API enforces this by stripping the `@YYYY-MM-DD` suffix server-side.
   function openEditEvent(e: CalEvent) {
-    const s = new Date(e.start_at);
-    const en = new Date(e.end_at);
-    const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    const z = tzResolved;
     const rule = e.recurrence_rule ?? null;
     setForm({
       title: e.title,
@@ -428,10 +498,10 @@ export default function CalendarPage() {
       status: e.status,
       space_id: e.space_id ?? '',
       customer_email: e.customer_email ?? '',
-      date:     localDateStr(e.start_at),
-      end_date: localDateStr(e.end_at),
-      start_time: hhmm(s),
-      end_time:   hhmm(en),
+      date:     dateStrInTimeZone(e.start_at, z),
+      end_date: dateStrInTimeZone(e.end_at, z),
+      start_time: timeStrInTimeZone(e.start_at, z),
+      end_time:   timeStrInTimeZone(e.end_at, z),
       all_day: !!e.all_day,
       notes: e.notes ?? '',
       repeat:          (rule?.freq ?? 'none') as RepeatOpt,
@@ -473,19 +543,28 @@ export default function CalendarPage() {
 
   // Title label for navigation
   function navLabel() {
+    const tz = tzResolved;
     if (view === 'month' || view === 'revenue') return `${MONTHS[month]} ${year}`;
     if (view === 'week') {
-      const sat = weekDays[6];
-      if (weekDays[0].getMonth() === sat.getMonth())
-        return `${MONTHS[weekDays[0].getMonth()].slice(0,3)} ${weekDays[0].getDate()}–${sat.getDate()}, ${year}`;
-      return `${MONTHS[weekDays[0].getMonth()].slice(0,3)} ${weekDays[0].getDate()} – ${MONTHS[sat.getMonth()].slice(0,3)} ${sat.getDate()}, ${year}`;
+      const start = weekDaysYmd[0];
+      const end = weekDaysYmd[6];
+      const d0 = toDate(`${start}T12:00:00`, { timeZone: tz });
+      const d6 = toDate(`${end}T12:00:00`, { timeZone: tz });
+      if (start.slice(0, 7) === end.slice(0, 7)) {
+        return `${formatInTimeZone(d0, tz, 'MMM')} ${formatInTimeZone(d0, tz, 'd')}–${formatInTimeZone(d6, tz, 'd')}, ${formatInTimeZone(d0, tz, 'yyyy')}`;
+      }
+      return `${formatInTimeZone(d0, tz, 'MMM d')} – ${formatInTimeZone(d6, tz, 'MMM d, yyyy')}`;
     }
-    return `${DAYS_LONG[anchorDate.getDay()]}, ${MONTHS[anchorDate.getMonth()]} ${anchorDate.getDate()}, ${anchorDate.getFullYear()}`;
+    const dayYmd = formatInTimeZone(anchorDate, tz, 'yyyy-MM-dd');
+    const ad = toDate(`${dayYmd}T12:00:00`, { timeZone: tz });
+    return formatInTimeZone(ad, tz, 'EEEE, MMMM d, yyyy');
   }
 
   // ── Shared hour grid (week + day) ─────────────────────────────────────────
-  function HourGrid({ cols }: { cols: { date: Date; events: CalEvent[] }[] }) {
+  function HourGrid({ cols }: { cols: { dateStr: string; dow: number; dom: number; events: CalEvent[] }[] }) {
     const SLOT_H = 60; // px per hour
+    const tz = tzResolved;
+    const todayYmd = formatInTimeZone(new Date(), tz, 'yyyy-MM-dd');
     return (
       <div className="flex overflow-auto" style={{ maxHeight: '70vh' }}>
         {/* Time gutter */}
@@ -498,16 +577,16 @@ export default function CalendarPage() {
           ))}
         </div>
         {/* Day columns */}
-        {cols.map(({ date: d, events: dayEvts }, ci) => {
-          const isToday = d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate();
-          const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        {cols.map(({ dateStr, dow, dom, events: dayEvts }, ci) => {
+          const isToday = dateStr === todayYmd;
+          const { start: dayStart, end: dayEnd } = venueDayBoundsUtc(dateStr, tz);
           return (
             <div key={ci} className="flex-1 min-w-0 border-r border-gray-100 last:border-r-0">
               {/* Day header */}
               <div className={`h-8 flex items-center justify-center gap-1 border-b border-gray-100 text-xs font-semibold ${isToday ? 'text-white' : 'text-gray-600'}`}
                 style={isToday ? { backgroundColor: '#1b1b1b' } : {}}>
-                {cols.length > 1 && <span className="text-[10px] font-normal">{DAYS_SHORT[d.getDay()]}</span>}
-                <span>{d.getDate()}</span>
+                {cols.length > 1 && <span className="text-[10px] font-normal">{DAYS_SHORT[dow]}</span>}
+                <span>{dom}</span>
               </div>
               {/* Hour slots + events */}
               <div className="relative">
@@ -523,12 +602,10 @@ export default function CalendarPage() {
                 {dayEvts.filter(e => !e.all_day).map(e => {
                   const evStart  = new Date(e.start_at);
                   const evEnd    = new Date(e.end_at);
-                  const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
-                  const dayEnd   = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59);
                   const winStart = evStart < dayStart ? dayStart : evStart;
                   const winEnd   = evEnd   > dayEnd   ? dayEnd   : evEnd;
-                  const startH = winStart.getHours() + winStart.getMinutes() / 60;
-                  const endH   = winEnd.getHours()   + winEnd.getMinutes()   / 60;
+                  const startH = hourFloatInTimeZone(winStart, tz);
+                  const endH   = hourFloatInTimeZone(winEnd, tz);
                   const clampedStart = Math.max(HOURS[0], startH);
                   const clampedEnd   = Math.min(HOURS[HOURS.length - 1] + 1, endH);
                   const top    = (clampedStart - HOURS[0]) * SLOT_H;
@@ -545,7 +622,7 @@ export default function CalendarPage() {
                       <span className="block truncate">
                         {isContinuation && '← '}{e.title}{endsLater && ' →'}
                       </span>
-                      {height > 28 && <span className="block text-[9px] opacity-80 truncate">{fmtTime(e.start_at)} – {fmtTime(e.end_at)}</span>}
+                      {height > 28 && <span className="block text-[9px] opacity-80 truncate">{fmtTime(e.start_at, tz)} – {fmtTime(e.end_at, tz)}</span>}
                     </button>
                   );
                 })}
@@ -623,6 +700,15 @@ export default function CalendarPage() {
             <button onClick={next} className="rounded-lg border border-gray-200 p-2 hover:bg-gray-50 transition-colors"><ChevronRight size={16} /></button>
             <button onClick={goToday}
               className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">Today</button>
+            <div className="flex items-center gap-2 min-w-0" data-noprint="">
+              <label htmlFor="cal-tz" className="text-[11px] text-gray-500 whitespace-nowrap shrink-0">Time zone</label>
+              <TimezoneSelect
+                id="cal-tz"
+                value={venueTz}
+                onChange={patchVenueTimezone}
+                className="min-w-[180px] max-w-[min(100%,240px)] rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-[11px] text-gray-700 focus:border-gray-400 focus:outline-none"
+              />
+            </div>
           </div>
           <div className="flex rounded-xl border border-gray-200 overflow-hidden" data-noprint="">
             {(['month','week','day','revenue'] as CalView[]).map((v, i) => (
@@ -666,7 +752,8 @@ export default function CalendarPage() {
               <div className="grid grid-cols-7">
                 {cells.map((day, idx) => {
                   const dayEvts = day ? eventsForDay(year, month, day) : [];
-                  const isToday = day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+                  const dateStrToday = day ? `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}` : '';
+                  const isToday = !!day && dateStrToday === formatInTimeZone(new Date(), tzResolved, 'yyyy-MM-dd');
                   const isWeekend = (idx % 7 === 0) || (idx % 7 === 6);
                   const dateStr = day ? `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}` : '';
                   return (
@@ -706,7 +793,15 @@ export default function CalendarPage() {
             {loading ? (
               <div className="flex items-center justify-center py-20"><Loader2 className="animate-spin text-gray-300" size={28} /></div>
             ) : (
-              <HourGrid cols={weekDays.map(d => ({ date: d, events: eventsForWeekDay(d) }))} />
+              <HourGrid cols={weekDaysYmd.map((ymd) => {
+                const noon = toDate(`${ymd}T12:00:00`, { timeZone: tzResolved });
+                return {
+                  dateStr: ymd,
+                  dow: sun0WeekdayInTimeZone(noon, tzResolved),
+                  dom: parseInt(formatInTimeZone(noon, tzResolved, 'd'), 10),
+                  events: eventsForDayYmd(ymd),
+                };
+              })} />
             )}
           </div>
         )}
@@ -717,7 +812,16 @@ export default function CalendarPage() {
             {loading ? (
               <div className="flex items-center justify-center py-20"><Loader2 className="animate-spin text-gray-300" size={28} /></div>
             ) : (
-              <HourGrid cols={[{ date: anchorDate, events: eventsForWeekDay(anchorDate) }]} />
+              <HourGrid cols={(() => {
+                const ymd = formatInTimeZone(anchorDate, tzResolved, 'yyyy-MM-dd');
+                const noon = toDate(`${ymd}T12:00:00`, { timeZone: tzResolved });
+                return [{
+                  dateStr: ymd,
+                  dow: sun0WeekdayInTimeZone(noon, tzResolved),
+                  dom: parseInt(formatInTimeZone(noon, tzResolved, 'd'), 10),
+                  events: eventsForDayYmd(ymd),
+                }];
+              })()} />
             )}
           </div>
         )}
@@ -729,11 +833,16 @@ export default function CalendarPage() {
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
               {Array.from({ length: 12 }, (_, i) => {
                 const m = i, y = year;
-                const monthEvts = events.filter(e => { const d = new Date(e.start_at); return d.getFullYear() === y && d.getMonth() === m; });
+                const monthEvts = events.filter(e => {
+                  const z = tzResolved;
+                  return formatInTimeZone(new Date(e.start_at), z, 'yyyy') === String(y)
+                    && Number(formatInTimeZone(new Date(e.start_at), z, 'M')) - 1 === m;
+                });
                 const weddings  = monthEvts.filter(e => e.event_type === 'wedding' || e.event_type === 'reception');
                 const tours     = monthEvts.filter(e => e.event_type === 'tour');
                 const phoneCalls = monthEvts.filter(e => e.event_type === 'phone_call');
-                const isCurrent = m === today.getMonth() && y === today.getFullYear();
+                const isCurrent = formatInTimeZone(new Date(), tzResolved, 'yyyy-MM')
+                  === `${y}-${String(m + 1).padStart(2, '0')}`;
                 return (
                   <button key={m}
                     onClick={() => { setMonth(m); setView('month'); }}
@@ -783,7 +892,7 @@ export default function CalendarPage() {
                     <p className="text-sm font-semibold text-amber-800">Booking Conflict Detected</p>
                     <p className="text-xs text-amber-700 mt-0.5">This space already has an event during this time:</p>
                     {conflicts.map(c => (
-                      <p key={c.id} className="text-xs text-amber-700 font-medium mt-1">— {c.title} ({fmtConflict(c.start_at)} → {fmtConflict(c.end_at)})</p>
+                      <p key={c.id} className="text-xs text-amber-700 font-medium mt-1">— {c.title} ({fmtConflict(c.start_at, tzResolved)} → {fmtConflict(c.end_at, tzResolved)})</p>
                     ))}
                     <button onClick={() => handleSave(true)}
                       className="mt-2 rounded-lg border border-amber-400 bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-200 transition-colors">
@@ -1009,17 +1118,17 @@ export default function CalendarPage() {
               </div>
             </div>
             <div className="space-y-2 text-sm text-gray-700">
-              {localDateStr(selectedEvent.start_at) === localDateStr(selectedEvent.end_at) ? (
-                <p><span className="text-gray-400">Date:</span> {new Date(selectedEvent.start_at).toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' })}</p>
+              {dateStrInTimeZone(selectedEvent.start_at, tzResolved) === dateStrInTimeZone(selectedEvent.end_at, tzResolved) ? (
+                <p><span className="text-gray-400">Date:</span> {new Date(selectedEvent.start_at).toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric', timeZone: tzResolved })}</p>
               ) : (
                 <p><span className="text-gray-400">Dates:</span>{' '}
-                  {new Date(selectedEvent.start_at).toLocaleDateString('en-US', { month:'short', day:'numeric' })}
+                  {new Date(selectedEvent.start_at).toLocaleDateString('en-US', { month:'short', day:'numeric', timeZone: tzResolved })}
                   {' – '}
-                  {new Date(selectedEvent.end_at).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })}
+                  {new Date(selectedEvent.end_at).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric', timeZone: tzResolved })}
                 </p>
               )}
               {!selectedEvent.all_day && (
-                <p><span className="text-gray-400">Time:</span> {fmtTime(selectedEvent.start_at)} – {fmtTime(selectedEvent.end_at)}</p>
+                <p><span className="text-gray-400">Time:</span> {fmtTime(selectedEvent.start_at, tzResolved)} – {fmtTime(selectedEvent.end_at, tzResolved)}</p>
               )}
               {selectedEvent.recurrence_rule && (
                 <p className="flex items-center gap-1.5">
