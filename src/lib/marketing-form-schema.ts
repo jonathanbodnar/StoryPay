@@ -29,6 +29,8 @@ export interface FormBlockStyle {
   color?: string;
   textAlign?: 'left' | 'center' | 'right';
   lineHeight?: string;
+  /** Sentence case vs all caps (heading blocks) */
+  textTransform?: 'none' | 'uppercase';
 }
 
 /** After successful submit (public embed + preview). */

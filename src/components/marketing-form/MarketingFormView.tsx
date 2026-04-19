@@ -37,6 +37,7 @@ function blockStyleCss(s?: FormBlockStyle): CSSProperties {
     color: s.color,
     textAlign: s.textAlign,
     lineHeight: s.lineHeight,
+    textTransform: s.textTransform === 'uppercase' ? 'uppercase' : undefined,
   };
 }
 

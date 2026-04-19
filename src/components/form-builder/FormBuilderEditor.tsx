@@ -30,15 +30,18 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
   ArrowLeft,
+  ChevronDown,
   Code2,
   Copy,
   GripVertical,
-  History,
-  Inbox,
   LayoutTemplate,
   Loader2,
   Mail,
+  Minus,
   Monitor,
   PanelLeftClose,
   PanelLeftOpen,
@@ -104,6 +107,82 @@ const PALETTE: { type: FormBlockType; label: string; icon?: string }[] = [
   { type: 'button', label: 'Button' },
   { type: 'html', label: 'HTML' },
 ];
+
+const SETTINGS_SELECT =
+  'w-full cursor-pointer appearance-none rounded border border-gray-200 bg-white py-2 pl-3 pr-9 text-[13px] text-gray-900 shadow-sm transition hover:border-gray-300 focus:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200';
+
+const SETTINGS_INPUT =
+  'w-full rounded border border-gray-200 bg-white px-3 py-2 text-[13px] text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200';
+
+function parseSizeToPx(fs: string | undefined): number {
+  if (!fs?.trim()) return 38;
+  const px = fs.match(/^(\d+(?:\.\d+)?)px$/i);
+  if (px) return Math.min(96, Math.max(12, Math.round(Number(px[1]))));
+  const rem = fs.match(/^(\d+(?:\.\d+)?)rem$/i);
+  if (rem) return Math.min(96, Math.max(12, Math.round(Number(rem[1]) * 16)));
+  return 38;
+}
+
+function parseLineHeight(lh: string | undefined): number {
+  if (!lh?.trim()) return 1.4;
+  const n = Number.parseFloat(lh);
+  if (Number.isFinite(n) && n > 0) return Math.min(2.5, Math.max(1, n));
+  return 1.4;
+}
+
+function SettingsPanelTitle({
+  children,
+  className = '',
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`mb-6 text-center ${className}`}>
+      <h3 className="text-[15px] font-medium tracking-tight text-gray-900">{children}</h3>
+      <div className="mx-auto mt-3 h-px w-full max-w-[220px] bg-gray-200/90" />
+    </div>
+  );
+}
+
+function SettingsFieldLabel({ children }: { children: React.ReactNode }) {
+  return <span className="text-[13px] text-gray-600">{children}</span>;
+}
+
+function SettingsRow({
+  label,
+  right,
+  children,
+}: {
+  label: string;
+  right?: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-5 last:mb-0">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <SettingsFieldLabel>{label}</SettingsFieldLabel>
+        {right !== undefined && right !== null ? (
+          <span className="text-[13px] tabular-nums text-gray-900">{right}</span>
+        ) : null}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function SettingsSelectWrap({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="relative">
+      {children}
+      <ChevronDown
+        className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+        strokeWidth={2}
+        aria-hidden
+      />
+    </div>
+  );
+}
 
 function patchBlock(blocks: FormBlock[], id: string, patch: Partial<FormBlock>): FormBlock[] {
   return blocks.map((b) => (b.id === id ? { ...b, ...patch } : b));
@@ -208,115 +287,286 @@ function CanvasTailDrop() {
 function BlockStyleFields({
   style,
   onChange,
-  fontDatalistId,
+  googleFontNames,
 }: {
   style: FormBlockStyle | undefined;
   onChange: (next: FormBlockStyle) => void;
-  fontDatalistId: string;
+  googleFontNames: string[];
 }) {
   const s = style ?? {};
+  const [spacingOpen, setSpacingOpen] = useState(false);
+
+  const fontFamily = s.fontFamily?.trim() ?? '';
+  const sizePx = parseSizeToPx(s.fontSize);
+  const weight = s.fontWeight ?? '';
+  const hex =
+    s.color?.startsWith('#') && (s.color.length === 4 || s.color.length === 7) ? s.color : '#000000';
+  const align = s.textAlign ?? 'left';
+  const isUpper = s.textTransform === 'uppercase';
+  const lh = parseLineHeight(s.lineHeight);
+
+  const inCatalog =
+    !fontFamily ||
+    googleFontNames.length === 0 ||
+    googleFontNames.includes(fontFamily);
+  const familySelectValue = fontFamily && !inCatalog ? '__custom' : fontFamily;
+
+  const segBtn = (active: boolean) =>
+    `flex h-9 flex-1 items-center justify-center rounded-md border text-gray-600 transition ${
+      active ? 'border-gray-200 bg-gray-100 text-gray-900' : 'border-transparent bg-transparent hover:bg-gray-50'
+    }`;
+
   return (
-    <div className="space-y-3 border-t border-gray-100 pt-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Typography</p>
-      <div>
-        <label className="mb-1 block text-xs font-medium text-gray-500">Font (Google)</label>
-        <input
-          className="w-full rounded border border-gray-200 px-2 py-1.5 font-mono text-xs"
-          placeholder="e.g. Montserrat"
-          value={s.fontFamily ?? ''}
-          onChange={(e) => onChange({ ...s, fontFamily: e.target.value || undefined })}
-          list={fontDatalistId}
-        />
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-500">Size</label>
-          <input
-            className="w-full rounded border border-gray-200 px-2 py-1.5 text-xs"
-            placeholder="1.25rem"
-            value={s.fontSize ?? ''}
-            onChange={(e) => onChange({ ...s, fontSize: e.target.value || undefined })}
-          />
+    <div>
+      <SettingsPanelTitle>Font</SettingsPanelTitle>
+
+      {googleFontNames.length === 0 ? (
+        <div className="mb-5 grid grid-cols-2 gap-2">
+          <div>
+            <SettingsFieldLabel>Family</SettingsFieldLabel>
+            <div className="mt-1.5">
+              <input
+                className={SETTINGS_INPUT}
+                placeholder="e.g. Montserrat"
+                value={fontFamily}
+                onChange={(e) => onChange({ ...s, fontFamily: e.target.value.trim() || undefined })}
+              />
+            </div>
+          </div>
+          <div>
+            <SettingsFieldLabel>Weight</SettingsFieldLabel>
+            <div className="mt-1.5">
+              <SettingsSelectWrap>
+                <select
+                  className={SETTINGS_SELECT}
+                  value={weight}
+                  onChange={(e) => onChange({ ...s, fontWeight: e.target.value || undefined })}
+                >
+                  <option value="">Default</option>
+                  <option value="400">Regular</option>
+                  <option value="500">Medium</option>
+                  <option value="600">Semibold</option>
+                  <option value="700">Bold</option>
+                </select>
+              </SettingsSelectWrap>
+            </div>
+          </div>
         </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-500">Weight</label>
-          <select
-            className="w-full rounded border border-gray-200 px-2 py-1.5 text-xs"
-            value={s.fontWeight ?? ''}
-            onChange={(e) => onChange({ ...s, fontWeight: e.target.value || undefined })}
+      ) : (
+        <>
+          <div className="mb-5 grid grid-cols-2 gap-2">
+            <div>
+              <SettingsFieldLabel>Family</SettingsFieldLabel>
+              <div className="mt-1.5">
+                <SettingsSelectWrap>
+                  <select
+                    className={SETTINGS_SELECT}
+                    value={familySelectValue}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === '') onChange({ ...s, fontFamily: undefined });
+                      else if (v === '__custom') onChange({ ...s, fontFamily: 'Montserrat' });
+                      else onChange({ ...s, fontFamily: v });
+                    }}
+                  >
+                    <option value="">Theme default</option>
+                    {googleFontNames.map((f) => (
+                      <option key={f} value={f}>
+                        {f}
+                      </option>
+                    ))}
+                    <option value="__custom">Custom…</option>
+                  </select>
+                </SettingsSelectWrap>
+              </div>
+            </div>
+            <div>
+              <SettingsFieldLabel>Weight</SettingsFieldLabel>
+              <div className="mt-1.5">
+                <SettingsSelectWrap>
+                  <select
+                    className={SETTINGS_SELECT}
+                    value={weight}
+                    onChange={(e) => onChange({ ...s, fontWeight: e.target.value || undefined })}
+                  >
+                    <option value="">Default</option>
+                    <option value="400">Regular</option>
+                    <option value="500">Medium</option>
+                    <option value="600">Semibold</option>
+                    <option value="700">Bold</option>
+                  </select>
+                </SettingsSelectWrap>
+              </div>
+            </div>
+          </div>
+
+          {!inCatalog && (
+            <SettingsRow label="Custom name">
+              <input
+                className={SETTINGS_INPUT}
+                placeholder="e.g. Montserrat"
+                value={fontFamily}
+                onChange={(e) => onChange({ ...s, fontFamily: e.target.value.trim() || undefined })}
+              />
+            </SettingsRow>
+          )}
+        </>
+      )}
+
+      <SettingsRow label="Size" right={String(sizePx)}>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+            onClick={() =>
+              onChange({ ...s, fontSize: `${Math.max(12, sizePx - 1)}px` })
+            }
           >
-            <option value="">Default</option>
-            <option value="400">400</option>
-            <option value="500">500</option>
-            <option value="600">600</option>
-            <option value="700">700</option>
-          </select>
+            <Minus className="h-4 w-4" strokeWidth={2} />
+          </button>
+          <input
+            type="range"
+            min={12}
+            max={96}
+            value={sizePx}
+            onChange={(e) => onChange({ ...s, fontSize: `${e.target.value}px` })}
+            className="h-2 flex-1 cursor-pointer appearance-none rounded-full bg-gray-200 accent-gray-900"
+          />
+          <button
+            type="button"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+            onClick={() =>
+              onChange({ ...s, fontSize: `${Math.min(96, sizePx + 1)}px` })
+            }
+          >
+            <Plus className="h-4 w-4" strokeWidth={2} />
+          </button>
+        </div>
+      </SettingsRow>
+
+      <div className="mb-5">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <SettingsFieldLabel>Font color</SettingsFieldLabel>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-[13px] uppercase text-gray-900">{hex}</span>
+            <label className="relative h-7 w-7 cursor-pointer overflow-hidden rounded-full border border-gray-200 shadow-sm">
+              <input
+                type="color"
+                className="absolute inset-0 h-[200%] w-[200%] -translate-x-1/4 -translate-y-1/4 cursor-pointer p-0"
+                value={hex}
+                onChange={(e) => onChange({ ...s, color: e.target.value })}
+              />
+            </label>
+          </div>
         </div>
       </div>
-      <div>
-        <label className="mb-1 block text-xs font-medium text-gray-500">Color</label>
-        <div className="flex gap-2">
-          <input
-            type="color"
-            className="h-9 w-10 cursor-pointer rounded border border-gray-200 bg-white p-0.5"
-            value={s.color?.startsWith('#') && s.color.length >= 4 ? s.color : '#111827'}
-            onChange={(e) => onChange({ ...s, color: e.target.value })}
-          />
-          <input
-            className="min-w-0 flex-1 rounded border border-gray-200 px-2 py-1.5 font-mono text-xs"
-            value={s.color ?? ''}
-            onChange={(e) => onChange({ ...s, color: e.target.value || undefined })}
-            placeholder="#111827"
-          />
-        </div>
-      </div>
-      <div>
-        <label className="mb-1 block text-xs font-medium text-gray-500">Align</label>
-        <div className="flex gap-1">
-          {(['left', 'center', 'right'] as const).map((a) => (
+
+      <SettingsRow label="Alignment">
+        <div className="flex gap-1 rounded-lg border border-gray-100 bg-gray-50/80 p-0.5">
+          {(
+            [
+              ['left', AlignLeft],
+              ['center', AlignCenter],
+              ['right', AlignRight],
+            ] as const
+          ).map(([key, Icon]) => (
             <button
-              key={a}
+              key={key}
               type="button"
-              onClick={() => onChange({ ...s, textAlign: a })}
-              className={`flex-1 rounded border px-2 py-1 text-xs capitalize ${
-                s.textAlign === a ? 'border-brand-500 bg-brand-50 text-brand-900' : 'border-gray-200'
-              }`}
+              className={segBtn(align === key)}
+              onClick={() => onChange({ ...s, textAlign: key })}
+              title={key}
             >
-              {a}
+              <Icon className="h-4 w-4" strokeWidth={1.75} />
             </button>
           ))}
         </div>
+      </SettingsRow>
+
+      <SettingsRow label="Case">
+        <div className="flex gap-1 rounded-lg border border-gray-100 bg-gray-50/80 p-0.5">
+          <button
+            type="button"
+            className={segBtn(!isUpper)}
+            onClick={() => onChange({ ...s, textTransform: 'none' })}
+          >
+            <span className="text-[13px] font-medium">Aa</span>
+          </button>
+          <button
+            type="button"
+            className={segBtn(isUpper)}
+            onClick={() => onChange({ ...s, textTransform: 'uppercase' })}
+          >
+            <span className="text-[12px] font-semibold tracking-wide">AA</span>
+          </button>
+        </div>
+      </SettingsRow>
+
+      <div className="mb-2 mt-4 border-t border-gray-100 pt-4">
+        <button
+          type="button"
+          onClick={() => setSpacingOpen((o) => !o)}
+          className="flex w-full items-center justify-between py-1 text-left"
+        >
+          <SettingsFieldLabel>Spacing</SettingsFieldLabel>
+          <ChevronDown
+            className={`h-4 w-4 text-gray-400 transition ${spacingOpen ? 'rotate-180' : ''}`}
+            strokeWidth={2}
+          />
+        </button>
+        {spacingOpen ? (
+          <div className="mt-3 pl-0">
+            <SettingsRow label="Line height" right={lh.toFixed(2)}>
+              <input
+                type="range"
+                min={100}
+                max={250}
+                value={Math.round(lh * 100)}
+                onChange={(e) =>
+                  onChange({
+                    ...s,
+                    lineHeight: String(Number(e.target.value) / 100),
+                  })
+                }
+                className="h-2 w-full cursor-pointer appearance-none rounded-full bg-gray-200 accent-gray-900"
+              />
+            </SettingsRow>
+          </div>
+        ) : null}
       </div>
     </div>
   );
+}
+
+function humanizeBlockType(type: FormBlockType): string {
+  return type
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function BlockInspector({
   block,
   onChange,
   onRemove,
-  fontDatalistId,
+  googleFontNames,
 }: {
   block: FormBlock;
   onChange: (patch: Partial<FormBlock>) => void;
   onRemove: () => void;
-  fontDatalistId: string;
+  googleFontNames: string[];
 }) {
   const optsText = (block.options || []).join('\n');
 
   return (
-    <div className="space-y-4 text-sm">
-      <div>
-        <label className="mb-1 block text-xs font-medium text-gray-500">Block type</label>
-        <p className="rounded border border-gray-100 bg-gray-50 px-2 py-1.5 capitalize text-gray-800">
-          {block.type.replace(/_/g, ' ')}
-        </p>
-      </div>
+    <div className="text-[13px] text-gray-900">
+      {block.type !== 'heading' ? (
+        <SettingsPanelTitle className="mb-5">{humanizeBlockType(block.type)}</SettingsPanelTitle>
+      ) : null}
 
       {block.type === 'venue_contact' ? (
-        <p className="text-xs text-gray-600">
+        <p className="mb-5 text-[12px] leading-relaxed text-gray-500">
           Shows your venue name, email, phone, and address from{' '}
-          <Link href="/dashboard/settings/branding" className="text-brand-600 hover:underline">
+          <Link href="/dashboard/settings/branding" className="text-gray-900 underline underline-offset-2 hover:text-gray-700">
             Settings → Branding
           </Link>
           . Add this block again if you removed it.
@@ -336,97 +586,95 @@ function BlockInspector({
         block.type === 'select' ||
         block.type === 'checkbox_group') && (
         <>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">Label</label>
+          <SettingsRow label="Label">
             <input
-              className="w-full rounded border border-gray-200 px-2 py-1.5"
+              className={SETTINGS_INPUT}
               value={block.label ?? ''}
               onChange={(e) => onChange({ label: e.target.value })}
             />
-          </div>
+          </SettingsRow>
           {block.type !== 'date' &&
           block.type !== 'file' &&
           block.type !== 'radio' &&
           block.type !== 'checkbox_group' ? (
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">Placeholder</label>
+            <SettingsRow label="Placeholder">
               <input
-                className="w-full rounded border border-gray-200 px-2 py-1.5"
+                className={SETTINGS_INPUT}
                 value={block.placeholder ?? ''}
                 onChange={(e) => onChange({ placeholder: e.target.value })}
               />
-            </div>
+            </SettingsRow>
           ) : null}
-          <label className="flex items-center gap-2">
+          <label className="mb-5 flex cursor-pointer items-center gap-2.5">
             <input
               type="checkbox"
+              className="h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-400"
               checked={!!block.required}
               onChange={(e) => onChange({ required: e.target.checked })}
             />
-            <span>Required</span>
+            <span className="text-[13px] text-gray-700">Required</span>
           </label>
         </>
       )}
 
       {block.type === 'heading' && (
         <>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">Level</label>
-            <select
-              className="w-full rounded border border-gray-200 px-2 py-1.5"
-              value={block.level ?? 2}
-              onChange={(e) => onChange({ level: Number(e.target.value) as FormBlock['level'] })}
-            >
-              {[1, 2, 3, 4, 5, 6].map((n) => (
-                <option key={n} value={n}>
-                  H{n}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">Text</label>
+          <SettingsRow label="Heading level">
+            <SettingsSelectWrap>
+              <select
+                className={SETTINGS_SELECT}
+                value={block.level ?? 2}
+                onChange={(e) => onChange({ level: Number(e.target.value) as FormBlock['level'] })}
+              >
+                {[1, 2, 3, 4, 5, 6].map((n) => (
+                  <option key={n} value={n}>
+                    H{n}
+                  </option>
+                ))}
+              </select>
+            </SettingsSelectWrap>
+          </SettingsRow>
+          <SettingsRow label="Text">
             <input
-              className="w-full rounded border border-gray-200 px-2 py-1.5"
+              className={SETTINGS_INPUT}
               value={block.content ?? ''}
               onChange={(e) => onChange({ content: e.target.value })}
             />
-          </div>
+          </SettingsRow>
           <BlockStyleFields
             style={block.style}
-            fontDatalistId={fontDatalistId}
+            googleFontNames={googleFontNames}
             onChange={(st) => onChange({ style: { ...block.style, ...st } })}
           />
         </>
       )}
 
       {block.type === 'rich_text' && (
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-500">Content</label>
-          <RichTextEditor
-            content={block.content || '<p></p>'}
-            onChange={(html: string) => onChange({ content: html })}
-            minHeight={160}
-          />
-        </div>
+        <SettingsRow label="Content">
+          <div className="rounded-md border border-gray-200 bg-white p-1 shadow-sm">
+            <RichTextEditor
+              content={block.content || '<p></p>'}
+              onChange={(html: string) => onChange({ content: html })}
+              minHeight={160}
+            />
+          </div>
+        </SettingsRow>
       )}
 
       {block.type === 'html' && (
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-500">HTML (sanitized on display)</label>
+        <SettingsRow label="HTML (sanitized when shown)">
           <textarea
-            className="h-40 w-full rounded border border-gray-200 px-2 py-1.5 font-mono text-xs"
+            className="min-h-[160px] w-full rounded border border-gray-200 bg-white px-3 py-2 font-mono text-[12px] text-gray-900 shadow-sm focus:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200"
             value={block.content ?? ''}
             onChange={(e) => onChange({ content: e.target.value })}
           />
-        </div>
+        </SettingsRow>
       )}
 
       {(block.type === 'radio' || block.type === 'select' || block.type === 'checkbox_group') && (
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-500">Options (one per line)</label>
+        <SettingsRow label="Options (one per line)">
           <textarea
-            className="h-32 w-full rounded border border-gray-200 px-2 py-1.5"
+            className="min-h-[120px] w-full rounded border border-gray-200 bg-white px-3 py-2 text-[13px] shadow-sm focus:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200"
             value={optsText}
             onChange={(e) =>
               onChange({
@@ -437,69 +685,66 @@ function BlockInspector({
               })
             }
           />
-        </div>
+        </SettingsRow>
       )}
 
       {block.type === 'image' && (
         <>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">Image URL</label>
+          <SettingsRow label="Image URL">
             <input
-              className="w-full rounded border border-gray-200 px-2 py-1.5"
+              className={SETTINGS_INPUT}
               value={block.src ?? ''}
               onChange={(e) => onChange({ src: e.target.value })}
               placeholder="https://"
             />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">Alt text</label>
+          </SettingsRow>
+          <SettingsRow label="Alt text">
             <input
-              className="w-full rounded border border-gray-200 px-2 py-1.5"
+              className={SETTINGS_INPUT}
               value={block.alt ?? ''}
               onChange={(e) => onChange({ alt: e.target.value })}
             />
-          </div>
+          </SettingsRow>
         </>
       )}
 
       {(block.type === 'submit' || block.type === 'button') && (
         <>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">Label</label>
+          <SettingsRow label="Label">
             <input
-              className="w-full rounded border border-gray-200 px-2 py-1.5"
+              className={SETTINGS_INPUT}
               value={block.buttonLabel ?? ''}
               onChange={(e) => onChange({ buttonLabel: e.target.value })}
             />
-          </div>
+          </SettingsRow>
           {block.type === 'button' && (
             <>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-500">Link (https)</label>
+              <SettingsRow label="Link (https)">
                 <input
-                  className="w-full rounded border border-gray-200 px-2 py-1.5"
+                  className={SETTINGS_INPUT}
                   value={block.href ?? ''}
                   onChange={(e) => onChange({ href: e.target.value })}
                   placeholder="https://"
                 />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-500">Style</label>
-                <select
-                  className="w-full rounded border border-gray-200 px-2 py-1.5"
-                  value={block.buttonVariant ?? 'secondary'}
-                  onChange={(e) =>
-                    onChange({
-                      buttonVariant: e.target.value as FormBlock['buttonVariant'],
-                    })
-                  }
-                >
-                  <option value="primary">Primary</option>
-                  <option value="secondary">Secondary</option>
-                  <option value="outline">Outline</option>
-                  <option value="link">Link</option>
-                </select>
-              </div>
+              </SettingsRow>
+              <SettingsRow label="Style">
+                <SettingsSelectWrap>
+                  <select
+                    className={SETTINGS_SELECT}
+                    value={block.buttonVariant ?? 'secondary'}
+                    onChange={(e) =>
+                      onChange({
+                        buttonVariant: e.target.value as FormBlock['buttonVariant'],
+                      })
+                    }
+                  >
+                    <option value="primary">Primary</option>
+                    <option value="secondary">Secondary</option>
+                    <option value="outline">Outline</option>
+                    <option value="link">Link</option>
+                  </select>
+                </SettingsSelectWrap>
+              </SettingsRow>
             </>
           )}
         </>
@@ -514,20 +759,19 @@ function BlockInspector({
         block.type === 'date' ||
         block.type === 'address' ||
         block.type === 'file') && (
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-500">Hint (optional)</label>
+        <SettingsRow label="Hint (optional)">
           <input
-            className="w-full rounded border border-gray-200 px-2 py-1.5"
+            className={SETTINGS_INPUT}
             value={block.hint ?? ''}
             onChange={(e) => onChange({ hint: e.target.value })}
           />
-        </div>
+        </SettingsRow>
       )}
 
-      <div className="border-t border-gray-100 pt-2">
+      <div className="mt-6 border-t border-gray-100 pt-4">
         <button
           type="button"
-          className="text-xs font-medium text-red-600 hover:text-red-700"
+          className="text-[13px] font-medium text-gray-500 underline-offset-2 hover:text-gray-900 hover:underline"
           onClick={() => {
             if (typeof window !== 'undefined' && window.confirm('Remove this block?')) {
               onRemove();
@@ -550,37 +794,38 @@ function ThemeInspector({
   onChange: (t: MarketingFormDefinition['theme']) => void;
   fontDatalistId: string;
 }) {
+  const T = theme;
   const row = (key: keyof ReturnType<typeof mergeTheme>, label: string) => (
-    <div key={key}>
-      <label className="mb-1 block text-xs font-medium text-gray-500">{label}</label>
+    <SettingsRow key={String(key)} label={label}>
       {key === 'fontFamily' ? (
         <input
-          className="w-full rounded border border-gray-200 px-2 py-1.5 font-mono text-xs"
-          value={theme[key]}
+          className={`${SETTINGS_INPUT} font-mono text-[12px]`}
+          value={T[key]}
           onChange={(e) => onChange({ [key]: e.target.value })}
           list={fontDatalistId}
         />
       ) : (
         <input
-          className="w-full rounded border border-gray-200 px-2 py-1.5"
-          value={theme[key]}
+          className={SETTINGS_INPUT}
+          value={T[key]}
           onChange={(e) => onChange({ [key]: e.target.value })}
         />
       )}
-    </div>
+    </SettingsRow>
   );
 
   return (
-    <div className="space-y-3">
-      {row('maxWidth', 'Max width (e.g. 520px)')}
-      {row('primaryColor', 'Primary / button color')}
+    <div className="text-[13px] text-gray-900">
+      <SettingsPanelTitle>Theme</SettingsPanelTitle>
+      {row('maxWidth', 'Max width')}
+      {row('primaryColor', 'Primary / button')}
       {row('background', 'Page background')}
       {row('surface', 'Card background')}
-      {row('fontFamily', 'Font stack (Google name first for preview)')}
+      {row('fontFamily', 'Font stack')}
       {row('borderRadius', 'Corner radius')}
       {row('labelColor', 'Label color')}
-      {row('inputBorder', 'Field border color')}
-      {row('mutedColor', 'Hint / muted text')}
+      {row('inputBorder', 'Field border')}
+      {row('mutedColor', 'Muted text')}
     </div>
   );
 }
@@ -596,42 +841,42 @@ function PostSubmitInspector({
   const mode = p.mode ?? 'default';
 
   return (
-    <div className="space-y-3 text-sm">
-      <div>
-        <label className="mb-1 block text-xs font-medium text-gray-500">After successful submit</label>
-        <select
-          className="w-full rounded border border-gray-200 px-2 py-1.5"
-          value={mode}
-          onChange={(e) => {
-            const m = e.target.value as PostSubmitConfig['mode'];
-            onChange({ ...p, mode: m });
-          }}
-        >
-          <option value="default">Short thank-you message</option>
-          <option value="inline_message">Custom message (stay on page)</option>
-          <option value="redirect">Redirect to URL</option>
-        </select>
-      </div>
+    <div className="text-[13px] text-gray-900">
+      <SettingsPanelTitle>Thank you</SettingsPanelTitle>
+      <SettingsRow label="After submit">
+        <SettingsSelectWrap>
+          <select
+            className={SETTINGS_SELECT}
+            value={mode}
+            onChange={(e) => {
+              const m = e.target.value as PostSubmitConfig['mode'];
+              onChange({ ...p, mode: m });
+            }}
+          >
+            <option value="default">Short thank-you message</option>
+            <option value="inline_message">Custom message (same page)</option>
+            <option value="redirect">Redirect to URL</option>
+          </select>
+        </SettingsSelectWrap>
+      </SettingsRow>
       {mode === 'inline_message' ? (
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-500">Message (HTML, sanitized)</label>
+        <SettingsRow label="Message (HTML)">
           <textarea
-            className="h-36 w-full rounded border border-gray-200 px-2 py-1.5 font-mono text-xs"
+            className="min-h-[140px] w-full rounded border border-gray-200 bg-white px-3 py-2 font-mono text-[12px] shadow-sm focus:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200"
             value={p.messageHtml ?? ''}
             onChange={(e) => onChange({ ...p, messageHtml: e.target.value })}
           />
-        </div>
+        </SettingsRow>
       ) : null}
       {mode === 'redirect' ? (
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-500">Redirect URL</label>
+        <SettingsRow label="Redirect URL">
           <input
-            className="w-full rounded border border-gray-200 px-2 py-1.5"
+            className={SETTINGS_INPUT}
             value={p.redirectUrl ?? ''}
             onChange={(e) => onChange({ ...p, redirectUrl: e.target.value })}
             placeholder="https://…"
           />
-        </div>
+        </SettingsRow>
       ) : null}
     </div>
   );
@@ -1039,25 +1284,6 @@ export function FormBuilderEditor({
 
             <button
               type="button"
-              onClick={undo}
-              disabled={!canUndo}
-              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
-              title="Undo"
-            >
-              <Undo2 size={14} /> Undo
-            </button>
-            <button
-              type="button"
-              onClick={redo}
-              disabled={!canRedo}
-              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
-              title="Redo"
-            >
-              <Redo2 size={14} /> Redo
-            </button>
-
-            <button
-              type="button"
               onClick={() => setThankYouOpen(true)}
               className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium hover:bg-gray-50"
             >
@@ -1160,28 +1386,32 @@ export function FormBuilderEditor({
           </DndContext>
         </div>
 
-        <aside className="sticky top-[57px] z-20 min-h-[320px] w-full shrink-0 overflow-y-auto border-t border-gray-200 bg-white px-3 py-4 shadow-sm xl:h-[calc(100vh-57px)] xl:w-[320px] xl:border-l xl:border-t-0">
-          <div className="mb-3 flex gap-1 overflow-x-auto pb-1 text-xs font-medium">
-            {(
-              [
-                ['block', 'Block'],
-                ['form', 'Thank you'],
-                ['theme', 'Theme'],
-                ['submissions', 'Submissions'],
-                ['versions', 'Versions'],
-              ] as const
-            ).map(([id, lab]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setRightTab(id)}
-                className={`whitespace-nowrap rounded-full px-2.5 py-1 ${
-                  rightTab === id ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {lab}
-              </button>
-            ))}
+        <aside className="sticky top-[57px] z-20 flex min-h-[50vh] w-full shrink-0 flex-col border-t border-gray-200/90 bg-[#fafafa] xl:h-[calc(100vh-57px)] xl:w-[300px] xl:border-l xl:border-t-0">
+          <div className="shrink-0 border-b border-gray-200/80 bg-white px-1 pt-2">
+            <div className="flex gap-0 px-2">
+              {(
+                [
+                  ['block', 'Design'],
+                  ['form', 'Thank you'],
+                  ['theme', 'Theme'],
+                  ['submissions', 'Inbox'],
+                  ['versions', 'History'],
+                ] as const
+              ).map(([id, lab]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setRightTab(id)}
+                  className={`relative min-w-0 flex-1 px-2 pb-2.5 pt-1 text-center text-[13px] font-medium transition ${
+                    rightTab === id
+                      ? 'text-gray-900 after:absolute after:bottom-0 after:left-2 after:right-2 after:h-0.5 after:bg-gray-900'
+                      : 'text-gray-400 hover:text-gray-600'
+                  }`}
+                >
+                  {lab}
+                </button>
+              ))}
+            </div>
           </div>
 
           <datalist id="storypay-form-gfonts">
@@ -1193,108 +1423,129 @@ export function FormBuilderEditor({
             ))}
           </datalist>
 
-          {rightTab === 'block' ? (
-            <div className="rounded-xl border border-gray-200 bg-white p-3">
-              <h3 className="mb-2 text-sm font-semibold text-gray-900">Selection</h3>
-              {selected ? (
-                <BlockInspector
-                  block={selected}
-                  onChange={patchSelected}
-                  onRemove={() => selectedId && removeBlock(selectedId)}
-                  fontDatalistId="storypay-form-gfonts"
-                />
-              ) : (
-                <p className="text-sm text-gray-500">Click a block on the canvas.</p>
-              )}
-            </div>
-          ) : null}
-
-          {rightTab === 'form' ? (
-            <div className="space-y-3">
-              <div className="rounded-xl border border-gray-200 bg-white p-3">
-                <h3 className="mb-2 text-sm font-semibold text-gray-900">After submit</h3>
-                <PostSubmitInspector postSubmit={definition.postSubmit} onChange={patchPostSubmit} />
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+            {rightTab === 'block' ? (
+              <div>
+                {selected ? (
+                  <BlockInspector
+                    block={selected}
+                    onChange={patchSelected}
+                    onRemove={() => selectedId && removeBlock(selectedId)}
+                    googleFontNames={googleFontNames}
+                  />
+                ) : (
+                  <p className="text-center text-[13px] text-gray-400">Select a block on the canvas</p>
+                )}
               </div>
-            </div>
-          ) : null}
+            ) : null}
 
-          {rightTab === 'theme' ? (
-            <div className="rounded-xl border border-gray-200 bg-white p-3">
-              <h3 className="mb-2 text-sm font-semibold text-gray-900">Theme</h3>
+            {rightTab === 'form' ? (
+              <PostSubmitInspector postSubmit={definition.postSubmit} onChange={patchPostSubmit} />
+            ) : null}
+
+            {rightTab === 'theme' ? (
               <ThemeInspector theme={mergedTheme} onChange={patchTheme} fontDatalistId="storypay-form-gfonts" />
-            </div>
-          ) : null}
+            ) : null}
 
-          {rightTab === 'submissions' ? (
-            <div className="rounded-xl border border-gray-200 bg-white p-3">
-              <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-900">
-                <Inbox size={16} /> Submissions
-              </h3>
-              {submissionsLoading ? (
-                <p className="text-sm text-gray-500">Loading…</p>
-              ) : submissions.length === 0 ? (
-                <p className="text-sm text-gray-500">No submissions yet.</p>
-              ) : (
-                <ul className="max-h-[60vh] space-y-2 overflow-y-auto text-xs">
-                  {submissions.map((s) => (
-                    <li key={s.id} className="rounded border border-gray-100 bg-gray-50 p-2">
-                      <p className="font-medium text-gray-700">
-                        {new Date(s.created_at).toLocaleString()}
-                      </p>
-                      <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-all text-[11px] text-gray-600">
-                        {JSON.stringify(s.payload, null, 2)}
-                      </pre>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          ) : null}
-
-          {rightTab === 'versions' ? (
-            <div className="rounded-xl border border-gray-200 bg-white p-3">
-              <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-900">
-                <History size={16} /> Version history
-              </h3>
-              <p className="mb-2 text-xs text-gray-500">
-                Snapshots are stored when you save. Restore loads into the editor (save again to publish).
-              </p>
-              {revisionsLoading ? (
-                <p className="text-sm text-gray-500">Loading…</p>
-              ) : revisions.length === 0 ? (
-                <p className="text-sm text-gray-500">No saved versions yet — save the form once.</p>
-              ) : (
-                <ul className="max-h-[60vh] space-y-2 overflow-y-auto text-xs">
-                  {revisions.map((r) => (
-                    <li
-                      key={r.id}
-                      className="flex items-center justify-between gap-2 rounded border border-gray-100 bg-gray-50 px-2 py-2"
-                    >
-                      <span className="text-gray-700">
-                        {new Date(r.createdAt).toLocaleString()}
-                      </span>
-                      <button
-                        type="button"
-                        className="shrink-0 rounded border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium hover:bg-gray-100"
-                        onClick={() => {
-                          if (typeof window !== 'undefined' && window.confirm('Replace the canvas with this version?')) {
-                            reset({
-                              ...present,
-                              definition: r.definition,
-                            });
-                            setSelectedId(r.definition.blocks[0]?.id ?? null);
-                            setRightTab('block');
-                          }
-                        }}
+            {rightTab === 'submissions' ? (
+              <div className="text-[13px] text-gray-900">
+                <SettingsPanelTitle>Inbox</SettingsPanelTitle>
+                {submissionsLoading ? (
+                  <p className="text-[13px] text-gray-400">Loading…</p>
+                ) : submissions.length === 0 ? (
+                  <p className="text-[13px] text-gray-400">No submissions yet.</p>
+                ) : (
+                  <ul className="max-h-[min(50vh,480px)] space-y-2 overflow-y-auto">
+                    {submissions.map((s) => (
+                      <li
+                        key={s.id}
+                        className="rounded-lg border border-gray-200/80 bg-white p-3 shadow-sm"
                       >
-                        Restore
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
+                        <p className="text-[12px] font-medium text-gray-700">
+                          {new Date(s.created_at).toLocaleString()}
+                        </p>
+                        <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-gray-500">
+                          {JSON.stringify(s.payload, null, 2)}
+                        </pre>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ) : null}
+
+            {rightTab === 'versions' ? (
+              <div className="text-[13px] text-gray-900">
+                <SettingsPanelTitle>Versions</SettingsPanelTitle>
+                <p className="mb-4 text-[12px] leading-relaxed text-gray-500">
+                  Saved when you click Save. Restore replaces the editor — save again to publish.
+                </p>
+                {revisionsLoading ? (
+                  <p className="text-[13px] text-gray-400">Loading…</p>
+                ) : revisions.length === 0 ? (
+                  <p className="text-[13px] text-gray-400">No versions yet.</p>
+                ) : (
+                  <ul className="max-h-[min(50vh,480px)] space-y-2 overflow-y-auto">
+                    {revisions.map((r) => (
+                      <li
+                        key={r.id}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-gray-200/80 bg-white px-3 py-2.5 shadow-sm"
+                      >
+                        <span className="text-[12px] text-gray-700">
+                          {new Date(r.createdAt).toLocaleString()}
+                        </span>
+                        <button
+                          type="button"
+                          className="shrink-0 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-800 hover:bg-gray-50"
+                          onClick={() => {
+                            if (
+                              typeof window !== 'undefined' &&
+                              window.confirm('Replace the canvas with this version?')
+                            ) {
+                              reset({
+                                ...present,
+                                definition: r.definition,
+                              });
+                              setSelectedId(r.definition.blocks[0]?.id ?? null);
+                              setRightTab('block');
+                            }
+                          }}
+                        >
+                          Restore
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="shrink-0 border-t border-gray-200/90 bg-white px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-5">
+                <button
+                  type="button"
+                  onClick={undo}
+                  disabled={!canUndo}
+                  className="inline-flex items-center gap-1.5 text-[13px] font-medium text-gray-600 hover:text-gray-900 disabled:opacity-30"
+                >
+                  <Undo2 size={15} strokeWidth={1.75} /> Undo
+                </button>
+                <button
+                  type="button"
+                  onClick={redo}
+                  disabled={!canRedo}
+                  className="inline-flex items-center gap-1.5 text-[13px] font-medium text-gray-600 hover:text-gray-900 disabled:opacity-30"
+                >
+                  <Redo2 size={15} strokeWidth={1.75} /> Redo
+                </button>
+              </div>
+              <span className="text-[12px] text-gray-400">
+                {saving ? 'Saving…' : saveMsg === 'Saved' ? 'Saved' : ''}
+              </span>
             </div>
-          ) : null}
+          </div>
         </aside>
       </div>
 
