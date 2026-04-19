@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { normalizeReminderOffsets, refreshAppointmentRemindersForVenue } from '@/lib/appointment-reminders';
+import { normalizePaymentReminderOffsets, refreshPaymentRemindersForVenue } from '@/lib/payment-reminders';
 
 // Never cache this route — it returns live per-venue data
 export const dynamic = 'force-dynamic';
@@ -59,6 +60,8 @@ export async function PATCH(request: Request) {
     timezone: true,
     appointment_reminders_enabled: true,
     appointment_reminder_offsets: true,
+    payment_reminders_enabled: true,
+    payment_reminder_offsets: true,
   };
   const updates: Record<string, unknown> = {};
 
@@ -69,11 +72,18 @@ export async function PATCH(request: Request) {
     updates.appointment_reminder_offsets = normalizeReminderOffsets(body.appointment_reminder_offsets);
   }
 
+  if (body.payment_reminder_offsets !== undefined && body.payment_reminder_offsets !== null) {
+    if (!Array.isArray(body.payment_reminder_offsets)) {
+      return NextResponse.json({ error: 'payment_reminder_offsets must be a JSON array' }, { status: 400 });
+    }
+    updates.payment_reminder_offsets = normalizePaymentReminderOffsets(body.payment_reminder_offsets);
+  }
+
   // Use Object.keys on the raw body so null values are explicitly included.
   // This is important for clearing fields like brand_logo_url — Supabase's
   // .update() needs the key present with a null value to write NULL to the DB.
   for (const key of Object.keys(body)) {
-    if (key === 'appointment_reminder_offsets') continue;
+    if (key === 'appointment_reminder_offsets' || key === 'payment_reminder_offsets') continue;
     if (allowedFields[key]) {
       updates[key] = body[key] ?? null;
     }
@@ -97,7 +107,8 @@ export async function PATCH(request: Request) {
     const knownCols = ['name', 'service_fee_rate', 'brand_logo_url', 'brand_color',
       'brand_tagline', 'brand_website', 'brand_email', 'brand_phone',
       'brand_address', 'brand_city', 'brand_state', 'brand_zip', 'brand_footer_note', 'monthly_booking_goal',
-      'listing_marketing_monthly_spend', 'timezone', 'appointment_reminders_enabled', 'appointment_reminder_offsets'];
+      'listing_marketing_monthly_spend', 'timezone', 'appointment_reminders_enabled', 'appointment_reminder_offsets',
+      'payment_reminders_enabled', 'payment_reminder_offsets'];
     for (const k of knownCols) {
       if (k in updates) safeUpdates[k] = updates[k];
     }
@@ -115,6 +126,10 @@ export async function PATCH(request: Request) {
 
   if ('appointment_reminders_enabled' in updates || 'appointment_reminder_offsets' in updates) {
     void refreshAppointmentRemindersForVenue(venueId);
+  }
+
+  if ('payment_reminders_enabled' in updates || 'payment_reminder_offsets' in updates) {
+    void refreshPaymentRemindersForVenue(venueId);
   }
 
   return NextResponse.json(venue);

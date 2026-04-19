@@ -5,6 +5,7 @@ import { createCustomer } from '@/lib/lunarpay';
 import { findOrCreateContact, sendSms, sendEmail, normalizePhone, getGhlToken } from '@/lib/ghl';
 import { sendEmail as directSendEmail } from '@/lib/email';
 import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
+import { syncPaymentRemindersForProposal } from '@/lib/payment-reminders';
 
 export async function GET(
   _request: NextRequest,
@@ -230,6 +231,8 @@ export async function PATCH(
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 500 });
   }
+
+  void syncPaymentRemindersForProposal(id);
 
   return NextResponse.json(updated);
 }

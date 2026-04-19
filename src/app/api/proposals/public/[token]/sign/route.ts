@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { syncPaymentRemindersForProposal } from '@/lib/payment-reminders';
 
 export async function POST(
   request: Request,
@@ -38,6 +39,8 @@ export async function POST(
   if (updateError) {
     return NextResponse.json({ error: 'Failed to save signature' }, { status: 500 });
   }
+
+  void syncPaymentRemindersForProposal(proposal.id);
 
   return NextResponse.json({ success: true });
 }

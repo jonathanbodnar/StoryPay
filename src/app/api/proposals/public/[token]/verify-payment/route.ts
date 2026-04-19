@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getCheckoutSession, createPaymentSchedule, createSubscription } from '@/lib/lunarpay';
 import { sendEmail as directSendEmail } from '@/lib/email';
 import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
+import { syncPaymentRemindersForProposal } from '@/lib/payment-reminders';
 
 function applyFee(cents: number, ratePercent: number): number {
   if (ratePercent <= 0) return cents;
@@ -160,6 +161,8 @@ export async function POST(
       .from('proposals')
       .update(updateData)
       .eq('id', proposal.id);
+
+    void syncPaymentRemindersForProposal(proposal.id);
 
     console.log('[verify-payment] Proposal updated:', JSON.stringify(updateData));
 

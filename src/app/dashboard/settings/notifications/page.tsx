@@ -1,9 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Mail, MessageSquare, Loader2, Save, CheckCircle2, Calendar } from 'lucide-react';
+import { Mail, MessageSquare, Loader2, Save, CheckCircle2, Calendar, CreditCard } from 'lucide-react';
 import type { ReminderOffset } from '@/lib/appointment-reminders';
 import { DEFAULT_APPOINTMENT_REMINDER_OFFSETS, normalizeReminderOffsets } from '@/lib/appointment-reminders';
+import {
+  DEFAULT_PAYMENT_REMINDER_OFFSETS,
+  normalizePaymentReminderOffsets,
+} from '@/lib/payment-reminders';
 
 type Settings = Record<string, boolean>;
 
@@ -69,6 +73,12 @@ function padOffsets(rows: ReminderOffset[]): ReminderOffset[] {
  return out;
 }
 
+function padPayOffsets(rows: ReminderOffset[]): ReminderOffset[] {
+ const out = rows.slice(0, 3);
+ while (out.length < 3) out.push({ d: 0, h: 0, m: 0 });
+ return out;
+}
+
 export default function NotificationsPage() {
  const [settings, setSettings] = useState<Settings>({});
  const [loading, setLoading] = useState(true);
@@ -82,6 +92,13 @@ export default function NotificationsPage() {
  const [apptSaving, setApptSaving] = useState(false);
  const [apptSaved, setApptSaved] = useState(false);
 
+ const [payLoading, setPayLoading] = useState(true);
+ const [payEnabled, setPayEnabled] = useState(true);
+ const [payCount, setPayCount] = useState(3);
+ const [payRows, setPayRows] = useState<ReminderOffset[]>(() => padPayOffsets([...DEFAULT_PAYMENT_REMINDER_OFFSETS]));
+ const [paySaving, setPaySaving] = useState(false);
+ const [paySaved, setPaySaved] = useState(false);
+
  useEffect(() => {
  fetch('/api/notifications').then(r => r.json()).then(d => {
  setSettings(d);
@@ -94,13 +111,20 @@ export default function NotificationsPage() {
  .then((v) => {
  if (!v) return;
  if (typeof v.appointment_reminders_enabled === 'boolean') setApptEnabled(v.appointment_reminders_enabled);
- const raw = v.appointment_reminder_offsets;
- const norm = normalizeReminderOffsets(raw);
- const padded = padOffsets(norm);
- setApptRows(padded);
- setApptCount(Math.min(5, Math.max(1, norm.length || 3)));
+ const rawAppt = v.appointment_reminder_offsets;
+ const normAppt = normalizeReminderOffsets(rawAppt);
+ setApptRows(padOffsets(normAppt));
+ setApptCount(Math.min(5, Math.max(1, normAppt.length || 3)));
+ if (typeof v.payment_reminders_enabled === 'boolean') setPayEnabled(v.payment_reminders_enabled);
+ const rawPay = v.payment_reminder_offsets;
+ const normPay = normalizePaymentReminderOffsets(rawPay);
+ setPayRows(padPayOffsets(normPay));
+ setPayCount(Math.min(3, Math.max(1, normPay.length || 3)));
  })
- .finally(() => setApptLoading(false));
+ .finally(() => {
+ setApptLoading(false);
+ setPayLoading(false);
+ });
  }, []);
 
  function toggle(key: string, value: boolean) {
@@ -144,8 +168,39 @@ export default function NotificationsPage() {
  }
  }
 
+ async function savePaymentReminders() {
+ setPaySaving(true);
+ setPaySaved(false);
+ try {
+ const slice = payRows.slice(0, payCount);
+ const res = await fetch('/api/venues/me', {
+ method: 'PATCH',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({
+ payment_reminders_enabled: payEnabled,
+ payment_reminder_offsets: slice,
+ }),
+ });
+ if (res.ok) {
+ setPaySaved(true);
+ setTimeout(() => setPaySaved(false), 3000);
+ }
+ } finally {
+ setPaySaving(false);
+ }
+ }
+
  function patchRow(i: number, field: 'd' | 'h' | 'm', val: number) {
  setApptRows((prev) => {
+ const next = [...prev];
+ const row = { ...next[i], [field]: val };
+ next[i] = row;
+ return next;
+ });
+ }
+
+ function patchPayRow(i: number, field: 'd' | 'h' | 'm', val: number) {
+ setPayRows((prev) => {
  const next = [...prev];
  const row = { ...next[i], [field]: val };
  next[i] = row;
@@ -276,6 +331,85 @@ export default function NotificationsPage() {
  >
  {apptSaving ? <Loader2 size={14} className="animate-spin"/> : apptSaved ? <CheckCircle2 size={14} /> : <Save size={14} />}
  {apptSaving ? 'Saving...' : apptSaved ? 'Saved!' : 'Save appointment reminders'}
+ </button>
+ </>
+ )}
+ </div>
+ </div>
+
+ {/* Payment due email reminders (installments) */}
+ <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+ <div className="flex items-center gap-2.5 px-6 py-4 border-b border-gray-200">
+ <CreditCard size={16} className="text-gray-400"/>
+ <div>
+ <h2 className="text-sm font-semibold text-gray-900">Payment due email reminders</h2>
+ <p className="text-xs text-gray-400 mt-0.5">Email your customer before each installment due date on signed proposals (installment plans). Uses venue time zone. Requires a customer email on the proposal.</p>
+ </div>
+ </div>
+ <div className="px-6 py-5 space-y-4">
+ {payLoading ? (
+ <div className="flex justify-center py-8"><Loader2 size={22} className="animate-spin text-gray-300"/></div>
+ ) : (
+ <>
+ <div className="flex items-center justify-between py-1">
+ <span className="text-sm font-medium text-gray-900">Send payment reminder emails</span>
+ <Toggle checked={payEnabled} onChange={setPayEnabled} />
+ </div>
+ <div>
+ <label className="block text-xs font-medium text-gray-500 mb-1.5">How many reminders (1–3)</label>
+ <select
+ value={payCount}
+ onChange={(e) => setPayCount(Number(e.target.value))}
+ className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-gray-400 focus:outline-none"
+ >
+ {[1, 2, 3].map((n) => (
+ <option key={n} value={n}>{n}</option>
+ ))}
+ </select>
+ </div>
+ <p className="text-xs text-gray-400">Each reminder is sent this long before the due time (noon local on the due date).</p>
+ <div className="space-y-3">
+ {Array.from({ length: payCount }, (_, i) => (
+ <div key={i} className="flex flex-wrap items-center gap-2 text-sm">
+ <span className="text-gray-500 w-24 shrink-0">Reminder {i + 1}</span>
+ <input
+ type="number"
+ min={0}
+ max={365}
+ value={payRows[i]?.d ?? 0}
+ onChange={(e) => patchPayRow(i, 'd', Math.max(0, Math.min(365, parseInt(e.target.value, 10) || 0)))}
+ className="w-16 rounded-lg border border-gray-200 px-2 py-1.5 text-gray-900"
+ />
+ <span className="text-gray-400">days</span>
+ <input
+ type="number"
+ min={0}
+ value={payRows[i]?.h ?? 0}
+ onChange={(e) => patchPayRow(i, 'h', Math.max(0, parseInt(e.target.value, 10) || 0))}
+ className="w-16 rounded-lg border border-gray-200 px-2 py-1.5 text-gray-900"
+ />
+ <span className="text-gray-400">hours</span>
+ <input
+ type="number"
+ min={0}
+ max={59}
+ value={payRows[i]?.m ?? 0}
+ onChange={(e) => patchPayRow(i, 'm', Math.max(0, Math.min(59, parseInt(e.target.value, 10) || 0)))}
+ className="w-16 rounded-lg border border-gray-200 px-2 py-1.5 text-gray-900"
+ />
+ <span className="text-gray-400">min</span>
+ </div>
+ ))}
+ </div>
+ <button
+ type="button"
+ onClick={() => void savePaymentReminders()}
+ disabled={paySaving}
+ className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60 transition-all"
+ style={{ backgroundColor: '#1b1b1b' }}
+ >
+ {paySaving ? <Loader2 size={14} className="animate-spin"/> : paySaved ? <CheckCircle2 size={14} /> : <Save size={14} />}
+ {paySaving ? 'Saving...' : paySaved ? 'Saved!' : 'Save payment reminders'}
  </button>
  </>
  )}
