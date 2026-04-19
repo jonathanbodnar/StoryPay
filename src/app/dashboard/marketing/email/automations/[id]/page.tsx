@@ -229,7 +229,7 @@ export default function AutomationEditPage() {
       {msg ? <p className="mb-2 text-sm text-green-700">{msg}</p> : null}
       {err ? <p className="mb-2 text-sm text-red-600">{err}</p> : null}
 
-      <div className="mb-6 space-y-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="mb-6 space-y-4 rounded-xl border border-gray-200 bg-white p-5">
         <div>
           <label className="text-xs font-medium text-gray-500">Name</label>
           <input
@@ -299,7 +299,7 @@ export default function AutomationEditPage() {
         ) : null}
       </div>
 
-      <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-gray-900">Steps</h2>
           <div className="flex gap-2">

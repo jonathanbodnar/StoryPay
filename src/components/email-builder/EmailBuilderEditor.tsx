@@ -168,7 +168,7 @@ function SortableRow({
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex items-stretch gap-1 rounded-lg border bg-white shadow-sm ${
+      className={`flex items-stretch gap-1 rounded-lg border bg-white ${
         selected ? 'border-brand-500 ring-1 ring-brand-500' : 'border-gray-200'
       }`}
     >
@@ -542,7 +542,7 @@ export function EmailBuilderEditor({
       </header>
 
       <div className="mx-auto grid max-w-7xl gap-4 px-4 pt-4 lg:grid-cols-[200px_1fr_320px]">
-        <aside className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+        <aside className="rounded-xl border border-gray-200 bg-white p-3">
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Blocks</h2>
           <p className="mb-2 text-xs text-gray-500">Click to add. Drag to reorder the main stack.</p>
           <div className="flex flex-col gap-1">
@@ -561,7 +561,7 @@ export function EmailBuilderEditor({
         </aside>
 
         <section className="space-y-3">
-          <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+          <div className="rounded-xl border border-gray-200 bg-white p-3">
             <h2 className="mb-2 text-sm font-semibold text-gray-900">Layout</h2>
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
               <SortableContext items={definition.blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
@@ -583,7 +583,7 @@ export function EmailBuilderEditor({
               </SortableContext>
             </DndContext>
           </div>
-          <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+          <div className="rounded-xl border border-gray-200 bg-white p-3">
             <h2 className="mb-2 text-sm font-semibold text-gray-900">Preview</h2>
             <p className="mb-2 text-xs text-gray-500">Sample merge fields. Unsubscribe is a placeholder in preview.</p>
             <iframe title="Email preview" className="h-[min(480px,55vh)] w-full rounded-lg border border-gray-200 bg-white" srcDoc={previewHtml} sandbox="allow-same-origin" />
@@ -591,7 +591,7 @@ export function EmailBuilderEditor({
         </section>
 
         <aside className="space-y-3">
-          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <div className="rounded-xl border border-gray-200 bg-white p-4">
             <h2 className="mb-2 text-sm font-semibold text-gray-900">Send settings</h2>
             <div className="mb-3 space-y-2 text-sm">
               <div>
@@ -617,11 +617,11 @@ export function EmailBuilderEditor({
               </p>
             </div>
           </div>
-          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <div className="rounded-xl border border-gray-200 bg-white p-4">
             <h2 className="mb-3 text-sm font-semibold text-gray-900">Theme</h2>
             <ThemeFields theme={mergedTheme} onChange={patchTheme} />
           </div>
-          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <div className="rounded-xl border border-gray-200 bg-white p-4">
             <h2 className="mb-3 text-sm font-semibold text-gray-900">Block</h2>
             {selected ? (
               <BlockInspector

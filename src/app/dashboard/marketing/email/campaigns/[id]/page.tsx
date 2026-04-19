@@ -331,7 +331,7 @@ export default function CampaignDetailPage() {
       {msg ? <p className="mb-3 text-sm text-green-700">{msg}</p> : null}
       {err ? <p className="mb-3 text-sm text-red-600">{err}</p> : null}
 
-      <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-5">
         <div>
           <label className="text-xs font-medium text-gray-500">Name</label>
           <input
@@ -491,7 +491,7 @@ export default function CampaignDetailPage() {
         ) : null}
       </div>
 
-      <div className="mt-6 space-y-3 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="mt-6 space-y-3 rounded-xl border border-gray-200 bg-white p-5">
         <h2 className="text-sm font-semibold text-gray-900">Send</h2>
         <p className="text-xs text-gray-500">
           Scheduled campaigns are picked up by the platform cron (typically every few minutes). Past-due schedules send
@@ -539,7 +539,7 @@ export default function CampaignDetailPage() {
 
       {testModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog">
-          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
+          <div className="w-full max-w-sm rounded-xl border border-gray-200 bg-white p-5">
             <h3 className="font-semibold text-gray-900">Test send</h3>
             <p className="mt-1 text-xs text-gray-500">
               Optional: enter a lead id to merge real wedding date, guest count, and names (email still sends to the address

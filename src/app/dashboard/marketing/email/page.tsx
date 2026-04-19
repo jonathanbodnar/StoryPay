@@ -62,7 +62,7 @@ export default async function MarketingEmailHubPage() {
             <li key={c.href}>
               <Link
                 href={c.href}
-                className="flex gap-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition hover:border-brand-300 hover:shadow-md"
+                className="flex gap-4 rounded-xl border border-gray-200 bg-white p-5 transition hover:border-brand-300"
               >
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
                   <Icon size={24} />

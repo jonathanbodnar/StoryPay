@@ -119,7 +119,7 @@ export default function FormBuilderListPage() {
             <li key={f.id}>
               <Link
                 href={`/dashboard/marketing/form-builder/${f.id}`}
-                className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm transition hover:border-brand-200 hover:bg-brand-50/40"
+                className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 transition hover:border-brand-200 hover:bg-brand-50/40"
               >
                 <div>
                   <p className="font-medium text-gray-900">{f.name}</p>
@@ -137,7 +137,7 @@ export default function FormBuilderListPage() {
 
       {modalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-6">
             <h2 className="text-lg font-semibold text-gray-900">New form</h2>
             <p className="mt-1 text-sm text-gray-600">Choose a name you will recognize in the dashboard.</p>
             <input

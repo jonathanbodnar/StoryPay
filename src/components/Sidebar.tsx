@@ -468,7 +468,7 @@ export default function Sidebar({
     if (!flyout || flyout !== group || !flyoutPos || !collapsed) return null;
     const node = (
       <div
-        className="hidden lg:block fixed z-[100] w-56 rounded-xl border border-gray-200 bg-white py-1 shadow-xl"
+        className="hidden lg:block fixed z-[100] w-56 rounded-xl border border-gray-200 bg-white py-1"
         style={{ top: flyoutPos.top, left: flyoutPos.left }}
         role="menu"
       >

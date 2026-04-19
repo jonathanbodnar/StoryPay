@@ -76,7 +76,7 @@ export default function MarketingAnalyticsPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <section className="rounded-xl border border-gray-200 bg-white p-5">
             <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
               <Mail size={18} className="text-brand-600" /> Email campaigns
             </h2>
@@ -101,7 +101,7 @@ export default function MarketingAnalyticsPage() {
             </p>
           </section>
 
-          <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <section className="rounded-xl border border-gray-200 bg-white p-5">
             <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
               <MousePointerClick size={18} className="text-brand-600" /> Form submissions
             </h2>
@@ -119,7 +119,7 @@ export default function MarketingAnalyticsPage() {
             )}
           </section>
 
-          <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <section className="rounded-xl border border-gray-200 bg-white p-5">
             <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
               <PieChart size={18} className="text-brand-600" /> Pipeline & revenue
             </h2>
@@ -152,7 +152,7 @@ export default function MarketingAnalyticsPage() {
             )}
           </section>
 
-          <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <section className="rounded-xl border border-gray-200 bg-white p-5">
             <h2 className="text-sm font-semibold text-gray-900">Top loss reasons</h2>
             {!crm?.lostReasons?.length ? (
               <p className="mt-3 text-sm text-gray-500">No loss reasons recorded yet. Mark a lost stage and add a reason on the lead.</p>

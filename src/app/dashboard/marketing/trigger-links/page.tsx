@@ -398,7 +398,7 @@ export default function TriggerLinksPage() {
 
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl relative">
+          <div className="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6">
             <button
               type="button"
               onClick={() => setModalOpen(false)}
@@ -465,7 +465,7 @@ export default function TriggerLinksPage() {
 
       {tagModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl relative">
+          <div className="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6">
             <button
               type="button"
               onClick={() => setTagModalOpen(false)}

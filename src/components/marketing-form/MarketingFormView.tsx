@@ -423,7 +423,7 @@ function renderBlock(
           <button
             type="submit"
             disabled={preview}
-            className="w-full px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 disabled:opacity-50"
+            className="w-full px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-95 disabled:opacity-50"
             style={{
               borderRadius: theme.borderRadius,
               background: theme.primaryColor,
@@ -441,7 +441,7 @@ function renderBlock(
         'inline-flex items-center justify-center px-4 py-2 text-sm font-medium transition rounded-lg';
       const styles =
         v === 'primary'
-          ? 'text-white shadow-sm'
+          ? 'text-white'
           : v === 'outline'
             ? 'border-2 bg-transparent'
             : v === 'link'
@@ -608,7 +608,7 @@ export function MarketingFormView({
       <GoogleFontsLoader families={googleFontFamilies} />
       <div className="mx-auto w-full px-4" style={{ maxWidth: theme.maxWidth }}>
         <div
-          className={flatCanvas ? 'px-2 py-2 sm:px-4 sm:py-4' : 'border px-5 py-6 shadow-sm'}
+          className={flatCanvas ? 'px-2 py-2 sm:px-4 sm:py-4' : 'border px-5 py-6'}
           style={{
             borderRadius: flatCanvas ? 0 : theme.borderRadius,
             borderColor: flatCanvas ? 'transparent' : theme.inputBorder,

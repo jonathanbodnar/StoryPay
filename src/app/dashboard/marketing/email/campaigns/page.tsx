@@ -123,7 +123,7 @@ export default function CampaignsListPage() {
           No campaigns yet. Create one, then refine the audience on the detail page.
         </p>
       ) : (
-        <ul className="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white shadow-sm">
+        <ul className="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white">
           {campaigns.map((c) => (
             <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 hover:bg-gray-50/80">
               <div className="min-w-0">
@@ -143,7 +143,7 @@ export default function CampaignsListPage() {
 
       {modalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog">
-          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
+          <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-5">
             <h2 className="text-lg font-semibold text-gray-900">New campaign</h2>
             <label className="mt-4 block text-sm font-medium text-gray-700">Name</label>
             <input
