@@ -43,8 +43,6 @@ import {
   Mail,
   Minus,
   Monitor,
-  PanelLeftClose,
-  PanelLeftOpen,
   Plus,
   Redo2,
   Save,
@@ -201,21 +199,17 @@ function PaletteDraggable({
     id: `palette:${type}`,
     data: { kind: 'palette', blockType: type, label } satisfies PaletteDrag,
   });
+  const badge = label.replace(/[^a-zA-Z]/g, '').slice(0, 1).toUpperCase() || '?';
   return (
     <div
       ref={setNodeRef}
-      className={`flex items-center gap-1 rounded-lg border border-gray-100 bg-white px-1.5 py-1.5 text-sm text-gray-800 shadow-sm ${
+      className={`group flex items-center gap-2 rounded-md border border-gray-200/80 bg-white px-2 py-2 text-[13px] text-gray-800 shadow-sm transition hover:border-gray-300 ${
         isDragging ? 'opacity-50' : ''
       }`}
     >
-      <button
-        type="button"
-        title={`Add ${label}`}
-        onClick={() => onQuickAdd(type)}
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-brand-600 hover:bg-brand-50"
-      >
-        <Plus size={16} />
-      </button>
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-gray-200 bg-[#fafafa] text-xs font-semibold text-gray-600">
+        {badge}
+      </span>
       <span
         className="min-w-0 flex-1 cursor-grab truncate active:cursor-grabbing"
         {...listeners}
@@ -223,6 +217,14 @@ function PaletteDraggable({
       >
         {label}
       </span>
+      <button
+        type="button"
+        title={`Add ${label}`}
+        onClick={() => onQuickAdd(type)}
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-gray-400 opacity-0 transition hover:bg-gray-100 hover:text-gray-800 group-hover:opacity-100"
+      >
+        <Plus size={15} strokeWidth={2} />
+      </button>
     </div>
   );
 }
@@ -914,7 +916,6 @@ export function FormBuilderEditor({
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [flyoutOpen, setFlyoutOpen] = useState(true);
   const [viewport, setViewport] = useState<Viewport>('desktop');
   const [embedOpen, setEmbedOpen] = useState(false);
   const [thankYouOpen, setThankYouOpen] = useState(false);
@@ -1230,163 +1231,162 @@ export function FormBuilderEditor({
   );
 
   return (
-    <div className="min-h-screen bg-gray-100 pb-10">
-      <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 px-4 py-3 backdrop-blur">
-        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-2">
-          <Link
-            href="/dashboard/marketing/form-builder"
-            className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900"
-          >
-            <ArrowLeft size={16} />
-            Forms
-          </Link>
-          <input
-            className="min-w-[10rem] flex-1 rounded border border-gray-200 px-3 py-1.5 text-base font-semibold"
-            value={name}
-            onChange={(e) => setSnapshot((s) => ({ ...s, name: e.target.value }))}
-          />
-          <label className="flex items-center gap-2 text-sm text-gray-700">
+    <div className="relative left-1/2 w-screen max-w-[100vw] -translate-x-1/2 overflow-x-clip bg-[#f7f7f8]">
+      <div className="flex min-h-[calc(100vh-5rem)] flex-col">
+        <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 sm:px-6">
+          <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-8">
+            <Link
+              href="/dashboard/marketing/form-builder"
+              className="inline-flex shrink-0 items-center gap-1.5 text-[13px] font-medium text-gray-500 transition hover:text-gray-900"
+            >
+              <ArrowLeft size={15} strokeWidth={2} />
+              <span className="hidden sm:inline">Forms</span>
+            </Link>
+            <span className="hidden text-[13px] font-semibold text-gray-900 lg:inline">Form builder</span>
             <input
-              type="checkbox"
-              checked={published}
-              onChange={(e) => setSnapshot((s) => ({ ...s, published: e.target.checked }))}
+              className="min-w-0 max-w-[10rem] flex-1 border-0 border-b border-transparent bg-transparent py-1 text-sm font-semibold text-gray-900 placeholder:text-gray-400 focus:border-gray-300 focus:outline-none sm:max-w-xs md:max-w-md"
+              value={name}
+              placeholder="Untitled form"
+              onChange={(e) => setSnapshot((s) => ({ ...s, name: e.target.value }))}
             />
-            Published
-          </label>
-
-          <div className="ml-auto flex flex-wrap items-center gap-1">
-            <div className="mr-2 flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
-              <button
-                type="button"
-                title="Desktop"
-                onClick={() => setViewport('desktop')}
-                className={`rounded-md px-2 py-1.5 ${viewport === 'desktop' ? 'bg-white shadow-sm' : ''}`}
-              >
-                <Monitor size={16} />
-              </button>
-              <button
-                type="button"
-                title="Tablet"
-                onClick={() => setViewport('tablet')}
-                className={`rounded-md px-2 py-1.5 ${viewport === 'tablet' ? 'bg-white shadow-sm' : ''}`}
-              >
-                <Tablet size={16} />
-              </button>
-              <button
-                type="button"
-                title="Mobile"
-                onClick={() => setViewport('mobile')}
-                className={`rounded-md px-2 py-1.5 ${viewport === 'mobile' ? 'bg-white shadow-sm' : ''}`}
-              >
-                <Smartphone size={16} />
-              </button>
-            </div>
-
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <button
               type="button"
               onClick={() => setThankYouOpen(true)}
-              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium hover:bg-gray-50"
+              className="hidden items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-medium text-gray-800 shadow-sm transition hover:bg-gray-50 sm:inline-flex"
             >
-              <Mail size={16} />
-              Thank you preview
+              <Mail size={15} strokeWidth={2} />
+              Preview
             </button>
             <button
               type="button"
               onClick={() => setEmbedOpen(true)}
-              className="inline-flex items-center gap-1 rounded-lg border border-gray-900 bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-800"
+              className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-medium text-gray-800 shadow-sm transition hover:bg-gray-50"
             >
-              <Code2 size={16} />
-              Embed
+              <Code2 size={15} strokeWidth={2} />
+              <span className="hidden sm:inline">Embed</span>
             </button>
             <button
               type="button"
               onClick={() => void save()}
               disabled={saving}
-              className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-2 text-[13px] font-medium text-gray-900 shadow-sm transition hover:bg-gray-50 disabled:opacity-50"
             >
-              {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} strokeWidth={2} />}
               Save
             </button>
-            {saveMsg ? <span className="text-sm text-gray-600">{saveMsg}</span> : null}
+            <button
+              type="button"
+              onClick={() => setSnapshot((s) => ({ ...s, published: !s.published }))}
+              className={`rounded-md px-3 py-2 text-[13px] font-medium shadow-sm transition ${
+                published
+                  ? 'border border-gray-200 bg-white text-gray-800 hover:bg-gray-50'
+                  : 'bg-gray-900 text-white hover:bg-gray-800'
+              }`}
+            >
+              {published ? 'Published' : 'Publish'}
+            </button>
           </div>
-        </div>
-      </header>
+        </header>
 
-      <div className="relative mx-auto flex max-w-[1600px] flex-col xl:flex-row">
-        <button
-          type="button"
-          onClick={() => setFlyoutOpen((o) => !o)}
-          className="fixed left-0 top-[calc(50vh-24px)] z-40 flex h-12 w-9 items-center justify-center rounded-r-xl border border-gray-200 bg-white shadow-md hover:bg-gray-50 lg:left-[max(0px,calc((100vw-1600px)/2))]"
-          title={flyoutOpen ? 'Hide modules' : 'Modules'}
-        >
-          {flyoutOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
-        </button>
-
-        {flyoutOpen ? (
-          <aside className="sticky top-[57px] z-20 h-[calc(100vh-57px)] w-64 shrink-0 overflow-y-auto border-r border-gray-200 bg-white px-3 py-4 shadow-sm">
-            <div className="mb-3 flex items-center gap-2">
-              <LayoutTemplate size={18} className="text-gray-500" />
-              <h2 className="text-sm font-semibold text-gray-900">Modules</h2>
+        <div className="flex min-h-0 flex-1 flex-col xl:flex-row">
+          <aside className="flex max-h-[40vh] min-h-0 w-full shrink-0 flex-col border-b border-gray-200/90 bg-[#f7f7f8] xl:max-h-none xl:h-auto xl:w-[280px] xl:border-b-0 xl:border-r">
+            <div className="shrink-0 border-b border-gray-200/70 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <LayoutTemplate size={16} className="text-gray-400" strokeWidth={1.75} />
+                <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-500">
+                  Sections
+                </h2>
+              </div>
+              <p className="mt-1 text-[12px] leading-snug text-gray-400">
+                Drag modules to the canvas or use + to add.
+              </p>
             </div>
-            <p className="mb-3 text-xs text-gray-500">
-              Drag onto the canvas or tap + to add. Reorder with the grip on the canvas.
-            </p>
-            <div className="flex flex-col gap-1.5">
-              {PALETTE.map((p) => (
-                <PaletteDraggable
-                  key={p.type}
-                  type={p.type}
-                  label={p.label}
-                  onQuickAdd={addBlock}
-                />
-              ))}
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4 pt-2">
+              <div className="flex flex-col gap-1.5">
+                {PALETTE.map((p) => (
+                  <PaletteDraggable
+                    key={p.type}
+                    type={p.type}
+                    label={p.label}
+                    onQuickAdd={addBlock}
+                  />
+                ))}
+              </div>
             </div>
           </aside>
-        ) : null}
 
-        <div className="min-w-0 flex-1 px-3 py-4 lg:px-6">
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragStart={onDragStart}
-            onDragEnd={onDragEnd}
-          >
-            <SortableContext
-              items={definition.blocks.map((b) => b.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              <div
-                className="mx-auto w-full transition-[max-width] duration-200"
-                style={{ maxWidth: viewportMax }}
-              >
-                <div className="rounded-2xl border border-gray-200 bg-gray-50/80 p-3 shadow-inner">
-                  <MarketingFormView
-                    definition={definition}
-                    embedToken={embedToken}
-                    preview
-                    formTitle={name}
-                    venueContact={venueContact}
-                    builder={builderOpts}
-                    wrapBlock={wrapBlock}
-                    emptyCanvasSlot={emptySlot}
-                    onPreviewSubmit={() => setSaveMsg('Preview only — not submitted')}
-                  />
-                  {definition.blocks.length > 0 ? <CanvasTailDrop /> : null}
-                </div>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#e8e7e5]">
+            <div className="flex shrink-0 justify-center border-b border-gray-300/25 bg-[#e8e7e5] px-4 py-3">
+              <div className="inline-flex rounded-full border border-gray-300/50 bg-white/95 p-0.5 shadow-sm">
+                {(
+                  [
+                    ['desktop', 'Desktop', Monitor] as const,
+                    ['tablet', 'Tablet', Tablet] as const,
+                    ['mobile', 'Mobile', Smartphone] as const,
+                  ]
+                ).map(([id, label, Icon]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setViewport(id)}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition sm:px-4 ${
+                      viewport === id
+                        ? 'bg-gray-900 text-white shadow-sm'
+                        : 'text-gray-600 hover:bg-gray-100/80'
+                    }`}
+                  >
+                    <Icon size={14} strokeWidth={2} className="opacity-80" />
+                    <span className="hidden sm:inline">{label}</span>
+                  </button>
+                ))}
               </div>
-            </SortableContext>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-8">
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragStart={onDragStart}
+                onDragEnd={onDragEnd}
+              >
+                <SortableContext
+                  items={definition.blocks.map((b) => b.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div
+                    className="mx-auto w-full transition-[max-width] duration-300 ease-out"
+                    style={{ maxWidth: viewportMax }}
+                  >
+                    <div className="rounded-lg border border-gray-200/90 bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
+                      <MarketingFormView
+                        definition={definition}
+                        embedToken={embedToken}
+                        preview
+                        formTitle={name}
+                        venueContact={venueContact}
+                        builder={builderOpts}
+                        wrapBlock={wrapBlock}
+                        emptyCanvasSlot={emptySlot}
+                        onPreviewSubmit={() => setSaveMsg('Preview only — not submitted')}
+                      />
+                      {definition.blocks.length > 0 ? <CanvasTailDrop /> : null}
+                    </div>
+                  </div>
+                </SortableContext>
 
-            <DragOverlay dropAnimation={null}>
-              {activeDrag ? (
-                <div className="rounded-lg border border-brand-200 bg-white px-3 py-2 text-sm shadow-lg">
-                  {activeDrag.label}
-                </div>
-              ) : null}
-            </DragOverlay>
-          </DndContext>
-        </div>
+                <DragOverlay dropAnimation={null}>
+                  {activeDrag ? (
+                    <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-[13px] shadow-lg">
+                      {activeDrag.label}
+                    </div>
+                  ) : null}
+                </DragOverlay>
+              </DndContext>
+            </div>
+          </div>
 
-        <aside className="sticky top-[57px] z-20 flex min-h-[50vh] w-full shrink-0 flex-col border-t border-gray-200/90 bg-[#fafafa] xl:h-[calc(100vh-57px)] xl:w-[300px] xl:border-l xl:border-t-0">
+        <aside className="flex min-h-[50vh] w-full shrink-0 flex-col border-t border-gray-200/90 bg-[#f9f9f9] xl:min-h-0 xl:w-[320px] xl:border-l xl:border-t-0">
           <div className="shrink-0 border-b border-gray-200/80 bg-white px-1 pt-2">
             <div className="flex gap-0 px-2">
               {(
@@ -1547,6 +1547,7 @@ export function FormBuilderEditor({
             </div>
           </div>
         </aside>
+        </div>
       </div>
 
       {embedOpen ? (
