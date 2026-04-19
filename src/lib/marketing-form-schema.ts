@@ -258,6 +258,13 @@ export function createBlock(type: FormBlockType): FormBlock {
   }
 }
 
+/** Deep clone a block with a new id (builder duplicate). */
+export function duplicateBlock(block: FormBlock): FormBlock {
+  const raw = JSON.parse(JSON.stringify(block)) as FormBlock;
+  raw.id = crypto.randomUUID();
+  return raw;
+}
+
 /** Stable `name` / FormData key for this block (embed + submit API). */
 export function formFieldName(block: FormBlock): string {
   return `bf_${block.id}`;

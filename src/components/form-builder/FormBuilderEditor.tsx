@@ -43,7 +43,9 @@ import {
   CircleDot,
   Code2,
   Copy,
+  ExternalLink,
   Eye,
+  Files,
   FileText,
   GripVertical,
   Hash,
@@ -66,6 +68,7 @@ import {
   Send,
   Settings,
   Smartphone,
+  Sparkles,
   Undo2,
   Upload,
   User,
@@ -86,6 +89,7 @@ import {
   type PostSubmitConfig,
   createBlock,
   defaultPostSubmit,
+  duplicateBlock,
   mergeTheme,
   resolvePostSubmit,
 } from '@/lib/marketing-form-schema';
@@ -156,6 +160,10 @@ const SETTINGS_SELECT =
 const SETTINGS_INPUT =
   'w-full rounded border border-gray-200 bg-white px-3 py-2 text-[13px] text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200';
 
+function formatSavedTime(d: Date): string {
+  return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+
 function parseSizeToPx(fs: string | undefined): number {
   if (!fs?.trim()) return 38;
   const px = fs.match(/^(\d+(?:\.\d+)?)px$/i);
@@ -188,7 +196,7 @@ function SettingsPanelTitle({
 }
 
 function SettingsFieldLabel({ children }: { children: React.ReactNode }) {
-  return <span className="text-[13px] text-gray-600">{children}</span>;
+  return <span className="text-[12px] font-medium text-gray-500">{children}</span>;
 }
 
 function SettingsRow({
@@ -304,11 +312,17 @@ function CanvasEmptyDrop() {
   return (
     <div
       ref={setNodeRef}
-      className={`min-h-[140px] rounded-lg border-2 border-dashed px-4 py-8 text-center text-sm ${
-        isOver ? 'border-brand-400 bg-brand-50 text-brand-900' : 'border-gray-200 text-gray-400'
+      className={`flex min-h-[160px] flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed px-6 py-10 text-center transition ${
+        isOver ? 'border-brand-500 bg-brand-50/80 text-brand-900' : 'border-gray-200 bg-gray-50/50 text-gray-500'
       }`}
     >
-      Drag a module here, use + add, or open the module panel.
+      <Sparkles className="h-10 w-10 opacity-40" strokeWidth={1.25} aria-hidden />
+      <div>
+        <p className="text-[15px] font-semibold text-gray-800">Start your form</p>
+        <p className="mt-1.5 max-w-[260px] text-[13px] leading-snug text-gray-500">
+          Drag a module from Sections, click + on a row, or pick a block type to add your first field.
+        </p>
+      </div>
     </div>
   );
 }
@@ -328,12 +342,18 @@ function CanvasTailDrop() {
 }
 
 /** Horizontal insertion line shown while dragging over a drop target. */
-function DropInsertionMarker() {
+function DropInsertionMarker({ showLabel }: { showLabel?: boolean }) {
   return (
-    <div
-      className="pointer-events-none relative z-[5] -mx-1 mb-2 h-[3px] rounded-full bg-gray-900 shadow-[0_0_0_1px_rgba(255,255,255,0.9)] animate-pulse"
-      aria-hidden
-    />
+    <div className="pointer-events-none relative z-[5] -mx-1 mb-3" aria-hidden>
+      {showLabel ? (
+        <div className="mb-1.5 flex justify-center">
+          <span className="rounded-full bg-brand-900 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white shadow-sm">
+            Drop here
+          </span>
+        </div>
+      ) : null}
+      <div className="h-[5px] rounded-full bg-brand-600 shadow-[0_0_0_1px_rgba(255,255,255,0.95),0_2px_8px_rgba(27,27,27,0.12)] animate-pulse" />
+    </div>
   );
 }
 
@@ -625,11 +645,13 @@ function BlockInspector({
   block,
   onChange,
   onRemove,
+  onDuplicate,
   googleFontNames,
 }: {
   block: FormBlock;
   onChange: (patch: Partial<FormBlock>) => void;
   onRemove: () => void;
+  onDuplicate: () => void;
   googleFontNames: string[];
 }) {
   const optsText = (block.options || []).join('\n');
@@ -845,12 +867,20 @@ function BlockInspector({
         </SettingsRow>
       )}
 
-      <div className="mt-6 border-t border-gray-100 pt-4">
+      <div className="mt-8 flex flex-wrap items-center gap-4 border-t border-gray-100 pt-5">
         <button
           type="button"
-          className="text-[13px] font-medium text-gray-500 underline-offset-2 hover:text-gray-900 hover:underline"
+          className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 py-2 text-[13px] font-medium text-gray-800 shadow-sm transition hover:bg-gray-50"
+          onClick={onDuplicate}
+        >
+          <Files size={14} strokeWidth={2} aria-hidden />
+          Duplicate
+        </button>
+        <button
+          type="button"
+          className="text-[13px] font-medium text-red-600 underline-offset-2 transition hover:text-red-700 hover:underline"
           onClick={() => {
-            if (typeof window !== 'undefined' && window.confirm('Remove this block?')) {
+            if (typeof window !== 'undefined' && window.confirm('Remove this block from the form?')) {
               onRemove();
             }
           }}
@@ -1004,10 +1034,23 @@ export function FormBuilderEditor({
   const [selectedId, setSelectedId] = useState<string | null>(
     initialDefinition.blocks[0]?.id ?? null
   );
+  const viewportStorageKey = `storypay.formBuilder.viewport.${formId}`;
   const [saving, setSaving] = useState(false);
-  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [autoSaving, setAutoSaving] = useState(false);
+  const [persistError, setPersistError] = useState<string | null>(null);
+  const [canvasHint, setCanvasHint] = useState<string | null>(null);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const [copied, setCopied] = useState(false);
-  const [viewport, setViewport] = useState<Viewport>('desktop');
+  const [viewport, setViewport] = useState<Viewport>(() => {
+    if (typeof window === 'undefined') return 'desktop';
+    try {
+      const v = sessionStorage.getItem(viewportStorageKey);
+      if (v === 'mobile' || v === 'desktop') return v;
+    } catch {
+      /* ignore */
+    }
+    return 'desktop';
+  });
   const [embedOpen, setEmbedOpen] = useState(false);
   const [thankYouOpen, setThankYouOpen] = useState(false);
   const [rightTab, setRightTab] = useState<
@@ -1027,6 +1070,11 @@ export function FormBuilderEditor({
     { id: string; createdAt: string; definition: MarketingFormDefinition }[]
   >([]);
   const [revisionsLoading, setRevisionsLoading] = useState(false);
+
+  const presentRef = useRef(present);
+  presentRef.current = present;
+  const lastPersistedJsonRef = useRef(JSON.stringify(present));
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const modulesScroll = useFormBuilderScrollbar();
   const canvasScroll = useFormBuilderScrollbar();
@@ -1077,6 +1125,20 @@ export function FormBuilderEditor({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(viewportStorageKey, viewport);
+    } catch {
+      /* ignore */
+    }
+  }, [viewport, viewportStorageKey]);
+
+  useEffect(() => {
+    if (!canvasHint) return;
+    const t = setTimeout(() => setCanvasHint(null), 3500);
+    return () => clearTimeout(t);
+  }, [canvasHint]);
 
   useEffect(() => {
     if (rightTab !== 'submissions') return;
@@ -1139,6 +1201,84 @@ export function FormBuilderEditor({
     return () => window.removeEventListener('keydown', onKey);
   }, [undo, redo]);
 
+  const clearAutosaveTimer = useCallback(() => {
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+  }, []);
+
+  const persistForm = useCallback(
+    async (source: 'manual' | 'autosave') => {
+      if (source === 'manual') clearAutosaveTimer();
+      const payload = presentRef.current;
+      const json = JSON.stringify(payload);
+      if (json === lastPersistedJsonRef.current) {
+        if (source === 'manual') setPersistError(null);
+        return;
+      }
+      if (source === 'manual') setSaving(true);
+      else setAutoSaving(true);
+      setPersistError(null);
+      try {
+        const res = await fetch(`/api/marketing/forms/${formId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: payload.name,
+            published: payload.published,
+            definition: payload.definition,
+          }),
+        });
+        if (!res.ok) {
+          const j = (await res.json().catch(() => ({}))) as { error?: string };
+          setPersistError(j.error || 'Save failed');
+          return;
+        }
+        if (JSON.stringify(presentRef.current) !== json) return;
+        lastPersistedJsonRef.current = json;
+        setLastSavedAt(new Date());
+      } finally {
+        if (source === 'manual') setSaving(false);
+        else setAutoSaving(false);
+      }
+    },
+    [formId, clearAutosaveTimer]
+  );
+
+  useEffect(() => {
+    const json = JSON.stringify(present);
+    if (json === lastPersistedJsonRef.current) return;
+    clearAutosaveTimer();
+    autosaveTimerRef.current = setTimeout(() => {
+      autosaveTimerRef.current = null;
+      void persistForm('autosave');
+    }, 3000);
+    return () => clearAutosaveTimer();
+  }, [present, clearAutosaveTimer, persistForm]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (previewOpen) {
+        e.preventDefault();
+        setPreviewOpen(false);
+        return;
+      }
+      if (embedOpen) {
+        e.preventDefault();
+        setEmbedOpen(false);
+        return;
+      }
+      if (thankYouOpen) {
+        e.preventDefault();
+        setThankYouOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [previewOpen, embedOpen, thankYouOpen]);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -1188,6 +1328,21 @@ export function FormBuilderEditor({
     },
     [patchDefinition]
   );
+
+  const duplicateSelected = useCallback(() => {
+    if (!selectedId) return;
+    const block = definition.blocks.find((b) => b.id === selectedId);
+    if (!block) return;
+    const clone = duplicateBlock(block);
+    patchDefinition((d) => {
+      const idx = d.blocks.findIndex((b) => b.id === selectedId);
+      if (idx < 0) return d;
+      const next = [...d.blocks];
+      next.splice(idx + 1, 0, clone);
+      return { ...d, blocks: next };
+    });
+    setSelectedId(clone.id);
+  }, [selectedId, definition.blocks, patchDefinition]);
 
   const patchSelected = useCallback(
     (patch: Partial<FormBlock>) => {
@@ -1280,28 +1435,6 @@ export function FormBuilderEditor({
     [patchDefinition]
   );
 
-  const save = useCallback(async () => {
-    setSaving(true);
-    setSaveMsg(null);
-    const res = await fetch(`/api/marketing/forms/${formId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: present.name,
-        published: present.published,
-        definition: present.definition,
-      }),
-    });
-    setSaving(false);
-    if (!res.ok) {
-      const j = (await res.json().catch(() => ({}))) as { error?: string };
-      setSaveMsg(j.error || 'Save failed');
-      return;
-    }
-    setSaveMsg('Saved');
-    setTimeout(() => setSaveMsg(null), 2000);
-  }, [formId, present]);
-
   const embedUrl = `${APP_ORIGIN || (typeof window !== 'undefined' ? window.location.origin : '')}/embed/form/${embedToken}`;
   const iframeSnippet = `<iframe src="${embedUrl}" title="${name.replace(/"/g, '&quot;')}" style="width:100%;min-height:520px;border:0;border-radius:12px;" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>`;
 
@@ -1332,12 +1465,12 @@ export function FormBuilderEditor({
         dropOverId === block.id && (canvasDragId == null || canvasDragId !== block.id);
       return (
         <>
-          {showLineBefore ? <DropInsertionMarker /> : null}
+          {showLineBefore ? <DropInsertionMarker showLabel={activeDrag != null} /> : null}
           <SortableCanvasRow id={block.id}>{node}</SortableCanvasRow>
         </>
       );
     },
-    [dropOverId, canvasDragId]
+    [dropOverId, canvasDragId, activeDrag]
   );
 
   const emptySlot = useMemo(() => <CanvasEmptyDrop />, []);
@@ -1403,7 +1536,7 @@ export function FormBuilderEditor({
             </button>
             <button
               type="button"
-              onClick={() => void save()}
+              onClick={() => void persistForm('manual')}
               disabled={saving}
               className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-2 text-[13px] font-medium text-gray-900 shadow-sm transition hover:bg-gray-50 disabled:opacity-50"
             >
@@ -1508,11 +1641,13 @@ export function FormBuilderEditor({
                         builder={builderOpts}
                         wrapBlock={wrapBlock}
                         emptyCanvasSlot={emptySlot}
-                        onPreviewSubmit={() => setSaveMsg('Preview only — not submitted')}
+                        onPreviewSubmit={() => setCanvasHint('Preview only — not submitted')}
                       />
                       {definition.blocks.length > 0 ? (
                         <>
-                          {dropOverId === 'canvas-tail' ? <DropInsertionMarker /> : null}
+                          {dropOverId === 'canvas-tail' ? (
+                            <DropInsertionMarker showLabel={activeDrag != null} />
+                          ) : null}
                           <CanvasTailDrop />
                         </>
                       ) : null}
@@ -1582,10 +1717,19 @@ export function FormBuilderEditor({
                     block={selected}
                     onChange={patchSelected}
                     onRemove={() => selectedId && removeBlock(selectedId)}
+                    onDuplicate={duplicateSelected}
                     googleFontNames={googleFontNames}
                   />
                 ) : (
-                  <p className="text-center text-[13px] text-gray-400">Select a block on the canvas</p>
+                  <div className="flex flex-col items-center gap-3 px-2 py-10 text-center">
+                    <MousePointerClick className="h-9 w-9 text-gray-300" strokeWidth={1.25} aria-hidden />
+                    <div>
+                      <p className="text-[14px] font-medium text-gray-700">Nothing selected</p>
+                      <p className="mt-2 max-w-[240px] text-[13px] leading-snug text-gray-400">
+                        Click a block on the canvas to edit labels, styling, and field options.
+                      </p>
+                    </div>
+                  </div>
                 )}
               </div>
             ) : null}
@@ -1606,7 +1750,17 @@ export function FormBuilderEditor({
               <div className="text-[13px] text-gray-900">
                 <SettingsPanelTitle>Inbox</SettingsPanelTitle>
                 {submissionsLoading ? (
-                  <p className="text-[13px] text-gray-400">Loading…</p>
+                  <div className="space-y-3" aria-hidden>
+                    {[0, 1, 2].map((i) => (
+                      <div
+                        key={i}
+                        className="animate-pulse rounded-lg border border-gray-200/80 bg-white p-3 shadow-sm"
+                      >
+                        <div className="h-3 w-36 rounded bg-gray-200" />
+                        <div className="mt-3 h-20 rounded bg-gray-100" />
+                      </div>
+                    ))}
+                  </div>
                 ) : submissions.length === 0 ? (
                   <p className="text-[13px] text-gray-400">No submissions yet.</p>
                 ) : (
@@ -1636,7 +1790,17 @@ export function FormBuilderEditor({
                   Saved when you click Save. Restore replaces the editor — save again to publish.
                 </p>
                 {revisionsLoading ? (
-                  <p className="text-[13px] text-gray-400">Loading…</p>
+                  <div className="space-y-2" aria-hidden>
+                    {[0, 1, 2, 3].map((i) => (
+                      <div
+                        key={i}
+                        className="flex animate-pulse items-center justify-between gap-2 rounded-lg border border-gray-200/80 bg-white px-3 py-2.5 shadow-sm"
+                      >
+                        <div className="h-3 w-44 rounded bg-gray-200" />
+                        <div className="h-7 w-16 shrink-0 rounded bg-gray-100" />
+                      </div>
+                    ))}
+                  </div>
                 ) : revisions.length === 0 ? (
                   <p className="text-[13px] text-gray-400">No versions yet.</p>
                 ) : (
@@ -1677,27 +1841,40 @@ export function FormBuilderEditor({
           </div>
 
           <div className="shrink-0 border-t border-gray-200/90 bg-white px-4 py-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-5">
-                <button
-                  type="button"
-                  onClick={undo}
-                  disabled={!canUndo}
-                  className="inline-flex items-center gap-1.5 text-[13px] font-medium text-gray-600 hover:text-gray-900 disabled:opacity-30"
-                >
-                  <Undo2 size={15} strokeWidth={1.75} /> Undo
-                </button>
-                <button
-                  type="button"
-                  onClick={redo}
-                  disabled={!canRedo}
-                  className="inline-flex items-center gap-1.5 text-[13px] font-medium text-gray-600 hover:text-gray-900 disabled:opacity-30"
-                >
-                  <Redo2 size={15} strokeWidth={1.75} /> Redo
-                </button>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+              <div>
+                <div className="flex items-center gap-5">
+                  <button
+                    type="button"
+                    onClick={undo}
+                    disabled={!canUndo}
+                    className="inline-flex items-center gap-1.5 text-[13px] font-medium text-gray-600 hover:text-gray-900 disabled:opacity-30"
+                  >
+                    <Undo2 size={15} strokeWidth={1.75} /> Undo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={redo}
+                    disabled={!canRedo}
+                    className="inline-flex items-center gap-1.5 text-[13px] font-medium text-gray-600 hover:text-gray-900 disabled:opacity-30"
+                  >
+                    <Redo2 size={15} strokeWidth={1.75} /> Redo
+                  </button>
+                </div>
+                <p className="mt-1.5 hidden text-[11px] text-gray-400 sm:block">
+                  ⌘Z undo · ⌘⇧Z redo
+                </p>
               </div>
-              <span className="text-[12px] text-gray-400">
-                {saving ? 'Saving…' : saveMsg === 'Saved' ? 'Saved' : ''}
+              <span className="text-right text-[12px] text-gray-500 sm:max-w-[min(100%,14rem)] sm:shrink-0">
+                {saving || autoSaving
+                  ? 'Saving…'
+                  : persistError
+                    ? persistError
+                    : canvasHint
+                      ? canvasHint
+                      : lastSavedAt
+                        ? `Saved · ${formatSavedTime(lastSavedAt)}`
+                        : ''}
               </span>
             </div>
           </div>
@@ -1726,6 +1903,15 @@ export function FormBuilderEditor({
                 <p className="mt-1 text-sm text-gray-600">
                   How visitors see your form (theme, labels, and fields). Submit is disabled.
                 </p>
+                <a
+                  href={embedUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-brand-700 underline-offset-2 hover:underline"
+                >
+                  <ExternalLink size={14} strokeWidth={2} aria-hidden />
+                  Open in new tab
+                </a>
               </div>
               <button
                 type="button"
@@ -1742,7 +1928,7 @@ export function FormBuilderEditor({
                 preview
                 formTitle={name}
                 venueContact={venueContact}
-                onPreviewSubmit={() => setSaveMsg('Preview only — not submitted')}
+                onPreviewSubmit={() => setCanvasHint('Preview only — not submitted')}
               />
             </div>
           </div>
