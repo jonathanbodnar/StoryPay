@@ -32,13 +32,13 @@ export const HELP_CATEGORIES: HelpCategory[] = [
 
 After logging in you land on the Home dashboard which shows your revenue, pipeline, recent proposals, and recent transactions at a glance.
 
-Navigation lives in the left sidebar (or the hamburger menu on mobile). Top-level items include Home, Ask AI, Customers, Calendar, Directory Listing, Leads, Reports, What's New, and Help Center. **Payments**, **Marketing** (analytics, lead capture forms, email tools, trigger links & tags), and **Settings** open as flyout submenus. On desktop you can **collapse** the sidebar with the chevron next to the logo — it becomes a narrow icon rail with a compact mark; your choice is remembered in the browser.
+Navigation lives in the left sidebar (or the hamburger menu on mobile). Top-level items include Home, Ask AI, Contacts, Calendar, Leads, Reports, What's New, and Help Center. **Venue listing** (your directory dashboard and reviews), **Payments**, **Marketing** (analytics, lead capture forms, email tools, trigger links & tags), and **Settings** open as flyout submenus. On desktop you can **collapse** the sidebar with the chevron next to the logo — it becomes a narrow icon rail with a compact mark; your choice is remembered in the browser.
 
 The main areas:
 - Home — revenue snapshot and recent activity
-- Customers — CRM profiles with tabs (Overview, Notes, Activity, Payments, Tasks, Documents) and a **pipeline + stage** control in the header (same sales pipelines as Leads)
+- Contacts — CRM profiles with tabs (Overview, Notes, Activity, Payments, Tasks, Documents) and a **pipeline + stage** control in the header (same sales pipelines as Leads)
 - Calendar — tours, weddings, and events
-- Directory Listing — how you appear on storyvenue.com (photos, description, publish)
+- Venue listing — how you appear on storyvenue.com (photos, description, publish) plus **Reviews** for testimonials you control
 - Leads — Kanban/list pipeline for inquiries; editable stages and pipelines
 - Reports — financial exports (owners and admins)
 - Payments flyout — new proposal/invoice, proposals list, templates, installments, subscriptions, transactions
@@ -1421,8 +1421,9 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   // Calendar
   '/dashboard/calendar': ['cal-overview', 'cal-spaces', 'cal-add-event', 'cal-conflicts'],
 
-  // Directory Listing
+  // Venue listing (directory + reviews)
   '/dashboard/listing/images': ['listing-photos', 'listing-overview', 'listing-publish'],
+  '/dashboard/listing/reviews': ['listing-overview', 'listing-publish'],
   '/dashboard/listing':        ['listing-overview', 'listing-autosave', 'listing-photos', 'listing-publish', 'listing-slug'],
 
   // Leads

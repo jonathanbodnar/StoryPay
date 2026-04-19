@@ -265,7 +265,7 @@ export default function ListingPage() {
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-heading text-2xl text-gray-900 flex items-center gap-2">
-            <Store className="w-6 h-6" /> Directory Listing
+            <Store className="w-6 h-6" /> Listing dashboard
           </h1>
           <p className="text-sm text-gray-500 mt-1">
             Manage how your venue appears on <a href={DIRECTORY_URL} target="_blank" rel="noreferrer" className="underline">storyvenue.com</a>.

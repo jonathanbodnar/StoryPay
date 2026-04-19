@@ -11,7 +11,7 @@ import {
   Bell, Receipt, Link2, RefreshCw, Plus, Calendar,
   Menu, X, ChevronDown, ChevronLeft, ChevronRight,
   HelpCircle, LogOut, BookOpen, Store, Inbox, Share2, LayoutTemplate, MessageCircle,
-  BarChart3, FileStack, Workflow,
+  BarChart3, FileStack, Workflow, Star,
 } from 'lucide-react';
 
 interface Venue { id: string; name: string; ghl_location_id: string; }
@@ -32,7 +32,6 @@ const menuItems = [
   { label: 'Contacts', href: '/dashboard/contacts', icon: Users },
   { label: 'Conversations', href: '/dashboard/conversations', icon: MessageCircle },
   { label: 'Calendar', href: '/dashboard/calendar', icon: Calendar },
-  { label: 'Directory Listing', href: '/dashboard/listing', icon: Store },
   { label: 'Leads', href: '/dashboard/leads', icon: Inbox },
   { label: 'Reports', href: '/dashboard/reports', icon: BarChart2 },
   { label: "What's New", href: '/dashboard/updates', icon: Megaphone },
@@ -67,7 +66,12 @@ const settingsItems = [
   { label: 'Notifications', href: '/dashboard/settings/notifications', icon: Bell },
 ];
 
-type FlyoutGroup = 'payments' | 'marketing' | 'settings' | null;
+const listingItems = [
+  { label: 'Dashboard', href: '/dashboard/listing', icon: LayoutDashboard },
+  { label: 'Reviews', href: '/dashboard/listing/reviews', icon: Star },
+];
+
+type FlyoutGroup = 'payments' | 'marketing' | 'settings' | 'listing' | null;
 
 export default function Sidebar({
   venue: _venue,
@@ -80,6 +84,7 @@ export default function Sidebar({
   const isOwner = role === 'owner';
   const isAdmin = role === 'owner' || role === 'admin';
   const pathname = usePathname();
+  const isOnListing = pathname.startsWith('/dashboard/listing');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [flyout, setFlyout] = useState<FlyoutGroup>(null);
   const [flyoutPos, setFlyoutPos] = useState<{ top: number; left: number } | null>(null);
@@ -96,21 +101,38 @@ export default function Sidebar({
     || pathname.startsWith('/dashboard/invoices')
     || pathname.startsWith('/dashboard/proposals');
 
-  type OpenGroup = 'payments' | 'settings' | 'marketing' | null;
-  const initialGroup: OpenGroup = isOnPayments ? 'payments' : isOnSettings ? 'settings' : isOnMarketing ? 'marketing' : null;
+  type OpenGroup = 'payments' | 'settings' | 'marketing' | 'listing' | null;
+  const initialGroup: OpenGroup = isOnListing
+    ? 'listing'
+    : isOnPayments
+      ? 'payments'
+      : isOnSettings
+        ? 'settings'
+        : isOnMarketing
+          ? 'marketing'
+          : null;
   const [openGroup, setOpenGroup] = useState<OpenGroup>(initialGroup);
 
   const paymentsOpen = openGroup === 'payments';
   const settingsOpen = openGroup === 'settings';
   const marketingOpen = openGroup === 'marketing';
+  const listingOpen = openGroup === 'listing';
 
   useEffect(() => {
-    if (isOnMarketing) setOpenGroup('marketing');
+    if (isOnListing) setOpenGroup('listing');
+    else if (isOnMarketing) setOpenGroup('marketing');
     else if (isOnPayments) setOpenGroup('payments');
     else if (isOnSettings) setOpenGroup('settings');
     else setOpenGroup(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
+
+  function listingSubActive(subHref: string) {
+    if (subHref === '/dashboard/listing') {
+      return pathname === '/dashboard/listing' || pathname === '/dashboard/listing/';
+    }
+    return pathname.startsWith(subHref);
+  }
 
   useEffect(() => {
     setFlyout(null);
@@ -155,6 +177,7 @@ export default function Sidebar({
     if (isOnPayments) return false;
     if (isOnSettings) return false;
     if (isOnMarketing) return false;
+    if (isOnListing) return false;
     return pathname.startsWith(href);
   };
 
@@ -277,6 +300,54 @@ export default function Sidebar({
             </Link>
           );
         })}
+
+        <div>
+          {rail ? (
+            <button
+              type="button"
+              title="Venue listing"
+              onClick={(e) => openFlyout('listing', e.currentTarget)}
+              className={groupBtn(isOnListing || flyout === 'listing', true)}
+              style={groupBtnStyle(isOnListing || flyout === 'listing')}
+            >
+              <Store size={16} />
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => toggleGroup('listing')}
+                className={groupBtn(isOnListing && listingOpen, false)}
+                style={groupBtnStyle(isOnListing && listingOpen)}
+              >
+                <div className="flex items-center gap-3">
+                  <Store size={16} />
+                  <span>Venue listing</span>
+                </div>
+                <ChevronDown
+                  size={13}
+                  className={`transition-transform duration-200 ${listingOpen ? 'rotate-180' : ''} ${
+                    isOnListing && listingOpen ? 'text-white/50' : 'text-gray-400'
+                  }`}
+                />
+              </button>
+              {listingOpen && (
+                <div className="mt-0.5 ml-3 pl-3 border-l border-gray-200 space-y-0.5 py-0.5">
+                  {listingItems.map((sub) => {
+                    const SubIcon = sub.icon;
+                    const active = listingSubActive(sub.href);
+                    return (
+                      <Link key={sub.label} href={sub.href} className={subItem(active)} style={subItemStyle(active)}>
+                        <SubIcon size={14} />
+                        <span>{sub.label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+        </div>
 
         <div>
           {rail ? (
@@ -468,7 +539,7 @@ export default function Sidebar({
   );
 
   const flyoutPanel = (
-    items: typeof paymentsItems | typeof marketingItems | typeof settingsItems,
+    items: typeof paymentsItems | typeof marketingItems | typeof settingsItems | typeof listingItems,
     group: NonNullable<FlyoutGroup>,
   ) => {
     if (!flyout || flyout !== group || !flyoutPos || !collapsed) return null;
@@ -480,7 +551,12 @@ export default function Sidebar({
       >
         {items.map((sub) => {
           const SubIcon = sub.icon;
-          const active = group === 'settings' ? pathname === sub.href : isSubActive(sub.href);
+          const active =
+            group === 'settings'
+              ? pathname === sub.href
+              : group === 'listing'
+                ? listingSubActive(sub.href)
+                : isSubActive(sub.href);
           return (
             <Link
               key={sub.label}
@@ -566,6 +642,7 @@ export default function Sidebar({
       </aside>
 
       {flyoutBackdrop}
+      {flyoutPanel(listingItems, 'listing')}
       {flyoutPanel(paymentsItems, 'payments')}
       {flyoutPanel(marketingItems, 'marketing')}
       {flyoutPanel(settingsFiltered, 'settings')}
