@@ -155,10 +155,10 @@ const PALETTE: { type: FormBlockType; label: string }[] = [
 ];
 
 const SETTINGS_SELECT =
-  'w-full cursor-pointer appearance-none rounded border border-gray-200 bg-white py-2 pl-3 pr-9 text-[13px] text-gray-900 shadow-sm transition hover:border-gray-300 focus:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200';
+  'w-full cursor-pointer appearance-none rounded border border-gray-200 bg-white py-2 pl-3 pr-9 text-[13px] text-gray-900 transition hover:border-gray-300 focus:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200';
 
 const SETTINGS_INPUT =
-  'w-full rounded border border-gray-200 bg-white px-3 py-2 text-[13px] text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200';
+  'w-full rounded border border-gray-200 bg-white px-3 py-2 text-[13px] text-gray-900 placeholder:text-gray-400 focus:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200';
 
 function formatSavedTime(d: Date): string {
   return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
@@ -257,7 +257,7 @@ function PaletteDraggable({
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      className={`group flex cursor-grab touch-none items-center gap-2 rounded-md border border-gray-200/80 bg-white px-2 py-2 text-[13px] text-gray-800 shadow-sm transition hover:border-gray-300 active:cursor-grabbing ${
+      className={`group flex cursor-grab touch-none items-center gap-2 rounded-md border border-gray-200/80 bg-white px-2 py-2 text-[13px] text-gray-800 transition hover:border-gray-300 active:cursor-grabbing ${
         isDragging ? 'opacity-50' : ''
       }`}
     >
@@ -347,12 +347,12 @@ function DropInsertionMarker({ showLabel }: { showLabel?: boolean }) {
     <div className="pointer-events-none relative z-[5] -mx-1 mb-3" aria-hidden>
       {showLabel ? (
         <div className="mb-1.5 flex justify-center">
-          <span className="rounded-full bg-brand-900 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white shadow-sm">
+          <span className="rounded-full border border-white/20 bg-brand-900 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
             Drop here
           </span>
         </div>
       ) : null}
-      <div className="h-[5px] rounded-full bg-brand-600 shadow-[0_0_0_1px_rgba(255,255,255,0.95),0_2px_8px_rgba(27,27,27,0.12)] animate-pulse" />
+      <div className="h-[5px] rounded-full border border-brand-700/40 bg-brand-600 animate-pulse" />
     </div>
   );
 }
@@ -546,7 +546,7 @@ function BlockStyleFields({
           <SettingsFieldLabel>Font color</SettingsFieldLabel>
           <div className="flex items-center gap-2">
             <span className="font-mono text-[13px] uppercase text-gray-900">{hex}</span>
-            <label className="relative h-7 w-7 cursor-pointer overflow-hidden rounded-full border border-gray-200 shadow-sm">
+            <label className="relative h-7 w-7 cursor-pointer overflow-hidden rounded-full border border-gray-200">
               <input
                 type="color"
                 className="absolute inset-0 h-[200%] w-[200%] -translate-x-1/4 -translate-y-1/4 cursor-pointer p-0"
@@ -750,7 +750,7 @@ function BlockInspector({
 
       {block.type === 'rich_text' && (
         <SettingsRow label="Content">
-          <div className="rounded-md border border-gray-200 bg-white p-1 shadow-sm">
+          <div className="rounded-md border border-gray-200 bg-white p-1">
             <RichTextEditor
               content={block.content || '<p></p>'}
               onChange={(html: string) => onChange({ content: html })}
@@ -763,7 +763,7 @@ function BlockInspector({
       {block.type === 'html' && (
         <SettingsRow label="HTML (sanitized when shown)">
           <textarea
-            className="min-h-[160px] w-full rounded border border-gray-200 bg-white px-3 py-2 font-mono text-[12px] text-gray-900 shadow-sm focus:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200"
+            className="min-h-[160px] w-full rounded border border-gray-200 bg-white px-3 py-2 font-mono text-[12px] text-gray-900 focus:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200"
             value={block.content ?? ''}
             onChange={(e) => onChange({ content: e.target.value })}
           />
@@ -773,7 +773,7 @@ function BlockInspector({
       {(block.type === 'radio' || block.type === 'select' || block.type === 'checkbox_group') && (
         <SettingsRow label="Options (one per line)">
           <textarea
-            className="min-h-[120px] w-full rounded border border-gray-200 bg-white px-3 py-2 text-[13px] shadow-sm focus:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200"
+            className="min-h-[120px] w-full rounded border border-gray-200 bg-white px-3 py-2 text-[13px] focus:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200"
             value={optsText}
             onChange={(e) =>
               onChange({
@@ -870,7 +870,7 @@ function BlockInspector({
       <div className="mt-8 flex flex-wrap items-center gap-4 border-t border-gray-100 pt-5">
         <button
           type="button"
-          className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 py-2 text-[13px] font-medium text-gray-800 shadow-sm transition hover:bg-gray-50"
+          className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 py-2 text-[13px] font-medium text-gray-800 transition hover:bg-gray-50"
           onClick={onDuplicate}
         >
           <Files size={14} strokeWidth={2} aria-hidden />
@@ -985,7 +985,7 @@ function PostSubmitInspector({
       {mode === 'inline_message' ? (
         <SettingsRow label="Message (HTML)">
           <textarea
-            className="min-h-[140px] w-full rounded border border-gray-200 bg-white px-3 py-2 font-mono text-[12px] shadow-sm focus:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200"
+            className="min-h-[140px] w-full rounded border border-gray-200 bg-white px-3 py-2 font-mono text-[12px] focus:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200"
             value={p.messageHtml ?? ''}
             onChange={(e) => onChange({ ...p, messageHtml: e.target.value })}
           />
@@ -1513,7 +1513,7 @@ export function FormBuilderEditor({
             <button
               type="button"
               onClick={() => setPreviewOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-medium text-gray-800 shadow-sm transition hover:bg-gray-50"
+              className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-medium text-gray-800 transition hover:bg-gray-50"
             >
               <Eye size={15} strokeWidth={2} />
               <span className="hidden sm:inline">Preview</span>
@@ -1521,7 +1521,7 @@ export function FormBuilderEditor({
             <button
               type="button"
               onClick={() => setRightTab('settings')}
-              className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-medium text-gray-800 shadow-sm transition hover:bg-gray-50"
+              className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-medium text-gray-800 transition hover:bg-gray-50"
             >
               <Settings size={15} strokeWidth={2} />
               <span className="hidden sm:inline">Settings</span>
@@ -1529,7 +1529,7 @@ export function FormBuilderEditor({
             <button
               type="button"
               onClick={() => setEmbedOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-medium text-gray-800 shadow-sm transition hover:bg-gray-50"
+              className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-medium text-gray-800 transition hover:bg-gray-50"
             >
               <Code2 size={15} strokeWidth={2} />
               <span className="hidden sm:inline">Embed</span>
@@ -1538,7 +1538,7 @@ export function FormBuilderEditor({
               type="button"
               onClick={() => void persistForm('manual')}
               disabled={saving}
-              className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-2 text-[13px] font-medium text-gray-900 shadow-sm transition hover:bg-gray-50 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-2 text-[13px] font-medium text-gray-900 transition hover:bg-gray-50 disabled:opacity-50"
             >
               {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} strokeWidth={2} />}
               Save
@@ -1546,10 +1546,10 @@ export function FormBuilderEditor({
             <button
               type="button"
               onClick={() => setSnapshot((s) => ({ ...s, published: !s.published }))}
-              className={`rounded-md px-3 py-2 text-[13px] font-medium shadow-sm transition ${
+              className={`rounded-md px-3 py-2 text-[13px] font-medium transition ${
                 published
                   ? 'border border-gray-200 bg-white text-gray-800 hover:bg-gray-50'
-                  : 'bg-gray-900 text-white hover:bg-gray-800'
+                  : 'border border-gray-900 bg-gray-900 text-white hover:bg-gray-800'
               }`}
             >
               {published ? 'Published' : 'Publish'}
@@ -1608,7 +1608,7 @@ export function FormBuilderEditor({
                       onClick={() => setViewport(id)}
                       className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition sm:px-4 ${
                         viewport === id
-                          ? 'bg-gray-900 text-white shadow-sm'
+                          ? 'bg-gray-900 text-white'
                           : 'text-gray-600 hover:bg-gray-100'
                       }`}
                     >
@@ -1657,7 +1657,7 @@ export function FormBuilderEditor({
 
                 <DragOverlay dropAnimation={null}>
                   {activeDrag ? (
-                    <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[13px] shadow-lg">
+                    <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[13px]">
                       {(() => {
                         const Ic = BLOCK_TYPE_ICONS[activeDrag.blockType];
                         return <Ic size={16} strokeWidth={1.75} className="shrink-0 text-gray-600" aria-hidden />;
@@ -1754,7 +1754,7 @@ export function FormBuilderEditor({
                     {[0, 1, 2].map((i) => (
                       <div
                         key={i}
-                        className="animate-pulse rounded-lg border border-gray-200/80 bg-white p-3 shadow-sm"
+                        className="animate-pulse rounded-lg border border-gray-200/80 bg-white p-3"
                       >
                         <div className="h-3 w-36 rounded bg-gray-200" />
                         <div className="mt-3 h-20 rounded bg-gray-100" />
@@ -1768,7 +1768,7 @@ export function FormBuilderEditor({
                     {submissions.map((s) => (
                       <li
                         key={s.id}
-                        className="rounded-lg border border-gray-200/80 bg-white p-3 shadow-sm"
+                        className="rounded-lg border border-gray-200/80 bg-white p-3"
                       >
                         <p className="text-[12px] font-medium text-gray-700">
                           {new Date(s.created_at).toLocaleString()}
@@ -1794,7 +1794,7 @@ export function FormBuilderEditor({
                     {[0, 1, 2, 3].map((i) => (
                       <div
                         key={i}
-                        className="flex animate-pulse items-center justify-between gap-2 rounded-lg border border-gray-200/80 bg-white px-3 py-2.5 shadow-sm"
+                        className="flex animate-pulse items-center justify-between gap-2 rounded-lg border border-gray-200/80 bg-white px-3 py-2.5"
                       >
                         <div className="h-3 w-44 rounded bg-gray-200" />
                         <div className="h-7 w-16 shrink-0 rounded bg-gray-100" />
@@ -1808,7 +1808,7 @@ export function FormBuilderEditor({
                     {revisions.map((r) => (
                       <li
                         key={r.id}
-                        className="flex items-center justify-between gap-2 rounded-lg border border-gray-200/80 bg-white px-3 py-2.5 shadow-sm"
+                        className="flex items-center justify-between gap-2 rounded-lg border border-gray-200/80 bg-white px-3 py-2.5"
                       >
                         <span className="text-[12px] text-gray-700">
                           {new Date(r.createdAt).toLocaleString()}
@@ -1892,7 +1892,7 @@ export function FormBuilderEditor({
           onClick={() => setPreviewOpen(false)}
         >
           <div
-            className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
+            className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-gray-200 bg-white p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4">
