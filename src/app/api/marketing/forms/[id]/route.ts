@@ -77,6 +77,17 @@ export async function PATCH(
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+  if (body.definition) {
+    const { error: revErr } = await supabaseAdmin.from('marketing_form_revisions').insert({
+      form_id: id,
+      venue_id: venueId,
+      definition_json: patch.definition_json,
+    });
+    if (revErr) {
+      console.error('[marketing forms PATCH] revision insert:', revErr.message);
+    }
+  }
+
   return NextResponse.json({
     form: {
       ...data,

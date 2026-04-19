@@ -18,7 +18,28 @@ export type FormBlockType =
   | 'select'
   | 'checkbox_group'
   | 'submit'
-  | 'button';
+  | 'button'
+  | 'venue_contact';
+
+/** Per-block typography (builder + public form). */
+export interface FormBlockStyle {
+  fontFamily?: string;
+  fontSize?: string;
+  fontWeight?: string;
+  color?: string;
+  textAlign?: 'left' | 'center' | 'right';
+  lineHeight?: string;
+}
+
+/** After successful submit (public embed + preview). */
+export interface PostSubmitConfig {
+  /** default = short built-in thanks; inline_message = stay on page; redirect = leave */
+  mode?: 'default' | 'inline_message' | 'redirect';
+  /** Shown when mode is inline_message (sanitized HTML subset) */
+  messageHtml?: string;
+  /** Absolute or same-origin relative URL when mode is redirect */
+  redirectUrl?: string;
+}
 
 export interface FormTheme {
   maxWidth?: string;
@@ -51,12 +72,18 @@ export interface FormBlock {
   buttonLabel?: string;
   /** optional stable key for exports (defaults to block id in payloads) */
   fieldKey?: string;
+  style?: FormBlockStyle;
 }
 
 export interface MarketingFormDefinition {
   version: typeof MARKETING_FORM_SCHEMA_VERSION;
   blocks: FormBlock[];
   theme?: FormTheme;
+  postSubmit?: PostSubmitConfig;
+}
+
+export function defaultPostSubmit(): PostSubmitConfig {
+  return { mode: 'default' };
 }
 
 export const FORM_BLOCK_TYPES: FormBlockType[] = [
@@ -78,6 +105,7 @@ export const FORM_BLOCK_TYPES: FormBlockType[] = [
   'checkbox_group',
   'submit',
   'button',
+  'venue_contact',
 ];
 
 /** Blocks that collect user input (excludes submit/button/layout). */
@@ -145,11 +173,16 @@ export function defaultDefinition(): MarketingFormDefinition {
       },
       {
         id: crypto.randomUUID(),
+        type: 'venue_contact',
+      },
+      {
+        id: crypto.randomUUID(),
         type: 'submit',
         buttonLabel: 'Submit',
       },
     ],
     theme: { ...DEFAULT_THEME },
+    postSubmit: defaultPostSubmit(),
   };
 }
 
@@ -216,6 +249,8 @@ export function createBlock(type: FormBlockType): FormBlock {
         href: 'https://',
         buttonVariant: 'secondary',
       };
+    case 'venue_contact':
+      return { id, type: 'venue_contact' };
     default:
       return { id, type: 'heading', level: 2, content: 'Block' };
   }
@@ -232,13 +267,17 @@ function isObject(v: unknown): v is Record<string, unknown> {
 
 export function parseDefinition(raw: unknown): MarketingFormDefinition {
   if (!isObject(raw)) return emptyDefinition();
-  const version = raw.version;
-  if (version !== MARKETING_FORM_SCHEMA_VERSION) {
-    return emptyDefinition();
-  }
+  // Be lenient: older or newer version numbers still parse blocks when present.
+  const version =
+    typeof raw.version === 'number' ? raw.version : MARKETING_FORM_SCHEMA_VERSION;
   const blocksRaw = raw.blocks;
   if (!Array.isArray(blocksRaw)) {
-    return { version: MARKETING_FORM_SCHEMA_VERSION, blocks: [], theme: mergeTheme(raw.theme as FormTheme) };
+    return {
+      version: MARKETING_FORM_SCHEMA_VERSION,
+      blocks: [],
+      theme: mergeTheme(raw.theme as FormTheme),
+      postSubmit: parsePostSubmit(raw.postSubmit),
+    };
   }
   const blocks: FormBlock[] = [];
   for (const b of blocksRaw) {
@@ -248,11 +287,24 @@ export function parseDefinition(raw: unknown): MarketingFormDefinition {
     blocks.push(block);
   }
   const theme = isObject(raw.theme) ? (raw.theme as FormTheme) : undefined;
+  const postSubmit = parsePostSubmit(raw.postSubmit);
   return {
     version: MARKETING_FORM_SCHEMA_VERSION,
     blocks,
     theme: theme ? mergeTheme(theme) : undefined,
+    postSubmit,
   };
+}
+
+function parsePostSubmit(raw: unknown): PostSubmitConfig | undefined {
+  if (!isObject(raw)) return undefined;
+  const mode = raw.mode;
+  const m =
+    mode === 'inline_message' || mode === 'redirect' || mode === 'default' ? mode : undefined;
+  const messageHtml = typeof raw.messageHtml === 'string' ? raw.messageHtml : undefined;
+  const redirectUrl = typeof raw.redirectUrl === 'string' ? raw.redirectUrl : undefined;
+  if (!m && !messageHtml && !redirectUrl) return undefined;
+  return { mode: m ?? 'default', messageHtml, redirectUrl };
 }
 
 export function serializeDefinition(def: MarketingFormDefinition): MarketingFormDefinition {
@@ -260,5 +312,17 @@ export function serializeDefinition(def: MarketingFormDefinition): MarketingForm
     version: MARKETING_FORM_SCHEMA_VERSION,
     blocks: def.blocks.map((b) => ({ ...b })),
     theme: def.theme ? mergeTheme(def.theme) : mergeTheme({}),
+    ...(def.postSubmit ? { postSubmit: { ...def.postSubmit } } : {}),
+  };
+}
+
+/** Resolved post-submit behavior for API + embed. */
+export function resolvePostSubmit(def: MarketingFormDefinition): Required<PostSubmitConfig> {
+  const p = def.postSubmit ?? {};
+  const mode = p.mode ?? 'default';
+  return {
+    mode: mode === 'redirect' || mode === 'inline_message' ? mode : 'default',
+    messageHtml: p.messageHtml ?? '<p>Thanks — your response was recorded.</p>',
+    redirectUrl: p.redirectUrl?.trim() ?? '',
   };
 }

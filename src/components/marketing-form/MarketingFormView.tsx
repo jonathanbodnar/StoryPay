@@ -1,13 +1,44 @@
 'use client';
 
-import { useCallback, useMemo, useState, type FormEvent } from 'react';
+import {
+  Fragment,
+  useCallback,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
+import { GoogleFontsLoader } from '@/components/marketing-form/GoogleFontsLoader';
 import {
   type FormBlock,
+  type FormBlockStyle,
   type MarketingFormDefinition,
   formFieldName,
   mergeTheme,
 } from '@/lib/marketing-form-schema';
+import { collectGoogleFontFamiliesFromDefinition } from '@/lib/google-fonts';
 import { sanitizeFormHtml } from '@/lib/sanitize-form-html';
+
+/** Branding fields for the venue_contact block (embed + builder preview). */
+export type VenueContactInfo = {
+  venueName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  addressLine?: string | null;
+};
+
+function blockStyleCss(s?: FormBlockStyle): CSSProperties {
+  if (!s) return {};
+  return {
+    fontFamily: s.fontFamily,
+    fontSize: s.fontSize,
+    fontWeight: s.fontWeight as CSSProperties['fontWeight'],
+    color: s.color,
+    textAlign: s.textAlign,
+    lineHeight: s.lineHeight,
+  };
+}
 
 function blockOptions(block: FormBlock): string[] {
   const o = block.options;
@@ -15,10 +46,18 @@ function blockOptions(block: FormBlock): string[] {
   return o.map((x) => String(x).trim()).filter(Boolean);
 }
 
+export type FormBuilderCanvasOpts = {
+  selectedId: string | null;
+  onSelectBlock: (id: string) => void;
+  onPatchBlock: (id: string, patch: Partial<FormBlock>) => void;
+};
+
 function renderBlock(
   block: FormBlock,
   theme: ReturnType<typeof mergeTheme>,
-  preview: boolean
+  preview: boolean,
+  venueContact: VenueContactInfo | null,
+  builder?: FormBuilderCanvasOpts | null,
 ) {
   const name = formFieldName(block);
   const label = block.label?.trim() || '';
@@ -62,8 +101,29 @@ function renderBlock(
           : L === 2
             ? 'text-xl font-semibold tracking-tight'
             : 'text-lg font-semibold';
+      const sel = builder?.selectedId === block.id;
+      const sty: CSSProperties = {
+        color: block.style?.color ?? theme.primaryColor,
+        ...blockStyleCss(block.style),
+      };
       return (
-        <Tag key={block.id} className={`mb-3 ${cls}`} style={{ color: theme.primaryColor }}>
+        <Tag
+          key={block.id}
+          className={`mb-3 min-h-[1.5em] outline-none ${cls}`}
+          style={sty}
+          contentEditable={!!(builder && sel)}
+          suppressContentEditableWarning
+          onClick={(e) => {
+            e.stopPropagation();
+            builder?.onSelectBlock(block.id);
+          }}
+          onBlur={(e) => {
+            const t = e.currentTarget.textContent?.trim() ?? '';
+            if (builder && t !== (block.content ?? '').trim()) {
+              builder.onPatchBlock(block.id, { content: t || 'Heading' });
+            }
+          }}
+        >
           {text}
         </Tag>
       );
@@ -324,6 +384,38 @@ function renderBlock(
         </fieldset>
       );
     }
+    case 'venue_contact': {
+      const vc = venueContact;
+      const has =
+        vc &&
+        (vc.email || vc.phone || vc.addressLine || vc.venueName);
+      if (!has) {
+        return (
+          <div
+            key={block.id}
+            className="mb-4 rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-4 text-center text-xs text-gray-400"
+          >
+            Venue contact will appear here on your live embed (add branding under Settings → Branding).
+          </div>
+        );
+      }
+      return (
+        <div
+          key={block.id}
+          className="mb-4 border-t border-gray-100 pt-4 text-sm"
+          style={{ color: theme.mutedColor }}
+        >
+          {vc!.venueName ? (
+            <p className="font-semibold" style={{ color: theme.labelColor }}>
+              {vc!.venueName}
+            </p>
+          ) : null}
+          {vc!.email ? <p className="mt-1">{vc!.email}</p> : null}
+          {vc!.phone ? <p className="mt-1">{vc!.phone}</p> : null}
+          {vc!.addressLine ? <p className="mt-2 whitespace-pre-line">{vc!.addressLine}</p> : null}
+        </div>
+      );
+    }
     case 'submit':
       return (
         <div key={block.id} className="mb-2 mt-2">
@@ -400,6 +492,14 @@ interface MarketingFormViewProps {
   formTitle?: string;
   preview?: boolean;
   onPreviewSubmit?: () => void;
+  /** Shown for venue_contact blocks on embed; builder loads from /api/venues/me */
+  venueContact?: VenueContactInfo | null;
+  /** Select blocks + edit heading in place on the canvas */
+  builder?: FormBuilderCanvasOpts | null;
+  /** Wrap each block (after builder chrome), e.g. sortable drag handles in the form builder */
+  wrapBlock?: (block: FormBlock, node: ReactNode) => ReactNode;
+  /** Shown inside the form when there are no blocks (e.g. builder drop zone) */
+  emptyCanvasSlot?: ReactNode | null;
 }
 
 export function MarketingFormView({
@@ -408,10 +508,19 @@ export function MarketingFormView({
   formTitle,
   preview = false,
   onPreviewSubmit,
+  venueContact = null,
+  builder = null,
+  wrapBlock,
+  emptyCanvasSlot = null,
 }: MarketingFormViewProps) {
   const theme = useMemo(() => mergeTheme(definition.theme), [definition.theme]);
+  const googleFontFamilies = useMemo(
+    () => collectGoogleFontFamiliesFromDefinition(definition),
+    [definition]
+  );
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState<string | null>(null);
+  const [successHtml, setSuccessHtml] = useState<string | null>(null);
 
   const onSubmit = useCallback(
     async (e: FormEvent<HTMLFormElement>) => {
@@ -449,14 +558,28 @@ export function MarketingFormView({
           method: 'POST',
           body: fd,
         });
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          postSubmit?: { mode?: string; redirectUrl?: string | null; messageHtml?: string | null };
+        };
         if (!res.ok) {
           setStatus('error');
           setMessage(data.error || 'Something went wrong.');
           return;
         }
+        const ps = data.postSubmit;
+        if (ps?.mode === 'redirect' && ps.redirectUrl?.trim()) {
+          window.location.href = ps.redirectUrl.trim();
+          return;
+        }
         setStatus('success');
-        setMessage('Thanks — your response was recorded.');
+        setSuccessHtml(null);
+        if (ps?.messageHtml?.trim()) {
+          setMessage(null);
+          setSuccessHtml(ps.messageHtml);
+        } else {
+          setMessage('Thanks — your response was recorded.');
+        }
         form.reset();
       } catch {
         setStatus('error');
@@ -475,6 +598,7 @@ export function MarketingFormView({
         color: theme.labelColor,
       }}
     >
+      <GoogleFontsLoader families={googleFontFamilies} />
       <div className="mx-auto w-full px-4" style={{ maxWidth: theme.maxWidth }}>
         <div
           className="border px-5 py-6 shadow-sm"
@@ -495,11 +619,47 @@ export function MarketingFormView({
                 status === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
               }`}
             >
-              {message}
+              {status === 'success' && successHtml ? (
+                <div
+                  className="prose prose-sm max-w-none text-green-900"
+                  dangerouslySetInnerHTML={{ __html: sanitizeFormHtml(successHtml) }}
+                />
+              ) : (
+                message
+              )}
             </div>
           ) : null}
           <form onSubmit={onSubmit} className="mt-2">
-            {definition.blocks.map((b) => renderBlock(b, theme, preview))}
+            {definition.blocks.length === 0 && emptyCanvasSlot ? (
+              emptyCanvasSlot
+            ) : (
+              definition.blocks.map((b) => {
+                const inner = renderBlock(b, theme, preview || !!builder, venueContact, builder);
+                let node: ReactNode;
+                if (!builder) {
+                  node = inner;
+                } else {
+                  node = (
+                    <div
+                      role="presentation"
+                      className={`relative rounded-md transition ${
+                        builder.selectedId === b.id
+                          ? 'ring-2 ring-brand-500 ring-offset-2'
+                          : 'hover:ring-1 hover:ring-gray-200'
+                      }`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        builder.onSelectBlock(b.id);
+                      }}
+                    >
+                      {inner}
+                    </div>
+                  );
+                }
+                if (wrapBlock) node = wrapBlock(b, node);
+                return <Fragment key={b.id}>{node}</Fragment>;
+              })
+            )}
           </form>
         </div>
       </div>

@@ -2,12 +2,16 @@
 
 import {
   DndContext,
-  type DragEndEvent,
+  DragOverlay,
   KeyboardSensor,
   PointerSensor,
   closestCenter,
+  useDroppable,
+  useDraggable,
   useSensor,
   useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -18,32 +22,68 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import Link from 'next/link';
-import { useCallback, useMemo, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import {
   ArrowLeft,
+  Code2,
   Copy,
   GripVertical,
+  History,
+  Inbox,
+  LayoutTemplate,
   Loader2,
+  Mail,
+  Monitor,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
+  Redo2,
   Save,
-  Trash2,
+  Smartphone,
+  Tablet,
+  Undo2,
 } from 'lucide-react';
 import RichTextEditor from '@/components/RichTextEditor';
-import { MarketingFormView } from '@/components/marketing-form/MarketingFormView';
+import {
+  MarketingFormView,
+  type VenueContactInfo,
+} from '@/components/marketing-form/MarketingFormView';
+import { useFormHistory } from '@/hooks/useFormHistory';
 import {
   type FormBlock,
+  type FormBlockStyle,
   type FormBlockType,
   type MarketingFormDefinition,
+  type PostSubmitConfig,
   createBlock,
+  defaultPostSubmit,
   mergeTheme,
+  resolvePostSubmit,
 } from '@/lib/marketing-form-schema';
+import { sanitizeFormHtml } from '@/lib/sanitize-form-html';
 
 const APP_ORIGIN =
   typeof window !== 'undefined'
     ? (process.env.NEXT_PUBLIC_APP_URL || window.location.origin).replace(/\/$/, '')
     : (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '');
 
-const PALETTE: { type: FormBlockType; label: string }[] = [
+type Viewport = 'mobile' | 'tablet' | 'desktop';
+
+type EditorSnapshot = {
+  definition: MarketingFormDefinition;
+  name: string;
+  published: boolean;
+};
+
+type PaletteDrag = { kind: 'palette'; blockType: FormBlockType; label: string };
+
+const PALETTE: { type: FormBlockType; label: string; icon?: string }[] = [
   { type: 'heading', label: 'Heading' },
   { type: 'rich_text', label: 'Rich text' },
   { type: 'first_name', label: 'First name' },
@@ -59,99 +99,208 @@ const PALETTE: { type: FormBlockType; label: string }[] = [
   { type: 'radio', label: 'Radio' },
   { type: 'select', label: 'Dropdown' },
   { type: 'checkbox_group', label: 'Checkboxes' },
+  { type: 'venue_contact', label: 'Venue contact' },
   { type: 'submit', label: 'Submit' },
   { type: 'button', label: 'Button' },
   { type: 'html', label: 'HTML' },
 ];
 
-function blockSummary(block: FormBlock): string {
-  switch (block.type) {
-    case 'heading':
-      return `H${block.level ?? 2}: ${(block.content || '').slice(0, 40) || '…'}`;
-    case 'rich_text':
-      return 'Rich text';
-    case 'submit':
-      return `Submit: ${block.buttonLabel || 'Submit'}`;
-    case 'button':
-      return `Button: ${block.buttonLabel || 'Button'}`;
-    case 'image':
-      return block.src ? `Image: ${block.src.slice(0, 30)}…` : 'Image';
-    case 'html':
-      return 'Custom HTML';
-    default:
-      return block.label || block.type.replace(/_/g, ' ');
-  }
+function patchBlock(blocks: FormBlock[], id: string, patch: Partial<FormBlock>): FormBlock[] {
+  return blocks.map((b) => (b.id === id ? { ...b, ...patch } : b));
 }
 
-function SortableRow({
-  block,
-  selected,
-  onSelect,
-  onRemove,
+function PaletteDraggable({
+  type,
+  label,
+  onQuickAdd,
 }: {
-  block: FormBlock;
-  selected: boolean;
-  onSelect: (id: string) => void;
-  onRemove: (id: string) => void;
+  type: FormBlockType;
+  label: string;
+  onQuickAdd: (t: FormBlockType) => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: block.id,
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `palette:${type}`,
+    data: { kind: 'palette', blockType: type, label } satisfies PaletteDrag,
   });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.55 : 1,
-  };
-
   return (
     <div
       ref={setNodeRef}
-      style={style}
-      className={`flex items-stretch gap-1 rounded-lg border bg-white shadow-sm ${
-        selected ? 'border-brand-500 ring-1 ring-brand-500' : 'border-gray-200'
+      className={`flex items-center gap-1 rounded-lg border border-gray-100 bg-white px-1.5 py-1.5 text-sm text-gray-800 shadow-sm ${
+        isDragging ? 'opacity-50' : ''
       }`}
     >
       <button
         type="button"
-        className="flex touch-none items-center px-1.5 text-gray-400 hover:text-gray-700"
-        title="Drag to reorder"
-        {...attributes}
+        title={`Add ${label}`}
+        onClick={() => onQuickAdd(type)}
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-brand-600 hover:bg-brand-50"
+      >
+        <Plus size={16} />
+      </button>
+      <span
+        className="min-w-0 flex-1 cursor-grab truncate active:cursor-grabbing"
         {...listeners}
+        {...attributes}
       >
-        <GripVertical size={18} />
-      </button>
-      <button
-        type="button"
-        className="min-w-0 flex-1 px-2 py-2.5 text-left text-sm"
-        onClick={() => onSelect(block.id)}
-      >
-        <span className="font-medium capitalize text-gray-900">
-          {block.type.replace(/_/g, ' ')}
-        </span>
-        <span className="mt-0.5 block truncate text-xs text-gray-500">{blockSummary(block)}</span>
-      </button>
-      <button
-        type="button"
-        className="px-2 text-gray-400 hover:text-red-600"
-        title="Remove block"
-        onClick={() => onRemove(block.id)}
-      >
-        <Trash2 size={16} />
-      </button>
+        {label}
+      </span>
     </div>
   );
 }
 
-function patchBlock(blocks: FormBlock[], id: string, patch: Partial<FormBlock>): FormBlock[] {
-  return blocks.map((b) => (b.id === id ? { ...b, ...patch } : b));
+function SortableCanvasRow({ id, children }: { id: string; children: ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+  });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 20 : undefined,
+  };
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex gap-1 ${isDragging ? 'opacity-60' : ''}`}
+    >
+      <button
+        type="button"
+        className="mt-1 flex h-8 w-7 shrink-0 touch-none items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+        title="Drag to reorder"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical size={16} />
+      </button>
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
+  );
+}
+
+function CanvasEmptyDrop() {
+  const { setNodeRef, isOver } = useDroppable({ id: 'canvas-empty' });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`min-h-[140px] rounded-lg border-2 border-dashed px-4 py-8 text-center text-sm ${
+        isOver ? 'border-brand-400 bg-brand-50 text-brand-900' : 'border-gray-200 text-gray-400'
+      }`}
+    >
+      Drag a module here, use + add, or open the module panel.
+    </div>
+  );
+}
+
+function CanvasTailDrop() {
+  const { setNodeRef, isOver } = useDroppable({ id: 'canvas-tail' });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`mt-2 rounded-md border border-dashed px-2 py-2 text-center text-xs ${
+        isOver ? 'border-brand-400 bg-brand-50 text-brand-800' : 'border-transparent text-gray-400'
+      }`}
+    >
+      Drop to add at end
+    </div>
+  );
+}
+
+function BlockStyleFields({
+  style,
+  onChange,
+  fontDatalistId,
+}: {
+  style: FormBlockStyle | undefined;
+  onChange: (next: FormBlockStyle) => void;
+  fontDatalistId: string;
+}) {
+  const s = style ?? {};
+  return (
+    <div className="space-y-3 border-t border-gray-100 pt-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Typography</p>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-gray-500">Font (Google)</label>
+        <input
+          className="w-full rounded border border-gray-200 px-2 py-1.5 font-mono text-xs"
+          placeholder="e.g. Montserrat"
+          value={s.fontFamily ?? ''}
+          onChange={(e) => onChange({ ...s, fontFamily: e.target.value || undefined })}
+          list={fontDatalistId}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-500">Size</label>
+          <input
+            className="w-full rounded border border-gray-200 px-2 py-1.5 text-xs"
+            placeholder="1.25rem"
+            value={s.fontSize ?? ''}
+            onChange={(e) => onChange({ ...s, fontSize: e.target.value || undefined })}
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-500">Weight</label>
+          <select
+            className="w-full rounded border border-gray-200 px-2 py-1.5 text-xs"
+            value={s.fontWeight ?? ''}
+            onChange={(e) => onChange({ ...s, fontWeight: e.target.value || undefined })}
+          >
+            <option value="">Default</option>
+            <option value="400">400</option>
+            <option value="500">500</option>
+            <option value="600">600</option>
+            <option value="700">700</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-gray-500">Color</label>
+        <div className="flex gap-2">
+          <input
+            type="color"
+            className="h-9 w-10 cursor-pointer rounded border border-gray-200 bg-white p-0.5"
+            value={s.color?.startsWith('#') && s.color.length >= 4 ? s.color : '#111827'}
+            onChange={(e) => onChange({ ...s, color: e.target.value })}
+          />
+          <input
+            className="min-w-0 flex-1 rounded border border-gray-200 px-2 py-1.5 font-mono text-xs"
+            value={s.color ?? ''}
+            onChange={(e) => onChange({ ...s, color: e.target.value || undefined })}
+            placeholder="#111827"
+          />
+        </div>
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-gray-500">Align</label>
+        <div className="flex gap-1">
+          {(['left', 'center', 'right'] as const).map((a) => (
+            <button
+              key={a}
+              type="button"
+              onClick={() => onChange({ ...s, textAlign: a })}
+              className={`flex-1 rounded border px-2 py-1 text-xs capitalize ${
+                s.textAlign === a ? 'border-brand-500 bg-brand-50 text-brand-900' : 'border-gray-200'
+              }`}
+            >
+              {a}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function BlockInspector({
   block,
   onChange,
+  onRemove,
+  fontDatalistId,
 }: {
   block: FormBlock;
   onChange: (patch: Partial<FormBlock>) => void;
+  onRemove: () => void;
+  fontDatalistId: string;
 }) {
   const optsText = (block.options || []).join('\n');
 
@@ -163,6 +312,16 @@ function BlockInspector({
           {block.type.replace(/_/g, ' ')}
         </p>
       </div>
+
+      {block.type === 'venue_contact' ? (
+        <p className="text-xs text-gray-600">
+          Shows your venue name, email, phone, and address from{' '}
+          <Link href="/dashboard/settings/branding" className="text-brand-600 hover:underline">
+            Settings → Branding
+          </Link>
+          . Add this block again if you removed it.
+        </p>
+      ) : null}
 
       {(block.type === 'first_name' ||
         block.type === 'last_name' ||
@@ -185,7 +344,10 @@ function BlockInspector({
               onChange={(e) => onChange({ label: e.target.value })}
             />
           </div>
-          {block.type !== 'date' && block.type !== 'file' && block.type !== 'radio' && block.type !== 'checkbox_group' ? (
+          {block.type !== 'date' &&
+          block.type !== 'file' &&
+          block.type !== 'radio' &&
+          block.type !== 'checkbox_group' ? (
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-500">Placeholder</label>
               <input
@@ -230,6 +392,11 @@ function BlockInspector({
               onChange={(e) => onChange({ content: e.target.value })}
             />
           </div>
+          <BlockStyleFields
+            style={block.style}
+            fontDatalistId={fontDatalistId}
+            onChange={(st) => onChange({ style: { ...block.style, ...st } })}
+          />
         </>
       )}
 
@@ -263,7 +430,10 @@ function BlockInspector({
             value={optsText}
             onChange={(e) =>
               onChange({
-                options: e.target.value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean),
+                options: e.target.value
+                  .split(/\r?\n/)
+                  .map((s) => s.trim())
+                  .filter(Boolean),
               })
             }
           />
@@ -353,6 +523,20 @@ function BlockInspector({
           />
         </div>
       )}
+
+      <div className="border-t border-gray-100 pt-2">
+        <button
+          type="button"
+          className="text-xs font-medium text-red-600 hover:text-red-700"
+          onClick={() => {
+            if (typeof window !== 'undefined' && window.confirm('Remove this block?')) {
+              onRemove();
+            }
+          }}
+        >
+          Remove block
+        </button>
+      </div>
     </div>
   );
 }
@@ -360,18 +544,29 @@ function BlockInspector({
 function ThemeInspector({
   theme,
   onChange,
+  fontDatalistId,
 }: {
   theme: ReturnType<typeof mergeTheme>;
   onChange: (t: MarketingFormDefinition['theme']) => void;
+  fontDatalistId: string;
 }) {
   const row = (key: keyof ReturnType<typeof mergeTheme>, label: string) => (
     <div key={key}>
       <label className="mb-1 block text-xs font-medium text-gray-500">{label}</label>
-      <input
-        className="w-full rounded border border-gray-200 px-2 py-1.5"
-        value={theme[key]}
-        onChange={(e) => onChange({ [key]: e.target.value })}
-      />
+      {key === 'fontFamily' ? (
+        <input
+          className="w-full rounded border border-gray-200 px-2 py-1.5 font-mono text-xs"
+          value={theme[key]}
+          onChange={(e) => onChange({ [key]: e.target.value })}
+          list={fontDatalistId}
+        />
+      ) : (
+        <input
+          className="w-full rounded border border-gray-200 px-2 py-1.5"
+          value={theme[key]}
+          onChange={(e) => onChange({ [key]: e.target.value })}
+        />
+      )}
     </div>
   );
 
@@ -381,11 +576,63 @@ function ThemeInspector({
       {row('primaryColor', 'Primary / button color')}
       {row('background', 'Page background')}
       {row('surface', 'Card background')}
-      {row('fontFamily', 'Font stack (CSS)')}
+      {row('fontFamily', 'Font stack (Google name first for preview)')}
       {row('borderRadius', 'Corner radius')}
       {row('labelColor', 'Label color')}
       {row('inputBorder', 'Field border color')}
       {row('mutedColor', 'Hint / muted text')}
+    </div>
+  );
+}
+
+function PostSubmitInspector({
+  postSubmit,
+  onChange,
+}: {
+  postSubmit: PostSubmitConfig | undefined;
+  onChange: (p: PostSubmitConfig) => void;
+}) {
+  const p = { ...defaultPostSubmit(), ...postSubmit };
+  const mode = p.mode ?? 'default';
+
+  return (
+    <div className="space-y-3 text-sm">
+      <div>
+        <label className="mb-1 block text-xs font-medium text-gray-500">After successful submit</label>
+        <select
+          className="w-full rounded border border-gray-200 px-2 py-1.5"
+          value={mode}
+          onChange={(e) => {
+            const m = e.target.value as PostSubmitConfig['mode'];
+            onChange({ ...p, mode: m });
+          }}
+        >
+          <option value="default">Short thank-you message</option>
+          <option value="inline_message">Custom message (stay on page)</option>
+          <option value="redirect">Redirect to URL</option>
+        </select>
+      </div>
+      {mode === 'inline_message' ? (
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-500">Message (HTML, sanitized)</label>
+          <textarea
+            className="h-36 w-full rounded border border-gray-200 px-2 py-1.5 font-mono text-xs"
+            value={p.messageHtml ?? ''}
+            onChange={(e) => onChange({ ...p, messageHtml: e.target.value })}
+          />
+        </div>
+      ) : null}
+      {mode === 'redirect' ? (
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-500">Redirect URL</label>
+          <input
+            className="w-full rounded border border-gray-200 px-2 py-1.5"
+            value={p.redirectUrl ?? ''}
+            onChange={(e) => onChange({ ...p, redirectUrl: e.target.value })}
+            placeholder="https://…"
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -403,18 +650,153 @@ export function FormBuilderEditor({
   initialDefinition: MarketingFormDefinition;
   embedToken: string;
 }) {
-  const [name, setName] = useState(initialName);
-  const [published, setPublished] = useState(initialPublished);
-  const [definition, setDefinition] = useState<MarketingFormDefinition>(initialDefinition);
+  const initialSnapshot: EditorSnapshot = useMemo(
+    () => ({
+      definition: initialDefinition,
+      name: initialName,
+      published: initialPublished,
+    }),
+    [initialDefinition, initialName, initialPublished]
+  );
+
+  const { present, set, undo, redo, reset, canUndo, canRedo } = useFormHistory(initialSnapshot);
+
+  const { definition, name, published } = present;
+
   const [selectedId, setSelectedId] = useState<string | null>(
     initialDefinition.blocks[0]?.id ?? null
   );
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [flyoutOpen, setFlyoutOpen] = useState(true);
+  const [viewport, setViewport] = useState<Viewport>('desktop');
+  const [embedOpen, setEmbedOpen] = useState(false);
+  const [thankYouOpen, setThankYouOpen] = useState(false);
+  const [rightTab, setRightTab] = useState<'block' | 'form' | 'theme' | 'submissions' | 'versions'>(
+    'block'
+  );
+  const [activeDrag, setActiveDrag] = useState<PaletteDrag | null>(null);
+  const [venueContact, setVenueContact] = useState<VenueContactInfo | null>(null);
+  const [googleFontNames, setGoogleFontNames] = useState<string[]>([]);
+  const [submissions, setSubmissions] = useState<{ id: string; payload: unknown; created_at: string }[]>(
+    []
+  );
+  const [submissionsLoading, setSubmissionsLoading] = useState(false);
+  const [revisions, setRevisions] = useState<
+    { id: string; createdAt: string; definition: MarketingFormDefinition }[]
+  >([]);
+  const [revisionsLoading, setRevisionsLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch('/api/fonts/google');
+        const j = (await res.json()) as { families?: string[] };
+        if (!cancelled && Array.isArray(j.families)) setGoogleFontNames(j.families);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch('/api/venues/me');
+        if (!res.ok) return;
+        const v = (await res.json()) as Record<string, unknown>;
+        if (cancelled) return;
+        const city = typeof v.brand_city === 'string' ? v.brand_city : '';
+        const state = typeof v.brand_state === 'string' ? v.brand_state : '';
+        const zip = typeof v.brand_zip === 'string' ? v.brand_zip : '';
+        const line2 = [city, state, zip].filter(Boolean).join(', ');
+        const addrParts = [typeof v.brand_address === 'string' ? v.brand_address : '', line2].filter(
+          Boolean
+        );
+        setVenueContact({
+          venueName: typeof v.name === 'string' ? v.name : null,
+          email: typeof v.brand_email === 'string' ? v.brand_email : null,
+          phone: typeof v.brand_phone === 'string' ? v.brand_phone : null,
+          addressLine: addrParts.length ? addrParts.join('\n') : null,
+        });
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (rightTab !== 'submissions') return;
+    let cancelled = false;
+    setSubmissionsLoading(true);
+    void (async () => {
+      try {
+        const res = await fetch(`/api/marketing/forms/${formId}/submissions`);
+        const j = (await res.json()) as {
+          submissions?: { id: string; payload: unknown; created_at: string }[];
+        };
+        if (!cancelled && j.submissions) setSubmissions(j.submissions);
+      } finally {
+        if (!cancelled) setSubmissionsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [rightTab, formId]);
+
+  useEffect(() => {
+    if (rightTab !== 'versions') return;
+    let cancelled = false;
+    setRevisionsLoading(true);
+    void (async () => {
+      try {
+        const res = await fetch(`/api/marketing/forms/${formId}/revisions`);
+        const j = (await res.json()) as {
+          revisions?: { id: string; createdAt: string; definition: MarketingFormDefinition }[];
+        };
+        if (!cancelled && j.revisions) setRevisions(j.revisions);
+      } finally {
+        if (!cancelled) setRevisionsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [rightTab, formId]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    if (!definition.blocks.some((b) => b.id === selectedId)) {
+      setSelectedId(definition.blocks[0]?.id ?? null);
+    }
+  }, [definition.blocks, selectedId]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t?.closest?.('[contenteditable="true"],input,textarea,select')) return;
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) redo();
+        else undo();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo, redo]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
@@ -425,46 +807,119 @@ export function FormBuilderEditor({
 
   const mergedTheme = useMemo(() => mergeTheme(definition.theme), [definition.theme]);
 
-  const onDragEnd = useCallback(
-    (event: DragEndEvent) => {
-      const { active, over } = event;
-      if (!over || active.id === over.id) return;
-      setDefinition((d) => {
-        const ids = d.blocks.map((b) => b.id);
-        const oldIndex = ids.indexOf(String(active.id));
-        const newIndex = ids.indexOf(String(over.id));
-        if (oldIndex < 0 || newIndex < 0) return d;
-        return { ...d, blocks: arrayMove(d.blocks, oldIndex, newIndex) };
-      });
+  const setSnapshot = useCallback(
+    (fn: (s: EditorSnapshot) => EditorSnapshot) => {
+      set(fn);
     },
-    []
+    [set]
   );
 
-  const addBlock = useCallback((type: FormBlockType) => {
-    const nb = createBlock(type);
-    setDefinition((d) => ({ ...d, blocks: [...d.blocks, nb] }));
-    setSelectedId(nb.id);
-  }, []);
+  const patchDefinition = useCallback(
+    (fn: (d: MarketingFormDefinition) => MarketingFormDefinition) => {
+      setSnapshot((s) => ({ ...s, definition: fn(s.definition) }));
+    },
+    [setSnapshot]
+  );
 
-  const removeBlock = useCallback((id: string) => {
-    setDefinition((d) => {
-      const blocks = d.blocks.filter((b) => b.id !== id);
-      return { ...d, blocks };
-    });
-    setSelectedId((cur) => (cur === id ? null : cur));
-  }, []);
+  const patchPostSubmit = useCallback(
+    (next: PostSubmitConfig) => {
+      patchDefinition((d) => ({ ...d, postSubmit: next }));
+    },
+    [patchDefinition]
+  );
+
+  const addBlock = useCallback(
+    (type: FormBlockType) => {
+      const nb = createBlock(type);
+      patchDefinition((d) => ({ ...d, blocks: [...d.blocks, nb] }));
+      setSelectedId(nb.id);
+    },
+    [patchDefinition]
+  );
+
+  const removeBlock = useCallback(
+    (id: string) => {
+      patchDefinition((d) => ({ ...d, blocks: d.blocks.filter((b) => b.id !== id) }));
+      setSelectedId((cur) => (cur === id ? null : cur));
+    },
+    [patchDefinition]
+  );
 
   const patchSelected = useCallback(
     (patch: Partial<FormBlock>) => {
       if (!selectedId) return;
-      setDefinition((d) => ({ ...d, blocks: patchBlock(d.blocks, selectedId, patch) }));
+      patchDefinition((d) => ({ ...d, blocks: patchBlock(d.blocks, selectedId, patch) }));
     },
-    [selectedId]
+    [selectedId, patchDefinition]
   );
 
-  const patchTheme = useCallback((t: MarketingFormDefinition['theme']) => {
-    setDefinition((d) => ({ ...d, theme: { ...d.theme, ...t } }));
+  const patchTheme = useCallback(
+    (t: MarketingFormDefinition['theme']) => {
+      patchDefinition((d) => ({ ...d, theme: { ...d.theme, ...t } }));
+    },
+    [patchDefinition]
+  );
+
+  const onDragStart = useCallback((event: DragStartEvent) => {
+    const id = String(event.active.id);
+    if (id.startsWith('palette:')) {
+      const type = event.active.data.current?.blockType as FormBlockType;
+      const label = (event.active.data.current?.label as string) ?? String(type);
+      setActiveDrag({ kind: 'palette', blockType: type, label });
+    } else {
+      setActiveDrag(null);
+    }
   }, []);
+
+  const onDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      setActiveDrag(null);
+      if (!over) return;
+
+      const activeId = String(active.id);
+      const overId = String(over.id);
+      const isPalette = activeId.startsWith('palette:');
+
+      if (isPalette) {
+        const type = active.data.current?.blockType as FormBlockType | undefined;
+        if (!type) return;
+        const nb = createBlock(type);
+        patchDefinition((d) => {
+          const blocks = [...d.blocks];
+          if (overId === 'canvas-empty' || overId === 'canvas-tail') {
+            blocks.push(nb);
+          } else {
+            const idx = blocks.findIndex((b) => b.id === overId);
+            if (idx >= 0) blocks.splice(idx, 0, nb);
+            else blocks.push(nb);
+          }
+          return { ...d, blocks };
+        });
+        setSelectedId(nb.id);
+        return;
+      }
+
+      if (activeId === overId) return;
+
+      patchDefinition((d) => {
+        const blocks = [...d.blocks];
+        const oldIndex = blocks.findIndex((b) => b.id === activeId);
+        if (oldIndex < 0) return d;
+
+        if (overId === 'canvas-tail') {
+          const [moved] = blocks.splice(oldIndex, 1);
+          if (moved) blocks.push(moved);
+          return { ...d, blocks };
+        }
+
+        const newIndex = blocks.findIndex((b) => b.id === overId);
+        if (newIndex < 0) return d;
+        return { ...d, blocks: arrayMove(blocks, oldIndex, newIndex) };
+      });
+    },
+    [patchDefinition]
+  );
 
   const save = useCallback(async () => {
     setSaving(true);
@@ -473,9 +928,9 @@ export function FormBuilderEditor({
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name,
-        published,
-        definition,
+        name: present.name,
+        published: present.published,
+        definition: present.definition,
       }),
     });
     setSaving(false);
@@ -486,7 +941,7 @@ export function FormBuilderEditor({
     }
     setSaveMsg('Saved');
     setTimeout(() => setSaveMsg(null), 2000);
-  }, [formId, name, published, definition]);
+  }, [formId, present]);
 
   const embedUrl = `${APP_ORIGIN || (typeof window !== 'undefined' ? window.location.origin : '')}/embed/form/${embedToken}`;
   const iframeSnippet = `<iframe src="${embedUrl}" title="${name.replace(/"/g, '&quot;')}" style="width:100%;min-height:520px;border:0;border-radius:12px;" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>`;
@@ -501,10 +956,38 @@ export function FormBuilderEditor({
     }
   };
 
+  const builderOpts = useMemo(
+    () => ({
+      selectedId,
+      onSelectBlock: setSelectedId,
+      onPatchBlock: (id: string, patch: Partial<FormBlock>) => {
+        patchDefinition((d) => ({ ...d, blocks: patchBlock(d.blocks, id, patch) }));
+      },
+    }),
+    [selectedId, patchDefinition]
+  );
+
+  const wrapBlock = useCallback(
+    (block: FormBlock, node: ReactNode) => (
+      <SortableCanvasRow id={block.id}>{node}</SortableCanvasRow>
+    ),
+    []
+  );
+
+  const emptySlot = useMemo(() => <CanvasEmptyDrop />, []);
+
+  const viewportMax =
+    viewport === 'mobile' ? 390 : viewport === 'tablet' ? 768 : 1200;
+
+  const resolvedThankYou = useMemo(
+    () => resolvePostSubmit(definition),
+    [definition]
+  );
+
   return (
-    <div className="min-h-screen bg-gray-50 pb-16">
-      <header className="sticky top-0 z-10 border-b border-gray-200 bg-white/95 px-4 py-3 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3">
+    <div className="min-h-screen bg-gray-100 pb-10">
+      <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 px-4 py-3 backdrop-blur">
+        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-2">
           <Link
             href="/dashboard/marketing/form-builder"
             className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900"
@@ -513,127 +996,389 @@ export function FormBuilderEditor({
             Forms
           </Link>
           <input
-            className="min-w-[12rem] flex-1 rounded border border-gray-200 px-3 py-1.5 text-base font-semibold"
+            className="min-w-[10rem] flex-1 rounded border border-gray-200 px-3 py-1.5 text-base font-semibold"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => setSnapshot((s) => ({ ...s, name: e.target.value }))}
           />
           <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input type="checkbox" checked={published} onChange={(e) => setPublished(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={published}
+              onChange={(e) => setSnapshot((s) => ({ ...s, published: e.target.checked }))}
+            />
             Published
           </label>
-          <button
-            type="button"
-            onClick={() => void save()}
-            disabled={saving}
-            className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
-          >
-            {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-            Save
-          </button>
-          {saveMsg ? <span className="text-sm text-gray-600">{saveMsg}</span> : null}
+
+          <div className="ml-auto flex flex-wrap items-center gap-1">
+            <div className="mr-2 flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+              <button
+                type="button"
+                title="Desktop"
+                onClick={() => setViewport('desktop')}
+                className={`rounded-md px-2 py-1.5 ${viewport === 'desktop' ? 'bg-white shadow-sm' : ''}`}
+              >
+                <Monitor size={16} />
+              </button>
+              <button
+                type="button"
+                title="Tablet"
+                onClick={() => setViewport('tablet')}
+                className={`rounded-md px-2 py-1.5 ${viewport === 'tablet' ? 'bg-white shadow-sm' : ''}`}
+              >
+                <Tablet size={16} />
+              </button>
+              <button
+                type="button"
+                title="Mobile"
+                onClick={() => setViewport('mobile')}
+                className={`rounded-md px-2 py-1.5 ${viewport === 'mobile' ? 'bg-white shadow-sm' : ''}`}
+              >
+                <Smartphone size={16} />
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={undo}
+              disabled={!canUndo}
+              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+              title="Undo"
+            >
+              <Undo2 size={14} /> Undo
+            </button>
+            <button
+              type="button"
+              onClick={redo}
+              disabled={!canRedo}
+              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+              title="Redo"
+            >
+              <Redo2 size={14} /> Redo
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setThankYouOpen(true)}
+              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium hover:bg-gray-50"
+            >
+              <Mail size={16} />
+              Thank you preview
+            </button>
+            <button
+              type="button"
+              onClick={() => setEmbedOpen(true)}
+              className="inline-flex items-center gap-1 rounded-lg border border-gray-900 bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-800"
+            >
+              <Code2 size={16} />
+              Embed
+            </button>
+            <button
+              type="button"
+              onClick={() => void save()}
+              disabled={saving}
+              className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+            >
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              Save
+            </button>
+            {saveMsg ? <span className="text-sm text-gray-600">{saveMsg}</span> : null}
+          </div>
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-7xl gap-4 px-4 pt-4 lg:grid-cols-[220px_1fr_300px]">
-        <aside className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Blocks</h2>
-          <p className="mb-2 text-xs text-gray-500">Click to add. Drag rows to reorder.</p>
-          <div className="flex flex-col gap-1">
-            {PALETTE.map((p) => (
-              <button
-                key={p.type}
-                type="button"
-                onClick={() => addBlock(p.type)}
-                className="flex items-center gap-2 rounded-md border border-gray-100 px-2 py-1.5 text-left text-sm text-gray-800 hover:border-brand-200 hover:bg-brand-50"
+      <div className="relative mx-auto flex max-w-[1600px] flex-col xl:flex-row">
+        <button
+          type="button"
+          onClick={() => setFlyoutOpen((o) => !o)}
+          className="fixed left-0 top-[calc(50vh-24px)] z-40 flex h-12 w-9 items-center justify-center rounded-r-xl border border-gray-200 bg-white shadow-md hover:bg-gray-50 lg:left-[max(0px,calc((100vw-1600px)/2))]"
+          title={flyoutOpen ? 'Hide modules' : 'Modules'}
+        >
+          {flyoutOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
+        </button>
+
+        {flyoutOpen ? (
+          <aside className="sticky top-[57px] z-20 h-[calc(100vh-57px)] w-64 shrink-0 overflow-y-auto border-r border-gray-200 bg-white px-3 py-4 shadow-sm">
+            <div className="mb-3 flex items-center gap-2">
+              <LayoutTemplate size={18} className="text-gray-500" />
+              <h2 className="text-sm font-semibold text-gray-900">Modules</h2>
+            </div>
+            <p className="mb-3 text-xs text-gray-500">
+              Drag onto the canvas or tap + to add. Reorder with the grip on the canvas.
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {PALETTE.map((p) => (
+                <PaletteDraggable
+                  key={p.type}
+                  type={p.type}
+                  label={p.label}
+                  onQuickAdd={addBlock}
+                />
+              ))}
+            </div>
+          </aside>
+        ) : null}
+
+        <div className="min-w-0 flex-1 px-3 py-4 lg:px-6">
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+          >
+            <SortableContext
+              items={definition.blocks.map((b) => b.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div
+                className="mx-auto w-full transition-[max-width] duration-200"
+                style={{ maxWidth: viewportMax }}
               >
-                <Plus size={14} className="text-brand-600" />
-                {p.label}
+                <div className="rounded-2xl border border-gray-200 bg-gray-50/80 p-3 shadow-inner">
+                  <MarketingFormView
+                    definition={definition}
+                    embedToken={embedToken}
+                    preview
+                    formTitle={name}
+                    venueContact={venueContact}
+                    builder={builderOpts}
+                    wrapBlock={wrapBlock}
+                    emptyCanvasSlot={emptySlot}
+                    onPreviewSubmit={() => setSaveMsg('Preview only — not submitted')}
+                  />
+                  {definition.blocks.length > 0 ? <CanvasTailDrop /> : null}
+                </div>
+              </div>
+            </SortableContext>
+
+            <DragOverlay dropAnimation={null}>
+              {activeDrag ? (
+                <div className="rounded-lg border border-brand-200 bg-white px-3 py-2 text-sm shadow-lg">
+                  {activeDrag.label}
+                </div>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
+        </div>
+
+        <aside className="sticky top-[57px] z-20 min-h-[320px] w-full shrink-0 overflow-y-auto border-t border-gray-200 bg-white px-3 py-4 shadow-sm xl:h-[calc(100vh-57px)] xl:w-[320px] xl:border-l xl:border-t-0">
+          <div className="mb-3 flex gap-1 overflow-x-auto pb-1 text-xs font-medium">
+            {(
+              [
+                ['block', 'Block'],
+                ['form', 'Thank you'],
+                ['theme', 'Theme'],
+                ['submissions', 'Submissions'],
+                ['versions', 'Versions'],
+              ] as const
+            ).map(([id, lab]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setRightTab(id)}
+                className={`whitespace-nowrap rounded-full px-2.5 py-1 ${
+                  rightTab === id ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {lab}
               </button>
             ))}
           </div>
-        </aside>
 
-        <section className="space-y-3">
-          <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
-            <h2 className="mb-2 text-sm font-semibold text-gray-900">Form canvas</h2>
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-              <SortableContext items={definition.blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
-                <div className="flex max-h-[55vh] flex-col gap-2 overflow-y-auto pr-1">
-                  {definition.blocks.length === 0 ? (
-                    <p className="py-8 text-center text-sm text-gray-500">
-                      Add blocks from the left panel.
-                    </p>
-                  ) : (
-                    definition.blocks.map((b) => (
-                      <SortableRow
-                        key={b.id}
-                        block={b}
-                        selected={b.id === selectedId}
-                        onSelect={setSelectedId}
-                        onRemove={removeBlock}
-                      />
-                    ))
-                  )}
-                </div>
-              </SortableContext>
-            </DndContext>
-          </div>
+          <datalist id="storypay-form-gfonts">
+            {googleFontNames.map((f) => (
+              <option key={f} value={f} />
+            ))}
+            {googleFontNames.map((f) => (
+              <option key={`${f}-stack`} value={`${f}, system-ui, sans-serif`} />
+            ))}
+          </datalist>
 
-          <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
-            <h2 className="mb-2 text-sm font-semibold text-gray-900">Live preview</h2>
-            <div className="max-h-[480px] overflow-y-auto rounded-lg border border-dashed border-gray-200 bg-gray-50 p-2">
-              <MarketingFormView
-                definition={definition}
-                embedToken={embedToken}
-                preview
-                formTitle={name}
-                onPreviewSubmit={() => setSaveMsg('Preview only — not submitted')}
-              />
+          {rightTab === 'block' ? (
+            <div className="rounded-xl border border-gray-200 bg-white p-3">
+              <h3 className="mb-2 text-sm font-semibold text-gray-900">Selection</h3>
+              {selected ? (
+                <BlockInspector
+                  block={selected}
+                  onChange={patchSelected}
+                  onRemove={() => selectedId && removeBlock(selectedId)}
+                  fontDatalistId="storypay-form-gfonts"
+                />
+              ) : (
+                <p className="text-sm text-gray-500">Click a block on the canvas.</p>
+              )}
             </div>
-          </div>
-        </section>
+          ) : null}
 
-        <aside className="space-y-3">
-          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-3 text-sm font-semibold text-gray-900">Embed</h2>
-            <p className="mb-2 text-xs text-gray-600">
-              Paste this iframe on any site. Styling is controlled by the theme below so it stays on-brand.
+          {rightTab === 'form' ? (
+            <div className="space-y-3">
+              <div className="rounded-xl border border-gray-200 bg-white p-3">
+                <h3 className="mb-2 text-sm font-semibold text-gray-900">After submit</h3>
+                <PostSubmitInspector postSubmit={definition.postSubmit} onChange={patchPostSubmit} />
+              </div>
+            </div>
+          ) : null}
+
+          {rightTab === 'theme' ? (
+            <div className="rounded-xl border border-gray-200 bg-white p-3">
+              <h3 className="mb-2 text-sm font-semibold text-gray-900">Theme</h3>
+              <ThemeInspector theme={mergedTheme} onChange={patchTheme} fontDatalistId="storypay-form-gfonts" />
+            </div>
+          ) : null}
+
+          {rightTab === 'submissions' ? (
+            <div className="rounded-xl border border-gray-200 bg-white p-3">
+              <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-900">
+                <Inbox size={16} /> Submissions
+              </h3>
+              {submissionsLoading ? (
+                <p className="text-sm text-gray-500">Loading…</p>
+              ) : submissions.length === 0 ? (
+                <p className="text-sm text-gray-500">No submissions yet.</p>
+              ) : (
+                <ul className="max-h-[60vh] space-y-2 overflow-y-auto text-xs">
+                  {submissions.map((s) => (
+                    <li key={s.id} className="rounded border border-gray-100 bg-gray-50 p-2">
+                      <p className="font-medium text-gray-700">
+                        {new Date(s.created_at).toLocaleString()}
+                      </p>
+                      <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-all text-[11px] text-gray-600">
+                        {JSON.stringify(s.payload, null, 2)}
+                      </pre>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : null}
+
+          {rightTab === 'versions' ? (
+            <div className="rounded-xl border border-gray-200 bg-white p-3">
+              <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-900">
+                <History size={16} /> Version history
+              </h3>
+              <p className="mb-2 text-xs text-gray-500">
+                Snapshots are stored when you save. Restore loads into the editor (save again to publish).
+              </p>
+              {revisionsLoading ? (
+                <p className="text-sm text-gray-500">Loading…</p>
+              ) : revisions.length === 0 ? (
+                <p className="text-sm text-gray-500">No saved versions yet — save the form once.</p>
+              ) : (
+                <ul className="max-h-[60vh] space-y-2 overflow-y-auto text-xs">
+                  {revisions.map((r) => (
+                    <li
+                      key={r.id}
+                      className="flex items-center justify-between gap-2 rounded border border-gray-100 bg-gray-50 px-2 py-2"
+                    >
+                      <span className="text-gray-700">
+                        {new Date(r.createdAt).toLocaleString()}
+                      </span>
+                      <button
+                        type="button"
+                        className="shrink-0 rounded border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium hover:bg-gray-100"
+                        onClick={() => {
+                          if (typeof window !== 'undefined' && window.confirm('Replace the canvas with this version?')) {
+                            reset({
+                              ...present,
+                              definition: r.definition,
+                            });
+                            setSelectedId(r.definition.blocks[0]?.id ?? null);
+                            setRightTab('block');
+                          }
+                        }}
+                      >
+                        Restore
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : null}
+        </aside>
+      </div>
+
+      {embedOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setEmbedOpen(false)}
+        >
+          <div
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold text-gray-900">Embed this form</h2>
+            <p className="mt-2 text-sm text-gray-600">
+              Paste this iframe on your site. Styling follows your theme below.
             </p>
-            <p className="mb-1 text-xs font-medium text-gray-500">Public URL</p>
-            <code className="mb-2 block break-all rounded bg-gray-50 p-2 text-[11px] text-gray-800">{embedUrl}</code>
+            <p className="mt-4 text-xs font-medium text-gray-500">Public URL</p>
+            <code className="mt-1 block break-all rounded bg-gray-50 p-2 text-[11px] text-gray-800">{embedUrl}</code>
             <button
               type="button"
               onClick={() => void copyEmbed()}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 py-2 text-sm font-medium hover:bg-gray-50"
+              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 py-2.5 text-sm font-medium hover:bg-gray-50"
             >
               <Copy size={16} />
-              {copied ? 'Copied' : 'Copy iframe HTML'}
+              {copied ? 'Copied iframe HTML' : 'Copy iframe HTML'}
             </button>
             <textarea
               readOnly
-              className="mt-2 h-24 w-full resize-none rounded border border-gray-200 bg-gray-50 p-2 font-mono text-[11px]"
+              className="mt-3 h-28 w-full resize-none rounded border border-gray-200 bg-gray-50 p-2 font-mono text-[11px]"
               value={iframeSnippet}
             />
             {!published ? (
-              <p className="mt-2 text-xs text-amber-700">Publish the form so the embed URL works for visitors.</p>
+              <p className="mt-3 text-xs text-amber-700">Publish the form so the embed URL works for visitors.</p>
             ) : null}
+            <button
+              type="button"
+              className="mt-4 w-full rounded-lg border border-gray-200 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              onClick={() => setEmbedOpen(false)}
+            >
+              Close
+            </button>
           </div>
+        </div>
+      ) : null}
 
-          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-3 text-sm font-semibold text-gray-900">Theme</h2>
-            <ThemeInspector theme={mergedTheme} onChange={patchTheme} />
+      {thankYouOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setThankYouOpen(false)}
+        >
+          <div
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold text-gray-900">Thank you preview</h2>
+            <p className="mt-2 text-sm text-gray-600">
+              This is what visitors see after a successful submit (unless you redirect).
+            </p>
+            <div className="mt-4 rounded-lg border border-green-100 bg-green-50 p-4 text-sm text-green-900">
+              {resolvedThankYou.mode === 'redirect' ? (
+                <p>Visitors leave to: {resolvedThankYou.redirectUrl || '(set a URL)'}</p>
+              ) : (
+                <div
+                  className="prose prose-sm max-w-none"
+                  dangerouslySetInnerHTML={{
+                    __html: sanitizeFormHtml(resolvedThankYou.messageHtml),
+                  }}
+                />
+              )}
+            </div>
+            <button
+              type="button"
+              className="mt-4 w-full rounded-lg border border-gray-200 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              onClick={() => setThankYouOpen(false)}
+            >
+              Close
+            </button>
           </div>
-
-          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-3 text-sm font-semibold text-gray-900">Block settings</h2>
-            {selected ? (
-              <BlockInspector block={selected} onChange={patchSelected} />
-            ) : (
-              <p className="text-sm text-gray-500">Select a block on the canvas.</p>
-            )}
-          </div>
-        </aside>
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -1,7 +1,12 @@
 import { randomUUID } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { INPUT_BLOCK_TYPES, formFieldName, parseDefinition } from '@/lib/marketing-form-schema';
+import {
+  INPUT_BLOCK_TYPES,
+  formFieldName,
+  parseDefinition,
+  resolvePostSubmit,
+} from '@/lib/marketing-form-schema';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -139,5 +144,13 @@ export async function POST(
     return NextResponse.json({ error: 'Could not save submission' }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true });
+  const ps = resolvePostSubmit(definition);
+  return NextResponse.json({
+    ok: true,
+    postSubmit: {
+      mode: ps.mode,
+      redirectUrl: ps.mode === 'redirect' ? ps.redirectUrl || null : null,
+      messageHtml: ps.mode !== 'redirect' ? ps.messageHtml : null,
+    },
+  });
 }
