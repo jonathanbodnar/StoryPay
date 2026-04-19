@@ -28,7 +28,7 @@ export function ListingReviewsBlock({ venueName, reviews, compact }: Props) {
     reviews.average_rating != null ? Math.round(reviews.average_rating * 10) / 10 : null;
 
   return (
-    <section className={compact ? 'text-gray-900' : 'rounded-3xl border border-gray-200 bg-white p-6 shadow-sm'}>
+    <section className={compact ? 'text-gray-900' : 'rounded-3xl border border-gray-200 bg-white p-6'}>
       <div className="mb-6 flex flex-col gap-3 border-b border-gray-100 pb-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2

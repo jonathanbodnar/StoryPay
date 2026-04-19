@@ -138,7 +138,7 @@ function ChangelogTab() {
  </div>
 
  {/* Content card */}
- <div className="flex-1 rounded-2xl border border-gray-200 bg-white p-4 mb-2 hover:shadow transition-shadow">
+ <div className="flex-1 rounded-2xl border border-gray-200 bg-white p-4 mb-2 transition-colors hover:border-gray-300">
  <div className="flex items-start justify-between gap-3 flex-wrap">
  <div className="flex items-center gap-2">
  <span className={classNames('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold', cat.bg, cat.text)}>
@@ -370,7 +370,7 @@ function FeatureRequestsTab() {
  <div
  key={req.id}
  className={classNames(
- 'flex items-start gap-4 rounded-2xl border bg-white p-4 transition-shadow hover:',
+ 'flex items-start gap-4 rounded-2xl border bg-white p-4 transition-colors hover:border-gray-300',
  isTopRequest ? 'border-brand-900/20 bg-brand-900/[0.02]' : 'border-gray-200'
  )}
  >

@@ -280,7 +280,7 @@ export default function ConversationsPage() {
         </button>
       </div>
 
-      <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-gray-200 bg-white">
         {/* Thread list */}
         <aside
           className={classNames(
@@ -294,7 +294,7 @@ export default function ConversationsPage() {
               onClick={() => setFilterUnread(false)}
               className={classNames(
                 'rounded-full px-3 py-1.5 text-xs font-semibold transition-colors',
-                !filterUnread ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 ring-1 ring-gray-200',
+                !filterUnread ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 border border-gray-200',
               )}
             >
               All
@@ -304,7 +304,7 @@ export default function ConversationsPage() {
               onClick={() => setFilterUnread(true)}
               className={classNames(
                 'rounded-full px-3 py-1.5 text-xs font-semibold transition-colors',
-                filterUnread ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 ring-1 ring-gray-200',
+                filterUnread ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 border border-gray-200',
               )}
             >
               Unread
@@ -346,7 +346,7 @@ export default function ConversationsPage() {
                     }}
                     className={classNames(
                       'flex w-full flex-col gap-0.5 border-b border-gray-100 px-4 py-3 text-left transition-colors hover:bg-white',
-                      selectedId === t.thread_id ? 'bg-white shadow-[inset_3px_0_0_0_#171717]' : '',
+                      selectedId === t.thread_id ? 'bg-white border-l-[3px] border-l-neutral-900' : '',
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -435,12 +435,12 @@ export default function ConversationsPage() {
                         >
                           <div
                             className={classNames(
-                              'rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed shadow-sm',
+                              'rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed',
                               isInternal
                                 ? 'border border-amber-200/80 bg-amber-50 text-amber-950'
                                 : fromContact
                                   ? 'border border-gray-200 bg-gray-100 text-gray-900'
-                                  : 'bg-[#171717] text-white',
+                                  : 'border border-neutral-800 bg-[#171717] text-white',
                             )}
                           >
                             {isInternal && (
@@ -495,7 +495,7 @@ export default function ConversationsPage() {
                       className={classNames(
                         'flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold transition-colors',
                         composerMode === 'internal'
-                          ? 'bg-white text-gray-900 shadow-sm'
+                          ? 'bg-white text-gray-900 border border-gray-200'
                           : 'text-gray-600 hover:text-gray-900',
                       )}
                     >
@@ -512,7 +512,7 @@ export default function ConversationsPage() {
                       className={classNames(
                         'flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold transition-colors',
                         composerMode === 'external'
-                          ? 'bg-white text-gray-900 shadow-sm'
+                          ? 'bg-white text-gray-900 border border-gray-200'
                           : 'text-gray-600 hover:text-gray-900',
                       )}
                     >
@@ -564,7 +564,7 @@ export default function ConversationsPage() {
                           ? 'Write a team note…'
                           : 'Write an email to the contact…'
                       }
-                      className="w-full resize-none rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                      className="w-full resize-none rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
                       style={{ fontSize: 16 }}
                     />
                     {sendError && <p className="text-xs text-red-600">{sendError}</p>}
@@ -602,7 +602,7 @@ export default function ConversationsPage() {
 
       {showNew && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
-          <div className="max-h-[85vh] w-full max-w-md overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl">
+          <div className="max-h-[85vh] w-full max-w-md overflow-hidden rounded-t-2xl border border-gray-200 bg-white sm:rounded-2xl">
             <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
               <p className="font-semibold text-gray-900">New conversation</p>
               <button

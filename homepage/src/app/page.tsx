@@ -472,7 +472,6 @@ export default function LandingPage() {
                 height: 620,
                 backgroundColor: '#1a1a1a',
                 border: '8px solid #1a1a1a',
-                boxShadow: '0 0 0 1px #333, 0 30px 80px rgba(0,0,0,0.35)',
                 flexShrink: 0,
               }}
             >

@@ -651,7 +651,7 @@ export default function CalendarPage() {
           body > * { display: none !important; }
           #cal-print-area { display: block !important; }
           #cal-print-area * { display: revert; }
-          /* Force white background, remove shadows */
+          /* Force white background for print */
           #cal-print-area { background: white; padding: 0; }
           /* Hide buttons inside the print area */
           #cal-print-area button,

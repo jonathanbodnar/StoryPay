@@ -329,7 +329,7 @@ export default function DateRangePicker({ value, onChange }: Props) {
  <button
  ref={btnRef}
  onClick={openPicker}
- className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-gray-300 hover:shadow"
+ className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-gray-300"
  >
  <Calendar size={14} className="text-gray-400" />
  <span>{value.label === 'Custom range' ? `${formatDisplay(value.from)} – ${formatDisplay(value.to)}` : value.label}</span>

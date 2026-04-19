@@ -553,7 +553,7 @@ export default function ListingPage() {
         <button
           onClick={() => save()}
           disabled={status === 'saving'}
-          className="inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-medium text-white shadow-lg hover:opacity-90 disabled:opacity-60"
+          className="inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
           style={{ backgroundColor: '#1b1b1b' }}
         >
           {status === 'saving' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}

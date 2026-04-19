@@ -613,7 +613,6 @@ export function MarketingFormView({
             borderRadius: flatCanvas ? 0 : theme.borderRadius,
             borderColor: flatCanvas ? 'transparent' : theme.inputBorder,
             background: cardBg,
-            boxShadow: flatCanvas ? 'none' : undefined,
           }}
         >
           {formTitle ? (

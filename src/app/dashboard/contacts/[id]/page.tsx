@@ -1192,7 +1192,7 @@ export default function CustomerDetailPage() {
               <div className="space-y-4">
                 {activity.map(a => (
                   <div key={a.id} className="flex gap-4">
-                    <div className="relative z-10 flex-shrink-0 w-8 h-8 rounded-full border-2 border-white shadow-sm bg-gray-100 flex items-center justify-center text-gray-500">
+                    <div className="relative z-10 flex-shrink-0 w-8 h-8 rounded-full border-2 border-white bg-gray-100 flex items-center justify-center text-gray-500">
                       {ACTIVITY_ICONS[a.activity_type] ?? <Info size={13} />}
                     </div>
                     <div className="flex-1 pb-4">

@@ -48,7 +48,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
  checked ? 'bg-gray-900' : 'bg-gray-200'
  }`}
  >
- <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${
+ <span className={`inline-block h-4 w-4 transform rounded-full border border-gray-200 bg-white transition-transform duration-200 ${
  checked ? 'translate-x-6' : 'translate-x-1'
  }`} />
  </button>

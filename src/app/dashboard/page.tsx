@@ -505,7 +505,7 @@ export default function DashboardOverview() {
          const row = payload[0]?.payload as BookingTrendMonth | undefined;
          if (!row) return null;
          return (
-          <div className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-xs shadow-sm max-w-xs">
+          <div className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-xs max-w-xs">
            <p className="font-semibold text-gray-900 mb-1.5">{label}</p>
            <p className="text-gray-600">
             Events this month: <span className="font-semibold text-gray-900">{row.weddingsBooked}</span>

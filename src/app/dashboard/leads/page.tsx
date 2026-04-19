@@ -832,7 +832,7 @@ function PipelineTabs({
             onClick={() => onChange(p.id)}
             className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
               active
-                ? 'bg-white text-gray-900 shadow-sm border border-gray-200'
+                ? 'bg-white text-gray-900 border border-gray-200'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-white/60 border border-transparent'
             }`}
           >
@@ -902,7 +902,7 @@ function TagPicker({
                 onClick={() => onToggle(t.id)}
                 className={`inline-flex max-w-[140px] items-center justify-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
                   on
-                    ? 'border-brand-900 bg-brand-900 text-white shadow-sm'
+                    ? 'border-brand-900 bg-brand-900 text-white'
                     : 'border-gray-200 bg-white text-gray-600 hover:border-brand-900/30 hover:bg-brand-900/5 hover:text-brand-900'
                 }`}
               >
@@ -1012,7 +1012,7 @@ function LeadTagPopover({
       </button>
       {open ? (
         <div
-          className={`absolute z-[60] mt-1 w-64 rounded-xl border border-gray-200 bg-white p-2 shadow-xl ${
+          className={`absolute z-[60] mt-1 w-64 rounded-xl border border-gray-200 bg-white p-2 ${
             align === 'right' ? 'right-0' : 'left-0'
           }`}
         >
@@ -1159,7 +1159,7 @@ function KanbanCard({
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onClick={onClick}
-      className={`group rounded-xl border bg-white p-3 min-h-[72px] shadow-sm cursor-pointer hover:border-gray-300 transition-all active:scale-[0.99] ${
+      className={`group rounded-xl border bg-white p-3 min-h-[72px] cursor-pointer hover:border-gray-300 transition-all active:scale-[0.99] ${
         isDragging ? 'opacity-50 border-gray-400' : 'border-gray-200'
       }`}
     >
@@ -1216,7 +1216,7 @@ function KanbanCard({
       {bookingBadge && (
         <div className="mt-2 flex justify-end">
           <div
-            className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-900 shadow-sm"
+            className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-900"
             title={bookingBadge.variant === 'wedding' ? 'Wedding booked' : 'Upcoming appointment'}
           >
             <CalendarPlus className="w-3.5 h-3.5 shrink-0 text-sky-700" />
@@ -1643,7 +1643,7 @@ function LeadDrawer({
   return (
     <div className="fixed inset-0 z-40">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <aside className="absolute right-0 top-0 bottom-0 w-full sm:w-[560px] bg-white shadow-2xl overflow-y-auto flex flex-col">
+      <aside className="absolute right-0 top-0 bottom-0 w-full sm:w-[560px] border-l border-gray-200 bg-white overflow-y-auto flex flex-col">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
           <div className="min-w-0">
             <h2 className="font-heading text-xl text-gray-900 truncate">{displayName(lead)}</h2>
@@ -2332,7 +2332,7 @@ function AppointmentModal({
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="absolute inset-0 flex items-center justify-center p-4">
-        <div className="relative w-full max-w-md rounded-3xl border border-gray-200 bg-white shadow-2xl">
+        <div className="relative w-full max-w-md rounded-3xl border border-gray-200 bg-white">
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
             <h3 className="font-heading text-lg text-gray-900 flex items-center gap-2">
               <CalendarPlus className="w-4.5 h-4.5" /> Schedule appointment
@@ -2582,7 +2582,7 @@ function PipelineEditor({
     <div className="fixed inset-0 z-40">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="absolute inset-0 flex items-center justify-center p-4">
-        <div className="relative w-full max-w-3xl max-h-[90vh] rounded-3xl border border-gray-200 bg-white shadow-2xl overflow-hidden flex flex-col">
+        <div className="relative w-full max-w-3xl max-h-[90vh] rounded-3xl border border-gray-200 bg-white overflow-hidden flex flex-col">
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
             <h3 className="font-heading text-lg text-gray-900">Edit pipelines</h3>
             <button onClick={onClose} className="rounded-xl p-1.5 text-gray-400 hover:bg-gray-100">
@@ -2843,7 +2843,7 @@ function AddLeadModal({
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="absolute inset-0 flex items-center justify-center p-4">
-        <div className="relative w-full max-w-2xl max-h-[90vh] rounded-3xl border border-gray-200 bg-white shadow-2xl overflow-hidden flex flex-col">
+        <div className="relative w-full max-w-2xl max-h-[90vh] rounded-3xl border border-gray-200 bg-white overflow-hidden flex flex-col">
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
             <h3 className="font-heading text-lg text-gray-900 flex items-center gap-2">
               <UserPlus className="w-4.5 h-4.5" /> New lead

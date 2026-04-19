@@ -273,7 +273,7 @@ export default async function PublicVenuePage({ params }: { params: Promise<{ sl
                     {venue.features.map((f) => (
                       <li
                         key={f}
-                        className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm"
+                        className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700"
                       >
                         {f}
                       </li>
@@ -294,7 +294,7 @@ export default async function PublicVenuePage({ params }: { params: Promise<{ sl
                     {venue.gallery_images.slice(0, 9).map((url, i) => (
                       <div
                         key={i}
-                        className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-gray-200 shadow-sm"
+                        className="relative aspect-[4/3] overflow-hidden rounded-2xl border border-gray-200 bg-gray-200"
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
@@ -306,7 +306,7 @@ export default async function PublicVenuePage({ params }: { params: Promise<{ sl
             </div>
 
             <aside className="space-y-6 lg:pt-2">
-              <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
+              <div className="rounded-3xl border border-gray-200 bg-white p-6">
                 <h3 className="text-xs font-bold uppercase tracking-wide text-gray-400">Details</h3>
                 <dl className="mt-4 space-y-4 text-sm">
                   {(venue.capacity_min != null || venue.capacity_max != null) && (
@@ -376,7 +376,7 @@ export default async function PublicVenuePage({ params }: { params: Promise<{ sl
                 <p className="mt-1 text-sm text-gray-500">Couples who celebrated here</p>
               </div>
               {reviews.count > 0 && roundedAvg != null && (
-                <div className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+                <div className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3">
                   <span className="text-3xl tabular-nums text-gray-900" style={{ fontFamily: "'Playfair Display', Georgia, serif" }}>
                     {roundedAvg}
                   </span>
@@ -397,7 +397,7 @@ export default async function PublicVenuePage({ params }: { params: Promise<{ sl
                 {reviews.items.map((r) => (
                   <li
                     key={r.id}
-                    className="rounded-3xl border border-gray-200/90 bg-white p-6 shadow-sm transition hover:shadow-md"
+                    className="rounded-3xl border border-gray-200/90 bg-white p-6 transition-colors hover:border-gray-300"
                   >
                     <Stars value={r.rating} />
                     {r.title && (

@@ -258,7 +258,7 @@ export default function ListingReviewsPage() {
                 setShowComposer(true);
                 setFormError('');
               }}
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-[#1b1b1b] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-neutral-800"
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-[#1b1b1b] px-5 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800"
             >
               <Plus size={18} />
               Add review
@@ -266,7 +266,7 @@ export default function ListingReviewsPage() {
           </div>
 
           <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="rounded-3xl border border-gray-200/80 bg-white/90 p-6 shadow-sm backdrop-blur-sm">
+            <div className="rounded-3xl border border-gray-200/80 bg-white/90 p-6 backdrop-blur-sm">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Average (published)</p>
               <div className="mt-2 flex items-baseline gap-3">
                 <span className="font-heading text-4xl text-gray-900">
@@ -277,7 +277,7 @@ export default function ListingReviewsPage() {
               <p className="mt-2 text-sm text-gray-500">{stats.n} published review{stats.n === 1 ? '' : 's'}</p>
             </div>
 
-            <div className="rounded-3xl border border-gray-200/80 bg-white/90 p-6 shadow-sm backdrop-blur sm:col-span-2 lg:col-span-2">
+            <div className="rounded-3xl border border-gray-200/80 bg-white/90 p-6 backdrop-blur sm:col-span-2 lg:col-span-2">
               <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-gray-400">Rating mix</p>
               <div className="space-y-2">
                 {[5, 4, 3, 2, 1].map((star) => {
@@ -311,7 +311,7 @@ export default function ListingReviewsPage() {
               <span className="font-mono text-[11px]">storyvenue.com/venue/{listingSlug}</span>) is built separately.
               Paste this iframe where you want reviews to appear (Webflow, custom HTML, etc.):
             </p>
-            <pre className="mt-3 max-h-40 overflow-x-auto overflow-y-auto rounded-xl bg-white/90 p-3 text-[11px] leading-relaxed text-gray-800 shadow-inner ring-1 ring-sky-100">
+            <pre className="mt-3 max-h-40 overflow-x-auto overflow-y-auto rounded-xl border border-sky-100 bg-white/90 p-3 text-[11px] leading-relaxed text-gray-800">
               {`<iframe\n  src="${publicOrigin}/embed/listing-reviews/${listingSlug}"\n  title="Reviews"\n  style="width:100%;min-height:420px;border:0;border-radius:12px"\n  loading="lazy"\n/>`}
             </pre>
             <p className="mt-2 text-[11px] text-sky-800/80">
@@ -338,7 +338,7 @@ export default function ListingReviewsPage() {
                 'rounded-full px-4 py-2 text-xs font-semibold transition-colors',
                 filter === t.id
                   ? 'bg-gray-900 text-white'
-                  : 'bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50',
+                  : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50',
               )}
             >
               {t.label}
@@ -373,7 +373,7 @@ export default function ListingReviewsPage() {
             {filtered.map((r) => (
               <li
                 key={r.id}
-                className="relative rounded-3xl border border-gray-200/90 bg-white p-6 shadow-sm transition hover:shadow-md"
+                className="relative rounded-3xl border border-gray-200/90 bg-white p-6 transition-colors hover:border-gray-300"
               >
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
@@ -411,9 +411,9 @@ export default function ListingReviewsPage() {
                     <span
                       className={classNames(
                         'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide',
-                        r.status === 'published' && 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200/80',
-                        r.status === 'pending' && 'bg-amber-50 text-amber-900 ring-1 ring-amber-200/80',
-                        r.status === 'hidden' && 'bg-gray-100 text-gray-600 ring-1 ring-gray-200',
+                        r.status === 'published' && 'border border-emerald-200/80 bg-emerald-50 text-emerald-800',
+                        r.status === 'pending' && 'border border-amber-200/80 bg-amber-50 text-amber-900',
+                        r.status === 'hidden' && 'border border-gray-200 bg-gray-100 text-gray-600',
                       )}
                     >
                       {r.status === 'pending' && <Clock size={10} />}
@@ -428,7 +428,7 @@ export default function ListingReviewsPage() {
                       <MoreHorizontal size={18} />
                     </button>
                     {openMenuId === r.id && (
-                      <div className="absolute right-0 top-9 z-10 w-48 rounded-xl border border-gray-200 bg-white py-1 text-sm shadow-lg">
+                      <div className="absolute right-0 top-9 z-10 w-48 rounded-xl border border-gray-200 bg-white py-1 text-sm">
                         {r.status !== 'published' && (
                           <button
                             type="button"
@@ -481,7 +481,7 @@ export default function ListingReviewsPage() {
           role="presentation"
         >
           <div
-            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl"
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-gray-200 bg-white sm:rounded-3xl"
             role="dialog"
             onClick={(e) => e.stopPropagation()}
             aria-modal

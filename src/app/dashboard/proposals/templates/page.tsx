@@ -121,7 +121,7 @@ export default function TemplatesPage() {
  ) : (
  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
  {filtered.map(t => (
- <div key={t.id} className="rounded-2xl border border-gray-200 bg-white p-5 flex flex-col justify-between hover: transition-shadow group">
+ <div key={t.id} className="rounded-2xl border border-gray-200 bg-white p-5 flex flex-col justify-between transition-colors hover:border-gray-300 group">
  <div className="flex-1 min-w-0">
  {/* Highlight matching name */}
  <h3 className="text-sm font-bold text-gray-900 mb-1 truncate">
