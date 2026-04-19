@@ -1306,7 +1306,7 @@ export function FormBuilderEditor({
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
           >
-            <aside className="flex max-h-[min(44vh,22rem)] min-h-0 w-full shrink-0 flex-col overflow-hidden border-b border-gray-200 bg-white lg:max-h-none lg:h-full lg:w-[280px] lg:shrink-0 lg:border-b-0 lg:border-r">
+            <aside className="flex min-h-0 max-h-[min(44vh,22rem)] w-full shrink-0 flex-col overflow-hidden border-b border-gray-200 bg-white lg:max-h-none lg:h-full lg:min-h-0 lg:w-[280px] lg:shrink-0 lg:border-b-0 lg:border-r">
               <div className="shrink-0 border-b border-gray-100 px-4 py-3">
                 <div className="flex items-center gap-2">
                   <LayoutTemplate size={16} className="text-gray-400" strokeWidth={1.75} />
@@ -1318,7 +1318,7 @@ export function FormBuilderEditor({
                   Drag modules to the canvas or use + to add.
                 </p>
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-4 pt-2 touch-pan-y">
+              <div className="min-h-0 flex-1 basis-0 overflow-y-auto overscroll-contain px-3 pb-4 pt-2 [-webkit-overflow-scrolling:touch]">
                 <div className="flex flex-col gap-1.5">
                   {PALETTE.map((p) => (
                     <PaletteDraggable
@@ -1332,7 +1332,7 @@ export function FormBuilderEditor({
               </div>
             </aside>
 
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white lg:min-h-0">
               <div className="flex shrink-0 justify-center border-b border-gray-100 bg-white px-4 py-3">
                 <div className="inline-flex rounded-full border border-gray-200 bg-white p-0.5">
                   {(
@@ -1357,7 +1357,7 @@ export function FormBuilderEditor({
                   ))}
                 </div>
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-white px-4 py-4 sm:px-6 touch-pan-y">
+              <div className="min-h-0 flex-1 basis-0 overflow-y-auto overscroll-contain bg-white px-4 py-4 sm:px-6 [-webkit-overflow-scrolling:touch]">
                 <SortableContext
                   items={definition.blocks.map((b) => b.id)}
                   strategy={verticalListSortingStrategy}
@@ -1394,7 +1394,7 @@ export function FormBuilderEditor({
               </div>
             </div>
 
-            <aside className="flex min-h-[min(50vh,28rem)] w-full shrink-0 flex-col overflow-hidden border-t border-gray-200 bg-[#f9f9f9] lg:min-h-0 lg:h-full lg:w-[320px] lg:shrink-0 lg:border-l lg:border-t-0">
+            <aside className="flex min-h-[min(50vh,28rem)] w-full shrink-0 flex-col overflow-hidden border-t border-gray-200 bg-[#f9f9f9] lg:h-full lg:min-h-0 lg:w-[320px] lg:shrink-0 lg:border-l lg:border-t-0">
           <div className="shrink-0 border-b border-gray-200/80 bg-white px-1 pt-2">
             <div className="flex gap-0 px-2">
               {(
@@ -1430,7 +1430,7 @@ export function FormBuilderEditor({
             ))}
           </datalist>
 
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 touch-pan-y">
+          <div className="min-h-0 flex-1 basis-0 overflow-y-auto overscroll-contain px-5 py-5 [-webkit-overflow-scrolling:touch]">
             {rightTab === 'block' ? (
               <div>
                 {selected ? (
