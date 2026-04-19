@@ -10,7 +10,9 @@ import {
   useDraggable,
   useSensor,
   useSensors,
+  type DragCancelEvent,
   type DragEndEvent,
+  type DragOverEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
 import {
@@ -26,6 +28,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -273,13 +276,47 @@ function CanvasTailDrop() {
   return (
     <div
       ref={setNodeRef}
-      className={`mt-2 rounded-md border border-dashed px-2 py-2 text-center text-xs ${
+      className={`mt-2 rounded-md border border-dashed px-2 py-2 text-center text-xs transition ${
         isOver ? 'border-brand-400 bg-brand-50 text-brand-800' : 'border-transparent text-gray-400'
       }`}
     >
       Drop to add at end
     </div>
   );
+}
+
+/** Horizontal insertion line shown while dragging over a drop target. */
+function DropInsertionMarker() {
+  return (
+    <div
+      className="pointer-events-none relative z-[5] -mx-1 mb-2 h-[3px] rounded-full bg-gray-900 shadow-[0_0_0_1px_rgba(255,255,255,0.9)] animate-pulse"
+      aria-hidden
+    />
+  );
+}
+
+function useFormBuilderScrollbar() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [scrolling, setScrolling] = useState(false);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const onScroll = () => {
+      setScrolling(true);
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+      hideTimer.current = setTimeout(() => setScrolling(false), 750);
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+    };
+  }, []);
+  return {
+    ref,
+    className: `sp-form-scrollbar ${scrolling ? 'sp-form-scrollbar--scrolling' : ''}`,
+  };
 }
 
 function BlockStyleFields({
@@ -919,6 +956,8 @@ export function FormBuilderEditor({
     'block'
   );
   const [activeDrag, setActiveDrag] = useState<PaletteDrag | null>(null);
+  const [dropOverId, setDropOverId] = useState<string | null>(null);
+  const [canvasDragId, setCanvasDragId] = useState<string | null>(null);
   const [venueContact, setVenueContact] = useState<VenueContactInfo | null>(null);
   const [googleFontNames, setGoogleFontNames] = useState<string[]>([]);
   const [submissions, setSubmissions] = useState<{ id: string; payload: unknown; created_at: string }[]>(
@@ -929,6 +968,10 @@ export function FormBuilderEditor({
     { id: string; createdAt: string; definition: MarketingFormDefinition }[]
   >([]);
   const [revisionsLoading, setRevisionsLoading] = useState(false);
+
+  const modulesScroll = useFormBuilderScrollbar();
+  const canvasScroll = useFormBuilderScrollbar();
+  const settingsScroll = useFormBuilderScrollbar();
 
   useEffect(() => {
     let cancelled = false;
@@ -1104,19 +1147,34 @@ export function FormBuilderEditor({
 
   const onDragStart = useCallback((event: DragStartEvent) => {
     const id = String(event.active.id);
+    setDropOverId(null);
     if (id.startsWith('palette:')) {
+      setCanvasDragId(null);
       const type = event.active.data.current?.blockType as FormBlockType;
       const label = (event.active.data.current?.label as string) ?? String(type);
       setActiveDrag({ kind: 'palette', blockType: type, label });
     } else {
+      setCanvasDragId(id);
       setActiveDrag(null);
     }
+  }, []);
+
+  const onDragOver = useCallback((event: DragOverEvent) => {
+    setDropOverId(event.over?.id != null ? String(event.over.id) : null);
+  }, []);
+
+  const onDragCancel = useCallback((_event: DragCancelEvent) => {
+    setActiveDrag(null);
+    setDropOverId(null);
+    setCanvasDragId(null);
   }, []);
 
   const onDragEnd = useCallback(
     (event: DragEndEvent) => {
       const { active, over } = event;
       setActiveDrag(null);
+      setDropOverId(null);
+      setCanvasDragId(null);
       if (!over) return;
 
       const activeId = String(active.id);
@@ -1210,10 +1268,17 @@ export function FormBuilderEditor({
   );
 
   const wrapBlock = useCallback(
-    (block: FormBlock, node: ReactNode) => (
-      <SortableCanvasRow id={block.id}>{node}</SortableCanvasRow>
-    ),
-    []
+    (block: FormBlock, node: ReactNode) => {
+      const showLineBefore =
+        dropOverId === block.id && (canvasDragId == null || canvasDragId !== block.id);
+      return (
+        <>
+          {showLineBefore ? <DropInsertionMarker /> : null}
+          <SortableCanvasRow id={block.id}>{node}</SortableCanvasRow>
+        </>
+      );
+    },
+    [dropOverId, canvasDragId]
   );
 
   const emptySlot = useMemo(() => <CanvasEmptyDrop />, []);
@@ -1304,6 +1369,8 @@ export function FormBuilderEditor({
             sensors={sensors}
             collisionDetection={closestCenter}
             onDragStart={onDragStart}
+            onDragOver={onDragOver}
+            onDragCancel={onDragCancel}
             onDragEnd={onDragEnd}
           >
             <aside className="flex min-h-0 max-h-[min(44vh,22rem)] w-full shrink-0 flex-col border-b border-gray-200 bg-white lg:max-h-none lg:min-h-0 lg:w-[280px] lg:shrink-0 lg:overflow-hidden lg:border-b-0 lg:border-r">
@@ -1318,7 +1385,10 @@ export function FormBuilderEditor({
                   Drag modules to the canvas or use + to add.
                 </p>
               </div>
-              <div className="min-h-0 grow overflow-y-auto overscroll-contain px-3 pb-4 pt-2">
+              <div
+                ref={modulesScroll.ref}
+                className={`min-h-0 grow overflow-y-auto overscroll-contain px-3 pb-4 pt-2 ${modulesScroll.className}`}
+              >
                 <div className="flex flex-col gap-1.5">
                   {PALETTE.map((p) => (
                     <PaletteDraggable
@@ -1357,7 +1427,10 @@ export function FormBuilderEditor({
                   ))}
                 </div>
               </div>
-              <div className="min-h-0 grow overflow-y-auto overscroll-contain bg-white px-4 py-4 sm:px-6">
+              <div
+                ref={canvasScroll.ref}
+                className={`min-h-0 grow overflow-y-auto overscroll-contain bg-white px-4 py-4 sm:px-6 ${canvasScroll.className}`}
+              >
                 <SortableContext
                   items={definition.blocks.map((b) => b.id)}
                   strategy={verticalListSortingStrategy}
@@ -1366,7 +1439,7 @@ export function FormBuilderEditor({
                     className="mx-auto w-full transition-[max-width] duration-300 ease-out"
                     style={{ maxWidth: viewportMax }}
                   >
-                    <div className="bg-white">
+                    <div className="rounded-lg border border-gray-200 bg-white p-3 sm:p-4">
                       <MarketingFormView
                         definition={definition}
                         embedToken={embedToken}
@@ -1379,7 +1452,12 @@ export function FormBuilderEditor({
                         emptyCanvasSlot={emptySlot}
                         onPreviewSubmit={() => setSaveMsg('Preview only — not submitted')}
                       />
-                      {definition.blocks.length > 0 ? <CanvasTailDrop /> : null}
+                      {definition.blocks.length > 0 ? (
+                        <>
+                          {dropOverId === 'canvas-tail' ? <DropInsertionMarker /> : null}
+                          <CanvasTailDrop />
+                        </>
+                      ) : null}
                     </div>
                   </div>
                 </SortableContext>
@@ -1430,7 +1508,10 @@ export function FormBuilderEditor({
             ))}
           </datalist>
 
-          <div className="min-h-0 grow overflow-y-auto overscroll-contain px-5 py-5">
+          <div
+            ref={settingsScroll.ref}
+            className={`min-h-0 grow overflow-y-auto overscroll-contain px-5 py-5 ${settingsScroll.className}`}
+          >
             {rightTab === 'block' ? (
               <div>
                 {selected ? (

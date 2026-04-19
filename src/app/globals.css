@@ -55,3 +55,27 @@ html, body {
   background: #cbd5e1;
   border-radius: 3px;
 }
+
+/* Form builder panels: hide scrollbars until hover or active scroll */
+.sp-form-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.35s ease;
+}
+.sp-form-scrollbar:hover,
+.sp-form-scrollbar.sp-form-scrollbar--scrolling {
+  scrollbar-color: rgba(100, 116, 139, 0.55) transparent;
+}
+.sp-form-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.sp-form-scrollbar::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 4px;
+  transition: background-color 0.35s ease;
+}
+.sp-form-scrollbar:hover::-webkit-scrollbar-thumb,
+.sp-form-scrollbar.sp-form-scrollbar--scrolling::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 116, 139, 0.45);
+}
