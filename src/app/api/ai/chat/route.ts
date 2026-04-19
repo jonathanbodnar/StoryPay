@@ -11,18 +11,30 @@ StoryPay is an all-in-one platform for wedding venues to manage proposals, invoi
 
 ## Navigation / Sections
 - Home (Dashboard): Revenue overview, KPI cards, recent proposals and transactions, date range filter.
-- Ask AI: Sidebar entry plus floating sparkle (bottom-right) — answers questions using live account data and this documentation.
+- Ask AI: Sidebar entry plus floating sparkle (bottom-right) — answers questions using live account data and this documentation (updated for Venue listing, Reviews, Conversations, public API/embed, and Help Center).
 - Contacts: Full CRM — contact profiles with Overview, Notes, Activity timeline, Payments, Tasks, Documents; configurable sales pipeline and stages in the profile header (aligned with Leads when email matches).
+- Conversations: Unified inbox per contact — **Team only** internal notes (optional @mentions to teammates) vs **Email contact** outbound messages. Threads use venue customers; external sends email when the contact has an email on file. Path: /dashboard/conversations. Related DB: conversation_threads, conversation_messages (migration 022).
 - Calendar: Book and track all venue events (tours, weddings, receptions, tastings, meetings, rehearsals, holds, blocked dates). Syncs with Calendly, Google Calendar, Outlook, and Apple Calendar.
-- Directory Listing: Manage how the venue appears on storyvenue.com (photos, description, capacity, publish on/off).
+- Venue listing (sidebar flyout, Store icon): **Dashboard** — edit how the venue appears on storyvenue.com (photos, description, slug, capacity, publish toggle); autosaves. **Reviews** — star ratings and testimonials; statuses published / pending / hidden. Published reviews feed the public directory via API and embed (see below). Paths: /dashboard/listing and /dashboard/listing/reviews.
 - Leads: Kanban and list views for inquiries — same configurable sales pipelines and stages as contact profiles. Includes pipeline intelligence (open pipeline vs weighted forecast, rough referral/directory revenue vs listing spend), per-lead opportunity value on cards, assignable owners, marketing tags, trigger links, an audit trail (stage/value/owner changes and logged calls), and mobile-friendly actions (drag cards, log call, quick note).
 - Reports: 7 downloadable financial reports (CSV, Excel, PDF). Owners and admins only.
 - Payments (sidebar flyout): New, Proposals, Proposal Templates, Installments, Subscriptions, Transactions.
 - Marketing (sidebar flyout): Analytics, Lead Capture Forms, email tools, trigger links & tags (availability depends on role).
-- Help Center: Searchable documentation, related articles, ratings.
+- Help Center: Searchable categories and articles (including Venue listing, Reviews, Conversations, Ask AI, Leads); contextual suggestions by page; voice search; article ratings.
 - What's New: Changelog and Feature Requests board.
 - Settings (sidebar flyout): General (venue info, service fee), Branding, Email Templates, Integrations (Calendly, Google Calendar, QuickBooks, FreshBooks), Team (roles, invites, **Hide $** for team members — owners only), Notifications. Venues may also store **listing marketing monthly spend** on the account for Leads ROI — when that value exists, insights use it.
 - Sidebar collapse (desktop): Chevron next to the logo narrows the sidebar to an icon rail and shows a compact mark; preference is saved in the browser.
+
+## Venue listing, reviews, and storyvenue.com
+- Public read API (no login): GET /api/public/venues/[slug] returns published venue fields plus **published** reviews only (404 if venue not published).
+- Reviews embed (for the marketing site): GET /embed/listing-reviews/[slug] — iframe-friendly page; Content-Security-Policy allows framing from storyvenue.com. The Reviews dashboard shows a copy-paste iframe snippet using the venue slug.
+- Full public preview on app host: /venue/[slug] (same data as API).
+- Supabase: listing_reviews table (migration 024); optional listing_reviews_public view for anon-safe reads (migration 025). Service role is used for dashboard APIs.
+
+## Conversations (inbox)
+- List threads with contact names; open thread to load messages.
+- Composer: toggle **Team only** vs **Email contact** before sending; @mentions only on team notes.
+- Requires conversation tables applied in Supabase (022); service role on server.
 
 ## Calendar
 - Go to Calendar in the sidebar.
@@ -189,6 +201,10 @@ StoryPay is an all-in-one platform for wedding venues to manage proposals, invoi
 - Where is the audit trail for a lead? Lead drawer → **Activity & audit** — stage, value, and owner changes; use **Log a call** to record a conversation.
 - Why can't someone see dollar amounts on leads? An owner may have enabled **Hide $** for that team member under Settings → Team.
 - What is listing marketing spend for? An optional monthly budget stored on the venue — when set, the Leads insights strip compares rough directory-attributed booked revenue to it for a simple ROI figure.
+- Where do I manage listing reviews? Sidebar → Venue listing → Reviews. Mark reviews **published** to include them in the public API and embed.
+- Why don't reviews show on storyvenue.com? The live directory page may be a separate site — paste the iframe from the Reviews page, or consume GET /api/public/venues/<slug>. Ensure migration 024 (and optionally 025) is applied on Supabase.
+- What is Conversations? Sidebar → Conversations — team-only notes vs emails to contacts, per thread.
+- Why do I see an error about conversations migration? Apply 022_conversations.sql in Supabase and set SUPABASE_SERVICE_ROLE_KEY on the host.
 `;
 
 export async function POST(request: NextRequest) {

@@ -32,13 +32,14 @@ export const HELP_CATEGORIES: HelpCategory[] = [
 
 After logging in you land on the Home dashboard which shows your revenue, pipeline, recent proposals, and recent transactions at a glance.
 
-Navigation lives in the left sidebar (or the hamburger menu on mobile). Top-level items include Home, Ask AI, Contacts, Calendar, Leads, Reports, What's New, and Help Center. **Venue listing** (your directory dashboard and reviews), **Payments**, **Marketing** (analytics, lead capture forms, email tools, trigger links & tags), and **Settings** open as flyout submenus. On desktop you can **collapse** the sidebar with the chevron next to the logo — it becomes a narrow icon rail with a compact mark; your choice is remembered in the browser.
+Navigation lives in the left sidebar (or the hamburger menu on mobile). Top-level items include Home, Ask AI, Contacts, **Conversations**, Calendar, Leads, Reports, What's New, and Help Center. **Venue listing** (directory **Dashboard** + **Reviews**), **Payments**, **Marketing** (analytics, lead capture forms, email tools, trigger links & tags), and **Settings** open as flyout submenus. On desktop you can **collapse** the sidebar with the chevron next to the logo — it becomes a narrow icon rail with a compact mark; your choice is remembered in the browser.
 
 The main areas:
 - Home — revenue snapshot and recent activity
 - Contacts — CRM profiles with tabs (Overview, Notes, Activity, Payments, Tasks, Documents) and a **pipeline + stage** control in the header (same sales pipelines as Leads)
+- Conversations — unified inbox per contact: **Team only** notes vs **Email contact** messages
 - Calendar — tours, weddings, and events
-- Venue listing — how you appear on storyvenue.com (photos, description, publish) plus **Reviews** for testimonials you control
+- Venue listing — **Dashboard** for how you appear on storyvenue.com (photos, description, publish); **Reviews** for star ratings and testimonials (published reviews feed the public API/embed)
 - Leads — Kanban/list pipeline for inquiries; editable stages and pipelines
 - Reports — financial exports (owners and admins)
 - Payments flyout — new proposal/invoice, proposals list, templates, installments, subscriptions, transactions
@@ -80,7 +81,7 @@ On the signup page:
 You'll see a "Check your inbox" confirmation. We email a magic login link to the address you entered — open it on the same device and you are logged straight into a brand-new dashboard with a blank directory listing ready to fill in.
 
 First things to do after signing up:
-- Go to Directory Listing in the sidebar and fill in your venue name, description, location, capacity, pricing, amenities, and photos
+- Go to **Venue listing → Dashboard** in the sidebar and fill in your venue name, description, location, capacity, pricing, amenities, and photos
 - Toggle the Publish switch on when you're ready for couples to find you on storyvenue.com
 - Head to Settings → Branding to upload your logo and brand colors (these appear on proposals and outgoing emails)
 - Invite team members at Settings → Team
@@ -97,7 +98,7 @@ One email address = one venue account. If you already have an account and try to
 
 Click the bubble to open the setup checklist. It tracks the core setup steps:
 
-1. Publish your Directory Listing — fill in your venue details and flip Publish on (Sidebar → Directory Listing)
+1. Publish your listing — fill in your venue details and flip Publish on (Sidebar → Venue listing → Dashboard)
 2. Create Your Profile and Branding — upload your logo and set brand colors (Settings → Branding)
 3. Customize Email Templates — personalize the emails sent to clients (Settings → Email Templates)
 4. Create Your First Proposal Template — build a reusable contract template (Payments → Proposal Templates)
@@ -369,8 +370,33 @@ Prospects can navigate forward and back through months. No customer information 
     ],
   },
   {
+    id: 'conversations',
+    label: 'Conversations',
+    iconName: 'MessageCircle',
+    color: '#0d9488',
+    articles: [
+      {
+        id: 'conversations-overview',
+        title: 'Conversations — team notes vs email to contact',
+        tags: ['conversations', 'inbox', 'messages', 'email', 'team', 'mentions'],
+        body: `**Conversations** is the unified inbox for messages with each contact (sidebar → Conversations, or under the same area on mobile).
+
+How it works:
+- Pick or start a **thread** tied to a venue customer (contact).
+- **Team only** — Internal notes visible only to your team. You can **@mention** teammates on a message; they are notified according to your setup.
+- **Email contact** — Sends an email to the couple through StoryPay (they need a real email on the contact profile). Client-visible messages cannot include @mentions — switch to Team only for that.
+
+Tips:
+- Use Team only for logistics and staff coordination; use Email contact when the couple should see the message in their inbox.
+- If something fails to send, check that the contact has an email address and that your venue email settings are configured.
+
+Technical note: the feature relies on database tables and RPCs created by migration **022_conversations.sql** on Supabase. The app server uses the service role to read/write threads.`,
+      },
+    ],
+  },
+  {
     id: 'listing',
-    label: 'Directory Listing',
+    label: 'Venue listing',
     iconName: 'Store',
     color: '#0ea5e9',
     articles: [
@@ -378,9 +404,11 @@ Prospects can navigate forward and back through months. No customer information 
         id: 'listing-overview',
         title: 'Your storyvenue.com directory listing',
         tags: ['directory', 'listing', 'public page', 'storyvenue', 'venue page', 'seo'],
-        body: `Your Directory Listing is your public venue profile on storyvenue.com. It's what couples see when they browse the directory or land on your page from a Google search.
+        body: `Your public listing is your venue profile on storyvenue.com. It's what couples see when they browse the directory or land on your page from a Google search.
 
-Open it from the sidebar → Directory Listing. Everything on this page mirrors what appears at storyvenue.com/venue/<your-slug>.
+Open it from the sidebar → **Venue listing** → **Dashboard** (the listing editor). Everything on that page mirrors what appears at storyvenue.com/venue/<your-slug> when **Publish** is on.
+
+A second item under the same flyout — **Reviews** — is where you collect star ratings and written testimonials. Reviews can be **published**, **pending**, or **hidden**. Only **published** reviews are included in the public read API and embed for the marketing site.
 
 The listing has these sections:
 
@@ -419,7 +447,7 @@ Publish toggle — at the top of the page. Off = not visible to the public. On =
         id: 'listing-autosave',
         title: 'Autosave and how changes are saved',
         tags: ['save', 'autosave', 'draft', 'saving', 'unsaved'],
-        body: `The Directory Listing page saves automatically as you edit — there is no "lose your work if you forget to click Save" moment.
+        body: `The **Venue listing → Dashboard** page saves automatically as you edit — there is no "lose your work if you forget to click Save" moment.
 
 How it works:
 - Every change you make (typing, toggling a feature, uploading a photo) queues up an autosave
@@ -441,7 +469,7 @@ Tip: this makes it safe to start the description, switch tabs to upload photos t
         body: `Your listing supports one cover photo (the hero at the top of the page) and an unlimited gallery below.
 
 To upload:
-1. Go to Directory Listing → scroll to the Photos section
+1. Go to Venue listing → Dashboard → scroll to the Photos section
 2. Drag and drop an image into the upload area, or click to pick from your device
 3. Images upload to secure cloud storage and appear on your listing immediately
 
@@ -465,7 +493,7 @@ Uploaded photos are public — they're served directly from a CDN so your listin
         id: 'listing-publish',
         title: 'Publishing and unpublishing your listing',
         tags: ['publish', 'unpublish', 'live', 'visible', 'hidden', 'public'],
-        body: `The Publish toggle (top of the Directory Listing page) controls whether couples can find your venue on storyvenue.com.
+        body: `The Publish toggle (top of the **Venue listing → Dashboard** page) controls whether couples can find your venue on storyvenue.com.
 
 Off (default for new accounts)
 - Your listing page returns "not found" to the public
@@ -480,7 +508,7 @@ On
 If your page doesn't appear after publishing:
 - Confirm the Publish toggle is actually on (the status pill next to it reads "Live")
 - Hard-refresh storyvenue.com
-- Check the URL uses your exact slug (Directory Listing → URL slug field)
+- Check the URL uses your exact slug (Venue listing → Dashboard → URL slug field)
 - If you recently changed the slug, the old URL now 404s — update any links you've shared
 
 Unpublishing is immediate — flip the toggle off and your public page returns 404. Leads already in your inbox are unaffected.`,
@@ -502,6 +530,26 @@ Rules:
 - If the slug you want is already taken, the save will fail with a helpful message — pick a different one
 
 Caution: changing the slug changes your public URL. Any links on your website, Instagram bio, or printed materials will break unless you update them. Do this rarely, and ideally before you share the URL widely.`,
+      },
+      {
+        id: 'listing-reviews',
+        title: 'Listing reviews and your public venue page',
+        tags: ['reviews', 'testimonials', 'stars', 'storyvenue', 'embed', 'public api', 'published'],
+        body: `Under **Venue listing → Reviews** you manage testimonials: star rating (1–5), optional title, review text, couple name, optional wedding date and email.
+
+Statuses:
+- **Published** — included in the public JSON API and in the reviews embed (see below).
+- **Pending** — hold for moderation (useful when you later let couples submit reviews).
+- **Hidden** — not shown publicly.
+
+Showing reviews on storyvenue.com:
+- The main directory site may use a **custom page template**. To display reviews, either:
+  1. Paste the **iframe** snippet from the Reviews page (it points to app.storyvenue.com/embed/listing-reviews/<your-slug>), or
+  2. Have your developer call the public JSON endpoint "GET https://app.storyvenue.com/api/public/venues/<slug>" and render the reviews array (only when your listing is published and reviews are published).
+
+On the app domain you can preview the path /venue/<your-slug> — same data as the API.
+
+Database: reviews live in **listing_reviews** (migration 024). An optional read-only view **listing_reviews_public** (migration 025) exposes published rows safely to Supabase anon for external sites that query Postgres directly.`,
       },
     ],
   },
@@ -749,7 +797,7 @@ If AI gives a stale answer, refresh the page to reset the context.`,
 The email includes the couple's name, contact info, wedding date (if given), estimated guest count, booking timeline, and their full message. A "View in dashboard" link jumps straight to the lead.
 
 Configure the notification email:
-- Sidebar → Directory Listing → Inquiry notifications section
+- Sidebar → Venue listing → Dashboard → Inquiry notifications section
 - Notification email — defaults to your account email; change it to a shared inbox (e.g. bookings@yourvenue.com) so the whole team sees new leads
 - Email notifications — toggle off if you only want leads to appear in the dashboard with no email
 
@@ -1345,7 +1393,7 @@ Note: SMS uses your GHL sub-account's verified A2P phone number automatically �
         id: 'ai-overview',
         title: 'What is Ask AI?',
         tags: ['ask ai', 'ai', 'chat', 'assistant', 'help'],
-        body: `Ask AI is your built-in assistant, powered by your live account data and an internal summary of the StoryPay product (navigation, CRM, Leads pipelines and intelligence, calendar, payments, marketing tools, team permissions, settings, etc.). It knows your current revenue, recent proposals, and — when you're on the **Leads** page — a detailed snapshot of leads, stages, and notes.
+        body: `Ask AI is your built-in assistant, powered by your live account data and an internal summary of the StoryPay product — navigation, CRM, **Conversations** inbox, **Venue listing** (directory + reviews), Leads pipelines and intelligence, calendar, payments, marketing tools, team permissions, settings, public listing API/embed notes, and Help Center–style guidance. It knows your current revenue, recent proposals, and — when you're on the **Leads** page — a detailed snapshot of leads, stages, and notes.
 
 Open it by clicking the sparkle button (bottom-right corner of any page) or by clicking Ask AI in the sidebar.
 
@@ -1356,9 +1404,11 @@ You can ask questions like:
 - "What reports are available?"
 - "How do I connect Calendly?"
 - "How do I sync my calendar with Google Calendar?"
+- "How do listing reviews show on storyvenue.com?" or "Where is the reviews embed?"
+- "What's the difference between Team only and Email contact in Conversations?"
 - On Leads: "What's my total pipeline value?", "Which leads have wedding dates in June?", "Explain weighted vs open pipeline"
 
-Ask AI answers in plain language without jargon. It uses your real account data to give accurate, personalised answers. The in-app documentation it reads includes weighted pipeline, audit logs, assignable owners, and team **Hide $** settings.`,
+Ask AI answers in plain language without jargon. It uses your real account data to give accurate, personalised answers. The in-app documentation it reads includes weighted pipeline, audit logs, assignable owners, team **Hide $** settings, and up-to-date product areas listed above.`,
       },
       {
         id: 'ai-screenshot',
@@ -1416,15 +1466,15 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/contacts': ['cust-add', 'cust-search', 'cust-profile', 'cust-pipeline', 'cust-tasks', 'cust-documents'],
 
   // Conversations (unified inbox)
-  '/dashboard/conversations': ['cust-profile', 'cust-add', 'gs-overview'],
+  '/dashboard/conversations': ['conversations-overview', 'cust-profile', 'gs-overview'],
 
   // Calendar
   '/dashboard/calendar': ['cal-overview', 'cal-spaces', 'cal-add-event', 'cal-conflicts'],
 
   // Venue listing (directory + reviews)
   '/dashboard/listing/images': ['listing-photos', 'listing-overview', 'listing-publish'],
-  '/dashboard/listing/reviews': ['listing-overview', 'listing-publish'],
-  '/dashboard/listing':        ['listing-overview', 'listing-autosave', 'listing-photos', 'listing-publish', 'listing-slug'],
+  '/dashboard/listing/reviews': ['listing-reviews', 'listing-overview', 'listing-publish'],
+  '/dashboard/listing':        ['listing-overview', 'listing-reviews', 'listing-autosave', 'listing-photos', 'listing-publish', 'listing-slug'],
 
   // Leads
   '/dashboard/leads': ['leads-overview', 'leads-crm-intelligence', 'leads-kanban', 'leads-filter-search', 'leads-notifications', 'leads-to-proposal'],
@@ -1465,7 +1515,7 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
 
   // AI
   '/dashboard/ai':   ['ai-overview', 'ai-screenshot', 'ai-voice', 'ai-escalate'],
-  '/dashboard/help': ['gs-overview', 'gs-sidebar-chrome', 'listing-overview', 'leads-overview', 'leads-crm-intelligence', 'ai-overview', 'cust-pipeline'],
+  '/dashboard/help': ['gs-overview', 'gs-sidebar-chrome', 'listing-overview', 'listing-reviews', 'conversations-overview', 'leads-overview', 'leads-crm-intelligence', 'ai-overview', 'cust-pipeline'],
 
   // Signup / login (public pages — harmless if never hit via dashboard)
   '/signup': ['gs-signup', 'gs-login'],
