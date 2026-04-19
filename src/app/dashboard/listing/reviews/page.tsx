@@ -232,8 +232,9 @@ export default function ListingReviewsPage() {
                 Couples &amp; guests
               </h1>
               <p className="mt-2 max-w-xl text-sm leading-relaxed text-gray-600 sm:text-base">
-                Collect polished testimonials for your directory listing. Later, couples will sign in here to
-                leave reviews you own—like Google, but on your platform.
+                Collect polished testimonials for your directory listing. Reviews marked <strong>published</strong>{' '}
+                appear on your public StoryVenue venue page. Later, couples will sign in here to leave reviews you
+                own—like Google, but on your platform.
               </p>
             </div>
             <button
