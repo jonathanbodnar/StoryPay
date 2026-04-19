@@ -191,12 +191,14 @@ export async function POST(
   const { data: venue } = await supabaseAdmin.from('venues').select('name').eq('id', venueId).single();
   const appOrigin = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
   const previewUnsub = `${appOrigin.replace(/\/$/, '')}/api/public/marketing/unsubscribe?token=preview`;
+  const previewResub = `${appOrigin.replace(/\/$/, '')}/api/public/marketing/resubscribe?token=preview`;
   let vars: MergeFieldRecord = {
     first_name: 'Alex',
     last_name: 'Preview',
     email: to,
     venue_name: (venue?.name as string) || 'Your venue',
     unsubscribe_url: previewUnsub,
+    resubscribe_url: previewResub,
     wedding_date: '',
     wedding_date_nice: '',
     wedding_month: '',

@@ -51,6 +51,7 @@ const marketingItems = [
   { label: 'Marketing analytics', href: '/dashboard/marketing/analytics', icon: BarChart3 },
   { label: 'Lead Capture Forms', href: '/dashboard/marketing/form-builder', icon: LayoutTemplate },
   { label: 'Email templates', href: '/dashboard/marketing/email/templates', icon: FileStack },
+  { label: 'Email opt-in / unsubscribes', href: '/dashboard/marketing/email/preferences', icon: Mail },
   { label: 'Email campaigns', href: '/dashboard/marketing/email/campaigns', icon: Megaphone },
   { label: 'Email workflows', href: '/dashboard/marketing/email/automations', icon: Workflow },
   { label: 'Trigger links & tags', href: '/dashboard/marketing/trigger-links', icon: Link2 },

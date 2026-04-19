@@ -37,6 +37,11 @@ const PREVIEW_VARS = {
   email: 'alex@example.com',
   venue_name: 'Your venue',
   unsubscribe_url: '#unsubscribe-preview',
+  resubscribe_url: '#resubscribe-preview',
+  wedding_date: '',
+  wedding_date_nice: '',
+  wedding_month: '',
+  guest_count: '',
 };
 
 const PALETTE: { type: EmailBlockType; label: string }[] = [
@@ -613,7 +618,8 @@ export function EmailBuilderEditor({
               <p className="text-[11px] leading-snug text-gray-500">
                 Merge tags: <code className="text-gray-700">{'{{first_name}}'}</code>,{' '}
                 <code className="text-gray-700">{'{{last_name}}'}</code>, <code className="text-gray-700">{'{{venue_name}}'}</code>,{' '}
-                <code className="text-gray-700">{'{{unsubscribe_url}}'}</code>
+                <code className="text-gray-700">{'{{unsubscribe_url}}'}</code>,{' '}
+                <code className="text-gray-700">{'{{resubscribe_url}}'}</code>
               </p>
             </div>
           </div>

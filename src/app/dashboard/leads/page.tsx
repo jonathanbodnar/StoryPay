@@ -89,6 +89,8 @@ interface Lead {
   first_touch_utm?: Record<string, unknown> | null;
   assigned_member_id?: string | null;
   assigned_member?: { id: string; name: string; initials: string } | null;
+  /** false = opted out of venue marketing email */
+  marketing_email_opt_in?: boolean | null;
 }
 
 interface TimelineItem {
@@ -347,6 +349,10 @@ export default function LeadsPage() {
     const tagIds = patch.tagIds;
     const rest = { ...patch } as Record<string, unknown>;
     delete rest.tagIds;
+    if ('marketingEmailOptIn' in rest) {
+      rest.marketing_email_opt_in = rest.marketingEmailOptIn;
+      delete rest.marketingEmailOptIn;
+    }
 
     const tagPoolForMerge = (): MarketingTag[] => {
       const pool = [...allTags];
@@ -1756,6 +1762,24 @@ function LeadDrawer({
               onSave={(v) => void saveField('lastName', v)} saving={savingField === 'lastName'} />
             <Field label="Email" value={lead.email} type="email" className="col-span-2"
               onSave={(v) => void saveField('email', v)} saving={savingField === 'email'} />
+            <div className="col-span-2">
+              <label className="flex items-start gap-2.5 cursor-pointer rounded-xl border border-gray-100 bg-gray-50/80 px-3 py-2.5">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 rounded border-gray-300"
+                  checked={lead.marketing_email_opt_in !== false}
+                  onChange={(e) => void saveField('marketingEmailOptIn', e.target.checked)}
+                />
+                <span>
+                  <span className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                    Marketing email consent
+                  </span>
+                  <span className="text-sm text-gray-600 leading-snug">
+                    Contact can receive email campaigns and automations from your venue. Uncheck to opt out (same as them using Unsubscribe).
+                  </span>
+                </span>
+              </label>
+            </div>
             <Field label="Phone" value={lead.phone ?? ''} type="tel"
               onSave={(v) => void saveField('phone', v)} saving={savingField === 'phone'} />
             {hideRevenue ? (

@@ -94,15 +94,18 @@ export async function buildMergeVars(
   const { data: venue } = await supabaseAdmin.from('venues').select('name').eq('id', venueId).maybeSingle();
   const { data: lead } = await supabaseAdmin
     .from('leads')
-    .select('id, email, first_name, last_name, name, wedding_date, guest_count')
+    .select('id, email, first_name, last_name, name, wedding_date, guest_count, marketing_email_opt_in')
     .eq('id', leadId)
     .eq('venue_id', venueId)
     .maybeSingle();
   if (!lead?.email) return null;
+  if ((lead as { marketing_email_opt_in?: boolean }).marketing_email_opt_in === false) return null;
   const fn = (lead.first_name as string | null)?.trim() || (lead.name as string | null)?.split(/\s+/)[0] || 'there';
   const ln = (lead.last_name as string | null)?.trim() || '';
   const token = signMarketingUnsubscribeToken(venueId, leadId);
-  const unsub = `${appOrigin.replace(/\/$/, '')}/api/public/marketing/unsubscribe?token=${encodeURIComponent(token)}`;
+  const base = appOrigin.replace(/\/$/, '');
+  const unsub = `${base}/api/public/marketing/unsubscribe?token=${encodeURIComponent(token)}`;
+  const resub = `${base}/api/public/marketing/resubscribe?token=${encodeURIComponent(token)}`;
   const wd = lead.wedding_date as string | null;
   let wedding_date_nice = '';
   let wedding_month = '';
@@ -127,6 +130,7 @@ export async function buildMergeVars(
     email: String(lead.email),
     venue_name: (venue?.name as string) || 'Your venue',
     unsubscribe_url: unsub,
+    resubscribe_url: resub,
     wedding_date: wd || '',
     wedding_date_nice: wedding_date_nice || '',
     wedding_month: wedding_month || '',
@@ -144,7 +148,8 @@ async function sendTemplateToLead(
 ): Promise<{ ok: boolean; error?: string }> {
   const appOrigin = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
   const vars = await buildMergeVars(venueId, leadId, appOrigin);
-  if (!vars?.email) return { ok: false, error: 'No email' };
+  if (!vars) return { ok: false, error: 'opt_out' };
+  if (!vars.email) return { ok: false, error: 'No email' };
   const { data: sup } = await supabaseAdmin
     .from('marketing_email_suppressions')
     .select('lead_id')

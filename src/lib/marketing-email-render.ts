@@ -89,7 +89,8 @@ export function renderMarketingEmailHtml(
   const inner = definition.blocks.map((b) => renderBlock(b, theme)).join('');
   const footer = `<tr><td style="padding:24px;font-size:11px;color:${theme.mutedColor};text-align:center;font-family:sans-serif;">
     <p style="margin:0 0 8px;">You received this because you are in our contacts at {{venue_name}}.</p>
-    <p style="margin:0;"><a href="{{unsubscribe_url}}" style="color:${theme.mutedColor};">Unsubscribe</a></p>
+    <p style="margin:0;"><a href="{{unsubscribe_url}}" style="color:${theme.mutedColor};">Unsubscribe</a>
+    · <a href="{{resubscribe_url}}" style="color:${theme.mutedColor};">Subscribe again</a></p>
   </td></tr>`;
   const raw = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:${theme.pageBg};">

@@ -362,7 +362,7 @@ export default function CampaignDetailPage() {
           <div className="mt-2 space-y-2 text-sm">
             <label className="flex items-center gap-2">
               <input type="radio" name="seg" checked={segType === 'all_leads'} disabled={!editable} onChange={() => setSegType('all_leads')} />
-              All leads (with email, excluding unsubscribes)
+              All leads (with email, excluding unsubscribes and marketing opt-outs)
             </label>
             <label className="flex items-center gap-2">
               <input type="radio" name="seg" checked={segType === 'tags_any'} disabled={!editable} onChange={() => setSegType('tags_any')} />

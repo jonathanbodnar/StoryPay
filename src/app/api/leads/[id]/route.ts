@@ -91,6 +91,8 @@ export async function PATCH(
     referralSource?: string | null;
     firstTouchUtm?: Record<string, unknown> | null;
     assignedMemberId?: string | null;
+    /** When true, venue may send marketing email; also clears suppression list entry. */
+    marketingEmailOptIn?: boolean;
   };
   try {
     body = await request.json();
@@ -151,6 +153,10 @@ export async function PATCH(
       body.firstTouchUtm && typeof body.firstTouchUtm === 'object' ? body.firstTouchUtm : {};
   }
 
+  if (typeof body.marketingEmailOptIn === 'boolean') {
+    updates.marketing_email_opt_in = body.marketingEmailOptIn;
+  }
+
   if (body.assignedMemberId !== undefined) {
     if (body.assignedMemberId === null || body.assignedMemberId === '') {
       updates.assigned_member_id = null;
@@ -203,6 +209,14 @@ export async function PATCH(
 
   if (Object.keys(updates).length === 0 && !hasTagPatch) {
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
+  }
+
+  if (typeof body.marketingEmailOptIn === 'boolean' && body.marketingEmailOptIn === true) {
+    await supabaseAdmin
+      .from('marketing_email_suppressions')
+      .delete()
+      .eq('venue_id', venueId)
+      .eq('lead_id', id);
   }
 
   if (Object.keys(updates).length > 0) {

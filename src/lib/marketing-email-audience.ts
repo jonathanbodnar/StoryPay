@@ -23,12 +23,23 @@ async function leadIdsWhoClickedLinks(venueId: string, linkIds: string[]): Promi
 }
 
 function applyBehaviorFilters(
-  rows: Array<{ id: string; email: string | null; stage_id?: string | null; wedding_date?: string | null }>,
+  rows: Array<{
+    id: string;
+    email: string | null;
+    stage_id?: string | null;
+    wedding_date?: string | null;
+    marketing_email_opt_in?: boolean | null;
+  }>,
   segment: CampaignSegment,
   suppressed: Set<string>,
   clickedSet: Set<string>,
 ): LeadRecipient[] {
-  let list = rows.filter((l) => l.email && !suppressed.has(l.id));
+  let list = rows.filter(
+    (l) =>
+      l.email &&
+      !suppressed.has(l.id) &&
+      (l.marketing_email_opt_in === undefined || l.marketing_email_opt_in !== false),
+  );
 
   const ex = segment.exclude_stage_ids?.filter(Boolean) ?? [];
   if (ex.length) {
@@ -67,7 +78,7 @@ export async function resolveCampaignRecipients(
   const clickedSet =
     clk.length > 0 ? await leadIdsWhoClickedLinks(venueId, clk) : new Set<string>();
 
-  const selectCols = 'id, email, stage_id, wedding_date';
+  const selectCols = 'id, email, stage_id, wedding_date, marketing_email_opt_in';
 
   if (segment.type === 'tags_any' && (segment.tag_ids?.length ?? 0) > 0) {
     const { data: rows, error } = await supabaseAdmin

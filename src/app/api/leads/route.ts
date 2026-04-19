@@ -38,6 +38,7 @@ interface LeadRow {
   referral_source?: string | null;
   first_touch_utm?: Record<string, unknown> | null;
   assigned_member_id?: string | null;
+  marketing_email_opt_in?: boolean | null;
 }
 
 async function getVenueId(): Promise<string | null> {
@@ -81,7 +82,7 @@ export async function GET(request: NextRequest) {
       'id, venue_id, track_token, first_name, last_name, name, email, phone, wedding_date, guest_count, ' +
       'booking_timeline, message, notes, status, source, created_at, updated_at, ' +
       'venue_name, venue_website_url, opportunity_value, pipeline_id, stage_id, position, ' +
-      'lost_reason, referral_source, first_touch_utm, assigned_member_id',
+      'lost_reason, referral_source, first_touch_utm, assigned_member_id, marketing_email_opt_in',
     )
     .eq('venue_id', venueId)
     .order('position', { ascending: true })
@@ -168,7 +169,7 @@ export async function GET(request: NextRequest) {
           'id, venue_id, track_token, first_name, last_name, name, email, phone, wedding_date, guest_count, ' +
           'booking_timeline, message, notes, status, source, created_at, updated_at, ' +
           'venue_name, venue_website_url, opportunity_value, pipeline_id, stage_id, position, ' +
-          'lost_reason, referral_source, first_touch_utm, assigned_member_id',
+          'lost_reason, referral_source, first_touch_utm, assigned_member_id, marketing_email_opt_in',
         )
         .eq('venue_id', venueId)
         .in('id', missingNoteLeadIds);
