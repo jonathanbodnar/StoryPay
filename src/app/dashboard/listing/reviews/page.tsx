@@ -104,6 +104,21 @@ export default function ListingReviewsPage() {
   const [reviewerEmail, setReviewerEmail] = useState('');
   const [weddingDate, setWeddingDate] = useState('');
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [listingSlug, setListingSlug] = useState<string | null>(null);
+  const [publicOrigin, setPublicOrigin] = useState('');
+
+  useEffect(() => {
+    setPublicOrigin(typeof window !== 'undefined' ? window.location.origin : '');
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/listing/me')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.listing?.slug) setListingSlug(String(d.listing.slug));
+      })
+      .catch(() => {});
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -232,9 +247,9 @@ export default function ListingReviewsPage() {
                 Couples &amp; guests
               </h1>
               <p className="mt-2 max-w-xl text-sm leading-relaxed text-gray-600 sm:text-base">
-                Collect polished testimonials for your directory listing. Reviews marked <strong>published</strong>{' '}
-                appear on your public StoryVenue venue page. Later, couples will sign in here to leave reviews you
-                own—like Google, but on your platform.
+                Collect polished testimonials for your directory listing. Reviews marked <strong>published</strong> are
+                available via the public API and the embed below for storyvenue.com. Later, couples will sign in here to
+                leave reviews you own—like Google, but on your platform.
               </p>
             </div>
             <button
@@ -288,6 +303,31 @@ export default function ListingReviewsPage() {
       </div>
 
       <div className="mx-auto max-w-5xl px-4 pt-8 sm:px-6">
+        {listingSlug && publicOrigin && (
+          <div className="mb-8 rounded-2xl border border-sky-200/80 bg-gradient-to-br from-sky-50/90 to-white px-4 py-4 sm:px-5 sm:py-5">
+            <p className="text-sm font-semibold text-sky-950">Show reviews on storyvenue.com</p>
+            <p className="mt-1 text-xs leading-relaxed text-sky-900/85">
+              The live directory site (e.g.{' '}
+              <span className="font-mono text-[11px]">storyvenue.com/venue/{listingSlug}</span>) is built separately.
+              Paste this iframe where you want reviews to appear (Webflow, custom HTML, etc.):
+            </p>
+            <pre className="mt-3 max-h-40 overflow-x-auto overflow-y-auto rounded-xl bg-white/90 p-3 text-[11px] leading-relaxed text-gray-800 shadow-inner ring-1 ring-sky-100">
+              {`<iframe\n  src="${publicOrigin}/embed/listing-reviews/${listingSlug}"\n  title="Reviews"\n  style="width:100%;min-height:420px;border:0;border-radius:12px"\n  loading="lazy"\n/>`}
+            </pre>
+            <p className="mt-2 text-[11px] text-sky-800/80">
+              Preview:{' '}
+              <a
+                href={`${publicOrigin}/embed/listing-reviews/${listingSlug}`}
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium underline hover:text-sky-950"
+              >
+                Open embed page
+              </a>
+            </p>
+          </div>
+        )}
+
         <div className="mb-6 flex flex-wrap gap-2">
           {FILTER_TABS.map((t) => (
             <button
