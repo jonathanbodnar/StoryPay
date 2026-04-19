@@ -56,7 +56,7 @@ html, body {
   border-radius: 3px;
 }
 
-/* Form builder panels: hide scrollbars until hover or active scroll */
+/* Lead capture form builder panels: hide scrollbars until hover or active scroll */
 .sp-form-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;

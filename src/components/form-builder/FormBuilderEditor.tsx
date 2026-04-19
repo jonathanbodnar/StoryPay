@@ -1492,12 +1492,8 @@ export function FormBuilderEditor({
               className="inline-flex shrink-0 items-center gap-1.5 font-medium transition hover:text-gray-900"
             >
               <ArrowLeft size={15} strokeWidth={2} />
-              <span className="hidden sm:inline">Forms</span>
+              <span className="hidden sm:inline">Lead Capture Forms</span>
             </Link>
-            <span className="text-gray-300" aria-hidden>
-              ›
-            </span>
-            <span className="hidden font-medium text-gray-600 sm:inline">Form builder</span>
             <span className="text-gray-300" aria-hidden>
               ›
             </span>

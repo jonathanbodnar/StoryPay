@@ -78,10 +78,10 @@ export default function FormBuilderListPage() {
           </Link>
           <h1 className="flex items-center gap-2 text-2xl font-semibold text-gray-900">
             <LayoutTemplate className="text-brand-600" size={28} />
-            Form builder
+            Lead Capture Forms
           </h1>
           <p className="mt-1 text-sm text-gray-600">
-            Build embeddable forms for your venue site. Drag blocks to reorder; copy the iframe when you are ready to go live.
+            Build embeddable lead capture forms for your venue site. Drag blocks to reorder; copy the iframe when you are ready to go live.
           </p>
         </div>
         <button

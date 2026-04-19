@@ -32,7 +32,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
 
 After logging in you land on the Home dashboard which shows your revenue, pipeline, recent proposals, and recent transactions at a glance.
 
-Navigation lives in the left sidebar (or the hamburger menu on mobile). Top-level items include Home, Ask AI, Customers, Calendar, Directory Listing, Leads, Reports, What's New, and Help Center. **Payments**, **Marketing** (email & campaigns, trigger links & tags, form builder), and **Settings** open as flyout submenus. On desktop you can **collapse** the sidebar with the chevron next to the logo — it becomes a narrow icon rail with a compact mark; your choice is remembered in the browser.
+Navigation lives in the left sidebar (or the hamburger menu on mobile). Top-level items include Home, Ask AI, Customers, Calendar, Directory Listing, Leads, Reports, What's New, and Help Center. **Payments**, **Marketing** (analytics, lead capture forms, email tools, trigger links & tags), and **Settings** open as flyout submenus. On desktop you can **collapse** the sidebar with the chevron next to the logo — it becomes a narrow icon rail with a compact mark; your choice is remembered in the browser.
 
 The main areas:
 - Home — revenue snapshot and recent activity
@@ -42,7 +42,7 @@ The main areas:
 - Leads — Kanban/list pipeline for inquiries; editable stages and pipelines
 - Reports — financial exports (owners and admins)
 - Payments flyout — new proposal/invoice, proposals list, templates, installments, subscriptions, transactions
-- Marketing flyout — email campaigns, trigger links & tags, form builder
+- Marketing flyout — analytics, lead capture forms, email tools, trigger links & tags
 - Help Center — searchable docs and Ask AI–style help
 - Settings flyout — general, branding, email templates, integrations, team, notifications
 

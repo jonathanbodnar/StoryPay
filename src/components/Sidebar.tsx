@@ -49,7 +49,7 @@ const paymentsItems = [
 
 const marketingItems = [
   { label: 'Marketing analytics', href: '/dashboard/marketing/analytics', icon: BarChart3 },
-  { label: 'Form builder', href: '/dashboard/marketing/form-builder', icon: LayoutTemplate },
+  { label: 'Lead Capture Forms', href: '/dashboard/marketing/form-builder', icon: LayoutTemplate },
   { label: 'Email templates', href: '/dashboard/marketing/email/templates', icon: FileStack },
   { label: 'Email campaigns', href: '/dashboard/marketing/email/campaigns', icon: Megaphone },
   { label: 'Email workflows', href: '/dashboard/marketing/email/automations', icon: Workflow },

@@ -497,7 +497,7 @@ interface MarketingFormViewProps {
   venueContact?: VenueContactInfo | null;
   /** Select blocks + edit heading in place on the canvas */
   builder?: FormBuilderCanvasOpts | null;
-  /** Wrap each block (after builder chrome), e.g. sortable drag handles in the form builder */
+  /** Wrap each block (after builder chrome), e.g. sortable drag handles in the lead capture form editor */
   wrapBlock?: (block: FormBlock, node: ReactNode) => ReactNode;
   /** Shown inside the form when there are no blocks (e.g. builder drop zone) */
   emptyCanvasSlot?: ReactNode | null;

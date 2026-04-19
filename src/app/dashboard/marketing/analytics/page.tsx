@@ -72,8 +72,8 @@ const quickLinks: { href: string; label: string; desc: string; Icon: typeof Mail
   },
   {
     href: '/dashboard/marketing/form-builder',
-    label: 'Form builder',
-    desc: 'Embeddable venue forms',
+    label: 'Lead Capture Forms',
+    desc: 'Embeddable lead capture forms',
     Icon: LayoutTemplate,
   },
   {
