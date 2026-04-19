@@ -108,6 +108,12 @@ export default function ConversationsPage() {
   }, [loadThreads]);
 
   useEffect(() => {
+    if (loadingList || threads.length !== 1 || selectedId) return;
+    setSelectedId(threads[0].thread_id);
+    setMobileShowThread(true);
+  }, [loadingList, threads, selectedId]);
+
+  useEffect(() => {
     fetch('/api/team')
       .then((r) => r.json())
       .then((d) => {
@@ -124,10 +130,22 @@ export default function ConversationsPage() {
         fetch(`/api/conversations/threads/${id}`),
         fetch(`/api/conversations/threads/${id}/messages`),
       ]);
-      if (tRes.ok) setThreadDetail(await tRes.json());
+      if (tRes.ok) {
+        const raw = (await tRes.json()) as ThreadDetail & { venue_customers?: ThreadDetail['venue_customers'] | unknown[] };
+        const vc = raw.venue_customers;
+        const venue_customers = Array.isArray(vc) ? (vc[0] as ThreadDetail['venue_customers']) ?? null : vc ?? null;
+        setThreadDetail({ ...raw, venue_customers });
+      } else {
+        const err = await tRes.json().catch(() => ({}));
+        setThreadDetail(null);
+        setSendError(typeof err?.error === 'string' ? err.error : 'Could not load conversation');
+      }
       if (mRes.ok) setMessages(await mRes.json());
-      await fetch(`/api/conversations/threads/${id}/read`, { method: 'POST' });
-      await loadThreads();
+      else setMessages([]);
+      if (tRes.ok) {
+        await fetch(`/api/conversations/threads/${id}/read`, { method: 'POST' });
+        await loadThreads();
+      }
     } finally {
       setLoadingThread(false);
     }
@@ -148,10 +166,16 @@ export default function ConversationsPage() {
   }, [messages, selectedId]);
 
   const contactLabel = useMemo(() => {
-    if (!threadDetail?.venue_customers) return '';
-    const v = threadDetail.venue_customers;
-    return [v.first_name, v.last_name].filter(Boolean).join(' ') || v.customer_email || 'Contact';
-  }, [threadDetail]);
+    if (threadDetail?.venue_customers) {
+      const v = threadDetail.venue_customers;
+      return [v.first_name, v.last_name].filter(Boolean).join(' ') || v.customer_email || 'Contact';
+    }
+    const row = threads.find((t) => t.thread_id === selectedId);
+    if (row) {
+      return [row.contact_first_name, row.contact_last_name].filter(Boolean).join(' ') || row.contact_email || 'Contact';
+    }
+    return 'Contact';
+  }, [threadDetail, threads, selectedId]);
 
   const contactProfileHref = threadDetail?.venue_customer_id
     ? `/dashboard/contacts/${threadDetail.venue_customer_id}`
@@ -551,6 +575,15 @@ export default function ConversationsPage() {
                 </div>
               </div>
             </>
+          ) : selectedId && loadingThread && !threadDetail ? (
+            <div className="flex flex-1 items-center justify-center py-20">
+              <Loader2 className="h-10 w-10 animate-spin text-gray-400" />
+            </div>
+          ) : selectedId && !threadDetail && sendError ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+              <MessageCircle size={40} className="text-gray-300" strokeWidth={1.25} />
+              <p className="text-sm text-red-600">{sendError}</p>
+            </div>
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center text-gray-500">
               <MessageCircle size={40} className="text-gray-300" strokeWidth={1.25} />

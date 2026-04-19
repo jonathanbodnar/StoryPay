@@ -16,21 +16,7 @@ export async function GET(
 
   const { data: thread, error } = await supabaseAdmin
     .from('conversation_threads')
-    .select(
-      `
-      id,
-      subject,
-      last_message_at,
-      venue_customer_id,
-      venue_customers (
-        id,
-        first_name,
-        last_name,
-        customer_email,
-        phone
-      )
-    `,
-    )
+    .select('id, subject, last_message_at, venue_customer_id')
     .eq('id', threadId)
     .eq('venue_id', venueId)
     .maybeSingle();
@@ -38,5 +24,15 @@ export async function GET(
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!thread) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  return NextResponse.json(thread);
+  const { data: contact } = await supabaseAdmin
+    .from('venue_customers')
+    .select('id, first_name, last_name, customer_email, phone')
+    .eq('id', thread.venue_customer_id)
+    .eq('venue_id', venueId)
+    .maybeSingle();
+
+  return NextResponse.json({
+    ...thread,
+    venue_customers: contact ?? null,
+  });
 }

@@ -49,7 +49,10 @@ export async function GET(request: NextRequest) {
     }
 
     const mapped = (rows ?? []).map((r: Record<string, unknown>) => {
-      const vc = r.venue_customers as { first_name?: string; last_name?: string; customer_email?: string } | null;
+      const rawVc = r.venue_customers;
+      const vc = (
+        Array.isArray(rawVc) ? rawVc[0] : rawVc
+      ) as { first_name?: string; last_name?: string; customer_email?: string } | null;
       return {
         thread_id: r.id,
         venue_id: r.venue_id,
