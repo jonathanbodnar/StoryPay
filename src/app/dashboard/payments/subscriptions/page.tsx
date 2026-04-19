@@ -133,7 +133,7 @@ export default function SubscriptionsPage() {
  </span>
  </div>
  {s.customerId && (
- <Link href={`/dashboard/customers/${s.customerId}`}
+ <Link href={`/dashboard/contacts/${s.customerId}`}
  className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition-colors self-center">
  View <ArrowRight size={11}/>
  </Link>

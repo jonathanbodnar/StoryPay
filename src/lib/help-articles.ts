@@ -782,16 +782,16 @@ Note: auto-conversion of a lead into a customer profile with a single click is a
     ],
   },
   {
-    id: 'customers',
-    label: 'Customers',
+    id: 'contacts',
+    label: 'Contacts',
     iconName: 'Users',
     color: '#10b981',
     articles: [
       {
         id: 'cust-add',
-        title: 'Adding a customer',
-        tags: ['add customer', 'new customer', 'create contact'],
-        body: `Go to Customers in the sidebar. Click the "+ Add Customer" button (top right).
+        title: 'Adding a contact',
+        tags: ['add contact', 'new contact', 'create contact'],
+        body: `Go to Contacts in the sidebar. Click the "+ Add contact" button (top right). You can also use Import CSV or Export CSV for bulk work.
 
 Fill in:
 - First Name (required)
@@ -800,23 +800,23 @@ Fill in:
 - Phone
 - Address, City, State, Zip
 
-Click Save. The customer appears in your list immediately.
+Click Save. The contact appears in your list immediately.
 
-Tip: You can also create a customer inline while building a new proposal or invoice — just type their name in the customer search field and select "Add new customer".`,
+Tip: You can also create a contact inline while building a new proposal or invoice — just type their name in the contact search field and select "Add new contact".`,
       },
       {
         id: 'cust-search',
-        title: 'Searching and filtering customers',
-        tags: ['search', 'find customer', 'filter'],
-        body: `On the Customers page there is a search bar at the top. Type any part of a name, email, or phone number and results filter in real time.
+        title: 'Searching and filtering contacts',
+        tags: ['search', 'find contact', 'filter'],
+        body: `On the Contacts page there is a search bar at the top. Type any part of a name, email, or phone number and results filter in real time.
 
 Results are paginated (20 per page). Use the Previous / Next buttons at the bottom to navigate.`,
       },
       {
         id: 'cust-profile',
-        title: 'Customer profile — overview and tabs',
-        tags: ['customer profile', 'crm', 'profile', 'tabs', 'overview', 'history', 'edit note', 'edit notes', 'new proposal', 'new invoice'],
-        body: `Click a customer's name to open their full profile. Customers you see on this list come from three sources — storyvenue.com signups, LunarPay integration, and GoHighLevel imports — all unified into one record per person. The profile has six tabs:
+        title: 'Contact profile — overview and tabs',
+        tags: ['contact profile', 'crm', 'profile', 'tabs', 'overview', 'history', 'edit note', 'edit notes', 'new proposal', 'new invoice'],
+        body: `Click a contact's name to open their full profile. Contacts you see on this list come from three sources — storyvenue.com signups, LunarPay integration, and GoHighLevel imports — all unified into one record per person. The profile has six tabs:
 
 Overview
 - Edit contact info inline (name, email, phone, address)
@@ -831,10 +831,10 @@ Activity
 - Unified reverse-chronological timeline of every interaction: proposals, payments, notes, files, tasks, Calendly bookings, pipeline stage changes, and more.
 
 Payments
-- All proposals and invoices linked to this customer
+- All proposals and invoices linked to this contact
 - Installment schedules with payment breakdown
 - Copy link, resend, view invoice, issue refund
-- Use the "New Proposal" and "New Invoice" buttons at the top of this tab to jump straight to the proposal/invoice builder with the customer's name and email pre-filled
+- Use the "New Proposal" and "New Invoice" buttons at the top of this tab to jump straight to the proposal/invoice builder with the contact's name and email pre-filled
 
 Tasks
 - Create tasks with optional due dates (e.g. "Collect final guest count")
@@ -847,11 +847,11 @@ Documents
 - Each file has a type and a status (Pending / Received / Approved)
 - Click a filename to download; update status inline; delete files
 
-Below the main header row, the **Pipeline** section lets you choose which **sales pipeline** applies (same pipelines you manage under Leads — e.g. default "Sales Pipeline") and shows **stage pills** for that pipeline. Click a pill to move the customer to that stage; the selection saves to the server and the UI updates right away. If a lead exists with the **same email**, you may see a note that the profile is linked to a lead and stages can stay in sync both ways.
+Below the main header row, the **Pipeline** section lets you choose which **sales pipeline** applies (same pipelines you manage under Leads — e.g. default "Sales Pipeline") and shows **stage pills** for that pipeline. Click a pill to move the contact to that stage; the selection saves to the server and the UI updates right away. If a lead exists with the **same email**, you may see a note that the profile is linked to a lead and stages can stay in sync both ways.
 
 The header also shows a stage badge, referral source when set, and KPIs: proposals count, total paid, pending amount, open tasks.
 
-On the Customers list page itself, each row also has "Create Proposal" and "Create Invoice" shortcut buttons that open the payment builder with the customer pre-selected.`,
+On the Contacts list page itself, each row also has "Create Proposal" and "Create Invoice" shortcut buttons that open the payment builder with the contact pre-selected.`,
       },
       {
         id: 'cust-pipeline',
@@ -1412,8 +1412,8 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   // Home
   '/dashboard': ['dash-kpis', 'dash-chart', 'gs-onboarding', 'gs-sidebar-chrome'],
 
-  // Customers
-  '/dashboard/customers': ['cust-add', 'cust-search', 'cust-profile', 'cust-pipeline', 'cust-tasks', 'cust-documents'],
+  // Contacts
+  '/dashboard/contacts': ['cust-add', 'cust-search', 'cust-profile', 'cust-pipeline', 'cust-tasks', 'cust-documents'],
 
   // Calendar
   '/dashboard/calendar': ['cal-overview', 'cal-spaces', 'cal-add-event', 'cal-conflicts'],

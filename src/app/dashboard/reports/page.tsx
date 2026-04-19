@@ -49,8 +49,8 @@ const REPORTS: ReportDef[] = [
  },
  {
  type: 'customers',
- label: 'Customer Summary',
- description: 'Unique customers ranked by total spend with proposal counts and last activity. Great for identifying top clients.',
+ label: 'Contact Summary',
+ description: 'Unique contacts ranked by total spend with proposal counts and last activity. Great for identifying top clients.',
  icon: Users,
  color: '#8b5cf6',
  bg: 'bg-violet-50',

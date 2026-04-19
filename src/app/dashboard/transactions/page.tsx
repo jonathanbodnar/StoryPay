@@ -133,7 +133,7 @@ export default function TransactionsPage() {
  </div>
  <div className="flex items-center gap-1 flex-wrap justify-end">
  {c.customerId && (
- <Link href={`/dashboard/customers/${c.customerId}`} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100">
+ <Link href={`/dashboard/contacts/${c.customerId}`} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100">
  <User size={12} /> Customer
  </Link>
  )}
@@ -156,7 +156,7 @@ export default function TransactionsPage() {
  <p className="text-sm text-gray-500">{formatDate(c.date)}</p>
  <div className="flex items-center justify-end gap-1">
  {c.customerId && (
- <Link href={`/dashboard/customers/${c.customerId}`} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100">
+ <Link href={`/dashboard/contacts/${c.customerId}`} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100">
  <User size={13} /> View Customer
  </Link>
  )}
@@ -202,7 +202,7 @@ export default function TransactionsPage() {
  <div className="flex items-center justify-between">
  <p className="text-sm font-semibold text-gray-800">{formatCents(s.totalAmount ?? s.amount ?? 0)} <span className="text-xs text-gray-400 font-normal">· {s.paymentsCount ?? s.numberOfPayments ?? '—'} payments</span></p>
  {s.customerId && (
- <Link href={`/dashboard/customers/${s.customerId}`} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100">
+ <Link href={`/dashboard/contacts/${s.customerId}`} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100">
  <User size={12} /> Customer
  </Link>
  )}
@@ -216,7 +216,7 @@ export default function TransactionsPage() {
  <span className={classNames('inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize w-fit', color.bg, color.text)}>{s.status}</span>
  <div className="flex justify-end">
  {s.customerId && (
- <Link href={`/dashboard/customers/${s.customerId}`} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100">
+ <Link href={`/dashboard/contacts/${s.customerId}`} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100">
  <User size={13} /> View Customer
  </Link>
  )}
@@ -257,7 +257,7 @@ export default function TransactionsPage() {
  {s.nextPayment && <p>Next: {formatDate(s.nextPayment)}</p>}
  </div>
  {s.customerId && (
- <Link href={`/dashboard/customers/${s.customerId}`} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100">
+ <Link href={`/dashboard/contacts/${s.customerId}`} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100">
  <User size={12} /> Customer
  </Link>
  )}
@@ -272,7 +272,7 @@ export default function TransactionsPage() {
  <span className={classNames('inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize w-fit', color.bg, color.text)}>{s.status}</span>
  <div className="flex justify-end">
  {s.customerId && (
- <Link href={`/dashboard/customers/${s.customerId}`} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100">
+ <Link href={`/dashboard/contacts/${s.customerId}`} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100">
  <User size={13} /> View Customer
  </Link>
  )}

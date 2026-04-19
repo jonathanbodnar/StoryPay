@@ -7,15 +7,15 @@ const PLATFORM_DOCS = `
 # StoryPay Platform Documentation
 
 ## Overview
-StoryPay is an all-in-one platform for wedding venues to manage proposals, invoices, payments, a booking calendar, customer CRM profiles, email templates, branding, integrations, and team members — all from one place.
+StoryPay is an all-in-one platform for wedding venues to manage proposals, invoices, payments, a booking calendar, contact CRM profiles, email templates, branding, integrations, and team members — all from one place.
 
 ## Navigation / Sections
 - Home (Dashboard): Revenue overview, KPI cards, recent proposals and transactions, date range filter.
 - Ask AI: Sidebar entry plus floating sparkle (bottom-right) — answers questions using live account data and this documentation.
-- Customers: Full CRM — customer profiles with Overview, Notes, Activity timeline, Payments, Tasks, Documents; configurable sales pipeline and stages in the profile header (aligned with Leads when email matches).
+- Contacts: Full CRM — contact profiles with Overview, Notes, Activity timeline, Payments, Tasks, Documents; configurable sales pipeline and stages in the profile header (aligned with Leads when email matches).
 - Calendar: Book and track all venue events (tours, weddings, receptions, tastings, meetings, rehearsals, holds, blocked dates). Syncs with Calendly, Google Calendar, Outlook, and Apple Calendar.
 - Directory Listing: Manage how the venue appears on storyvenue.com (photos, description, capacity, publish on/off).
-- Leads: Kanban and list views for inquiries — same configurable sales pipelines and stages as customer profiles. Includes pipeline intelligence (open pipeline vs weighted forecast, rough referral/directory revenue vs listing spend), per-lead opportunity value on cards, assignable owners, marketing tags, trigger links, an audit trail (stage/value/owner changes and logged calls), and mobile-friendly actions (drag cards, log call, quick note).
+- Leads: Kanban and list views for inquiries — same configurable sales pipelines and stages as contact profiles. Includes pipeline intelligence (open pipeline vs weighted forecast, rough referral/directory revenue vs listing spend), per-lead opportunity value on cards, assignable owners, marketing tags, trigger links, an audit trail (stage/value/owner changes and logged calls), and mobile-friendly actions (drag cards, log call, quick note).
 - Reports: 7 downloadable financial reports (CSV, Excel, PDF). Owners and admins only.
 - Payments (sidebar flyout): New, Proposals, Proposal Templates, Installments, Subscriptions, Transactions.
 - Marketing (sidebar flyout): Analytics, Lead Capture Forms, email tools, trigger links & tags (availability depends on role).
@@ -35,8 +35,8 @@ StoryPay is an all-in-one platform for wedding venues to manage proposals, invoi
 - Calendly sync: connect Calendly in Settings → Integrations — new bookings appear on the calendar automatically.
 - Public availability page: shareable link showing open/booked dates with no customer info exposed — find it in Settings → Integrations.
 
-## Customer Profiles (CRM)
-- Go to Customers → click a customer name to open their full profile.
+## Contact profiles (CRM)
+- Go to Contacts → click a contact name to open their full profile.
 - Tabs: Overview, Notes, Activity (timeline), Payments, Tasks, Documents.
 - Overview: edit contact info; partner/second contact; Wedding Details (date, ceremony type, guest count, space, rehearsal, coordinator, catering notes); referral source.
 - Notes: timestamped internal notes (editable after creation).
@@ -44,7 +44,7 @@ StoryPay is an all-in-one platform for wedding venues to manage proposals, invoi
 - Payments: proposals and invoices; installments; copy link, resend, refund.
 - Tasks: due dates, complete/reopen, inline edit; overdue highlighted.
 - Documents: upload (max 10MB); types Contract, Floor Plan, Vendor Agreement, Insurance, Photo, Other; statuses Pending, Received, Approved.
-- Pipeline (card below header): Use the **Pipeline** dropdown to pick one of your venue's sales pipelines (same pipelines as Leads / Kanban). **Stage** pills list that pipeline's stages with colors from your setup — click a pill to move the customer; saves to the server (UI updates immediately). If a lead exists with the same email, you may see "Linked to lead — stage syncs both ways". Default template stages often include Lead, Conversations Started, Lead Contacted, Tour Booked, Proposal Sent, Wedding Booked, Follow up, Not Interested — venues can rename, add, or reorder stages on the Leads page.
+- Pipeline (card below header): Use the **Pipeline** dropdown to pick one of your venue's sales pipelines (same pipelines as Leads / Kanban). **Stage** pills list that pipeline's stages with colors from your setup — click a pill to move the contact; saves to the server (UI updates immediately). If a lead exists with the same email, you may see "Linked to lead — stage syncs both ways". Default template stages often include Lead, Conversations Started, Lead Contacted, Tour Booked, Proposal Sent, Wedding Booked, Follow up, Not Interested — venues can rename, add, or reorder stages on the Leads page.
 - Legacy pipeline_stage slug may still appear in older integrations; the Kanban pipeline IDs are the source of truth for the dashboard UI.
 - Referral source: Instagram, Google, Wedding Wire, The Knot, Referral, Venue Website, Facebook, Other.
 
@@ -54,14 +54,14 @@ StoryPay is an all-in-one platform for wedding venues to manage proposals, invoi
 - **Cards and columns** show opportunity value; columns and cards also show **weighted (wtd)** amounts. **Assignee** initials can appear on cards when a lead has an owner.
 - **Lead drawer**: edit fields; **Owner** dropdown (team members); **Activity & audit** (who changed stage, opportunity value, or owner; **Log a call** posts to the audit feed); **Timeline** for notes, tasks, emails, etc.; **Hide $**: some team roles never see dollar amounts (see Team).
 - **Trust / permissions**: Stage, value, and assignment changes are logged with actor (owner vs team member). Venue owners can mark team members **Hide $** under Settings → Team so those users see masked amounts (•••) in CRM.
-- Moving a lead or updating a linked customer profile stage keeps CRM and pipeline consistent when emails match.
+- Moving a lead or updating a linked contact profile stage keeps CRM and pipeline consistent when emails match.
 
 ## Integrations
 
 ### Calendly
 - Connect at Settings → Integrations → Calendly → Connect.
 - Requires a Personal Access Token from calendly.com/integrations/api_webhooks.
-- Once connected: new bookings appear on StoryPay calendar in real time; customer profiles auto-created; cancellations auto-update.
+- Once connected: new bookings appear on StoryPay calendar in real time; contact profiles auto-created; cancellations auto-update.
 - Sync Now button imports all upcoming Calendly events on demand.
 
 ### Google Calendar / Outlook / Apple Calendar (iCal)
@@ -93,7 +93,7 @@ StoryPay is an all-in-one platform for wedding venues to manage proposals, invoi
 - Payment types: Full Payment, Installment Plan, Subscription.
 - Clients receive an email/SMS with a link to review, sign (if proposal), and pay.
 - Proposal statuses: Draft, Sent, Opened, Signed, Paid, Refunded, Cancelled.
-- Resend a proposal from the Proposals list or customer profile using the refresh icon.
+- Resend a proposal from the Proposals list or contact profile using the refresh icon.
 
 ## Proposal Templates
 - Go to Payments → Proposal Templates to create and manage templates.
@@ -133,8 +133,8 @@ StoryPay is an all-in-one platform for wedding venues to manage proposals, invoi
 - Go to Settings → Team to manage who has access to your account.
 - Three roles:
   - Owner: Full access to everything including Calendar, Settings, Reports, team management, and integrations.
-  - Admin: Access to proposals, customers, calendar, most settings. Cannot manage team, general settings, or integrations.
-  - Member: Can only view proposals, customers, and calendar. No access to Settings or Reports.
+  - Admin: Access to proposals, contacts, calendar, most settings. Cannot manage team, general settings, or integrations.
+  - Member: Can only view proposals, contacts, and calendar. No access to Settings or Reports.
 - Click Add Team Member to invite someone by email.
 - They receive a branded invite email with an Accept Invitation link.
 - **Hide pipeline revenue (Leads / CRM)**: When logged in as the **venue owner** (not a team-member session), each active non-owner member row can show a **Hide $** control. Enabling it hides opportunity amounts, weighted totals, and related money lines for that person while they use the dashboard.
@@ -171,18 +171,18 @@ StoryPay is an all-in-one platform for wedding venues to manage proposals, invoi
 - Why can't I accept payments? LunarPay account may be pending. Check Settings → Payment Processing.
 - How do I add my logo? Settings → Branding → upload logo file.
 - How do I add a team member? Settings → Team → Add Team Member.
-- How do I add a wedding date or guest count to a customer? Open the customer profile → Overview tab → Wedding Details → edit.
-- How do I add tasks for a customer? Customer profile → Tasks tab → type a task and press Enter.
-- How do I upload a contract to a customer profile? Customer profile → Documents tab → select type Contract → Upload File.
+- How do I add a wedding date or guest count to a contact? Open the contact profile → Overview tab → Wedding Details → edit.
+- How do I add tasks for a contact? Contact profile → Tasks tab → type a task and press Enter.
+- How do I upload a contract to a contact profile? Contact profile → Documents tab → select type Contract → Upload File.
 - How do I connect Calendly? Settings → Integrations → Calendly → Connect → paste your Personal Access Token.
 - How do I sync with Google Calendar? Settings → Integrations → copy your iCal URL → add as a subscribed calendar in Google Calendar.
 - How do I see my available dates? Settings → Integrations → Public Availability Page URL — share this link.
 - How do I add a venue space (barn, garden)? Calendar page → Manage Spaces → add name, color, capacity.
-- What is a pipeline / stage? Venues use configurable **sales pipelines** (see Leads). On a customer profile, pick a pipeline and click **stage pills** to move someone through your funnel; stages match your Kanban columns. Linked leads with the same email can stay in sync.
+- What is a pipeline / stage? Venues use configurable **sales pipelines** (see Leads). On a contact profile, pick a pipeline and click **stage pills** to move someone through your funnel; stages match your Kanban columns. Linked leads with the same email can stay in sync.
 - How do I collapse the sidebar? Desktop: click the chevron beside the logo (narrow icon rail + compact mark). Preference saves for this browser.
 - The browser tab shows the StoryVenue icon; if it looks outdated after an update, hard-refresh or clear site data (favicons cache aggressively).
-- How do I track where a lead came from? Customer profile → Overview → Referral Source dropdown.
-- Why can't a team member see Settings? Members only see proposals, customers, and calendar. Admins see most settings. Only owners see General, Team, and Integrations.
+- How do I track where a lead came from? Contact profile → Overview → Referral Source dropdown.
+- Why can't a team member see Settings? Members only see proposals, contacts, and calendar. Admins see most settings. Only owners see General, Team, and Integrations.
 - How do I restart the setup guide? Settings → General → Restart Setup Guide (owners only).
 - What is weighted pipeline on Leads? Each opportunity value is multiplied by the **win probability** of its stage (defaults by stage kind; venues can store 0–100% per stage). Weighted totals appear as **wtd** on columns and cards and in the insights strip.
 - How do I assign a lead to someone? Open the lead drawer → **Owner** → pick an active team member (or Unassigned).
@@ -248,7 +248,7 @@ PIPELINE:
 - Pending (sent/opened): ${pending.length} — value: ${fmt(pending.reduce((s, p) => s + (p.price ?? 0), 0))}
 - Signed (awaiting payment): ${signed.length} — value: ${fmt(signed.reduce((s, p) => s + (p.price ?? 0), 0))}
 - Total proposals: ${allProposals.length}
-- Unique customers: ${uniqueCustomers}
+- Unique contacts: ${uniqueCustomers}
 
 RECENT PROPOSALS (last 10):
 ${allProposals.slice(0, 10).map(p => `- ${p.customer_name || 'Unknown'} | ${p.status} | ${fmt(p.price ?? 0)} | ${p.payment_type} | ${(p.sent_at || p.created_at || '').slice(0, 10)}`).join('\n')}
@@ -397,7 +397,7 @@ ${accountContext}
 ${leadsContext ? '\n' + leadsContext + '\n' : ''}
 === BEHAVIOR RULES ===
 1. Always try to answer using the documentation and account data above
-2. When asked about account data (revenue, proposals, customers), use the real numbers above
+2. When asked about account data (revenue, proposals, contacts), use the real numbers above
 3. Never make up financial figures, contract details, or account information
 4. Be concise, warm, and action-oriented
 5. After answering, offer a relevant follow-up or next step
@@ -415,8 +415,8 @@ ${leadsContext ? '\n' + leadsContext + '\n' : ''}
 - Use numbered lists (1. 2. 3.) or dashes (- item) for lists
 - Keep headings as plain text with a colon, e.g. "How to Access Reports:"
 - When directing the user to a specific page, include ONE navigation link using ONLY this format: [Button Label](/dashboard/path)
-  Examples: [Open Branding Settings](/dashboard/settings/branding) [View Proposals](/dashboard/payments/proposals) [Go to Reports](/dashboard/reports) [Manage Customers](/dashboard/customers) [View Transactions](/dashboard/transactions) [Open Calendar](/dashboard/calendar) [Open Integrations](/dashboard/settings/integrations) [Marketing analytics](/dashboard/marketing/analytics) [Email templates](/dashboard/marketing/email/templates) [Trigger links](/dashboard/marketing/trigger-links) [Lead Capture Forms](/dashboard/marketing/form-builder)
-- Only link to real dashboard paths. Valid paths: /dashboard, /dashboard/calendar, /dashboard/customers, /dashboard/leads, /dashboard/marketing/analytics, /dashboard/marketing/email/templates, /dashboard/marketing/email/campaigns, /dashboard/marketing/email/automations, /dashboard/marketing/trigger-links, /dashboard/marketing/form-builder, /dashboard/payments/proposals, /dashboard/payments/new, /dashboard/transactions, /dashboard/reports, /dashboard/settings, /dashboard/settings/branding, /dashboard/settings/integrations, /dashboard/settings/team, /dashboard/settings/notifications, /dashboard/settings/email-templates, /dashboard/help
+  Examples: [Open Branding Settings](/dashboard/settings/branding) [View Proposals](/dashboard/payments/proposals) [Go to Reports](/dashboard/reports) [Manage Contacts](/dashboard/contacts) [View Transactions](/dashboard/transactions) [Open Calendar](/dashboard/calendar) [Open Integrations](/dashboard/settings/integrations) [Marketing analytics](/dashboard/marketing/analytics) [Email templates](/dashboard/marketing/email/templates) [Trigger links](/dashboard/marketing/trigger-links) [Lead Capture Forms](/dashboard/marketing/form-builder)
+- Only link to real dashboard paths. Valid paths: /dashboard, /dashboard/calendar, /dashboard/contacts, /dashboard/leads, /dashboard/marketing/analytics, /dashboard/marketing/email/templates, /dashboard/marketing/email/campaigns, /dashboard/marketing/email/automations, /dashboard/marketing/trigger-links, /dashboard/marketing/form-builder, /dashboard/payments/proposals, /dashboard/payments/new, /dashboard/transactions, /dashboard/reports, /dashboard/settings, /dashboard/settings/branding, /dashboard/settings/integrations, /dashboard/settings/team, /dashboard/settings/notifications, /dashboard/settings/email-templates, /dashboard/help
 - Place the link on its own line at the end of the relevant sentence or step, not inline mid-sentence
 
 === TONE ===

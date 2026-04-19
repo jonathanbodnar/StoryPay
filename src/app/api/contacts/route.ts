@@ -117,7 +117,7 @@ export async function GET(request: NextRequest) {
   }
 
   if (results.length === 0 && !venue.ghl_connected && !venue.lunarpay_secret_key) {
-    return NextResponse.json({ error: 'No customer sources configured' }, { status: 400 });
+    return NextResponse.json({ error: 'No contact sources configured' }, { status: 400 });
   }
 
   return NextResponse.json(results);

@@ -200,7 +200,7 @@ export default function CustomerDetailPage() {
         const pd = await pipeRes.json();
         setPipelines(Array.isArray(pd.pipelines) ? pd.pipelines : []);
       }
-      if (!cRes.ok) { setError('Customer not found'); setLoading(false); return; }
+      if (!cRes.ok) { setError('Contact not found'); setLoading(false); return; }
       const cData = await cRes.json();
       setCustomer(cData.customer);
       setProposals(cData.proposals || []);
@@ -706,7 +706,7 @@ export default function CustomerDetailPage() {
   if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="animate-spin text-gray-400" size={24} /></div>;
   if (error || !customer) return (
     <div className="py-20 text-center">
-      <p className="text-gray-500">{error || 'Customer not found'}</p>
+      <p className="text-gray-500">{error || 'Contact not found'}</p>
       <button onClick={() => router.back()} className="mt-4 text-sm text-blue-600 hover:underline">Go back</button>
     </div>
   );
@@ -729,9 +729,9 @@ export default function CustomerDetailPage() {
   return (
     <div>
       {/* Back */}
-      <button onClick={() => router.push('/dashboard/customers')}
+      <button onClick={() => router.push('/dashboard/contacts')}
         className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors mb-6">
-        <ArrowLeft size={16} /> Back to Customers
+        <ArrowLeft size={16} /> Back to Contacts
       </button>
 
       {/* ── Header card ── */}
@@ -1489,7 +1489,7 @@ export default function CustomerDetailPage() {
         <RefundModal
           proposalId={refundTarget.id}
           chargeId={refundTarget.charge_id}
-          customerName={refundTarget.customer_name || customer?.name || 'Customer'}
+          customerName={refundTarget.customer_name || customer?.name || 'Contact'}
           originalAmount={refundTarget.price}
           onSuccess={(fullRefund) => {
             if (fullRefund) setProposals(p => p.map(x => x.id === refundTarget.id ? { ...x, status: 'refunded' } : x));

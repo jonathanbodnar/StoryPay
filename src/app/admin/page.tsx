@@ -822,10 +822,10 @@ export default function AdminPage() {
               <KPICard label="Active Venues" value={statsLoading ? '...' : stats?.venueCount ?? 0} icon={Building2} color="#7c3aed" onClick={() => openDrill('venues')} />
               <KPICard label="Proposals" value={statsLoading ? '...' : stats?.totalProposals ?? 0} icon={FileText} color="#1b1b1b" />
               <KPICard label="Waitlist" value={statsLoading ? '...' : stats?.waitlistCount ?? 0} icon={Users} color="#10b981" onClick={() => openDrill('waitlist')} />
-              <KPICard label="Unique Customers" value={statsLoading ? '...' : stats?.uniqueCustomers ?? 0} icon={Users} color="#f59e0b" onClick={() => openDrill('customers')} />
+              <KPICard label="Unique Contacts" value={statsLoading ? '...' : stats?.uniqueCustomers ?? 0} icon={Users} color="#f59e0b" onClick={() => openDrill('customers')} />
               <KPICard label="Pending Payments" value={statsLoading ? '...' : stats?.pendingPayments ?? 0} icon={Clock} color="#f59e0b" onClick={() => openDrill('pending')} />
               <KPICard label="Failed Payments" value={statsLoading ? '...' : stats?.failedPayments ?? 0} icon={XCircle} color="#ef4444" onClick={() => openDrill('failed')} />
-              <KPICard label="Total Customers" value={statsLoading ? '...' : stats?.uniqueCustomers ?? 0} icon={Users} color="#888888" onClick={() => openDrill('customers')} />
+              <KPICard label="Total Contacts" value={statsLoading ? '...' : stats?.uniqueCustomers ?? 0} icon={Users} color="#888888" onClick={() => openDrill('customers')} />
             </div>
 
             {/* Drill-down modal */}
@@ -876,7 +876,7 @@ export default function AdminPage() {
 
               return (
                 <DrillModal
-                  title={drillKey === 'venues' ? 'Active Venues' : drillKey === 'waitlist' ? 'Waitlist Signups' : drillKey === 'customers' ? 'Customers' : drillKey === 'failed' ? 'Failed Payments' : 'Pending Payments'}
+                  title={drillKey === 'venues' ? 'Active Venues' : drillKey === 'waitlist' ? 'Waitlist Signups' : drillKey === 'customers' ? 'Contacts' : drillKey === 'failed' ? 'Failed Payments' : 'Pending Payments'}
                   count={drillLoading ? undefined : resultCount}
                   onClose={() => { setDrillKey(null); setDrillData(null); setDrillSearch(''); }}
                   searchQuery={showSearch ? drillSearch : undefined}
@@ -914,7 +914,7 @@ export default function AdminPage() {
                       </div>
                     )
                   ) : drillKey === 'customers' ? (
-                    filteredCustomers.length === 0 ? <p className="text-center text-gray-400 py-8 text-sm">{q ? 'No customers match your search' : 'No customers found'}</p> : (
+                    filteredCustomers.length === 0 ? <p className="text-center text-gray-400 py-8 text-sm">{q ? 'No contacts match your search' : 'No contacts found'}</p> : (
                       <div className="space-y-2">
                         {filteredCustomers.map((c, i) => (
                           <div key={i} className="rounded-xl border border-gray-100 px-4 py-3.5 hover:border-gray-200 hover:bg-gray-50/50 transition-colors">

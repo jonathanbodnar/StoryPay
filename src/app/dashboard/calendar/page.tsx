@@ -1142,7 +1142,7 @@ export default function CalendarPage() {
               {selectedEvent.customer_email && (
                 <p>
                   <span className="text-gray-400">Customer:</span>{' '}
-                  <Link href={`/dashboard/customers?search=${encodeURIComponent(selectedEvent.customer_email)}`}
+                  <Link href={`/dashboard/contacts?search=${encodeURIComponent(selectedEvent.customer_email)}`}
                     className="text-blue-600 hover:underline inline-flex items-center gap-1">
                     {selectedEvent.customer_email} <ExternalLink size={11} />
                   </Link>

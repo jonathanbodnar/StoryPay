@@ -109,7 +109,7 @@ export default function InstallmentsPage() {
  <span className={classNames('inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize', color.bg, color.text)}>{s.status}</span>
  </div>
  {s.customerId && (
- <Link href={`/dashboard/customers/${s.customerId}`} className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition-colors self-center">
+ <Link href={`/dashboard/contacts/${s.customerId}`} className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition-colors self-center">
  View <ArrowRight size={11}/>
  </Link>
  )}

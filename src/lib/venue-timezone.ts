@@ -11,6 +11,41 @@ export function resolveVenueTimezone(raw: string | null | undefined): string {
 
 let cachedZones: string[] | null = null;
 
+/** Short name from the environment (e.g. EST, MST, GMT+9) — varies by browser and DST. */
+function getIntlShortTimeZoneName(timeZone: string, date: Date): string {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      timeZoneName: 'short',
+    }).formatToParts(date);
+    return parts.find((p) => p.type === 'timeZoneName')?.value?.trim() ?? '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Label for timezone `<select>` options: IANA id, short abbreviation, and GMT/UTC offset.
+ * Example: `America/New_York (EST, GMT-05:00)`
+ */
+export function formatTimeZoneOptionLabel(iana: string, refDate: Date = new Date()): string {
+  const tz = (iana || '').trim() || DEFAULT_VENUE_TIMEZONE;
+  const short = getIntlShortTimeZoneName(tz, refDate);
+  let offset = '';
+  try {
+    offset = formatInTimeZone(refDate, tz, 'xxx');
+  } catch {
+    offset = '';
+  }
+  const gmt = offset ? `GMT${offset}` : '';
+  if (short && gmt) {
+    return `${tz} (${short}, ${gmt})`;
+  }
+  if (gmt) return `${tz} (${gmt})`;
+  if (short) return `${tz} (${short})`;
+  return tz;
+}
+
 /** Sorted IANA zones for pickers (browser) or a short fallback on the server. */
 export function getIanaTimeZoneOptions(): string[] {
   if (cachedZones) return cachedZones;

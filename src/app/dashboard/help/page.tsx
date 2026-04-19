@@ -70,13 +70,13 @@ const _PLACEHOLDER: Category[] = [
  id: 'gs-overview',
  title: 'Platform overview',
  tags: ['overview', 'intro', 'dashboard', 'what is'],
- body: `StoryVenue is an all-in-one platform for wedding venues to manage proposals, invoices, payments, customers, and team members — all from one place.
+ body: `StoryVenue is an all-in-one platform for wedding venues to manage proposals, invoices, payments, contacts, and team members — all from one place.
 
 After logging in you land on the Home dashboard which shows your revenue, pipeline, recent proposals, and recent transactions at a glance.
 
 Navigation lives in the left sidebar (or the hamburger menu on mobile). The main sections are:
 - Home — your live snapshot
-- Customers — manage contacts
+- Contacts — your CRM list
 - Reports — 7 downloadable report types
 - Payments — proposals, invoices, installments, subscriptions
 - Settings — branding, email templates, integrations, team, notifications
@@ -90,7 +90,7 @@ The floating sparkle button (bottom-right) opens Ask AI, which can answer questi
  body: `When you first access your dashboard you'll see a"Get Started"checklist on the Home page. It tracks 6 steps:
 
 1. Payment Processing — connect your LunarPay merchant account (Settings → General)
-2. First Customer — add your first customer record
+2. First Contact — add your first contact record
 3. First Proposal — create and send a proposal
 4. Branding — upload your logo and pick brand colors (Settings → Branding)
 5. Email Templates — customise your automated emails (Settings → Email Templates)
@@ -144,16 +144,16 @@ The two tables at the bottom show your 5 most recent proposals (with links to vi
  ],
  },
  {
- id: 'customers',
- label: 'Customers',
+ id: 'contacts',
+ label: 'Contacts',
  icon: Users,
  color: '#10b981',
  articles: [
  {
  id: 'cust-add',
- title: 'Adding a customer',
- tags: ['add customer', 'new customer', 'create contact'],
- body: `Go to Customers in the sidebar. Click the"+ Add Customer"button (top right).
+ title: 'Adding a contact',
+ tags: ['add contact', 'new contact', 'create contact'],
+ body: `Go to Contacts in the sidebar. Click the"+ Add contact"button (top right). Use Import CSV or Export CSV to bulk import or download your list.
 
 Fill in:
 - First Name (required)
@@ -162,26 +162,26 @@ Fill in:
 - Phone
 - Address, City, State, Zip
 
-Click Save. The customer appears in your list immediately.
+Click Save. The contact appears in your list immediately.
 
-Tip: You can also create a customer inline while building a new proposal or invoice — just type their name in the customer search field and select"Add new customer".`,
+Tip: You can also create a contact inline while building a new proposal or invoice — just type their name in the contact search field and select"Add new contact".`,
  },
  {
  id: 'cust-search',
- title: 'Searching and filtering customers',
- tags: ['search', 'find customer', 'filter'],
- body: `On the Customers page there is a search bar at the top. Type any part of a name, email, or phone number and results filter in real time.
+ title: 'Searching and filtering contacts',
+ tags: ['search', 'find contact', 'filter'],
+ body: `On the Contacts page there is a search bar at the top. Type any part of a name, email, or phone number and results filter in real time.
 
 Results are paginated (20 per page). Use the Previous / Next buttons at the bottom to navigate.`,
  },
  {
  id: 'cust-profile',
- title: 'Customer profile and proposal history',
- tags: ['customer profile', 'proposals', 'history', 'refund'],
- body: `Click a customer's name to open their profile. From here you can:
+ title: 'Contact profile and proposal history',
+ tags: ['contact profile', 'proposals', 'history', 'refund'],
+ body: `Click a contact's name to open their profile. From here you can:
 
 - Edit contact details inline
-- See all proposals linked to that customer
+- See all proposals linked to that contact
 - Copy a proposal's public link
 - Resend a proposal email
 - Issue a refund on a completed payment (click Refund on the relevant proposal row, enter the amount, and confirm)
@@ -313,7 +313,7 @@ The Installments and Subscriptions tabs list active payment plans.`,
 
 1. Revenue — total income, broken down by period
 2. Proposals — all proposals with status, amount, and customer
-3. Customers — customer list with contact info and total spend
+3. Contacts — contact list with spend and activity
 4. Aging — outstanding balances and how overdue they are
 5. Payment Methods — breakdown of charges by card type
 6. Refunds — all refunds issued in the period
@@ -458,8 +458,8 @@ Fill in:
 
 Role permissions:
 - Owner — full access to everything including billing
-- Admin — manage proposals, customers, and settings
-- Member — view and manage proposals and customers (no settings access)
+- Admin — manage proposals, contacts, and settings
+- Member — view and manage proposals and contacts (no settings access)
 
 Click Add Member. The team member appears in the list immediately. You can resend their invite, change their role, or remove them at any time.`,
  },
@@ -475,11 +475,11 @@ Owner
 - Cannot be removed (there must always be at least one owner)
 
 Admin
-- Can manage proposals, customers, invoices, and settings
+- Can manage proposals, contacts, invoices, and settings
 - Can invite and remove Members (but not other Admins or Owners)
 
 Member
-- Can view and create proposals and customers
+- Can view and create proposals and contacts
 - Cannot access Settings, Reports, or financial data
 
 To change a member's role: click the menu (three dots) on their row → Change Role.`,

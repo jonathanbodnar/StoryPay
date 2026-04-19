@@ -322,16 +322,16 @@ export default function DashboardOverview() {
  )}
  </div>
 
- {/* Customers */}
+ {/* Contacts */}
  <div className="rounded-2xl bg-white p-5 border border-gray-200">
  <div className="flex items-center justify-between mb-3">
- <span className="text-xs font-semibold uppercase tracking-wider"style={{ color: B.muted }}>Customers</span>
+ <span className="text-xs font-semibold uppercase tracking-wider"style={{ color: B.muted }}>Contacts</span>
  <IconBadge icon={Users} bg="#faf5ff"color="#7c3aed"/>
  </div>
  {loading ? <><Skeleton className="h-7 w-16 mb-2"/><Skeleton className="h-3.5 w-24"/></> : (
  <>
  <p className="text-2xl font-bold tracking-tight"style={{ color: B.primary }}>{(stats?.customerCount ?? 0).toLocaleString()}</p>
- <Link href="/dashboard/customers"className="inline-flex items-center gap-1 text-xs mt-1.5 transition-colors"style={{ color: B.muted }}
+ <Link href="/dashboard/contacts"className="inline-flex items-center gap-1 text-xs mt-1.5 transition-colors"style={{ color: B.muted }}
  onMouseEnter={e => (e.currentTarget.style.color = B.primary)}
  onMouseLeave={e => (e.currentTarget.style.color = B.muted)}>
  View all <ArrowRight size={10} />

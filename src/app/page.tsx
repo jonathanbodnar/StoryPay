@@ -251,7 +251,7 @@ function DashboardScreen() {
           {[
             { label: 'Revenue',   value: '$48.2k', trend: '+12%', up: true },
             { label: 'Proposals', value: '24',      trend: '+4',   up: true },
-            { label: 'Customers', value: '18',      trend: '+3',   up: true },
+            { label: 'Contacts', value: '18',      trend: '+3',   up: true },
             { label: 'Pending',   value: '5',       trend: '-2',   up: false },
           ].map(c => (
             <div key={c.label} className="rounded-xl bg-white border border-gray-100 p-2">

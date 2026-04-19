@@ -1,6 +1,7 @@
 'use client';
 
-import { getIanaTimeZoneOptions } from '@/lib/venue-timezone';
+import { useMemo } from 'react';
+import { formatTimeZoneOptionLabel, getIanaTimeZoneOptions } from '@/lib/venue-timezone';
 
 export function TimezoneSelect({
   value,
@@ -15,7 +16,14 @@ export function TimezoneSelect({
   id?: string;
   disabled?: boolean;
 }) {
-  const zones = getIanaTimeZoneOptions();
+  const options = useMemo(() => {
+    const refDate = new Date();
+    return getIanaTimeZoneOptions().map((z) => ({
+      value: z,
+      label: formatTimeZoneOptionLabel(z, refDate),
+    }));
+  }, []);
+
   return (
     <select
       id={id}
@@ -27,9 +35,9 @@ export function TimezoneSelect({
         'w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-700 focus:border-gray-400 focus:outline-none'
       }
     >
-      {zones.map((z) => (
+      {options.map(({ value: z, label }) => (
         <option key={z} value={z}>
-          {z}
+          {label}
         </option>
       ))}
     </select>

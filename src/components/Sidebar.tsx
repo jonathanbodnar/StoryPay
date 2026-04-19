@@ -29,7 +29,7 @@ interface SidebarProps {
 const menuItems = [
   { label: 'Ask AI', href: '/dashboard/ai', icon: Sparkles },
   { label: 'Home', href: '/dashboard', icon: LayoutDashboard },
-  { label: 'Customers', href: '/dashboard/customers', icon: Users },
+  { label: 'Contacts', href: '/dashboard/contacts', icon: Users },
   { label: 'Calendar', href: '/dashboard/calendar', icon: Calendar },
   { label: 'Directory Listing', href: '/dashboard/listing', icon: Store },
   { label: 'Leads', href: '/dashboard/leads', icon: Inbox },
