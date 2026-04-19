@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
 import { normalizeRule } from '@/lib/recurrence';
+import { syncAppointmentRemindersForEvent } from '@/lib/appointment-reminders';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -123,6 +124,9 @@ export async function PATCH(
     console.error('[calendar PATCH]', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  void syncAppointmentRemindersForEvent(id);
+
   return NextResponse.json(row ? flattenSpace(row) : null);
 }
 

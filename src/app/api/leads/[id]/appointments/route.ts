@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { syncAppointmentRemindersForEvent } from '@/lib/appointment-reminders';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -124,6 +125,8 @@ export async function POST(
     console.error('[POST /api/leads/[id]/appointments] failed:', error);
     return NextResponse.json({ error: error?.message ?? 'Failed to schedule appointment' }, { status: 500 });
   }
+
+  void syncAppointmentRemindersForEvent(event.id as string);
 
   // Auto-add a timestamped note so the activity thread shows the scheduling.
   const when = new Date(start_at).toLocaleString(undefined, {

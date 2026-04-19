@@ -7,6 +7,7 @@ import {
   normalizeRule,
   type RecurrenceRule,
 } from '@/lib/recurrence';
+import { syncAppointmentRemindersForEvent } from '@/lib/appointment-reminders';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -176,6 +177,8 @@ export async function POST(request: NextRequest) {
     console.error('[calendar POST insert]', error);
     return NextResponse.json({ error: error?.message ?? 'Failed to create event' }, { status: 500 });
   }
+
+  void syncAppointmentRemindersForEvent(String((row as { id: string }).id));
 
   return NextResponse.json(flattenSpace(row), { status: 201 });
 }

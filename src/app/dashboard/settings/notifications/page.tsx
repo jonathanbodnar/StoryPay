@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Mail, MessageSquare, Loader2, Save, CheckCircle2 } from 'lucide-react';
+import { Mail, MessageSquare, Loader2, Save, CheckCircle2, Calendar } from 'lucide-react';
+import type { ReminderOffset } from '@/lib/appointment-reminders';
+import { DEFAULT_APPOINTMENT_REMINDER_OFFSETS, normalizeReminderOffsets } from '@/lib/appointment-reminders';
 
 type Settings = Record<string, boolean>;
 
@@ -61,16 +63,44 @@ function NotifRow({ item, value, onChange }: { item: NotifItem; value: boolean; 
  );
 }
 
+function padOffsets(rows: ReminderOffset[]): ReminderOffset[] {
+ const out = rows.slice(0, 5);
+ while (out.length < 5) out.push({ d: 0, h: 0, m: 0 });
+ return out;
+}
+
 export default function NotificationsPage() {
  const [settings, setSettings] = useState<Settings>({});
  const [loading, setLoading] = useState(true);
  const [saving, setSaving] = useState(false);
  const [saved, setSaved] = useState(false);
 
+ const [apptLoading, setApptLoading] = useState(true);
+ const [apptEnabled, setApptEnabled] = useState(true);
+ const [apptCount, setApptCount] = useState(3);
+ const [apptRows, setApptRows] = useState<ReminderOffset[]>(() => padOffsets([...DEFAULT_APPOINTMENT_REMINDER_OFFSETS]));
+ const [apptSaving, setApptSaving] = useState(false);
+ const [apptSaved, setApptSaved] = useState(false);
+
  useEffect(() => {
  fetch('/api/notifications').then(r => r.json()).then(d => {
  setSettings(d);
  }).finally(() => setLoading(false));
+ }, []);
+
+ useEffect(() => {
+ fetch('/api/venues/me', { cache: 'no-store' })
+ .then(r => (r.ok ? r.json() : null))
+ .then((v) => {
+ if (!v) return;
+ if (typeof v.appointment_reminders_enabled === 'boolean') setApptEnabled(v.appointment_reminders_enabled);
+ const raw = v.appointment_reminder_offsets;
+ const norm = normalizeReminderOffsets(raw);
+ const padded = padOffsets(norm);
+ setApptRows(padded);
+ setApptCount(Math.min(5, Math.max(1, norm.length || 3)));
+ })
+ .finally(() => setApptLoading(false));
  }, []);
 
  function toggle(key: string, value: boolean) {
@@ -90,6 +120,37 @@ export default function NotificationsPage() {
  } finally {
  setSaving(false);
  }
+ }
+
+ async function saveAppointmentReminders() {
+ setApptSaving(true);
+ setApptSaved(false);
+ try {
+ const slice = apptRows.slice(0, apptCount);
+ const res = await fetch('/api/venues/me', {
+ method: 'PATCH',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({
+ appointment_reminders_enabled: apptEnabled,
+ appointment_reminder_offsets: slice,
+ }),
+ });
+ if (res.ok) {
+ setApptSaved(true);
+ setTimeout(() => setApptSaved(false), 3000);
+ }
+ } finally {
+ setApptSaving(false);
+ }
+ }
+
+ function patchRow(i: number, field: 'd' | 'h' | 'm', val: number) {
+ setApptRows((prev) => {
+ const next = [...prev];
+ const row = { ...next[i], [field]: val };
+ next[i] = row;
+ return next;
+ });
  }
 
  if (loading) {
@@ -139,6 +200,85 @@ export default function NotificationsPage() {
  onChange={v => toggle(item.key, v)}
  />
  ))}
+ </div>
+ </div>
+
+ {/* Appointment email reminders */}
+ <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+ <div className="flex items-center gap-2.5 px-6 py-4 border-b border-gray-200">
+ <Calendar size={16} className="text-gray-400"/>
+ <div>
+ <h2 className="text-sm font-semibold text-gray-900">Appointment email reminders</h2>
+ <p className="text-xs text-gray-400 mt-0.5">Email your customer before scheduled calendar appointments (not recurring series). Requires a customer email on the event.</p>
+ </div>
+ </div>
+ <div className="px-6 py-5 space-y-4">
+ {apptLoading ? (
+ <div className="flex justify-center py-8"><Loader2 size={22} className="animate-spin text-gray-300"/></div>
+ ) : (
+ <>
+ <div className="flex items-center justify-between py-1">
+ <span className="text-sm font-medium text-gray-900">Send reminder emails</span>
+ <Toggle checked={apptEnabled} onChange={setApptEnabled} />
+ </div>
+ <div>
+ <label className="block text-xs font-medium text-gray-500 mb-1.5">How many reminders (1–5)</label>
+ <select
+ value={apptCount}
+ onChange={(e) => setApptCount(Number(e.target.value))}
+ className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-gray-400 focus:outline-none"
+ >
+ {[1, 2, 3, 4, 5].map((n) => (
+ <option key={n} value={n}>{n}</option>
+ ))}
+ </select>
+ </div>
+ <p className="text-xs text-gray-400">Each reminder is sent this long before the appointment start (venue time zone).</p>
+ <div className="space-y-3">
+ {Array.from({ length: apptCount }, (_, i) => (
+ <div key={i} className="flex flex-wrap items-center gap-2 text-sm">
+ <span className="text-gray-500 w-24 shrink-0">Reminder {i + 1}</span>
+ <input
+ type="number"
+ min={0}
+ max={365}
+ value={apptRows[i]?.d ?? 0}
+ onChange={(e) => patchRow(i, 'd', Math.max(0, Math.min(365, parseInt(e.target.value, 10) || 0)))}
+ className="w-16 rounded-lg border border-gray-200 px-2 py-1.5 text-gray-900"
+ />
+ <span className="text-gray-400">days</span>
+ <input
+ type="number"
+ min={0}
+ value={apptRows[i]?.h ?? 0}
+ onChange={(e) => patchRow(i, 'h', Math.max(0, parseInt(e.target.value, 10) || 0))}
+ className="w-16 rounded-lg border border-gray-200 px-2 py-1.5 text-gray-900"
+ />
+ <span className="text-gray-400">hours</span>
+ <input
+ type="number"
+ min={0}
+ max={59}
+ value={apptRows[i]?.m ?? 0}
+ onChange={(e) => patchRow(i, 'm', Math.max(0, Math.min(59, parseInt(e.target.value, 10) || 0)))}
+ className="w-16 rounded-lg border border-gray-200 px-2 py-1.5 text-gray-900"
+ />
+ <span className="text-gray-400">min</span>
+ </div>
+ ))}
+ </div>
+ <button
+ type="button"
+ onClick={() => void saveAppointmentReminders()}
+ disabled={apptSaving}
+ className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60 transition-all"
+ style={{ backgroundColor: '#1b1b1b' }}
+ >
+ {apptSaving ? <Loader2 size={14} className="animate-spin"/> : apptSaved ? <CheckCircle2 size={14} /> : <Save size={14} />}
+ {apptSaving ? 'Saving...' : apptSaved ? 'Saved!' : 'Save appointment reminders'}
+ </button>
+ </>
+ )}
  </div>
  </div>
 

@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { normalizeReminderOffsets, refreshAppointmentRemindersForVenue } from '@/lib/appointment-reminders';
 
 // Never cache this route — it returns live per-venue data
 export const dynamic = 'force-dynamic';
@@ -56,13 +57,23 @@ export async function PATCH(request: Request) {
     monthly_booking_goal: true,
     listing_marketing_monthly_spend: true,
     timezone: true,
+    appointment_reminders_enabled: true,
+    appointment_reminder_offsets: true,
   };
   const updates: Record<string, unknown> = {};
+
+  if (body.appointment_reminder_offsets !== undefined && body.appointment_reminder_offsets !== null) {
+    if (!Array.isArray(body.appointment_reminder_offsets)) {
+      return NextResponse.json({ error: 'appointment_reminder_offsets must be a JSON array' }, { status: 400 });
+    }
+    updates.appointment_reminder_offsets = normalizeReminderOffsets(body.appointment_reminder_offsets);
+  }
 
   // Use Object.keys on the raw body so null values are explicitly included.
   // This is important for clearing fields like brand_logo_url — Supabase's
   // .update() needs the key present with a null value to write NULL to the DB.
   for (const key of Object.keys(body)) {
+    if (key === 'appointment_reminder_offsets') continue;
     if (allowedFields[key]) {
       updates[key] = body[key] ?? null;
     }
@@ -86,7 +97,7 @@ export async function PATCH(request: Request) {
     const knownCols = ['name', 'service_fee_rate', 'brand_logo_url', 'brand_color',
       'brand_tagline', 'brand_website', 'brand_email', 'brand_phone',
       'brand_address', 'brand_city', 'brand_state', 'brand_zip', 'brand_footer_note', 'monthly_booking_goal',
-      'listing_marketing_monthly_spend', 'timezone'];
+      'listing_marketing_monthly_spend', 'timezone', 'appointment_reminders_enabled', 'appointment_reminder_offsets'];
     for (const k of knownCols) {
       if (k in updates) safeUpdates[k] = updates[k];
     }
@@ -100,6 +111,10 @@ export async function PATCH(request: Request) {
   if (error) {
     console.error('[venues/me] PATCH failed:', error.message);
     return NextResponse.json({ error: 'Failed to update', detail: error.message }, { status: 500 });
+  }
+
+  if ('appointment_reminders_enabled' in updates || 'appointment_reminder_offsets' in updates) {
+    void refreshAppointmentRemindersForVenue(venueId);
   }
 
   return NextResponse.json(venue);
