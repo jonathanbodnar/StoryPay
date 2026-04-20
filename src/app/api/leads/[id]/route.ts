@@ -7,6 +7,7 @@ import { onMarketingStageChanged, onMarketingTagAdded } from '@/lib/marketing-em
 import { syncVenueCustomerFromLeadRow } from '@/lib/venue-customer-pipeline-sync';
 import { getSessionUser } from '@/lib/session';
 import { insertLeadActivity } from '@/lib/lead-activity';
+import { fetchOpenDuplicateMatchesForLeads, refreshDuplicateCandidatesForLead } from '@/lib/lead-duplicates';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -51,8 +52,11 @@ export async function GET(
   }
   if (!leadRow) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+  const dupMap = await fetchOpenDuplicateMatchesForLeads(venueId, [id]);
   const withTags = await leadRowWithTags(venueId, leadRow as Record<string, unknown>);
-  return NextResponse.json({ lead: withTags });
+  return NextResponse.json({
+    lead: { ...withTags, duplicate_matches: dupMap.get(id) ?? [] },
+  });
 }
 
 export async function PATCH(
@@ -233,6 +237,10 @@ export async function PATCH(
       return NextResponse.json({ error: `Update failed: ${error.message}` }, { status: 500 });
     }
     if (!data) return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
+
+    if (updates.email !== undefined || updates.phone !== undefined) {
+      await refreshDuplicateCandidatesForLead(venueId, id);
+    }
   } else {
     const { data: exists, error: exErr } = await supabaseAdmin
       .from('leads')
@@ -262,7 +270,9 @@ export async function PATCH(
     return NextResponse.json({ error: loadErr?.message ?? 'Lead not found' }, { status: 500 });
   }
 
+  const dupMap = await fetchOpenDuplicateMatchesForLeads(venueId, [id]);
   const withTags = await leadRowWithTags(venueId, leadRow as Record<string, unknown>);
+  const leadPayload = { ...withTags, duplicate_matches: dupMap.get(id) ?? [] };
 
   {
     const nextStageId = (leadRow.stage_id as string | null) ?? null;
@@ -340,7 +350,7 @@ export async function PATCH(
     }
   }
 
-  return NextResponse.json({ lead: withTags });
+  return NextResponse.json({ lead: leadPayload });
 }
 
 export async function DELETE(

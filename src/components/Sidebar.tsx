@@ -11,7 +11,8 @@ import {
   Bell, Receipt, Link2, RefreshCw, Plus, Calendar,
   Menu, X, ChevronDown, ChevronLeft, ChevronRight,
   HelpCircle, LogOut, BookOpen, Store, Inbox, Share2, LayoutTemplate, MessageCircle,
-  BarChart3, FileStack, Workflow, Star,
+  BarChart3, FileStack, Workflow,   Star,
+  Images,
 } from 'lucide-react';
 
 interface Venue { id: string; name: string; ghl_location_id: string; }
@@ -68,6 +69,8 @@ const settingsItems = [
 
 const listingItems = [
   { label: 'Dashboard', href: '/dashboard/listing', icon: LayoutDashboard },
+  { label: 'Media library', href: '/dashboard/listing/media', icon: Images },
+  { label: 'Analytics', href: '/dashboard/listing/analytics', icon: BarChart3 },
   { label: 'Reviews', href: '/dashboard/listing/reviews', icon: Star },
 ];
 

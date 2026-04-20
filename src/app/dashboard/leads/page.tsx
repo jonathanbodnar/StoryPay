@@ -54,6 +54,13 @@ interface MarketingTag {
   color?: string | null;
 }
 
+type DuplicateMatchBrief = {
+  other_lead_id: string;
+  reason: 'same_email' | 'same_phone' | 'same_email_and_phone';
+  name: string;
+  email: string;
+};
+
 interface Lead {
   id: string;
   venue_id: string;
@@ -91,6 +98,7 @@ interface Lead {
   assigned_member?: { id: string; name: string; initials: string } | null;
   /** false = opted out of venue marketing email */
   marketing_email_opt_in?: boolean | null;
+  duplicate_matches?: DuplicateMatchBrief[];
 }
 
 interface TimelineItem {
@@ -153,6 +161,19 @@ function formatMoney(n: number | null, hideRevenue = false): string {
 function displayName(lead: Lead): string {
   const composed = [lead.first_name, lead.last_name].filter(Boolean).join(' ').trim();
   return composed || lead.name || 'Unnamed lead';
+}
+
+function duplicateReasonLabel(reason: DuplicateMatchBrief['reason']): string {
+  switch (reason) {
+    case 'same_email_and_phone':
+      return 'Same email and phone';
+    case 'same_email':
+      return 'Same email';
+    case 'same_phone':
+      return 'Same phone';
+    default:
+      return 'Possible duplicate';
+  }
 }
 
 function splitName(full: string): { firstName: string; lastName: string } {
@@ -717,6 +738,22 @@ export default function LeadsPage() {
           onDelete={() => deleteLead(selectedLead.id)}
           onConvert={() => convertToCustomer(selectedLead)}
           onRefresh={loadLeads}
+          onMerged={async (keepId: string, removedId: string) => {
+            await loadLeads();
+            const res = await fetch(`/api/leads/${keepId}`, { cache: 'no-store' });
+            const next = res.ok ? ((await res.json()) as { lead: Lead }).lead : null;
+            setSelectedLead((prev) => {
+              if (!prev) return next;
+              if (prev.id === removedId || prev.id === keepId) return next;
+              return prev;
+            });
+          }}
+          onReloadCurrentLead={async () => {
+            const id = selectedLead?.id;
+            if (!id) return;
+            const res = await fetch(`/api/leads/${id}`, { cache: 'no-store' });
+            if (res.ok) setSelectedLead(((await res.json()) as { lead: Lead }).lead);
+          }}
           onToggleLeadTag={setLeadTagSelection}
           onCreateTagForLead={createTagAndAssignToLead}
         />
@@ -1169,6 +1206,14 @@ function KanbanCard({
           {lead.venue_name && (
             <p className="text-xs text-gray-500 truncate mt-0.5">{lead.venue_name}</p>
           )}
+          {(lead.duplicate_matches?.length ?? 0) > 0 && (
+            <span
+              className="mt-1 inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900"
+              title="Another lead shares email or phone"
+            >
+              <Users className="w-3 h-3" /> Possible duplicate
+            </span>
+          )}
         </div>
         <div className="flex shrink-0 items-start gap-1.5">
           {lead.assigned_member && (
@@ -1307,6 +1352,11 @@ function ListBoard({
                     {lead.venue_name && (
                       <span className="text-xs text-gray-400 truncate">· {lead.venue_name}</span>
                     )}
+                    {(lead.duplicate_matches?.length ?? 0) > 0 && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900">
+                        <Users className="w-3 h-3" /> Duplicate
+                      </span>
+                    )}
                   </div>
                   <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
                     {lead.email && <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> {lead.email}</span>}
@@ -1392,7 +1442,9 @@ type LeadActivityRow = {
 };
 
 function LeadDrawer({
-  lead, pipelines, allTags, stages, hideRevenue, onClose, onUpdate, onDelete, onConvert, onRefresh, onToggleLeadTag,
+  lead, pipelines, allTags, stages, hideRevenue, onClose, onUpdate, onDelete, onConvert, onRefresh, onMerged,
+  onReloadCurrentLead,
+  onToggleLeadTag,
   onCreateTagForLead,
 }: {
   lead: Lead;
@@ -1404,7 +1456,11 @@ function LeadDrawer({
   onUpdate: (patch: Record<string, unknown>) => void | Promise<void>;
   onDelete: () => void;
   onConvert: () => void;
-  onRefresh: () => void;
+  onRefresh: () => void | Promise<void>;
+  /** After merge: reload list and focus the kept lead row in the drawer. */
+  onMerged?: (keepLeadId: string, removedLeadId: string) => void | Promise<void>;
+  /** Re-fetch the open lead from GET /api/leads/[id] (e.g. after dismiss duplicate). */
+  onReloadCurrentLead?: () => void | Promise<void>;
   onToggleLeadTag: (leadId: string, tagId: string) => void;
   onCreateTagForLead: (leadId: string, name: string) => Promise<void>;
 }) {
@@ -1427,6 +1483,7 @@ function LeadDrawer({
   const [loadingActivity, setLoadingActivity] = useState(true);
   const [callSummary, setCallSummary] = useState('');
   const [loggingCall, setLoggingCall] = useState(false);
+  const [dupBusy, setDupBusy] = useState(false);
 
   const loadActivity = useCallback(async () => {
     setLoadingActivity(true);
@@ -1481,6 +1538,8 @@ function LeadDrawer({
       }
       case 'call_logged':
         return typeof d.summary === 'string' ? d.summary : 'Call logged';
+      case 'leads_merged':
+        return 'Merged another inquiry into this lead';
       default:
         return row.action.replace(/_/g, ' ');
     }
@@ -1623,6 +1682,45 @@ function LeadDrawer({
     }
   }
 
+  async function dismissDuplicate(otherLeadId: string) {
+    setDupBusy(true);
+    const res = await fetch('/api/leads/duplicates/dismiss', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lead_id: lead.id, other_lead_id: otherLeadId }),
+    });
+    setDupBusy(false);
+    if (!res.ok) {
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      alert(j.error || 'Could not dismiss');
+      return;
+    }
+    await onRefresh();
+    await onReloadCurrentLead?.();
+  }
+
+  async function mergeDuplicate(keepLeadId: string, mergeLeadId: string) {
+    if (!confirm('Merge these leads? Notes, tasks, tags, and activity move to the lead you keep. This cannot be undone.')) {
+      return;
+    }
+    setDupBusy(true);
+    const res = await fetch('/api/leads/duplicates/merge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keep_lead_id: keepLeadId, merge_lead_id: mergeLeadId }),
+    });
+    setDupBusy(false);
+    if (!res.ok) {
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      alert(j.error || 'Could not merge');
+      return;
+    }
+    if (onMerged) await onMerged(keepLeadId, mergeLeadId);
+    else await onRefresh();
+    void loadActivity();
+    void loadTimeline();
+  }
+
   async function logCall() {
     const summary = callSummary.trim();
     if (!summary) return;
@@ -1655,6 +1753,53 @@ function LeadDrawer({
         </div>
 
         <div className="flex-1 p-6 space-y-6">
+          {(lead.duplicate_matches?.length ?? 0) > 0 && (
+            <section className="rounded-2xl border border-amber-200 bg-amber-50/90 p-4 space-y-3">
+              <p className="text-sm font-semibold text-amber-950">Possible duplicate inquiry</p>
+              <p className="text-xs text-amber-900/80">
+                Another lead in your CRM shares contact info with this one. Dismiss if they are different people, or merge to combine history into one card.
+              </p>
+              <ul className="space-y-3">
+                {(lead.duplicate_matches ?? []).map((dm) => (
+                  <li
+                    key={dm.other_lead_id}
+                    className="rounded-xl border border-amber-200/80 bg-white/80 p-3 text-sm"
+                  >
+                    <p className="font-medium text-gray-900">{dm.name}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{dm.email}</p>
+                    <p className="text-[11px] text-amber-800 mt-1">{duplicateReasonLabel(dm.reason)}</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={dupBusy}
+                        onClick={() => void dismissDuplicate(dm.other_lead_id)}
+                        className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-950 hover:bg-amber-100 disabled:opacity-50"
+                      >
+                        Not a duplicate
+                      </button>
+                      <button
+                        type="button"
+                        disabled={dupBusy}
+                        onClick={() => void mergeDuplicate(lead.id, dm.other_lead_id)}
+                        className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+                      >
+                        Merge into this lead
+                      </button>
+                      <button
+                        type="button"
+                        disabled={dupBusy}
+                        onClick={() => void mergeDuplicate(dm.other_lead_id, lead.id)}
+                        className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        Merge into {dm.name.split(' ')[0] || 'other'}
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {/* Pipeline (multiple venues / processes) */}
           {pipelines.length > 0 && (
             <div>

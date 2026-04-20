@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Loader2, Star, Trash2, Upload, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, FolderOpen, Loader2, Star, Trash2, Upload, Image as ImageIcon } from 'lucide-react';
+import { VenueMediaPickerModal } from '@/components/venue-media/VenueMediaPickerModal';
 
 interface Listing {
   cover_image_url: string | null;
@@ -10,12 +11,15 @@ interface Listing {
 }
 
 const CARD = 'rounded-3xl border border-gray-200 bg-white p-6 sm:p-8';
+const ACCEPT_IMAGES =
+  'image/jpeg,image/jpg,image/png,image/webp,image/avif,image/gif,.jpg,.jpeg,.png,.webp,.avif,.gif';
 
 export default function ListingImagesPage() {
   const [listing, setListing] = useState<Listing>({ cover_image_url: null, gallery_images: [] });
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
   async function load() {
@@ -118,19 +122,28 @@ export default function ListingImagesPage() {
             The first photo (or the one you star) is the cover image couples see first.
           </p>
         </div>
-        <div>
+        <div className="flex flex-wrap items-center gap-2">
           <input
             ref={fileInput}
             type="file"
-            accept="image/*"
+            accept={ACCEPT_IMAGES}
             multiple
             className="hidden"
             onChange={(e) => handleUpload(e.target.files)}
           />
           <button
+            type="button"
+            onClick={() => setLibraryOpen(true)}
+            disabled={uploading}
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-60"
+          >
+            <FolderOpen className="w-4 h-4" />
+            From media library
+          </button>
+          <button
             onClick={() => fileInput.current?.click()}
             disabled={uploading}
-            className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+            className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
             style={{ backgroundColor: '#1b1b1b' }}
           >
             {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
@@ -187,6 +200,18 @@ export default function ListingImagesPage() {
           </div>
         )}
       </section>
+
+      <VenueMediaPickerModal
+        open={libraryOpen}
+        onOpenChange={setLibraryOpen}
+        onSelect={async (url) => {
+          const nextGallery = listing.gallery_images.includes(url)
+            ? listing.gallery_images
+            : [...listing.gallery_images, url];
+          const nextCover = listing.cover_image_url ?? url;
+          await save({ gallery_images: nextGallery, cover_image_url: nextCover });
+        }}
+      />
     </div>
   );
 }

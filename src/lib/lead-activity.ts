@@ -5,7 +5,8 @@ export type LeadActivityAction =
   | 'value_changed'
   | 'assigned_changed'
   | 'call_logged'
-  | 'note_added';
+  | 'note_added'
+  | 'leads_merged';
 
 export async function insertLeadActivity(params: {
   venueId: string;

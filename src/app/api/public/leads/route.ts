@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
+import { recordDuplicateCandidatesForNewLead } from '@/lib/lead-duplicates';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -127,7 +128,7 @@ export async function POST(request: NextRequest) {
       first_touch_utm: Object.keys(utm).length ? utm : {},
       referral_source: typeof payload.referral_source === 'string' ? payload.referral_source.trim() || null : null,
     })
-    .select('id, track_token')
+    .select('id, track_token, created_at, email, phone')
     .single();
 
   if (insertErr || !lead) {
@@ -137,6 +138,15 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     );
   }
+
+  const lr = lead as { id: string; created_at: string; email: string; phone: string | null };
+  void recordDuplicateCandidatesForNewLead(
+    venue.id,
+    lr.id,
+    lr.email,
+    lr.phone,
+    lr.created_at,
+  );
 
   const notifyEnabled = venue.email_notifications !== false;
   if (notifyEnabled) {

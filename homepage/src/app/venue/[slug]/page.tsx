@@ -4,7 +4,9 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { cache } from 'react';
 import { MapPin, Users, DollarSign, Home, Sparkles, Star } from 'lucide-react';
+import { Ga4Scripts } from '@/components/Ga4Scripts';
 import { SaveToWishlistButton } from '@/components/SaveToWishlistButton';
+import { VenueReviewsTabs } from '@/components/VenueReviewsTabs';
 import { VenueFaqSection, VenueMapEmbed, VenueSocialRow } from '@/components/VenuePublicExtras';
 
 const API_BASE = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'https://app.storyvenue.com';
@@ -34,6 +36,7 @@ type PublicVenuePayload = {
     show_map: boolean;
     social_links: Record<string, string>;
     faq: { question: string; answer: string }[];
+    ga4_measurement_id?: string | null;
   };
   reviews: {
     average_rating: number | null;
@@ -48,6 +51,17 @@ type PublicVenuePayload = {
       created_at: string;
     }>;
   };
+  google_reviews: {
+    average_rating: number | null;
+    count: number;
+    items: Array<{
+      author_name: string;
+      rating: number;
+      text: string;
+      published_at: string | null;
+      profile_photo_url: string | null;
+    }>;
+  } | null;
 };
 
 const fetchVenue = cache(async (slug: string): Promise<PublicVenuePayload | null> => {
@@ -119,7 +133,7 @@ export default async function PublicVenuePage({ params }: { params: Promise<{ sl
   const data = await fetchVenue(slug);
   if (!data) notFound();
 
-  const { venue, reviews } = data;
+  const { venue, reviews, google_reviews } = data;
   const locationLine =
     venue.location_full ||
     [venue.location_city, venue.location_state].filter(Boolean).join(', ') ||
@@ -167,6 +181,7 @@ export default async function PublicVenuePage({ params }: { params: Promise<{ sl
 
   return (
     <>
+      <Ga4Scripts measurementId={venue.ga4_measurement_id} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
       <div className="min-h-screen bg-[#fafaf9]">
@@ -381,75 +396,7 @@ export default async function PublicVenuePage({ params }: { params: Promise<{ sl
             </aside>
           </div>
 
-          <section id="reviews" className="scroll-mt-28">
-            <div className="mb-8 flex flex-col gap-4 border-b border-gray-200 pb-8 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <h2
-                  className="text-2xl text-gray-900 sm:text-3xl"
-                  style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
-                >
-                  Reviews
-                </h2>
-                <p className="mt-1 text-sm text-gray-500">Couples who celebrated here</p>
-              </div>
-              {reviews.count > 0 && roundedAvg != null && (
-                <div className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3">
-                  <span className="text-3xl tabular-nums text-gray-900" style={{ fontFamily: "'Playfair Display', Georgia, serif" }}>
-                    {roundedAvg}
-                  </span>
-                  <div>
-                    <Stars value={Math.round(roundedAvg)} size={16} />
-                    <p className="text-xs text-gray-500">{reviews.count} reviews</p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {reviews.items.length === 0 ? (
-              <p className="rounded-3xl border border-dashed border-gray-300 bg-white/60 px-6 py-14 text-center text-sm text-gray-500">
-                No reviews published yet. Check back soon.
-              </p>
-            ) : (
-              <ul className="space-y-5">
-                {reviews.items.map((r) => (
-                  <li
-                    key={r.id}
-                    className="rounded-3xl border border-gray-200/90 bg-white p-6 transition-colors hover:border-gray-300"
-                  >
-                    <Stars value={r.rating} />
-                    {r.title && (
-                      <h3
-                        className="mt-3 text-lg text-gray-900"
-                        style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
-                      >
-                        {r.title}
-                      </h3>
-                    )}
-                    <p className="mt-2 text-[15px] leading-relaxed text-gray-700">{r.body}</p>
-                    <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
-                      <span className="font-semibold text-gray-800">{r.reviewer_name}</span>
-                      {r.wedding_date && (
-                        <span>
-                          Wedding{' '}
-                          {new Date(r.wedding_date + 'T12:00:00').toLocaleDateString(undefined, {
-                            month: 'long',
-                            year: 'numeric',
-                          })}
-                        </span>
-                      )}
-                      <span>
-                        {new Date(r.created_at).toLocaleDateString(undefined, {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                        })}
-                      </span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+          <VenueReviewsTabs venueName={venue.name} storyVenue={reviews} google={google_reviews} />
         </div>
 
         <footer className="border-t border-gray-200 bg-white py-10 text-center text-xs text-gray-400">

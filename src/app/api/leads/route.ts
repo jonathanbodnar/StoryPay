@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { ensureDefaultPipeline, legacyStatusForStageName } from '@/lib/pipelines';
 import { fetchTagsForLeadIds, leadRowWithTags, setLeadTagIds } from '@/lib/lead-tags';
+import { fetchOpenDuplicateMatchesForLeads, recordDuplicateCandidatesForNewLead } from '@/lib/lead-duplicates';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -238,6 +239,8 @@ export async function GET(request: NextRequest) {
     uniqueMerged.map((l) => l.id),
   );
 
+  const dupMap = await fetchOpenDuplicateMatchesForLeads(venueId, uniqueMerged.map((l) => l.id));
+
   const memberIds = [
     ...new Set(
       uniqueMerged
@@ -270,6 +273,7 @@ export async function GET(request: NextRequest) {
       booking_badge: bookingBadge(l),
       tags:          tagMap.get(l.id) ?? [],
       assigned_member: aid ? memberMap.get(aid) ?? null : null,
+      duplicate_matches: dupMap.get(l.id) ?? [],
     };
   });
 
@@ -385,6 +389,15 @@ export async function POST(request: NextRequest) {
   }
 
   const newId = data.id as string;
+  const row = data as LeadRow & { created_at?: string };
+  await recordDuplicateCandidatesForNewLead(
+    venueId,
+    newId,
+    email,
+    body.phone?.trim() || null,
+    String(row.created_at ?? new Date().toISOString()),
+  );
+
   if (Array.isArray(body.tagIds) && body.tagIds.length > 0) {
     await setLeadTagIds(
       venueId,
@@ -393,6 +406,9 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const dupMap = await fetchOpenDuplicateMatchesForLeads(venueId, [newId]);
   const withTags = await leadRowWithTags(venueId, data as Record<string, unknown>);
-  return NextResponse.json({ lead: withTags });
+  return NextResponse.json({
+    lead: { ...withTags, duplicate_matches: dupMap.get(newId) ?? [] },
+  });
 }

@@ -94,6 +94,7 @@ import {
   resolvePostSubmit,
 } from '@/lib/marketing-form-schema';
 import { sanitizeFormHtml } from '@/lib/sanitize-form-html';
+import { VenueMediaPickerModal } from '@/components/venue-media/VenueMediaPickerModal';
 
 const APP_ORIGIN =
   typeof window !== 'undefined'
@@ -647,12 +648,14 @@ function BlockInspector({
   onRemove,
   onDuplicate,
   googleFontNames,
+  onRequestMediaPick,
 }: {
   block: FormBlock;
   onChange: (patch: Partial<FormBlock>) => void;
   onRemove: () => void;
   onDuplicate: () => void;
   googleFontNames: string[];
+  onRequestMediaPick?: (applyUrl: (url: string) => void) => void;
 }) {
   const optsText = (block.options || []).join('\n');
 
@@ -790,12 +793,23 @@ function BlockInspector({
       {block.type === 'image' && (
         <>
           <SettingsRow label="Image URL">
-            <input
-              className={SETTINGS_INPUT}
-              value={block.src ?? ''}
-              onChange={(e) => onChange({ src: e.target.value })}
-              placeholder="https://"
-            />
+            <div className="space-y-2">
+              <input
+                className={SETTINGS_INPUT}
+                value={block.src ?? ''}
+                onChange={(e) => onChange({ src: e.target.value })}
+                placeholder="https://"
+              />
+              {onRequestMediaPick ? (
+                <button
+                  type="button"
+                  className="text-[12px] font-medium text-gray-700 underline underline-offset-2 hover:text-gray-900"
+                  onClick={() => onRequestMediaPick((url) => onChange({ src: url }))}
+                >
+                  Choose from media library
+                </button>
+              ) : null}
+            </div>
           </SettingsRow>
           <SettingsRow label="Alt text">
             <input
@@ -1053,6 +1067,8 @@ export function FormBuilderEditor({
   });
   const [embedOpen, setEmbedOpen] = useState(false);
   const [thankYouOpen, setThankYouOpen] = useState(false);
+  const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
+  const mediaApplyRef = useRef<(url: string) => void>(() => {});
   const [rightTab, setRightTab] = useState<
     'block' | 'settings' | 'theme' | 'submissions' | 'versions'
   >('block');
@@ -1343,6 +1359,11 @@ export function FormBuilderEditor({
     });
     setSelectedId(clone.id);
   }, [selectedId, definition.blocks, patchDefinition]);
+
+  const handleRequestMediaPick = useCallback((applyUrl: (url: string) => void) => {
+    mediaApplyRef.current = applyUrl;
+    setMediaPickerOpen(true);
+  }, []);
 
   const patchSelected = useCallback(
     (patch: Partial<FormBlock>) => {
@@ -1715,6 +1736,7 @@ export function FormBuilderEditor({
                     onRemove={() => selectedId && removeBlock(selectedId)}
                     onDuplicate={duplicateSelected}
                     googleFontNames={googleFontNames}
+                    onRequestMediaPick={handleRequestMediaPick}
                   />
                 ) : (
                   <div className="flex flex-col items-center gap-3 px-2 py-10 text-center">
@@ -1974,6 +1996,15 @@ export function FormBuilderEditor({
           </div>
         </div>
       ) : null}
+
+      <VenueMediaPickerModal
+        open={mediaPickerOpen}
+        onOpenChange={setMediaPickerOpen}
+        onSelect={(url) => {
+          mediaApplyRef.current(url);
+          setMediaPickerOpen(false);
+        }}
+      />
 
       {thankYouOpen ? (
         <div

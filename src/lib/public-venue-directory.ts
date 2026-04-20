@@ -1,4 +1,12 @@
 import { supabaseAdmin } from '@/lib/supabase';
+import { isValidGa4MeasurementId } from '@/lib/ga4';
+import type { GoogleReviewsCachePayload } from '@/lib/google-place-reviews';
+import {
+  isGoogleReviewsCacheStale,
+  isValidGooglePlaceId,
+  parseGoogleReviewsCache,
+  refreshVenueGoogleReviews,
+} from '@/lib/venue-google-reviews';
 
 export type PublicVenueReviewItem = {
   id: string;
@@ -10,6 +18,14 @@ export type PublicVenueReviewItem = {
   created_at: string;
 };
 
+export type PublicGoogleReviewItem = {
+  author_name: string;
+  rating: number;
+  text: string;
+  published_at: string | null;
+  profile_photo_url: string | null;
+};
+
 export type PublicVenueSocialLinks = {
   facebook?: string;
   instagram?: string;
@@ -19,6 +35,25 @@ export type PublicVenueSocialLinks = {
 };
 
 export type PublicVenueFaqItem = { question: string; answer: string };
+
+function publicGoogleFromCache(cache: GoogleReviewsCachePayload | null): {
+  average_rating: number | null;
+  count: number;
+  items: PublicGoogleReviewItem[];
+} {
+  if (!cache) return { average_rating: null, count: 0, items: [] };
+  return {
+    average_rating: cache.rating,
+    count: cache.userRatingCount,
+    items: cache.reviews.map((r) => ({
+      author_name: r.author_name,
+      rating: r.rating,
+      text: r.text,
+      published_at: r.published_at,
+      profile_photo_url: r.profile_photo_url,
+    })),
+  };
+}
 
 export type PublicVenuePayload = {
   venue: {
@@ -43,12 +78,20 @@ export type PublicVenuePayload = {
     show_map: boolean;
     social_links: PublicVenueSocialLinks;
     faq: PublicVenueFaqItem[];
+    /** GA4 web Measurement ID; loaded on public pages when valid. */
+    ga4_measurement_id: string | null;
   };
   reviews: {
     average_rating: number | null;
     count: number;
     items: PublicVenueReviewItem[];
   };
+  /** Present only when the venue connected a Google Place ID. Omit from UI when null. */
+  google_reviews: {
+    average_rating: number | null;
+    count: number;
+    items: PublicGoogleReviewItem[];
+  } | null;
 };
 
 /**
@@ -86,6 +129,10 @@ export async function getPublicVenueBySlug(rawSlug: string): Promise<PublicVenue
         'show_map',
         'social_links',
         'faq',
+        'ga4_measurement_id',
+        'google_place_id',
+        'google_reviews_cache',
+        'google_reviews_fetched_at',
       ].join(','),
     )
     .eq('slug', slug)
@@ -152,6 +199,9 @@ export async function getPublicVenueBySlug(rawSlug: string): Promise<PublicVenue
   const lat = latRaw != null && !Number.isNaN(latRaw) ? latRaw : null;
   const lng = lngRaw != null && !Number.isNaN(lngRaw) ? lngRaw : null;
 
+  const gaRaw = v.ga4_measurement_id != null ? String(v.ga4_measurement_id).trim() : '';
+  const ga4_measurement_id = isValidGa4MeasurementId(gaRaw) ? gaRaw : null;
+
   const socialRaw = v.social_links as Record<string, unknown> | null | undefined;
   const social_links: PublicVenueSocialLinks = {};
   if (socialRaw && typeof socialRaw === 'object' && !Array.isArray(socialRaw)) {
@@ -177,6 +227,19 @@ export async function getPublicVenueBySlug(rawSlug: string): Promise<PublicVenue
       .slice(0, 20);
   }
 
+  let google_reviews: PublicVenuePayload['google_reviews'] = null;
+  const gPlaceRaw = v.google_place_id != null ? String(v.google_place_id).trim() : '';
+  if (gPlaceRaw && isValidGooglePlaceId(gPlaceRaw)) {
+    let gCache = parseGoogleReviewsCache(v.google_reviews_cache);
+    const fetchedAt =
+      v.google_reviews_fetched_at != null ? String(v.google_reviews_fetched_at) : null;
+    if (isGoogleReviewsCacheStale(fetchedAt) || !gCache) {
+      const fresh = await refreshVenueGoogleReviews(venueId, gPlaceRaw);
+      if (fresh) gCache = fresh;
+    }
+    google_reviews = publicGoogleFromCache(gCache);
+  }
+
   return {
     venue: {
       name: String(v.name ?? ''),
@@ -200,11 +263,13 @@ export async function getPublicVenueBySlug(rawSlug: string): Promise<PublicVenue
       show_map: v.show_map === false ? false : true,
       social_links,
       faq,
+      ga4_measurement_id,
     },
     reviews: {
       average_rating,
       count: review_count,
       items,
     },
+    google_reviews,
   };
 }

@@ -9,6 +9,7 @@ import {
   MessageSquareQuote,
   MoreHorizontal,
   Plus,
+  RefreshCw,
   Sparkles,
   Star,
   Trash2,
@@ -106,6 +107,24 @@ export default function ListingReviewsPage() {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [listingSlug, setListingSlug] = useState<string | null>(null);
   const [publicOrigin, setPublicOrigin] = useState('');
+  const [sourceTab, setSourceTab] = useState<'storyvenue' | 'google'>('storyvenue');
+  const [googlePlaceInput, setGooglePlaceInput] = useState('');
+  type GoogleReviewsCacheState = {
+    rating: number | null;
+    userRatingCount: number;
+    reviews: Array<{
+      author_name: string;
+      rating: number;
+      text: string;
+      published_at: string | null;
+      profile_photo_url: string | null;
+    }>;
+  };
+  const [googleCache, setGoogleCache] = useState<GoogleReviewsCacheState | null>(null);
+  const [googleFetchedAt, setGoogleFetchedAt] = useState<string | null>(null);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleSaveErr, setGoogleSaveErr] = useState('');
+  const [googleSaving, setGoogleSaving] = useState(false);
 
   useEffect(() => {
     setPublicOrigin(typeof window !== 'undefined' ? window.location.origin : '');
@@ -143,6 +162,38 @@ export default function ListingReviewsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const loadGoogle = useCallback(async (refresh = false) => {
+    setGoogleLoading(true);
+    setGoogleSaveErr('');
+    try {
+      const res = await fetch(
+        `/api/listing/google-reviews${refresh ? '?refresh=1' : ''}`,
+        { cache: 'no-store' },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setGoogleSaveErr(typeof data.error === 'string' ? data.error : 'Could not load Google reviews');
+        return;
+      }
+      setGooglePlaceInput(typeof data.google_place_id === 'string' ? data.google_place_id : '');
+      setGoogleFetchedAt(data.google_reviews_fetched_at ?? null);
+      const c = data.cache;
+      if (c && typeof c === 'object' && Array.isArray((c as { reviews?: unknown }).reviews)) {
+        setGoogleCache(c as GoogleReviewsCacheState);
+      } else {
+        setGoogleCache(null);
+      }
+    } catch {
+      setGoogleSaveErr('Could not load Google reviews');
+    } finally {
+      setGoogleLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadGoogle(false);
+  }, [loadGoogle]);
 
   const filtered = useMemo(() => {
     if (filter === 'all') return reviews;
@@ -216,6 +267,34 @@ export default function ListingReviewsPage() {
     if (res.ok) await load();
   }
 
+  async function saveGooglePlace() {
+    setGoogleSaving(true);
+    setGoogleSaveErr('');
+    try {
+      const res = await fetch('/api/listing/google-reviews', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ google_place_id: googlePlaceInput.trim() || null }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setGoogleSaveErr(typeof data.error === 'string' ? data.error : 'Save failed');
+        return;
+      }
+      if (data.cache && typeof data.cache === 'object') {
+        setGoogleCache(data.cache as GoogleReviewsCacheState);
+      } else {
+        setGoogleCache(null);
+      }
+      setGoogleFetchedAt(data.google_reviews_fetched_at ?? null);
+    } finally {
+      setGoogleSaving(false);
+    }
+  }
+
+  const gAvg = googleCache?.rating ?? null;
+  const gCnt = googleCache?.userRatingCount ?? 0;
+
   return (
     <div className="min-h-screen bg-[#fafaf9] pb-16">
       <div className="relative overflow-hidden border-b border-gray-200/80 bg-gradient-to-br from-[#faf8f5] via-white to-[#f3f6fa]">
@@ -252,19 +331,67 @@ export default function ListingReviewsPage() {
                 leave reviews you own—like Google, but on your platform.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                setShowComposer(true);
-                setFormError('');
-              }}
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-[#1b1b1b] px-5 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800"
-            >
-              <Plus size={18} />
-              Add review
-            </button>
+            {sourceTab === 'storyvenue' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowComposer(true);
+                  setFormError('');
+                }}
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-[#1b1b1b] px-5 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800"
+              >
+                <Plus size={18} />
+                Add review
+              </button>
+            )}
           </div>
 
+          <div className="mt-8 border-b border-gray-200">
+            <div className="flex gap-0">
+              <button
+                type="button"
+                onClick={() => setSourceTab('storyvenue')}
+                className={classNames(
+                  'flex min-w-0 flex-1 items-center gap-3 border-b-2 px-3 py-3 text-left sm:gap-4 sm:px-4',
+                  sourceTab === 'storyvenue'
+                    ? 'border-gray-900 bg-white/60'
+                    : 'border-transparent text-gray-500 hover:text-gray-800',
+                )}
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-900 text-white">
+                  <Sparkles size={18} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-gray-900">StoryVenue</span>
+                  <span className="block text-xs text-gray-500">
+                    {stats.n === 0 ? '—' : stats.avg.toFixed(1)}/5 · {stats.n} reviews
+                  </span>
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSourceTab('google')}
+                className={classNames(
+                  'flex min-w-0 flex-1 items-center gap-3 border-b-2 px-3 py-3 text-left sm:gap-4 sm:px-4',
+                  sourceTab === 'google'
+                    ? 'border-gray-900 bg-white/60'
+                    : 'border-transparent text-gray-500 hover:text-gray-800',
+                )}
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-[10px] font-bold text-gray-700">
+                  G
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-gray-900">Google</span>
+                  <span className="block text-xs text-gray-500">
+                    {gAvg != null ? `${gAvg.toFixed(1)}/5` : '—'} · {gCnt} reviews
+                  </span>
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {sourceTab === 'storyvenue' ? (
           <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div className="rounded-3xl border border-gray-200/80 bg-white/90 p-6 backdrop-blur-sm">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Average (published)</p>
@@ -299,11 +426,45 @@ export default function ListingReviewsPage() {
               </div>
             </div>
           </div>
+          ) : (
+          <div className="mt-10 grid gap-4 sm:grid-cols-2">
+            <div className="rounded-3xl border border-gray-200/80 bg-white/90 p-6 backdrop-blur-sm">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Google average</p>
+              <div className="mt-2 flex items-baseline gap-3">
+                <span className="font-heading text-4xl text-gray-900">
+                  {gAvg == null ? '—' : gAvg.toFixed(1)}
+                </span>
+                {gAvg != null && <StarsDisplay value={Math.round(gAvg)} size="md" />}
+              </div>
+              <p className="mt-2 text-sm text-gray-500">{gCnt} ratings (Google)</p>
+            </div>
+            <div className="rounded-3xl border border-gray-200/80 bg-white/90 p-6 backdrop-blur-sm">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Last synced</p>
+              <p className="mt-3 text-sm text-gray-700">
+                {googleFetchedAt
+                  ? new Date(googleFetchedAt).toLocaleString(undefined, {
+                      dateStyle: 'medium',
+                      timeStyle: 'short',
+                    })
+                  : 'Not synced yet'}
+              </p>
+              <button
+                type="button"
+                onClick={() => void loadGoogle(true)}
+                disabled={googleLoading || !googlePlaceInput.trim()}
+                className="mt-4 inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+              >
+                {googleLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                Refresh from Google
+              </button>
+            </div>
+          </div>
+          )}
         </div>
       </div>
 
       <div className="mx-auto max-w-5xl px-4 pt-8 sm:px-6">
-        {listingSlug && publicOrigin && (
+        {sourceTab === 'storyvenue' && listingSlug && publicOrigin && (
           <div className="mb-8 rounded-2xl border border-sky-200/80 bg-gradient-to-br from-sky-50/90 to-white px-4 py-4 sm:px-5 sm:py-5">
             <p className="text-sm font-semibold text-sky-950">Show reviews on your website.</p>
             <p className="mt-1 text-xs leading-relaxed text-sky-900/85">
@@ -326,6 +487,89 @@ export default function ListingReviewsPage() {
           </div>
         )}
 
+        {sourceTab === 'google' && (
+          <div className="mb-8 rounded-3xl border border-gray-200 bg-white p-6">
+            <h2 className="font-heading text-lg text-gray-900">Google Business connection</h2>
+            <p className="mt-1 text-sm text-gray-600">
+              Paste your Google Maps Place ID for this venue. We fetch public reviews via Google Places API (server-side).
+              Requires <code className="rounded bg-gray-100 px-1 text-xs">GOOGLE_PLACES_API_KEY</code> or{' '}
+              <code className="rounded bg-gray-100 px-1 text-xs">GOOGLE_MAPS_API_KEY</code> on the server.
+            </p>
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Place ID
+            </label>
+            <input
+              value={googlePlaceInput}
+              onChange={(e) => setGooglePlaceInput(e.target.value)}
+              placeholder="ChIJ…"
+              className="mt-1 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
+            />
+            {googleSaveErr && <p className="mt-2 text-sm text-red-600">{googleSaveErr}</p>}
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void saveGooglePlace()}
+                disabled={googleSaving}
+                className="rounded-2xl bg-[#1b1b1b] px-4 py-2.5 text-sm font-semibold text-white hover:bg-neutral-800 disabled:opacity-50"
+              >
+                {googleSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save & sync'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void loadGoogle(true)}
+                disabled={googleLoading}
+                className="rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
+        )}
+
+        {sourceTab === 'google' && (
+          <div className="mb-10 space-y-4">
+            {googleLoading && (
+              <div className="flex justify-center py-8 text-gray-400">
+                <Loader2 className="h-8 w-8 animate-spin" />
+              </div>
+            )}
+            {!googleLoading &&
+              (googleCache?.reviews?.length ? (
+                <ul className="space-y-4">
+                  {googleCache.reviews.map((r, i) => (
+                    <li
+                      key={`${r.author_name}-${i}`}
+                      className="rounded-3xl border border-gray-200/90 bg-white p-6"
+                    >
+                      <StarsDisplay value={r.rating} />
+                      <p className="mt-2 text-[15px] leading-relaxed text-gray-700">{r.text}</p>
+                      <div className="mt-3 flex flex-wrap gap-3 text-xs text-gray-500">
+                        <span className="font-semibold text-gray-800">{r.author_name}</span>
+                        {r.published_at && (
+                          <span>
+                            {new Date(r.published_at).toLocaleDateString(undefined, {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                            })}
+                          </span>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/80 px-4 py-10 text-center text-sm text-gray-500">
+                  {googlePlaceInput.trim()
+                    ? 'No reviews returned yet. Check your Place ID and API key, then refresh.'
+                    : 'Enter a Place ID above to pull Google reviews.'}
+                </p>
+              ))}
+          </div>
+        )}
+
+        {sourceTab === 'storyvenue' && (
+          <>
         <div className="mb-6 flex flex-wrap gap-2">
           {FILTER_TABS.map((t) => (
             <button
@@ -468,6 +712,8 @@ export default function ListingReviewsPage() {
               </li>
             ))}
           </ul>
+        )}
+          </>
         )}
       </div>
 

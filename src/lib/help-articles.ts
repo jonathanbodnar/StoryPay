@@ -32,14 +32,14 @@ export const HELP_CATEGORIES: HelpCategory[] = [
 
 After logging in you land on the Home dashboard which shows your revenue, pipeline, recent proposals, and recent transactions at a glance.
 
-Navigation lives in the left sidebar (or the hamburger menu on mobile). Top-level items include Home, Ask AI, Contacts, **Conversations**, Calendar, Leads, Reports, What's New, and Help Center. **Venue listing** (directory **Dashboard** + **Reviews**), **Payments**, **Marketing** (analytics, lead capture forms, email tools, trigger links & tags), and **Settings** open as flyout submenus. On desktop you can **collapse** the sidebar with the chevron next to the logo — it becomes a narrow icon rail with a compact mark; your choice is remembered in the browser.
+Navigation lives in the left sidebar (or the hamburger menu on mobile). Top-level items include Home, Ask AI, Contacts, **Conversations**, Calendar, Leads, Reports, What's New, and Help Center. **Venue listing** (directory **Dashboard**, **Media library**, **Photos**, **Analytics**, **Reviews**), **Payments**, **Marketing** (analytics, lead capture forms, email tools, trigger links & tags), and **Settings** open as flyout submenus. On desktop you can **collapse** the sidebar with the chevron next to the logo — it becomes a narrow icon rail with a compact mark; your choice is remembered in the browser.
 
 The main areas:
 - Home — revenue snapshot and recent activity
 - Contacts — CRM profiles with tabs (Overview, Notes, Activity, Payments, Tasks, Documents) and a **pipeline + stage** control in the header (same sales pipelines as Leads)
 - Conversations — unified inbox per contact: **Team only** notes vs **Email contact** messages
 - Calendar — tours, weddings, and events
-- Venue listing — **Dashboard** for how you appear on storyvenue.com (photos, description, publish); **Reviews** for star ratings and testimonials (published reviews feed the public API/embed)
+- Venue listing — **Dashboard** for how you appear on storyvenue.com (description, publish); **Media library** for shared images you reuse across listing, emails, forms, and branding; **Photos** for cover and gallery on the directory page; **Analytics** for GA4 measurement ID; **Reviews** for star ratings and testimonials (published reviews feed the public API/embed)
 - Leads — Kanban/list pipeline for inquiries; editable stages and pipelines
 - Reports — financial exports (owners and admins)
 - Payments flyout — new proposal/invoice, proposals list, templates, installments, subscriptions, transactions
@@ -432,7 +432,7 @@ Description
 Amenities
 - Check off the features your venue offers: Ceremony site, Reception site, Bridal suite, Groom's suite, On-site parking, Wheelchair accessible, In-house catering, BYO catering allowed, Bar service, Dance floor, Overnight accommodations, Pet friendly, Outdoor ceremony, Tented options, etc.
 
-Photos — see the "Uploading photos" article.
+Photos — see the "Uploading photos" article. For images you want to reuse in multiple places (listing gallery, marketing emails, lead capture forms, logo), use **Media library** first — see the dedicated article.
 
 Availability notes
 - Free-form text shown on your listing (e.g. "Booking 2026-2027 now, limited Saturdays in fall").
@@ -468,15 +468,19 @@ Tip: this makes it safe to start the description, switch tabs to upload photos t
         tags: ['photos', 'images', 'upload', 'gallery', 'cover image', 'hero', 'pictures'],
         body: `Your listing supports one cover photo (the hero at the top of the page) and an unlimited gallery below.
 
-To upload:
-1. Go to Venue listing → Dashboard → scroll to the Photos section
-2. Drag and drop an image into the upload area, or click to pick from your device
+Two ways to add images:
+1. **Venue listing → Photos** (/dashboard/listing/images) — upload files from your computer, or click **From media library** to pick an image you already uploaded under **Venue listing → Media library**.
+2. **Venue listing → Dashboard** — the Photos section links to the same photo tools; you can also open **Media library** from the listing overview.
+
+Direct upload from Photos:
+1. Go to Venue listing → Photos (or Dashboard → Photos section → Manage photos)
+2. Click **Upload photos** and choose files, or **From media library** to reuse a shared image
 3. Images upload to secure cloud storage and appear on your listing immediately
 
 Best practices:
 - Cover photo: wide landscape, 1600–2400 px wide, showing your signature space
 - Gallery: mix of ceremony, reception, details, outdoor, bridal suite
-- Accepted formats: JPG, PNG, WebP (max 10MB each)
+- Accepted formats: JPG, PNG, WebP, AVIF, GIF (max 10MB each); Media library uses the same limits. Video is not supported in Media library.
 
 Manage existing images:
 - Drag a gallery image to re-order it
@@ -488,6 +492,27 @@ Troubleshooting:
 - Large files may take 15–30 seconds on slower connections. The status indicator shows "Saving…" while uploads are in flight.
 
 Uploaded photos are public — they're served directly from a CDN so your listing stays fast.`,
+      },
+      {
+        id: 'listing-media-library',
+        title: 'Media library — shared images for listing, email, forms, and branding',
+        tags: ['media library', 'images', 'assets', 'upload', 'reuse', 'photos', 'cdn', 'logo'],
+        body: `The **Media library** is your venue-wide folder for image files. Open it from the sidebar → **Venue listing** → **Media library** (path: /dashboard/listing/media).
+
+What it is for:
+- Upload images once, then reuse them wherever StoryPay needs an image URL — directory **Photos**, **marketing email** templates (Image block), **lead capture forms** (Image block), and **Settings → Branding** (logo — "Choose from media library").
+- Copy any asset's public URL from the library to paste elsewhere if needed.
+
+Rules:
+- **Images only** — JPEG, PNG, WebP, AVIF, or GIF. Max 10 MB per file.
+- **Video uploads are not supported** (use a hosted video link in text/HTML if you need video elsewhere).
+
+Managing files:
+- Upload multiple images from the Media library page; each appears in a grid with file name and size.
+- Use **Copy URL** to put the link on your clipboard.
+- **Delete** removes the file from storage permanently. Any page or email that still pointed at that URL will show a broken image — update those spots after deleting.
+
+Tip: On **Venue listing → Photos**, use **From media library** to add a library image to your gallery without uploading a second copy.`,
       },
       {
         id: 'listing-publish',
@@ -1120,7 +1145,7 @@ Downloads happen instantly in your browser — no email required. For large date
         tags: ['branding', 'logo', 'colors', 'brand', 'customize', 'email colors'],
         body: `Go to Settings → Branding.
 
-Upload your logo by clicking "Upload Logo" and selecting a PNG, JPG, or SVG file (max 5MB). The logo appears in all outgoing emails — it shows in a white header with a colored strip underneath.
+Upload your logo by clicking "Upload Logo" and selecting a PNG, JPG, or SVG file (max 5MB). Or click **Choose from media library** to pick an image you already uploaded in **Venue listing → Media library** (shared images: JPEG, PNG, WebP, AVIF, GIF — no video). The logo appears in all outgoing emails — it shows in a white header with a colored strip underneath.
 
 Choose brand colors:
 - Click a Color Preset (Default, Ivory & Gold, Sage & Stone, Blush & Cream, Coastal Blue, etc.) — saves automatically when clicked.
@@ -1393,7 +1418,7 @@ Note: SMS uses your GHL sub-account's verified A2P phone number automatically �
         id: 'ai-overview',
         title: 'What is Ask AI?',
         tags: ['ask ai', 'ai', 'chat', 'assistant', 'help'],
-        body: `Ask AI is your built-in assistant, powered by your live account data and an internal summary of the StoryPay product — navigation, CRM, **Conversations** inbox, **Venue listing** (directory + reviews), Leads pipelines and intelligence, calendar, payments, marketing tools, team permissions, settings, public listing API/embed notes, and Help Center–style guidance. It knows your current revenue, recent proposals, and — when you're on the **Leads** page — a detailed snapshot of leads, stages, and notes.
+        body: `Ask AI is your built-in assistant, powered by your live account data and an internal summary of the StoryPay product — navigation, CRM, **Conversations** inbox, **Venue listing** (directory, **Media library** for shared images, photos, analytics, reviews), Leads pipelines and intelligence, calendar, payments, marketing tools (including email templates and lead capture forms that can use Media library images), team permissions, settings, public listing API/embed notes, and Help Center–style guidance. It knows your current revenue, recent proposals, and — when you're on the **Leads** page — a detailed snapshot of leads, stages, and notes.
 
 Open it by clicking the sparkle button (bottom-right corner of any page) or by clicking Ask AI in the sidebar.
 
@@ -1407,6 +1432,7 @@ You can ask questions like:
 - "How do listing reviews show on storyvenue.com?" or "Where is the reviews embed?"
 - "What's the difference between Team only and Email contact in Conversations?"
 - On Leads: "What's my total pipeline value?", "Which leads have wedding dates in June?", "Explain weighted vs open pipeline"
+- "What is the Media library?" or "How do I reuse photos in my emails and forms?" or "Where do I upload images for my listing and logo?"
 
 Ask AI answers in plain language without jargon. It uses your real account data to give accurate, personalised answers. The in-app documentation it reads includes weighted pipeline, audit logs, assignable owners, team **Hide $** settings, and up-to-date product areas listed above.`,
       },
@@ -1472,16 +1498,18 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/calendar': ['cal-overview', 'cal-spaces', 'cal-add-event', 'cal-conflicts'],
 
   // Venue listing (directory + reviews)
-  '/dashboard/listing/images': ['listing-photos', 'listing-overview', 'listing-publish'],
+  '/dashboard/listing/media': ['listing-media-library', 'listing-photos', 'listing-overview', 'brand-setup'],
+  '/dashboard/listing/images': ['listing-photos', 'listing-media-library', 'listing-overview', 'listing-publish'],
   '/dashboard/listing/reviews': ['listing-reviews', 'listing-overview', 'listing-publish'],
-  '/dashboard/listing':        ['listing-overview', 'listing-reviews', 'listing-autosave', 'listing-photos', 'listing-publish', 'listing-slug'],
+  '/dashboard/listing':        ['listing-overview', 'listing-media-library', 'listing-reviews', 'listing-autosave', 'listing-photos', 'listing-publish', 'listing-slug'],
 
   // Leads
   '/dashboard/leads': ['leads-overview', 'leads-crm-intelligence', 'leads-kanban', 'leads-filter-search', 'leads-notifications', 'leads-to-proposal'],
 
   // Marketing — native email
   '/dashboard/marketing/analytics': ['leads-overview', 'email-types', 'gs-overview'],
-  '/dashboard/marketing/email': ['leads-overview', 'email-types', 'gs-overview'],
+  '/dashboard/marketing/email': ['leads-overview', 'email-types', 'listing-media-library', 'gs-overview'],
+  '/dashboard/marketing/form-builder': ['listing-media-library', 'leads-overview', 'gs-overview'],
 
   // Payments — new proposal / invoice
   '/dashboard/payments/new':        ['pay-new', 'pay-templates', 'pay-installments'],
@@ -1503,7 +1531,7 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/reports': ['rep-overview', 'rep-download'],
 
   // Settings
-  '/dashboard/settings/branding':        ['brand-setup'],
+  '/dashboard/settings/branding':        ['brand-setup', 'listing-media-library'],
   '/dashboard/settings/email-templates': ['email-types', 'email-variables'],
   '/dashboard/settings/integrations':    ['int-calendly', 'int-google-cal', 'int-quickbooks', 'int-freshbooks'],
   '/dashboard/settings/team':            ['team-invite', 'team-roles'],
@@ -1514,7 +1542,7 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/updates': ['ai-overview', 'gs-overview'],
 
   // AI
-  '/dashboard/ai':   ['ai-overview', 'ai-screenshot', 'ai-voice', 'ai-escalate'],
+  '/dashboard/ai':   ['ai-overview', 'listing-media-library', 'ai-screenshot', 'ai-voice', 'ai-escalate'],
   '/dashboard/help': ['gs-overview', 'gs-sidebar-chrome', 'listing-overview', 'listing-reviews', 'conversations-overview', 'leads-overview', 'leads-crm-intelligence', 'ai-overview', 'cust-pipeline'],
 
   // Signup / login (public pages — harmless if never hit via dashboard)

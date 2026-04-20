@@ -701,12 +701,20 @@ export default function ListingPage() {
               <div className="text-gray-500">Upload, reorder, and pick your cover.</div>
             </div>
           </div>
-          <Link
-            href="/dashboard/listing/images"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
-          >
-            Manage photos
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/dashboard/listing/media"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Media library
+            </Link>
+            <Link
+              href="/dashboard/listing/images"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Manage photos
+            </Link>
+          </div>
         </div>
       </section>
 

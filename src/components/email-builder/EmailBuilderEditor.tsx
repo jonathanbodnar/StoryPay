@@ -18,8 +18,9 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import Link from 'next/link';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, GripVertical, Loader2, Plus, Save, Trash2 } from 'lucide-react';
+import { VenueMediaPickerModal } from '@/components/venue-media/VenueMediaPickerModal';
 import RichTextEditor from '@/components/RichTextEditor';
 import {
   type EmailBlock,
@@ -239,11 +240,13 @@ function BlockInspector({
   onChange,
   onAddToColumn,
   onRemoveNested,
+  onRequestMediaPick,
 }: {
   block: EmailBlock;
   onChange: (patch: Partial<EmailBlock>) => void;
   onAddToColumn: (columnId: string, side: 'left' | 'right', type: EmailBlockType) => void;
   onRemoveNested: (columnId: string, side: 'left' | 'right', childId: string) => void;
+  onRequestMediaPick?: (applyUrl: (url: string) => void) => void;
 }) {
   const alignPick = (
     <div>
@@ -375,6 +378,15 @@ function BlockInspector({
             value={block.src ?? ''}
             onChange={(e) => onChange({ src: e.target.value })}
           />
+          {onRequestMediaPick ? (
+            <button
+              type="button"
+              className="mt-1.5 text-xs font-medium text-brand-700 hover:text-brand-900"
+              onClick={() => onRequestMediaPick((url) => onChange({ src: url }))}
+            >
+              Choose from media library
+            </button>
+          ) : null}
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-500">Alt text</label>
@@ -431,6 +443,13 @@ export function EmailBuilderEditor({
   const [selectedId, setSelectedId] = useState<string | null>(initialDefinition.blocks[0]?.id ?? null);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
+  const mediaApplyRef = useRef<(url: string) => void>(() => {});
+
+  const handleRequestMediaPick = useCallback((applyUrl: (url: string) => void) => {
+    mediaApplyRef.current = applyUrl;
+    setMediaPickerOpen(true);
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -635,6 +654,7 @@ export function EmailBuilderEditor({
                 onChange={patchSelected}
                 onAddToColumn={addToColumn}
                 onRemoveNested={removeNested}
+                onRequestMediaPick={handleRequestMediaPick}
               />
             ) : (
               <p className="text-sm text-gray-500">Select a block in the layout list.</p>
@@ -642,6 +662,15 @@ export function EmailBuilderEditor({
           </div>
         </aside>
       </div>
+
+      <VenueMediaPickerModal
+        open={mediaPickerOpen}
+        onOpenChange={setMediaPickerOpen}
+        onSelect={(url) => {
+          mediaApplyRef.current(url);
+          setMediaPickerOpen(false);
+        }}
+      />
     </div>
   );
 }

@@ -11,11 +11,11 @@ StoryPay is an all-in-one platform for wedding venues to manage proposals, invoi
 
 ## Navigation / Sections
 - Home (Dashboard): Revenue overview, KPI cards, recent proposals and transactions, date range filter.
-- Ask AI: Sidebar entry plus floating sparkle (bottom-right) — answers questions using live account data and this documentation (updated for Venue listing, Reviews, Conversations, public API/embed, and Help Center).
+- Ask AI: Sidebar entry plus floating sparkle (bottom-right) — answers questions using live account data and this documentation (updated for Venue listing, Media library, Reviews, Conversations, public API/embed, and Help Center).
 - Contacts: Full CRM — contact profiles with Overview, Notes, Activity timeline, Payments, Tasks, Documents; configurable sales pipeline and stages in the profile header (aligned with Leads when email matches).
 - Conversations: Unified inbox per contact — **Team only** internal notes (optional @mentions to teammates) vs **Email contact** outbound messages. Threads use venue customers; external sends email when the contact has an email on file. Path: /dashboard/conversations. Related DB: conversation_threads, conversation_messages (migration 022).
 - Calendar: Book and track all venue events (tours, weddings, receptions, tastings, meetings, rehearsals, holds, blocked dates). Syncs with Calendly, Google Calendar, Outlook, and Apple Calendar.
-- Venue listing (sidebar flyout, Store icon): **Dashboard** — edit how the venue appears on storyvenue.com (photos, description, slug, capacity, publish toggle); autosaves. **Reviews** — star ratings and testimonials; statuses published / pending / hidden. Published reviews feed the public directory via API and embed (see below). Paths: /dashboard/listing and /dashboard/listing/reviews.
+- Venue listing (sidebar flyout, Store icon): **Dashboard** — edit how the venue appears on storyvenue.com (description, slug, capacity, publish toggle); autosaves. **Media library** — shared image assets for the venue (upload once, reuse URLs): JPEG, PNG, WebP, AVIF, GIF only; max 10MB each; video uploads are not supported. **Photos** — cover + gallery for the directory listing (upload directly or pick from Media library). **Analytics** — Google Analytics (GA4): save the Measurement ID; gtag loads on the public listing when published; full reports remain in Google Analytics. **Reviews** — star ratings and testimonials; statuses published / pending / hidden. Published reviews feed the public directory via API and embed (see below). Paths: /dashboard/listing, /dashboard/listing/media, /dashboard/listing/images, /dashboard/listing/analytics, /dashboard/listing/reviews.
 - Leads: Kanban and list views for inquiries — same configurable sales pipelines and stages as contact profiles. Includes pipeline intelligence (open pipeline vs weighted forecast, rough referral/directory revenue vs listing spend), per-lead opportunity value on cards, assignable owners, marketing tags, trigger links, an audit trail (stage/value/owner changes and logged calls), and mobile-friendly actions (drag cards, log call, quick note).
 - Reports: 7 downloadable financial reports (CSV, Excel, PDF). Owners and admins only.
 - Payments (sidebar flyout): New, Proposals, Proposal Templates, Installments, Subscriptions, Transactions.
@@ -30,6 +30,12 @@ StoryPay is an all-in-one platform for wedding venues to manage proposals, invoi
 - Reviews embed (for the marketing site): GET /embed/listing-reviews/[slug] — iframe-friendly page; Content-Security-Policy allows framing from storyvenue.com. The Reviews dashboard shows a copy-paste iframe snippet using the venue slug.
 - Full public preview on app host: /venue/[slug] (same data as API).
 - Supabase: listing_reviews table (migration 024); optional listing_reviews_public view for anon-safe reads (migration 025). Service role is used for dashboard APIs.
+
+## Media library (shared venue images)
+- Path: /dashboard/listing/media (sidebar → Venue listing → Media library). Central library for image files your venue reuses across the product.
+- Upload images here; each file gets a stable public URL you can copy. Supported types: JPEG, PNG, WebP, AVIF, GIF. Max 10MB per file. Video uploads are not supported.
+- Where it connects: **Listing photos** (/dashboard/listing/images) — "From media library" adds an image to the gallery. **Marketing → Email templates** — Image block → "Choose from media library". **Marketing → Lead Capture Forms** — Image block → "Choose from media library". **Settings → Branding** — "Choose from media library" for the logo (or upload a file separately). Deleting an asset in Media library removes the file from storage and breaks any remaining links to that URL.
+- Database: venue_media_assets table (migration 030); files stored in Supabase Storage bucket venue-images under paths like {venueId}/media/...
 
 ## Conversations (inbox)
 - List threads with contact names; open thread to load messages.
@@ -128,7 +134,7 @@ StoryPay is an all-in-one platform for wedding venues to manage proposals, invoi
 - Filter by date range. Download as CSV, Excel, or PDF.
 
 ## Branding & Customization
-- Go to Settings → Branding to upload a logo and set brand colors.
+- Go to Settings → Branding to upload a logo and set brand colors. You can also pick a logo image from **Media library** (shared images) via "Choose from media library".
 - Logo and colors appear on all emails, invoices, and proposals sent to clients.
 - Color presets available (Default, Ivory & Gold, Sage & Stone, etc.) — click a preset to apply and save instantly.
 - Custom colors: Primary/button color, background color, button text color.
@@ -181,7 +187,8 @@ StoryPay is an all-in-one platform for wedding venues to manage proposals, invoi
 - How do I see my revenue? Home dashboard (filter by date) or Reports → Revenue.
 - How do I refund a payment? Transactions → Charges → click Refund.
 - Why can't I accept payments? LunarPay account may be pending. Check Settings → Payment Processing.
-- How do I add my logo? Settings → Branding → upload logo file.
+- How do I add my logo? Settings → Branding → upload a logo file, or choose an image from Media library (JPEG/PNG/WebP/AVIF/GIF).
+- How do I upload images once and reuse them? Venue listing → Media library — upload files, copy URLs, or pick from the library on Photos, email templates, forms, and Branding.
 - How do I add a team member? Settings → Team → Add Team Member.
 - How do I add a wedding date or guest count to a contact? Open the contact profile → Overview tab → Wedding Details → edit.
 - How do I add tasks for a contact? Contact profile → Tasks tab → type a task and press Enter.
@@ -431,8 +438,8 @@ ${leadsContext ? '\n' + leadsContext + '\n' : ''}
 - Use numbered lists (1. 2. 3.) or dashes (- item) for lists
 - Keep headings as plain text with a colon, e.g. "How to Access Reports:"
 - When directing the user to a specific page, include ONE navigation link using ONLY this format: [Button Label](/dashboard/path)
-  Examples: [Open Branding Settings](/dashboard/settings/branding) [View Proposals](/dashboard/payments/proposals) [Go to Reports](/dashboard/reports) [Manage Contacts](/dashboard/contacts) [View Transactions](/dashboard/transactions) [Open Calendar](/dashboard/calendar) [Open Integrations](/dashboard/settings/integrations) [Marketing analytics](/dashboard/marketing/analytics) [Email templates](/dashboard/marketing/email/templates) [Trigger links](/dashboard/marketing/trigger-links) [Lead Capture Forms](/dashboard/marketing/form-builder)
-- Only link to real dashboard paths. Valid paths: /dashboard, /dashboard/calendar, /dashboard/contacts, /dashboard/conversations, /dashboard/leads, /dashboard/marketing/analytics, /dashboard/marketing/email/templates, /dashboard/marketing/email/campaigns, /dashboard/marketing/email/automations, /dashboard/marketing/trigger-links, /dashboard/marketing/form-builder, /dashboard/payments/proposals, /dashboard/payments/new, /dashboard/transactions, /dashboard/reports, /dashboard/settings, /dashboard/settings/branding, /dashboard/settings/integrations, /dashboard/settings/team, /dashboard/settings/notifications, /dashboard/settings/email-templates, /dashboard/help
+  Examples: [Open Branding Settings](/dashboard/settings/branding) [View Proposals](/dashboard/payments/proposals) [Go to Reports](/dashboard/reports) [Manage Contacts](/dashboard/contacts) [View Transactions](/dashboard/transactions) [Open Calendar](/dashboard/calendar) [Open Integrations](/dashboard/settings/integrations) [Marketing analytics](/dashboard/marketing/analytics) [Email templates](/dashboard/marketing/email/templates) [Trigger links](/dashboard/marketing/trigger-links) [Lead Capture Forms](/dashboard/marketing/form-builder) [Media library](/dashboard/listing/media) [Listing photos](/dashboard/listing/images)
+- Only link to real dashboard paths. Valid paths: /dashboard, /dashboard/calendar, /dashboard/contacts, /dashboard/conversations, /dashboard/leads, /dashboard/listing, /dashboard/listing/media, /dashboard/listing/images, /dashboard/listing/analytics, /dashboard/listing/reviews, /dashboard/marketing/analytics, /dashboard/marketing/email/templates, /dashboard/marketing/email/campaigns, /dashboard/marketing/email/automations, /dashboard/marketing/trigger-links, /dashboard/marketing/form-builder, /dashboard/payments/proposals, /dashboard/payments/new, /dashboard/transactions, /dashboard/reports, /dashboard/settings, /dashboard/settings/branding, /dashboard/settings/integrations, /dashboard/settings/team, /dashboard/settings/notifications, /dashboard/settings/email-templates, /dashboard/help
 - Place the link on its own line at the end of the relevant sentence or step, not inline mid-sentence
 
 === TONE ===

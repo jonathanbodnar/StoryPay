@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Loader2, Save, Upload, ImageIcon, X, CheckCircle2, FileText, Link2, FileBadge, Mail, Globe } from 'lucide-react';
+import { Loader2, Save, Upload, ImageIcon, X, CheckCircle2, FileText, Link2, FileBadge, Mail, Globe, FolderOpen } from 'lucide-react';
+import { VenueMediaPickerModal } from '@/components/venue-media/VenueMediaPickerModal';
 import { TimezoneSelect } from '@/components/TimezoneSelect';
 import { DEFAULT_VENUE_TIMEZONE, resolveVenueTimezone } from '@/lib/venue-timezone';
 
@@ -129,6 +130,7 @@ export default function BrandingPage() {
  const [saved, setSaved] = useState(false);
  const [logoUploading, setLogoUploading] = useState(false);
  const [logoError, setLogoError] = useState('');
+ const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false);
  const fileRef = useRef<HTMLInputElement>(null);
  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -339,12 +341,17 @@ export default function BrandingPage() {
  {/* Upload controls — no URL input */}
  <div className="flex-1 space-y-2">
  <input ref={fileRef} type="file"accept="image/*"className="hidden"onChange={handleLogoUpload} />
+ <button type="button"onClick={() => setMediaLibraryOpen(true)} disabled={logoUploading}
+ className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all disabled:opacity-50 w-full justify-center">
+ <FolderOpen size={14} />
+ Choose from media library
+ </button>
  <button type="button"onClick={() => fileRef.current?.click()} disabled={logoUploading}
  className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all disabled:opacity-50 w-full justify-center">
  {logoUploading ? <Loader2 size={14} className="animate-spin"/> : <Upload size={14} />}
  {logoUploading ? 'Uploading...' : brand.logo_url ? 'Replace Logo' : 'Upload Logo'}
  </button>
- <p className="text-[10px] text-gray-400">PNG, JPG, SVG — max 5MB. This logo will appear on all emails and invoices.</p>
+ <p className="text-[10px] text-gray-400">PNG, JPG, SVG — max 5MB for file upload. Media library accepts shared images (JPEG, PNG, WebP, AVIF, GIF). This logo will appear on all emails and invoices.</p>
  {logoError && <p className="text-xs text-red-500">{logoError}</p>}
  </div>
  </div>
@@ -524,6 +531,15 @@ export default function BrandingPage() {
  </div>
  </div>
  </div>
+
+ <VenueMediaPickerModal
+ open={mediaLibraryOpen}
+ onOpenChange={setMediaLibraryOpen}
+ onSelect={(url) => {
+ setBrand((b) => ({ ...b, logo_url: url }));
+ void saveNow({ brand_logo_url: url });
+ }}
+ />
  </div>
  );
 }
