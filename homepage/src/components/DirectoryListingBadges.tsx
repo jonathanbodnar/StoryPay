@@ -20,18 +20,16 @@ export function DirectoryListingBadges({
       {verified ? (
         <span className="inline-flex shrink-0" title="Verified venue" aria-label="Verified">
           <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden>
-            <defs>
-              <linearGradient id="hpVerifiedGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#3897F0" />
-                <stop offset="100%" stopColor="#1877D4" />
-              </linearGradient>
-            </defs>
-            <circle cx="12" cy="12" r="11" fill="url(#hpVerifiedGrad)" />
+            {/* Meta-style 12-point rosette, mirrors weddingdirectory + dashboard badges. */}
             <path
-              d="M7.2 12.3l2.8 2.8 6.8-6.8"
+              d="M12.00 0.50 L14.54 2.53 L17.75 2.04 L18.93 5.07 L21.96 6.25 L21.47 9.46 L23.50 12.00 L21.47 14.54 L21.96 17.75 L18.93 18.93 L17.75 21.96 L14.54 21.47 L12.00 23.50 L9.46 21.47 L6.25 21.96 L5.07 18.93 L2.04 17.75 L2.53 14.54 L0.50 12.00 L2.53 9.46 L2.04 6.25 L5.07 5.07 L6.25 2.04 L9.46 2.53 Z"
+              fill="#1D9BF0"
+            />
+            <path
+              d="M6.8 12.4 l3.0 3.0 l7.4 -7.4"
               fill="none"
               stroke="white"
-              strokeWidth="2"
+              strokeWidth="2.4"
               strokeLinecap="round"
               strokeLinejoin="round"
             />
