@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Send, Save, Plus, Trash2 } from 'lucide-react';
 import { formatCents } from '@/lib/utils';
@@ -272,10 +273,13 @@ export default function NewInvoicePage() {
 
  {/* Line Items */}
  <div>
- <div className="flex items-center justify-between mb-3">
+ <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
  <label className="block text-sm font-medium text-gray-700">
  Line Items <span className="text-red-400">*</span>
  </label>
+ <Link href="/dashboard/payments/products" className="text-xs font-medium text-gray-500 hover:text-gray-800 underline underline-offset-2">
+ Product catalog
+ </Link>
  </div>
 
  <div className="rounded-lg border border-gray-200 overflow-hidden">

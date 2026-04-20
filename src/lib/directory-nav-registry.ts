@@ -46,6 +46,7 @@ export const DIRECTORY_NAV_REGISTRY: DirectoryNavRegistryEntry[] = [
   { id: 'nav_listing_directory_billing', label: 'Listing — Plan & billing', pathPrefix: '/dashboard/directory-billing', group: 'listing' },
 
   { id: 'nav_payments_new', label: 'Payments — New', pathPrefix: '/dashboard/payments/new', group: 'payments' },
+  { id: 'nav_payments_products', label: 'Payments — Products', pathPrefix: '/dashboard/payments/products', group: 'payments' },
   { id: 'nav_payments_coupons', label: 'Payments — Coupons', pathPrefix: '/dashboard/payments/coupons', group: 'payments' },
   { id: 'nav_payments_proposals', label: 'Payments — Proposals', pathPrefix: '/dashboard/payments/proposals', group: 'payments' },
   { id: 'nav_payments_installments', label: 'Payments — Installments', pathPrefix: '/dashboard/payments/installments', group: 'payments' },

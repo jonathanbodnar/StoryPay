@@ -175,6 +175,39 @@ export function getCheckoutSession(secretKey: string, sessionId: string) {
   return lpFetch(`/api/v1/checkout/sessions/${sessionId}`, { key: secretKey });
 }
 
+/**
+ * Best-effort merchant product create. LunarPay dashboard supports products; the public
+ * REST shape may vary — we try common fields and return a string id when accepted.
+ */
+export async function tryCreateLunarPayProduct(
+  secretKey: string,
+  payload: { name: string; description?: string | null; priceCents: number; recurrence?: string },
+): Promise<string | null> {
+  const body: Record<string, unknown> = {
+    name: payload.name,
+    description: payload.description || undefined,
+    amount: payload.priceCents,
+    price: payload.priceCents,
+    recurrence: payload.recurrence ?? 'one_time',
+  };
+  try {
+    const res = await fetch(`${LP_BASE_URL}/api/v1/products`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${secretKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { id?: number | string; product_id?: number | string };
+    const id = data.id ?? data.product_id;
+    return id != null ? String(id) : null;
+  } catch {
+    return null;
+  }
+}
+
 // ── Agency webhook management ───────────────────────────────────────
 
 export function getAgencyWebhook() {
