@@ -8,6 +8,7 @@ import { Ga4Scripts } from '@/components/Ga4Scripts';
 import { SaveToWishlistButton } from '@/components/SaveToWishlistButton';
 import { VenueReviewsTabs } from '@/components/VenueReviewsTabs';
 import { VenueFaqSection, VenueMapEmbed, VenueSocialRow } from '@/components/VenuePublicExtras';
+import { DirectoryListingBadges } from '@/components/DirectoryListingBadges';
 
 const API_BASE = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'https://app.storyvenue.com';
 const DIRECTORY_SITE =
@@ -37,6 +38,8 @@ type PublicVenuePayload = {
     social_links: Record<string, string>;
     faq: { question: string; answer: string }[];
     ga4_measurement_id?: string | null;
+    listing_verified?: boolean;
+    listing_sponsored?: boolean;
   };
   reviews: {
     average_rating: number | null;
@@ -134,6 +137,8 @@ export default async function PublicVenuePage({ params }: { params: Promise<{ sl
   if (!data) notFound();
 
   const { venue, reviews, google_reviews } = data;
+  const listingVerified = venue.listing_verified === true;
+  const listingSponsored = venue.listing_sponsored === true;
   const locationLine =
     venue.location_full ||
     [venue.location_city, venue.location_state].filter(Boolean).join(', ') ||
@@ -218,12 +223,19 @@ export default async function PublicVenuePage({ params }: { params: Promise<{ sl
                   >
                     Wedding venue
                   </p>
-                  <h1
-                    className="text-4xl font-semibold tracking-tight text-white sm:text-5xl"
-                    style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
-                  >
-                    {venue.name}
-                  </h1>
+                  <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+                    <h1
+                      className="text-4xl font-semibold tracking-tight text-white sm:text-5xl"
+                      style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
+                    >
+                      {venue.name}
+                    </h1>
+                    <DirectoryListingBadges
+                      verified={listingVerified}
+                      sponsored={listingSponsored}
+                      variant="onDark"
+                    />
+                  </div>
                   {locationLine && (
                     <p className="mt-3 flex items-center gap-2 text-sm text-white/90">
                       <MapPin size={16} className="shrink-0 opacity-90" />
@@ -244,12 +256,19 @@ export default async function PublicVenuePage({ params }: { params: Promise<{ sl
           ) : (
             <div className="border-b border-gray-200 bg-gradient-to-br from-[#f5f2ed] to-[#e8eef5] px-4 py-14 sm:px-8 sm:py-20">
               <div className="mx-auto max-w-5xl">
-                <h1
-                  className="text-4xl font-semibold tracking-tight text-gray-900 sm:text-5xl"
-                  style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
-                >
-                  {venue.name}
-                </h1>
+                <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+                  <h1
+                    className="text-4xl font-semibold tracking-tight text-gray-900 sm:text-5xl"
+                    style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
+                  >
+                    {venue.name}
+                  </h1>
+                  <DirectoryListingBadges
+                    verified={listingVerified}
+                    sponsored={listingSponsored}
+                    variant="onLight"
+                  />
+                </div>
                 {locationLine && (
                   <p className="mt-3 flex items-center gap-2 text-gray-600">
                     <MapPin size={18} />

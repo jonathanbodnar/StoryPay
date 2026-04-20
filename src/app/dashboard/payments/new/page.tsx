@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
  Send, Save, Plus, Trash2, Search, UserPlus, X, ChevronDown,
@@ -8,6 +9,11 @@ import {
 } from 'lucide-react';
 import { formatCents } from '@/lib/utils';
 import dynamic from 'next/dynamic';
+import {
+  computeDiscountCents,
+  canRedeemCoupon,
+  type VenueCouponRow,
+} from '@/lib/venue-coupons-logic';
 
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ssr: false });
 const AIProposalGenerator = dynamic(() => import('@/components/AIProposalGenerator'), { ssr: false });
@@ -15,6 +21,7 @@ const AIProposalGenerator = dynamic(() => import('@/components/AIProposalGenerat
 // ─── Constants ────────────────────────────────────────────────────────────────
 const SURCHARGE_RATE = 0.0275;
 const SURCHARGE_ID = '__surcharge__';
+const COUPON_LINE_ID = '__coupon__';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Mode = 'proposal' | 'invoice';
@@ -22,7 +29,15 @@ type PaymentType = 'full' | 'installment' | 'subscription';
 
 interface Customer { id: number; name: string; email: string; phone?: string; }
 interface Template { id: string; name: string; content: string; }
-interface LineItem { id: string; name: string; description: string; amount: string; isSurcharge?: boolean; }
+interface LineItem {
+  id: string;
+  name: string;
+  description: string;
+  amount: string;
+  isSurcharge?: boolean;
+  isCoupon?: boolean;
+  couponId?: string;
+}
 interface Installment { id: string; amount: string; date: string; }
 interface Product { id: string; name: string; description: string | null; price: number; }
 
@@ -35,6 +50,50 @@ function today() {
 function emptyItem(): LineItem { return { id: uid(), name: '', description: '', amount: '' }; }
 function surcharge(subtotalCents: number): LineItem {
  return { id: SURCHARGE_ID, name: 'Processing Fee (2.75%)', description: 'Credit card processing surcharge', amount: ((subtotalCents * SURCHARGE_RATE) / 100).toFixed(2), isSurcharge: true };
+}
+
+function lineCents(amountStr: string): number {
+  const v = parseFloat(amountStr || '0');
+  return Number.isNaN(v) ? 0 : Math.round(v * 100);
+}
+
+function stripDerived(items: LineItem[]): LineItem[] {
+  return items.filter((i) => !i.isCoupon && !i.isSurcharge);
+}
+
+function withDerivedFromCore(
+  core: LineItem[],
+  hasSurcharge: boolean,
+  applied: string | null,
+  couponList: VenueCouponRow[],
+): LineItem[] {
+  let rows = [...core];
+  if (applied) {
+    const c = couponList.find((x) => x.id === applied);
+    if (c && c.active !== false) {
+      const merchant = rows.reduce((s, i) => s + lineCents(i.amount), 0);
+      const disc = computeDiscountCents(c as VenueCouponRow, merchant);
+      rows.push({
+        id: COUPON_LINE_ID,
+        name: `Discount (${c.code})`,
+        description: c.name || '',
+        amount: disc > 0 ? (-disc / 100).toFixed(2) : '0.00',
+        isCoupon: true,
+        couponId: c.id,
+      });
+    }
+  }
+  const net = rows.reduce((s, i) => s + lineCents(i.amount), 0);
+  if (hasSurcharge) {
+    rows.push({
+      id: SURCHARGE_ID,
+      name: 'Processing Fee (2.75%)',
+      description: 'Credit card processing surcharge',
+      amount: ((net * SURCHARGE_RATE) / 100).toFixed(2),
+      isSurcharge: true,
+    });
+  }
+  return rows;
 }
 
 const INPUT = 'w-full rounded-2xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none transition-colors';
@@ -96,10 +155,10 @@ function LivePreview({
  <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 grid grid-cols-[1fr_80px] text-[10px] font-semibold uppercase tracking-wider text-gray-400">
  <span>Description</span><span className="text-right">Amount</span>
  </div>
- {lineItems.filter(i => parseFloat(i.amount||'0') > 0 || i.name).map(item => (
+ {lineItems.filter(i => i.name || i.isCoupon || parseFloat(i.amount||'0') !== 0).map(item => (
  <div key={item.id} className="px-3 py-2 grid grid-cols-[1fr_80px] border-b border-gray-50 last:border-0">
  <div>
- <p className={`text-xs ${item.isSurcharge ? 'text-gray-500' : 'text-gray-800 font-medium'}`}>{item.name || 'Item'}</p>
+ <p className={`text-xs ${item.isSurcharge ? 'text-gray-500' : item.isCoupon ? 'text-emerald-800 font-medium' : 'text-gray-800 font-medium'}`}>{item.name || 'Item'}</p>
  {item.description && <p className="text-[10px] text-gray-400">{item.description}</p>}
  </div>
  <p className="text-xs text-right text-gray-800">{formatCents(Math.round(parseFloat(item.amount||'0')*100))}</p>
@@ -175,6 +234,8 @@ export default function NewProposalInvoicePage() {
 
  // Line items
  const [lineItems, setLineItems] = useState<LineItem[]>([emptyItem(), surcharge(0)]);
+ const [venueCoupons, setVenueCoupons] = useState<VenueCouponRow[]>([]);
+ const [appliedCouponId, setAppliedCouponId] = useState<string | null>(null);
  const [products, setProducts] = useState<Product[]>([]);
  const [productSuggestions, setProductSuggestions] = useState<Record<string,Product[]>>({});
  const [showSuggestions, setShowSuggestions] = useState<Record<string,boolean>>({});
@@ -261,6 +322,11 @@ export default function NewProposalInvoicePage() {
  const c = d.brand_color;
  setBrandColor(c && c !== '#293745' && c !== '#354859' ? c : '#1b1b1b');
  });
+ fetch('/api/venue-coupons')
+   .then((r) => (r.ok ? r.json() : null))
+   .then((d: { coupons?: VenueCouponRow[] } | null) => {
+     setVenueCoupons(Array.isArray(d?.coupons) ? d!.coupons! : []);
+   });
  }, []);
 
  // Customer search
@@ -292,55 +358,91 @@ export default function NewProposalInvoicePage() {
  }, []);
 
  // ── Line item helpers ──────────────────────────────────────────────────────
- const subtotalCents = lineItems.filter(i=>!i.isSurcharge).reduce((s,i)=>{
- const v=parseFloat(i.amount||'0'); return s+(isNaN(v)?0:Math.round(v*100));
- }, 0);
+ const subtotalCents = lineItems
+   .filter((i) => !i.isSurcharge)
+   .reduce((s, i) => s + lineCents(i.amount), 0);
 
- const totalCents = lineItems.reduce((s,i)=>{
- const v=parseFloat(i.amount||'0'); return s+(isNaN(v)?0:Math.round(v*100));
- }, 0);
+ const totalCents = lineItems.reduce((s, i) => s + lineCents(i.amount), 0);
+
+ function setCouponSelection(id: string | null) {
+   setAppliedCouponId(id);
+   setLineItems((prev) => {
+     const hasSurcharge = prev.some((i) => i.isSurcharge);
+     const core = stripDerived(prev);
+     return withDerivedFromCore(core, hasSurcharge, id, venueCoupons);
+   });
+ }
 
  function updateItem(id: string, field: keyof LineItem, value: string) {
- setLineItems(prev => {
- const updated = prev.map(i => i.id===id ? {...i,[field]:value} : i);
- if (id!==SURCHARGE_ID && field==='amount') {
- const newSub = updated.filter(i=>!i.isSurcharge).reduce((s,i)=>{
- const v=parseFloat(i.amount||'0'); return s+(isNaN(v)?0:Math.round(v*100));
- },0);
- return updated.map(i=>i.isSurcharge?{...i,amount:((newSub*SURCHARGE_RATE)/100).toFixed(2)}:i);
- }
- return updated;
- });
- if (field==='name' && id!==SURCHARGE_ID) {
- clearTimeout(suggestTimers.current[id]);
- suggestTimers.current[id] = setTimeout(()=>{
- const filtered = products.filter(p=>p.name.toLowerCase().includes(value.toLowerCase())).slice(0,5);
- setProductSuggestions(prev=>({...prev,[id]:filtered}));
- setShowSuggestions(prev=>({...prev,[id]:filtered.length>0&&value.length>0}));
- },150);
- }
+   setLineItems((prev) => {
+     if (id === SURCHARGE_ID) {
+       return prev.map((i) => (i.id === id ? { ...i, [field]: value } : i));
+     }
+     if (id === COUPON_LINE_ID) {
+       return prev;
+     }
+     const hasSurcharge = prev.some((i) => i.isSurcharge);
+     const core = stripDerived(prev).map((i) =>
+       i.id === id ? { ...i, [field]: value } : i,
+     );
+     return withDerivedFromCore(core, hasSurcharge, appliedCouponId, venueCoupons);
+   });
+   if (field === 'name' && id !== SURCHARGE_ID && id !== COUPON_LINE_ID) {
+     clearTimeout(suggestTimers.current[id]);
+     suggestTimers.current[id] = setTimeout(() => {
+       const filtered = products
+         .filter((p) => p.name.toLowerCase().includes(value.toLowerCase()))
+         .slice(0, 5);
+       setProductSuggestions((prev) => ({ ...prev, [id]: filtered }));
+       setShowSuggestions((prev) => ({
+         ...prev,
+         [id]: filtered.length > 0 && value.length > 0,
+       }));
+     }, 150);
+   }
  }
 
- function removeItem(id: string) { setLineItems(prev=>prev.filter(i=>i.id!==id)); }
+ function removeItem(id: string) {
+   if (id === COUPON_LINE_ID) {
+     setAppliedCouponId(null);
+   }
+   setLineItems((prev) => {
+     const hasSurcharge = prev.some((i) => i.isSurcharge);
+     const core = stripDerived(prev).filter((i) => i.id !== id);
+     const nextApplied = id === COUPON_LINE_ID ? null : appliedCouponId;
+     return withDerivedFromCore(core, hasSurcharge, nextApplied, venueCoupons);
+   });
+ }
 
  function addItem() {
- setLineItems(prev=>{
- const nonSurcharge = prev.filter(i=>!i.isSurcharge);
- const surchargeLine = prev.filter(i=>i.isSurcharge);
- return [...nonSurcharge, emptyItem(), ...surchargeLine];
- });
+   setLineItems((prev) => {
+     const hasSurcharge = prev.some((i) => i.isSurcharge);
+     const core = [...stripDerived(prev), emptyItem()];
+     return withDerivedFromCore(core, hasSurcharge, appliedCouponId, venueCoupons);
+   });
  }
 
  function selectProduct(itemId: string, p: Product) {
- setLineItems(prev=>{
- const updated = prev.map(i=>i.id===itemId?{...i,name:p.name,description:p.description||'',amount:(p.price/100).toFixed(2)}:i);
- const newSub = updated.filter(i=>!i.isSurcharge).reduce((s,i)=>{const v=parseFloat(i.amount||'0');return s+(isNaN(v)?0:Math.round(v*100));},0);
- return updated.map(i=>i.isSurcharge?{...i,amount:((newSub*SURCHARGE_RATE)/100).toFixed(2)}:i);
- });
- setShowSuggestions(prev=>({...prev,[itemId]:false}));
+   setLineItems((prev) => {
+     const hasSurcharge = prev.some((i) => i.isSurcharge);
+     const core = stripDerived(prev).map((i) =>
+       i.id === itemId
+         ? {
+             ...i,
+             name: p.name,
+             description: p.description || '',
+             amount: (p.price / 100).toFixed(2),
+           }
+         : i,
+     );
+     return withDerivedFromCore(core, hasSurcharge, appliedCouponId, venueCoupons);
+   });
+   setShowSuggestions((prev) => ({ ...prev, [itemId]: false }));
  }
 
- function hasSurcharge() { return lineItems.some(i=>i.isSurcharge); }
+ function hasSurcharge() {
+   return lineItems.some((i) => i.isSurcharge);
+ }
 
  // ── Template select ────────────────────────────────────────────────────────
  function selectTemplate(t: Template) {
@@ -361,9 +463,12 @@ export default function NewProposalInvoicePage() {
  asDraft ? setSaving(true) : setSubmitting(true);
 
  try {
- const lineItemsPayload = lineItems.map(i=>({
- name: i.name, description: i.description,
- amount: Math.round(parseFloat(i.amount||'0')*100),
+ const lineItemsPayload = lineItems.map((i) => ({
+   name: i.name,
+   description: i.description,
+   amount: Math.round(parseFloat(i.amount || '0') * 100),
+   ...(i.isCoupon ? { isCoupon: true, couponId: i.couponId } : {}),
+   ...(i.isSurcharge ? { isSurcharge: true } : {}),
  }));
 
  let paymentConfig = {};
@@ -381,6 +486,8 @@ export default function NewProposalInvoicePage() {
  body: JSON.stringify({
  templateId: selectedTemplate.id,
  customerName: clientName, customerEmail: clientEmail, customerPhone: clientPhone,
+ lineItems: lineItemsPayload,
+ appliedCouponId: appliedCouponId || undefined,
  price: totalCents, paymentType, paymentConfig, asDraft,
  overrideContent: contractHtml !== selectedTemplate.content ? contractHtml : undefined,
  }),
@@ -394,6 +501,7 @@ export default function NewProposalInvoicePage() {
  body: JSON.stringify({
  customerName: clientName, customerEmail: clientEmail, customerPhone: clientPhone,
  lineItems: lineItemsPayload, price: totalCents,
+ appliedCouponId: appliedCouponId || undefined,
  paymentType, paymentConfig, asDraft,
  }),
  });
@@ -600,8 +708,36 @@ export default function NewProposalInvoicePage() {
 
  {/* Line Items */}
  <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
- <div className="px-5 py-4 border-b border-gray-200">
+ <div className="px-5 py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
  <p className="text-sm font-semibold text-gray-900">Line Items</p>
+ <div className="flex flex-wrap items-center gap-2">
+ <label className="text-xs text-gray-500 whitespace-nowrap">Coupon</label>
+ <select
+ value={appliedCouponId ?? ''}
+ onChange={(e) => setCouponSelection(e.target.value || null)}
+ className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none min-w-[180px]"
+ >
+ <option value="">None</option>
+ {venueCoupons.map((c) => {
+ const ok = c.active && canRedeemCoupon(c as VenueCouponRow).ok;
+ const label =
+   c.discount_type === 'percent'
+     ? `${c.code} (${Number(c.discount_percent)}% off)`
+     : `${c.code} ($${((c.discount_amount_cents ?? 0) / 100).toFixed(2)} off)`;
+ return (
+ <option key={c.id} value={c.id} disabled={!ok}>
+ {label}{!c.active ? ' (inactive)' : ''}{!ok && c.active ? ' (unavailable)' : ''}
+ </option>
+ );
+ })}
+ </select>
+ <Link
+ href="/dashboard/payments/coupons"
+ className="text-xs font-medium text-gray-600 hover:text-gray-900 underline underline-offset-2"
+ >
+ Manage coupons
+ </Link>
+ </div>
  </div>
  <div>
  {/* Desktop headers */}
@@ -612,16 +748,22 @@ export default function NewProposalInvoicePage() {
  </div>
  <div className="divide-y divide-gray-50">
  {lineItems.map((item,idx)=>(
- <div key={item.id} className={`px-5 py-3 ${item.isSurcharge?'bg-gray-50/60':''}`}>
+ <div key={item.id} className={`px-5 py-3 ${item.isSurcharge?'bg-gray-50/60':''} ${item.isCoupon?'bg-emerald-50/40':''}`}>
  <div className="flex flex-col sm:grid sm:grid-cols-[1fr_180px_110px_36px] gap-2 sm:gap-3 items-start sm:items-center">
  {/* Name with autocomplete */}
  <div className="relative w-full">
+ {item.isCoupon ? (
+ <div className="w-full rounded-lg border border-emerald-200 bg-emerald-50/50 px-3 py-2 text-sm font-medium text-emerald-900">
+ {item.name}
+ </div>
+ ) : (
  <input type="text"value={item.name}
  onChange={e=>{updateItem(item.id,'name',e.target.value);}}
  onBlur={()=>setTimeout(()=>setShowSuggestions(p=>({...p,[item.id]:false})),150)}
  placeholder={item.isSurcharge?'Processing Fee (2.75%)':`Item ${idx+1}`}
  className={`w-full rounded-lg border px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none transition-colors ${item.isSurcharge?'border-gray-200 bg-gray-100 text-gray-600 font-medium':'border-gray-200 text-gray-900 focus:border-gray-400'}`}/>
- {!item.isSurcharge && showSuggestions[item.id] && (productSuggestions[item.id]||[]).length>0 && (
+ )}
+ {!item.isSurcharge && !item.isCoupon && showSuggestions[item.id] && (productSuggestions[item.id]||[]).length>0 && (
  <div className="absolute top-full left-0 right-0 z-20 mt-1 rounded-2xl border border-gray-200 bg-white overflow-hidden">
  {(productSuggestions[item.id]||[]).map(p=>(
  <button key={p.id} type="button"onMouseDown={()=>selectProduct(item.id,p)}
@@ -633,16 +775,28 @@ export default function NewProposalInvoicePage() {
  </div>
  )}
  </div>
+ {item.isCoupon ? (
+ <p className="w-full rounded-lg border border-emerald-100 bg-white px-3 py-2 text-xs text-emerald-800">{item.description || 'Discount'}</p>
+ ) : (
  <input type="text"value={item.description}
  onChange={e=>updateItem(item.id,'description',e.target.value)}
  placeholder={item.isSurcharge?'Credit card surcharge':'Optional note'}
  className={`w-full rounded-lg border px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none transition-colors ${item.isSurcharge?'border-gray-200 bg-gray-100 text-gray-600':'border-gray-200 text-gray-900 focus:border-gray-400'}`}/>
+ )}
  <div className="relative w-full sm:w-auto">
+ {item.isCoupon ? (
+ <div className="w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-right text-emerald-900">
+ {formatCents(lineCents(item.amount))}
+ </div>
+ ) : (
+ <>
  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
  <input type="number"min="0"step="0.01"value={item.amount}
  onChange={e=>updateItem(item.id,'amount',e.target.value)}
  placeholder="0.00"
  className={`w-full rounded-lg border pl-6 pr-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none transition-colors ${item.isSurcharge?'border-gray-200 bg-gray-100 font-medium':'border-gray-200 focus:border-gray-400'}`}/>
+ </>
+ )}
  </div>
  <button type="button"onClick={()=>removeItem(item.id)}
  className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors flex-shrink-0">
@@ -660,8 +814,19 @@ export default function NewProposalInvoicePage() {
  <Plus size={14}/> Add Line Item
  </button>
  {!hasSurcharge() && (
- <button type="button"onClick={()=>setLineItems(p=>[...p,surcharge(subtotalCents)])}
- className="text-xs text-gray-400 hover:text-gray-700 transition-colors">+ 2.75% fee</button>
+ <button
+ type="button"
+ onClick={() =>
+ setLineItems((prev) => {
+ if (prev.some((i) => i.isSurcharge)) return prev;
+ const core = stripDerived(prev);
+ return withDerivedFromCore(core, true, appliedCouponId, venueCoupons);
+ })
+ }
+ className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
+ >
+ + 2.75% fee
+ </button>
  )}
  </div>
  <div className="text-sm space-y-0.5 text-right">
@@ -842,10 +1007,10 @@ export default function NewProposalInvoicePage() {
  <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200 grid grid-cols-[1fr_90px] text-[11px] font-bold uppercase tracking-wider text-gray-400">
  <span>Description</span><span className="text-right">Amount</span>
  </div>
- {lineItems.filter(i=>i.name||parseFloat(i.amount||'0')>0).map(item=>(
+ {lineItems.filter(i=>i.name||i.isCoupon||parseFloat(i.amount||'0')!==0).map(item=>(
  <div key={item.id} className="px-4 py-3 grid grid-cols-[1fr_90px] border-b border-gray-50 last:border-0">
  <div>
- <p className={`text-sm ${item.isSurcharge?'text-gray-500':'text-gray-900 font-medium'}`}>{item.name||'Item'}</p>
+ <p className={`text-sm ${item.isSurcharge?'text-gray-500':item.isCoupon?'text-emerald-800 font-medium':'text-gray-900 font-medium'}`}>{item.name||'Item'}</p>
  {item.description&&<p className="text-xs text-gray-400 mt-0.5">{item.description}</p>}
  </div>
  <p className="text-sm text-right font-medium text-gray-900">{formatCents(Math.round(parseFloat(item.amount||'0')*100))}</p>

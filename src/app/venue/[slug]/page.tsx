@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import { MapPin } from 'lucide-react';
 import { getPublicVenueBySlug } from '@/lib/public-venue-directory';
 import { ListingReviewsBlock } from '@/components/directory/ListingReviewsBlock';
+import { DirectoryListingBadges } from '@/components/directory/DirectoryListingBadges';
 import { Ga4Scripts } from '@/components/directory/Ga4Scripts';
 import { VenueFaqSection, VenueMapEmbed, VenueSocialRow } from '@/components/directory/VenuePublicBlocks';
 
@@ -76,12 +77,19 @@ export default async function PublicVenuePage({ params }: { params: Promise<{ sl
           <div className="absolute inset-0 bg-gradient-to-t from-black/65 to-transparent" />
           <div className="absolute bottom-0 left-0 right-0 px-4 pb-8 sm:px-8">
             <div className="mx-auto max-w-3xl">
-              <h1
-                className="text-3xl font-semibold text-white sm:text-4xl"
-                style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
-              >
-                {venue.name}
-              </h1>
+              <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+                <h1
+                  className="text-3xl font-semibold text-white sm:text-4xl"
+                  style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
+                >
+                  {venue.name}
+                </h1>
+                <DirectoryListingBadges
+                  verified={venue.listing_verified}
+                  sponsored={venue.listing_sponsored}
+                  variant="onDark"
+                />
+              </div>
               {locationLine && (
                 <p className="mt-2 flex items-center gap-2 text-sm text-white/90">
                   <MapPin size={16} /> {locationLine}
@@ -93,12 +101,19 @@ export default async function PublicVenuePage({ params }: { params: Promise<{ sl
       ) : (
         <div className="border-b border-gray-200 bg-gradient-to-br from-[#f5f2ed] to-[#e8eef5] px-4 py-12 sm:px-8">
           <div className="mx-auto max-w-3xl">
-            <h1
-              className="text-3xl font-semibold text-gray-900 sm:text-4xl"
-              style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
-            >
-              {venue.name}
-            </h1>
+            <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+              <h1
+                className="text-3xl font-semibold text-gray-900 sm:text-4xl"
+                style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
+              >
+                {venue.name}
+              </h1>
+              <DirectoryListingBadges
+                verified={venue.listing_verified}
+                sponsored={venue.listing_sponsored}
+                variant="onLight"
+              />
+            </div>
             {locationLine && (
               <p className="mt-2 flex items-center gap-2 text-gray-600">
                 <MapPin size={18} /> {locationLine}

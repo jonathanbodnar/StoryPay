@@ -13,6 +13,8 @@ import {
   HelpCircle, LogOut, BookOpen, Store, Inbox, Share2, LayoutTemplate, MessageCircle,
   BarChart3, FileStack, Workflow,   Star,
   Images,
+  BadgeCheck,
+  Ticket,
 } from 'lucide-react';
 
 interface Venue { id: string; name: string; ghl_location_id: string; }
@@ -41,6 +43,7 @@ const menuItems = [
 
 const paymentsItems = [
   { label: 'New', href: '/dashboard/payments/new', icon: Plus },
+  { label: 'Coupons', href: '/dashboard/payments/coupons', icon: Ticket },
   { label: 'Proposals', href: '/dashboard/payments/proposals', icon: FileText },
   { label: 'Proposal Templates', href: '/dashboard/proposals/templates', icon: Receipt },
   { label: 'Installments', href: '/dashboard/payments/installments', icon: Calendar },
@@ -72,6 +75,7 @@ const listingItems = [
   { label: 'Media library', href: '/dashboard/listing/media', icon: Images },
   { label: 'Analytics', href: '/dashboard/listing/analytics', icon: BarChart3 },
   { label: 'Reviews', href: '/dashboard/listing/reviews', icon: Star },
+  { label: 'Verified & Sponsored', href: '/dashboard/listing/directory', icon: BadgeCheck },
 ];
 
 type FlyoutGroup = 'payments' | 'marketing' | 'settings' | 'listing' | null;

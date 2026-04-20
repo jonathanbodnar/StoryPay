@@ -6,6 +6,11 @@ import { findOrCreateContact, sendSms, sendEmail as ghlSendEmail, normalizePhone
 import { generateToken } from '@/lib/utils';
 import { sendEmail as directSendEmail } from '@/lib/email';
 import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
+import {
+  normalizeLineItemsFromRequest,
+  validateCouponForProposal,
+  recordCouponRedemption,
+} from '@/lib/venue-coupons-server';
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
@@ -18,9 +23,32 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const {
     customerName, customerEmail, customerPhone,
-    price, lineItems, paymentType, paymentConfig,
+    price, lineItems: lineItemsRaw, paymentType, paymentConfig,
     asDraft,
+    appliedCouponId: appliedCouponIdRaw,
   } = body;
+
+  const appliedCouponId =
+    typeof appliedCouponIdRaw === 'string' && appliedCouponIdRaw.length > 0
+      ? appliedCouponIdRaw
+      : null;
+
+  const lineItemsNorm = normalizeLineItemsFromRequest(lineItemsRaw);
+  const shouldValidateLineItems =
+    Boolean(appliedCouponId) || (Array.isArray(lineItemsRaw) && lineItemsRaw.length > 0);
+  const priceCents = typeof price === 'number' && Number.isFinite(price) ? Math.round(price) : 0;
+
+  if (shouldValidateLineItems) {
+    const couponCheck = await validateCouponForProposal({
+      venueId,
+      appliedCouponId,
+      lineItems: lineItemsNorm,
+      priceCents,
+    });
+    if (!couponCheck.ok) {
+      return NextResponse.json({ error: couponCheck.error }, { status: 400 });
+    }
+  }
 
   if (!asDraft) {
     if (!customerName || !customerEmail) {
@@ -57,8 +85,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const items: { name: string; description: string; amount: number }[] =
-    Array.isArray(lineItems) && lineItems.length > 0 ? lineItems : [];
+  const items = lineItemsNorm;
 
   const formatAmount = (cents: number) =>
     (cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -100,6 +127,9 @@ export async function POST(request: NextRequest) {
       </table>
     </div>`;
 
+  const lineItemsPayload = shouldValidateLineItems ? lineItemsNorm : null;
+  const appliedCouponPayload = shouldValidateLineItems ? appliedCouponId : null;
+
   const { data: proposal, error } = await supabaseAdmin
     .from('proposals')
     .insert({
@@ -115,6 +145,8 @@ export async function POST(request: NextRequest) {
       status: asDraft ? 'draft' : 'sent',
       sent_at: asDraft ? null : new Date().toISOString(),
       public_token: publicToken,
+      line_items: lineItemsPayload,
+      applied_coupon_id: appliedCouponPayload,
     })
     .select()
     .single();
@@ -122,6 +154,18 @@ export async function POST(request: NextRequest) {
   if (error || !proposal) {
     console.error('Invoice creation failed:', error);
     return NextResponse.json({ error: 'Failed to create invoice' }, { status: 500 });
+  }
+
+  if (!asDraft && appliedCouponPayload && proposal.id) {
+    const redeem = await recordCouponRedemption({
+      venueId,
+      couponId: appliedCouponPayload,
+      proposalId: proposal.id,
+      lineItems: lineItemsNorm,
+    });
+    if (!redeem.ok) {
+      console.error('[invoice] coupon redemption failed:', redeem.error);
+    }
   }
 
   const ghlToken = venue ? getGhlToken(venue) : null;

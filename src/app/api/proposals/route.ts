@@ -6,6 +6,11 @@ import { sendSms, sendEmail, findOrCreateContact, normalizePhone, getGhlToken } 
 import { generateToken } from '@/lib/utils';
 import { sendEmail as directSendEmail } from '@/lib/email';
 import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
+import {
+  normalizeLineItemsFromRequest,
+  validateCouponForProposal,
+  recordCouponRedemption,
+} from '@/lib/venue-coupons-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -57,6 +62,9 @@ export async function POST(request: NextRequest) {
     ghlContactId, customerId,
     price, paymentType, paymentConfig,
     asDraft,
+    lineItems: lineItemsRaw,
+    appliedCouponId: appliedCouponIdRaw,
+    overrideContent,
   } = body;
 
   if (!templateId) {
@@ -64,6 +72,28 @@ export async function POST(request: NextRequest) {
   }
 
   const isDraft = !!asDraft;
+
+  const appliedCouponId =
+    typeof appliedCouponIdRaw === 'string' && appliedCouponIdRaw.length > 0
+      ? appliedCouponIdRaw
+      : null;
+
+  const lineItems = normalizeLineItemsFromRequest(lineItemsRaw);
+  const shouldValidateLineItems =
+    Boolean(appliedCouponId) || (Array.isArray(lineItemsRaw) && lineItemsRaw.length > 0);
+  const priceCents = typeof price === 'number' && Number.isFinite(price) ? Math.round(price) : 0;
+
+  if (shouldValidateLineItems) {
+    const couponCheck = await validateCouponForProposal({
+      venueId,
+      appliedCouponId,
+      lineItems,
+      priceCents,
+    });
+    if (!couponCheck.ok) {
+      return NextResponse.json({ error: couponCheck.error }, { status: 400 });
+    }
+  }
 
   if (!isDraft) {
     if (!customerName || !customerEmail) {
@@ -76,6 +106,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'A valid price is required' }, { status: 400 });
     }
   }
+
+  const contentForProposal =
+    typeof overrideContent === 'string' && overrideContent.trim().length > 0
+      ? overrideContent
+      : null;
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
@@ -94,6 +129,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Template not found' }, { status: 404 });
   }
 
+  const resolvedContent = contentForProposal ?? template.content;
+
   const { data: sigFields } = await supabaseAdmin
     .from('proposal_template_fields')
     .select('*')
@@ -101,6 +138,9 @@ export async function POST(request: NextRequest) {
     .order('sort_order', { ascending: true });
 
   const publicToken = generateToken();
+
+  const lineItemsPayload = shouldValidateLineItems ? lineItems : null;
+  const appliedCouponPayload = shouldValidateLineItems ? appliedCouponId : null;
 
   if (isDraft) {
     const { data: proposal, error: insertError } = await supabaseAdmin
@@ -111,13 +151,15 @@ export async function POST(request: NextRequest) {
         customer_name: customerName || null,
         customer_email: customerEmail || null,
         customer_phone: customerPhone || null,
-        content: template.content,
+        content: resolvedContent,
         price: price || 0,
         payment_type: paymentType || 'full',
         payment_config: paymentConfig || {},
         signature_fields: sigFields ?? [],
         public_token: publicToken,
         status: 'draft',
+        line_items: lineItemsPayload,
+        applied_coupon_id: appliedCouponPayload,
       })
       .select()
       .single();
@@ -160,7 +202,7 @@ export async function POST(request: NextRequest) {
       customer_email: customerEmail,
       customer_phone: customerPhone || null,
       customer_lunarpay_id: customerLunarpayId,
-      content: template.content,
+      content: resolvedContent,
       price,
       payment_type: paymentType || 'full',
       payment_config: paymentConfig || {},
@@ -168,12 +210,26 @@ export async function POST(request: NextRequest) {
       public_token: publicToken,
       status: 'sent',
       sent_at: new Date().toISOString(),
+      line_items: lineItemsPayload,
+      applied_coupon_id: appliedCouponPayload,
     })
     .select()
     .single();
 
   if (insertError) {
     return NextResponse.json({ error: insertError.message }, { status: 500 });
+  }
+
+  if (appliedCouponPayload && proposal?.id) {
+    const redeem = await recordCouponRedemption({
+      venueId,
+      couponId: appliedCouponPayload,
+      proposalId: proposal.id,
+      lineItems,
+    });
+    if (!redeem.ok) {
+      console.error('[proposal-send] coupon redemption failed:', redeem.error);
+    }
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;

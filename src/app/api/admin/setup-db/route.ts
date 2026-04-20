@@ -54,6 +54,8 @@ const COLUMNS = [
   { table: 'venues', column: 'ghl_access_token',              sql: `ALTER TABLE public.venues ADD COLUMN IF NOT EXISTS ghl_access_token text;` },
   { table: 'venues', column: 'ghl_refresh_token',             sql: `ALTER TABLE public.venues ADD COLUMN IF NOT EXISTS ghl_refresh_token text;` },
   { table: 'venues', column: 'ghl_location_token',            sql: `ALTER TABLE public.venues ADD COLUMN IF NOT EXISTS ghl_location_token text;` },
+  { table: 'venues', column: 'directory_verified_status',      sql: `ALTER TABLE public.venues ADD COLUMN IF NOT EXISTS directory_verified_status text NOT NULL DEFAULT 'none';` },
+  { table: 'venues', column: 'directory_sponsored_status',     sql: `ALTER TABLE public.venues ADD COLUMN IF NOT EXISTS directory_sponsored_status text NOT NULL DEFAULT 'none';` },
 ];
 
 export async function POST() {

@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase';
+import { isPublicSponsoredStatus, isPublicVerifiedStatus } from '@/lib/directory-badges';
 import { isValidGa4MeasurementId } from '@/lib/ga4';
 import type { GoogleReviewsCachePayload } from '@/lib/google-place-reviews';
 import {
@@ -80,6 +81,10 @@ export type PublicVenuePayload = {
     faq: PublicVenueFaqItem[];
     /** GA4 web Measurement ID; loaded on public pages when valid. */
     ga4_measurement_id: string | null;
+    /** Blue verified badge (admin-approved). */
+    listing_verified: boolean;
+    /** "Sponsored" label (admin-approved). */
+    listing_sponsored: boolean;
   };
   reviews: {
     average_rating: number | null;
@@ -133,6 +138,8 @@ export async function getPublicVenueBySlug(rawSlug: string): Promise<PublicVenue
         'google_place_id',
         'google_reviews_cache',
         'google_reviews_fetched_at',
+        'directory_verified_status',
+        'directory_sponsored_status',
       ].join(','),
     )
     .eq('slug', slug)
@@ -202,6 +209,11 @@ export async function getPublicVenueBySlug(rawSlug: string): Promise<PublicVenue
   const gaRaw = v.ga4_measurement_id != null ? String(v.ga4_measurement_id).trim() : '';
   const ga4_measurement_id = isValidGa4MeasurementId(gaRaw) ? gaRaw : null;
 
+  const verifiedRaw = v.directory_verified_status != null ? String(v.directory_verified_status) : 'none';
+  const sponsoredRaw = v.directory_sponsored_status != null ? String(v.directory_sponsored_status) : 'none';
+  const listing_verified = isPublicVerifiedStatus(verifiedRaw);
+  const listing_sponsored = isPublicSponsoredStatus(sponsoredRaw);
+
   const socialRaw = v.social_links as Record<string, unknown> | null | undefined;
   const social_links: PublicVenueSocialLinks = {};
   if (socialRaw && typeof socialRaw === 'object' && !Array.isArray(socialRaw)) {
@@ -264,6 +276,8 @@ export async function getPublicVenueBySlug(rawSlug: string): Promise<PublicVenue
       social_links,
       faq,
       ga4_measurement_id,
+      listing_verified,
+      listing_sponsored,
     },
     reviews: {
       average_rating,

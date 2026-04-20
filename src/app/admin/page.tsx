@@ -8,8 +8,9 @@ import {
   TrendingUp, LogOut, Home,
   Megaphone, Plus, Trash2, Pencil, X, Loader2, ThumbsUp, ThumbsDown,
   Check, BarChart2, ExternalLink, ChevronRight, Search,
-  LayoutDashboard, Menu, Lightbulb, BookOpen, Star, Globe,
+  LayoutDashboard, Menu, Lightbulb, BookOpen, Star, Globe, BadgeCheck,
 } from 'lucide-react';
+import { DirectoryBadgesAdminPanel, type VenueDirectoryRow } from '@/components/admin/DirectoryBadgesAdminPanel';
 
 // Lazy-load the WYSIWYG editor so it doesn't affect admin initial load
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
@@ -347,7 +348,7 @@ export default function AdminPage() {
   const [authState, setAuthState]   = useState<AuthState>('loading');
   const [secret, setSecret]         = useState('');
   const [loginError, setLoginError] = useState('');
-  const [activeTab, setActiveTab]   = useState<'dashboard' | 'venues' | 'announcements' | 'feature-requests' | 'suggested-articles' | 'search-analytics' | 'article-ratings' | 'blog' | 'seo-pages' | 'trends'>('dashboard');
+  const [activeTab, setActiveTab]   = useState<'dashboard' | 'venues' | 'directory-badges' | 'announcements' | 'feature-requests' | 'suggested-articles' | 'search-analytics' | 'article-ratings' | 'blog' | 'seo-pages' | 'trends'>('dashboard');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // Stats
@@ -486,6 +487,9 @@ export default function AdminPage() {
   useEffect(() => { if (authState === 'authenticated' && activeTab === 'suggested-articles') fetchSuggestedArticles(); }, [authState, activeTab, fetchSuggestedArticles]);
   useEffect(() => { if (authState === 'authenticated' && activeTab === 'search-analytics') fetchSearchAnalytics(); }, [authState, activeTab, fetchSearchAnalytics]);
   useEffect(() => { if (authState === 'authenticated' && activeTab === 'article-ratings') fetchArticleRatings(); }, [authState, activeTab, fetchArticleRatings]);
+  useEffect(() => {
+    if (authState === 'authenticated' && activeTab === 'directory-badges') void fetchVenues();
+  }, [authState, activeTab, fetchVenues]);
 
   async function openFeatureRequest(id: string) {
     setFrDetailLoading(true);
@@ -681,6 +685,7 @@ export default function AdminPage() {
   const navItems = [
     { key: 'dashboard',          label: 'Dashboard',          icon: LayoutDashboard },
     { key: 'venues',             label: 'Venues',             icon: Building2 },
+    { key: 'directory-badges',   label: 'Directory badges',   icon: BadgeCheck },
     { key: 'blog',               label: 'Blog Posts',         icon: BookOpen },
     { key: 'seo-pages',          label: 'SEO / Pages',        icon: Globe },
     { key: 'trends',             label: 'Google Trends',      icon: TrendingUp },
@@ -1199,6 +1204,13 @@ export default function AdminPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {activeTab === 'directory-badges' && (
+          <DirectoryBadgesAdminPanel
+            venues={venues as unknown as VenueDirectoryRow[]}
+            onRefresh={fetchVenues}
+          />
         )}
 
         {/* ── Announcements Tab ── */}

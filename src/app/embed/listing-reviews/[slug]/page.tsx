@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { getPublicVenueBySlug } from '@/lib/public-venue-directory';
 import { Ga4Scripts } from '@/components/directory/Ga4Scripts';
+import { DirectoryListingBadges } from '@/components/directory/DirectoryListingBadges';
 import { ListingReviewsBlock } from '@/components/directory/ListingReviewsBlock';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com';
@@ -18,6 +19,14 @@ export default async function EmbedListingReviewsPage({ params }: { params: Prom
   return (
     <div className="min-h-0 bg-[#fafaf9] p-4 antialiased">
       <Ga4Scripts measurementId={data.venue.ga4_measurement_id} />
+      <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="text-base font-semibold text-gray-900">{data.venue.name}</span>
+        <DirectoryListingBadges
+          verified={data.venue.listing_verified}
+          sponsored={data.venue.listing_sponsored}
+          variant="onLight"
+        />
+      </div>
       <ListingReviewsBlock
         venueName={data.venue.name}
         reviews={data.reviews}
