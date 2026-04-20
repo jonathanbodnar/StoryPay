@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import {
   DollarSign, Users, FileText, Clock, XCircle, Building2,
@@ -29,6 +30,55 @@ import {
 import DateRangePicker, { DateRange, PRESETS } from '@/components/DateRangePicker';
 
 const BRAND = '#1b1b1b';
+
+type AdminTabKey =
+  | 'dashboard'
+  | 'venues'
+  | 'directory-plans'
+  | 'announcements'
+  | 'feature-requests'
+  | 'suggested-articles'
+  | 'search-analytics'
+  | 'article-ratings'
+  | 'blog'
+  | 'seo-pages'
+  | 'trends';
+
+const ADMIN_TAB_KEYS: ReadonlySet<string> = new Set<AdminTabKey>([
+  'dashboard',
+  'venues',
+  'directory-plans',
+  'announcements',
+  'feature-requests',
+  'suggested-articles',
+  'search-analytics',
+  'article-ratings',
+  'blog',
+  'seo-pages',
+  'trends',
+]);
+
+const PAGE_LABELS: Record<string, { label: string; url: string; description: string }> = {
+  home:    { label: 'Homepage',       url: 'storypay.io/',          description: 'Main landing page' },
+  blog:    { label: 'Blog Index',     url: 'storypay.io/blog',      description: 'Blog listing page' },
+  login:   { label: 'Login Page',     url: 'storypay.io/login',     description: 'Sign-in page' },
+  privacy: { label: 'Privacy Policy', url: 'storypay.io/privacy',   description: 'Privacy policy page' },
+  terms:   { label: 'Terms of Use',   url: 'storypay.io/terms',     description: 'Terms of use page' },
+};
+
+function parseAdminSegments(segments: string[]): { tab: AdminTabKey; rest: string[] } {
+  if (segments.length === 0) return { tab: 'dashboard', rest: [] };
+  const [first, ...rest] = segments;
+  if (ADMIN_TAB_KEYS.has(first)) return { tab: first as AdminTabKey, rest };
+  return { tab: 'dashboard', rest: [] };
+}
+
+function adminHref(tab: AdminTabKey, rest: string[] = []): string {
+  if (tab === 'dashboard') return '/admin';
+  const base = `/admin/${tab}`;
+  if (rest.length) return `${base}/${rest.map(encodeURIComponent).join('/')}`;
+  return base;
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface Venue { id: string; name: string; email: string | null; ghl_location_id: string | null; onboarding_status: string; setup_completed: boolean; created_at: string; login_url: string | null; venue_tokens: { token: string }[]; }
@@ -357,10 +407,33 @@ function FeatureRequestsAdminTab({
 }
 
 export default function AdminPage() {
+  const params = useParams();
+  const router = useRouter();
+  const pathSegments = useMemo(() => {
+    const raw = params.slug;
+    if (raw == null) return [] as string[];
+    return Array.isArray(raw) ? raw : [raw];
+  }, [params.slug]);
+
+  const { tab: activeTab, rest: tabRest } = parseAdminSegments(pathSegments);
+
+  const goBlog = useCallback(
+    (sub: string[]) => {
+      router.push(sub.length ? adminHref('blog', sub) : adminHref('blog'));
+    },
+    [router],
+  );
+
+  const goSeoPage = useCallback(
+    (key: string) => {
+      router.replace(adminHref('seo-pages', [key]));
+    },
+    [router],
+  );
+
   const [authState, setAuthState]   = useState<AuthState>('loading');
   const [secret, setSecret]         = useState('');
   const [loginError, setLoginError] = useState('');
-  const [activeTab, setActiveTab]   = useState<'dashboard' | 'venues' | 'directory-plans' | 'announcements' | 'feature-requests' | 'suggested-articles' | 'search-analytics' | 'article-ratings' | 'blog' | 'seo-pages' | 'trends'>('dashboard');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // Stats
@@ -489,6 +562,36 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => { fetchVenues(); }, [fetchVenues]);
+
+  useEffect(() => {
+    if (authState !== 'authenticated') return;
+    if (pathSegments.length === 0) return;
+    if (!ADMIN_TAB_KEYS.has(pathSegments[0])) router.replace('/admin');
+  }, [authState, pathSegments, router]);
+
+  useEffect(() => {
+    if (authState !== 'authenticated') return;
+    if (activeTab !== 'seo-pages') return;
+    if (tabRest.length === 0) {
+      router.replace(adminHref('seo-pages', ['home']));
+      return;
+    }
+    const key = tabRest[0];
+    if (tabRest.length > 1 || !(key in PAGE_LABELS)) {
+      router.replace(adminHref('seo-pages', ['home']));
+    }
+  }, [authState, activeTab, tabRest, router]);
+
+  useEffect(() => {
+    if (authState !== 'authenticated') return;
+    if (activeTab !== 'blog') return;
+    if (tabRest.length === 0) return;
+    const [a, b] = tabRest;
+    if (a === 'new' && tabRest.length === 1) return;
+    if (a === 'edit' && b && tabRest.length === 2) return;
+    router.replace(adminHref('blog'));
+  }, [authState, activeTab, tabRest, router]);
+
   useEffect(() => { if (authState === 'authenticated') { fetchStats(dateRange); fetchAnnouncements(); } }, [authState, fetchStats, fetchAnnouncements, dateRange]);
   useEffect(() => { if (authState === 'authenticated' && activeTab === 'suggested-articles') fetchSuggestedArticles(); }, [authState, activeTab, fetchSuggestedArticles]);
   useEffect(() => { if (authState === 'authenticated' && activeTab === 'search-analytics') fetchSearchAnalytics(); }, [authState, activeTab, fetchSearchAnalytics]);
@@ -701,16 +804,21 @@ export default function AdminPage() {
       <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
         {navItems.map(({ key, label, icon: Icon }) => {
           const active = activeTab === key;
+          const href =
+            key === 'seo-pages'
+              ? adminHref('seo-pages', ['home'])
+              : adminHref(key as AdminTabKey);
           return (
-            <button
+            <Link
               key={key}
-              onClick={() => { setActiveTab(key); setMobileSidebarOpen(false); }}
+              href={href}
+              onClick={() => setMobileSidebarOpen(false)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${active ? 'text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
               style={active ? { backgroundColor: BRAND } : {}}
             >
               <Icon size={16} />
               <span>{label}</span>
-            </button>
+            </Link>
           );
         })}
       </nav>
@@ -1129,7 +1237,7 @@ export default function AdminPage() {
                   <ThumbsUp size={16} style={{ color: BRAND }} />
                   <p className="text-sm font-semibold text-gray-900">Top Feature Requests</p>
                 </div>
-                <Link href="/admin#announcements" className="text-xs text-gray-400 hover:text-gray-700 transition-colors">View all in venues</Link>
+                <Link href={adminHref('announcements')} className="text-xs text-gray-400 hover:text-gray-700 transition-colors">View all in venues</Link>
               </div>
               <div className="divide-y divide-gray-50">
                 {!statsLoading && (stats?.featureRequests ?? []).length === 0 && (
@@ -1664,10 +1772,15 @@ export default function AdminPage() {
         )}
 
         {/* ── Blog Posts Tab ── */}
-        {activeTab === 'blog' && <BlogTab />}
+        {activeTab === 'blog' && <BlogTab subSegments={tabRest} onNavigate={goBlog} />}
 
         {/* ── SEO / Pages Tab ── */}
-        {activeTab === 'seo-pages' && <SeoPageTab />}
+        {activeTab === 'seo-pages' && (
+          <SeoPageTab
+            urlPageKey={tabRest[0] && tabRest[0] in PAGE_LABELS ? tabRest[0] : 'home'}
+            onPageKeyChange={goSeoPage}
+          />
+        )}
 
         {/* ── Google Trends Tab ── */}
         {activeTab === 'trends' && <TrendsTab />}
@@ -1679,7 +1792,13 @@ export default function AdminPage() {
 }
 
 // ─── Blog CMS component (separate to keep admin page clean) ──────────────────
-function BlogTab() {
+function BlogTab({
+  subSegments,
+  onNavigate,
+}: {
+  subSegments: string[];
+  onNavigate: (next: string[]) => void;
+}) {
   const [posts, setPosts] = React.useState<BlogPost[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [editing, setEditing] = React.useState<BlogPost | null>(null);
@@ -1693,9 +1812,49 @@ function BlogTab() {
       status: 'draft', noindex: false };
   }
 
+  function closeEditor() {
+    setEditing(null);
+    setCreating(false);
+    setForm(emptyPost());
+    onNavigate([]);
+  }
+
   React.useEffect(() => {
     fetch('/api/admin/blog').then(r => r.ok ? r.json() : []).then(setPosts).finally(() => setLoading(false));
   }, []);
+
+  React.useEffect(() => {
+    const [a, b] = subSegments;
+    if (!a) {
+      setCreating(false);
+      setEditing(null);
+      setForm(emptyPost());
+      return;
+    }
+    if (a === 'new' && subSegments.length === 1) {
+      setCreating(true);
+      setEditing(null);
+      setForm(emptyPost());
+      return;
+    }
+    if (a === 'edit' && b && subSegments.length === 2) {
+      setCreating(false);
+      setEditing(null);
+      setForm(emptyPost());
+    }
+  }, [subSegments]);
+
+  React.useEffect(() => {
+    const [a, b] = subSegments;
+    if (a !== 'edit' || !b || loading) return;
+    const post = posts.find(p => p.id === b);
+    if (post) {
+      setEditing(post);
+      setForm({ ...post, tags: post.tags || [] });
+    } else {
+      onNavigate([]);
+    }
+  }, [subSegments, posts, loading, onNavigate]);
 
   function autoSlug(title: string) {
     return title.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').trim();
@@ -1720,7 +1879,7 @@ function BlogTab() {
       if (res.ok) {
         const saved = await res.json();
         setPosts(p => editing ? p.map(x => x.id === saved.id ? saved : x) : [saved, ...p]);
-        setEditing(null); setCreating(false); setForm(emptyPost());
+        closeEditor();
       }
     } finally { setSaving(false); }
   }
@@ -1729,11 +1888,11 @@ function BlogTab() {
     if (!confirm('Delete this post? This cannot be undone.')) return;
     await fetch(`/api/admin/blog/${id}`, { method: 'DELETE' });
     setPosts(p => p.filter(x => x.id !== id));
+    if (editing?.id === id) closeEditor();
   }
 
   function startEdit(post: BlogPost) {
-    setForm({ ...post, tags: post.tags || [] });
-    setEditing(post); setCreating(false);
+    onNavigate(['edit', post.id]);
   }
 
   const INPUT = 'w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors';
@@ -1747,7 +1906,7 @@ function BlogTab() {
           <p className="text-sm text-gray-500 mt-0.5">Create and manage blog posts. All posts include automatic Schema markup, OG tags, and sitemap inclusion.</p>
         </div>
         {!creating && !editing && (
-          <button onClick={() => { setCreating(true); setEditing(null); setForm(emptyPost()); }}
+          <button onClick={() => onNavigate(['new'])}
             className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 transition-all"
             style={{ backgroundColor: BRAND }}>
             <Plus size={15} /> New Post
@@ -1760,7 +1919,7 @@ function BlogTab() {
         <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
             <h3 className="font-semibold text-gray-900">{editing ? 'Edit Post' : 'New Post'}</h3>
-            <button onClick={() => { setEditing(null); setCreating(false); setForm(emptyPost()); }}
+            <button onClick={closeEditor}
               className="text-gray-400 hover:text-gray-600 transition-colors"><X size={18} /></button>
           </div>
           <div className="px-6 py-5 space-y-5">
@@ -1852,7 +2011,7 @@ function BlogTab() {
             </div>
 
             <div className="flex justify-end gap-2 pt-1">
-              <button onClick={() => { setEditing(null); setCreating(false); setForm(emptyPost()); }}
+              <button onClick={closeEditor}
                 className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
                 Cancel
               </button>
@@ -1921,24 +2080,21 @@ interface BlogPost {
 
 // ─── SEO Pages Tab ────────────────────────────────────────────────────────────
 
-const PAGE_LABELS: Record<string, { label: string; url: string; description: string }> = {
-  home:    { label: 'Homepage',     url: 'storypay.io/',        description: 'Main landing page' },
-  blog:    { label: 'Blog Index',   url: 'storypay.io/blog',    description: 'Blog listing page' },
-  login:   { label: 'Login Page',   url: 'storypay.io/login',   description: 'Sign-in page' },
-  privacy: { label: 'Privacy Policy', url: 'storypay.io/privacy', description: 'Privacy policy page' },
-  terms:   { label: 'Terms of Use', url: 'storypay.io/terms',   description: 'Terms of use page' },
-};
-
 interface PageSeo {
   page_key: string; title: string | null; description: string | null;
   og_image: string | null; og_title: string | null; og_description: string | null;
   noindex: boolean; canonical: string | null; schema_json: string | null;
 }
 
-function SeoPageTab() {
+function SeoPageTab({
+  urlPageKey,
+  onPageKeyChange,
+}: {
+  urlPageKey: string;
+  onPageKeyChange: (key: string) => void;
+}) {
   const [pages, setPages] = React.useState<PageSeo[]>([]);
   const [loading, setLoading] = React.useState(true);
-  const [selected, setSelected] = React.useState<string>('home');
   const [form, setForm] = React.useState<Partial<PageSeo>>({});
   const [saving, setSaving] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
@@ -1946,19 +2102,19 @@ function SeoPageTab() {
   React.useEffect(() => {
     fetch('/api/admin/page-seo')
       .then(r => r.ok ? r.json() : [])
-      .then((data: PageSeo[]) => {
-        setPages(data);
-        const first = data.find(p => p.page_key === 'home') || data[0];
-        if (first) { setSelected(first.page_key); setForm(first); }
-      })
+      .then((data: PageSeo[]) => { setPages(data); })
       .finally(() => setLoading(false));
   }, []);
 
-  function selectPage(key: string) {
-    const p = pages.find(x => x.page_key === key);
-    setSelected(key);
-    setForm(p ?? { page_key: key });
+  React.useEffect(() => {
+    if (!pages.length) return;
+    const p = pages.find(x => x.page_key === urlPageKey);
+    setForm(p ?? { page_key: urlPageKey });
     setSaved(false);
+  }, [urlPageKey, pages]);
+
+  function selectPage(key: string) {
+    onPageKeyChange(key);
   }
 
   async function save() {
@@ -1967,12 +2123,12 @@ function SeoPageTab() {
       const res = await fetch('/api/admin/page-seo', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, page_key: selected }),
+        body: JSON.stringify({ ...form, page_key: urlPageKey }),
       });
       if (res.ok) {
         const updated = await res.json();
-        setPages(p => p.map(x => x.page_key === selected ? updated : x).concat(
-          p.find(x => x.page_key === selected) ? [] : [updated]
+        setPages(p => p.map(x => x.page_key === urlPageKey ? updated : x).concat(
+          p.find(x => x.page_key === urlPageKey) ? [] : [updated]
         ));
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
@@ -1983,7 +2139,7 @@ function SeoPageTab() {
   const INPUT = 'w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors';
   const LABEL = 'block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide';
 
-  const pageInfo = PAGE_LABELS[selected];
+  const pageInfo = PAGE_LABELS[urlPageKey];
   const titleLen = (form.title || '').length;
   const descLen  = (form.description || '').length;
 
@@ -2007,11 +2163,11 @@ function SeoPageTab() {
             <nav className="p-2 space-y-0.5">
               {Object.entries(PAGE_LABELS).map(([key, meta]) => (
                 <button key={key} onClick={() => selectPage(key)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-left transition-colors ${selected === key ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
-                  <Globe size={14} className={selected === key ? 'text-white/60' : 'text-gray-400'} />
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-left transition-colors ${urlPageKey === key ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
+                  <Globe size={14} className={urlPageKey === key ? 'text-white/60' : 'text-gray-400'} />
                   <div className="min-w-0">
                     <p className="truncate">{meta.label}</p>
-                    <p className={`text-[10px] truncate ${selected === key ? 'text-white/50' : 'text-gray-400'}`}>{meta.url}</p>
+                    <p className={`text-[10px] truncate ${urlPageKey === key ? 'text-white/50' : 'text-gray-400'}`}>{meta.url}</p>
                   </div>
                 </button>
               ))}
