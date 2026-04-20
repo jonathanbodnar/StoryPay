@@ -17,6 +17,9 @@ import {
   BadgeCheck,
   Ticket,
   Package,
+  Smartphone,
+  FileSpreadsheet,
+  Layers,
 } from 'lucide-react';
 
 interface Venue { id: string; name: string; ghl_location_id: string; }
@@ -48,6 +51,7 @@ const menuItems: NavItem[] = [
   { label: 'Conversations', href: '/dashboard/conversations', icon: MessageCircle, navId: 'nav_main_conversations' },
   { label: 'Calendar', href: '/dashboard/calendar', icon: Calendar, navId: 'nav_main_calendar' },
   { label: 'Leads', href: '/dashboard/leads', icon: Inbox, navId: 'nav_main_leads' },
+  { label: 'Floor', href: '/dashboard/floor', icon: Smartphone, navId: 'nav_main_floor' },
   { label: 'Reports', href: '/dashboard/reports', icon: BarChart2, navId: 'nav_main_reports' },
   { label: "What's New", href: '/dashboard/updates', icon: Megaphone, navId: 'nav_main_updates' },
   { label: 'Help Center', href: '/dashboard/help', icon: BookOpen, navId: 'nav_main_help' },
@@ -56,12 +60,14 @@ const menuItems: NavItem[] = [
 const paymentsItems: NavItem[] = [
   { label: 'New', href: '/dashboard/payments/new', icon: Plus, navId: 'nav_payments_new' },
   { label: 'Products', href: '/dashboard/payments/products', icon: Package, navId: 'nav_payments_products' },
+  { label: 'Packages', href: '/dashboard/payments/packages', icon: Layers, navId: 'nav_payments_packages' },
   { label: 'Coupons', href: '/dashboard/payments/coupons', icon: Ticket, navId: 'nav_payments_coupons' },
   { label: 'Proposals', href: '/dashboard/payments/proposals', icon: FileText, navId: 'nav_payments_proposals' },
   { label: 'Proposal Templates', href: '/dashboard/proposals/templates', icon: Receipt, navId: 'nav_proposals_hub' },
   { label: 'Installments', href: '/dashboard/payments/installments', icon: Calendar, navId: 'nav_payments_installments' },
   { label: 'Subscriptions', href: '/dashboard/payments/subscriptions', icon: RefreshCw, navId: 'nav_payments_subscriptions' },
   { label: 'Transactions', href: '/dashboard/transactions', icon: CreditCard, navId: 'nav_transactions' },
+  { label: 'Accounting', href: '/dashboard/payments/accounting', icon: FileSpreadsheet, navId: 'nav_payments_accounting' },
 ];
 
 const marketingItems: NavItem[] = [

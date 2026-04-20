@@ -4,6 +4,7 @@ import { getCheckoutSession, createPaymentSchedule, createSubscription } from '@
 import { sendEmail as directSendEmail } from '@/lib/email';
 import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
 import { syncPaymentRemindersForProposal } from '@/lib/payment-reminders';
+import { onMarketingProposalPaid } from '@/lib/marketing-email-worker';
 
 function applyFee(cents: number, ratePercent: number): number {
   if (ratePercent <= 0) return cents;
@@ -38,7 +39,9 @@ export async function POST(
 
   const { data: proposal, error } = await supabaseAdmin
     .from('proposals')
-    .select('id, venue_id, status, payment_type, payment_config, customer_name, customer_lunarpay_id, price')
+    .select(
+      'id, venue_id, status, payment_type, payment_config, customer_name, customer_email, customer_lunarpay_id, price',
+    )
     .eq('public_token', token)
     .single();
 
@@ -163,6 +166,7 @@ export async function POST(
       .eq('id', proposal.id);
 
     void syncPaymentRemindersForProposal(proposal.id);
+    void onMarketingProposalPaid(proposal.venue_id as string, proposal.customer_email as string | null);
 
     console.log('[verify-payment] Proposal updated:', JSON.stringify(updateData));
 

@@ -51,7 +51,11 @@ export default function AutomationsListPage() {
         ? { tag_ids: [] as string[] }
         : triggerType === 'stage_changed'
           ? { to_stage_ids: [] as string[] }
-          : { trigger_link_ids: [] as string[] };
+          : triggerType === 'wedding_date_followup'
+            ? { days_after_wedding: 3 }
+            : triggerType === 'proposal_paid'
+              ? {}
+              : { trigger_link_ids: [] as string[] };
     const res = await fetch('/api/marketing/automations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -85,8 +89,8 @@ export default function AutomationsListPage() {
             Email workflows
           </h1>
           <p className="mt-1 text-sm text-gray-600">
-            Active workflows enroll leads when tags, stages, or trigger-link clicks match. Steps run on the marketing
-            email cron.
+            Active workflows enroll leads when tags, stages, trigger-link clicks, proposal payment, or post-event dates
+            match. Steps run on the marketing email cron.
           </p>
         </div>
         <button
@@ -150,6 +154,8 @@ export default function AutomationsListPage() {
               <option value="tag_added">Tag added</option>
               <option value="stage_changed">Stage changed (enters stage)</option>
               <option value="trigger_link_click">Trigger link click</option>
+              <option value="wedding_date_followup">After wedding date (thank-you / review)</option>
+              <option value="proposal_paid">Proposal paid (deposit or final)</option>
             </select>
             {err ? <p className="mt-2 text-sm text-red-600">{err}</p> : null}
             <div className="mt-4 flex justify-end gap-2">

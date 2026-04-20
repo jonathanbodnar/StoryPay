@@ -14,6 +14,8 @@ import {
   canRedeemCoupon,
   type VenueCouponRow,
 } from '@/lib/venue-coupons-logic';
+import { formatInTimeZone } from 'date-fns-tz';
+import { resolveVenueTimezone } from '@/lib/venue-timezone';
 
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ssr: false });
 const AIProposalGenerator = dynamic(() => import('@/components/AIProposalGenerator'), { ssr: false });
@@ -40,6 +42,46 @@ interface LineItem {
 }
 interface Installment { id: string; amount: string; date: string; }
 interface Product { id: string; name: string; description: string | null; price: number; }
+
+type PackageProductEmbed = {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  active: boolean;
+};
+
+type VenuePackageLine = {
+  product_id: string;
+  quantity: number;
+  price_override_cents: number | null;
+  venue_products?: PackageProductEmbed | PackageProductEmbed[] | null;
+};
+
+type VenuePackageRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  season_label: string | null;
+  valid_from: string | null;
+  valid_to: string | null;
+  minimum_subtotal_cents: number;
+  venue_package_lines: VenuePackageLine[];
+};
+
+function packageProduct(line: VenuePackageLine): PackageProductEmbed | null {
+  const v = line.venue_products;
+  const p = Array.isArray(v) ? v[0] : v;
+  return p?.id ? p : null;
+}
+
+function packageAppliesToday(pkg: VenuePackageRow, tzRaw: string | null | undefined): boolean {
+  const tz = resolveVenueTimezone(tzRaw);
+  const ymd = formatInTimeZone(new Date(), tz, 'yyyy-MM-dd');
+  if (pkg.valid_from && ymd < pkg.valid_from) return false;
+  if (pkg.valid_to && ymd > pkg.valid_to) return false;
+  return true;
+}
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
 function today() {
@@ -237,6 +279,14 @@ export default function NewProposalInvoicePage() {
  const [venueCoupons, setVenueCoupons] = useState<VenueCouponRow[]>([]);
  const [appliedCouponId, setAppliedCouponId] = useState<string | null>(null);
  const [products, setProducts] = useState<Product[]>([]);
+ const [packages, setPackages] = useState<VenuePackageRow[]>([]);
+ const [venueTimezone, setVenueTimezone] = useState<string | null>(null);
+ const [selectedPackageId, setSelectedPackageId] = useState<string>('');
+ const [appliedPackage, setAppliedPackage] = useState<{
+   id: string;
+   name: string;
+   minimum_subtotal_cents: number;
+ } | null>(null);
  const [productSuggestions, setProductSuggestions] = useState<Record<string,Product[]>>({});
  const [showSuggestions, setShowSuggestions] = useState<Record<string,boolean>>({});
  const suggestTimers = useRef<Record<string,ReturnType<typeof setTimeout>>>({});
@@ -318,9 +368,13 @@ export default function NewProposalInvoicePage() {
  fetch('/api/venues/me').then(r=>r.json()).then(d=>{
  setVenueName(d.name||'');
  setLogoUrl(d.brand_logo_url||'');
+ setVenueTimezone(typeof d.timezone === 'string' ? d.timezone : null);
  // Treat old default #293745 as unset — use #1b1b1b
  const c = d.brand_color;
  setBrandColor(c && c !== '#293745' && c !== '#354859' ? c : '#1b1b1b');
+ });
+ fetch('/api/venue-packages').then((r) => (r.ok ? r.json() : [])).then((d) => {
+   setPackages(Array.isArray(d) ? d : []);
  });
  fetch('/api/venue-coupons')
    .then((r) => (r.ok ? r.json() : null))
@@ -440,6 +494,47 @@ export default function NewProposalInvoicePage() {
    setShowSuggestions((prev) => ({ ...prev, [itemId]: false }));
  }
 
+ function applySelectedPackage() {
+   const pkg = packages.find((p) => p.id === selectedPackageId);
+   if (!pkg) {
+     setError('Select a package.');
+     return;
+   }
+   if (!packageAppliesToday(pkg, venueTimezone)) {
+     setError('This package is outside its valid date range.');
+     return;
+   }
+   const hasSurchargeRow = lineItems.some((i) => i.isSurcharge);
+   const core: LineItem[] = [];
+   for (const line of pkg.venue_package_lines ?? []) {
+     const p = packageProduct(line);
+     if (!p || p.active === false) continue;
+     const unitCents = line.price_override_cents ?? p.price;
+     const totalCents = unitCents * Math.max(1, line.quantity || 1);
+     core.push({
+       id: uid(),
+       name: line.quantity > 1 ? `${p.name} × ${line.quantity}` : p.name,
+       description: p.description || '',
+       amount: (totalCents / 100).toFixed(2),
+     });
+   }
+   if (!core.length) {
+     setError('This package has no active products.');
+     return;
+   }
+   setAppliedPackage({
+     id: pkg.id,
+     name: pkg.name,
+     minimum_subtotal_cents: pkg.minimum_subtotal_cents ?? 0,
+   });
+   setLineItems(withDerivedFromCore(core, hasSurchargeRow, appliedCouponId, venueCoupons));
+   setError('');
+ }
+
+ function clearAppliedPackage() {
+   setAppliedPackage(null);
+ }
+
  function hasSurcharge() {
    return lineItems.some((i) => i.isSurcharge);
  }
@@ -456,8 +551,18 @@ export default function NewProposalInvoicePage() {
  if (!clientEmail.trim() || !clientFirst.trim() || !clientLast.trim()) { setError('First name, last name, and email are required.'); return; }
  if (customerMode === 'new' && !clientPhone.trim()) { setError('Phone number is required.'); return; }
  if (totalCents <= 0) { setError('Please add at least one line item with an amount.'); return; }
+ if (
+   appliedPackage &&
+   appliedPackage.minimum_subtotal_cents > 0 &&
+   subtotalCents < appliedPackage.minimum_subtotal_cents
+ ) {
+   setError(
+     `This package requires a minimum subtotal of ${formatCents(appliedPackage.minimum_subtotal_cents)} before sending (excluding processing fee).`,
+   );
+   return;
+ }
  if (mode==='proposal' && !selectedTemplate && !contractHtml) {
- if (!asDraft) { setError('Please select or create a contract for this proposal.'); return; }
+   if (!asDraft) { setError('Please select or create a contract for this proposal.'); return; }
  }
 
  asDraft ? setSaving(true) : setSubmitting(true);
@@ -714,6 +819,9 @@ export default function NewProposalInvoicePage() {
  <Link href="/dashboard/payments/products" className="text-xs font-medium text-gray-500 hover:text-gray-800 underline underline-offset-2">
  Product catalog
  </Link>
+ <Link href="/dashboard/payments/packages" className="text-xs font-medium text-gray-500 hover:text-gray-800 underline underline-offset-2">
+ Packages
+ </Link>
  </div>
  <div className="flex flex-wrap items-center gap-2">
  <label className="text-xs text-gray-500 whitespace-nowrap">Coupon</label>
@@ -744,6 +852,50 @@ export default function NewProposalInvoicePage() {
  </Link>
  </div>
  </div>
+ {packages.length > 0 ? (
+ <div className="border-b border-gray-100 bg-gray-50/50 px-5 py-3 space-y-2">
+ <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap">
+ <label className="text-xs font-medium text-gray-600">Apply package</label>
+ <select
+ value={selectedPackageId}
+ onChange={(e) => setSelectedPackageId(e.target.value)}
+ className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none min-w-[200px]"
+ >
+ <option value="">Choose a package…</option>
+ {packages
+ .filter((p) => packageAppliesToday(p, venueTimezone))
+ .map((p) => (
+ <option key={p.id} value={p.id}>
+ {p.name}
+ {p.season_label ? ` — ${p.season_label}` : ''}
+ </option>
+ ))}
+ </select>
+ <button
+ type="button"
+ onClick={() => applySelectedPackage()}
+ className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-100"
+ >
+ Replace lines from package
+ </button>
+ {appliedPackage ? (
+ <button
+ type="button"
+ onClick={() => clearAppliedPackage()}
+ className="text-xs font-medium text-gray-500 hover:text-gray-800 underline underline-offset-2"
+ >
+ Clear package minimum
+ </button>
+ ) : null}
+ </div>
+ {appliedPackage && appliedPackage.minimum_subtotal_cents > 0 ? (
+ <p className={`text-xs ${subtotalCents < appliedPackage.minimum_subtotal_cents ? 'text-amber-800' : 'text-gray-500'}`}>
+ Minimum subtotal for <span className="font-medium">{appliedPackage.name}</span>:{' '}
+ {formatCents(appliedPackage.minimum_subtotal_cents)} · Current: {formatCents(subtotalCents)}
+ </p>
+ ) : null}
+ </div>
+ ) : null}
  <div>
  {/* Desktop headers */}
  <div className="hidden sm:grid grid-cols-[1fr_180px_110px_36px] gap-3 bg-gray-50 px-5 py-2.5 border-b border-gray-200">

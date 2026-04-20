@@ -53,11 +53,27 @@ export async function PATCH(
 
   const { data: existing, error: ex0 } = await supabaseAdmin
     .from('marketing_automations')
-    .select('id, status')
+    .select('id, status, trigger_type')
     .eq('id', id)
     .eq('venue_id', venueId)
     .maybeSingle();
   if (ex0 || !existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  const effectiveTrigger =
+    body.triggerType ?? (existing.trigger_type as AutomationTriggerType);
+
+  if (body.triggerConfig !== undefined) {
+    if (effectiveTrigger === 'wedding_date_followup') {
+      const d = Number((body.triggerConfig as { days_after_wedding?: unknown }).days_after_wedding ?? 0);
+      if (!Number.isFinite(d) || d < 0 || d > 3650) {
+        return NextResponse.json({ error: 'days_after_wedding must be between 0 and 3650' }, { status: 400 });
+      }
+      body.triggerConfig = { days_after_wedding: Math.floor(d) };
+    }
+    if (effectiveTrigger === 'proposal_paid') {
+      body.triggerConfig = {};
+    }
+  }
 
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (typeof body.name === 'string') {

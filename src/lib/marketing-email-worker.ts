@@ -8,6 +8,8 @@ import {
 import { mergeMarketingFields, renderMarketingEmailHtml, type MergeFieldRecord } from '@/lib/marketing-email-render';
 import { resolveCampaignRecipients } from '@/lib/marketing-email-audience';
 import { signMarketingOpenToken, signMarketingUnsubscribeToken } from '@/lib/marketing-email-tokens';
+import { addCalendarDaysYmd, resolveVenueTimezone } from '@/lib/venue-timezone';
+import { formatInTimeZone } from 'date-fns-tz';
 
 const BATCH = 25;
 
@@ -83,6 +85,91 @@ export async function onMarketingTriggerLinkClick(
     const links = cfg.trigger_link_ids?.filter(Boolean) ?? [];
     if (!links.length || !links.includes(triggerLinkId)) continue;
     await enrollIfNew(row.id as string, venueId, leadId);
+  }
+}
+
+/** Daily cron: enroll leads whose wedding_date + offset matches today in the venue timezone. */
+export async function processWeddingDateFollowupAutomations(): Promise<{ enrolled: number }> {
+  const { data: autos, error } = await supabaseAdmin
+    .from('marketing_automations')
+    .select('id, venue_id, trigger_config')
+    .eq('status', 'active')
+    .eq('trigger_type', 'wedding_date_followup');
+  if (error || !autos?.length) return { enrolled: 0 };
+
+  const byVenue = new Map<string, Array<{ id: string; days: number }>>();
+  for (const row of autos) {
+    const vid = row.venue_id as string;
+    const cfg = (row.trigger_config || {}) as { days_after_wedding?: number };
+    const days = Math.max(0, Math.min(3650, Number(cfg.days_after_wedding ?? 0) || 0));
+    const list = byVenue.get(vid) ?? [];
+    list.push({ id: row.id as string, days });
+    byVenue.set(vid, list);
+  }
+
+  const venueIds = [...byVenue.keys()];
+  const { data: venues } = await supabaseAdmin.from('venues').select('id, timezone').in('id', venueIds);
+
+  const tzMap = new Map<string, string>();
+  for (const v of venues ?? []) {
+    tzMap.set(v.id as string, resolveVenueTimezone(v.timezone as string | null));
+  }
+
+  let enrolled = 0;
+  const now = new Date();
+
+  for (const [venueId, autoList] of byVenue) {
+    const tz = tzMap.get(venueId) ?? resolveVenueTimezone(null);
+    const todayYmd = formatInTimeZone(now, tz, 'yyyy-MM-dd');
+
+    const { data: leads, error: leErr } = await supabaseAdmin
+      .from('leads')
+      .select('id, wedding_date')
+      .eq('venue_id', venueId)
+      .not('wedding_date', 'is', null);
+    if (leErr || !leads?.length) continue;
+
+    for (const lead of leads) {
+      const wd = lead.wedding_date as string | null;
+      if (!wd) continue;
+      const ymd = wd.slice(0, 10);
+      for (const auto of autoList) {
+        const target = addCalendarDaysYmd(ymd, auto.days, tz);
+        if (target !== todayYmd) continue;
+        await enrollIfNew(auto.id, venueId, lead.id as string);
+        enrolled++;
+      }
+    }
+  }
+
+  return { enrolled };
+}
+
+/** When a proposal is marked paid, enroll matching lead (by email) in proposal_paid workflows. */
+export async function onMarketingProposalPaid(
+  venueId: string,
+  customerEmail: string | null | undefined,
+): Promise<void> {
+  const raw = typeof customerEmail === 'string' ? customerEmail.trim() : '';
+  if (!raw) return;
+
+  const { data: lead } = await supabaseAdmin
+    .from('leads')
+    .select('id')
+    .eq('venue_id', venueId)
+    .ilike('email', raw)
+    .maybeSingle();
+  if (!lead?.id) return;
+
+  const { data: autos } = await supabaseAdmin
+    .from('marketing_automations')
+    .select('id')
+    .eq('venue_id', venueId)
+    .eq('status', 'active')
+    .eq('trigger_type', 'proposal_paid');
+
+  for (const row of autos ?? []) {
+    await enrollIfNew(row.id as string, venueId, lead.id as string);
   }
 }
 
@@ -419,7 +506,13 @@ export async function processCampaignsCron(): Promise<{ campaigns: number; recip
 }
 
 export async function runMarketingEmailCron(): Promise<Record<string, number | string>> {
+  const w = await processWeddingDateFollowupAutomations();
   const a = await processAutomationEnrollmentsBatch();
   const c = await processCampaignsCron();
-  return { automationSteps: a.processed, campaignRecipientsSent: c.recipients, campaignsStarted: c.campaigns };
+  return {
+    weddingFollowupEnrollments: w.enrolled,
+    automationSteps: a.processed,
+    campaignRecipientsSent: c.recipients,
+    campaignsStarted: c.campaigns,
+  };
 }

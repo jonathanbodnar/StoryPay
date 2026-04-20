@@ -40,10 +40,25 @@ export async function POST(request: NextRequest) {
   if (
     triggerType !== 'tag_added' &&
     triggerType !== 'stage_changed' &&
-    triggerType !== 'trigger_link_click'
+    triggerType !== 'trigger_link_click' &&
+    triggerType !== 'wedding_date_followup' &&
+    triggerType !== 'proposal_paid'
   ) {
     return NextResponse.json({ error: 'Invalid triggerType' }, { status: 400 });
   }
+
+  let triggerConfig = body.triggerConfig ?? {};
+  if (triggerType === 'wedding_date_followup') {
+    const d = Number((triggerConfig as { days_after_wedding?: unknown }).days_after_wedding ?? 0);
+    if (!Number.isFinite(d) || d < 0 || d > 3650) {
+      return NextResponse.json({ error: 'days_after_wedding must be between 0 and 3650' }, { status: 400 });
+    }
+    triggerConfig = { days_after_wedding: Math.floor(d) };
+  }
+  if (triggerType === 'proposal_paid') {
+    triggerConfig = {};
+  }
+
   const { data: auto, error } = await supabaseAdmin
     .from('marketing_automations')
     .insert({
@@ -51,7 +66,7 @@ export async function POST(request: NextRequest) {
       name,
       status: 'draft',
       trigger_type: triggerType,
-      trigger_config: body.triggerConfig ?? {},
+      trigger_config: triggerConfig,
     })
     .select('*')
     .single();

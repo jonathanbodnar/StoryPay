@@ -228,7 +228,12 @@ export function parseSegment(raw: unknown): CampaignSegment {
   return { type: 'all_leads', ...extra };
 }
 
-export type AutomationTriggerType = 'tag_added' | 'stage_changed' | 'trigger_link_click';
+export type AutomationTriggerType =
+  | 'tag_added'
+  | 'stage_changed'
+  | 'trigger_link_click'
+  | 'wedding_date_followup'
+  | 'proposal_paid';
 
 export interface AutomationTriggerConfig {
   /** tag_added: fire when any of these tags are added (empty = any tag) */
@@ -237,4 +242,6 @@ export interface AutomationTriggerConfig {
   to_stage_ids?: string[];
   /** trigger_link_click: these link ids */
   trigger_link_ids?: string[];
+  /** wedding_date_followup: enroll when wedding_date + this many full days equals today in venue timezone */
+  days_after_wedding?: number;
 }

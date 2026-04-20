@@ -59,6 +59,7 @@ export default function AutomationEditPage() {
   const [selTags, setSelTags] = useState<string[]>([]);
   const [selStages, setSelStages] = useState<string[]>([]);
   const [selLinks, setSelLinks] = useState<string[]>([]);
+  const [daysAfterWedding, setDaysAfterWedding] = useState(3);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -74,10 +75,18 @@ export default function AutomationEditPage() {
       const j = await aRes.json();
       const a = j.automation as AutomationRow;
       setAuto(a);
-      const cfg = (a.trigger_config || {}) as { tag_ids?: string[]; to_stage_ids?: string[]; trigger_link_ids?: string[] };
+      const cfg = (a.trigger_config || {}) as {
+        tag_ids?: string[];
+        to_stage_ids?: string[];
+        trigger_link_ids?: string[];
+        days_after_wedding?: number;
+      };
       setSelTags(cfg.tag_ids ?? []);
       setSelStages(cfg.to_stage_ids ?? []);
       setSelLinks(cfg.trigger_link_ids ?? []);
+      setDaysAfterWedding(
+        Math.max(0, Math.min(3650, Number(cfg.days_after_wedding ?? 3) || 0)),
+      );
       const rawSteps = (j.steps ?? []) as Array<{ step_type: string; config_json: Record<string, unknown> }>;
       const mapped: LocalStep[] = rawSteps.map((s, i) => {
         const lid = `s-${i}-${Math.random().toString(36).slice(2)}`;
@@ -134,6 +143,10 @@ export default function AutomationEditPage() {
     if (!auto) return {};
     if (auto.trigger_type === 'tag_added') return { tag_ids: selTags };
     if (auto.trigger_type === 'stage_changed') return { to_stage_ids: selStages };
+    if (auto.trigger_type === 'wedding_date_followup') {
+      return { days_after_wedding: Math.max(0, Math.min(3650, Math.floor(daysAfterWedding))) };
+    }
+    if (auto.trigger_type === 'proposal_paid') return {};
     return { trigger_link_ids: selLinks };
   }
 
@@ -296,6 +309,34 @@ export default function AutomationEditPage() {
               ))}
             </div>
           </div>
+        ) : null}
+
+        {auto.trigger_type === 'wedding_date_followup' ? (
+          <div>
+            <label className="text-xs font-medium text-gray-500" htmlFor="days-after-wedding">
+              Days after wedding date (venue timezone)
+            </label>
+            <input
+              id="days-after-wedding"
+              type="number"
+              min={0}
+              max={3650}
+              className="mt-1 w-32 rounded-lg border border-gray-200 px-3 py-2 text-sm"
+              value={daysAfterWedding}
+              onChange={(e) => setDaysAfterWedding(Number(e.target.value) || 0)}
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Runs when the lead&apos;s wedding date plus this offset equals today. Use 0 for day-of, 1 for the day
+              after, etc.
+            </p>
+          </div>
+        ) : null}
+
+        {auto.trigger_type === 'proposal_paid' ? (
+          <p className="text-xs text-gray-600">
+            Enrolls the lead (matched by email) when a proposal is marked paid after checkout — deposits, full
+            payments, or final installments that complete the proposal.
+          </p>
         ) : null}
       </div>
 

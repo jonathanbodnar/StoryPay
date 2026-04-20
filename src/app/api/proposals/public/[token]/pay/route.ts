@@ -6,6 +6,7 @@ import {
   createPaymentSchedule,
   createSubscription,
 } from '@/lib/lunarpay';
+import { onMarketingProposalPaid } from '@/lib/marketing-email-worker';
 
 export async function POST(
   request: Request,
@@ -108,6 +109,8 @@ export async function POST(
       .from('proposals')
       .update(updateData)
       .eq('id', proposal.id);
+
+    void onMarketingProposalPaid(proposal.venue_id as string, proposal.customer_email as string | null);
 
     return NextResponse.json({
       success: true,
