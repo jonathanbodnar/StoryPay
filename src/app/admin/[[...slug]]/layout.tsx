@@ -406,6 +406,74 @@ function FeatureRequestsAdminTab({
   );
 }
 
+const ADMIN_NAV_ITEMS = [
+  { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { key: 'venues', label: 'Venue management', icon: Building2 },
+  { key: 'directory-plans', label: 'Directory plans', icon: Layers },
+  { key: 'blog', label: 'Blog Posts', icon: BookOpen },
+  { key: 'seo-pages', label: 'SEO / Pages', icon: Globe },
+  { key: 'trends', label: 'Google Trends', icon: TrendingUp },
+  { key: 'announcements', label: 'Announcements', icon: Megaphone },
+  { key: 'feature-requests', label: 'Feature Requests', icon: Lightbulb },
+  { key: 'suggested-articles', label: 'Suggested Articles', icon: BookOpen },
+  { key: 'search-analytics', label: 'Search Analytics', icon: BarChart2 },
+  { key: 'article-ratings', label: 'Article Ratings', icon: Star },
+] as const;
+
+/** Module-level component so React does not remount the sidebar on every parent render. */
+function AdminNavSidebar({
+  activeTab,
+  onMobileClose,
+  onLogout,
+}: {
+  activeTab: AdminTabKey;
+  onMobileClose: () => void;
+  onLogout: () => void;
+}) {
+  return (
+    <div className="flex flex-col h-full" style={{ backgroundColor: '#fafaf9' }}>
+      <div className="px-5 pt-5 pb-3 border-b border-gray-100">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/storyvenue-dark-logo.png" alt="StoryPay Admin" className="h-8 object-contain" />
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mt-1.5">Super Admin</p>
+      </div>
+
+      <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
+        {ADMIN_NAV_ITEMS.map(({ key, label, icon: Icon }) => {
+          const active = activeTab === key;
+          const href =
+            key === 'seo-pages'
+              ? adminHref('seo-pages', ['home'])
+              : adminHref(key as AdminTabKey);
+          return (
+            <Link
+              key={key}
+              href={href}
+              scroll={false}
+              prefetch
+              onClick={() => onMobileClose()}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${active ? 'text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+              style={active ? { backgroundColor: BRAND } : {}}
+            >
+              <Icon size={16} />
+              <span>{label}</span>
+            </Link>
+          );
+        })}
+      </nav>
+
+      <div className="px-4 py-4 border-t border-gray-100 space-y-1">
+        <Link href="/" className="flex items-center gap-2 text-gray-400 hover:text-gray-700 transition-colors text-sm w-full px-2 py-1.5 rounded-lg hover:bg-gray-50">
+          <Home size={16} /><span>Homepage</span>
+        </Link>
+        <button type="button" onClick={onLogout} className="flex items-center gap-2 text-gray-400 hover:text-gray-700 transition-colors text-sm w-full px-2 py-1.5 rounded-lg hover:bg-gray-50">
+          <LogOut size={16} /><span>Logout</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminSlugLayout({ children }: { children: React.ReactNode }) {
   const params = useParams();
   const router = useRouter();
@@ -783,71 +851,17 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
   }
 
   // ── Authenticated ───────────────────────────────────────────────────────────
-  const navItems = [
-    { key: 'dashboard',          label: 'Dashboard',          icon: LayoutDashboard },
-    { key: 'venues',             label: 'Venue management',     icon: Building2 },
-    { key: 'directory-plans',    label: 'Directory plans',      icon: Layers },
-    { key: 'blog',               label: 'Blog Posts',         icon: BookOpen },
-    { key: 'seo-pages',          label: 'SEO / Pages',        icon: Globe },
-    { key: 'trends',             label: 'Google Trends',      icon: TrendingUp },
-    { key: 'announcements',      label: 'Announcements',      icon: Megaphone },
-    { key: 'feature-requests',   label: 'Feature Requests',   icon: Lightbulb },
-    { key: 'suggested-articles', label: 'Suggested Articles', icon: BookOpen },
-    { key: 'search-analytics',   label: 'Search Analytics',   icon: BarChart2 },
-    { key: 'article-ratings',    label: 'Article Ratings',    icon: Star },
-  ] as const;
-
-  const NavSidebar = () => (
-    <div className="flex flex-col h-full" style={{ backgroundColor: '#fafaf9' }}>
-      {/* Logo */}
-      <div className="px-5 pt-5 pb-3 border-b border-gray-100">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/storyvenue-dark-logo.png" alt="StoryPay Admin" className="h-8 object-contain" />
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mt-1.5">Super Admin</p>
-      </div>
-
-      {/* Nav */}
-      <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
-        {navItems.map(({ key, label, icon: Icon }) => {
-          const active = activeTab === key;
-          const href =
-            key === 'seo-pages'
-              ? adminHref('seo-pages', ['home'])
-              : adminHref(key as AdminTabKey);
-          return (
-            <Link
-              key={key}
-              href={href}
-              onClick={() => setMobileSidebarOpen(false)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${active ? 'text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-              style={active ? { backgroundColor: BRAND } : {}}
-            >
-              <Icon size={16} />
-              <span>{label}</span>
-            </Link>
-          );
-        })}
-      </nav>
-
-      {/* Footer */}
-      <div className="px-4 py-4 border-t border-gray-100 space-y-1">
-        <Link href="/" className="flex items-center gap-2 text-gray-400 hover:text-gray-700 transition-colors text-sm w-full px-2 py-1.5 rounded-lg hover:bg-gray-50">
-          <Home size={16} /><span>Homepage</span>
-        </Link>
-        <button onClick={handleLogout} className="flex items-center gap-2 text-gray-400 hover:text-gray-700 transition-colors text-sm w-full px-2 py-1.5 rounded-lg hover:bg-gray-50">
-          <LogOut size={16} /><span>Logout</span>
-        </button>
-      </div>
-    </div>
-  );
-
   return (
     <>
     <div className="min-h-screen bg-white flex">
 
       {/* ── Desktop Sidebar ── */}
       <aside className="hidden lg:block fixed left-0 top-0 bottom-0 w-[260px] border-r border-gray-200 z-30">
-        <NavSidebar />
+        <AdminNavSidebar
+          activeTab={activeTab}
+          onMobileClose={() => {}}
+          onLogout={handleLogout}
+        />
       </aside>
 
       {/* ── Mobile top bar ── */}
@@ -862,7 +876,11 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
       {/* ── Mobile drawer ── */}
       {mobileSidebarOpen && <div className="lg:hidden fixed inset-0 z-40 bg-black/20" onClick={() => setMobileSidebarOpen(false)} />}
       <aside className={`lg:hidden fixed top-0 left-0 bottom-0 z-50 w-[280px] border-r border-gray-200 transition-transform duration-300 ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <NavSidebar />
+        <AdminNavSidebar
+          activeTab={activeTab}
+          onMobileClose={() => setMobileSidebarOpen(false)}
+          onLogout={handleLogout}
+        />
       </aside>
 
       {/* ── Main content ── */}
