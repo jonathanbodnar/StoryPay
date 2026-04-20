@@ -5,8 +5,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Loader2, Save, CheckCircle2, Store, Globe, MapPin, Users, DollarSign,
   Image as ImageIcon, ExternalLink, Eye, EyeOff, AlertCircle, RotateCcw,
+  Link2, HelpCircle, Plus, Trash2,
 } from 'lucide-react';
 import { slugify } from '@/lib/directory';
+
+type FaqRow = { question: string; answer: string };
+
+type SocialLinks = {
+  facebook?: string;
+  instagram?: string;
+  tiktok?: string;
+  pinterest?: string;
+  website?: string;
+};
 
 interface Listing {
   id: string | null;
@@ -17,6 +28,8 @@ interface Listing {
   location_full: string | null;
   location_city: string | null;
   location_state: string | null;
+  lat: number | null;
+  lng: number | null;
   capacity_min: number | null;
   capacity_max: number | null;
   price_min: number | null;
@@ -28,6 +41,9 @@ interface Listing {
   availability_notes: string | null;
   is_published: boolean;
   onboarding_completed: boolean;
+  social_links: SocialLinks;
+  faq: FaqRow[];
+  show_map: boolean;
   notification_email: string | null;
   email_notifications: boolean;
 }
@@ -53,9 +69,11 @@ function emptyListing(): Listing {
   return {
     id: null, slug: null, name: null, description: null, venue_type: null,
     location_full: null, location_city: null, location_state: null,
+    lat: null, lng: null,
     capacity_min: null, capacity_max: null, price_min: null, price_max: null,
     indoor_outdoor: null, features: [], cover_image_url: null, gallery_images: [],
     availability_notes: null, is_published: false, onboarding_completed: false,
+    social_links: {}, faq: [], show_map: true,
     notification_email: null, email_notifications: true,
   };
 }
@@ -97,6 +115,14 @@ export default function ListingPage() {
               ...data.listing,
               features: Array.isArray(data.listing.features) ? data.listing.features : [],
               gallery_images: Array.isArray(data.listing.gallery_images) ? data.listing.gallery_images : [],
+              social_links:
+                data.listing.social_links && typeof data.listing.social_links === 'object'
+                  ? (data.listing.social_links as SocialLinks)
+                  : {},
+              faq: Array.isArray(data.listing.faq) ? (data.listing.faq as FaqRow[]) : [],
+              show_map: data.listing.show_map !== false,
+              lat: data.listing.lat != null ? Number(data.listing.lat) : null,
+              lng: data.listing.lng != null ? Number(data.listing.lng) : null,
             };
             setListing(next);
             // If slug is blank or already matches slugify(name), keep auto-mode on
@@ -155,6 +181,14 @@ export default function ListingPage() {
         ...data.listing,
         features: Array.isArray(data.listing.features) ? data.listing.features : [],
         gallery_images: Array.isArray(data.listing.gallery_images) ? data.listing.gallery_images : [],
+        social_links:
+          data.listing.social_links && typeof data.listing.social_links === 'object'
+            ? (data.listing.social_links as SocialLinks)
+            : {},
+        faq: Array.isArray(data.listing.faq) ? (data.listing.faq as FaqRow[]) : [],
+        show_map: data.listing.show_map !== false,
+        lat: data.listing.lat != null ? Number(data.listing.lat) : null,
+        lng: data.listing.lng != null ? Number(data.listing.lng) : null,
       });
       setStatus('saved');
       setLastSavedAt(new Date());
@@ -217,6 +251,37 @@ export default function ListingPage() {
       const has = prev.features.includes(feat);
       return { ...prev, features: has ? prev.features.filter(f => f !== feat) : [...prev.features, feat] };
     });
+    scheduleAutosave();
+  }
+
+  function updateSocial(key: keyof SocialLinks, value: string) {
+    setListing((prev) => {
+      const next = { ...prev.social_links };
+      const t = value.trim();
+      if (!t) delete next[key];
+      else next[key] = t;
+      return { ...prev, social_links: next };
+    });
+    scheduleAutosave();
+  }
+
+  function addFaq() {
+    setListing((prev) => ({ ...prev, faq: [...prev.faq, { question: '', answer: '' }] }));
+    scheduleAutosave();
+  }
+
+  function updateFaqRow(index: number, field: 'question' | 'answer', value: string) {
+    setListing((prev) => {
+      const faq = prev.faq.map((row, i) =>
+        i === index ? { ...row, [field]: value } : row,
+      );
+      return { ...prev, faq };
+    });
+    scheduleAutosave();
+  }
+
+  function removeFaqRow(index: number) {
+    setListing((prev) => ({ ...prev, faq: prev.faq.filter((_, i) => i !== index) }));
     scheduleAutosave();
   }
 
@@ -414,6 +479,129 @@ export default function ListingPage() {
               onChange={(e) => update('location_state', e.target.value)}
             />
           </div>
+        </div>
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div>
+            <label className={LABEL}>Latitude</label>
+            <input
+              type="text"
+              inputMode="decimal"
+              className={INPUT}
+              value={listing.lat ?? ''}
+              onChange={(e) => {
+                const v = e.target.value.trim();
+                if (!v) {
+                  update('lat', null);
+                  return;
+                }
+                const n = parseFloat(v);
+                update('lat', Number.isFinite(n) ? n : null);
+              }}
+              placeholder="e.g. 40.7128"
+            />
+          </div>
+          <div>
+            <label className={LABEL}>Longitude</label>
+            <input
+              type="text"
+              inputMode="decimal"
+              className={INPUT}
+              value={listing.lng ?? ''}
+              onChange={(e) => {
+                const v = e.target.value.trim();
+                if (!v) {
+                  update('lng', null);
+                  return;
+                }
+                const n = parseFloat(v);
+                update('lng', Number.isFinite(n) ? n : null);
+              }}
+              placeholder="e.g. -74.0060"
+            />
+          </div>
+          <div className="flex flex-col justify-end pb-1">
+            <label className="flex cursor-pointer items-center gap-3">
+              <input
+                type="checkbox"
+                className="h-4 w-4"
+                checked={listing.show_map}
+                onChange={(e) => update('show_map', e.target.checked)}
+              />
+              <span className="text-sm text-gray-700">Show embedded map on public listing</span>
+            </label>
+            <p className="mt-2 text-xs text-gray-400">Requires both coordinates. Map uses OpenStreetMap.</p>
+          </div>
+        </div>
+      </section>
+
+      <section className={CARD}>
+        <h2 className={SECTION_TITLE}><Link2 className="inline w-4 h-4 -mt-0.5" /> Social &amp; web</h2>
+        <p className={SECTION_HINT}>Full URLs starting with https:// — shown as icons on your public venue page.</p>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {(
+            [
+              ['facebook', 'Facebook'],
+              ['instagram', 'Instagram'],
+              ['tiktok', 'TikTok'],
+              ['pinterest', 'Pinterest'],
+              ['website', 'Website'],
+            ] as const
+          ).map(([key, label]) => (
+            <div key={key}>
+              <label className={LABEL}>{label}</label>
+              <input
+                type="url"
+                className={INPUT}
+                value={listing.social_links[key] ?? ''}
+                onChange={(e) => updateSocial(key, e.target.value)}
+                placeholder="https://"
+              />
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className={CARD}>
+        <h2 className={SECTION_TITLE}><HelpCircle className="inline w-4 h-4 -mt-0.5" /> FAQ</h2>
+        <p className={SECTION_HINT}>Questions and answers for couples visiting your venue page.</p>
+        <div className="space-y-4">
+          {listing.faq.map((row, i) => (
+            <div key={i} className="rounded-2xl border border-gray-200 bg-gray-50/80 p-4">
+              <div className="mb-3 flex items-start justify-between gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">Item {i + 1}</span>
+                <button
+                  type="button"
+                  onClick={() => removeFaqRow(i)}
+                  className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-200 hover:text-gray-700"
+                  aria-label="Remove FAQ item"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+              <label className={LABEL}>Question</label>
+              <input
+                type="text"
+                className={`${INPUT} mb-3`}
+                value={row.question}
+                onChange={(e) => updateFaqRow(i, 'question', e.target.value)}
+                placeholder="Do you allow outside catering?"
+              />
+              <label className={LABEL}>Answer</label>
+              <textarea
+                className={`${INPUT} min-h-[80px]`}
+                value={row.answer}
+                onChange={(e) => updateFaqRow(i, 'answer', e.target.value)}
+                placeholder="We offer in-house catering and can accommodate licensed vendors…"
+              />
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={addFaq}
+            className="inline-flex items-center gap-2 rounded-xl border border-dashed border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:border-gray-400"
+          >
+            <Plus className="h-4 w-4" /> Add FAQ item
+          </button>
         </div>
       </section>
 

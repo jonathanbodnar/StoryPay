@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { cache } from 'react';
 import { MapPin, Users, DollarSign, Home, Sparkles, Star } from 'lucide-react';
+import { SaveToWishlistButton } from '@/components/SaveToWishlistButton';
+import { VenueFaqSection, VenueMapEmbed, VenueSocialRow } from '@/components/VenuePublicExtras';
 
 const API_BASE = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'https://app.storyvenue.com';
 const DIRECTORY_SITE =
@@ -17,6 +19,8 @@ type PublicVenuePayload = {
     location_full: string | null;
     location_city: string | null;
     location_state: string | null;
+    lat: number | null;
+    lng: number | null;
     venue_type: string | null;
     capacity_min: number | null;
     capacity_max: number | null;
@@ -27,6 +31,9 @@ type PublicVenuePayload = {
     cover_image_url: string | null;
     gallery_images: string[];
     availability_notes: string | null;
+    show_map: boolean;
+    social_links: Record<string, string>;
+    faq: { question: string; answer: string }[];
   };
   reviews: {
     average_rating: number | null;
@@ -259,6 +266,16 @@ export default async function PublicVenuePage({ params }: { params: Promise<{ sl
                   </div>
                 </div>
               )}
+
+              <SaveToWishlistButton venueSlug={venue.slug} />
+
+              <VenueMapEmbed
+                lat={venue.lat ?? null}
+                lng={venue.lng ?? null}
+                show={venue.show_map !== false}
+              />
+              <VenueSocialRow social={venue.social_links ?? {}} />
+              <VenueFaqSection items={Array.isArray(venue.faq) ? venue.faq : []} />
 
               {venue.features.length > 0 && (
                 <div>

@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { LISTING_WRITABLE_FIELDS, slugify, type ListingWritableField } from '@/lib/directory';
+import { sanitizeListingUpdates } from '@/lib/listing-sanitize';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -30,6 +31,9 @@ const SELECT_COLUMNS = [
   'onboarding_completed',
   'notification_email',
   'email_notifications',
+  'social_links',
+  'faq',
+  'show_map',
   'created_at',
   'updated_at',
 ].join(',');
@@ -80,6 +84,9 @@ export async function PATCH(request: NextRequest) {
     const s = updates.slug.trim();
     updates.slug = s.length > 0 ? slugify(s) : null;
   }
+
+  const sanitized = sanitizeListingUpdates(updates) as Partial<Record<ListingWritableField, unknown>>;
+  Object.assign(updates, sanitized);
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });

@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import { MapPin } from 'lucide-react';
 import { getPublicVenueBySlug } from '@/lib/public-venue-directory';
 import { ListingReviewsBlock } from '@/components/directory/ListingReviewsBlock';
+import { VenueFaqSection, VenueMapEmbed, VenueSocialRow } from '@/components/directory/VenuePublicBlocks';
 
 const DIRECTORY_SITE =
   process.env.NEXT_PUBLIC_DIRECTORY_URL || process.env.NEXT_PUBLIC_DIRECTORY_SITE_URL || 'https://storyvenue.com';
@@ -113,6 +114,10 @@ export default async function PublicVenuePage({ params }: { params: Promise<{ sl
             ))}
           </div>
         )}
+
+        <VenueMapEmbed lat={venue.lat} lng={venue.lng} show={venue.show_map} />
+        <VenueSocialRow social={venue.social_links} />
+        <VenueFaqSection items={venue.faq} />
 
         <ListingReviewsBlock venueName={venue.name} reviews={data.reviews} />
       </div>

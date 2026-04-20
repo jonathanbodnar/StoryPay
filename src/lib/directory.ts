@@ -32,6 +32,12 @@ export const LISTING_WRITABLE_FIELDS = [
   'is_published',
   'notification_email',
   'email_notifications',
+  /** { facebook?, instagram?, tiktok?, pinterest?, website? } — full URLs */
+  'social_links',
+  /** [{ question, answer }, ...] max ~20 */
+  'faq',
+  /** When true and lat/lng set, public listing shows embedded map */
+  'show_map',
 ] as const;
 
 export type ListingWritableField = (typeof LISTING_WRITABLE_FIELDS)[number];

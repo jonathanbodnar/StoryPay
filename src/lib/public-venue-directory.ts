@@ -10,6 +10,16 @@ export type PublicVenueReviewItem = {
   created_at: string;
 };
 
+export type PublicVenueSocialLinks = {
+  facebook?: string;
+  instagram?: string;
+  tiktok?: string;
+  pinterest?: string;
+  website?: string;
+};
+
+export type PublicVenueFaqItem = { question: string; answer: string };
+
 export type PublicVenuePayload = {
   venue: {
     name: string;
@@ -18,6 +28,8 @@ export type PublicVenuePayload = {
     location_full: string | null;
     location_city: string | null;
     location_state: string | null;
+    lat: number | null;
+    lng: number | null;
     venue_type: string | null;
     capacity_min: number | null;
     capacity_max: number | null;
@@ -28,6 +40,9 @@ export type PublicVenuePayload = {
     cover_image_url: string | null;
     gallery_images: string[];
     availability_notes: string | null;
+    show_map: boolean;
+    social_links: PublicVenueSocialLinks;
+    faq: PublicVenueFaqItem[];
   };
   reviews: {
     average_rating: number | null;
@@ -55,6 +70,8 @@ export async function getPublicVenueBySlug(rawSlug: string): Promise<PublicVenue
         'location_full',
         'location_city',
         'location_state',
+        'lat',
+        'lng',
         'venue_type',
         'capacity_min',
         'capacity_max',
@@ -66,6 +83,9 @@ export async function getPublicVenueBySlug(rawSlug: string): Promise<PublicVenue
         'gallery_images',
         'availability_notes',
         'is_published',
+        'show_map',
+        'social_links',
+        'faq',
       ].join(','),
     )
     .eq('slug', slug)
@@ -127,6 +147,36 @@ export async function getPublicVenueBySlug(rawSlug: string): Promise<PublicVenue
 
   const v = row;
 
+  const latRaw = v.lat != null ? Number(v.lat) : null;
+  const lngRaw = v.lng != null ? Number(v.lng) : null;
+  const lat = latRaw != null && !Number.isNaN(latRaw) ? latRaw : null;
+  const lng = lngRaw != null && !Number.isNaN(lngRaw) ? lngRaw : null;
+
+  const socialRaw = v.social_links as Record<string, unknown> | null | undefined;
+  const social_links: PublicVenueSocialLinks = {};
+  if (socialRaw && typeof socialRaw === 'object' && !Array.isArray(socialRaw)) {
+    for (const key of ['facebook', 'instagram', 'tiktok', 'pinterest', 'website'] as const) {
+      const u = socialRaw[key];
+      if (typeof u === 'string' && u.trim().startsWith('http')) social_links[key] = u.trim();
+    }
+  }
+
+  let faq: PublicVenueFaqItem[] = [];
+  const faqRaw = v.faq;
+  if (Array.isArray(faqRaw)) {
+    faq = faqRaw
+      .filter((x) => x && typeof x === 'object')
+      .map((x) => {
+        const o = x as { question?: unknown; answer?: unknown };
+        return {
+          question: String(o.question ?? '').trim(),
+          answer: String(o.answer ?? '').trim(),
+        };
+      })
+      .filter((x) => x.question || x.answer)
+      .slice(0, 20);
+  }
+
   return {
     venue: {
       name: String(v.name ?? ''),
@@ -135,6 +185,8 @@ export async function getPublicVenueBySlug(rawSlug: string): Promise<PublicVenue
       location_full: v.location_full != null ? String(v.location_full) : null,
       location_city: v.location_city != null ? String(v.location_city) : null,
       location_state: v.location_state != null ? String(v.location_state) : null,
+      lat,
+      lng,
       venue_type: v.venue_type != null ? String(v.venue_type) : null,
       capacity_min: v.capacity_min != null ? Number(v.capacity_min) : null,
       capacity_max: v.capacity_max != null ? Number(v.capacity_max) : null,
@@ -145,6 +197,9 @@ export async function getPublicVenueBySlug(rawSlug: string): Promise<PublicVenue
       cover_image_url: v.cover_image_url != null ? String(v.cover_image_url) : null,
       gallery_images: Array.isArray(v.gallery_images) ? (v.gallery_images as string[]) : [],
       availability_notes: v.availability_notes != null ? String(v.availability_notes) : null,
+      show_map: v.show_map === false ? false : true,
+      social_links,
+      faq,
     },
     reviews: {
       average_rating,
