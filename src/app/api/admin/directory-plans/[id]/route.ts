@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { verifyAdminCookie } from '@/lib/admin-auth';
+import { buildPlanNavPayloadFromEditor } from '@/lib/directory-plans-venue';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -50,7 +51,23 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (body.stripe_price_id !== undefined) {
     updates.stripe_price_id = body.stripe_price_id === null ? null : String(body.stripe_price_id).trim();
   }
-  if (body.feature_flags !== undefined && typeof body.feature_flags === 'object' && body.feature_flags !== null) {
+  if (body.fortis_merchant_id !== undefined) {
+    updates.fortis_merchant_id =
+      body.fortis_merchant_id === null || String(body.fortis_merchant_id).trim() === ''
+        ? null
+        : String(body.fortis_merchant_id).trim();
+  }
+  if (
+    body.nav_permissions !== undefined &&
+    typeof body.nav_permissions === 'object' &&
+    body.nav_permissions !== null
+  ) {
+    const { nav_permissions, feature_flags } = buildPlanNavPayloadFromEditor(
+      body.nav_permissions as Record<string, boolean>,
+    );
+    updates.nav_permissions = nav_permissions;
+    updates.feature_flags = feature_flags;
+  } else if (body.feature_flags !== undefined && typeof body.feature_flags === 'object' && body.feature_flags !== null) {
     updates.feature_flags = body.feature_flags;
   }
 

@@ -38,6 +38,8 @@ const TABLES = [
         is_default boolean NOT NULL DEFAULT false,
         price_monthly_cents int,
         stripe_price_id text,
+        fortis_merchant_id text,
+        nav_permissions jsonb NOT NULL DEFAULT '{}'::jsonb,
         feature_flags jsonb NOT NULL DEFAULT '{}'::jsonb,
         created_at timestamptz NOT NULL DEFAULT now(),
         updated_at timestamptz NOT NULL DEFAULT now()
@@ -62,6 +64,29 @@ const TABLES = [
         created_at timestamptz NOT NULL DEFAULT now()
       );
       ALTER TABLE public.venue_team_members ENABLE ROW LEVEL SECURITY;
+    `,
+  },
+  {
+    name: 'platform_billing_events',
+    sql: `
+      CREATE TABLE IF NOT EXISTS public.platform_billing_events (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        venue_id uuid REFERENCES public.venues(id) ON DELETE SET NULL,
+        directory_plan_id uuid REFERENCES public.directory_plans(id) ON DELETE SET NULL,
+        amount_cents int NOT NULL,
+        currency text NOT NULL DEFAULT 'usd',
+        fortis_merchant_id text,
+        external_event_id text,
+        event_type text NOT NULL,
+        occurred_at timestamptz NOT NULL DEFAULT now(),
+        metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+        created_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS platform_billing_events_occurred_idx
+        ON public.platform_billing_events (occurred_at DESC);
+      CREATE INDEX IF NOT EXISTS platform_billing_events_venue_idx
+        ON public.platform_billing_events (venue_id);
+      ALTER TABLE public.platform_billing_events DISABLE ROW LEVEL SECURITY;
     `,
   },
   {
@@ -91,6 +116,11 @@ const COLUMNS = [
   { table: 'venues', column: 'directory_verified_status',      sql: `ALTER TABLE public.venues ADD COLUMN IF NOT EXISTS directory_verified_status text NOT NULL DEFAULT 'none';` },
   { table: 'venues', column: 'directory_sponsored_status',     sql: `ALTER TABLE public.venues ADD COLUMN IF NOT EXISTS directory_sponsored_status text NOT NULL DEFAULT 'none';` },
   { table: 'venues', column: 'directory_plan_id',                sql: `ALTER TABLE public.venues ADD COLUMN IF NOT EXISTS directory_plan_id uuid REFERENCES public.directory_plans(id) ON DELETE SET NULL;` },
+  { table: 'directory_plans', column: 'fortis_merchant_id',      sql: `ALTER TABLE public.directory_plans ADD COLUMN IF NOT EXISTS fortis_merchant_id text;` },
+  { table: 'directory_plans', column: 'nav_permissions',         sql: `ALTER TABLE public.directory_plans ADD COLUMN IF NOT EXISTS nav_permissions jsonb NOT NULL DEFAULT '{}'::jsonb;` },
+  { table: 'venues', column: 'directory_subscription_status',    sql: `ALTER TABLE public.venues ADD COLUMN IF NOT EXISTS directory_subscription_status text NOT NULL DEFAULT 'none';` },
+  { table: 'venues', column: 'directory_subscription_external_id', sql: `ALTER TABLE public.venues ADD COLUMN IF NOT EXISTS directory_subscription_external_id text;` },
+  { table: 'venues', column: 'platform_lunarpay_customer_id', sql: `ALTER TABLE public.venues ADD COLUMN IF NOT EXISTS platform_lunarpay_customer_id text;` },
 ];
 
 export async function POST() {

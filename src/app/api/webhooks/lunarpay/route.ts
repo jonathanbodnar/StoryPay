@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { handleLunarPayWebhookForPlatformLedger } from '@/lib/platform-directory-billing';
 import crypto from 'crypto';
 
 const LP_WEBHOOK_SECRET = process.env.LP_WEBHOOK_SECRET || '';
@@ -58,11 +59,15 @@ export async function POST(request: NextRequest) {
     .from('venues')
     .select('id, onboarding_status')
     .eq('lunarpay_merchant_id', merchant.id)
-    .single();
+    .maybeSingle();
 
   if (findError || !venue) {
-    console.error(`[lunarpay-webhook] No venue found for merchantId=${merchant.id}`);
-    return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
+    const handled = await handleLunarPayWebhookForPlatformLedger(payload as unknown as Record<string, unknown>);
+    if (handled) {
+      return NextResponse.json({ received: true });
+    }
+    console.log(`[lunarpay-webhook] No venue for merchantId=${merchant.id} (not a platform ledger event)`);
+    return NextResponse.json({ received: true });
   }
 
   if (event === 'merchant.approved') {

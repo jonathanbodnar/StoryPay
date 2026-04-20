@@ -9,6 +9,7 @@ import {
   Megaphone, Plus, Trash2, Pencil, X, Loader2, ThumbsUp, ThumbsDown,
   Check, BarChart2, ExternalLink, ChevronRight, Search,
   LayoutDashboard, Menu, Lightbulb, BookOpen, Star, Globe, Layers,
+  Repeat, Wallet,
 } from 'lucide-react';
 import {
   VenueManagementPortal,
@@ -38,6 +39,13 @@ interface AdminStats {
   statusBreakdown: Record<string, number>;
   monthlyChart: { month: string; label: string; revenue: number; proposals: number }[];
   featureRequests: { id: string; title: string; vote_count: number; status: string; created_at: string }[];
+  directoryActiveMrrCents?: number;
+  directoryAssignedMrrCents?: number;
+  directoryActiveSubscriptionCount?: number;
+  directoryAssignedPayingVenueCount?: number;
+  directoryMrrByPlan?: { planId: string; name: string; slug: string; venueCount: number; mrrCents: number }[];
+  platformSaaSRevenueInRangeCents?: number;
+  platformSaaSMonthlyChart?: { month: string; label: string; revenue: number }[];
 }
 interface Announcement { id: string; message: string; link_text: string | null; link_url: string | null; is_active: boolean; created_at: string; }
 type AuthState = 'loading' | 'unauthenticated' | 'authenticated';
@@ -817,6 +825,65 @@ export default function AdminPage() {
               <KPICard label="Total Contacts" value={statsLoading ? '...' : stats?.uniqueCustomers ?? 0} icon={Users} color="#888888" onClick={() => openDrill('customers')} />
             </div>
 
+            <div className="rounded-xl border border-gray-200 bg-gray-50/80 p-4 sm:p-5 space-y-3">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900">Directory SaaS (StoryPay)</h3>
+                <p className="text-xs text-gray-500 mt-1 max-w-3xl">
+                  MRR from priced directory plans assigned to venues. &quot;Active&quot; counts venues with subscription status
+                  active or trialing (set when recurring billing is wired). &quot;Assigned&quot; includes all non-canceled
+                  assignments
+                  {statsLoading
+                    ? '.'
+                    : ` (${stats?.directoryAssignedPayingVenueCount ?? 0} paying venues).`}{' '}
+                  SaaS cash sums <code className="text-[10px] bg-white px-1 rounded border">platform_billing_events</code>{' '}
+                  in the selected date range (populate via webhooks or jobs).
+                </p>
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <KPICard
+                  label="MRR (active subs)"
+                  value={statsLoading ? '...' : formatCents(stats?.directoryActiveMrrCents ?? 0)}
+                  icon={Repeat}
+                  color="#0d9488"
+                />
+                <KPICard
+                  label="MRR (assigned plans)"
+                  value={statsLoading ? '...' : formatCents(stats?.directoryAssignedMrrCents ?? 0)}
+                  icon={Layers}
+                  color="#6366f1"
+                />
+                <KPICard
+                  label="Active subscriptions"
+                  value={statsLoading ? '...' : stats?.directoryActiveSubscriptionCount ?? 0}
+                  icon={Check}
+                  color="#0d9488"
+                />
+                <KPICard
+                  label="SaaS cash (range)"
+                  value={statsLoading ? '...' : formatCents(stats?.platformSaaSRevenueInRangeCents ?? 0)}
+                  icon={Wallet}
+                  color="#b45309"
+                />
+              </div>
+              {(stats?.directoryMrrByPlan?.length ?? 0) > 0 ? (
+                <div className="rounded-lg border border-gray-100 bg-white p-3 text-xs">
+                  <p className="font-semibold text-gray-600 mb-2">MRR by plan (assigned, non-canceled)</p>
+                  <ul className="space-y-1.5">
+                    {stats!.directoryMrrByPlan!.map((row) => (
+                      <li key={row.planId} className="flex flex-wrap justify-between gap-2 text-gray-700">
+                        <span>
+                          {row.name}{' '}
+                          <span className="text-gray-400 font-mono">({row.slug})</span> — {row.venueCount} venue
+                          {row.venueCount === 1 ? '' : 's'}
+                        </span>
+                        <span className="font-medium tabular-nums">{formatCents(row.mrrCents)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+
             {/* Drill-down modal */}
             {drillKey && (() => {
               const q = drillSearch.toLowerCase().trim();
@@ -965,13 +1032,14 @@ export default function AdminPage() {
             })()}
 
             {/* Charts */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-              {/* Revenue chart */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+              {/* Venue customer proposal revenue */}
               <div className="rounded-xl bg-white border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Platform Revenue</p>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Venue customer payments</p>
                     <p className="text-2xl font-bold text-gray-900 mt-1">{statsLoading ? '...' : formatCents(stats?.totalRevenue ?? 0)}</p>
+                    <p className="text-[11px] text-gray-400 mt-1">Paid proposals in range (your venues&apos; buyers)</p>
                   </div>
                   <TrendingUp size={20} style={{ color: BRAND }} />
                 </div>
@@ -1015,6 +1083,39 @@ export default function AdminPage() {
                         <Tooltip contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 12 }} />
                         <Bar dataKey="proposals" fill={BRAND} radius={[4, 4, 0, 0]} barSize={20} />
                       </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+
+              {/* StoryPay SaaS cash (platform_billing_events) */}
+              <div className="rounded-xl bg-white border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">StoryPay SaaS cash</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1">
+                      {statsLoading ? '...' : formatCents(stats?.platformSaaSRevenueInRangeCents ?? 0)}
+                    </p>
+                    <p className="text-[11px] text-gray-400 mt-1">Recorded platform charges in range</p>
+                  </div>
+                  <Wallet size={20} style={{ color: '#b45309' }} />
+                </div>
+                <div style={{ height: 200 }}>
+                  {!statsLoading && stats?.platformSaaSMonthlyChart && (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={stats.platformSaaSMonthlyChart} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="adminSaasGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#b45309" stopOpacity={0.15} />
+                            <stop offset="100%" stopColor="#b45309" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                        <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                        <YAxis tickFormatter={formatShort} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={44} />
+                        <Tooltip formatter={v => [formatCents(Number(v)), 'SaaS cash']} contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 12 }} />
+                        <Area type="monotone" dataKey="revenue" stroke="#b45309" strokeWidth={2} fill="url(#adminSaasGrad)" dot={false} activeDot={{ r: 4, fill: '#b45309' }} />
+                      </AreaChart>
                     </ResponsiveContainer>
                   )}
                 </div>

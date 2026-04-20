@@ -26,10 +26,11 @@ export type AdminVenueRow = Record<string, unknown> & {
   directory_plan_id?: string | null;
   directory_verified_status?: string | null;
   directory_sponsored_status?: string | null;
+  directory_subscription_status?: string | null;
   directory_plans?: { id: string; name: string; slug: string } | null;
 };
 
-type PlanOpt = { id: string; name: string; slug: string };
+type PlanOpt = { id: string; name: string; slug: string; price_monthly_cents?: number | null };
 
 export function VenueManagementPortal({
   venues,
@@ -151,6 +152,25 @@ export function VenueManagementPortal({
       await onRefresh();
     } finally {
       setSavingKey(null);
+    }
+  }
+
+  async function copyDirectoryBillingLink(venueId: string) {
+    try {
+      const res = await fetch(`/api/admin/venues/${venueId}/directory-checkout`, { method: 'POST' });
+      const d = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (!res.ok) {
+        alert(d.error || 'Could not create billing link');
+        return;
+      }
+      if (d.url) {
+        await navigator.clipboard.writeText(d.url);
+        alert(
+          'SaaS billing link copied. The venue should log in first, then open the link (or use Venue listing → Plan & billing).',
+        );
+      }
+    } catch {
+      alert('Request failed');
     }
   }
 
@@ -373,6 +393,7 @@ export function VenueManagementPortal({
                 setTimeout(() => setCopiedId(null), 2000);
               }}
               onViewAs={() => void viewAsVenue(venue.id)}
+              onCopyBillingLink={() => void copyDirectoryBillingLink(venue.id)}
             />
           ))
         )}
@@ -440,6 +461,19 @@ export function VenueManagementPortal({
                             </option>
                           ))}
                         </select>
+                        <div className="text-[10px] text-gray-500 mt-1">
+                          SaaS: {(venue.directory_subscription_status as string) || '—'}
+                        </div>
+                        {(plans.find((p) => p.id === venue.directory_plan_id)?.price_monthly_cents ?? 0) > 0 ? (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void copyDirectoryBillingLink(venue.id)}
+                            className="mt-1 text-[10px] font-medium text-amber-800 hover:underline"
+                          >
+                            Copy SaaS billing link
+                          </button>
+                        ) : null}
                       </td>
                       <td className="px-3 py-3 align-top">
                         <select
@@ -519,6 +553,7 @@ function VenueMobileCard({
   onPatch,
   onCopyLogin,
   onViewAs,
+  onCopyBillingLink,
 }: {
   venue: AdminVenueRow;
   plans: PlanOpt[];
@@ -528,6 +563,7 @@ function VenueMobileCard({
   onPatch: (id: string, b: Record<string, unknown>) => void;
   onCopyLogin: (url: string, id: string) => void;
   onViewAs: () => void;
+  onCopyBillingLink: () => void;
 }) {
   const vs = (venue.directory_verified_status as string) || 'none';
   const ss = (venue.directory_sponsored_status as string) || 'none';
@@ -538,6 +574,7 @@ function VenueMobileCard({
       <div className="text-xs text-gray-600">{venue.email}</div>
       {venue.phone ? <div className="text-xs text-gray-500">{venue.phone}</div> : null}
       <div className="text-[11px] text-gray-400">Plan: {planLabelText}</div>
+      <div className="text-[10px] text-gray-500">SaaS billing: {(venue.directory_subscription_status as string) || '—'}</div>
       <select
         value={venue.directory_plan_id || ''}
         disabled={busy}
@@ -554,6 +591,16 @@ function VenueMobileCard({
           </option>
         ))}
       </select>
+      {(plans.find((p) => p.id === venue.directory_plan_id)?.price_monthly_cents ?? 0) > 0 ? (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onCopyBillingLink}
+          className="w-full rounded-lg border border-amber-200 bg-amber-50 py-2 text-[11px] font-medium text-amber-900"
+        >
+          Copy SaaS billing link
+        </button>
+      ) : null}
       <div className="grid grid-cols-2 gap-2">
         <div>
           <span className="text-[10px] font-semibold text-gray-400">Verified</span>

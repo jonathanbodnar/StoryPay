@@ -2,8 +2,17 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Loader2, Plus, Trash2, Pencil, Check } from 'lucide-react';
+import {
+  DIRECTORY_NAV_GROUP_LABELS,
+  DIRECTORY_NAV_REGISTRY,
+  defaultNavPermissionsAllTrue,
+  type DirectoryNavGroup,
+} from '@/lib/directory-nav-registry';
+import { buildPlanNavPayloadFromEditor, mergeNavPermissionsForEditor } from '@/lib/directory-plans-venue';
 
 const BRAND = '#1b1b1b';
+
+const NAV_GROUP_ORDER: DirectoryNavGroup[] = ['main', 'listing', 'payments', 'marketing', 'settings'];
 
 type FeatureDef = {
   id: string;
@@ -23,12 +32,15 @@ type PlanRow = {
   is_default: boolean;
   price_monthly_cents: number | null;
   stripe_price_id: string | null;
+  fortis_merchant_id?: string | null;
   feature_flags: Record<string, boolean>;
+  nav_permissions?: Record<string, boolean> | null;
 };
 
 export function DirectoryPlansAdminPanel() {
   const [plans, setPlans] = useState<PlanRow[]>([]);
   const [features, setFeatures] = useState<FeatureDef[]>([]);
+  const [platformFortisMerchantIdConfigured, setPlatformFortisMerchantIdConfigured] = useState(false);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
 
@@ -41,18 +53,20 @@ export function DirectoryPlansAdminPanel() {
     description: '',
     sort_order: 0,
     price_monthly_cents: '' as string,
+    fortis_merchant_id: '',
     is_default: false,
   });
   const [planSaving, setPlanSaving] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editFlags, setEditFlags] = useState<Record<string, boolean>>({});
+  const [editNav, setEditNav] = useState<Record<string, boolean>>({});
   const [editMeta, setEditMeta] = useState({
     name: '',
     slug: '',
     description: '',
     sort_order: 0,
     price_monthly_cents: '' as string,
+    fortis_merchant_id: '',
     is_default: false,
   });
 
@@ -65,9 +79,14 @@ export function DirectoryPlansAdminPanel() {
         setErr('Could not load plans');
         return;
       }
-      const d = (await res.json()) as { plans?: PlanRow[]; features?: FeatureDef[] };
+      const d = (await res.json()) as {
+        plans?: PlanRow[];
+        features?: FeatureDef[];
+        platformFortisMerchantIdConfigured?: boolean;
+      };
       setPlans(d.plans || []);
       setFeatures(d.features || []);
+      setPlatformFortisMerchantIdConfigured(d.platformFortisMerchantIdConfigured === true);
     } finally {
       setLoading(false);
     }
@@ -113,8 +132,7 @@ export function DirectoryPlansAdminPanel() {
     e.preventDefault();
     setPlanSaving(true);
     try {
-      const flags: Record<string, boolean> = {};
-      for (const f of features) flags[f.feature_key] = true;
+      const { nav_permissions, feature_flags } = buildPlanNavPayloadFromEditor(defaultNavPermissionsAllTrue());
 
       const res = await fetch('/api/admin/directory-plans', {
         method: 'POST',
@@ -128,7 +146,9 @@ export function DirectoryPlansAdminPanel() {
           price_monthly_cents: planForm.price_monthly_cents
             ? Math.round(parseFloat(planForm.price_monthly_cents) * 100)
             : null,
-          feature_flags: flags,
+          fortis_merchant_id: planForm.fortis_merchant_id.trim() || null,
+          nav_permissions,
+          feature_flags,
         }),
       });
       if (!res.ok) {
@@ -142,6 +162,7 @@ export function DirectoryPlansAdminPanel() {
         description: '',
         sort_order: 0,
         price_monthly_cents: '',
+        fortis_merchant_id: '',
         is_default: false,
       });
       await load();
@@ -152,19 +173,31 @@ export function DirectoryPlansAdminPanel() {
 
   function startEdit(p: PlanRow) {
     setEditingId(p.id);
-    setEditFlags({ ...(p.feature_flags || {}) });
+    setEditNav(mergeNavPermissionsForEditor(p.nav_permissions, p.feature_flags));
     setEditMeta({
       name: p.name,
       slug: p.slug,
       description: p.description || '',
       sort_order: p.sort_order,
       price_monthly_cents: p.price_monthly_cents != null ? (p.price_monthly_cents / 100).toFixed(2) : '',
+      fortis_merchant_id: p.fortis_merchant_id?.trim() || '',
       is_default: p.is_default,
+    });
+  }
+
+  function setNavGroup(group: DirectoryNavGroup, value: boolean) {
+    setEditNav((prev) => {
+      const next = { ...prev };
+      for (const e of DIRECTORY_NAV_REGISTRY) {
+        if (e.group === group) next[e.id] = value;
+      }
+      return next;
     });
   }
 
   async function saveEdit() {
     if (!editingId) return;
+    const { nav_permissions } = buildPlanNavPayloadFromEditor(editNav);
     const res = await fetch(`/api/admin/directory-plans/${editingId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -177,7 +210,8 @@ export function DirectoryPlansAdminPanel() {
         price_monthly_cents: editMeta.price_monthly_cents
           ? Math.round(parseFloat(editMeta.price_monthly_cents) * 100)
           : null,
-        feature_flags: editFlags,
+        fortis_merchant_id: editMeta.fortis_merchant_id.trim() || null,
+        nav_permissions,
       }),
     });
     if (!res.ok) {
@@ -209,14 +243,26 @@ export function DirectoryPlansAdminPanel() {
       <div>
         <h2 className="font-heading text-xl text-gray-900">Directory plans &amp; features</h2>
         <p className="mt-1 text-sm text-gray-500 max-w-3xl">
-          Define feature keys venues can have per plan. Assign plans on the Venue management tab. Venues with no plan
-          keep full access (legacy). Stripe fields are optional for later billing.
+          Pick each dashboard menu, submenu, and page per plan (main nav, Venue listing, Payments, Marketing, Settings).
+          Plans with empty <code className="text-xs bg-gray-100 px-1 rounded">nav_permissions</code> still fall back to
+          legacy feature flags until you save from this UI. Venues with no plan keep full access. Optional Fortis merchant
+          id per plan overrides <code className="text-xs bg-gray-100 px-1 rounded">STORYPAY_PLATFORM_FORTIS_MERCHANT_ID</code>.
         </p>
+        {!platformFortisMerchantIdConfigured ? (
+          <p className="mt-2 text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 max-w-3xl">
+            Set <code className="text-xs">STORYPAY_PLATFORM_FORTIS_MERCHANT_ID</code> in production env so new charges use
+            your StoryPay merchant unless a plan specifies its own id.
+          </p>
+        ) : null}
         {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
       </div>
 
       <section className="rounded-2xl border border-gray-200 bg-white p-6">
-        <h3 className="font-semibold text-gray-900 mb-3">Feature catalog</h3>
+        <h3 className="font-semibold text-gray-900 mb-3">Legacy feature catalog</h3>
+        <p className="text-xs text-gray-500 mb-3 max-w-3xl">
+          Optional registry keys for older tooling. Live gating uses <span className="font-mono">nav_permissions</span> when
+          you save a plan from the editor below.
+        </p>
         <form onSubmit={addFeature} className="flex flex-wrap gap-2 items-end mb-4">
           <div>
             <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Key</label>
@@ -338,6 +384,17 @@ export function DirectoryPlansAdminPanel() {
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
             />
           </div>
+          <div className="md:col-span-2">
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Fortis merchant id (optional override)
+            </label>
+            <input
+              value={planForm.fortis_merchant_id}
+              onChange={(e) => setPlanForm({ ...planForm, fortis_merchant_id: e.target.value })}
+              placeholder="Leave blank for env default"
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 font-mono text-xs"
+            />
+          </div>
           <div className="md:col-span-2 flex items-center gap-2">
             <input
               type="checkbox"
@@ -408,6 +465,15 @@ export function DirectoryPlansAdminPanel() {
                         className="w-20 rounded border border-gray-200 px-1 py-0.5"
                       />
                     </label>
+                    <label className="text-xs text-gray-600 flex items-center gap-1">
+                      Fortis{' '}
+                      <input
+                        value={editMeta.fortis_merchant_id}
+                        onChange={(e) => setEditMeta({ ...editMeta, fortis_merchant_id: e.target.value })}
+                        placeholder="env default"
+                        className="w-44 rounded border border-gray-200 px-1 py-0.5 font-mono text-[10px]"
+                      />
+                    </label>
                     <label className="flex items-center gap-1 text-xs">
                       <input
                         type="checkbox"
@@ -417,18 +483,48 @@ export function DirectoryPlansAdminPanel() {
                       Default
                     </label>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-56 overflow-y-auto border border-gray-50 rounded-lg p-2">
-                    {features.map((f) => (
-                      <label key={f.id} className="flex items-center gap-2 text-xs">
-                        <input
-                          type="checkbox"
-                          checked={editFlags[f.feature_key] === true}
-                          onChange={(e) =>
-                            setEditFlags({ ...editFlags, [f.feature_key]: e.target.checked })
-                          }
-                        />
-                        <span>{f.label}</span>
-                      </label>
+                  <div className="border border-gray-100 rounded-xl p-3 space-y-4 max-h-[min(70vh,520px)] overflow-y-auto">
+                    <p className="text-xs text-gray-500">
+                      Toggle any screen; submenu sections only appear in the venue sidebar if at least one child is
+                      allowed.
+                    </p>
+                    {NAV_GROUP_ORDER.map((group) => (
+                      <div key={group}>
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <span className="text-xs font-semibold text-gray-800">
+                            {DIRECTORY_NAV_GROUP_LABELS[group]}
+                          </span>
+                          <button
+                            type="button"
+                            className="text-[10px] font-medium text-gray-500 hover:text-gray-800"
+                            onClick={() => setNavGroup(group, true)}
+                          >
+                            All
+                          </button>
+                          <button
+                            type="button"
+                            className="text-[10px] font-medium text-gray-500 hover:text-gray-800"
+                            onClick={() => setNavGroup(group, false)}
+                          >
+                            None
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pl-1">
+                          {DIRECTORY_NAV_REGISTRY.filter((e) => e.group === group).map((e) => (
+                            <label key={e.id} className="flex items-start gap-2 text-xs text-gray-700">
+                              <input
+                                type="checkbox"
+                                className="mt-0.5 rounded border-gray-300"
+                                checked={editNav[e.id] === true}
+                                onChange={(ev) =>
+                                  setEditNav({ ...editNav, [e.id]: ev.target.checked })
+                                }
+                              />
+                              <span>{e.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
                     ))}
                   </div>
                   <div className="flex gap-2">
@@ -454,6 +550,12 @@ export function DirectoryPlansAdminPanel() {
                   <div>
                     <p className="font-medium text-gray-900">{p.name}</p>
                     <p className="text-xs font-mono text-gray-400">{p.slug}</p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">
+                      Fortis:{' '}
+                      {p.fortis_merchant_id?.trim()
+                        ? <span className="font-mono text-gray-700">{p.fortis_merchant_id.trim()}</span>
+                        : <span className="text-gray-400">env default</span>}
+                    </p>
                     {p.is_default ? (
                       <span className="inline-block mt-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
                         Default

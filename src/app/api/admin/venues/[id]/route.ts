@@ -29,11 +29,25 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if ('directory_plan_id' in body) {
     if (body.directory_plan_id === null || body.directory_plan_id === '') {
       updates.directory_plan_id = null;
+      updates.directory_subscription_status = 'none';
+      updates.directory_subscription_external_id = null;
     } else if (typeof body.directory_plan_id === 'string') {
       const pid = body.directory_plan_id.trim();
-      const { data: plan } = await supabaseAdmin.from('directory_plans').select('id').eq('id', pid).maybeSingle();
-      if (!plan) return NextResponse.json({ error: 'Invalid directory_plan_id' }, { status: 400 });
+      const { data: planRow } = await supabaseAdmin
+        .from('directory_plans')
+        .select('id, price_monthly_cents')
+        .eq('id', pid)
+        .maybeSingle();
+      if (!planRow) return NextResponse.json({ error: 'Invalid directory_plan_id' }, { status: 400 });
       updates.directory_plan_id = pid;
+      const price = planRow.price_monthly_cents ?? 0;
+      if (price > 0) {
+        updates.directory_subscription_status = 'pending_payment';
+        updates.directory_subscription_external_id = null;
+      } else {
+        updates.directory_subscription_status = 'active';
+        updates.directory_subscription_external_id = null;
+      }
     } else {
       return NextResponse.json({ error: 'Invalid directory_plan_id' }, { status: 400 });
     }
@@ -61,7 +75,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     .update(updates)
     .eq('id', venueId)
     .select(
-      'id, name, directory_plan_id, directory_verified_status, directory_sponsored_status',
+      'id, name, directory_plan_id, directory_verified_status, directory_sponsored_status, directory_subscription_status',
     )
     .single();
 

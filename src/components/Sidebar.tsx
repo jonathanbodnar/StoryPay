@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import type { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard, FileText, Users, CreditCard, BarChart2,
   Sparkles, Megaphone, Settings, Palette, Mail, UsersRound,
@@ -19,6 +20,14 @@ import {
 
 interface Venue { id: string; name: string; ghl_location_id: string; }
 type UserRole = 'owner' | 'admin' | 'member';
+
+type NavItem = {
+  label: string;
+  href: string;
+  icon: LucideIcon;
+  navId: string;
+};
+
 interface SidebarProps {
   venue: Venue;
   role?: UserRole;
@@ -27,55 +36,58 @@ interface SidebarProps {
   /** Desktop-only narrow icon rail */
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
+  /** From directory plan; null = show all nav targets. */
+  allowedNavIds?: string[] | null;
 }
 
-const menuItems = [
-  { label: 'Ask AI', href: '/dashboard/ai', icon: Sparkles },
-  { label: 'Home', href: '/dashboard', icon: LayoutDashboard },
-  { label: 'Contacts', href: '/dashboard/contacts', icon: Users },
-  { label: 'Conversations', href: '/dashboard/conversations', icon: MessageCircle },
-  { label: 'Calendar', href: '/dashboard/calendar', icon: Calendar },
-  { label: 'Leads', href: '/dashboard/leads', icon: Inbox },
-  { label: 'Reports', href: '/dashboard/reports', icon: BarChart2 },
-  { label: "What's New", href: '/dashboard/updates', icon: Megaphone },
-  { label: 'Help Center', href: '/dashboard/help', icon: BookOpen },
+const menuItems: NavItem[] = [
+  { label: 'Ask AI', href: '/dashboard/ai', icon: Sparkles, navId: 'nav_main_ai' },
+  { label: 'Home', href: '/dashboard', icon: LayoutDashboard, navId: 'nav_main_home' },
+  { label: 'Contacts', href: '/dashboard/contacts', icon: Users, navId: 'nav_main_contacts' },
+  { label: 'Conversations', href: '/dashboard/conversations', icon: MessageCircle, navId: 'nav_main_conversations' },
+  { label: 'Calendar', href: '/dashboard/calendar', icon: Calendar, navId: 'nav_main_calendar' },
+  { label: 'Leads', href: '/dashboard/leads', icon: Inbox, navId: 'nav_main_leads' },
+  { label: 'Reports', href: '/dashboard/reports', icon: BarChart2, navId: 'nav_main_reports' },
+  { label: "What's New", href: '/dashboard/updates', icon: Megaphone, navId: 'nav_main_updates' },
+  { label: 'Help Center', href: '/dashboard/help', icon: BookOpen, navId: 'nav_main_help' },
 ];
 
-const paymentsItems = [
-  { label: 'New', href: '/dashboard/payments/new', icon: Plus },
-  { label: 'Coupons', href: '/dashboard/payments/coupons', icon: Ticket },
-  { label: 'Proposals', href: '/dashboard/payments/proposals', icon: FileText },
-  { label: 'Proposal Templates', href: '/dashboard/proposals/templates', icon: Receipt },
-  { label: 'Installments', href: '/dashboard/payments/installments', icon: Calendar },
-  { label: 'Subscriptions', href: '/dashboard/payments/subscriptions', icon: RefreshCw },
-  { label: 'Transactions', href: '/dashboard/transactions', icon: CreditCard },
+const paymentsItems: NavItem[] = [
+  { label: 'New', href: '/dashboard/payments/new', icon: Plus, navId: 'nav_payments_new' },
+  { label: 'Coupons', href: '/dashboard/payments/coupons', icon: Ticket, navId: 'nav_payments_coupons' },
+  { label: 'Proposals', href: '/dashboard/payments/proposals', icon: FileText, navId: 'nav_payments_proposals' },
+  { label: 'Proposal Templates', href: '/dashboard/proposals/templates', icon: Receipt, navId: 'nav_proposals_hub' },
+  { label: 'Installments', href: '/dashboard/payments/installments', icon: Calendar, navId: 'nav_payments_installments' },
+  { label: 'Subscriptions', href: '/dashboard/payments/subscriptions', icon: RefreshCw, navId: 'nav_payments_subscriptions' },
+  { label: 'Transactions', href: '/dashboard/transactions', icon: CreditCard, navId: 'nav_transactions' },
 ];
 
-const marketingItems = [
-  { label: 'Marketing analytics', href: '/dashboard/marketing/analytics', icon: BarChart3 },
-  { label: 'Lead Capture Forms', href: '/dashboard/marketing/form-builder', icon: LayoutTemplate },
-  { label: 'Email templates', href: '/dashboard/marketing/email/templates', icon: FileStack },
-  { label: 'Email opt-in / unsubscribes', href: '/dashboard/marketing/email/preferences', icon: Mail },
-  { label: 'Email campaigns', href: '/dashboard/marketing/email/campaigns', icon: Megaphone },
-  { label: 'Email workflows', href: '/dashboard/marketing/email/automations', icon: Workflow },
-  { label: 'Trigger links & tags', href: '/dashboard/marketing/trigger-links', icon: Link2 },
+const marketingItems: NavItem[] = [
+  { label: 'Marketing analytics', href: '/dashboard/marketing/analytics', icon: BarChart3, navId: 'nav_marketing_analytics' },
+  { label: 'Lead Capture Forms', href: '/dashboard/marketing/form-builder', icon: LayoutTemplate, navId: 'nav_marketing_form_builder' },
+  { label: 'Email templates', href: '/dashboard/marketing/email/templates', icon: FileStack, navId: 'nav_marketing_email_templates' },
+  { label: 'Email opt-in / unsubscribes', href: '/dashboard/marketing/email/preferences', icon: Mail, navId: 'nav_marketing_email_preferences' },
+  { label: 'Email campaigns', href: '/dashboard/marketing/email/campaigns', icon: Megaphone, navId: 'nav_marketing_email_campaigns' },
+  { label: 'Email workflows', href: '/dashboard/marketing/email/automations', icon: Workflow, navId: 'nav_marketing_email_automations' },
+  { label: 'Trigger links & tags', href: '/dashboard/marketing/trigger-links', icon: Link2, navId: 'nav_marketing_trigger_links' },
 ];
 
-const settingsItems = [
-  { label: 'General', href: '/dashboard/settings', icon: Settings },
-  { label: 'Branding', href: '/dashboard/settings/branding', icon: Palette },
-  { label: 'Email Templates', href: '/dashboard/settings/email-templates', icon: Mail },
-  { label: 'Integrations', href: '/dashboard/settings/integrations', icon: Link2 },
-  { label: 'Team', href: '/dashboard/settings/team', icon: UsersRound },
-  { label: 'Notifications', href: '/dashboard/settings/notifications', icon: Bell },
+const settingsItems: NavItem[] = [
+  { label: 'General', href: '/dashboard/settings', icon: Settings, navId: 'nav_settings_general' },
+  { label: 'Branding', href: '/dashboard/settings/branding', icon: Palette, navId: 'nav_settings_branding' },
+  { label: 'Email Templates', href: '/dashboard/settings/email-templates', icon: Mail, navId: 'nav_settings_email_templates' },
+  { label: 'Integrations', href: '/dashboard/settings/integrations', icon: Link2, navId: 'nav_settings_integrations' },
+  { label: 'Team', href: '/dashboard/settings/team', icon: UsersRound, navId: 'nav_settings_team' },
+  { label: 'Notifications', href: '/dashboard/settings/notifications', icon: Bell, navId: 'nav_settings_notifications' },
 ];
 
-const listingItems = [
-  { label: 'Dashboard', href: '/dashboard/listing', icon: LayoutDashboard },
-  { label: 'Media library', href: '/dashboard/listing/media', icon: Images },
-  { label: 'Analytics', href: '/dashboard/listing/analytics', icon: BarChart3 },
-  { label: 'Reviews', href: '/dashboard/listing/reviews', icon: Star },
-  { label: 'Verified & Sponsored', href: '/dashboard/listing/directory', icon: BadgeCheck },
+const listingItems: NavItem[] = [
+  { label: 'Dashboard', href: '/dashboard/listing', icon: LayoutDashboard, navId: 'nav_listing_dashboard' },
+  { label: 'Plan & billing', href: '/dashboard/directory-billing', icon: CreditCard, navId: 'nav_listing_directory_billing' },
+  { label: 'Media library', href: '/dashboard/listing/media', icon: Images, navId: 'nav_listing_media' },
+  { label: 'Analytics', href: '/dashboard/listing/analytics', icon: BarChart3, navId: 'nav_listing_analytics' },
+  { label: 'Reviews', href: '/dashboard/listing/reviews', icon: Star, navId: 'nav_listing_reviews' },
+  { label: 'Verified & Sponsored', href: '/dashboard/listing/directory', icon: BadgeCheck, navId: 'nav_listing_directory' },
 ];
 
 type FlyoutGroup = 'payments' | 'marketing' | 'settings' | 'listing' | null;
@@ -87,10 +99,12 @@ export default function Sidebar({
   memberEmail: _memberEmail,
   collapsed = false,
   onToggleCollapsed,
+  allowedNavIds = null,
 }: SidebarProps) {
   const isOwner = role === 'owner';
   const isAdmin = role === 'owner' || role === 'admin';
   const pathname = usePathname();
+  const navOk = (navId: string) => allowedNavIds === null || allowedNavIds.includes(navId);
   const isOnListing = pathname.startsWith('/dashboard/listing');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [flyout, setFlyout] = useState<FlyoutGroup>(null);
@@ -218,11 +232,16 @@ export default function Sidebar({
     active ? { backgroundColor: '#1b1b1b', color: '#ffffff' } : {};
 
   const settingsFiltered = settingsItems.filter((sub) => {
+    if (!navOk(sub.navId)) return false;
     if (!isOwner && sub.label === 'General') return false;
     if (!isOwner && sub.label === 'Team') return false;
     if (!isOwner && sub.label === 'Integrations') return false;
     return true;
   });
+
+  const listingFiltered = listingItems.filter((sub) => navOk(sub.navId));
+  const paymentsFiltered = paymentsItems.filter((sub) => navOk(sub.navId));
+  const marketingFiltered = marketingItems.filter((sub) => navOk(sub.navId));
 
   const NavContent = ({ rail, onCloseMobile }: { rail: boolean; onCloseMobile?: () => void }) => (
     <div className="flex flex-col h-full">
@@ -277,6 +296,7 @@ export default function Sidebar({
 
       <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
         {menuItems.filter((item) => {
+          if (!navOk(item.navId)) return false;
           if (!isAdmin && item.label === 'Reports') return false;
           if (!isAdmin && item.label === "What's New") return false;
           return true;
@@ -308,6 +328,7 @@ export default function Sidebar({
           );
         })}
 
+        {listingFiltered.length > 0 ? (
         <div>
           {rail ? (
             <button
@@ -340,7 +361,7 @@ export default function Sidebar({
               </button>
               {listingOpen && (
                 <div className="mt-0.5 ml-3 pl-3 border-l border-gray-200 space-y-0.5 py-0.5">
-                  {listingItems.map((sub) => {
+                  {listingFiltered.map((sub) => {
                     const SubIcon = sub.icon;
                     const active = listingSubActive(sub.href);
                     return (
@@ -355,7 +376,9 @@ export default function Sidebar({
             </>
           )}
         </div>
+        ) : null}
 
+        {paymentsFiltered.length > 0 ? (
         <div>
           {rail ? (
             <button
@@ -388,7 +411,7 @@ export default function Sidebar({
               </button>
               {paymentsOpen && (
                 <div className="mt-0.5 ml-3 pl-3 border-l border-gray-200 space-y-0.5 py-0.5">
-                  {paymentsItems.map((sub) => {
+                  {paymentsFiltered.map((sub) => {
                     const SubIcon = sub.icon;
                     const active = isSubActive(sub.href);
                     return (
@@ -403,8 +426,9 @@ export default function Sidebar({
             </>
           )}
         </div>
+        ) : null}
 
-        {isAdmin && (
+        {isAdmin && marketingFiltered.length > 0 ? (
           <div>
             {rail ? (
               <button
@@ -437,7 +461,7 @@ export default function Sidebar({
                 </button>
                 {marketingOpen && (
                   <div className="mt-0.5 ml-3 pl-3 border-l border-gray-200 space-y-0.5 py-0.5">
-                    {marketingItems.map((sub) => {
+                    {marketingFiltered.map((sub) => {
                       const SubIcon = sub.icon;
                       const active = isSubActive(sub.href);
                       return (
@@ -452,9 +476,9 @@ export default function Sidebar({
               </>
             )}
           </div>
-        )}
+        ) : null}
 
-        {isAdmin && (
+        {isAdmin && settingsFiltered.length > 0 ? (
           <div>
             {rail ? (
               <button
@@ -502,11 +526,11 @@ export default function Sidebar({
               </>
             )}
           </div>
-        )}
+        ) : null}
       </nav>
 
       <div className={`px-3 py-4 border-t border-gray-200 space-y-1 ${rail ? 'flex flex-col items-center' : ''}`}>
-        {memberName && (
+        {memberName && navOk('nav_main_profile') ? (
           <Link
             href="/dashboard/profile"
             title={rail ? memberName : undefined}
@@ -519,7 +543,7 @@ export default function Sidebar({
             </div>
             {!rail && <span className="truncate">{memberName}</span>}
           </Link>
-        )}
+        ) : null}
         <button
           type="button"
           title="Support"
@@ -546,7 +570,7 @@ export default function Sidebar({
   );
 
   const flyoutPanel = (
-    items: typeof paymentsItems | typeof marketingItems | typeof settingsItems | typeof listingItems,
+    items: NavItem[],
     group: NonNullable<FlyoutGroup>,
   ) => {
     if (!flyout || flyout !== group || !flyoutPos || !collapsed) return null;
@@ -649,9 +673,9 @@ export default function Sidebar({
       </aside>
 
       {flyoutBackdrop}
-      {flyoutPanel(listingItems, 'listing')}
-      {flyoutPanel(paymentsItems, 'payments')}
-      {flyoutPanel(marketingItems, 'marketing')}
+      {flyoutPanel(listingFiltered, 'listing')}
+      {flyoutPanel(paymentsFiltered, 'payments')}
+      {flyoutPanel(marketingFiltered, 'marketing')}
       {flyoutPanel(settingsFiltered, 'settings')}
     </>
   );

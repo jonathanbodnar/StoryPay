@@ -18,18 +18,25 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { data: venue, error } = await supabaseAdmin
-    .from('venues')
-    .select('*')
-    .eq('id', venueId)
-    .single();
+  const { data: venue, error } = await supabaseAdmin.from('venues').select('*').eq('id', venueId).single();
 
   if (error || !venue) {
     console.error('[venues/me] query error:', error?.message, 'venueId:', venueId);
     return NextResponse.json({ error: 'Venue not found', detail: error?.message }, { status: 404 });
   }
 
-  return NextResponse.json(venue);
+  let directory_plans: { name: string; price_monthly_cents: number | null } | null = null;
+  const pid = venue.directory_plan_id as string | null | undefined;
+  if (pid) {
+    const { data: planRow } = await supabaseAdmin
+      .from('directory_plans')
+      .select('name, price_monthly_cents')
+      .eq('id', pid)
+      .maybeSingle();
+    if (planRow) directory_plans = planRow;
+  }
+
+  return NextResponse.json({ ...venue, directory_plans });
 }
 
 export async function PATCH(request: Request) {
