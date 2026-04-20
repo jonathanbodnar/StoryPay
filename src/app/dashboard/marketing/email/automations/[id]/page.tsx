@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2, Plus, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, Trash2, ChevronUp, ChevronDown, Smartphone } from 'lucide-react';
 import type { AutomationTriggerType } from '@/lib/marketing-email-schema';
 
 interface AutomationRow {
@@ -36,9 +36,13 @@ interface TemplateOpt {
   name: string;
 }
 
+const DEFAULT_AUTOMATION_SMS =
+  'Hi {{first_name}}, a quick note from {{venue_name}}. Reply STOP to opt out.';
+
 type LocalStep =
   | { localId: string; step_type: 'delay'; delay_minutes: number }
-  | { localId: string; step_type: 'send_email'; template_id: string };
+  | { localId: string; step_type: 'send_email'; template_id: string }
+  | { localId: string; step_type: 'send_sms'; body: string };
 
 export default function AutomationEditPage() {
   const params = useParams();
@@ -95,6 +99,13 @@ export default function AutomationEditPage() {
             localId: lid,
             step_type: 'delay',
             delay_minutes: Number((s.config_json as { delay_minutes?: number }).delay_minutes ?? 60),
+          };
+        }
+        if (s.step_type === 'send_sms') {
+          return {
+            localId: lid,
+            step_type: 'send_sms',
+            body: String((s.config_json as { body?: string }).body ?? DEFAULT_AUTOMATION_SMS),
           };
         }
         return {
@@ -154,6 +165,9 @@ export default function AutomationEditPage() {
     return steps.map((s, i) => {
       if (s.step_type === 'delay') {
         return { step_order: i, step_type: 'delay' as const, config: { delay_minutes: Math.max(1, Math.min(10080, s.delay_minutes)) } };
+      }
+      if (s.step_type === 'send_sms') {
+        return { step_order: i, step_type: 'send_sms' as const, config: { body: s.body.trim() } };
       }
       return { step_order: i, step_type: 'send_email' as const, config: { template_id: s.template_id } };
     });
@@ -365,8 +379,25 @@ export default function AutomationEditPage() {
             >
               <Plus size={14} /> Send email
             </button>
+            <button
+              type="button"
+              onClick={() =>
+                setSteps((s) => [
+                  ...s,
+                  { localId: crypto.randomUUID(), step_type: 'send_sms', body: DEFAULT_AUTOMATION_SMS },
+                ])
+              }
+              className="inline-flex items-center gap-1 rounded border border-gray-200 px-2 py-1 text-xs hover:bg-gray-50"
+            >
+              <Plus size={14} /> Send SMS
+            </button>
           </div>
         </div>
+        <p className="mb-3 text-xs text-gray-500">
+          SMS steps send through your connected GHL number. Merge fields:{' '}
+          <code className="rounded bg-gray-100 px-1">{`{{first_name}} {{venue_name}} {{wedding_date_nice}}`}</code> — leads
+          with SMS DND (e.g. replied STOP) are skipped.
+        </p>
         {steps.length === 0 ? (
           <p className="text-sm text-gray-500">Add at least one step. Delays wait before the next step runs.</p>
         ) : (
@@ -401,6 +432,23 @@ export default function AutomationEditPage() {
                           }}
                         />
                       </label>
+                    </>
+                  ) : s.step_type === 'send_sms' ? (
+                    <>
+                      <span className="inline-flex items-center gap-1 font-medium">
+                        <Smartphone size={14} className="text-gray-500" /> SMS body
+                      </span>
+                      <textarea
+                        className="mt-1 min-h-[88px] w-full rounded border border-gray-200 px-2 py-1.5 text-xs"
+                        value={s.body}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setSteps((prev) =>
+                            prev.map((x) => (x.localId === s.localId && x.step_type === 'send_sms' ? { ...x, body: v } : x)),
+                          );
+                        }}
+                        placeholder={DEFAULT_AUTOMATION_SMS}
+                      />
                     </>
                   ) : (
                     <>

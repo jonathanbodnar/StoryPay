@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
+import { findOrCreateContact, getGhlToken, normalizePhone, sendSms } from '@/lib/ghl';
 import {
   parseEmailDefinition,
   parseSegment,
@@ -177,16 +178,32 @@ export async function buildMergeVars(
   venueId: string,
   leadId: string,
   appOrigin: string,
+  opts?: { forSms?: boolean },
 ): Promise<MergeFieldRecord | null> {
+  const forSms = opts?.forSms === true;
   const { data: venue } = await supabaseAdmin.from('venues').select('name').eq('id', venueId).maybeSingle();
   const { data: lead } = await supabaseAdmin
     .from('leads')
-    .select('id, email, first_name, last_name, name, wedding_date, guest_count, marketing_email_opt_in')
+    .select('id, email, first_name, last_name, name, wedding_date, guest_count, marketing_email_opt_in, sms_dnd')
     .eq('id', leadId)
     .eq('venue_id', venueId)
     .maybeSingle();
-  if (!lead?.email) return null;
-  if ((lead as { marketing_email_opt_in?: boolean }).marketing_email_opt_in === false) return null;
+  if (!lead) return null;
+  const emailRaw = String(lead.email || '').trim();
+  if (forSms && (lead as { sms_dnd?: boolean }).sms_dnd === true) return null;
+  if (forSms && emailRaw) {
+    const { data: vcDnd } = await supabaseAdmin
+      .from('venue_customers')
+      .select('sms_dnd')
+      .eq('venue_id', venueId)
+      .ilike('customer_email', emailRaw)
+      .maybeSingle();
+    if (vcDnd?.sms_dnd === true) return null;
+  }
+  if (!forSms) {
+    if (!emailRaw) return null;
+    if ((lead as { marketing_email_opt_in?: boolean }).marketing_email_opt_in === false) return null;
+  }
   const fn = (lead.first_name as string | null)?.trim() || (lead.name as string | null)?.split(/\s+/)[0] || 'there';
   const ln = (lead.last_name as string | null)?.trim() || '';
   const token = signMarketingUnsubscribeToken(venueId, leadId);
@@ -211,10 +228,13 @@ export async function buildMergeVars(
     }
   }
   const gc = lead.guest_count as number | null;
+  const email =
+    emailRaw ||
+    `lead.${String(lead.id).replace(/-/g, '').slice(0, 12)}@sms-auto.storypay.placeholder`;
   return {
     first_name: fn,
     last_name: ln,
-    email: String(lead.email),
+    email,
     venue_name: (venue?.name as string) || 'Your venue',
     unsubscribe_url: unsub,
     resubscribe_url: resub,
@@ -223,6 +243,65 @@ export async function buildMergeVars(
     wedding_month: wedding_month || '',
     guest_count: gc != null ? String(gc) : '',
   };
+}
+
+async function resolvePhoneForLead(venueId: string, leadId: string): Promise<string | null> {
+  const { data: lead } = await supabaseAdmin
+    .from('leads')
+    .select('phone, email')
+    .eq('id', leadId)
+    .eq('venue_id', venueId)
+    .maybeSingle();
+  if (!lead) return null;
+  const direct = normalizePhone(lead.phone as string | null);
+  if (direct) return direct;
+  const em = String(lead.email || '').trim().toLowerCase();
+  if (!em) return null;
+  const { data: vc } = await supabaseAdmin
+    .from('venue_customers')
+    .select('phone')
+    .eq('venue_id', venueId)
+    .ilike('customer_email', em)
+    .maybeSingle();
+  return normalizePhone(vc?.phone as string | null);
+}
+
+async function sendAutomationSmsToLead(
+  venueId: string,
+  leadId: string,
+  bodyTemplate: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const appOrigin = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
+  const vars = await buildMergeVars(venueId, leadId, appOrigin, { forSms: true });
+  if (!vars) return { ok: false, error: 'suppressed' };
+  const phone = await resolvePhoneForLead(venueId, leadId);
+  if (!phone) return { ok: false, error: 'no_phone' };
+  const { data: venue } = await supabaseAdmin
+    .from('venues')
+    .select('ghl_access_token, ghl_location_id, ghl_connected')
+    .eq('id', venueId)
+    .maybeSingle();
+  if (!(venue as { ghl_connected?: boolean } | null)?.ghl_connected) {
+    return { ok: false, error: 'ghl_not_connected' };
+  }
+  const token = getGhlToken(venue as { ghl_access_token?: string | null });
+  const loc = venue?.ghl_location_id as string | null;
+  if (!token || !loc) return { ok: false, error: 'ghl_not_configured' };
+  const mergedBody = mergeMarketingFields(bodyTemplate, vars).trim();
+  if (!mergedBody) return { ok: false, error: 'empty_after_merge' };
+  try {
+    const contactId = await findOrCreateContact(token, loc, {
+      email: vars.email,
+      phone,
+      firstName: vars.first_name,
+      lastName: vars.last_name,
+    });
+    if (!contactId) return { ok: false, error: 'no_contact' };
+    await sendSms(token, loc, contactId, mergedBody);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'sms_failed' };
+  }
+  return { ok: true };
 }
 
 async function sendTemplateToLead(
@@ -358,6 +437,45 @@ async function processOneEnrollment(en: {
       await supabaseAdmin
         .from('marketing_automation_enrollments')
         .update({ status: 'failed', last_error: send.error ?? 'send failed' })
+        .eq('id', en.id);
+      return true;
+    }
+    const nextIdx = idx + 1;
+    if (nextIdx >= sorted.length) {
+      await supabaseAdmin
+        .from('marketing_automation_enrollments')
+        .update({
+          status: 'completed',
+          current_step_index: nextIdx,
+          completed_at: new Date().toISOString(),
+          next_run_at: new Date().toISOString(),
+        })
+        .eq('id', en.id);
+    } else {
+      await supabaseAdmin
+        .from('marketing_automation_enrollments')
+        .update({
+          current_step_index: nextIdx,
+          next_run_at: new Date().toISOString(),
+        })
+        .eq('id', en.id);
+    }
+    return true;
+  }
+  if (step.step_type === 'send_sms') {
+    const body = String((step.config_json as { body?: string }).body || '').trim();
+    if (!body) {
+      await supabaseAdmin
+        .from('marketing_automation_enrollments')
+        .update({ status: 'failed', last_error: 'Empty SMS body' })
+        .eq('id', en.id);
+      return true;
+    }
+    const send = await sendAutomationSmsToLead(en.venue_id, en.lead_id, body);
+    if (!send.ok && send.error !== 'suppressed') {
+      await supabaseAdmin
+        .from('marketing_automation_enrollments')
+        .update({ status: 'failed', last_error: send.error ?? 'sms failed' })
         .eq('id', en.id);
       return true;
     }

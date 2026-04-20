@@ -167,7 +167,7 @@ export async function insertInboundGhlSms(params: {
   messageBody: string;
   ghlMessageId: string | null;
   contactName?: string | null;
-}): Promise<{ ok: boolean; error?: string }> {
+}): Promise<{ ok: boolean; error?: string; venueCustomerId?: string }> {
   const { venueId, locationId, contactId, messageBody, ghlMessageId, contactName } = params;
   if (!messageBody?.trim()) return { ok: true };
 
@@ -200,5 +200,5 @@ export async function insertInboundGhlSms(params: {
     console.error('[ghl-sms] insert message', insErr);
     return { ok: false, error: insErr.message };
   }
-  return { ok: true };
+  return { ok: true, venueCustomerId: customerId };
 }

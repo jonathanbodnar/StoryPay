@@ -11,6 +11,7 @@ import {
   isMissingVenueCustomerPipelineColumns,
   VENUE_CUSTOMERS_PIPELINE_MIGRATION_HINT,
 } from '@/lib/venue-customer-db-error';
+import { applySmsDndForVenueCustomer, clearSmsDndForVenueCustomer } from '@/lib/sms-compliance';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -104,6 +105,14 @@ export async function PATCH(
     }
   }
 
+  if ('sms_dnd' in body) {
+    updates.sms_dnd = body.sms_dnd === true;
+    if (!updates.sms_dnd) {
+      updates.sms_dnd_at = null;
+      updates.sms_dnd_source = null;
+    }
+  }
+
   // Canonical pipeline + stage (camelCase from client)
   const pid = typeof body.pipelineId === 'string' ? body.pipelineId : undefined;
   const sid = typeof body.stageId === 'string' ? body.stageId : undefined;
@@ -157,6 +166,18 @@ export async function PATCH(
       return NextResponse.json({ error: VENUE_CUSTOMERS_PIPELINE_MIGRATION_HINT }, { status: 503 });
     }
     return NextResponse.json({ error: updErr.message }, { status: 500 });
+  }
+
+  if ('sms_dnd' in body) {
+    if (body.sms_dnd === true) {
+      await applySmsDndForVenueCustomer({
+        venueId,
+        venueCustomerId: id,
+        source: 'manual',
+      });
+    } else {
+      await clearSmsDndForVenueCustomer({ venueId, venueCustomerId: id });
+    }
   }
 
   try {

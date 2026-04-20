@@ -6,7 +6,11 @@ import type { AutomationTriggerConfig, AutomationTriggerType } from '@/lib/marke
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-type StepIn = { step_order: number; step_type: 'delay' | 'send_email'; config: Record<string, unknown> };
+type StepIn = {
+  step_order: number;
+  step_type: 'delay' | 'send_email' | 'send_sms';
+  config: Record<string, unknown>;
+};
 
 export async function GET(
   _request: NextRequest,

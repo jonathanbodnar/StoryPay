@@ -5,10 +5,10 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, Mail, Phone, MapPin, FileText, Loader2, ExternalLink,
-  Receipt, Pencil, Copy, RefreshCw, RotateCcw, X as XIcon,
+  Receipt, Pencil, Copy, RefreshCw,   RotateCcw, X as XIcon,
   Plus, Check, Trash2, Upload, Calendar, ClipboardList,
   FileCheck, Activity, User, Heart, ChevronDown, ChevronUp, Info,
-  AlertCircle, Undo2,
+  AlertCircle, Undo2, Smartphone,
 } from 'lucide-react';
 import RefundModal from '@/components/RefundModal';
 import { formatCents, formatDate, formatDateTime, getStatusColor, classNames } from '@/lib/utils';
@@ -18,6 +18,9 @@ import { slugifyStageLabel } from '@/lib/pipeline-stage-slug';
 interface Customer {
   id: number; name: string; firstName: string; lastName: string;
   email: string; phone: string; address: string; city: string; state: string; zip: string;
+  sms_dnd?: boolean;
+  sms_dnd_at?: string | null;
+  sms_dnd_source?: string | null;
 }
 
 interface PipelineContext {
@@ -46,6 +49,9 @@ interface VenuePipeline {
 interface VenueCustomer {
   id: string; customer_email: string; first_name: string; last_name: string;
   phone: string | null;
+  sms_dnd?: boolean;
+  sms_dnd_at?: string | null;
+  sms_dnd_source?: string | null;
   partner_first_name: string | null; partner_last_name: string | null;
   partner_email: string | null; partner_phone: string | null;
   wedding_date: string | null; wedding_space_id: string | null;
@@ -188,6 +194,7 @@ export default function CustomerDetailPage() {
   const [newSpaceColor,    setNewSpaceColor]    = useState('#6366f1');
   const [newSpaceCap,      setNewSpaceCap]      = useState('');
   const [savingSpace,      setSavingSpace]      = useState(false);
+  const [clearingSmsDnd,   setClearingSmsDnd]   = useState(false);
 
   // ── Fetch all data ─────────────────────────────────────────────────────────
   const fetchAll = useCallback(async () => {
@@ -318,6 +325,27 @@ export default function CustomerDetailPage() {
       setContactError(d.error || 'Failed to save — please try again');
     }
     setSavingContact(false);
+  }
+
+  async function clearSmsDndPreference() {
+    if (!venueCustomer?.id) return;
+    setClearingSmsDnd(true);
+    try {
+      const res = await fetch(`/api/venue-customers/${venueCustomer.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sms_dnd: false }),
+      });
+      if (res.ok) {
+        const row = (await res.json()) as VenueCustomer;
+        setVenueCustomer(row);
+        setCustomer((p) =>
+          p ? { ...p, sms_dnd: false, sms_dnd_at: null, sms_dnd_source: null } : p,
+        );
+      }
+    } finally {
+      setClearingSmsDnd(false);
+    }
   }
 
   // ── Partner save ────────────────────────────────────────────────────────────
@@ -919,6 +947,46 @@ export default function CustomerDetailPage() {
       {/* ── OVERVIEW TAB ── */}
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+          {venueCustomer?.sms_dnd ? (
+            <div className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-5 lg:col-span-2">
+              <div className="flex items-start gap-3">
+                <Smartphone size={20} className="mt-0.5 shrink-0 text-amber-700" />
+                <div>
+                  <p className="font-medium text-amber-950">SMS marketing paused (DND)</p>
+                  <p className="mt-1 text-sm text-amber-900/90">
+                    This contact opted out of automated SMS (for example by replying STOP). Automated SMS workflows
+                    will not message them until you turn this off.
+                  </p>
+                  {venueCustomer.sms_dnd_at ? (
+                    <p className="mt-2 text-xs text-amber-800/80">
+                      Since {formatDateTime(venueCustomer.sms_dnd_at)}
+                      {venueCustomer.sms_dnd_source === 'inbound_stop_keyword'
+                        ? ' · from their message'
+                        : venueCustomer.sms_dnd_source === 'manual'
+                          ? ' · set manually'
+                          : venueCustomer.sms_dnd_source
+                            ? ` · ${venueCustomer.sms_dnd_source}`
+                            : ''}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+              <div>
+                <button
+                  type="button"
+                  disabled={clearingSmsDnd}
+                  onClick={() => void clearSmsDndPreference()}
+                  className="rounded-lg bg-amber-900 px-4 py-2 text-sm font-medium text-white hover:bg-amber-950 disabled:opacity-50"
+                >
+                  {clearingSmsDnd ? 'Updating…' : 'Allow SMS again'}
+                </button>
+                <p className="mt-2 text-xs text-amber-800/80">
+                  Only use if they have agreed to receive texts again (written consent recommended).
+                </p>
+              </div>
+            </div>
+          ) : null}
 
           {/* Contact info (read-only display — edit via modal above) */}
           <div className="rounded-2xl border border-gray-200 bg-white p-5">

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { insertInboundGhlSms, parseGhlInboundSmsPayload } from '@/lib/ghl-sms-conversations';
+import { applySmsDndForVenueCustomer, isSmsOptOutKeyword } from '@/lib/sms-compliance';
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,6 +28,12 @@ export async function POST(request: NextRequest) {
         });
         if (!r.ok) {
           console.error('[ghl webhook] inbound SMS ingest failed:', r.error);
+        } else if (r.venueCustomerId && isSmsOptOutKeyword(inboundSms.body)) {
+          await applySmsDndForVenueCustomer({
+            venueId: venue.id as string,
+            venueCustomerId: r.venueCustomerId,
+            source: 'inbound_stop_keyword',
+          });
         }
       } else {
         console.warn('[ghl webhook] inbound SMS: no venue for locationId', inboundSms.locationId);

@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { ghlRequest, sendSms } from '@/lib/ghl';
+import { ghlRequest, normalizePhone, sendSms } from '@/lib/ghl';
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
@@ -31,6 +31,32 @@ export async function POST(request: NextRequest) {
       { error: 'Messaging is not connected for this venue' },
       { status: 400 }
     );
+  }
+
+  const phoneNorm = normalizePhone(phone);
+  if (phoneNorm) {
+    const { data: dndCustomers } = await supabaseAdmin
+      .from('venue_customers')
+      .select('phone')
+      .eq('venue_id', venueId)
+      .eq('sms_dnd', true);
+    if (dndCustomers?.some((r) => normalizePhone(r.phone as string | null) === phoneNorm)) {
+      return NextResponse.json(
+        { error: 'This contact has opted out of SMS (DND).' },
+        { status: 403 },
+      );
+    }
+    const { data: dndLeads } = await supabaseAdmin
+      .from('leads')
+      .select('phone')
+      .eq('venue_id', venueId)
+      .eq('sms_dnd', true);
+    if (dndLeads?.some((r) => normalizePhone(r.phone as string | null) === phoneNorm)) {
+      return NextResponse.json(
+        { error: 'This contact has opted out of SMS (DND).' },
+        { status: 403 },
+      );
+    }
   }
 
   try {

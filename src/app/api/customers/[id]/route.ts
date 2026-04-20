@@ -54,7 +54,9 @@ export async function GET(
   if (isStoryPayId) {
     const { data: row } = await supabaseAdmin
       .from('venue_customers')
-      .select('id, customer_email, first_name, last_name, phone, lunarpay_customer_id, ghl_contact_id')
+      .select(
+        'id, customer_email, first_name, last_name, phone, lunarpay_customer_id, ghl_contact_id, sms_dnd, sms_dnd_at, sms_dnd_source',
+      )
       .eq('id', id)
       .eq('venue_id', venueId)
       .maybeSingle();
@@ -71,6 +73,9 @@ export async function GET(
         city:      '',
         state:     '',
         zip:       '',
+        sms_dnd: (row as { sms_dnd?: boolean }).sms_dnd === true,
+        sms_dnd_at: (row as { sms_dnd_at?: string | null }).sms_dnd_at ?? null,
+        sms_dnd_source: (row as { sms_dnd_source?: string | null }).sms_dnd_source ?? null,
       };
     }
   }
