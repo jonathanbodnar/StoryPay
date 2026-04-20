@@ -2,6 +2,9 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { agencyCreateMerchant } from '@/lib/lunarpay';
+import { getLunarPayAdminSummary } from '@/lib/lunarpay-venue-admin';
+
+const REDACT_VENUE_KEYS = new Set(['lunarpay_secret_key', 'lunarpay_org_token']);
 
 async function verifyAdmin() {
   const cookieStore = await cookies();
@@ -35,12 +38,19 @@ export async function GET() {
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
     const venuesWithLinks = (venues || []).map((venue: Record<string, unknown>) => {
-      const pid = venue.directory_plan_id as string | null | undefined;
+      const lpSummary = getLunarPayAdminSummary(venue);
+      const safe: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(venue)) {
+        if (REDACT_VENUE_KEYS.has(k)) continue;
+        safe[k] = v;
+      }
+      const pid = safe.directory_plan_id as string | null | undefined;
       const directory_plans = pid ? planById.get(pid) ?? null : null;
       return {
-        ...venue,
+        ...safe,
         directory_plans,
-        login_url: venue.login_token ? `${appUrl}/login/${venue.login_token}` : null,
+        login_url: safe.login_token ? `${appUrl}/login/${safe.login_token}` : null,
+        lunarpay_admin: lpSummary,
       };
     });
 

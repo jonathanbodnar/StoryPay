@@ -9,6 +9,10 @@ import {
   Copy,
 } from 'lucide-react';
 import { DIRECTORY_BADGE_STATUSES, directoryBadgeLabel } from '@/lib/directory-badges';
+import {
+  getLunarPayAdminSummary,
+  type LunarPayAdminSummary,
+} from '@/lib/lunarpay-venue-admin';
 
 const BRAND = '#1b1b1b';
 
@@ -20,6 +24,7 @@ export type AdminVenueRow = Record<string, unknown> & {
   slug?: string | null;
   ghl_location_id: string | null;
   onboarding_status: string;
+  lunarpay_merchant_id?: number | string | null;
   setup_completed: boolean;
   created_at: string;
   login_url: string | null;
@@ -28,7 +33,49 @@ export type AdminVenueRow = Record<string, unknown> & {
   directory_sponsored_status?: string | null;
   directory_subscription_status?: string | null;
   directory_plans?: { id: string; name: string; slug: string } | null;
+  lunarpay_admin?: LunarPayAdminSummary;
 };
+
+function lunarPaySummaryForRow(v: AdminVenueRow): LunarPayAdminSummary {
+  const a = v.lunarpay_admin;
+  if (a && typeof a === 'object' && 'payments_ready' in a) {
+    return a;
+  }
+  return getLunarPayAdminSummary(v as Record<string, unknown>);
+}
+
+function LunarPayStatusCell({ venue, summary }: { venue: AdminVenueRow; summary: LunarPayAdminSummary }) {
+  const badgeClass =
+    summary.category === 'active_approved'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+      : summary.category === 'denied'
+        ? 'border-red-200 bg-red-50 text-red-900'
+        : summary.category === 'not_provisioned'
+          ? 'border-gray-200 bg-gray-50 text-gray-700'
+          : 'border-amber-200 bg-amber-50 text-amber-900';
+
+  const mid = venue.lunarpay_merchant_id;
+
+  return (
+    <div className="space-y-1">
+      <span
+        className={`inline-flex max-w-[220px] rounded-full border px-2 py-0.5 text-[11px] font-semibold leading-snug ${badgeClass}`}
+      >
+        {summary.label}
+      </span>
+      {mid != null && String(mid).length > 0 ? (
+        <div className="text-[10px] font-mono text-gray-400">Merchant {String(mid)}</div>
+      ) : null}
+      {summary.payments_ready ? (
+        <div className="text-[10px] text-emerald-700">Can process card payments</div>
+      ) : summary.category === 'not_provisioned' ? (
+        <div className="text-[10px] text-gray-500">No agency merchant on file</div>
+      ) : (
+        <div className="text-[10px] text-gray-500 capitalize">Status: {summary.onboarding_status}</div>
+      )}
+    </div>
+  );
+}
 
 type PlanOpt = { id: string; name: string; slug: string; price_monthly_cents?: number | null };
 
@@ -47,6 +94,7 @@ export function VenueManagementPortal({
   const [filterVerified, setFilterVerified] = useState<string>('any');
   const [filterSponsored, setFilterSponsored] = useState<string>('any');
   const [filterPlan, setFilterPlan] = useState<string>('any');
+  const [filterLunarPay, setFilterLunarPay] = useState<string>('any');
 
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -115,6 +163,11 @@ export function VenueManagementPortal({
           .toLowerCase();
         if (!blob.includes(q)) return false;
       }
+      const lp = lunarPaySummaryForRow(v);
+      if (filterLunarPay === 'ready' && !lp.payments_ready) return false;
+      if (filterLunarPay === 'not_ready' && lp.payments_ready) return false;
+      if (filterLunarPay === 'denied' && lp.category !== 'denied') return false;
+      if (filterLunarPay === 'not_provisioned' && lp.category !== 'not_provisioned') return false;
       if (filterVerified !== 'any') {
         const vs = (v.directory_verified_status as string) || 'none';
         if (vs !== filterVerified) return false;
@@ -130,7 +183,15 @@ export function VenueManagementPortal({
       }
       return true;
     });
-  }, [venues, search, filterVerified, filterSponsored, filterPlan]);
+  }, [venues, search, filterVerified, filterSponsored, filterPlan, filterLunarPay]);
+
+  const lunarPayCounts = useMemo(() => {
+    let ready = 0;
+    for (const v of venues) {
+      if (lunarPaySummaryForRow(v).payments_ready) ready++;
+    }
+    return { ready, total: venues.length };
+  }, [venues]);
 
   async function patchVenue(
     venueId: string,
@@ -200,7 +261,8 @@ export function VenueManagementPortal({
         <h2 className="font-heading text-xl text-gray-900">Venue management</h2>
         <p className="mt-1 text-sm text-gray-500 max-w-3xl">
           All registered venues: search, assign directory plans, approve verified / sponsored badges, copy magic login
-          links, or open their dashboard as they see it (exit from the amber bar).
+          links, or open their dashboard as they see it (exit from the amber bar). LunarPay shows onboarding approval
+          and whether the venue can run card payments (active merchant + API credentials).
         </p>
       </div>
 
@@ -364,9 +426,24 @@ export function VenueManagementPortal({
               ))}
             </select>
           </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">LunarPay</label>
+            <select
+              value={filterLunarPay}
+              onChange={(e) => setFilterLunarPay(e.target.value)}
+              className="w-full lg:w-48 rounded-xl border border-gray-200 px-3 py-2 text-sm"
+            >
+              <option value="any">Any</option>
+              <option value="ready">Active &amp; approved (can charge)</option>
+              <option value="not_ready">Not approved / not ready</option>
+              <option value="denied">Denied</option>
+              <option value="not_provisioned">No merchant</option>
+            </select>
+          </div>
         </div>
         <p className="text-xs text-gray-400">
-          Showing {filtered.length} of {venues.length} venues
+          Showing {filtered.length} of {venues.length} venues · LunarPay ready: {lunarPayCounts.ready} /{' '}
+          {lunarPayCounts.total}
         </p>
       </div>
 
@@ -382,6 +459,7 @@ export function VenueManagementPortal({
             <VenueMobileCard
               key={venue.id}
               venue={venue}
+              lpSummary={lunarPaySummaryForRow(venue)}
               plans={plans}
               planLabelText={planLabel(venue)}
               savingKey={savingKey}
@@ -406,6 +484,7 @@ export function VenueManagementPortal({
               <tr className="border-b border-gray-200 bg-gray-50 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500">
                 <th className="px-3 py-3">Venue</th>
                 <th className="px-3 py-3">Contact</th>
+                <th className="px-3 py-3">LunarPay</th>
                 <th className="px-3 py-3">Plan</th>
                 <th className="px-3 py-3">Verified</th>
                 <th className="px-3 py-3">Sponsored</th>
@@ -415,13 +494,13 @@ export function VenueManagementPortal({
             <tbody className="divide-y divide-gray-100">
               {venuesLoading ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-8 text-gray-400">
+                  <td colSpan={7} className="text-center py-8 text-gray-400">
                     Loading…
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-8 text-gray-400 text-sm">
+                  <td colSpan={7} className="text-center py-8 text-gray-400 text-sm">
                     No venues match
                   </td>
                 </tr>
@@ -430,6 +509,7 @@ export function VenueManagementPortal({
                   const vs = (venue.directory_verified_status as string) || 'none';
                   const ss = (venue.directory_sponsored_status as string) || 'none';
                   const busy = savingKey !== null;
+                  const lpSum = lunarPaySummaryForRow(venue);
                   return (
                     <tr key={venue.id} className="hover:bg-gray-50/80">
                       <td className="px-3 py-3 align-top">
@@ -441,6 +521,9 @@ export function VenueManagementPortal({
                       <td className="px-3 py-3 align-top text-xs text-gray-600">
                         <div>{venue.email || '—'}</div>
                         {venue.phone ? <div className="text-gray-500">{venue.phone}</div> : null}
+                      </td>
+                      <td className="px-3 py-3 align-top">
+                        <LunarPayStatusCell venue={venue} summary={lpSum} />
                       </td>
                       <td className="px-3 py-3 align-top">
                         <select
@@ -546,6 +629,7 @@ export function VenueManagementPortal({
 
 function VenueMobileCard({
   venue,
+  lpSummary,
   plans,
   planLabelText,
   savingKey,
@@ -556,6 +640,7 @@ function VenueMobileCard({
   onCopyBillingLink,
 }: {
   venue: AdminVenueRow;
+  lpSummary: LunarPayAdminSummary;
   plans: PlanOpt[];
   planLabelText: string;
   savingKey: string | null;
@@ -573,6 +658,9 @@ function VenueMobileCard({
       <div className="font-semibold text-gray-900">{venue.name}</div>
       <div className="text-xs text-gray-600">{venue.email}</div>
       {venue.phone ? <div className="text-xs text-gray-500">{venue.phone}</div> : null}
+      <div className="rounded-lg border border-gray-100 bg-gray-50/80 px-2 py-2">
+        <LunarPayStatusCell venue={venue} summary={lpSummary} />
+      </div>
       <div className="text-[11px] text-gray-400">Plan: {planLabelText}</div>
       <div className="text-[10px] text-gray-500">SaaS billing: {(venue.directory_subscription_status as string) || '—'}</div>
       <select
