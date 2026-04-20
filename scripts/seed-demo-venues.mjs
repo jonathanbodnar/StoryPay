@@ -110,6 +110,51 @@ const VENUES = [
     ],
     is_published: true,
     onboarding_completed: true,
+    // Mock Google cache so the directory's Story/Google review toggle has
+    // content to render without standing up the real Places API in dev.
+    // Shape mirrors src/lib/google-place-reviews.ts#GoogleReviewsCachePayload.
+    google_place_id: 'ChIJN1t_tDeuEmsRUsoyG83frY4',
+    google_reviews_cache: {
+      rating: 4.9,
+      userRatingCount: 128,
+      reviews: [
+        {
+          author_name: 'Amanda P.',
+          rating: 5,
+          text: 'Found this venue on Google and it did not disappoint. The grounds photograph beautifully — we had a drone shoot at sunset and our photographer still sends the video to prospective clients.',
+          published_at: '2025-09-02T14:11:00Z',
+          profile_photo_url: null,
+        },
+        {
+          author_name: 'Trevor S.',
+          rating: 5,
+          text: 'Hosted a rehearsal dinner here the night before our ceremony. Staff ran two events back-to-back without a hitch. Would book again in a heartbeat.',
+          published_at: '2025-07-21T20:02:00Z',
+          profile_photo_url: null,
+        },
+        {
+          author_name: 'Kim D.',
+          rating: 5,
+          text: 'The driveway up is half the magic. Our parents teared up before they even got out of the car. Worth every star.',
+          published_at: '2025-05-14T18:45:00Z',
+          profile_photo_url: null,
+        },
+        {
+          author_name: 'Jordan L.',
+          rating: 4,
+          text: 'Gorgeous property and attentive team. Only ding: cell service is spotty on the far meadow so make sure your DJ has a backup playlist cached.',
+          published_at: '2024-10-07T16:20:00Z',
+          profile_photo_url: null,
+        },
+        {
+          author_name: 'Nina R.',
+          rating: 5,
+          text: 'We toured five venues — this one sold itself on the first walk-through. Fair pricing, transparent contract, and the coordinator responded in under an hour every single time.',
+          published_at: '2024-06-30T10:15:00Z',
+          profile_photo_url: null,
+        },
+      ],
+    },
     reviews: [
       {
         rating: 5,
@@ -264,6 +309,10 @@ async function main() {
       'indoor_outdoor', 'features', 'cover_image_url', 'gallery_images',
       'availability_notes', 'is_published', 'onboarding_completed',
       'show_map', 'social_links', 'faq',
+      // Google reviews (migration 029). Only venue 1 has seed data; venue 2
+      // leaves these null to verify the directory gracefully falls back to
+      // the StoryVenue-only layout.
+      'google_place_id', 'google_reviews_cache',
     ];
     const values = cols.map((c) => toSqlLiteral(v[c])).join(', ');
     const updates = cols
@@ -271,10 +320,17 @@ async function main() {
       .map((c) => `${c} = EXCLUDED.${c}`)
       .join(', ');
 
+    // When we seed a google_reviews_cache, stamp fetched_at so the dashboard's
+    // staleness check (>24h) doesn't immediately try to hit the Places API on
+    // the next public page view.
+    const extraSet = v.google_reviews_cache
+      ? ', google_reviews_fetched_at = now()'
+      : ', google_reviews_fetched_at = NULL';
+
     const sql = `
       INSERT INTO public.venues (${cols.join(', ')})
       VALUES (${values})
-      ON CONFLICT (id) DO UPDATE SET ${updates};
+      ON CONFLICT (id) DO UPDATE SET ${updates}${extraSet};
     `;
     await runSql(sql);
     console.log(`✓ venue: ${v.slug}`);
