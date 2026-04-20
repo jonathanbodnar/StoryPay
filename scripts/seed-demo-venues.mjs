@@ -110,6 +110,11 @@ const VENUES = [
     ],
     is_published: true,
     onboarding_completed: true,
+    // Directory badges (migration 031). Evans Farms is the "flagship" demo
+    // so we approve both — verified check + Sponsored pill — to prove out
+    // the top-of-grid placement rule.
+    directory_verified_status: 'approved',
+    directory_sponsored_status: 'approved',
     // Mock Google cache so the directory's Story/Google review toggle has
     // content to render without standing up the real Places API in dev.
     // Shape mirrors src/lib/google-place-reviews.ts#GoogleReviewsCachePayload.
@@ -208,6 +213,10 @@ const VENUES = [
     price_min: 8500,
     price_max: 15500,
     indoor_outdoor: 'both',
+    // Verified but not sponsored — lets us eyeball the "blue check, no pill"
+    // state against Evans Farms' fully-loaded state.
+    directory_verified_status: 'approved',
+    directory_sponsored_status: 'none',
     features: [
       'ceremony_space',
       'reception_hall',
@@ -313,6 +322,9 @@ async function main() {
       // leaves these null to verify the directory gracefully falls back to
       // the StoryVenue-only layout.
       'google_place_id', 'google_reviews_cache',
+      // Directory badges (migration 031) — status workflow; only 'approved'
+      // surfaces on the public directory.
+      'directory_verified_status', 'directory_sponsored_status',
     ];
     const values = cols.map((c) => toSqlLiteral(v[c])).join(', ');
     const updates = cols
