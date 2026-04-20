@@ -181,6 +181,12 @@ export async function sendEmail(
   });
 }
 
+/** Fetch a single contact from GHL (for webhook enrichment). */
+export async function getGhlContact(accessToken: string, locationId: string, contactId: string) {
+  const token = await resolveLocationToken(accessToken, locationId);
+  return ghlRequest(`/contacts/${encodeURIComponent(contactId)}`, token, { locationId });
+}
+
 export async function findOrCreateContact(
   accessToken: string,
   locationId: string,

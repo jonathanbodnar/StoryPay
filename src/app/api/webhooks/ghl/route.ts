@@ -1,12 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { insertInboundGhlSms, parseGhlInboundSmsPayload } from '@/lib/ghl-sms-conversations';
 
 export async function POST(request: NextRequest) {
   try {
-    const payload = await request.json();
+    const payload = (await request.json()) as Record<string, unknown>;
     const eventType = payload.type || payload.event;
 
     console.log('GHL webhook received:', eventType, JSON.stringify(payload).slice(0, 500));
+
+    const inboundSms = parseGhlInboundSmsPayload(payload);
+    if (inboundSms) {
+      const { data: venue } = await supabaseAdmin
+        .from('venues')
+        .select('id')
+        .eq('ghl_location_id', inboundSms.locationId)
+        .maybeSingle();
+      if (venue?.id) {
+        const r = await insertInboundGhlSms({
+          venueId: venue.id as string,
+          locationId: inboundSms.locationId,
+          contactId: inboundSms.contactId,
+          messageBody: inboundSms.body,
+          ghlMessageId: inboundSms.messageId,
+          contactName: inboundSms.contactName,
+        });
+        if (!r.ok) {
+          console.error('[ghl webhook] inbound SMS ingest failed:', r.error);
+        }
+      } else {
+        console.warn('[ghl webhook] inbound SMS: no venue for locationId', inboundSms.locationId);
+      }
+    }
 
     switch (eventType) {
       case 'InboundMessage':

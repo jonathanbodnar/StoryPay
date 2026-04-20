@@ -16,7 +16,7 @@ export async function GET(
 
   const { data: thread, error } = await supabaseAdmin
     .from('conversation_threads')
-    .select('id, subject, last_message_at, venue_customer_id')
+    .select('id, subject, last_message_at, venue_customer_id, external_reply_channel')
     .eq('id', threadId)
     .eq('venue_id', venueId)
     .maybeSingle();

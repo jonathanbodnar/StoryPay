@@ -15,6 +15,7 @@ import {
   Mail,
   ChevronRight,
   X,
+  Smartphone,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
 
@@ -28,6 +29,8 @@ interface ThreadRow {
   contact_first_name: string;
   contact_last_name: string;
   contact_email: string;
+  contact_phone?: string | null;
+  external_reply_channel?: string;
   venue_customer_id: string;
 }
 
@@ -36,6 +39,7 @@ interface ThreadDetail {
   subject: string;
   last_message_at: string;
   venue_customer_id: string;
+  external_reply_channel?: string;
   venue_customers: {
     id: string;
     first_name: string;
@@ -264,7 +268,8 @@ export default function ConversationsPage() {
         <div>
           <h1 className="font-heading text-2xl text-gray-900">Conversations</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Team-only notes and client emails are strictly separated — choose the mode before you send.
+            Team-only notes and client messages (email or SMS via Go High Level) are separated — choose the mode before
+            you send. SMS threads appear when customers text your GHL number; replies go back through GHL.
           </p>
         </div>
         <button
@@ -359,14 +364,24 @@ export default function ConversationsPage() {
                       {t.last_message_preview || t.subject || 'No messages'}
                     </p>
                     <div className="mt-0.5 flex items-center gap-2 text-[10px] text-gray-400">
+                      {t.external_reply_channel === 'sms' && (
+                        <span className="inline-flex items-center gap-0.5 rounded bg-violet-100 px-1.5 py-0 text-violet-900">
+                          <Smartphone size={10} /> SMS
+                        </span>
+                      )}
                       {t.last_message_visibility === 'internal' && (
                         <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0 text-amber-800">
                           <Lock size={10} /> Team
                         </span>
                       )}
-                      {t.last_message_visibility === 'external' && (
+                      {t.last_message_visibility === 'external' && t.external_reply_channel !== 'sms' && (
                         <span className="inline-flex items-center gap-0.5 rounded bg-sky-100 px-1.5 py-0 text-sky-800">
                           <Mail size={10} /> Email
+                        </span>
+                      )}
+                      {t.last_message_visibility === 'external' && t.external_reply_channel === 'sms' && (
+                        <span className="inline-flex items-center gap-0.5 rounded bg-sky-100/80 px-1.5 py-0 text-sky-900">
+                          Client
                         </span>
                       )}
                     </div>
@@ -397,7 +412,20 @@ export default function ConversationsPage() {
                 </button>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-base font-semibold text-gray-900">{contactLabel}</p>
-                  <p className="truncate text-xs text-gray-500">{threadDetail.venue_customers?.customer_email}</p>
+                  <p className="truncate text-xs text-gray-500">
+                    {threadDetail.external_reply_channel === 'sms' ? (
+                      <>
+                        <span className="inline-flex items-center gap-0.5 font-medium text-violet-800">
+                          <Smartphone size={12} /> SMS
+                        </span>
+                        {threadDetail.venue_customers?.phone ?
+                          <> · {threadDetail.venue_customers.phone}</>
+                        : null}
+                      </>
+                    ) : (
+                      threadDetail.venue_customers?.customer_email
+                    )}
+                  </p>
                 </div>
                 {contactProfileHref && (
                   <Link
@@ -450,7 +478,7 @@ export default function ConversationsPage() {
                             )}
                             {!isInternal && fromUs && (
                               <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-white/70">
-                                Email to contact
+                                {m.channel === 'sms' ? 'SMS to contact' : 'Email to contact'}
                               </p>
                             )}
                             {!isInternal && fromContact && (
@@ -472,7 +500,9 @@ export default function ConversationsPage() {
                               })}
                             </span>
                             {m.visibility === 'external' && m.external_email_sent === false && m.send_error && (
-                              <span className="text-amber-600">Email not sent: {m.send_error}</span>
+                              <span className="text-amber-600">
+                                {m.channel === 'sms' ? 'SMS not sent' : 'Email not sent'}: {m.send_error}
+                              </span>
                             )}
                           </div>
                         </div>
@@ -516,14 +546,16 @@ export default function ConversationsPage() {
                           : 'text-gray-600 hover:text-gray-900',
                       )}
                     >
-                      <Mail size={14} />
-                      Email contact
+                      {threadDetail.external_reply_channel === 'sms' ? <Smartphone size={14} /> : <Mail size={14} />}
+                      {threadDetail.external_reply_channel === 'sms' ? 'SMS contact' : 'Email contact'}
                     </button>
                   </div>
                   <p className="mb-2 text-[11px] text-gray-500">
                     {composerMode === 'internal'
                       ? 'Visible only to your team. @mentions notify teammates (stored on this message).'
-                      : `Sends an email to ${threadDetail.venue_customers?.customer_email || 'the contact'}. No @mentions.`}
+                      : threadDetail.external_reply_channel === 'sms'
+                        ? `Sends a text via Go High Level (A2P on your GHL account) to ${threadDetail.venue_customers?.phone || 'the contact phone on file'}. No @mentions.`
+                        : `Sends an email to ${threadDetail.venue_customers?.customer_email || 'the contact'}. No @mentions.`}
                   </p>
 
                   {composerMode === 'internal' && team.length > 0 && (
@@ -562,7 +594,9 @@ export default function ConversationsPage() {
                       placeholder={
                         composerMode === 'internal'
                           ? 'Write a team note…'
-                          : 'Write an email to the contact…'
+                          : threadDetail.external_reply_channel === 'sms'
+                            ? 'Write an SMS…'
+                            : 'Write an email to the contact…'
                       }
                       className="w-full resize-none rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
                       style={{ fontSize: 16 }}
@@ -575,7 +609,11 @@ export default function ConversationsPage() {
                         className="inline-flex items-center gap-2 rounded-xl bg-[#171717] px-5 py-2.5 text-sm font-medium text-white transition-colors disabled:opacity-50"
                       >
                         {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send size={16} />}
-                        {composerMode === 'internal' ? 'Send team note' : 'Send email'}
+                        {composerMode === 'internal' ?
+                          'Send team note'
+                        : threadDetail.external_reply_channel === 'sms' ?
+                          'Send SMS'
+                        : 'Send email'}
                       </button>
                     </div>
                   </form>

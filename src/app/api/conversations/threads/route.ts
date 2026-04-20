@@ -13,7 +13,7 @@ async function fetchThreadsListManual(venueId: string) {
   const { data: rows, error: qErr } = await supabaseAdmin
     .from('conversation_threads')
     .select(
-      'id, venue_id, venue_customer_id, subject, last_message_at, last_message_preview, last_message_visibility',
+      'id, venue_id, venue_customer_id, subject, last_message_at, last_message_preview, last_message_visibility, external_reply_channel',
     )
     .eq('venue_id', venueId)
     .order('last_message_at', { ascending: false })
@@ -27,13 +27,13 @@ async function fetchThreadsListManual(venueId: string) {
 
   const byCustomer = new Map<
     string,
-    { first_name?: string; last_name?: string; customer_email?: string }
+    { first_name?: string; last_name?: string; customer_email?: string; phone?: string | null }
   >();
 
   if (customerIds.length > 0) {
     const { data: contacts, error: cErr } = await supabaseAdmin
       .from('venue_customers')
-      .select('id, first_name, last_name, customer_email')
+      .select('id, first_name, last_name, customer_email, phone')
       .eq('venue_id', venueId)
       .in('id', customerIds);
 
@@ -45,11 +45,13 @@ async function fetchThreadsListManual(venueId: string) {
         first_name?: string;
         last_name?: string;
         customer_email?: string;
+        phone?: string | null;
       };
       byCustomer.set(row.id, {
         first_name: row.first_name,
         last_name: row.last_name,
         customer_email: row.customer_email,
+        phone: row.phone,
       });
     }
   }
@@ -68,6 +70,8 @@ async function fetchThreadsListManual(venueId: string) {
       contact_first_name: vc?.first_name ?? '',
       contact_last_name: vc?.last_name ?? '',
       contact_email: vc?.customer_email ?? '',
+      contact_phone: vc?.phone ?? null,
+      external_reply_channel: (r as { external_reply_channel?: string }).external_reply_channel ?? 'email',
     };
   });
 
