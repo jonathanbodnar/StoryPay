@@ -8,9 +8,13 @@ import {
   TrendingUp, LogOut, Home,
   Megaphone, Plus, Trash2, Pencil, X, Loader2, ThumbsUp, ThumbsDown,
   Check, BarChart2, ExternalLink, ChevronRight, Search,
-  LayoutDashboard, Menu, Lightbulb, BookOpen, Star, Globe, BadgeCheck,
+  LayoutDashboard, Menu, Lightbulb, BookOpen, Star, Globe, Layers,
 } from 'lucide-react';
-import { DirectoryBadgesAdminPanel, type VenueDirectoryRow } from '@/components/admin/DirectoryBadgesAdminPanel';
+import {
+  VenueManagementPortal,
+  type AdminVenueRow,
+} from '@/components/admin/VenueManagementPortal';
+import { DirectoryPlansAdminPanel } from '@/components/admin/DirectoryPlansAdminPanel';
 
 // Lazy-load the WYSIWYG editor so it doesn't affect admin initial load
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
@@ -348,7 +352,7 @@ export default function AdminPage() {
   const [authState, setAuthState]   = useState<AuthState>('loading');
   const [secret, setSecret]         = useState('');
   const [loginError, setLoginError] = useState('');
-  const [activeTab, setActiveTab]   = useState<'dashboard' | 'venues' | 'directory-badges' | 'announcements' | 'feature-requests' | 'suggested-articles' | 'search-analytics' | 'article-ratings' | 'blog' | 'seo-pages' | 'trends'>('dashboard');
+  const [activeTab, setActiveTab]   = useState<'dashboard' | 'venues' | 'directory-plans' | 'announcements' | 'feature-requests' | 'suggested-articles' | 'search-analytics' | 'article-ratings' | 'blog' | 'seo-pages' | 'trends'>('dashboard');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // Stats
@@ -359,12 +363,6 @@ export default function AdminPage() {
   // Venues
   const [venues, setVenues]         = useState<Venue[]>([]);
   const [venuesLoading, setVenuesLoading] = useState(false);
-  const [copiedId, setCopiedId]     = useState<string | null>(null);
-  const [copiedGhl, setCopiedGhl]   = useState(false);
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [creating, setCreating]     = useState(false);
-  const [serverError, setServerError] = useState('');
-  const [formData, setFormData]     = useState({ name: '', email: '', firstName: '', lastName: '', phone: '', ghlLocationId: '' });
 
   // Announcements
   const [announcements, setAnnouncements]   = useState<Announcement[]>([]);
@@ -487,10 +485,6 @@ export default function AdminPage() {
   useEffect(() => { if (authState === 'authenticated' && activeTab === 'suggested-articles') fetchSuggestedArticles(); }, [authState, activeTab, fetchSuggestedArticles]);
   useEffect(() => { if (authState === 'authenticated' && activeTab === 'search-analytics') fetchSearchAnalytics(); }, [authState, activeTab, fetchSearchAnalytics]);
   useEffect(() => { if (authState === 'authenticated' && activeTab === 'article-ratings') fetchArticleRatings(); }, [authState, activeTab, fetchArticleRatings]);
-  useEffect(() => {
-    if (authState === 'authenticated' && activeTab === 'directory-badges') void fetchVenues();
-  }, [authState, activeTab, fetchVenues]);
-
   async function openFeatureRequest(id: string) {
     setFrDetailLoading(true);
     setFrDetail(null);
@@ -607,16 +601,6 @@ export default function AdminPage() {
     setVenues([]); setStats(null);
   }
 
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault(); setCreating(true); setServerError('');
-    try {
-      const res = await fetch('/api/admin/venues', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData) });
-      if (res.ok) { setFormData({ name: '', email: '', firstName: '', lastName: '', phone: '', ghlLocationId: '' }); setShowCreateForm(false); fetchVenues(); }
-      else { const d = await res.json(); setServerError(d.error || 'Create failed'); }
-    } catch (err) { setServerError(err instanceof Error ? err.message : 'Request failed'); }
-    setCreating(false);
-  }
-
   async function saveAnnouncement(data: { message: string; link_text: string; link_url: string; is_active: boolean }) {
     if (editingAnn) {
       await fetch(`/api/admin/announcements/${editingAnn.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
@@ -684,8 +668,8 @@ export default function AdminPage() {
   // ── Authenticated ───────────────────────────────────────────────────────────
   const navItems = [
     { key: 'dashboard',          label: 'Dashboard',          icon: LayoutDashboard },
-    { key: 'venues',             label: 'Venues',             icon: Building2 },
-    { key: 'directory-badges',   label: 'Directory badges',   icon: BadgeCheck },
+    { key: 'venues',             label: 'Venue management',     icon: Building2 },
+    { key: 'directory-plans',    label: 'Directory plans',      icon: Layers },
     { key: 'blog',               label: 'Blog Posts',         icon: BookOpen },
     { key: 'seo-pages',          label: 'SEO / Pages',        icon: Globe },
     { key: 'trends',             label: 'Google Trends',      icon: TrendingUp },
@@ -1088,130 +1072,16 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* ── Venues Tab ── */}
+        {/* ── Venue management (plans, badges, impersonation) ── */}
         {activeTab === 'venues' && (
-          <div>
-            {serverError && (
-              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
-                <strong>Error:</strong> {serverError}
-                <button onClick={fetchVenues} className="ml-3 underline">Retry</button>
-              </div>
-            )}
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-              <h2 className="font-heading text-xl text-gray-900">Venues ({venues.length})</h2>
-              <button onClick={() => setShowCreateForm(!showCreateForm)}
-                className="text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors hover:opacity-90" style={{ backgroundColor: BRAND }}>
-                {showCreateForm ? 'Cancel' : '+ Create Venue'}
-              </button>
-            </div>
-
-            {showCreateForm && (
-              <form onSubmit={handleCreate} className="bg-white rounded-xl border border-gray-200 p-6 mb-5">
-                <h3 className="font-heading text-lg text-gray-900 mb-4">New Venue</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">Business Name *</label>
-                    <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-brand-900 outline-none" required /></div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">First Name *</label>
-                    <input type="text" value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-brand-900 outline-none" required /></div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Last Name *</label>
-                    <input type="text" value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-brand-900 outline-none" required /></div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
-                    <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-brand-900 outline-none" required /></div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                    <input type="tel" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-brand-900 outline-none" /></div>
-                  <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">GHL Location ID</label>
-                    <input type="text" value={formData.ghlLocationId} onChange={e => setFormData({...formData, ghlLocationId: e.target.value})} className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-brand-900 outline-none" /></div>
-                </div>
-                <div className="mt-4 flex justify-end">
-                  <button type="submit" disabled={creating} className="text-white font-medium px-5 py-2 rounded-xl hover:opacity-90 disabled:opacity-50 transition-colors" style={{ backgroundColor: BRAND }}>
-                    {creating ? 'Creating...' : 'Create Venue'}
-                  </button>
-                </div>
-              </form>
-            )}
-
-            <div className="mb-4 flex items-center justify-between rounded-lg border border-brand-900/20 bg-brand-900/5 px-4 py-3">
-              <div>
-                <p className="text-sm font-medium" style={{ color: BRAND }}>Universal GHL Login Link</p>
-                <p className="text-xs text-gray-500 mt-0.5">Auto-detects venue from referring GHL location</p>
-              </div>
-              <button onClick={() => { const url = venues[0]?.login_url?.split('/login/')[0] || 'https://www.storypay.io'; navigator.clipboard.writeText(`${url}/login/ghl`); setCopiedGhl(true); setTimeout(() => setCopiedGhl(false), 2000); }}
-                className="text-xs font-medium px-3 py-1.5 rounded-lg text-white hover:opacity-90 transition-colors" style={{ backgroundColor: BRAND }}>
-                {copiedGhl ? 'Copied!' : 'Copy Link'}
-              </button>
-            </div>
-
-            {/* Mobile: card view. Desktop: table */}
-            <div className="sm:hidden space-y-3">
-              {venuesLoading ? <div className="text-center py-8 text-gray-400"><Loader2 size={20} className="animate-spin inline" /></div>
-              : venues.length === 0 ? <p className="text-center text-gray-400 py-8 text-sm">No venues yet</p>
-              : venues.map(venue => (
-                <div key={venue.id} className="bg-white rounded-xl border border-gray-200 p-4">
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <p className="text-sm font-semibold text-gray-900">{venue.name}</p>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {statusBadge(venue.onboarding_status)}
-                      {venue.setup_completed && <span className="inline-block h-5 w-5 rounded-full bg-emerald-100 text-emerald-600 text-center text-xs leading-5">✓</span>}
-                    </div>
-                  </div>
-                  {venue.email && <p className="text-xs text-gray-500 mb-1">{venue.email}</p>}
-                  {venue.ghl_location_id && <p className="text-xs font-mono text-gray-400 mb-2">ID: {venue.ghl_location_id.slice(0,16)}…</p>}
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-gray-400">{new Date(venue.created_at).toLocaleDateString()}</span>
-                    <button onClick={() => { if (!venue.login_url) return; navigator.clipboard.writeText(venue.login_url); setCopiedId(venue.id); setTimeout(() => setCopiedId(null), 2000); }}
-                      disabled={!venue.login_url}
-                      className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors disabled:opacity-40">
-                      {copiedId === venue.id ? 'Copied!' : 'Copy Login'}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="hidden sm:block bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-200 bg-gray-50">
-                      {['Name','Email','GHL Location','Status','Setup','Created','Actions'].map(h => (
-                        <th key={h} className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-3">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {venuesLoading ? (
-                      <tr><td colSpan={7} className="text-center py-8 text-gray-400">Loading...</td></tr>
-                    ) : venues.length === 0 ? (
-                      <tr><td colSpan={7} className="text-center text-gray-400 py-12 text-sm">No venues yet</td></tr>
-                    ) : venues.map(venue => (
-                      <tr key={venue.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-4 py-3 text-sm font-medium text-gray-900">{venue.name}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600">{venue.email || '—'}</td>
-                        <td className="px-4 py-3 text-xs text-gray-500 font-mono">{venue.ghl_location_id ? `${venue.ghl_location_id.slice(0,12)}…` : <span className="text-gray-300">—</span>}</td>
-                        <td className="px-4 py-3">{statusBadge(venue.onboarding_status)}</td>
-                        <td className="px-4 py-3">{venue.setup_completed ? <span className="inline-block h-5 w-5 rounded-full bg-emerald-100 text-emerald-600 text-center text-xs leading-5">✓</span> : <span className="inline-block h-5 w-5 rounded-full bg-gray-100 text-gray-400 text-center text-xs leading-5">—</span>}</td>
-                        <td className="px-4 py-3 text-sm text-gray-500">{new Date(venue.created_at).toLocaleDateString()}</td>
-                        <td className="px-4 py-3">
-                          <button onClick={() => { if (!venue.login_url) return; navigator.clipboard.writeText(venue.login_url); setCopiedId(venue.id); setTimeout(() => setCopiedId(null), 2000); }}
-                            disabled={!venue.login_url}
-                            className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors disabled:opacity-40">
-                            {copiedId === venue.id ? 'Copied!' : 'Copy Login'}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'directory-badges' && (
-          <DirectoryBadgesAdminPanel
-            venues={venues as unknown as VenueDirectoryRow[]}
+          <VenueManagementPortal
+            venues={venues as unknown as AdminVenueRow[]}
+            venuesLoading={venuesLoading}
             onRefresh={fetchVenues}
           />
         )}
+
+        {activeTab === 'directory-plans' && <DirectoryPlansAdminPanel />}
 
         {/* ── Announcements Tab ── */}
         {activeTab === 'announcements' && (

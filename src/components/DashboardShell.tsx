@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Sidebar from '@/components/Sidebar';
 import AnnouncementTicker from '@/components/AnnouncementTicker';
+import ImpersonationBanner from '@/components/ImpersonationBanner';
 
 const STORAGE_KEY = 'storypay.dashboard.sidebarCollapsed';
 
@@ -55,6 +56,7 @@ export default function DashboardShell({
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#ffffff' }}>
+      <ImpersonationBanner />
       <Sidebar
         venue={venue}
         role={role}

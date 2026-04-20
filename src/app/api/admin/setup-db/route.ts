@@ -12,6 +12,40 @@ async function requireAdmin() {
 // Run this once by visiting /admin and clicking Setup DB.
 const TABLES = [
   {
+    name: 'directory_feature_definitions',
+    sql: `
+      CREATE TABLE IF NOT EXISTS public.directory_feature_definitions (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        feature_key text NOT NULL UNIQUE,
+        label text NOT NULL,
+        description text,
+        category text,
+        sort_order int NOT NULL DEFAULT 0,
+        created_at timestamptz NOT NULL DEFAULT now()
+      );
+      ALTER TABLE public.directory_feature_definitions DISABLE ROW LEVEL SECURITY;
+    `,
+  },
+  {
+    name: 'directory_plans',
+    sql: `
+      CREATE TABLE IF NOT EXISTS public.directory_plans (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        name text NOT NULL,
+        slug text NOT NULL UNIQUE,
+        description text,
+        sort_order int NOT NULL DEFAULT 0,
+        is_default boolean NOT NULL DEFAULT false,
+        price_monthly_cents int,
+        stripe_price_id text,
+        feature_flags jsonb NOT NULL DEFAULT '{}'::jsonb,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      ALTER TABLE public.directory_plans DISABLE ROW LEVEL SECURITY;
+    `,
+  },
+  {
     name: 'venue_team_members',
     sql: `
       CREATE TABLE IF NOT EXISTS public.venue_team_members (
@@ -56,6 +90,7 @@ const COLUMNS = [
   { table: 'venues', column: 'ghl_location_token',            sql: `ALTER TABLE public.venues ADD COLUMN IF NOT EXISTS ghl_location_token text;` },
   { table: 'venues', column: 'directory_verified_status',      sql: `ALTER TABLE public.venues ADD COLUMN IF NOT EXISTS directory_verified_status text NOT NULL DEFAULT 'none';` },
   { table: 'venues', column: 'directory_sponsored_status',     sql: `ALTER TABLE public.venues ADD COLUMN IF NOT EXISTS directory_sponsored_status text NOT NULL DEFAULT 'none';` },
+  { table: 'venues', column: 'directory_plan_id',                sql: `ALTER TABLE public.venues ADD COLUMN IF NOT EXISTS directory_plan_id uuid REFERENCES public.directory_plans(id) ON DELETE SET NULL;` },
 ];
 
 export async function POST() {

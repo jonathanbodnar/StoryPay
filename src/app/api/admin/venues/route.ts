@@ -30,10 +30,16 @@ export async function GET() {
       return NextResponse.json({ error: `Supabase error: ${error.message}` }, { status: 500 });
     }
 
+    const { data: planRows } = await supabaseAdmin.from('directory_plans').select('id, name, slug');
+    const planById = new Map((planRows || []).map((p) => [p.id as string, p]));
+
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
     const venuesWithLinks = (venues || []).map((venue: Record<string, unknown>) => {
+      const pid = venue.directory_plan_id as string | null | undefined;
+      const directory_plans = pid ? planById.get(pid) ?? null : null;
       return {
         ...venue,
+        directory_plans,
         login_url: venue.login_token ? `${appUrl}/login/${venue.login_token}` : null,
       };
     });
