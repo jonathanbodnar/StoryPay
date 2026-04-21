@@ -27,14 +27,32 @@ export async function GET(
   const { data: contact } = await supabaseAdmin
     .from('venue_customers')
     .select(
-      'id, first_name, last_name, customer_email, phone, sms_dnd, conversation_dnd_all, conversation_dnd_email, conversation_dnd_calls, conversation_dnd_inbound_sms',
+      'id, first_name, last_name, customer_email, phone, sms_dnd, conversation_dnd_all, conversation_dnd_email, conversation_dnd_calls, conversation_dnd_inbound_sms, stage_id',
     )
     .eq('id', thread.venue_customer_id)
     .eq('venue_id', venueId)
     .maybeSingle();
 
+  let contact_stage: { name: string; color: string | null } | null = null;
+  const stageId = (contact as { stage_id?: string | null } | null)?.stage_id;
+  if (stageId) {
+    const { data: st } = await supabaseAdmin
+      .from('lead_pipeline_stages')
+      .select('name, color')
+      .eq('id', stageId)
+      .eq('venue_id', venueId)
+      .maybeSingle();
+    if (st) {
+      contact_stage = {
+        name: String((st as { name?: string }).name || 'Stage'),
+        color: ((st as { color?: string | null }).color ?? null) as string | null,
+      };
+    }
+  }
+
   return NextResponse.json({
     ...thread,
     venue_customers: contact ?? null,
+    contact_stage,
   });
 }

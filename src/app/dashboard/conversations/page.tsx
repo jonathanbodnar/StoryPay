@@ -47,6 +47,7 @@ interface ThreadDetail {
   last_message_at: string;
   venue_customer_id: string;
   external_reply_channel?: string;
+  contact_stage?: { name: string; color: string | null } | null;
   venue_customers: {
     id: string;
     first_name: string;
@@ -307,15 +308,22 @@ export default function ConversationsPage() {
 
   const threadsFiltered = useMemo(() => {
     const q = threadSearch.trim().toLowerCase();
-    if (!q) return threads;
-    return threads.filter((t) => {
-      const name = [t.contact_first_name, t.contact_last_name]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-      const em = (t.contact_email || '').toLowerCase();
-      const ph = (t.contact_phone || '').toLowerCase();
-      return name.includes(q) || em.includes(q) || ph.includes(q);
+    const base = !q
+      ? threads
+      : threads.filter((t) => {
+          const name = [t.contact_first_name, t.contact_last_name]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+          const em = (t.contact_email || '').toLowerCase();
+          const ph = (t.contact_phone || '').toLowerCase();
+          return name.includes(q) || em.includes(q) || ph.includes(q);
+        });
+    return [...base].sort((a, b) => {
+      const ap = a.has_pinned ? 1 : 0;
+      const bp = b.has_pinned ? 1 : 0;
+      if (bp !== ap) return bp - ap;
+      return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime();
     });
   }, [threads, threadSearch]);
 
@@ -401,7 +409,11 @@ export default function ConversationsPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ field }),
     });
-    if (!res.ok) return;
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      console.error('[conversations] star/pin toggle:', data?.error || res.status);
+      return;
+    }
     await loadThreads();
     if (selectedId === threadId) await reloadMessages(threadId);
   }
@@ -543,15 +555,23 @@ export default function ConversationsPage() {
                 const unreadN = Number(t.unread_count ?? 0);
                 const unread = unreadN > 0;
                 return (
-                  <button
+                  <div
                     key={t.thread_id}
-                    type="button"
+                    role="button"
+                    tabIndex={0}
                     onClick={() => {
                       setSelectedId(t.thread_id);
                       setMobileShowThread(true);
                     }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedId(t.thread_id);
+                        setMobileShowThread(true);
+                      }
+                    }}
                     className={classNames(
-                      'flex w-full flex-col gap-0.5 border-b border-gray-100 px-4 py-3 text-left transition-colors hover:bg-white',
+                      'flex w-full cursor-pointer flex-col gap-0.5 border-b border-gray-100 px-4 py-3 text-left transition-colors hover:bg-white',
                       selectedId === t.thread_id ? 'bg-white border-l-[3px] border-l-neutral-900' : '',
                     )}
                   >
@@ -617,7 +637,7 @@ export default function ConversationsPage() {
                         </span>
                       )}
                     </div>
-                  </button>
+                  </div>
                 );
               })
             )}
@@ -659,16 +679,34 @@ export default function ConversationsPage() {
                     )}
                   </p>
                 </div>
-                {contactProfileHref && (
-                  <Link
-                    href={contactProfileHref}
-                    className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50"
-                  >
-                    <User size={14} />
-                    Profile
-                    <ChevronRight size={14} className="text-gray-400" />
-                  </Link>
-                )}
+                <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2">
+                  {threadDetail.contact_stage?.name ? (
+                    <span
+                      className="inline-flex max-w-[140px] truncate rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-semibold text-gray-800 sm:max-w-[200px]"
+                      style={
+                        threadDetail.contact_stage.color
+                          ? {
+                              borderColor: threadDetail.contact_stage.color,
+                              backgroundColor: `${threadDetail.contact_stage.color}18`,
+                            }
+                          : undefined
+                      }
+                      title={threadDetail.contact_stage.name}
+                    >
+                      {threadDetail.contact_stage.name}
+                    </span>
+                  ) : null}
+                  {contactProfileHref ? (
+                    <Link
+                      href={contactProfileHref}
+                      className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                    >
+                      <User size={14} />
+                      Profile
+                      <ChevronRight size={14} className="text-gray-400" />
+                    </Link>
+                  ) : null}
+                </div>
               </header>
 
               {threadDetail.venue_customers ? (

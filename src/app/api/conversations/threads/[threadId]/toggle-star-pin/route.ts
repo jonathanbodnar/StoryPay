@@ -6,8 +6,7 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 /**
- * Toggle thread highlight: if any message in the thread has the flag, clear it on all
- * messages; otherwise set the flag on the latest message only.
+ * Toggle conversation_threads.is_starred / is_pinned (works even with zero messages).
  */
 export async function POST(
   request: NextRequest,
@@ -19,7 +18,7 @@ export async function POST(
   const { threadId } = await params;
   const { data: thread, error: tErr } = await supabaseAdmin
     .from('conversation_threads')
-    .select('id')
+    .select('id, is_starred, is_pinned')
     .eq('id', threadId)
     .eq('venue_id', venueId)
     .maybeSingle();
@@ -34,34 +33,30 @@ export async function POST(
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const field = body.field === 'is_pinned' ? 'is_pinned' : 'is_starred';
+  const field = (body.field === 'is_pinned' ? 'is_pinned' : 'is_starred') as 'is_starred' | 'is_pinned';
 
-  const { data: msgs, error: mErr } = await supabaseAdmin
-    .from('conversation_messages')
-    .select('id, created_at, is_starred, is_pinned')
-    .eq('thread_id', threadId)
-    .order('created_at', { ascending: false });
+  const row = thread as { is_starred?: boolean; is_pinned?: boolean };
+  const current = field === 'is_pinned' ? !!row.is_pinned : !!row.is_starred;
+  const next = !current;
 
-  if (mErr) return NextResponse.json({ error: mErr.message }, { status: 500 });
+  const { error: uErr } = await supabaseAdmin
+    .from('conversation_threads')
+    .update({ [field]: next, updated_at: new Date().toISOString() })
+    .eq('id', threadId)
+    .eq('venue_id', venueId);
 
-  const list = msgs ?? [];
-  const anyOn = list.some((m) => Boolean(m[field as 'is_starred' | 'is_pinned']));
-
-  if (anyOn) {
-    const { error: uErr } = await supabaseAdmin
-      .from('conversation_messages')
-      .update({ [field]: false })
-      .eq('thread_id', threadId);
-    if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 });
-  } else {
-    const latest = list[0];
-    if (!latest) return NextResponse.json({ error: 'No messages in thread' }, { status: 400 });
-    const { error: uErr } = await supabaseAdmin
-      .from('conversation_messages')
-      .update({ [field]: true })
-      .eq('id', latest.id);
-    if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 });
+  if (uErr) {
+    if (uErr.message?.includes('is_starred') || uErr.message?.includes('is_pinned')) {
+      return NextResponse.json(
+        {
+          error:
+            'Database migration required: run migrations/044_conversation_threads_star_pin.sql',
+        },
+        { status: 503 },
+      );
+    }
+    return NextResponse.json({ error: uErr.message }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, [field]: next });
 }

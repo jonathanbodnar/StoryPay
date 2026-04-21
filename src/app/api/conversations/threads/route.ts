@@ -78,47 +78,61 @@ async function fetchThreadsListManual(venueId: string) {
   return { ok: true as const, data: mapped };
 }
 
-async function threadIdsWithMessageFlag(
+async function threadIdsWithThreadColumn(
   venueId: string,
-  flag: 'is_starred' | 'is_pinned',
+  col: 'is_starred' | 'is_pinned',
 ): Promise<Set<string>> {
-  const { data: threads, error: tErr } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from('conversation_threads')
     .select('id')
-    .eq('venue_id', venueId);
-  if (tErr) return new Set();
-  const ids = (threads ?? []).map((r) => r.id as string).filter(Boolean);
-  if (ids.length === 0) return new Set();
-  const { data: msgs } = await supabaseAdmin
-    .from('conversation_messages')
-    .select('thread_id')
-    .eq(flag, true)
-    .in('thread_id', ids);
-  return new Set((msgs ?? []).map((m) => m.thread_id as string));
+    .eq('venue_id', venueId)
+    .eq(col, true);
+  if (error) return new Set();
+  return new Set((data ?? []).map((r) => r.id as string));
 }
 
 async function enrichThreadsWithStarPinFlags<T extends { thread_id: string }>(
   rows: T[],
+  venueId: string,
 ): Promise<(T & { has_starred: boolean; has_pinned: boolean })[]> {
   const ids = rows.map((r) => r.thread_id);
   if (ids.length === 0) return [];
-  const { data: starMsgs } = await supabaseAdmin
-    .from('conversation_messages')
-    .select('thread_id')
-    .eq('is_starred', true)
-    .in('thread_id', ids);
-  const { data: pinMsgs } = await supabaseAdmin
-    .from('conversation_messages')
-    .select('thread_id')
-    .eq('is_pinned', true)
-    .in('thread_id', ids);
-  const starSet = new Set((starMsgs ?? []).map((m) => m.thread_id as string));
-  const pinSet = new Set((pinMsgs ?? []).map((m) => m.thread_id as string));
-  return rows.map((r) => ({
-    ...r,
-    has_starred: starSet.has(r.thread_id),
-    has_pinned: pinSet.has(r.thread_id),
-  }));
+  const { data: thr, error } = await supabaseAdmin
+    .from('conversation_threads')
+    .select('id, is_starred, is_pinned')
+    .eq('venue_id', venueId)
+    .in('id', ids);
+  if (error) {
+    console.warn('[conversations/threads] enrich star/pin:', error.message);
+  }
+  const byId = new Map(
+    (thr ?? []).map((t) => [
+      t.id as string,
+      { is_starred: !!(t as { is_starred?: boolean }).is_starred, is_pinned: !!(t as { is_pinned?: boolean }).is_pinned },
+    ]),
+  );
+  return rows.map((r) => {
+    const flags = byId.get(r.thread_id);
+    return {
+      ...r,
+      has_starred: flags?.is_starred ?? false,
+      has_pinned: flags?.is_pinned ?? false,
+    };
+  });
+}
+
+/** Pinned threads first; then by last activity (newest first). */
+function sortThreadsPinnedFirst<
+  T extends { has_pinned?: boolean; last_message_at?: string | null },
+>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => {
+    const ap = a.has_pinned ? 1 : 0;
+    const bp = b.has_pinned ? 1 : 0;
+    if (bp !== ap) return bp - ap;
+    const at = new Date(a.last_message_at ?? 0).getTime();
+    const bt = new Date(b.last_message_at ?? 0).getTime();
+    return bt - at;
+  });
 }
 
 export async function GET(request: NextRequest) {
@@ -149,27 +163,27 @@ export async function GET(request: NextRequest) {
     }
     let rows = manual.data;
     if (starredOnly) {
-      const ok = await threadIdsWithMessageFlag(venueId, 'is_starred');
+      const ok = await threadIdsWithThreadColumn(venueId, 'is_starred');
       rows = rows.filter((r) => ok.has(r.thread_id));
     }
     if (pinnedOnly) {
-      const ok = await threadIdsWithMessageFlag(venueId, 'is_pinned');
+      const ok = await threadIdsWithThreadColumn(venueId, 'is_pinned');
       rows = rows.filter((r) => ok.has(r.thread_id));
     }
-    const enriched = await enrichThreadsWithStarPinFlags(rows);
+    const enriched = sortThreadsPinnedFirst(await enrichThreadsWithStarPinFlags(rows, venueId));
     return NextResponse.json(enriched);
   }
 
-  let rows = (data ?? []) as { thread_id: string }[];
+  let rows = (data ?? []) as { thread_id: string; last_message_at?: string }[];
   if (starredOnly) {
-    const ok = await threadIdsWithMessageFlag(venueId, 'is_starred');
+    const ok = await threadIdsWithThreadColumn(venueId, 'is_starred');
     rows = rows.filter((r) => ok.has(r.thread_id));
   }
   if (pinnedOnly) {
-    const ok = await threadIdsWithMessageFlag(venueId, 'is_pinned');
+    const ok = await threadIdsWithThreadColumn(venueId, 'is_pinned');
     rows = rows.filter((r) => ok.has(r.thread_id));
   }
-  const enriched = await enrichThreadsWithStarPinFlags(rows);
+  const enriched = sortThreadsPinnedFirst(await enrichThreadsWithStarPinFlags(rows, venueId));
   return NextResponse.json(enriched);
 }
 
