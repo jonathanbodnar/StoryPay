@@ -21,6 +21,11 @@ import { classNames } from '@/lib/utils';
 
 const capitalizeName = (name: string) => name.replace(/\b\w/g, (c) => c.toUpperCase());
 
+function isPlaceholderContactEmail(email: string): boolean {
+  const e = email.trim().toLowerCase();
+  return !e || !e.includes('@') || e.endsWith('@storypay.internal') || e.includes('@ghl-sms.storypay.placeholder');
+}
+
 interface ContactRow {
   id: string | number;
   name: string;
@@ -264,7 +269,18 @@ export default function ContactsPage() {
                 </td>
               </tr>
             ) : (
-              contacts.map((c) => (
+              contacts.map((c) => {
+                const emailNorm = (c.email || '').trim().toLowerCase();
+                const canOpenConversations =
+                  !!c.venueCustomerId || !isPlaceholderContactEmail(c.email || '');
+                const emailConvHref = c.venueCustomerId
+                  ? `/dashboard/conversations?customer=${encodeURIComponent(c.venueCustomerId)}&compose=email`
+                  : `/dashboard/conversations?customerFromEmail=${encodeURIComponent(emailNorm)}&compose=email`;
+                const smsConvHref = c.venueCustomerId
+                  ? `/dashboard/conversations?customer=${encodeURIComponent(c.venueCustomerId)}&compose=sms`
+                  : `/dashboard/conversations?customerFromEmail=${encodeURIComponent(emailNorm)}&compose=sms`;
+
+                return (
                 <tr key={String(c.id)} className="group hover:bg-gray-50/50 transition-colors">
                   <td className="px-5 py-3.5">
                     <Link
@@ -302,38 +318,42 @@ export default function ContactsPage() {
                   </td>
                   <td className="px-3 sm:px-5 py-3.5 text-right">
                     <div className="flex flex-wrap items-center justify-end gap-1">
-                      {c.venueCustomerId ? (
+                      {canOpenConversations ? (
                         <>
                           <Link
-                            href={`/dashboard/conversations?customer=${encodeURIComponent(c.venueCustomerId)}&compose=email`}
-                            className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-violet-200 bg-violet-50 text-violet-800 shadow-sm transition-colors hover:border-violet-300 hover:bg-violet-100"
-                            title="Email in Conversations"
+                            href={emailConvHref}
+                            className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-violet-800 transition-colors hover:bg-violet-50"
+                            title="Open or start email thread in Conversations"
                             aria-label={`Email ${c.name || c.email || 'contact'} in Conversations`}
                           >
-                            <Mail size={16} strokeWidth={2} aria-hidden />
+                            <Mail size={14} strokeWidth={2} className="flex-shrink-0" aria-hidden />
+                            <span className="hidden sm:inline">Email</span>
                           </Link>
                           <Link
-                            href={`/dashboard/conversations?customer=${encodeURIComponent(c.venueCustomerId)}&compose=sms`}
-                            className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-900 shadow-sm transition-colors hover:border-emerald-300 hover:bg-emerald-100"
-                            title="SMS in Conversations"
+                            href={smsConvHref}
+                            className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-emerald-900 transition-colors hover:bg-emerald-50"
+                            title="Open or start SMS thread in Conversations"
                             aria-label={`SMS ${c.name || c.email || 'contact'} in Conversations`}
                           >
-                            <Smartphone size={16} strokeWidth={2} aria-hidden />
+                            <Smartphone size={14} strokeWidth={2} className="flex-shrink-0" aria-hidden />
+                            <span className="hidden sm:inline">SMS</span>
                           </Link>
                         </>
                       ) : (
                         <>
                           <span
-                            className="inline-flex h-8 w-8 flex-shrink-0 cursor-not-allowed items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-gray-400"
-                            title="Link or save this person as a StoryPay contact to message from Conversations"
+                            className="inline-flex cursor-not-allowed items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-400"
+                            title="Add a real email for this contact to use Conversations"
                           >
-                            <Mail size={16} aria-hidden />
+                            <Mail size={14} aria-hidden />
+                            <span className="hidden sm:inline">Email</span>
                           </span>
                           <span
-                            className="inline-flex h-8 w-8 flex-shrink-0 cursor-not-allowed items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-gray-400"
-                            title="Link or save this person as a StoryPay contact to message from Conversations"
+                            className="inline-flex cursor-not-allowed items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-400"
+                            title="Add a real email for this contact to use Conversations"
                           >
-                            <Smartphone size={16} aria-hidden />
+                            <Smartphone size={14} aria-hidden />
+                            <span className="hidden sm:inline">SMS</span>
                           </span>
                         </>
                       )}
@@ -364,7 +384,8 @@ export default function ContactsPage() {
                     </div>
                   </td>
                 </tr>
-              ))
+                );
+              })
             )}
           </tbody>
         </table>

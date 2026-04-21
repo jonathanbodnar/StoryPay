@@ -119,9 +119,11 @@ export default function ConversationsPage() {
     if (deepLinkConsumed.current || typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     const customerId = params.get('customer')?.trim();
-    if (!customerId || !/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(customerId)) {
-      return;
-    }
+    const customerFromEmail = params.get('customerFromEmail')?.trim();
+    const uuidOk =
+      !!customerId && /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(customerId);
+    if (!uuidOk && !customerFromEmail) return;
+
     deepLinkConsumed.current = true;
 
     const composeRaw = params.get('compose')?.trim().toLowerCase();
@@ -130,23 +132,35 @@ export default function ConversationsPage() {
 
     void (async () => {
       try {
-        const res = await fetch('/api/conversations/threads');
-        if (!res.ok) return;
-        const list = (await res.json()) as ThreadRow[];
-        const existing = Array.isArray(list)
-          ? list.find((t) => t.venue_customer_id === customerId)
-          : undefined;
-        let threadId = existing?.thread_id;
-        if (!threadId) {
-          const cre = await fetch('/api/conversations/threads', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ venue_customer_id: customerId, subject: 'Conversation' }),
-          });
-          if (!cre.ok) return;
-          const data = (await cre.json()) as { id?: string };
-          threadId = data.id;
+        let threadId: string | undefined;
+
+        if (uuidOk && customerId) {
+          const res = await fetch('/api/conversations/threads');
+          if (!res.ok) return;
+          const list = (await res.json()) as ThreadRow[];
+          const existing = Array.isArray(list)
+            ? list.find((t) => t.venue_customer_id === customerId)
+            : undefined;
+          threadId = existing?.thread_id;
+          if (!threadId) {
+            const cre = await fetch('/api/conversations/threads', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ venue_customer_id: customerId, subject: 'Conversation' }),
+            });
+            if (!cre.ok) return;
+            const data = (await cre.json()) as { id?: string };
+            threadId = data.id;
+          }
+        } else if (customerFromEmail) {
+          const r = await fetch(
+            `/api/conversations/open-or-create?email=${encodeURIComponent(customerFromEmail)}`,
+          );
+          if (!r.ok) return;
+          const data = (await r.json()) as { thread_id?: string };
+          threadId = data.thread_id;
         }
+
         if (!threadId) return;
         setSelectedId(threadId);
         if (composeTab) setComposerTab(composeTab);
