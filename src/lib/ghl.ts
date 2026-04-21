@@ -158,6 +158,36 @@ export async function sendSms(
   });
 }
 
+/** Resolve the primary GHL conversation id for a contact (SMS thread lives here). */
+export async function getGhlConversationIdForContact(
+  accessToken: string,
+  locationId: string,
+  contactId: string
+): Promise<string | null> {
+  const token = await resolveLocationToken(accessToken, locationId);
+  const convRes = await ghlRequest(
+    `/conversations/search?locationId=${encodeURIComponent(locationId)}&contactId=${encodeURIComponent(contactId)}&limit=1`,
+    token,
+    { locationId }
+  );
+  const id = convRes?.conversations?.[0]?.id;
+  return id != null ? String(id) : null;
+}
+
+/** List messages in a conversation (inbound replies appear here even when webhooks are not configured). */
+export async function listGhlConversationMessages(
+  accessToken: string,
+  locationId: string,
+  conversationId: string
+): Promise<unknown> {
+  const token = await resolveLocationToken(accessToken, locationId);
+  return ghlRequest(
+    `/conversations/${encodeURIComponent(conversationId)}/messages`,
+    token,
+    { locationId }
+  );
+}
+
 export async function sendEmail(
   accessToken: string,
   locationId: string,

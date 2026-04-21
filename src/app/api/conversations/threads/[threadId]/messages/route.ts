@@ -5,6 +5,7 @@ import { getSessionUser } from '@/lib/session';
 import { sendEmail } from '@/lib/email';
 import { conversationReaderRef } from '@/lib/conversation-reader';
 import { findOrCreateContact, getGhlToken, normalizePhone, sendSms } from '@/lib/ghl';
+import { syncInboundSmsFromGhlForThread } from '@/lib/ghl-sms-conversations';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -41,6 +42,18 @@ export async function GET(
   const { threadId } = await params;
   const gate = await assertThreadVenue(threadId, venueId);
   if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.error === 'Not found' ? 404 : 500 });
+
+  const thread = gate.thread as {
+    external_reply_channel?: string;
+    venue_customer_id: string;
+  };
+  if (thread.external_reply_channel === 'sms') {
+    await syncInboundSmsFromGhlForThread({
+      venueId,
+      threadId,
+      venueCustomerId: thread.venue_customer_id,
+    });
+  }
 
   const { data: messages, error } = await supabaseAdmin
     .from('conversation_messages')

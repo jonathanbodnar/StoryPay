@@ -1,5 +1,11 @@
 import { supabaseAdmin } from '@/lib/supabase';
-import { getGhlContact, getGhlToken, normalizePhone } from '@/lib/ghl';
+import {
+  getGhlContact,
+  getGhlConversationIdForContact,
+  getGhlToken,
+  listGhlConversationMessages,
+  normalizePhone,
+} from '@/lib/ghl';
 
 const PLACEHOLDER_EMAIL_DOMAIN = 'ghl-sms.storypay.placeholder';
 
@@ -318,9 +324,13 @@ export async function insertInboundGhlSms(params: {
   messageBody: string;
   ghlMessageId: string | null;
   contactName?: string | null;
-}): Promise<{ ok: boolean; error?: string; venueCustomerId?: string }> {
-  const { venueId, locationId, contactId, messageBody, ghlMessageId, contactName } = params;
-  if (!messageBody?.trim()) return { ok: true };
+  /** When set, message is stored on this thread if it belongs to the resolved venue customer. */
+  threadId?: string;
+  createdAt?: string | null;
+}): Promise<{ ok: boolean; error?: string; venueCustomerId?: string; inserted?: boolean }> {
+  const { venueId, locationId, contactId, messageBody, ghlMessageId, contactName, threadId: preferredThreadId, createdAt } =
+    params;
+  if (!messageBody?.trim()) return { ok: true, inserted: false };
 
   if (ghlMessageId) {
     const { data: dup } = await supabaseAdmin
@@ -328,16 +338,28 @@ export async function insertInboundGhlSms(params: {
       .select('id')
       .eq('ghl_message_id', ghlMessageId)
       .maybeSingle();
-    if (dup) return { ok: true };
+    if (dup) return { ok: true, inserted: false };
   }
 
   const customerId = await upsertVenueCustomerFromGhl({ venueId, locationId, contactId });
   if (!customerId) return { ok: false, error: 'no_customer' };
 
-  const threadId = await ensureSmsThread(venueId, customerId);
+  let threadId: string | null = null;
+  if (preferredThreadId) {
+    const { data: trow } = await supabaseAdmin
+      .from('conversation_threads')
+      .select('id')
+      .eq('id', preferredThreadId)
+      .eq('venue_id', venueId)
+      .eq('venue_customer_id', customerId)
+      .eq('external_reply_channel', 'sms')
+      .maybeSingle();
+    if (trow?.id) threadId = trow.id as string;
+  }
+  if (!threadId) threadId = await ensureSmsThread(venueId, customerId);
   if (!threadId) return { ok: false, error: 'no_thread' };
 
-  const { error: insErr } = await supabaseAdmin.from('conversation_messages').insert({
+  const row: Record<string, unknown> = {
     thread_id: threadId,
     visibility: 'external',
     channel: 'sms',
@@ -346,10 +368,138 @@ export async function insertInboundGhlSms(params: {
     contact_from_name: contactName?.trim() || null,
     contact_from_email: null,
     ghl_message_id: ghlMessageId || null,
-  });
+  };
+  if (createdAt && String(createdAt).trim()) {
+    row.created_at = String(createdAt).trim();
+  }
+
+  const { error: insErr } = await supabaseAdmin.from('conversation_messages').insert(row);
   if (insErr) {
     console.error('[ghl-sms] insert message', insErr);
     return { ok: false, error: insErr.message };
   }
-  return { ok: true, venueCustomerId: customerId };
+  return { ok: true, inserted: true, venueCustomerId: customerId };
+}
+
+function ghlApiMessagesFromResponse(raw: unknown): Record<string, unknown>[] {
+  if (!raw || typeof raw !== 'object') return [];
+  const o = raw as Record<string, unknown>;
+  const direct = o.messages;
+  if (Array.isArray(direct)) return direct as Record<string, unknown>[];
+  if (direct && typeof direct === 'object') {
+    const inner = (direct as Record<string, unknown>).messages;
+    if (Array.isArray(inner)) return inner as Record<string, unknown>[];
+  }
+  if (Array.isArray(o.data)) return o.data as Record<string, unknown>[];
+  if (Array.isArray(o.items)) return o.items as Record<string, unknown>[];
+  return [];
+}
+
+function isGhlApiInboundSmsMessage(msg: Record<string, unknown>): boolean {
+  const dir = String(msg.direction ?? '').toLowerCase();
+  if (dir === 'outbound') return false;
+
+  const type = String(msg.type ?? msg.messageType ?? msg.channel ?? '').toUpperCase();
+  if (type === 'SMS' || type === 'TEXT') return true;
+  const mts = String(msg.messageTypeString ?? '').toUpperCase();
+  if (mts.includes('SMS')) return true;
+  const id = msg.messageTypeId;
+  if (id === 2 || id === '2') return true;
+  return false;
+}
+
+function bodyFromGhlApiMessage(msg: Record<string, unknown>): string {
+  const raw =
+    msg.body ?? msg.text ?? msg.message ?? msg.content ?? msg.messageBody ?? '';
+  let s = String(raw ?? '').trim();
+  if (!s && msg.html) {
+    s = String(msg.html)
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+  return s;
+}
+
+function ghlApiMessageId(msg: Record<string, unknown>): string | null {
+  const id = msg.id ?? msg.messageId ?? msg._id;
+  if (id == null) return null;
+  const s = String(id).trim();
+  return s || null;
+}
+
+/**
+ * Pull inbound SMS from GHL for this thread (covers missing / misconfigured InboundMessage webhooks).
+ * Best-effort: errors are logged, never thrown.
+ */
+export async function syncInboundSmsFromGhlForThread(params: {
+  venueId: string;
+  threadId: string;
+  venueCustomerId: string;
+}): Promise<{ imported: number }> {
+  const { venueId, threadId, venueCustomerId } = params;
+
+  try {
+    const { data: venue } = await supabaseAdmin
+      .from('venues')
+      .select('ghl_access_token, ghl_location_id, ghl_connected')
+      .eq('id', venueId)
+      .maybeSingle();
+
+    if (!(venue as { ghl_connected?: boolean } | null)?.ghl_connected) return { imported: 0 };
+    const locationId = (venue as { ghl_location_id?: string | null })?.ghl_location_id;
+    if (!locationId) return { imported: 0 };
+
+    const token = getGhlToken(venue as { ghl_access_token?: string | null });
+    if (!token) return { imported: 0 };
+
+    const { data: vc } = await supabaseAdmin
+      .from('venue_customers')
+      .select('ghl_contact_id')
+      .eq('id', venueCustomerId)
+      .eq('venue_id', venueId)
+      .maybeSingle();
+
+    const contactId = (vc as { ghl_contact_id?: string | null } | null)?.ghl_contact_id;
+    if (!contactId) return { imported: 0 };
+
+    const conversationId = await getGhlConversationIdForContact(token, locationId, contactId);
+    if (!conversationId) return { imported: 0 };
+
+    const rawList = await listGhlConversationMessages(token, locationId, conversationId);
+    const list = ghlApiMessagesFromResponse(rawList);
+
+    let imported = 0;
+    for (const msg of list) {
+      // Only contact→venue SMS; require explicit inbound (avoids importing outbound without direction).
+      if (String(msg.direction ?? '').toLowerCase() !== 'inbound') continue;
+      if (!isGhlApiInboundSmsMessage(msg)) continue;
+      const body = bodyFromGhlApiMessage(msg);
+      if (!body) continue;
+      const ghlMessageId = ghlApiMessageId(msg);
+      if (!ghlMessageId) continue;
+
+      const createdAt =
+        (msg.dateAdded as string | undefined) ||
+        (msg.createdAt as string | undefined) ||
+        (msg.date as string | undefined) ||
+        null;
+
+      const r = await insertInboundGhlSms({
+        venueId,
+        locationId,
+        contactId,
+        messageBody: body,
+        ghlMessageId,
+        threadId,
+        createdAt,
+      });
+      if (r.inserted) imported++;
+    }
+
+    return { imported };
+  } catch (e) {
+    console.error('[ghl-sms] syncInboundSmsFromGhlForThread', e);
+    return { imported: 0 };
+  }
 }
