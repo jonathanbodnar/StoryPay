@@ -480,24 +480,30 @@ ${triggerBlock}
       ? triggerLinkId
       : null;
 
+  /** Only set keys for columns that exist in the DB. Migration 043 adds email_cc, email_bcc, trigger_link_id. */
+  const insertRow: Record<string, unknown> = {
+    thread_id: threadId,
+    visibility,
+    channel: messageChannel,
+    body: rawBody,
+    sender_kind,
+    venue_team_member_id,
+    mentioned_member_ids: visibility === 'internal' ? mentionedIds : [],
+    external_email_sent,
+    send_error,
+  };
+  if (visibility === 'external' && messageChannel === 'email') {
+    insertRow.email_subject = rawSubject || null;
+    if (emailCcStored) insertRow.email_cc = emailCcStored;
+    if (emailBccStored) insertRow.email_bcc = emailBccStored;
+  }
+  if (insertTriggerId) {
+    insertRow.trigger_link_id = insertTriggerId;
+  }
+
   const { data: row, error: insErr } = await supabaseAdmin
     .from('conversation_messages')
-    .insert({
-      thread_id: threadId,
-      visibility,
-      channel: messageChannel,
-      body: rawBody,
-      email_subject:
-        visibility === 'external' && messageChannel === 'email' ? rawSubject || null : null,
-      email_cc: visibility === 'external' && messageChannel === 'email' ? emailCcStored : null,
-      email_bcc: visibility === 'external' && messageChannel === 'email' ? emailBccStored : null,
-      trigger_link_id: insertTriggerId,
-      sender_kind,
-      venue_team_member_id,
-      mentioned_member_ids: visibility === 'internal' ? mentionedIds : [],
-      external_email_sent,
-      send_error,
-    })
+    .insert(insertRow)
     .select('*')
     .single();
 
