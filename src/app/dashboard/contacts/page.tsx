@@ -15,6 +15,7 @@ import {
   Download,
   Upload,
 } from 'lucide-react';
+import { classNames } from '@/lib/utils';
 
 const capitalizeName = (name: string) => name.replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -23,6 +24,8 @@ interface ContactRow {
   name: string;
   email: string;
   phone?: string;
+  funnelStage?: string | null;
+  funnelStageColor?: string | null;
 }
 
 const PAGE_SIZE = 20;
@@ -60,7 +63,7 @@ export default function ContactsPage() {
       );
       if (res.ok) {
         const data = await res.json();
-        const items = Array.isArray(data) ? data : data.data ?? [];
+        const items = (Array.isArray(data) ? data : data.data ?? []) as ContactRow[];
         setHasMore(items.length > PAGE_SIZE);
         setContacts(items.slice(0, PAGE_SIZE));
       }
@@ -236,6 +239,9 @@ export default function ContactsPage() {
               <th className="hidden md:table-cell px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                 Phone
               </th>
+              <th className="hidden md:table-cell px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                Status
+              </th>
               <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                 Actions
               </th>
@@ -244,13 +250,13 @@ export default function ContactsPage() {
           <tbody className="divide-y divide-gray-200">
             {loading ? (
               <tr>
-                <td colSpan={4} className="px-5 py-8 text-center text-gray-400">
+                <td colSpan={5} className="px-5 py-8 text-center text-gray-400">
                   <Loader2 className="inline animate-spin" size={18} />
                 </td>
               </tr>
             ) : contacts.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-5 py-8 text-center text-gray-400">
+                <td colSpan={5} className="px-5 py-8 text-center text-gray-400">
                   {search ? 'No contacts match your search' : 'No contacts yet'}
                 </td>
               </tr>
@@ -267,6 +273,30 @@ export default function ContactsPage() {
                   </td>
                   <td className="hidden sm:table-cell px-5 py-3.5 text-gray-700">{c.email || '---'}</td>
                   <td className="hidden md:table-cell px-5 py-3.5 text-gray-700">{c.phone || '---'}</td>
+                  <td className="hidden md:table-cell px-5 py-3.5">
+                    {c.funnelStage ? (
+                      <span
+                        className={classNames(
+                          'inline-flex max-w-[160px] truncate rounded-full border px-2.5 py-0.5 text-[11px] font-semibold',
+                          !c.funnelStageColor && 'border-gray-200 bg-gray-50 text-gray-700',
+                        )}
+                        style={
+                          c.funnelStageColor
+                            ? {
+                                backgroundColor: `${c.funnelStageColor}22`,
+                                color: c.funnelStageColor,
+                                borderColor: `${c.funnelStageColor}44`,
+                              }
+                            : undefined
+                        }
+                        title={c.funnelStage}
+                      >
+                        {c.funnelStage}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </td>
                   <td className="px-3 sm:px-5 py-3.5 text-right">
                     <div className="flex flex-wrap items-center justify-end gap-1">
                       <Link

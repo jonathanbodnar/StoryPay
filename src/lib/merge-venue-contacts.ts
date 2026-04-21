@@ -12,6 +12,58 @@ export interface MergedContact {
   email: string;
   phone: string;
   source: MergedContactSource;
+  /** Resolved from `venue_customers` pipeline stage (matches Leads funnel / contact profile). */
+  funnelStage?: string | null;
+  funnelStageColor?: string | null;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function humanizePipelineSlug(slug: string | null | undefined): string {
+  const s = (slug || '').trim();
+  if (!s) return '—';
+  return s
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
+
+function funnelLabelFromVenueCustomer(
+  stageId: string | null | undefined,
+  pipelineStageSlug: string | null | undefined,
+  stageById: Map<string, { name: string; color: string }>,
+): { label: string; color: string | null } {
+  if (stageId && stageById.has(stageId)) {
+    const s = stageById.get(stageId)!;
+    return { label: s.name, color: s.color };
+  }
+  return { label: humanizePipelineSlug(pipelineStageSlug), color: null };
+}
+
+function attachFunnelMetadata(
+  contacts: MergedContact[],
+  funnelLookup: Map<string, { label: string; color: string | null }>,
+) {
+  for (const c of contacts) {
+    const keys: string[] = [];
+    const e = (c.email || '').toLowerCase().trim();
+    if (e) keys.push(`email:${e}`);
+    const sid = String(c.id);
+    if (c.source === 'ghl') keys.push(`ghl:${sid}`);
+    if (c.source === 'lunarpay') keys.push(`lp:${sid}`);
+    if (c.source === 'storypay') keys.push(`uuid:${sid}`);
+    if (UUID_RE.test(sid)) keys.push(`uuid:${sid}`);
+
+    for (const k of keys) {
+      const v = funnelLookup.get(k);
+      if (v) {
+        c.funnelStage = v.label;
+        c.funnelStageColor = v.color;
+        break;
+      }
+    }
+  }
 }
 
 /**
@@ -31,6 +83,39 @@ export async function mergeVenueContacts(
     .single();
 
   if (!venue) return [];
+
+  const [{ data: stageRows }, { data: vcFunnelRows }] = await Promise.all([
+    supabaseAdmin
+      .from('lead_pipeline_stages')
+      .select('id, name, color')
+      .eq('venue_id', venueId),
+    supabaseAdmin
+      .from('venue_customers')
+      .select('id, customer_email, ghl_contact_id, lunarpay_customer_id, stage_id, pipeline_stage')
+      .eq('venue_id', venueId),
+  ]);
+
+  const stageById = new Map<string, { name: string; color: string }>();
+  for (const s of stageRows ?? []) {
+    stageById.set(s.id as string, { name: s.name as string, color: (s.color as string) || '#6b7280' });
+  }
+
+  const funnelLookup = new Map<string, { label: string; color: string | null }>();
+  for (const vc of vcFunnelRows ?? []) {
+    const { label, color } = funnelLabelFromVenueCustomer(
+      vc.stage_id as string | null | undefined,
+      vc.pipeline_stage as string | null | undefined,
+      stageById,
+    );
+    const payload = { label, color };
+    const em = ((vc.customer_email as string) || '').toLowerCase().trim();
+    if (em) funnelLookup.set(`email:${em}`, payload);
+    const ghlId = vc.ghl_contact_id as string | null | undefined;
+    if (ghlId) funnelLookup.set(`ghl:${ghlId}`, payload);
+    const lpId = vc.lunarpay_customer_id;
+    if (lpId != null && String(lpId).trim() !== '') funnelLookup.set(`lp:${String(lpId)}`, payload);
+    funnelLookup.set(`uuid:${vc.id as string}`, payload);
+  }
 
   let ghlToken = venue.ghl_access_token;
   if (venue.ghl_connected && venue.ghl_refresh_token) {
@@ -137,6 +222,8 @@ export async function mergeVenueContacts(
     console.error('[mergeVenueContacts] venue_customers fetch error:', err);
   }
 
+  attachFunnelMetadata(merged, funnelLookup);
+
   const filtered = search
     ? merged.filter((c) => {
         const q = search.toLowerCase();
@@ -149,6 +236,9 @@ export async function mergeVenueContacts(
             .includes(q) ||
           String(c.phone || '')
             .toLowerCase()
+            .includes(q) ||
+          String(c.funnelStage || '')
+            .toLowerCase()
             .includes(q)
         );
       })
@@ -156,8 +246,6 @@ export async function mergeVenueContacts(
 
   return filtered;
 }
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Resolve or create a `venue_customers` row for a merged contact so conversation threads
