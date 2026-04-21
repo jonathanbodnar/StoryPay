@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import {
+  describeGhlInboundWebhookShape,
   insertInboundGhlSms,
   isGhlInboundMessageWebhookPayload,
   parseGhlInboundSmsPayload,
@@ -9,7 +10,15 @@ import { applySmsDndForVenueCustomer, isSmsOptOutKeyword } from '@/lib/sms-compl
 
 export async function POST(request: NextRequest) {
   try {
-    const payload = (await request.json()) as Record<string, unknown>;
+    const raw = await request.text();
+    let payload: Record<string, unknown>;
+    try {
+      payload = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      console.error('[ghl webhook] invalid JSON body, len=', raw.length);
+      return NextResponse.json({ received: true });
+    }
+
     const eventType = payload.type || payload.event;
 
     console.log('GHL webhook received:', eventType, JSON.stringify(payload).slice(0, 500));
@@ -17,7 +26,8 @@ export async function POST(request: NextRequest) {
     const inboundSms = parseGhlInboundSmsPayload(payload);
     if (isGhlInboundMessageWebhookPayload(payload) && !inboundSms) {
       console.warn(
-        '[ghl webhook] InboundMessage received but SMS not ingested (channel, direction, ids, or empty body)'
+        '[ghl webhook] InboundMessage received but SMS not ingested — shape:',
+        describeGhlInboundWebhookShape(payload)
       );
     }
     if (inboundSms) {
@@ -59,13 +69,18 @@ export async function POST(request: NextRequest) {
         break;
 
       case 'AppInstall': {
-        const { locationId, access_token, refresh_token } = payload;
+        const data = payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)
+          ? (payload.data as Record<string, unknown>)
+          : null;
+        const locationId = (payload.locationId ?? data?.locationId) as string | undefined;
+        const access_token = (payload.access_token ?? data?.access_token) as string | undefined;
+        const refresh_token = (payload.refresh_token ?? data?.refresh_token) as string | undefined;
         if (locationId && access_token) {
           await supabaseAdmin
             .from('venues')
             .update({
               ghl_access_token: access_token,
-              ghl_refresh_token: refresh_token,
+              ghl_refresh_token: refresh_token ?? null,
               ghl_location_id: locationId,
               ghl_location_token: access_token,
               ghl_connected: true,
@@ -76,7 +91,10 @@ export async function POST(request: NextRequest) {
       }
 
       case 'AppUninstall': {
-        const { locationId: uninstallLocId } = payload;
+        const data = payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)
+          ? (payload.data as Record<string, unknown>)
+          : null;
+        const uninstallLocId = (payload.locationId ?? data?.locationId) as string | undefined;
         if (uninstallLocId) {
           await supabaseAdmin
             .from('venues')

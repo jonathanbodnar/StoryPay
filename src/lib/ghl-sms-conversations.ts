@@ -20,26 +20,128 @@ function parseJsonObject(value: unknown): Record<string, unknown> | null {
   return null;
 }
 
+function pickStr(obj: Record<string, unknown>, keys: string[]): string {
+  if (!obj || typeof obj !== 'object') return '';
+  for (const key of keys) {
+    const lower = key.toLowerCase();
+    for (const [k, v] of Object.entries(obj)) {
+      if (k.toLowerCase() !== lower) continue;
+      if (v == null) continue;
+      const s = String(v).trim();
+      if (s) return s;
+    }
+  }
+  return '';
+}
+
+function htmlToPlain(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function inboundMessageEventMatch(value: unknown): boolean {
-  const s = String(value ?? '').toLowerCase();
+  const s = String(value ?? '')
+    .toLowerCase()
+    .replace(/[\s_\-]+/g, '');
   return s === 'inboundmessage';
+}
+
+function eventNameCandidates(payload: Record<string, unknown>, dataObj: Record<string, unknown> | null) {
+  return [
+    payload.type,
+    payload.event,
+    payload.name,
+    payload.eventName,
+    payload.webhookEvent,
+    dataObj?.type,
+    dataObj?.event,
+    dataObj?.name,
+  ];
 }
 
 /** True if this webhook is a GHL / LeadConnector InboundMessage (type may be on a wrapper or nested data). */
 export function isGhlInboundMessageWebhookPayload(payload: Record<string, unknown>): boolean {
   const dataObj = parseJsonObject(payload.data);
-  const candidates = [payload.type, payload.event, dataObj?.type, dataObj?.event];
-  return candidates.some(inboundMessageEventMatch);
+  if (eventNameCandidates(payload, dataObj).some(inboundMessageEventMatch)) return true;
+
+  const pl = parseJsonObject(payload.payload);
+  if (pl && [pl.type, pl.event, pl.name].some(inboundMessageEventMatch)) return true;
+
+  if (Array.isArray(payload.data)) {
+    for (const item of payload.data) {
+      const o = parseJsonObject(item);
+      if (o && [o.type, o.event, o.name].some(inboundMessageEventMatch)) return true;
+    }
+  }
+  return false;
 }
 
 function isGhlSmsChannel(root: Record<string, unknown>): boolean {
-  const mt = String(root.messageType ?? root.channel ?? '').trim().toUpperCase();
+  const mt = pickStr(root, ['messageType', 'channel']).toUpperCase();
   if (mt === 'SMS' || mt === 'TEXT') return true;
-  const mts = String(root.messageTypeString ?? '').trim().toUpperCase();
+  const mts = pickStr(root, ['messageTypeString', 'message_type_string']).toUpperCase();
   if (mts === 'TYPE_SMS' || mts.includes('SMS')) return true;
-  const id = root.messageTypeId;
+  const id = root.messageTypeId ?? root.message_type_id;
   if (id === 2 || id === '2') return true;
+  const mtRaw = root.messageType;
+  if (mtRaw === 2 || mtRaw === '2') return true;
   return false;
+}
+
+/** Merge strategies for marketplace vs flat InboundMessage payloads. */
+function inboundSmsRootCandidates(payload: Record<string, unknown>): Record<string, unknown>[] {
+  const list: Record<string, unknown>[] = [];
+  const push = (r: Record<string, unknown>) => list.push(r);
+
+  push({ ...payload });
+  const dataObj = parseJsonObject(payload.data);
+  if (dataObj) {
+    push({ ...payload, ...dataObj });
+    for (const nestKey of ['message', 'record', 'meta', 'attributes']) {
+      const nest = parseJsonObject(dataObj[nestKey]);
+      if (nest) push({ ...payload, ...dataObj, ...nest });
+    }
+  }
+  if (Array.isArray(payload.data)) {
+    for (const item of payload.data) {
+      const o = parseJsonObject(item);
+      if (o) push({ ...payload, ...o });
+    }
+  }
+  const pl = parseJsonObject(payload.payload);
+  if (pl) push({ ...payload, ...pl });
+
+  return list;
+}
+
+/** One-line diagnostic when InboundMessage does not parse (no PII: no body text). */
+export function describeGhlInboundWebhookShape(payload: Record<string, unknown>): string {
+  const dataObj = parseJsonObject(payload.data);
+  const dataKeys =
+    dataObj && typeof dataObj === 'object' ? Object.keys(dataObj).slice(0, 24).join(',') : '';
+  const arr = Array.isArray(payload.data) ? `data[len=${payload.data.length}]` : '';
+  const locHint = pickStr(
+    { ...(dataObj || {}), ...payload },
+    ['locationId', 'location_id']
+  );
+  const locPresent = locHint ? 'loc=yes' : 'loc=no';
+  const chHint = pickStr(
+    { ...(dataObj || {}), ...payload },
+    ['messageType', 'messageTypeString', 'channel']
+  );
+  return JSON.stringify({
+    topKeys: Object.keys(payload).slice(0, 20),
+    dataKeys: dataKeys || arr,
+    type: payload.type,
+    event: payload.event,
+    name: payload.name,
+    locPresent,
+    channelHint: chHint ? String(chHint).slice(0, 24) : '',
+  });
 }
 
 /** Normalize GHL InboundMessage webhook payloads (shape varies by app version). */
@@ -52,37 +154,45 @@ export function parseGhlInboundSmsPayload(payload: Record<string, unknown>): {
 } | null {
   if (!isGhlInboundMessageWebhookPayload(payload)) return null;
 
-  const dataObj = parseJsonObject(payload.data);
-  const root: Record<string, unknown> = dataObj ? { ...payload, ...dataObj } : { ...payload };
+  for (const root of inboundSmsRootCandidates(payload)) {
+    if (!isGhlSmsChannel(root)) continue;
 
-  if (!isGhlSmsChannel(root)) return null;
+    const direction = (pickStr(root, ['direction']) || 'inbound').toLowerCase();
+    if (direction !== 'inbound') continue;
 
-  const direction = String(root.direction || 'inbound').toLowerCase();
-  if (direction !== 'inbound') return null;
+    const locationId = pickStr(root, [
+      'locationId',
+      'location_id',
+      'subAccountId',
+      'sub_account_id',
+    ]);
+    let contactId = pickStr(root, ['contactId', 'contact_id']);
+    if (!contactId) {
+      const c = parseJsonObject(root.contact);
+      if (c) contactId = pickStr(c, ['id', 'contactId', 'contact_id']);
+    }
+    let body = pickStr(root, ['body', 'messageBody', 'message', 'text', 'content']);
+    if (!body) {
+      const html = pickStr(root, ['html', 'bodyHtml', 'body_html']);
+      if (html) body = htmlToPlain(html);
+    }
+    let messageId = pickStr(root, ['messageId', 'msgId']) || null;
+    if (!messageId) {
+      const mid = root.messageId ?? root.id;
+      if (mid != null && String(mid).trim()) messageId = String(mid).trim();
+    }
 
-  const locationId = String(
-    root.locationId ?? root.location_id ?? payload.locationId ?? payload.location_id ?? ''
-  ).trim();
-  let contactId = String(root.contactId ?? root.contact_id ?? '').trim();
-  if (!contactId && root.contact && typeof root.contact === 'object') {
-    const c = root.contact as Record<string, unknown>;
-    contactId = String(c.id ?? c.contactId ?? '').trim();
+    if (!locationId || !contactId || !body) continue;
+
+    let contactName: string | null = null;
+    const c = parseJsonObject(root.contact);
+    if (c) {
+      contactName = [c.firstName, c.lastName].filter(Boolean).join(' ').trim() || null;
+    }
+
+    return { locationId, contactId, body, messageId, contactName };
   }
-  const body = String(
-    root.body ?? root.messageBody ?? root.message ?? root.text ?? root.content ?? ''
-  ).trim();
-  const messageId =
-    root.id != null ? String(root.id) : root.messageId != null ? String(root.messageId) : null;
-
-  if (!locationId || !contactId || !body) return null;
-
-  let contactName: string | null = null;
-  if (root.contact && typeof root.contact === 'object') {
-    const c = root.contact as Record<string, unknown>;
-    contactName = [c.firstName, c.lastName].filter(Boolean).join(' ').trim() || null;
-  }
-
-  return { locationId, contactId, body, messageId, contactName };
+  return null;
 }
 
 /**
