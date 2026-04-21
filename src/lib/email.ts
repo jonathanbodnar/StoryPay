@@ -15,13 +15,33 @@ function normalizeEmailList(list: string[] | undefined): string[] {
   return out;
 }
 
-/** Verified in your Resend dashboard (or use Resend’s onboarding@resend.dev for tests). */
-const DEFAULT_FROM =
-  process.env.RESEND_DEFAULT_FROM?.trim() || 'StoryPay <noreply@storypay.io>';
+/**
+ * Parse RESEND_DEFAULT_FROM: `"Name <email@domain.com>"` or bare `email@domain.com`.
+ */
+function getDefaultFrom(): { header: string; email: string } {
+  const raw = process.env.RESEND_DEFAULT_FROM?.trim() || 'StoryPay <noreply@storypay.io>';
+  const m = /^(.+?)\s*<([^>]+)>$/u.exec(raw);
+  if (m) {
+    const name = m[1].replace(/^["']|["']$/g, '').trim();
+    const email = m[2].trim();
+    return {
+      email,
+      header: name ? `${name} <${email}>` : email,
+    };
+  }
+  if (raw.includes('@')) {
+    return { header: raw, email: raw };
+  }
+  return { header: 'StoryPay <noreply@storypay.io>', email: 'noreply@storypay.io' };
+}
 
 /**
  * Send HTML email via Resend.
  * For conversations Reply-To routing, pass `replyTo` (e.g. reply+thread+sig@your-inbound-domain).
+ *
+ * If you pass `from.name` without `from.email` (e.g. venue display name, no brand_email yet),
+ * the **email address** comes from RESEND_DEFAULT_FROM so the inbox shows the venue name
+ * with your verified domain.
  */
 export async function sendEmail({
   to,
@@ -47,14 +67,20 @@ export async function sendEmail({
     return { success: false, error: 'Email not configured (RESEND_API_KEY)' };
   }
 
+  const def = getDefaultFrom();
   const fromEmail = from?.email?.trim();
   const fromName = from?.name?.trim();
-  const fromHeader =
-    fromEmail && fromName
-      ? `${fromName} <${fromEmail}>`
-      : fromEmail
-        ? fromEmail
-        : DEFAULT_FROM;
+
+  let fromHeader: string;
+  if (fromEmail && fromName) {
+    fromHeader = `${fromName} <${fromEmail}>`;
+  } else if (fromEmail) {
+    fromHeader = fromEmail;
+  } else if (fromName) {
+    fromHeader = `${fromName} <${def.email}>`;
+  } else {
+    fromHeader = def.header;
+  }
 
   const ccList = normalizeEmailList(cc);
   const bccList = normalizeEmailList(bcc);

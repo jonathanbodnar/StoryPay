@@ -24,7 +24,13 @@ RESEND_DEFAULT_FROM="StoryVenue <mail@yourdomain.com>"
 
 If unset, the app falls back to `StoryPay <noreply@storypay.io>` — that address must also be verified in **your** Resend account, or sends will fail.
 
-Per-email `from` overrides still apply (e.g. venue **brand email** in Settings) — those addresses must be verified domains/aliases in Resend.
+Per-email `from` overrides still apply (e.g. venue **brand email** in Settings → **Branding**) — those addresses must be verified in Resend. If brand email is empty, the **display name** is still your venue name and the **address** comes from `RESEND_DEFAULT_FROM`.
+
+**Still seeing `StoryPay <noreply@storypay.io>` after setting `RESEND_DEFAULT_FROM`?**
+
+- Add the variable on **Production** in your host (Vercel: Settings → Environment Variables → Production, not only Preview).
+- **Redeploy** after saving env vars.
+- Check **Settings → Branding** — if “brand email” is `noreply@storypay.io`, outbound conversation mail will use that address until you change it.
 
 ## 3. Conversations — inbound replies (optional)
 
