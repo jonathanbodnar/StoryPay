@@ -92,6 +92,11 @@ const CEREMONY_TYPES   = [
 const FILE_TYPES    = ['contract','floor_plan','vendor_agreement','insurance','photo','other'];
 const FILE_STATUSES = ['pending','received','approved'];
 
+function isPlaceholderStoryPayEmail(email: string): boolean {
+  const e = email.trim().toLowerCase();
+  return !e || !e.includes('@') || e.endsWith('@storypay.internal') || e.includes('@ghl-sms.storypay.placeholder');
+}
+
 const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
   proposal_sent:     <FileText size={13} />,
   proposal_viewed:   <ExternalLink size={13} />,
@@ -678,6 +683,23 @@ export default function CustomerDetailPage() {
     };
   }, [venueCustomer, pipelines]);
 
+  const conversationsOutreach = useMemo(() => {
+    const vid = venueCustomer?.id;
+    const em = (customer?.email || venueCustomer?.customer_email || '').trim().toLowerCase();
+    if (!vid && isPlaceholderStoryPayEmail(em)) return null;
+    const emailHref = vid
+      ? `/dashboard/conversations?customer=${encodeURIComponent(vid)}&compose=email`
+      : `/dashboard/conversations?customerFromEmail=${encodeURIComponent(em)}&compose=email`;
+    const smsHref = vid
+      ? `/dashboard/conversations?customer=${encodeURIComponent(vid)}&compose=sms`
+      : `/dashboard/conversations?customerFromEmail=${encodeURIComponent(em)}&compose=sms`;
+    return {
+      emailHref,
+      smsHref,
+      labelName: customer?.name || em || 'contact',
+    };
+  }, [venueCustomer?.id, venueCustomer?.customer_email, customer?.email, customer?.name]);
+
   async function applyPipelineAndStage(pipelineId: string, stageId: string) {
     if (!venueCustomer) return;
     setPipelineActionError('');
@@ -795,6 +817,28 @@ export default function CustomerDetailPage() {
                 {customer.phone && <span className="flex items-center gap-1 text-sm text-gray-500"><Phone size={13} />{customer.phone}</span>}
                 {venueCustomer?.referral_source && <span className="text-xs text-gray-400 border border-gray-200 rounded-full px-2 py-0.5">via {venueCustomer.referral_source}</span>}
               </div>
+              {conversationsOutreach && (
+                <div className="flex flex-wrap items-center gap-2 mt-3">
+                  <Link
+                    href={conversationsOutreach.emailHref}
+                    className="inline-flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3.5 py-2 text-sm font-semibold text-violet-900 shadow-sm transition-colors hover:border-violet-300 hover:bg-violet-100"
+                    title="Open Conversations — reuses their thread or creates one, then email composer"
+                    aria-label={`Email ${conversationsOutreach.labelName} in Conversations`}
+                  >
+                    <Mail size={17} strokeWidth={2} className="flex-shrink-0" aria-hidden />
+                    Email
+                  </Link>
+                  <Link
+                    href={conversationsOutreach.smsHref}
+                    className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2 text-sm font-semibold text-emerald-950 shadow-sm transition-colors hover:border-emerald-300 hover:bg-emerald-100"
+                    title="Open Conversations — reuses their thread or creates one, then SMS composer"
+                    aria-label={`SMS ${conversationsOutreach.labelName} in Conversations`}
+                  >
+                    <Smartphone size={17} strokeWidth={2} className="flex-shrink-0" aria-hidden />
+                    SMS
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -1000,6 +1044,29 @@ export default function CustomerDetailPage() {
               {(customer.address || customer.city) && <div className="flex items-center gap-2 text-gray-700"><MapPin size={13} className="text-gray-400 flex-shrink-0" />{[customer.address, customer.city, customer.state, customer.zip].filter(Boolean).join(', ')}</div>}
               {!customer.email && !customer.phone && <p className="text-gray-400 text-xs">No contact info</p>}
             </div>
+            {conversationsOutreach && (
+              <div className="flex flex-wrap items-center gap-2 mt-4 pt-4 border-t border-gray-100">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mr-1">Outreach</span>
+                <Link
+                  href={conversationsOutreach.emailHref}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-xs font-semibold text-violet-900 transition-colors hover:bg-violet-100"
+                  title="Email in Conversations"
+                  aria-label={`Email ${conversationsOutreach.labelName} in Conversations`}
+                >
+                  <Mail size={15} strokeWidth={2} className="flex-shrink-0" aria-hidden />
+                  Email
+                </Link>
+                <Link
+                  href={conversationsOutreach.smsHref}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-950 transition-colors hover:bg-emerald-100"
+                  title="SMS in Conversations"
+                  aria-label={`SMS ${conversationsOutreach.labelName} in Conversations`}
+                >
+                  <Smartphone size={15} strokeWidth={2} className="flex-shrink-0" aria-hidden />
+                  SMS
+                </Link>
+              </div>
+            )}
           </div>
 
           {/* Partner / Second Contact */}
