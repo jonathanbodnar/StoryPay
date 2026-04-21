@@ -85,7 +85,7 @@ export async function POST(
     venue_id: venueId,
     customer_id: customerId,
     activity_type: 'file_uploaded',
-    title: 'File shared in SMS',
+    title: 'File shared from conversations',
     description: file.name,
   });
 

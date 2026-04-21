@@ -130,12 +130,12 @@ export default function ConversationsPage() {
   const [triggerModalOpen, setTriggerModalOpen] = useState(false);
   const [triggerSearch, setTriggerSearch] = useState('');
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
-  const [smsAttaching, setSmsAttaching] = useState(false);
+  const [fileAttaching, setFileAttaching] = useState(false);
   const [dndSaving, setDndSaving] = useState(false);
   const [listActionError, setListActionError] = useState('');
   const listRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const smsFileRef = useRef<HTMLInputElement>(null);
+  const composerFileRef = useRef<HTMLInputElement>(null);
   const deepLinkConsumed = useRef(false);
 
   const loadThreads = useCallback(async () => {
@@ -347,11 +347,11 @@ export default function ConversationsPage() {
     }
   }, []);
 
-  async function handleSmsAttachmentChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleComposerAttachmentChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file || !selectedId) return;
-    setSmsAttaching(true);
+    setFileAttaching(true);
     setSendError('');
     try {
       const fd = new FormData();
@@ -370,7 +370,7 @@ export default function ConversationsPage() {
         setBody((prev) => (prev.trim() ? `${prev.trim()}\n\n${line}` : line));
       }
     } finally {
-      setSmsAttaching(false);
+      setFileAttaching(false);
     }
   }
 
@@ -1200,27 +1200,26 @@ export default function ConversationsPage() {
                                 />
                               )}
                             </div>
-                            {composerTab === 'sms' && (
-                              <>
-                                <input
-                                  ref={smsFileRef}
-                                  type="file"
-                                  className="sr-only"
-                                  onChange={handleSmsAttachmentChange}
-                                />
-                                <button
-                                  type="button"
-                                  disabled={smsAttaching}
-                                  onClick={() => smsFileRef.current?.click()}
-                                  className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 disabled:opacity-50"
-                                  aria-label="Attach file"
-                                >
-                                  {smsAttaching ?
-                                    <Loader2 size={18} className="animate-spin" strokeWidth={1.75} />
-                                  : <Paperclip size={18} strokeWidth={1.75} />}
-                                </button>
-                              </>
-                            )}
+                            <>
+                              <input
+                                ref={composerFileRef}
+                                type="file"
+                                className="sr-only"
+                                onChange={handleComposerAttachmentChange}
+                              />
+                              <button
+                                type="button"
+                                disabled={fileAttaching}
+                                onClick={() => composerFileRef.current?.click()}
+                                className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 disabled:opacity-50"
+                                aria-label="Attach file"
+                                title="Upload a file (link is inserted into the message)"
+                              >
+                                {fileAttaching ?
+                                  <Loader2 size={18} className="animate-spin" strokeWidth={1.75} />
+                                : <Paperclip size={18} strokeWidth={1.75} />}
+                              </button>
+                            </>
                             <button
                               type="button"
                               onClick={() => {
