@@ -32,6 +32,63 @@ function appOrigin(): string {
   return (process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io').replace(/\/$/, '');
 }
 
+type ResolvedOutboundTrigger = {
+  short_code: string;
+  name: string | null;
+  href: string;
+  displayText: string;
+};
+
+async function resolveTriggerForOutbound(
+  venueId: string,
+  triggerLinkId: string,
+  leadEmailForTracking: string | null,
+): Promise<{ ok: true; trigger: ResolvedOutboundTrigger } | { ok: false; response: NextResponse }> {
+  const { data: tl, error: tlErr } = await supabaseAdmin
+    .from('trigger_links')
+    .select('id, short_code, name')
+    .eq('id', triggerLinkId)
+    .eq('venue_id', venueId)
+    .maybeSingle();
+  if (tlErr || !tl) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: 'Invalid trigger link for this venue.' }, { status: 400 }),
+    };
+  }
+  const shortCode = String(tl.short_code);
+  const em = leadEmailForTracking?.trim() || null;
+  let token: string | undefined;
+  if (em) {
+    const { data: leadRow } = await supabaseAdmin
+      .from('leads')
+      .select('track_token')
+      .eq('venue_id', venueId)
+      .ilike('email', em)
+      .maybeSingle();
+    token = (leadRow as { track_token?: string } | null)?.track_token?.trim().toLowerCase();
+  }
+  const base = appOrigin();
+  const q = token && /^[0-9a-f]{32}$/i.test(token) ? `?t=${encodeURIComponent(token)}` : '';
+  const href = `${base}/t/${encodeURIComponent(shortCode)}${q}`;
+  let displayHost: string;
+  try {
+    displayHost = new URL(base).hostname;
+  } catch {
+    displayHost = 'storypay.io';
+  }
+  const displayText = `${displayHost}/t/${shortCode}`;
+  return {
+    ok: true,
+    trigger: {
+      short_code: shortCode,
+      name: (tl.name as string) || null,
+      href,
+      displayText,
+    },
+  };
+}
+
 async function assertThreadVenue(threadId: string, venueId: string) {
   const { data, error } = await supabaseAdmin
     .from('conversation_threads')
@@ -175,8 +232,14 @@ export async function POST(
   if (visibility !== 'internal' && visibility !== 'external') {
     return NextResponse.json({ error: 'visibility must be internal or external' }, { status: 400 });
   }
-  if (!rawBody) {
+  if (visibility === 'internal' && !rawBody) {
     return NextResponse.json({ error: 'body is required' }, { status: 400 });
+  }
+  if (visibility === 'external' && !rawBody && !triggerLinkId) {
+    return NextResponse.json(
+      { error: 'Add a message or choose a trigger link to send.' },
+      { status: 400 },
+    );
   }
 
   if (visibility === 'internal' && mentionedIds.length > 0) {
@@ -212,14 +275,14 @@ export async function POST(
       ? externalChannelOverride
       : threadReplyChannel;
 
-  if (
-    triggerLinkId &&
-    (visibility !== 'external' || replyChannel !== 'email')
-  ) {
+  if (triggerLinkId && visibility !== 'external') {
     return NextResponse.json(
-      { error: 'Trigger links can only be attached to outbound email.' },
+      { error: 'Trigger links can only be attached to client-visible messages.' },
       { status: 400 },
     );
+  }
+  if (triggerLinkId && replyChannel !== 'email' && replyChannel !== 'sms') {
+    return NextResponse.json({ error: 'Invalid channel for trigger link.' }, { status: 400 });
   }
 
   const venueCustomerId = (gate.thread as { venue_customer_id: string }).venue_customer_id;
@@ -316,7 +379,15 @@ export async function POST(
         if (!contactId) {
           throw new Error('Could not resolve Go High Level contact for this phone number.');
         }
-        await sendSms(ghlToken, vrow.ghl_location_id as string, contactId, rawBody);
+        let smsBody = rawBody;
+        if (triggerLinkId) {
+          const resolved = await resolveTriggerForOutbound(venueId, triggerLinkId, email || null);
+          if (!resolved.ok) return resolved.response;
+          const { trigger: t } = resolved;
+          const linkLine = `${t.displayText}\n${t.href}`;
+          smsBody = rawBody.trim() ? `${rawBody.trim()}\n\n${linkLine}` : linkLine;
+        }
+        await sendSms(ghlToken, vrow.ghl_location_id as string, contactId, smsBody);
         external_email_sent = true;
       } catch (e) {
         send_error = e instanceof Error ? e.message : 'SMS send failed';
@@ -344,44 +415,11 @@ export async function POST(
       const venueName = (venue as { name?: string })?.name ?? 'Venue';
       const brandEmail = (venue as { brand_email?: string | null })?.brand_email?.trim();
 
-      let resolvedTrigger:
-        | { short_code: string; name: string | null; href: string; displayText: string }
-        | null = null;
+      let resolvedTrigger: ResolvedOutboundTrigger | null = null;
       if (triggerLinkId) {
-        const { data: tl, error: tlErr } = await supabaseAdmin
-          .from('trigger_links')
-          .select('id, short_code, name')
-          .eq('id', triggerLinkId)
-          .eq('venue_id', venueId)
-          .maybeSingle();
-        if (tlErr || !tl) {
-          return NextResponse.json({ error: 'Invalid trigger link for this venue.' }, { status: 400 });
-        }
-        const shortCode = String(tl.short_code);
-        const { data: leadRow } = await supabaseAdmin
-          .from('leads')
-          .select('track_token')
-          .eq('venue_id', venueId)
-          .ilike('email', to)
-          .maybeSingle();
-        const token = (leadRow as { track_token?: string } | null)?.track_token?.trim().toLowerCase();
-        const base = appOrigin();
-        const q =
-          token && /^[0-9a-f]{32}$/i.test(token) ? `?t=${encodeURIComponent(token)}` : '';
-        const href = `${base}/t/${encodeURIComponent(shortCode)}${q}`;
-        let displayHost: string;
-        try {
-          displayHost = new URL(base).hostname;
-        } catch {
-          displayHost = 'storypay.io';
-        }
-        const displayText = `${displayHost}/t/${shortCode}`;
-        resolvedTrigger = {
-          short_code: shortCode,
-          name: (tl.name as string) || null,
-          href,
-          displayText,
-        };
+        const resolved = await resolveTriggerForOutbound(venueId, triggerLinkId, to);
+        if (!resolved.ok) return resolved.response;
+        resolvedTrigger = resolved.trigger;
       }
 
       const triggerBlock = resolvedTrigger
@@ -436,7 +474,9 @@ ${triggerBlock}
     visibility === 'external' && replyChannel === 'sms' ? 'sms' : 'email';
 
   const insertTriggerId =
-    visibility === 'external' && messageChannel === 'email' && triggerLinkId ? triggerLinkId : null;
+    visibility === 'external' && (messageChannel === 'email' || messageChannel === 'sms') && triggerLinkId
+      ? triggerLinkId
+      : null;
 
   const { data: row, error: insErr } = await supabaseAdmin
     .from('conversation_messages')

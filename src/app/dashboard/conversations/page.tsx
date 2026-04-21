@@ -18,11 +18,14 @@ import {
   Smartphone,
   Star,
   Pin,
-  Link2,
   Info,
   Phone,
+  Smile,
+  Paperclip,
+  Zap,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
+import { EmojiPickerPopover } from '@/components/EmojiPickerPopover';
 
 interface ThreadRow {
   thread_id: string;
@@ -124,9 +127,15 @@ export default function ConversationsPage() {
   const [emailBcc, setEmailBcc] = useState('');
   const [triggerLinkOptions, setTriggerLinkOptions] = useState<TriggerLinkOpt[]>([]);
   const [selectedTriggerLinkId, setSelectedTriggerLinkId] = useState<string>('');
+  const [triggerModalOpen, setTriggerModalOpen] = useState(false);
+  const [triggerSearch, setTriggerSearch] = useState('');
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  const [smsAttaching, setSmsAttaching] = useState(false);
   const [dndSaving, setDndSaving] = useState(false);
+  const [listActionError, setListActionError] = useState('');
   const listRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const smsFileRef = useRef<HTMLInputElement>(null);
   const deepLinkConsumed = useRef(false);
 
   const loadThreads = useCallback(async () => {
@@ -137,10 +146,11 @@ export default function ConversationsPage() {
       if (threadListFilter === 'starred') params.set('starred', '1');
       if (threadListFilter === 'pinned') params.set('pinned', '1');
       const q = params.toString() ? `?${params.toString()}` : '';
-      const res = await fetch(`/api/conversations/threads${q}`);
+      const res = await fetch(`/api/conversations/threads${q}`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         setThreads(Array.isArray(data) ? data : []);
+        setListActionError('');
       }
     } finally {
       setLoadingList(false);
@@ -241,14 +251,21 @@ export default function ConversationsPage() {
     setSendError('');
     try {
       const [tRes, mRes] = await Promise.all([
-        fetch(`/api/conversations/threads/${id}`),
-        fetch(`/api/conversations/threads/${id}/messages`),
+        fetch(`/api/conversations/threads/${id}`, { cache: 'no-store' }),
+        fetch(`/api/conversations/threads/${id}/messages`, { cache: 'no-store' }),
       ]);
       if (tRes.ok) {
-        const raw = (await tRes.json()) as ThreadDetail & { venue_customers?: ThreadDetail['venue_customers'] | unknown[] };
+        const raw = (await tRes.json()) as ThreadDetail & {
+          venue_customers?: ThreadDetail['venue_customers'] | unknown[];
+          contact_stage?: ThreadDetail['contact_stage'];
+        };
         const vc = raw.venue_customers;
         const venue_customers = Array.isArray(vc) ? (vc[0] as ThreadDetail['venue_customers']) ?? null : vc ?? null;
-        setThreadDetail({ ...raw, venue_customers });
+        setThreadDetail({
+          ...raw,
+          venue_customers,
+          contact_stage: raw.contact_stage ?? null,
+        });
       } else {
         const err = await tRes.json().catch(() => ({}));
         setThreadDetail(null);
@@ -306,6 +323,57 @@ export default function ConversationsPage() {
     ? `/dashboard/contacts/${threadDetail.venue_customer_id}`
     : null;
 
+  const selectedTriggerMeta = useMemo(
+    () => triggerLinkOptions.find((t) => t.id === selectedTriggerLinkId),
+    [triggerLinkOptions, selectedTriggerLinkId],
+  );
+
+  const filteredTriggerLinks = useMemo(() => {
+    const q = triggerSearch.trim().toLowerCase();
+    if (!q) return triggerLinkOptions;
+    return triggerLinkOptions.filter(
+      (tl) =>
+        tl.name.toLowerCase().includes(q) || tl.short_code.toLowerCase().includes(q),
+    );
+  }, [triggerLinkOptions, triggerSearch]);
+
+  const triggerPreviewBase = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    const raw = (process.env.NEXT_PUBLIC_APP_URL || window.location.origin).replace(/\/$/, '');
+    try {
+      return new URL(raw).hostname;
+    } catch {
+      return window.location.hostname;
+    }
+  }, []);
+
+  async function handleSmsAttachmentChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !selectedId) return;
+    setSmsAttaching(true);
+    setSendError('');
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`/api/conversations/threads/${selectedId}/sms-attachment`, {
+        method: 'POST',
+        body: fd,
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; url?: string; filename?: string };
+      if (!res.ok) {
+        setSendError(data.error || 'Could not attach file');
+        return;
+      }
+      if (data.url && data.filename) {
+        const line = `${data.filename}: ${data.url}`;
+        setBody((prev) => (prev.trim() ? `${prev.trim()}\n\n${line}` : line));
+      }
+    } finally {
+      setSmsAttaching(false);
+    }
+  }
+
   const threadsFiltered = useMemo(() => {
     const q = threadSearch.trim().toLowerCase();
     const base = !q
@@ -329,8 +397,12 @@ export default function ConversationsPage() {
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedId || !body.trim()) return;
+    if (!selectedId) return;
     if (composerTab !== 'team' && mentionedIds.length > 0) return;
+
+    const canSendExternal = body.trim() || !!selectedTriggerLinkId;
+    if (composerTab === 'team' && !body.trim()) return;
+    if (composerTab !== 'team' && !canSendExternal) return;
 
     setSending(true);
     setSendError('');
@@ -350,6 +422,7 @@ export default function ConversationsPage() {
       }
       if (composerTab === 'sms') {
         payload.external_channel = 'sms';
+        if (selectedTriggerLinkId) payload.trigger_link_id = selectedTriggerLinkId;
       }
 
       const res = await fetch(`/api/conversations/threads/${selectedId}/messages`, {
@@ -404,14 +477,18 @@ export default function ConversationsPage() {
   ) {
     e.stopPropagation();
     e.preventDefault();
+    setListActionError('');
     const res = await fetch(`/api/conversations/threads/${threadId}/toggle-star-pin`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ field }),
+      cache: 'no-store',
     });
-    const data = await res.json().catch(() => ({}));
+    const data = (await res.json().catch(() => ({}))) as { error?: string; hint?: string };
     if (!res.ok) {
-      console.error('[conversations] star/pin toggle:', data?.error || res.status);
+      const msg = [data.error, data.hint].filter(Boolean).join(' — ') || `Request failed (${res.status})`;
+      setListActionError(msg);
+      console.error('[conversations] star/pin toggle:', msg);
       return;
     }
     await loadThreads();
@@ -492,6 +569,11 @@ export default function ConversationsPage() {
           )}
         >
           <div className="flex flex-shrink-0 flex-wrap items-center gap-2 border-b border-gray-200 p-3">
+            {listActionError ? (
+              <p className="w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                {listActionError}
+              </p>
+            ) : null}
             {(
               [
                 { id: 'all' as const, label: 'All' },
@@ -1060,28 +1142,6 @@ export default function ConversationsPage() {
                             />
                           </div>
                         </div>
-                        <div>
-                          <label className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                            <Link2 size={12} />
-                            Trigger link (optional)
-                          </label>
-                          <select
-                            value={selectedTriggerLinkId}
-                            onChange={(e) => setSelectedTriggerLinkId(e.target.value)}
-                            className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:border-gray-500 focus:outline-none"
-                          >
-                            <option value="">None</option>
-                            {triggerLinkOptions.map((tl) => (
-                              <option key={tl.id} value={tl.id}>
-                                {tl.name} ({tl.short_code})
-                              </option>
-                            ))}
-                          </select>
-                          <p className="mt-1 text-[10px] text-gray-500">
-                            Adds a short tracked link to the email body; clicks go through your trigger link and count
-                            toward analytics.
-                          </p>
-                        </div>
                       </>
                     )}
                     <div>
@@ -1104,6 +1164,80 @@ export default function ConversationsPage() {
                         className="w-full resize-none rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
                         style={{ fontSize: 16 }}
                       />
+                      {(composerTab === 'email' || composerTab === 'sms') && (
+                        <div className="mt-2 space-y-2">
+                          {selectedTriggerMeta && (
+                            <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-950">
+                              <Zap size={14} className="shrink-0 text-amber-700" />
+                              <span className="min-w-0 flex-1 font-medium truncate">{selectedTriggerMeta.name}</span>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedTriggerLinkId('')}
+                                className="shrink-0 rounded-lg p-1 text-amber-800 hover:bg-amber-100"
+                                aria-label="Remove trigger link"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          )}
+                          <div className="relative flex flex-wrap items-center gap-0.5 border-t border-gray-100 pt-2">
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={() => setEmojiPickerOpen((o) => !o)}
+                                className={classNames(
+                                  'rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800',
+                                  emojiPickerOpen && 'bg-gray-100 text-gray-800',
+                                )}
+                                aria-label="Insert emoji"
+                              >
+                                <Smile size={18} strokeWidth={1.75} />
+                              </button>
+                              {emojiPickerOpen && (
+                                <EmojiPickerPopover
+                                  onSelect={(ch) => setBody((b) => b + ch)}
+                                  onClose={() => setEmojiPickerOpen(false)}
+                                />
+                              )}
+                            </div>
+                            {composerTab === 'sms' && (
+                              <>
+                                <input
+                                  ref={smsFileRef}
+                                  type="file"
+                                  className="sr-only"
+                                  onChange={handleSmsAttachmentChange}
+                                />
+                                <button
+                                  type="button"
+                                  disabled={smsAttaching}
+                                  onClick={() => smsFileRef.current?.click()}
+                                  className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 disabled:opacity-50"
+                                  aria-label="Attach file"
+                                >
+                                  {smsAttaching ?
+                                    <Loader2 size={18} className="animate-spin" strokeWidth={1.75} />
+                                  : <Paperclip size={18} strokeWidth={1.75} />}
+                                </button>
+                              </>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTriggerSearch('');
+                                setTriggerModalOpen(true);
+                              }}
+                              className={classNames(
+                                'rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800',
+                                selectedTriggerLinkId && 'bg-sky-50 text-sky-700',
+                              )}
+                              aria-label="Trigger links"
+                            >
+                              <Zap size={18} strokeWidth={1.75} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
                       {composerTab === 'sms' && (
                         <p className="mt-1 text-right text-[10px] tabular-nums text-gray-400">
                           Chars: {body.length}
@@ -1117,7 +1251,10 @@ export default function ConversationsPage() {
                     <div className="flex justify-end">
                       <button
                         type="submit"
-                        disabled={sending || !body.trim()}
+                        disabled={
+                          sending ||
+                          (composerTab === 'team' ? !body.trim() : !body.trim() && !selectedTriggerLinkId)
+                        }
                         className="inline-flex items-center gap-2 rounded-xl bg-[#171717] px-5 py-2.5 text-sm font-medium text-white transition-colors disabled:opacity-50"
                       >
                         {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send size={16} />}
@@ -1149,6 +1286,79 @@ export default function ConversationsPage() {
           )}
         </section>
       </div>
+
+      {triggerModalOpen && (
+        <div
+          className="fixed inset-0 z-[55] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="trigger-links-title"
+          onClick={() => setTriggerModalOpen(false)}
+        >
+          <div
+            className="flex max-h-[min(480px,85vh)] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-gray-200 bg-white shadow-xl sm:rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+              <p id="trigger-links-title" className="font-semibold text-gray-900">
+                Trigger links
+              </p>
+              <button
+                type="button"
+                onClick={() => setTriggerModalOpen(false)}
+                className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"
+                aria-label="Close"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="border-b border-gray-100 px-3 py-2">
+              <div className="relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  value={triggerSearch}
+                  onChange={(e) => setTriggerSearch(e.target.value)}
+                  placeholder="Search trigger links"
+                  className="w-full rounded-xl border border-gray-200 py-2.5 pl-9 pr-3 text-sm"
+                  style={{ fontSize: 16 }}
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {filteredTriggerLinks.length === 0 ? (
+                <p className="px-4 py-8 text-center text-sm text-gray-500">
+                  {triggerLinkOptions.length === 0 ?
+                    'No trigger links yet. Add them in Marketing → Trigger links.'
+                  : 'No matches.'}
+                </p>
+              ) : (
+                <ul className="divide-y divide-gray-100">
+                  {filteredTriggerLinks.map((tl) => (
+                    <li key={tl.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedTriggerLinkId(tl.id);
+                          setTriggerModalOpen(false);
+                        }}
+                        className="flex w-full flex-col items-start gap-0.5 px-4 py-3 text-left hover:bg-gray-50"
+                      >
+                        <span className="font-semibold text-gray-900">{tl.name}</span>
+                        <span className="break-all font-mono text-[11px] text-gray-500">
+                          {triggerPreviewBase ?
+                            `${triggerPreviewBase}/t/${tl.short_code}`
+                          : `/t/${tl.short_code}`}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {showNew && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">

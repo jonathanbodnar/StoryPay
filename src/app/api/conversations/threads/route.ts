@@ -4,6 +4,10 @@ import { getVenueId } from '@/lib/auth-helpers';
 import { getSessionUser } from '@/lib/session';
 import { conversationReaderRef } from '@/lib/conversation-reader';
 import { conversationHttpError } from '@/lib/conversation-db-errors';
+import {
+  isMissingThreadStarPinColumnsError,
+  starPinFlagsFromMessages,
+} from '@/lib/conversation-thread-flags';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -87,8 +91,21 @@ async function threadIdsWithThreadColumn(
     .select('id')
     .eq('venue_id', venueId)
     .eq(col, true);
-  if (error) return new Set();
-  return new Set((data ?? []).map((r) => r.id as string));
+  if (!error) return new Set((data ?? []).map((r) => r.id as string));
+  if (!isMissingThreadStarPinColumnsError(error)) return new Set();
+
+  const { data: venueThreads } = await supabaseAdmin
+    .from('conversation_threads')
+    .select('id')
+    .eq('venue_id', venueId);
+  const tids = (venueThreads ?? []).map((t) => t.id as string);
+  if (tids.length === 0) return new Set();
+  const { data: msgs } = await supabaseAdmin
+    .from('conversation_messages')
+    .select('thread_id')
+    .eq(col, true)
+    .in('thread_id', tids);
+  return new Set((msgs ?? []).map((m) => m.thread_id as string));
 }
 
 async function enrichThreadsWithStarPinFlags<T extends { thread_id: string }>(
@@ -102,6 +119,13 @@ async function enrichThreadsWithStarPinFlags<T extends { thread_id: string }>(
     .select('id, is_starred, is_pinned')
     .eq('venue_id', venueId)
     .in('id', ids);
+  if (error && isMissingThreadStarPinColumnsError(error)) {
+    const msgMap = await starPinFlagsFromMessages(ids);
+    return rows.map((r) => {
+      const f = msgMap.get(r.thread_id) ?? { has_starred: false, has_pinned: false };
+      return { ...r, has_starred: f.has_starred, has_pinned: f.has_pinned };
+    });
+  }
   if (error) {
     console.warn('[conversations/threads] enrich star/pin:', error.message);
   }
