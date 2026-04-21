@@ -19,8 +19,6 @@ import {
   Star,
   Pin,
   Link2,
-  ClipboardList,
-  ListTodo,
   Info,
   Phone,
 } from 'lucide-react';
@@ -39,6 +37,8 @@ interface ThreadRow {
   contact_phone?: string | null;
   external_reply_channel?: string;
   venue_customer_id: string;
+  has_starred?: boolean;
+  has_pinned?: boolean;
 }
 
 interface ThreadDetail {
@@ -81,21 +81,6 @@ interface Msg {
   trigger_link_id?: string | null;
 }
 
-interface CrmNote {
-  id: string;
-  content: string;
-  author_name: string | null;
-  created_at: string;
-}
-
-interface CrmTask {
-  id: string;
-  title: string;
-  due_date: string | null;
-  completed_at: string | null;
-  created_at: string;
-}
-
 interface TriggerLinkOpt {
   id: string;
   name: string;
@@ -110,12 +95,12 @@ interface TeamMember {
 }
 
 type ComposerTab = 'team' | 'email' | 'sms';
-type MessageFilter = 'all' | 'starred' | 'pinned';
+type ThreadListFilter = 'all' | 'unread' | 'starred' | 'pinned';
 
 export default function ConversationsPage() {
   const [threads, setThreads] = useState<ThreadRow[]>([]);
   const [loadingList, setLoadingList] = useState(true);
-  const [filterUnread, setFilterUnread] = useState(false);
+  const [threadListFilter, setThreadListFilter] = useState<ThreadListFilter>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [threadDetail, setThreadDetail] = useState<ThreadDetail | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -134,20 +119,11 @@ export default function ConversationsPage() {
   const [creatingThread, setCreatingThread] = useState(false);
   const [newConversationError, setNewConversationError] = useState('');
   const [threadSearch, setThreadSearch] = useState('');
-  const [messageFilter, setMessageFilter] = useState<MessageFilter>('all');
   const [emailCc, setEmailCc] = useState('');
   const [emailBcc, setEmailBcc] = useState('');
   const [triggerLinkOptions, setTriggerLinkOptions] = useState<TriggerLinkOpt[]>([]);
   const [selectedTriggerLinkId, setSelectedTriggerLinkId] = useState<string>('');
   const [dndSaving, setDndSaving] = useState(false);
-  const [crmNotes, setCrmNotes] = useState<CrmNote[]>([]);
-  const [crmTasks, setCrmTasks] = useState<CrmTask[]>([]);
-  const [newCrmNote, setNewCrmNote] = useState('');
-  const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [newTaskDue, setNewTaskDue] = useState('');
-  const [savingCrmNote, setSavingCrmNote] = useState(false);
-  const [savingCrmTask, setSavingCrmTask] = useState(false);
-  const [crmPanelOpen, setCrmPanelOpen] = useState(true);
   const listRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const deepLinkConsumed = useRef(false);
@@ -155,7 +131,11 @@ export default function ConversationsPage() {
   const loadThreads = useCallback(async () => {
     setLoadingList(true);
     try {
-      const q = filterUnread ? '?unread=1' : '';
+      const params = new URLSearchParams();
+      if (threadListFilter === 'unread') params.set('unread', '1');
+      if (threadListFilter === 'starred') params.set('starred', '1');
+      if (threadListFilter === 'pinned') params.set('pinned', '1');
+      const q = params.toString() ? `?${params.toString()}` : '';
       const res = await fetch(`/api/conversations/threads${q}`);
       if (res.ok) {
         const data = await res.json();
@@ -167,7 +147,7 @@ export default function ConversationsPage() {
         window.dispatchEvent(new Event('storypay:conversations-unread'));
       }
     }
-  }, [filterUnread]);
+  }, [threadListFilter]);
 
   useEffect(() => {
     loadThreads();
@@ -255,36 +235,6 @@ export default function ConversationsPage() {
       .catch(() => {});
   }, []);
 
-  const reloadCrmData = useCallback(async (customerId: string) => {
-    try {
-      const [nRes, tRes] = await Promise.all([
-        fetch(`/api/venue-customers/${customerId}/notes`),
-        fetch(`/api/venue-customers/${customerId}/tasks`),
-      ]);
-      if (nRes.ok) {
-        const n = await nRes.json();
-        if (Array.isArray(n)) setCrmNotes(n);
-      }
-      if (tRes.ok) {
-        const t = await tRes.json();
-        if (Array.isArray(t)) setCrmTasks(t);
-      }
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  const customerIdForCrm = threadDetail?.venue_customers?.id ?? null;
-
-  useEffect(() => {
-    if (!customerIdForCrm) {
-      setCrmNotes([]);
-      setCrmTasks([]);
-      return;
-    }
-    void reloadCrmData(customerIdForCrm);
-  }, [customerIdForCrm, reloadCrmData]);
-
   const reloadMessages = useCallback(async (id: string) => {
     setLoadingThread(true);
     setSendError('');
@@ -337,7 +287,6 @@ export default function ConversationsPage() {
     setEmailCc('');
     setEmailBcc('');
     setSelectedTriggerLinkId('');
-    setMessageFilter('all');
   }, [selectedId]);
 
   const contactLabel = useMemo(() => {
@@ -369,12 +318,6 @@ export default function ConversationsPage() {
       return name.includes(q) || em.includes(q) || ph.includes(q);
     });
   }, [threads, threadSearch]);
-
-  const visibleMessages = useMemo(() => {
-    if (messageFilter === 'starred') return messages.filter((m) => m.is_starred);
-    if (messageFilter === 'pinned') return messages.filter((m) => m.is_pinned);
-    return messages;
-  }, [messages, messageFilter]);
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
@@ -446,70 +389,21 @@ export default function ConversationsPage() {
     }
   }
 
-  async function toggleMessageMeta(m: Msg, field: 'is_starred' | 'is_pinned') {
-    if (!selectedId) return;
-    const next = !m[field];
-    const res = await fetch(`/api/conversations/threads/${selectedId}/messages/${m.id}`, {
-      method: 'PATCH',
+  async function toggleThreadStarPin(
+    threadId: string,
+    field: 'is_starred' | 'is_pinned',
+    e: React.MouseEvent,
+  ) {
+    e.stopPropagation();
+    e.preventDefault();
+    const res = await fetch(`/api/conversations/threads/${threadId}/toggle-star-pin`, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ [field]: next }),
+      body: JSON.stringify({ field }),
     });
     if (!res.ok) return;
-    const row = (await res.json()) as Msg;
-    setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, ...row } : x)));
-  }
-
-  async function submitCrmNote() {
-    const cid = threadDetail?.venue_customers?.id;
-    if (!cid || !newCrmNote.trim()) return;
-    setSavingCrmNote(true);
-    try {
-      const res = await fetch(`/api/venue-customers/${cid}/notes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: newCrmNote.trim() }),
-      });
-      if (!res.ok) return;
-      setNewCrmNote('');
-      await reloadCrmData(cid);
-    } finally {
-      setSavingCrmNote(false);
-    }
-  }
-
-  async function submitCrmTask() {
-    const cid = threadDetail?.venue_customers?.id;
-    if (!cid || !newTaskTitle.trim()) return;
-    setSavingCrmTask(true);
-    try {
-      const res = await fetch(`/api/venue-customers/${cid}/tasks`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: newTaskTitle.trim(),
-          due_date: newTaskDue.trim() || null,
-        }),
-      });
-      if (!res.ok) return;
-      setNewTaskTitle('');
-      setNewTaskDue('');
-      await reloadCrmData(cid);
-    } finally {
-      setSavingCrmTask(false);
-    }
-  }
-
-  async function toggleTaskDone(task: CrmTask) {
-    const cid = threadDetail?.venue_customers?.id;
-    if (!cid) return;
-    const done = !!task.completed_at;
-    const res = await fetch(`/api/venue-customers/${cid}/tasks/${task.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ completed_at: done ? null : new Date().toISOString() }),
-    });
-    if (!res.ok) return;
-    await reloadCrmData(cid);
+    await loadThreads();
+    if (selectedId === threadId) await reloadMessages(threadId);
   }
 
   useEffect(() => {
@@ -585,27 +479,29 @@ export default function ConversationsPage() {
             mobileShowThread ? 'hidden md:flex' : 'flex',
           )}
         >
-          <div className="flex flex-shrink-0 items-center gap-2 border-b border-gray-200 p-3">
-            <button
-              type="button"
-              onClick={() => setFilterUnread(false)}
-              className={classNames(
-                'rounded-full px-3 py-1.5 text-xs font-semibold transition-colors',
-                !filterUnread ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 border border-gray-200',
-              )}
-            >
-              All
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterUnread(true)}
-              className={classNames(
-                'rounded-full px-3 py-1.5 text-xs font-semibold transition-colors',
-                filterUnread ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 border border-gray-200',
-              )}
-            >
-              Unread
-            </button>
+          <div className="flex flex-shrink-0 flex-wrap items-center gap-2 border-b border-gray-200 p-3">
+            {(
+              [
+                { id: 'all' as const, label: 'All' },
+                { id: 'unread' as const, label: 'Unread' },
+                { id: 'starred' as const, label: 'Starred' },
+                { id: 'pinned' as const, label: 'Pinned' },
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setThreadListFilter(tab.id)}
+                className={classNames(
+                  'rounded-full px-3 py-1.5 text-xs font-semibold transition-colors',
+                  threadListFilter === tab.id
+                    ? 'bg-gray-900 text-white'
+                    : 'bg-white text-gray-600 border border-gray-200',
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
           <div className="flex-shrink-0 border-b border-gray-200 p-2">
             <div className="relative">
@@ -626,7 +522,13 @@ export default function ConversationsPage() {
               </div>
             ) : threads.length === 0 ? (
               <p className="px-4 py-10 text-center text-sm text-gray-500">
-                No conversations yet. Start one with a contact.
+                {threadListFilter === 'starred'
+                  ? 'No starred conversations. Star a thread from the list using the star icon.'
+                  : threadListFilter === 'pinned'
+                    ? 'No pinned conversations. Pin a thread from the list using the pin icon.'
+                    : threadListFilter === 'unread'
+                      ? 'No unread conversations.'
+                      : 'No conversations yet. Start one with a contact.'}
               </p>
             ) : threadsFiltered.length === 0 ? (
               <p className="px-4 py-10 text-center text-sm text-gray-500">
@@ -654,20 +556,41 @@ export default function ConversationsPage() {
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className={classNames('truncate text-sm font-semibold', unread ? 'text-gray-900' : 'text-gray-700')}>
+                      <span className={classNames('min-w-0 truncate text-sm font-semibold', unread ? 'text-gray-900' : 'text-gray-700')}>
                         {name}
                       </span>
-                      {unread ? (
-                        <span className="flex shrink-0 items-center gap-1">
-                          {unreadN > 1 ? (
-                            <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white tabular-nums">
-                              {unreadN > 99 ? '99+' : unreadN}
-                            </span>
-                          ) : (
-                            <span className="h-2 w-2 rounded-full bg-red-500" />
-                          )}
-                        </span>
-                      ) : null}
+                      <span className="flex shrink-0 items-center gap-0.5">
+                        <button
+                          type="button"
+                          title={t.has_starred ? 'Remove star' : 'Star thread'}
+                          onClick={(e) => void toggleThreadStarPin(t.thread_id, 'is_starred', e)}
+                          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-amber-600"
+                        >
+                          <Star
+                            size={15}
+                            className={t.has_starred ? 'fill-amber-400 text-amber-500' : ''}
+                          />
+                        </button>
+                        <button
+                          type="button"
+                          title={t.has_pinned ? 'Unpin' : 'Pin thread'}
+                          onClick={(e) => void toggleThreadStarPin(t.thread_id, 'is_pinned', e)}
+                          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-sky-700"
+                        >
+                          <Pin size={15} className={t.has_pinned ? 'text-sky-600' : ''} />
+                        </button>
+                        {unread ? (
+                          <span className="flex items-center gap-1 pl-0.5">
+                            {unreadN > 1 ? (
+                              <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white tabular-nums">
+                                {unreadN > 99 ? '99+' : unreadN}
+                              </span>
+                            ) : (
+                              <span className="h-2 w-2 rounded-full bg-red-500" />
+                            )}
+                          </span>
+                        ) : null}
+                      </span>
                     </div>
                     <p className="truncate text-xs text-gray-500">
                       {t.last_message_preview || t.subject || 'No messages'}
@@ -856,33 +779,7 @@ export default function ConversationsPage() {
                   <p className="py-12 text-center text-sm text-gray-500">No messages yet. Say hello below.</p>
                 ) : (
                   <div className="mx-auto flex max-w-xl flex-col gap-3">
-                    <div className="flex flex-wrap gap-2">
-                      {(
-                        [
-                          { id: 'all' as const, label: 'All messages' },
-                          { id: 'starred' as const, label: 'Starred' },
-                          { id: 'pinned' as const, label: 'Pinned' },
-                        ] as const
-                      ).map((f) => (
-                        <button
-                          key={f.id}
-                          type="button"
-                          onClick={() => setMessageFilter(f.id)}
-                          className={classNames(
-                            'rounded-full px-3 py-1.5 text-xs font-semibold transition-colors',
-                            messageFilter === f.id
-                              ? 'bg-gray-900 text-white'
-                              : 'border border-gray-200 bg-white text-gray-600 hover:border-gray-300',
-                          )}
-                        >
-                          {f.label}
-                        </button>
-                      ))}
-                    </div>
-                    {visibleMessages.length === 0 ? (
-                      <p className="py-8 text-center text-sm text-gray-500">No messages match this filter.</p>
-                    ) : null}
-                    {visibleMessages.map((m) => {
+                    {messages.map((m) => {
                       const isInternal = m.visibility === 'internal';
                       const fromContact = m.sender_kind === 'contact';
                       const fromUs = m.sender_kind === 'owner' || m.sender_kind === 'team';
@@ -977,25 +874,6 @@ export default function ConversationsPage() {
                                 {m.channel === 'sms' ? 'SMS not sent' : 'Email not sent'}: {m.send_error}
                               </span>
                             )}
-                            <button
-                              type="button"
-                              title={m.is_starred ? 'Unstar' : 'Star'}
-                              onClick={() => void toggleMessageMeta(m, 'is_starred')}
-                              className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-amber-600"
-                            >
-                              <Star
-                                size={14}
-                                className={m.is_starred ? 'fill-amber-400 text-amber-500' : ''}
-                              />
-                            </button>
-                            <button
-                              type="button"
-                              title={m.is_pinned ? 'Unpin' : 'Pin'}
-                              onClick={() => void toggleMessageMeta(m, 'is_pinned')}
-                              className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-                            >
-                              <Pin size={14} className={m.is_pinned ? 'text-sky-600' : ''} />
-                            </button>
                           </div>
                         </div>
                       );
@@ -1003,132 +881,6 @@ export default function ConversationsPage() {
                     <div ref={bottomRef} />
                   </div>
                 )}
-              </div>
-
-              <div className="flex-shrink-0 border-t border-gray-100 bg-white px-3 py-3 sm:px-5">
-                <div className="mx-auto max-w-xl">
-                  <button
-                    type="button"
-                    onClick={() => setCrmPanelOpen((o) => !o)}
-                    className="flex w-full items-center justify-between rounded-xl border border-gray-200 bg-gray-50/80 px-3 py-2 text-left text-sm font-semibold text-gray-900"
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <ClipboardList size={16} />
-                      Notes &amp; tasks
-                    </span>
-                    <ChevronRight
-                      size={16}
-                      className={classNames('text-gray-400 transition-transform', crmPanelOpen ? 'rotate-90' : '')}
-                    />
-                  </button>
-                  {crmPanelOpen && threadDetail.venue_customers?.id ? (
-                    <div className="mt-3 space-y-4 border-t border-gray-100 pt-3">
-                      <div>
-                        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                          Notes
-                        </p>
-                        <ul className="mb-2 max-h-40 space-y-2 overflow-y-auto text-sm text-gray-700">
-                          {crmNotes.map((n) => (
-                            <li key={n.id} className="rounded-lg border border-gray-100 bg-white px-2.5 py-2">
-                              <p className="whitespace-pre-wrap">{n.content}</p>
-                              <p className="mt-1 text-[10px] text-gray-400">
-                                {n.author_name || 'Team'} ·{' '}
-                                {new Date(n.created_at).toLocaleString(undefined, {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  hour: 'numeric',
-                                  minute: '2-digit',
-                                })}
-                              </p>
-                            </li>
-                          ))}
-                          {crmNotes.length === 0 ? (
-                            <li className="text-xs text-gray-400">No notes yet.</li>
-                          ) : null}
-                        </ul>
-                        <textarea
-                          value={newCrmNote}
-                          onChange={(e) => setNewCrmNote(e.target.value)}
-                          rows={2}
-                          placeholder="Add a note (syncs to contact profile)…"
-                          className="w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm"
-                          style={{ fontSize: 16 }}
-                        />
-                        <div className="mt-2 flex justify-end">
-                          <button
-                            type="button"
-                            disabled={savingCrmNote || !newCrmNote.trim()}
-                            onClick={() => void submitCrmNote()}
-                            className="rounded-xl bg-[#171717] px-4 py-2 text-xs font-medium text-white disabled:opacity-50"
-                          >
-                            {savingCrmNote ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save note'}
-                          </button>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                          <ListTodo size={12} /> Tasks
-                        </p>
-                        <ul className="mb-2 max-h-40 space-y-2 overflow-y-auto text-sm">
-                          {crmTasks.map((tk) => (
-                            <li
-                              key={tk.id}
-                              className="flex items-start gap-2 rounded-lg border border-gray-100 bg-white px-2.5 py-2"
-                            >
-                              <input
-                                type="checkbox"
-                                className="mt-1 h-4 w-4 rounded border-gray-300"
-                                checked={!!tk.completed_at}
-                                onChange={() => void toggleTaskDone(tk)}
-                              />
-                              <div className="min-w-0 flex-1">
-                                <p
-                                  className={classNames(
-                                    tk.completed_at ? 'text-gray-400 line-through' : 'text-gray-900',
-                                  )}
-                                >
-                                  {tk.title}
-                                </p>
-                                {tk.due_date ? (
-                                  <p className="text-[10px] text-gray-400">Due {tk.due_date}</p>
-                                ) : null}
-                              </div>
-                            </li>
-                          ))}
-                          {crmTasks.length === 0 ? (
-                            <li className="text-xs text-gray-400">No tasks yet.</li>
-                          ) : null}
-                        </ul>
-                        <div className="flex flex-col gap-2 sm:flex-row">
-                          <input
-                            type="text"
-                            value={newTaskTitle}
-                            onChange={(e) => setNewTaskTitle(e.target.value)}
-                            placeholder="Task title"
-                            className="min-w-0 flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm"
-                            style={{ fontSize: 16 }}
-                          />
-                          <input
-                            type="date"
-                            value={newTaskDue}
-                            onChange={(e) => setNewTaskDue(e.target.value)}
-                            className="rounded-xl border border-gray-200 px-3 py-2 text-sm sm:w-40"
-                          />
-                        </div>
-                        <div className="mt-2 flex justify-end">
-                          <button
-                            type="button"
-                            disabled={savingCrmTask || !newTaskTitle.trim()}
-                            onClick={() => void submitCrmTask()}
-                            className="rounded-xl bg-[#171717] px-4 py-2 text-xs font-medium text-white disabled:opacity-50"
-                          >
-                            {savingCrmTask ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Add task'}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
               </div>
 
               <div className="flex-shrink-0 border-t border-gray-100 bg-gray-50/90 px-3 py-3 sm:px-5">

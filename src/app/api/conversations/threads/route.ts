@@ -78,6 +78,49 @@ async function fetchThreadsListManual(venueId: string) {
   return { ok: true as const, data: mapped };
 }
 
+async function threadIdsWithMessageFlag(
+  venueId: string,
+  flag: 'is_starred' | 'is_pinned',
+): Promise<Set<string>> {
+  const { data: threads, error: tErr } = await supabaseAdmin
+    .from('conversation_threads')
+    .select('id')
+    .eq('venue_id', venueId);
+  if (tErr) return new Set();
+  const ids = (threads ?? []).map((r) => r.id as string).filter(Boolean);
+  if (ids.length === 0) return new Set();
+  const { data: msgs } = await supabaseAdmin
+    .from('conversation_messages')
+    .select('thread_id')
+    .eq(flag, true)
+    .in('thread_id', ids);
+  return new Set((msgs ?? []).map((m) => m.thread_id as string));
+}
+
+async function enrichThreadsWithStarPinFlags<T extends { thread_id: string }>(
+  rows: T[],
+): Promise<(T & { has_starred: boolean; has_pinned: boolean })[]> {
+  const ids = rows.map((r) => r.thread_id);
+  if (ids.length === 0) return [];
+  const { data: starMsgs } = await supabaseAdmin
+    .from('conversation_messages')
+    .select('thread_id')
+    .eq('is_starred', true)
+    .in('thread_id', ids);
+  const { data: pinMsgs } = await supabaseAdmin
+    .from('conversation_messages')
+    .select('thread_id')
+    .eq('is_pinned', true)
+    .in('thread_id', ids);
+  const starSet = new Set((starMsgs ?? []).map((m) => m.thread_id as string));
+  const pinSet = new Set((pinMsgs ?? []).map((m) => m.thread_id as string));
+  return rows.map((r) => ({
+    ...r,
+    has_starred: starSet.has(r.thread_id),
+    has_pinned: pinSet.has(r.thread_id),
+  }));
+}
+
 export async function GET(request: NextRequest) {
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -86,6 +129,8 @@ export async function GET(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const unreadOnly = request.nextUrl.searchParams.get('unread') === '1';
+  const starredOnly = request.nextUrl.searchParams.get('starred') === '1';
+  const pinnedOnly = request.nextUrl.searchParams.get('pinned') === '1';
   const readerRef = conversationReaderRef(user);
 
   const { data, error } = await supabaseAdmin.rpc('conversation_threads_with_meta', {
@@ -102,10 +147,30 @@ export async function GET(request: NextRequest) {
       const { status, body } = conversationHttpError(manual.error);
       return NextResponse.json(body, { status });
     }
-    return NextResponse.json(manual.data);
+    let rows = manual.data;
+    if (starredOnly) {
+      const ok = await threadIdsWithMessageFlag(venueId, 'is_starred');
+      rows = rows.filter((r) => ok.has(r.thread_id));
+    }
+    if (pinnedOnly) {
+      const ok = await threadIdsWithMessageFlag(venueId, 'is_pinned');
+      rows = rows.filter((r) => ok.has(r.thread_id));
+    }
+    const enriched = await enrichThreadsWithStarPinFlags(rows);
+    return NextResponse.json(enriched);
   }
 
-  return NextResponse.json(data ?? []);
+  let rows = (data ?? []) as { thread_id: string }[];
+  if (starredOnly) {
+    const ok = await threadIdsWithMessageFlag(venueId, 'is_starred');
+    rows = rows.filter((r) => ok.has(r.thread_id));
+  }
+  if (pinnedOnly) {
+    const ok = await threadIdsWithMessageFlag(venueId, 'is_pinned');
+    rows = rows.filter((r) => ok.has(r.thread_id));
+  }
+  const enriched = await enrichThreadsWithStarPinFlags(rows);
+  return NextResponse.json(enriched);
 }
 
 export async function POST(request: NextRequest) {
