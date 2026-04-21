@@ -105,6 +105,9 @@ export async function POST(
   const body = await request.json();
   const visibility = body.visibility as string | undefined;
   const rawBody = typeof body.body === 'string' ? body.body.trim() : '';
+  const rawSubject =
+    typeof body.email_subject === 'string' ? body.email_subject.trim() : '';
+  const externalChannelOverride = body.external_channel as string | undefined;
   const mentionedIds = Array.isArray(body.mentioned_member_ids)
     ? (body.mentioned_member_ids as string[]).filter((id) => typeof id === 'string')
     : [];
@@ -142,8 +145,12 @@ export async function POST(
   let external_email_sent = false;
   let send_error: string | null = null;
 
-  const replyChannel =
+  const threadReplyChannel =
     (gate.thread as { external_reply_channel?: string }).external_reply_channel ?? 'email';
+  const replyChannel =
+    externalChannelOverride === 'sms' || externalChannelOverride === 'email'
+      ? externalChannelOverride
+      : threadReplyChannel;
 
   if (visibility === 'external') {
     if (replyChannel === 'sms') {
@@ -243,10 +250,15 @@ ${escapeHtml(rawBody)
 <p style="font-size:12px;color:#6b7280">Sent via StoryPay Conversations — reply to this email to continue the thread.</p>
 </div>`;
 
+      const subjectLine =
+        rawSubject ||
+        String((gate.thread as { subject?: string }).subject || '').trim() ||
+        'Message from ' + venueName;
+
       const result = await sendEmail({
         to,
         replyTo: brandEmail || undefined,
-        subject: gate.thread.subject || 'Message from ' + venueName,
+        subject: subjectLine,
         html,
         from: { name: venueName, email: brandEmail || undefined },
       });
@@ -255,6 +267,12 @@ ${escapeHtml(rawBody)
       send_error = result.error ?? null;
       if (!result.success) {
         console.warn('[conversations] external email failed:', send_error);
+      } else if (rawSubject) {
+        await supabaseAdmin
+          .from('conversation_threads')
+          .update({ subject: rawSubject, updated_at: new Date().toISOString() })
+          .eq('id', threadId)
+          .eq('venue_id', venueId);
       }
     }
   }
@@ -269,6 +287,8 @@ ${escapeHtml(rawBody)
       visibility,
       channel: messageChannel,
       body: rawBody,
+      email_subject:
+        visibility === 'external' && messageChannel === 'email' ? rawSubject || null : null,
       sender_kind,
       venue_team_member_id,
       mentioned_member_ids: visibility === 'internal' ? mentionedIds : [],

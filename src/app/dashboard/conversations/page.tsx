@@ -60,6 +60,7 @@ interface Msg {
   send_error?: string | null;
   mentioned_member_ids?: string[];
   author_label?: string;
+  email_subject?: string | null;
 }
 
 interface TeamMember {
@@ -69,7 +70,7 @@ interface TeamMember {
   email: string | null;
 }
 
-type ComposerMode = 'internal' | 'external';
+type ComposerTab = 'team' | 'email' | 'sms';
 
 export default function ConversationsPage() {
   const [threads, setThreads] = useState<ThreadRow[]>([]);
@@ -79,7 +80,8 @@ export default function ConversationsPage() {
   const [threadDetail, setThreadDetail] = useState<ThreadDetail | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [loadingThread, setLoadingThread] = useState(false);
-  const [composerMode, setComposerMode] = useState<ComposerMode>('internal');
+  const [composerTab, setComposerTab] = useState<ComposerTab>('team');
+  const [emailSubject, setEmailSubject] = useState('');
   const [body, setBody] = useState('');
   const [mentionedIds, setMentionedIds] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
@@ -170,6 +172,14 @@ export default function ConversationsPage() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, selectedId]);
 
+  useEffect(() => {
+    setComposerTab('team');
+    setEmailSubject('');
+    setBody('');
+    setMentionedIds([]);
+    setSendError('');
+  }, [selectedId]);
+
   const contactLabel = useMemo(() => {
     if (threadDetail?.venue_customers) {
       const v = threadDetail.venue_customers;
@@ -189,19 +199,29 @@ export default function ConversationsPage() {
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedId || !body.trim()) return;
-    if (composerMode === 'external' && mentionedIds.length > 0) return;
+    if (composerTab !== 'team' && mentionedIds.length > 0) return;
 
     setSending(true);
     setSendError('');
     try {
+      const visibility = composerTab === 'team' ? 'internal' : 'external';
+      const payload: Record<string, unknown> = {
+        visibility,
+        body: body.trim(),
+        mentioned_member_ids: composerTab === 'team' ? mentionedIds : [],
+      };
+      if (composerTab === 'email') {
+        payload.external_channel = 'email';
+        payload.email_subject = emailSubject.trim();
+      }
+      if (composerTab === 'sms') {
+        payload.external_channel = 'sms';
+      }
+
       const res = await fetch(`/api/conversations/threads/${selectedId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          visibility: composerMode,
-          body: body.trim(),
-          mentioned_member_ids: composerMode === 'internal' ? mentionedIds : [],
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -209,8 +229,10 @@ export default function ConversationsPage() {
         return;
       }
       setBody('');
+      setEmailSubject('');
       setMentionedIds([]);
       await reloadMessages(selectedId);
+      await loadThreads();
     } finally {
       setSending(false);
     }
@@ -268,8 +290,8 @@ export default function ConversationsPage() {
         <div>
           <h1 className="font-heading text-2xl text-gray-900">Conversations</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Team-only notes and client messages (email or SMS via Go High Level) are separated — choose the mode before
-            you send. SMS threads appear when customers text your GHL number; replies go back through GHL.
+            Pick Team only, Email (subject and message body), or SMS before you send — similar to Go High Level. SMS
+            uses your GHL line; email goes to the contact&apos;s address from their profile.
           </p>
         </div>
         <button
@@ -481,6 +503,11 @@ export default function ConversationsPage() {
                                 {m.channel === 'sms' ? 'SMS to contact' : 'Email to contact'}
                               </p>
                             )}
+                            {!isInternal && fromUs && m.channel === 'email' && m.email_subject && (
+                              <p className="mb-1.5 border-b border-white/15 pb-1.5 text-xs font-medium text-white/95">
+                                Subject: {m.email_subject}
+                              </p>
+                            )}
                             {!isInternal && fromContact && (
                               <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
                                 Contact
@@ -519,46 +546,68 @@ export default function ConversationsPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        setComposerMode('internal');
+                        setComposerTab('team');
                         setSendError('');
                       }}
                       className={classNames(
-                        'flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold transition-colors',
-                        composerMode === 'internal'
+                        'flex min-w-0 flex-1 items-center justify-center gap-1 rounded-xl py-2 text-[11px] font-semibold transition-colors sm:text-xs',
+                        composerTab === 'team'
                           ? 'bg-white text-gray-900 border border-gray-200'
                           : 'text-gray-600 hover:text-gray-900',
                       )}
                     >
-                      <Lock size={14} />
-                      Team only
+                      <Lock size={14} className="hidden shrink-0 sm:inline" />
+                      <span className="truncate">Team only</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => {
-                        setComposerMode('external');
+                        setComposerTab('email');
                         setMentionedIds([]);
                         setSendError('');
+                        setEmailSubject((s) => {
+                          if (s.trim()) return s;
+                          const sub = threadDetail.subject?.trim();
+                          return sub && sub !== 'Conversation' ? sub : '';
+                        });
                       }}
                       className={classNames(
-                        'flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold transition-colors',
-                        composerMode === 'external'
+                        'flex min-w-0 flex-1 items-center justify-center gap-1 rounded-xl py-2 text-[11px] font-semibold transition-colors sm:text-xs',
+                        composerTab === 'email'
                           ? 'bg-white text-gray-900 border border-gray-200'
                           : 'text-gray-600 hover:text-gray-900',
                       )}
                     >
-                      {threadDetail.external_reply_channel === 'sms' ? <Smartphone size={14} /> : <Mail size={14} />}
-                      {threadDetail.external_reply_channel === 'sms' ? 'SMS contact' : 'Email contact'}
+                      <Mail size={14} className="hidden shrink-0 sm:inline" />
+                      <span className="truncate">Email</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setComposerTab('sms');
+                        setMentionedIds([]);
+                        setSendError('');
+                      }}
+                      className={classNames(
+                        'flex min-w-0 flex-1 items-center justify-center gap-1 rounded-xl py-2 text-[11px] font-semibold transition-colors sm:text-xs',
+                        composerTab === 'sms'
+                          ? 'bg-white text-gray-900 border border-gray-200'
+                          : 'text-gray-600 hover:text-gray-900',
+                      )}
+                    >
+                      <Smartphone size={14} className="hidden shrink-0 sm:inline" />
+                      <span className="truncate">SMS</span>
                     </button>
                   </div>
                   <p className="mb-2 text-[11px] text-gray-500">
-                    {composerMode === 'internal'
+                    {composerTab === 'team'
                       ? 'Visible only to your team. @mentions notify teammates (stored on this message).'
-                      : threadDetail.external_reply_channel === 'sms'
-                        ? `Sends a text via Go High Level (A2P on your GHL account) to ${threadDetail.venue_customers?.phone || 'the contact phone on file'}. No @mentions.`
-                        : `Sends an email to ${threadDetail.venue_customers?.customer_email || 'the contact'}. No @mentions.`}
+                      : composerTab === 'email'
+                        ? `Email ${threadDetail.venue_customers?.customer_email || 'the contact'} with a subject line and body (like Go High Level). No @mentions.`
+                        : `Text ${threadDetail.venue_customers?.phone || 'the contact'} via Go High Level (A2P on your GHL account). No @mentions.`}
                   </p>
 
-                  {composerMode === 'internal' && team.length > 0 && (
+                  {composerTab === 'team' && team.length > 0 && (
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
                         <Users size={12} />
@@ -587,20 +636,50 @@ export default function ConversationsPage() {
                   )}
 
                   <form onSubmit={handleSend} className="flex flex-col gap-2">
-                    <textarea
-                      value={body}
-                      onChange={(e) => setBody(e.target.value)}
-                      rows={composerMode === 'internal' ? 3 : 4}
-                      placeholder={
-                        composerMode === 'internal'
-                          ? 'Write a team note…'
-                          : threadDetail.external_reply_channel === 'sms'
-                            ? 'Write an SMS…'
-                            : 'Write an email to the contact…'
-                      }
-                      className="w-full resize-none rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
-                      style={{ fontSize: 16 }}
-                    />
+                    {composerTab === 'email' && (
+                      <div>
+                        <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                          Subject
+                        </label>
+                        <input
+                          type="text"
+                          value={emailSubject}
+                          onChange={(e) => setEmailSubject(e.target.value)}
+                          placeholder="Enter subject"
+                          className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
+                          style={{ fontSize: 16 }}
+                        />
+                      </div>
+                    )}
+                    <div>
+                      {composerTab === 'email' && (
+                        <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                          Message
+                        </label>
+                      )}
+                      <textarea
+                        value={body}
+                        onChange={(e) => setBody(e.target.value)}
+                        rows={composerTab === 'team' ? 3 : 4}
+                        placeholder={
+                          composerTab === 'team'
+                            ? 'Write a team note…'
+                            : composerTab === 'sms'
+                              ? 'Type a message…'
+                              : 'Type a message…'
+                        }
+                        className="w-full resize-none rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
+                        style={{ fontSize: 16 }}
+                      />
+                      {composerTab === 'sms' && (
+                        <p className="mt-1 text-right text-[10px] tabular-nums text-gray-400">
+                          Chars: {body.length}
+                          {body.length > 0 ?
+                            <> · Segs: ~{Math.max(1, Math.ceil(body.length / 160))}</>
+                          : null}
+                        </p>
+                      )}
+                    </div>
                     {sendError && <p className="text-xs text-red-600">{sendError}</p>}
                     <div className="flex justify-end">
                       <button
@@ -609,9 +688,9 @@ export default function ConversationsPage() {
                         className="inline-flex items-center gap-2 rounded-xl bg-[#171717] px-5 py-2.5 text-sm font-medium text-white transition-colors disabled:opacity-50"
                       >
                         {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send size={16} />}
-                        {composerMode === 'internal' ?
+                        {composerTab === 'team' ?
                           'Send team note'
-                        : threadDetail.external_reply_channel === 'sms' ?
+                        : composerTab === 'sms' ?
                           'Send SMS'
                         : 'Send email'}
                       </button>
