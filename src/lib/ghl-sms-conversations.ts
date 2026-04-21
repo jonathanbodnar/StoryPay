@@ -3,6 +3,45 @@ import { getGhlContact, getGhlToken, normalizePhone } from '@/lib/ghl';
 
 const PLACEHOLDER_EMAIL_DOMAIN = 'ghl-sms.storypay.placeholder';
 
+function parseJsonObject(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  if (typeof value === 'string') {
+    try {
+      const parsed: unknown = JSON.parse(value);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function inboundMessageEventMatch(value: unknown): boolean {
+  const s = String(value ?? '').toLowerCase();
+  return s === 'inboundmessage';
+}
+
+/** True if this webhook is a GHL / LeadConnector InboundMessage (type may be on a wrapper or nested data). */
+export function isGhlInboundMessageWebhookPayload(payload: Record<string, unknown>): boolean {
+  const dataObj = parseJsonObject(payload.data);
+  const candidates = [payload.type, payload.event, dataObj?.type, dataObj?.event];
+  return candidates.some(inboundMessageEventMatch);
+}
+
+function isGhlSmsChannel(root: Record<string, unknown>): boolean {
+  const mt = String(root.messageType ?? root.channel ?? '').trim().toUpperCase();
+  if (mt === 'SMS' || mt === 'TEXT') return true;
+  const mts = String(root.messageTypeString ?? '').trim().toUpperCase();
+  if (mts === 'TYPE_SMS' || mts.includes('SMS')) return true;
+  const id = root.messageTypeId;
+  if (id === 2 || id === '2') return true;
+  return false;
+}
+
 /** Normalize GHL InboundMessage webhook payloads (shape varies by app version). */
 export function parseGhlInboundSmsPayload(payload: Record<string, unknown>): {
   locationId: string;
@@ -11,25 +50,27 @@ export function parseGhlInboundSmsPayload(payload: Record<string, unknown>): {
   messageId: string | null;
   contactName: string | null;
 } | null {
-  const eventType = String(payload.type || payload.event || '');
-  if (eventType !== 'InboundMessage' && eventType.toLowerCase() !== 'inboundmessage') {
-    return null;
-  }
+  if (!isGhlInboundMessageWebhookPayload(payload)) return null;
 
-  const root =
-    payload.data && typeof payload.data === 'object'
-      ? (payload.data as Record<string, unknown>)
-      : payload;
+  const dataObj = parseJsonObject(payload.data);
+  const root: Record<string, unknown> = dataObj ? { ...payload, ...dataObj } : { ...payload };
 
-  const messageType = String(root.messageType || root.channel || '').toUpperCase();
-  if (messageType !== 'SMS') return null;
+  if (!isGhlSmsChannel(root)) return null;
 
   const direction = String(root.direction || 'inbound').toLowerCase();
   if (direction !== 'inbound') return null;
 
-  const locationId = String(root.locationId || payload.locationId || '');
-  const contactId = String(root.contactId || payload.contactId || '');
-  const body = String(root.body || root.message || root.text || '').trim();
+  const locationId = String(
+    root.locationId ?? root.location_id ?? payload.locationId ?? payload.location_id ?? ''
+  ).trim();
+  let contactId = String(root.contactId ?? root.contact_id ?? '').trim();
+  if (!contactId && root.contact && typeof root.contact === 'object') {
+    const c = root.contact as Record<string, unknown>;
+    contactId = String(c.id ?? c.contactId ?? '').trim();
+  }
+  const body = String(
+    root.body ?? root.messageBody ?? root.message ?? root.text ?? root.content ?? ''
+  ).trim();
   const messageId =
     root.id != null ? String(root.id) : root.messageId != null ? String(root.messageId) : null;
 

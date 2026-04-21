@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { insertInboundGhlSms, parseGhlInboundSmsPayload } from '@/lib/ghl-sms-conversations';
+import {
+  insertInboundGhlSms,
+  isGhlInboundMessageWebhookPayload,
+  parseGhlInboundSmsPayload,
+} from '@/lib/ghl-sms-conversations';
 import { applySmsDndForVenueCustomer, isSmsOptOutKeyword } from '@/lib/sms-compliance';
 
 export async function POST(request: NextRequest) {
@@ -11,6 +15,11 @@ export async function POST(request: NextRequest) {
     console.log('GHL webhook received:', eventType, JSON.stringify(payload).slice(0, 500));
 
     const inboundSms = parseGhlInboundSmsPayload(payload);
+    if (isGhlInboundMessageWebhookPayload(payload) && !inboundSms) {
+      console.warn(
+        '[ghl webhook] InboundMessage received but SMS not ingested (channel, direction, ids, or empty body)'
+      );
+    }
     if (inboundSms) {
       const { data: venue } = await supabaseAdmin
         .from('venues')
