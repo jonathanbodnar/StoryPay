@@ -4,6 +4,53 @@ import { supabaseAdmin } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
+function pctDelta(prev: number, curr: number): number {
+  if (prev <= 0) return 0;
+  return ((curr - prev) / prev) * 100;
+}
+
+async function countLeads(venueId: string, startIso: string | null, endIso: string | null): Promise<number> {
+  let q = supabaseAdmin.from('leads').select('*', { count: 'exact', head: true }).eq('venue_id', venueId);
+  if (startIso) q = q.gte('created_at', startIso);
+  if (endIso) q = q.lte('created_at', endIso);
+  const { count, error } = await q;
+  if (error) console.error('[dashboard/stats] leads count', error);
+  return count ?? 0;
+}
+
+async function countVenueCustomers(venueId: string, startIso: string | null, endIso: string | null): Promise<number> {
+  let q = supabaseAdmin.from('venue_customers').select('*', { count: 'exact', head: true }).eq('venue_id', venueId);
+  if (startIso) q = q.gte('created_at', startIso);
+  if (endIso) q = q.lte('created_at', endIso);
+  const { count, error } = await q;
+  if (error) console.error('[dashboard/stats] venue_customers count', error);
+  return count ?? 0;
+}
+
+/** Tours and wedding/reception events with start_at in range; excludes cancelled. */
+async function countCalendarBookings(
+  venueId: string,
+  startAtGte: string | null,
+  startAtLte: string | null,
+): Promise<{ toursBooked: number; weddingsBooked: number }> {
+  let q = supabaseAdmin.from('calendar_events').select('event_type, status').eq('venue_id', venueId);
+  if (startAtGte) q = q.gte('start_at', startAtGte);
+  if (startAtLte) q = q.lte('start_at', startAtLte);
+  const { data, error } = await q;
+  if (error) {
+    console.error('[dashboard/stats] calendar_events', error);
+    return { toursBooked: 0, weddingsBooked: 0 };
+  }
+  let toursBooked = 0;
+  let weddingsBooked = 0;
+  for (const row of data ?? []) {
+    if (row.status === 'cancelled') continue;
+    if (row.event_type === 'tour') toursBooked += 1;
+    else if (row.event_type === 'wedding' || row.event_type === 'reception') weddingsBooked += 1;
+  }
+  return { toursBooked, weddingsBooked };
+}
+
 export async function GET(request: NextRequest) {
   const cookieStore = await cookies();
   const venueId = cookieStore.get('venue_id')?.value;
@@ -120,14 +167,44 @@ export async function GET(request: NextRequest) {
 
   const prevRevenue   = prevRows.filter((r) => r.status === 'paid').reduce((s, r) => s + (r.price ?? 0), 0);
   const prevProposalCount = prevRows.length;
+  const proposalCount = rows.length;
 
-  const revenueChange   = prevRevenue       > 0 ? ((totalRevenue   - prevRevenue)       / prevRevenue)       * 100 : 0;
-  const proposalChange  = prevProposalCount > 0 ? ((activeProposals - prevProposalCount) / prevProposalCount) * 100 : 0;
+  const revenueChange = pctDelta(prevRevenue, totalRevenue);
+  const proposalChange = pctDelta(prevProposalCount, proposalCount);
+
+  const currentCreatedEnd = to ? `${to}T23:59:59.999Z` : null;
+  const prevCreatedEnd = prevEndStr;
+
+  const [
+    leadCount,
+    contactCount,
+    { toursBooked, weddingsBooked },
+    prevLeadCount,
+    prevContactCount,
+    prevCal,
+  ] = await Promise.all([
+    countLeads(venueId, from, currentCreatedEnd),
+    countVenueCustomers(venueId, from, currentCreatedEnd),
+    countCalendarBookings(venueId, from, currentCreatedEnd),
+    countLeads(venueId, prevStartStr, prevCreatedEnd),
+    countVenueCustomers(venueId, prevStartStr, prevCreatedEnd),
+    countCalendarBookings(venueId, prevStartStr, prevCreatedEnd),
+  ]);
+
+  const leadChange = pctDelta(prevLeadCount, leadCount);
+  const contactChange = pctDelta(prevContactCount, contactCount);
+  const toursChange = pctDelta(prevCal.toursBooked, toursBooked);
+  const weddingsChange = pctDelta(prevCal.weddingsBooked, weddingsBooked);
 
   return NextResponse.json({
     totalRevenue,
     activeProposals,
+    proposalCount,
     customerCount,
+    leadCount,
+    contactCount,
+    toursBooked,
+    weddingsBooked,
     pendingPayments,
     failedPayments,
     refundedCount,
@@ -137,9 +214,13 @@ export async function GET(request: NextRequest) {
     trends: {
       revenueChange,
       proposalChange,
+      leadChange,
+      contactChange,
+      toursChange,
+      weddingsChange,
       thisMonthRevenue: totalRevenue,
       lastMonthRevenue: prevRevenue,
-      thisMonthProposals: activeProposals,
+      thisMonthProposals: proposalCount,
       lastMonthProposals: prevProposalCount,
     },
   });

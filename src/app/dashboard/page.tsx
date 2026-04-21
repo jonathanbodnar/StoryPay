@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import {
-  DollarSign, FileText, Users, TrendingUp, TrendingDown, ArrowUpRight, ArrowRight,
-  CheckCircle2, Send, PenLine, Eye, CreditCard, RotateCcw, CalendarDays,
+  DollarSign, FileText, Users, UserPlus, TrendingUp, TrendingDown, ArrowUpRight, ArrowRight,
+  CheckCircle2, Send, PenLine, Eye, CreditCard, CalendarDays, Binoculars, Heart,
 } from 'lucide-react';
 import { formatCents, formatDate, getStatusColor, classNames } from '@/lib/utils';
 import Link from 'next/link';
@@ -64,7 +64,12 @@ const STATUS_ICON: Record<string, React.ElementType> = {
 interface Stats {
  totalRevenue: number;
  activeProposals: number;
+ proposalCount: number;
  customerCount: number;
+ leadCount: number;
+ contactCount: number;
+ toursBooked: number;
+ weddingsBooked: number;
  pendingPayments: number;
  failedPayments: number;
  refundedCount: number;
@@ -74,6 +79,10 @@ interface Stats {
  trends: {
  revenueChange: number;
  proposalChange: number;
+ leadChange: number;
+ contactChange: number;
+ toursChange: number;
+ weddingsChange: number;
  thisMonthRevenue: number;
  lastMonthRevenue: number;
  thisMonthProposals: number;
@@ -262,6 +271,10 @@ export default function DashboardOverview() {
 
  const revenueChange = stats?.trends?.revenueChange ?? null;
  const proposalChange = stats?.trends?.proposalChange ?? null;
+ const leadChange = stats?.trends?.leadChange ?? null;
+ const contactChange = stats?.trends?.contactChange ?? null;
+ const toursChange = stats?.trends?.toursChange ?? null;
+ const weddingsKpiChange = stats?.trends?.weddingsChange ?? null;
  const statusBreakdown = stats?.statusBreakdown ?? {};
  const statusOrder = ['paid', 'signed', 'sent', 'opened', 'draft'];
  const totalProposals = Object.values(statusBreakdown).reduce((a, b) => a + b, 0);
@@ -286,38 +299,26 @@ export default function DashboardOverview() {
  </div>
 
  {/* ── KPI Cards ── */}
- <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+ <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4 mb-6">
 
- {/* Revenue */}
+ {/* Leads */}
  <div className="rounded-2xl bg-white p-5 border border-gray-200">
  <div className="flex items-center justify-between mb-3">
- <span className="text-xs font-semibold uppercase tracking-wider"style={{ color: B.muted }}>Revenue</span>
- <IconBadge icon={DollarSign} bg="#f0fdf4"color="#16a34a"/>
- </div>
- {loading ? <><Skeleton className="h-7 w-24 mb-2"/><Skeleton className="h-3.5 w-16"/></> : (
- <>
- <p className="text-2xl font-bold tracking-tight"style={{ color: B.primary }}>{formatCents(stats?.totalRevenue ?? 0)}</p>
- <div className="flex items-center gap-1.5 mt-1.5">
- <TrendBadge value={revenueChange} />
- <span className="text-xs text-gray-400">vs prior period</span>
- </div>
- </>
- )}
- </div>
-
- {/* Proposals */}
- <div className="rounded-2xl bg-white p-5 border border-gray-200">
- <div className="flex items-center justify-between mb-3">
- <span className="text-xs font-semibold uppercase tracking-wider"style={{ color: B.muted }}>Proposals</span>
- <IconBadge icon={FileText} bg="#eff6ff"color="#2563eb"/>
+ <span className="text-xs font-semibold uppercase tracking-wider"style={{ color: B.muted }}>Leads</span>
+ <IconBadge icon={UserPlus} bg="#fff1f2"color="#e11d48"/>
  </div>
  {loading ? <><Skeleton className="h-7 w-16 mb-2"/><Skeleton className="h-3.5 w-20"/></> : (
  <>
- <p className="text-2xl font-bold tracking-tight"style={{ color: B.primary }}>{(stats?.activeProposals ?? 0).toLocaleString()}</p>
- <div className="flex items-center gap-1.5 mt-1.5">
- <TrendBadge value={proposalChange} />
- <span className="text-xs text-gray-400">vs prior period</span>
+ <p className="text-2xl font-bold tracking-tight"style={{ color: B.primary }}>{(stats?.leadCount ?? 0).toLocaleString()}</p>
+ <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+ <TrendBadge value={leadChange} />
+ <span className="text-xs text-gray-400">vs prior</span>
  </div>
+ <Link href="/dashboard/leads"className="inline-flex items-center gap-1 text-xs mt-1.5 transition-colors"style={{ color: B.muted }}
+ onMouseEnter={e => (e.currentTarget.style.color = B.primary)}
+ onMouseLeave={e => (e.currentTarget.style.color = B.muted)}>
+ View all <ArrowRight size={10} />
+ </Link>
  </>
  )}
  </div>
@@ -330,7 +331,11 @@ export default function DashboardOverview() {
  </div>
  {loading ? <><Skeleton className="h-7 w-16 mb-2"/><Skeleton className="h-3.5 w-24"/></> : (
  <>
- <p className="text-2xl font-bold tracking-tight"style={{ color: B.primary }}>{(stats?.customerCount ?? 0).toLocaleString()}</p>
+ <p className="text-2xl font-bold tracking-tight"style={{ color: B.primary }}>{(stats?.contactCount ?? 0).toLocaleString()}</p>
+ <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+ <TrendBadge value={contactChange} />
+ <span className="text-xs text-gray-400">vs prior</span>
+ </div>
  <Link href="/dashboard/contacts"className="inline-flex items-center gap-1 text-xs mt-1.5 transition-colors"style={{ color: B.muted }}
  onMouseEnter={e => (e.currentTarget.style.color = B.primary)}
  onMouseLeave={e => (e.currentTarget.style.color = B.muted)}>
@@ -340,29 +345,90 @@ export default function DashboardOverview() {
  )}
  </div>
 
- {/* Refunded */}
+ {/* Tours booked */}
  <div className="rounded-2xl bg-white p-5 border border-gray-200">
  <div className="flex items-center justify-between mb-3">
- <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Refunded</span>
- <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-50">
- <RotateCcw size={15} className="text-gray-500"/>
+ <span className="text-xs font-semibold uppercase tracking-wider"style={{ color: B.muted }}>Tours booked</span>
+ <IconBadge icon={Binoculars} bg="#eff6ff"color="#2563eb"/>
  </div>
- </div>
- {loading ? <><Skeleton className="h-7 w-16 mb-2"/><Skeleton className="h-3.5 w-28"/></> : (
+ {loading ? <><Skeleton className="h-7 w-16 mb-2"/><Skeleton className="h-3.5 w-20"/></> : (
  <>
- <p className="text-2xl font-bold tracking-tight"style={{ color: (stats?.refundedCount ?? 0) > 0 ? '#ef4444' : B.primary }}>
- {(stats?.refundedCount ?? 0).toLocaleString()}
- </p>
- {(stats?.refundedCount ?? 0) > 0 ? (
- <div className="mt-1.5">
- <p className="text-xs text-red-500 font-medium">{formatCents(stats?.refundedAmount ?? 0)} refunded</p>
- <Link href="/dashboard/transactions"className="inline-flex items-center gap-1 text-xs text-gray-400 mt-0.5 hover:text-gray-700 transition-colors">
- View <ArrowRight size={10} />
- </Link>
+ <p className="text-2xl font-bold tracking-tight"style={{ color: B.primary }}>{(stats?.toursBooked ?? 0).toLocaleString()}</p>
+ <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+ <TrendBadge value={toursChange} />
+ <span className="text-xs text-gray-400">vs prior</span>
  </div>
- ) : (
- <p className="text-xs mt-1.5"style={{ color: B.muted }}>None this period</p>
+ <Link href="/dashboard/calendar"className="inline-flex items-center gap-1 text-xs mt-1.5 transition-colors"style={{ color: B.muted }}
+ onMouseEnter={e => (e.currentTarget.style.color = B.primary)}
+ onMouseLeave={e => (e.currentTarget.style.color = B.muted)}>
+ Calendar <ArrowRight size={10} />
+ </Link>
+ </>
  )}
+ </div>
+
+ {/* Proposals */}
+ <div className="rounded-2xl bg-white p-5 border border-gray-200">
+ <div className="flex items-center justify-between mb-3">
+ <span className="text-xs font-semibold uppercase tracking-wider"style={{ color: B.muted }}>Proposals</span>
+ <IconBadge icon={FileText} bg="#f0f9ff"color="#0369a1"/>
+ </div>
+ {loading ? <><Skeleton className="h-7 w-16 mb-2"/><Skeleton className="h-3.5 w-20"/></> : (
+ <>
+ <p className="text-2xl font-bold tracking-tight"style={{ color: B.primary }}>{(stats?.proposalCount ?? 0).toLocaleString()}</p>
+ <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+ <TrendBadge value={proposalChange} />
+ <span className="text-xs text-gray-400">vs prior</span>
+ </div>
+ <Link href="/dashboard/payments/proposals"className="inline-flex items-center gap-1 text-xs mt-1.5 transition-colors"style={{ color: B.muted }}
+ onMouseEnter={e => (e.currentTarget.style.color = B.primary)}
+ onMouseLeave={e => (e.currentTarget.style.color = B.muted)}>
+ View all <ArrowRight size={10} />
+ </Link>
+ </>
+ )}
+ </div>
+
+ {/* Weddings booked */}
+ <div className="rounded-2xl bg-white p-5 border border-gray-200">
+ <div className="flex items-center justify-between mb-3">
+ <span className="text-xs font-semibold uppercase tracking-wider"style={{ color: B.muted }}>Weddings booked</span>
+ <IconBadge icon={Heart} bg="#fdf2f8"color="#db2777"/>
+ </div>
+ {loading ? <><Skeleton className="h-7 w-16 mb-2"/><Skeleton className="h-3.5 w-20"/></> : (
+ <>
+ <p className="text-2xl font-bold tracking-tight"style={{ color: B.primary }}>{(stats?.weddingsBooked ?? 0).toLocaleString()}</p>
+ <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+ <TrendBadge value={weddingsKpiChange} />
+ <span className="text-xs text-gray-400">vs prior</span>
+ </div>
+ <Link href="/dashboard/calendar"className="inline-flex items-center gap-1 text-xs mt-1.5 transition-colors"style={{ color: B.muted }}
+ onMouseEnter={e => (e.currentTarget.style.color = B.primary)}
+ onMouseLeave={e => (e.currentTarget.style.color = B.muted)}>
+ Calendar <ArrowRight size={10} />
+ </Link>
+ </>
+ )}
+ </div>
+
+ {/* Revenue */}
+ <div className="rounded-2xl bg-white p-5 border border-gray-200">
+ <div className="flex items-center justify-between mb-3">
+ <span className="text-xs font-semibold uppercase tracking-wider"style={{ color: B.muted }}>Revenue</span>
+ <IconBadge icon={DollarSign} bg="#f0fdf4"color="#16a34a"/>
+ </div>
+ {loading ? <><Skeleton className="h-7 w-24 mb-2"/><Skeleton className="h-3.5 w-16"/></> : (
+ <>
+ <p className="text-2xl font-bold tracking-tight"style={{ color: B.primary }}>{formatCents(stats?.totalRevenue ?? 0)}</p>
+ <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+ <TrendBadge value={revenueChange} />
+ <span className="text-xs text-gray-400">vs prior</span>
+ </div>
+ <Link href="/dashboard/transactions"className="inline-flex items-center gap-1 text-xs mt-1.5 transition-colors"style={{ color: B.muted }}
+ onMouseEnter={e => (e.currentTarget.style.color = B.primary)}
+ onMouseLeave={e => (e.currentTarget.style.color = B.muted)}>
+ View all <ArrowRight size={10} />
+ </Link>
  </>
  )}
  </div>
@@ -561,7 +627,7 @@ export default function DashboardOverview() {
  </div>
 
  {/* ── Recent Transactions ── */}
- <div className="rounded-2xl bg-white overflow-hidden"style={{ border: '1px solid #e5e7eb' }}>
+ <div className="rounded-2xl bg-white overflow-hidden mb-6"style={{ border: '1px solid #e5e7eb' }}>
  <div className="flex items-center justify-between px-6 py-4"style={{ borderBottom: '1px solid #e5e7eb' }}>
  <div className="flex items-center gap-2">
  <CreditCard size={15} style={{ color: B.muted }} />
