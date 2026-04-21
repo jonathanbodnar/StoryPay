@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase';
 import {
   getGhlContact,
@@ -163,8 +164,8 @@ export function parseGhlInboundSmsPayload(payload: Record<string, unknown>): {
   for (const root of inboundSmsRootCandidates(payload)) {
     if (!isGhlSmsChannel(root)) continue;
 
-    const direction = (pickStr(root, ['direction']) || 'inbound').toLowerCase();
-    if (direction !== 'inbound') continue;
+    const direction = pickStr(root, ['direction']).toLowerCase();
+    if (direction === 'outbound') continue;
 
     const locationId = pickStr(root, [
       'locationId',
@@ -375,6 +376,7 @@ export async function insertInboundGhlSms(params: {
 
   const { error: insErr } = await supabaseAdmin.from('conversation_messages').insert(row);
   if (insErr) {
+    if (insErr.code === '23505') return { ok: true, inserted: false };
     console.error('[ghl-sms] insert message', insErr);
     return { ok: false, error: insErr.message };
   }
@@ -450,6 +452,18 @@ function ghlApiMessageId(msg: Record<string, unknown>): string | null {
   return s || null;
 }
 
+function syntheticGhlSyncMessageId(params: {
+  conversationId: string;
+  body: string;
+  createdAt: string | null;
+}): string {
+  const h = createHash('sha256')
+    .update([params.conversationId, params.body, params.createdAt ?? ''].join('\0'))
+    .digest('hex')
+    .slice(0, 48);
+  return `ghl-sync:${h}`;
+}
+
 /**
  * Pull inbound SMS from GHL for this thread (covers missing / misconfigured InboundMessage webhooks).
  * Best-effort: errors are logged, never thrown.
@@ -521,15 +535,20 @@ export async function syncInboundSmsFromGhlForThread(params: {
         if (!isGhlApiInboundSmsMessage(msg)) continue;
         const body = bodyFromGhlApiMessage(msg);
         if (!body) continue;
-        const ghlMessageId = ghlApiMessageId(msg);
-        if (!ghlMessageId) continue;
-
         const createdAt =
           (msg.dateAdded as string | undefined) ||
           (msg.createdAt as string | undefined) ||
           (msg.date as string | undefined) ||
           (msg.sentAt as string | undefined) ||
           null;
+        let ghlMessageId = ghlApiMessageId(msg);
+        if (!ghlMessageId) {
+          ghlMessageId = syntheticGhlSyncMessageId({
+            conversationId: ghlConversationId,
+            body,
+            createdAt,
+          });
+        }
 
         const r = await insertInboundGhlSms({
           venueId,

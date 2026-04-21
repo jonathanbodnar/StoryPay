@@ -5,6 +5,7 @@ import { getSessionUser } from '@/lib/session';
 import { sendEmail } from '@/lib/email';
 import { conversationReaderRef } from '@/lib/conversation-reader';
 import { findOrCreateContact, getGhlToken, normalizePhone, sendSms } from '@/lib/ghl';
+import { buildConversationsReplyToEmail } from '@/lib/conversations-inbound-email';
 import { syncInboundSmsFromGhlForThread } from '@/lib/ghl-sms-conversations';
 
 export const dynamic = 'force-dynamic';
@@ -446,11 +447,12 @@ ${triggerBlock}
         String((gate.thread as { subject?: string }).subject || '').trim() ||
         'Message from ' + venueName;
 
+      const replyRouting = buildConversationsReplyToEmail(threadId, venueId);
       const result = await sendEmail({
         to,
         cc: emailCcList.length ? emailCcList : undefined,
         bcc: emailBccList.length ? emailBccList : undefined,
-        replyTo: brandEmail || undefined,
+        replyTo: replyRouting || brandEmail || undefined,
         subject: subjectLine,
         html,
         from: { name: venueName, email: brandEmail || undefined },
