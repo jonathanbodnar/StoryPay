@@ -14,6 +14,8 @@ import {
   User,
   Download,
   Upload,
+  Mail,
+  Smartphone,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
 
@@ -26,6 +28,7 @@ interface ContactRow {
   phone?: string;
   funnelStage?: string | null;
   funnelStageColor?: string | null;
+  venueCustomerId?: string | null;
 }
 
 const PAGE_SIZE = 20;
@@ -299,6 +302,41 @@ export default function ContactsPage() {
                   </td>
                   <td className="px-3 sm:px-5 py-3.5 text-right">
                     <div className="flex flex-wrap items-center justify-end gap-1">
+                      {c.venueCustomerId ? (
+                        <>
+                          <Link
+                            href={`/dashboard/conversations?customer=${encodeURIComponent(c.venueCustomerId)}&compose=email`}
+                            className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-violet-200 bg-violet-50 text-violet-800 shadow-sm transition-colors hover:border-violet-300 hover:bg-violet-100"
+                            title="Email in Conversations"
+                            aria-label={`Email ${c.name || c.email || 'contact'} in Conversations`}
+                          >
+                            <Mail size={16} strokeWidth={2} aria-hidden />
+                          </Link>
+                          <Link
+                            href={`/dashboard/conversations?customer=${encodeURIComponent(c.venueCustomerId)}&compose=sms`}
+                            className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-900 shadow-sm transition-colors hover:border-emerald-300 hover:bg-emerald-100"
+                            title="SMS in Conversations"
+                            aria-label={`SMS ${c.name || c.email || 'contact'} in Conversations`}
+                          >
+                            <Smartphone size={16} strokeWidth={2} aria-hidden />
+                          </Link>
+                        </>
+                      ) : (
+                        <>
+                          <span
+                            className="inline-flex h-8 w-8 flex-shrink-0 cursor-not-allowed items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-gray-400"
+                            title="Link or save this person as a StoryPay contact to message from Conversations"
+                          >
+                            <Mail size={16} aria-hidden />
+                          </span>
+                          <span
+                            className="inline-flex h-8 w-8 flex-shrink-0 cursor-not-allowed items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-gray-400"
+                            title="Link or save this person as a StoryPay contact to message from Conversations"
+                          >
+                            <Smartphone size={16} aria-hidden />
+                          </span>
+                        </>
+                      )}
                       <Link
                         href={`/dashboard/contacts/${encodeURIComponent(String(c.id))}`}
                         className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"

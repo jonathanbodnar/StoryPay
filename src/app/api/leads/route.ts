@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { ensureDefaultPipeline, legacyStatusForStageName } from '@/lib/pipelines';
+import { reconcileLeadsForKanban } from '@/lib/leads-reconcile';
 import { fetchTagsForLeadIds, leadRowWithTags, setLeadTagIds } from '@/lib/lead-tags';
 import { fetchOpenDuplicateMatchesForLeads, recordDuplicateCandidatesForNewLead } from '@/lib/lead-duplicates';
 
@@ -76,6 +77,7 @@ export async function GET(request: NextRequest) {
   // Make sure the default pipeline exists before we query leads — otherwise
   // new venues see an empty screen on their first visit.
   await ensureDefaultPipeline(venueId);
+  await reconcileLeadsForKanban(venueId);
 
   let query = supabaseAdmin
     .from('leads')

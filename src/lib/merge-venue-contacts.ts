@@ -15,6 +15,8 @@ export interface MergedContact {
   /** Resolved from `venue_customers` pipeline stage (matches Leads funnel / contact profile). */
   funnelStage?: string | null;
   funnelStageColor?: string | null;
+  /** StoryPay `venue_customers.id` when known (for profile + conversations deep links). */
+  venueCustomerId?: string | null;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -66,6 +68,30 @@ function attachFunnelMetadata(
   }
 }
 
+function attachVenueCustomerIds(contacts: MergedContact[], vcIdLookup: Map<string, string>) {
+  for (const c of contacts) {
+    const keys: string[] = [];
+    const e = (c.email || '').toLowerCase().trim();
+    if (e) keys.push(`email:${e}`);
+    const sid = String(c.id);
+    if (c.source === 'ghl') keys.push(`ghl:${sid}`);
+    if (c.source === 'lunarpay') keys.push(`lp:${sid}`);
+    if (c.source === 'storypay') keys.push(`uuid:${sid}`);
+    if (UUID_RE.test(sid)) keys.push(`uuid:${sid}`);
+
+    for (const k of keys) {
+      const v = vcIdLookup.get(k);
+      if (v) {
+        c.venueCustomerId = v;
+        break;
+      }
+    }
+    if (!c.venueCustomerId && c.source === 'storypay' && UUID_RE.test(sid)) {
+      c.venueCustomerId = sid;
+    }
+  }
+}
+
 /**
  * Merged list for the dashboard: GHL + LunarPay + StoryPay `venue_customers`,
  * deduplicated by email (GHL wins, then LP, then native rows without dup email).
@@ -101,6 +127,7 @@ export async function mergeVenueContacts(
   }
 
   const funnelLookup = new Map<string, { label: string; color: string | null }>();
+  const vcIdLookup = new Map<string, string>();
   for (const vc of vcFunnelRows ?? []) {
     const { label, color } = funnelLabelFromVenueCustomer(
       vc.stage_id as string | null | undefined,
@@ -108,13 +135,25 @@ export async function mergeVenueContacts(
       stageById,
     );
     const payload = { label, color };
+    const vid = vc.id as string;
     const em = ((vc.customer_email as string) || '').toLowerCase().trim();
-    if (em) funnelLookup.set(`email:${em}`, payload);
+    if (em) {
+      funnelLookup.set(`email:${em}`, payload);
+      vcIdLookup.set(`email:${em}`, vid);
+    }
     const ghlId = vc.ghl_contact_id as string | null | undefined;
-    if (ghlId) funnelLookup.set(`ghl:${ghlId}`, payload);
+    if (ghlId) {
+      funnelLookup.set(`ghl:${ghlId}`, payload);
+      vcIdLookup.set(`ghl:${ghlId}`, vid);
+    }
     const lpId = vc.lunarpay_customer_id;
-    if (lpId != null && String(lpId).trim() !== '') funnelLookup.set(`lp:${String(lpId)}`, payload);
-    funnelLookup.set(`uuid:${vc.id as string}`, payload);
+    if (lpId != null && String(lpId).trim() !== '') {
+      const lpKey = `lp:${String(lpId)}`;
+      funnelLookup.set(lpKey, payload);
+      vcIdLookup.set(lpKey, vid);
+    }
+    funnelLookup.set(`uuid:${vid}`, payload);
+    vcIdLookup.set(`uuid:${vid}`, vid);
   }
 
   let ghlToken = venue.ghl_access_token;
@@ -223,6 +262,7 @@ export async function mergeVenueContacts(
   }
 
   attachFunnelMetadata(merged, funnelLookup);
+  attachVenueCustomerIds(merged, vcIdLookup);
 
   const filtered = search
     ? merged.filter((c) => {

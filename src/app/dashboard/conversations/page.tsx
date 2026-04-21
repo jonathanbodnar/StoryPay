@@ -95,6 +95,7 @@ export default function ConversationsPage() {
   const [newConversationError, setNewConversationError] = useState('');
   const listRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const deepLinkConsumed = useRef(false);
 
   const loadThreads = useCallback(async () => {
     setLoadingList(true);
@@ -112,6 +113,50 @@ export default function ConversationsPage() {
 
   useEffect(() => {
     loadThreads();
+  }, [loadThreads]);
+
+  useEffect(() => {
+    if (deepLinkConsumed.current || typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const customerId = params.get('customer')?.trim();
+    if (!customerId || !/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(customerId)) {
+      return;
+    }
+    deepLinkConsumed.current = true;
+
+    const composeRaw = params.get('compose')?.trim().toLowerCase();
+    const composeTab: ComposerTab | null =
+      composeRaw === 'email' || composeRaw === 'sms' ? composeRaw : null;
+
+    void (async () => {
+      try {
+        const res = await fetch('/api/conversations/threads');
+        if (!res.ok) return;
+        const list = (await res.json()) as ThreadRow[];
+        const existing = Array.isArray(list)
+          ? list.find((t) => t.venue_customer_id === customerId)
+          : undefined;
+        let threadId = existing?.thread_id;
+        if (!threadId) {
+          const cre = await fetch('/api/conversations/threads', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ venue_customer_id: customerId, subject: 'Conversation' }),
+          });
+          if (!cre.ok) return;
+          const data = (await cre.json()) as { id?: string };
+          threadId = data.id;
+        }
+        if (!threadId) return;
+        setSelectedId(threadId);
+        if (composeTab) setComposerTab(composeTab);
+        setMobileShowThread(true);
+        await loadThreads();
+        window.history.replaceState({}, '', '/dashboard/conversations');
+      } catch {
+        /* ignore */
+      }
+    })();
   }, [loadThreads]);
 
   useEffect(() => {

@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 import { recordDuplicateCandidatesForNewLead } from '@/lib/lead-duplicates';
+import { ensureDefaultPipeline, legacyStatusForStageName } from '@/lib/pipelines';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -147,6 +148,32 @@ export async function POST(request: NextRequest) {
     lr.phone,
     lr.created_at,
   );
+
+  try {
+    const defaultPipelineId = await ensureDefaultPipeline(venue.id);
+    const { data: firstSt } = await supabaseAdmin
+      .from('lead_pipeline_stages')
+      .select('id, name')
+      .eq('venue_id', venue.id)
+      .eq('pipeline_id', defaultPipelineId)
+      .order('position', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (firstSt) {
+      await supabaseAdmin
+        .from('leads')
+        .update({
+          pipeline_id: defaultPipelineId,
+          stage_id: firstSt.id,
+          status: legacyStatusForStageName(firstSt.name),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', lr.id)
+        .eq('venue_id', venue.id);
+    }
+  } catch (e) {
+    console.error('[public/leads] attach default pipeline', e);
+  }
 
   const notifyEnabled = venue.email_notifications !== false;
   if (notifyEnabled) {

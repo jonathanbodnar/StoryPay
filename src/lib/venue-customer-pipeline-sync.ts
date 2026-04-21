@@ -2,6 +2,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { ensureDefaultPipeline, legacyStatusForStageName, loadPipelinesWithStages } from '@/lib/pipelines';
 import { onMarketingStageChanged } from '@/lib/marketing-email-worker';
 import { slugifyStageLabel } from '@/lib/pipeline-stage-slug';
+import { createLeadFromVenueCustomerIfMissing } from '@/lib/leads-reconcile';
 
 export { slugifyStageLabel } from '@/lib/pipeline-stage-slug';
 
@@ -66,7 +67,10 @@ export async function syncLeadFromVenueCustomerRow(
     .eq('venue_id', venueId)
     .ilike('email', email);
 
-  if (leadErr || !leadRows?.length) return;
+  if (leadErr || !leadRows?.length) {
+    await createLeadFromVenueCustomerIfMissing(venueId, vc);
+    return;
+  }
 
   const status = legacyStatusForStageName(stage.name);
   const updatedAt = new Date().toISOString();
