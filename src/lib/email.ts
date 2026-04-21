@@ -1,19 +1,28 @@
-// Shared email utility — tries SendGrid first, falls back to Resend
+// Transactional email — Resend only (https://resend.com/docs/send-with-nextjs)
+// Requires RESEND_API_KEY. Verify your sending domain in Resend for production deliverability.
 
-function normalizeEmailList(list: string[] | undefined): { email: string }[] {
+function normalizeEmailList(list: string[] | undefined): string[] {
   if (!list?.length) return [];
   const seen = new Set<string>();
-  const out: { email: string }[] = [];
+  const out: string[] = [];
   for (const raw of list) {
     const e = raw.trim().toLowerCase();
     if (!e || !e.includes('@')) continue;
     if (seen.has(e)) continue;
     seen.add(e);
-    out.push({ email: raw.trim() });
+    out.push(raw.trim());
   }
   return out;
 }
 
+/** Verified in your Resend dashboard (or use Resend’s onboarding@resend.dev for tests). */
+const DEFAULT_FROM =
+  process.env.RESEND_DEFAULT_FROM?.trim() || 'StoryPay <noreply@storypay.io>';
+
+/**
+ * Send HTML email via Resend.
+ * For conversations Reply-To routing, pass `replyTo` (e.g. reply+thread+sig@your-inbound-domain).
+ */
 export async function sendEmail({
   to,
   cc,
@@ -29,77 +38,59 @@ export async function sendEmail({
   replyTo?: string;
   subject: string;
   html: string;
-  /** Optional sender display (still uses platform from-address unless you verify a custom domain). */
+  /** Overrides default from; use a domain you verified in Resend (e.g. `Acme <mail@yourdomain.com>`). */
   from?: { email?: string; name?: string };
 }): Promise<{ success: boolean; error?: string }> {
-  const sendgridKey = process.env.SENDGRID_API_KEY;
-  const resendKey   = process.env.RESEND_API_KEY;
-  const fromEmail = from?.email?.trim() || 'noreply@storypay.io';
-  const fromName = from?.name?.trim() || 'StoryPay';
+  const resendKey = process.env.RESEND_API_KEY?.trim();
+  if (!resendKey) {
+    console.warn('[email] RESEND_API_KEY is not set');
+    return { success: false, error: 'Email not configured (RESEND_API_KEY)' };
+  }
+
+  const fromEmail = from?.email?.trim();
+  const fromName = from?.name?.trim();
+  const fromHeader =
+    fromEmail && fromName
+      ? `${fromName} <${fromEmail}>`
+      : fromEmail
+        ? fromEmail
+        : DEFAULT_FROM;
+
   const ccList = normalizeEmailList(cc);
   const bccList = normalizeEmailList(bcc);
 
-  // Try SendGrid
-  if (sendgridKey) {
-    try {
-      const personalization: Record<string, unknown> = { to: [{ email: to }] };
-      if (ccList.length) personalization.cc = ccList;
-      if (bccList.length) personalization.bcc = bccList;
-      const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${sendgridKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          personalizations: [personalization],
-          from: { email: fromEmail, name: fromName },
-          reply_to: replyTo ? { email: replyTo } : undefined,
-          subject,
-          content: [{ type: 'text/html', value: html }],
-        }),
-      });
-      if (res.status === 202) return { success: true };
-      const err = await res.text();
-      console.error('[email] SendGrid error:', res.status, err);
-    } catch (err) {
-      console.error('[email] SendGrid exception:', err);
-    }
-  }
+  try {
+    const body: Record<string, unknown> = {
+      from: fromHeader,
+      to: [to.trim()],
+      subject,
+      html,
+    };
+    if (ccList.length) body.cc = ccList;
+    if (bccList.length) body.bcc = bccList;
+    if (replyTo?.trim()) body.reply_to = replyTo.trim();
 
-  // Fallback: Resend
-  if (resendKey) {
-    try {
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${resendKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: `${fromName} <${fromEmail}>`,
-          to: [to],
-          cc: ccList.length ? ccList.map((c) => c.email) : undefined,
-          bcc: bccList.length ? bccList.map((c) => c.email) : undefined,
-          reply_to: replyTo,
-          subject,
-          html,
-        }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        console.log(`[email] Resend sent to ${to}, id:`, data.id);
-        return { success: true };
-      }
-      console.error('[email] Resend failed:', JSON.stringify(data));
-      return { success: false, error: JSON.stringify(data) };
-    } catch (err) {
-      console.error('[email] Resend exception:', err);
-    }
-  }
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${resendKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
 
-  console.warn('[email] No email service configured (SENDGRID_API_KEY or RESEND_API_KEY)');
-  return { success: false, error: 'No email service configured' };
+    const data = (await res.json()) as { id?: string; message?: string; name?: string };
+    if (res.ok) {
+      console.log(`[email] Resend sent to ${to}, id:`, data.id);
+      return { success: true };
+    }
+    const errMsg = typeof data.message === 'string' ? data.message : JSON.stringify(data);
+    console.error('[email] Resend failed:', res.status, errMsg);
+    return { success: false, error: errMsg };
+  } catch (err) {
+    console.error('[email] Resend exception:', err);
+    return { success: false, error: err instanceof Error ? err.message : 'Send failed' };
+  }
 }
 
 // ─── Email templates ──────────────────────────────────────────────────────────

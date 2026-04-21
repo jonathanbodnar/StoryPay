@@ -85,7 +85,7 @@ export default function PrivacyPage() {
             <ul className="list-disc pl-5 space-y-1 mt-2">
               <li><strong>LunarPay / Fortis:</strong> To process payments. Card data goes directly to Fortis and never touches our servers (PCI SAQ-A compliant).</li>
               <li><strong>Go High Level (GHL):</strong> To send SMS and email notifications to your customers when connected.</li>
-              <li><strong>SendGrid / Resend:</strong> To deliver transactional emails.</li>
+              <li><strong>Resend:</strong> To deliver transactional emails.</li>
               <li><strong>OpenAI:</strong> To power the Ask AI assistant. Only non-identifying account context is shared.</li>
               <li><strong>Supabase:</strong> Our database and backend infrastructure provider.</li>
               <li><strong>Legal authorities:</strong> When required by law or to protect our rights.</li>

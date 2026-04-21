@@ -312,7 +312,7 @@ export default function EmailTemplatesPage() {
  </p>
  )}
  {testResult === 'error' && (
- <p className="mt-2 text-xs text-red-500">Failed to send — check that your email service (Resend/SendGrid) is configured.</p>
+ <p className="mt-2 text-xs text-red-500">Failed to send — check that Resend is configured (RESEND_API_KEY and a verified sending domain).</p>
  )}
  </div>
  )}

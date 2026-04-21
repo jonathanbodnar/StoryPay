@@ -73,7 +73,7 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-/** Extract first email from a To/Cc string (SendGrid may send display names). */
+/** Extract first email from a To/Cc string (display names / angle brackets). */
 export function firstEmailFromList(raw: string): string {
   const s = (raw ?? '').trim();
   const m = /<?([^\s<>,]+@[^\s<>,>]+)>?/i.exec(s);

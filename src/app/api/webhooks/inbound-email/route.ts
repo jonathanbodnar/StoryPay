@@ -13,18 +13,14 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 /**
- * Inbound conversation replies (contact → venue thread).
+ * Resend **email.received** webhook → conversation thread (contact reply).
  *
- * **Resend** (recommended if you only use Resend):
- * - Enable Receiving on a domain / subdomain; point MX to Resend (see https://resend.com/inbound ).
- * - Create a webhook for `email.received` → `https://YOUR_HOST/api/webhooks/inbound-email?token=...`
- * - Env: `RESEND_API_KEY`, `CONVERSATIONS_INBOUND_SECRET`, `CONVERSATIONS_INBOUND_DOMAIN`
- * - Optional: `INBOUND_EMAIL_WEBHOOK_TOKEN` (query `token`) to block random posts.
+ * 1. Receiving: add domain in Resend, point MX records (https://resend.com/inbound ).
+ * 2. Webhook: subscribe to `email.received` → `https://YOUR_HOST/api/webhooks/inbound-email?token=...`
+ * 3. Env: `RESEND_API_KEY`, `CONVERSATIONS_INBOUND_SECRET`, `CONVERSATIONS_INBOUND_DOMAIN`
+ * 4. Optional `INBOUND_EMAIL_WEBHOOK_TOKEN` (query `token`).
  *
- * **SendGrid Inbound Parse** (multipart/form-data):
- * - MX → SendGrid; POST URL as above.
- *
- * Outbound `Reply-To` is set in `messages/route.ts` via `buildConversationsReplyToEmail` when secret + domain exist.
+ * Outbound `Reply-To` is set in `conversations/.../messages/route.ts` when secret + domain exist.
  */
 
 async function ingestFromParsedFields(params: {
@@ -97,7 +93,25 @@ async function ingestFromParsedFields(params: {
   return NextResponse.json({ ok: true, inserted: r.inserted ?? false });
 }
 
-async function handleResendWebhook(request: NextRequest): Promise<NextResponse> {
+export async function POST(request: NextRequest) {
+  const token = process.env.INBOUND_EMAIL_WEBHOOK_TOKEN?.trim();
+  if (token) {
+    const q = request.nextUrl.searchParams.get('token') ?? '';
+    if (q !== token) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+  }
+
+  const ct = request.headers.get('content-type') ?? '';
+  if (!ct.includes('application/json')) {
+    return NextResponse.json(
+      {
+        error: 'Expected application/json (Resend email.received webhook)',
+      },
+      { status: 415 },
+    );
+  }
+
   const raw = await request.text();
   let event: { type?: string; data?: { email_id?: string } };
   try {
@@ -112,7 +126,7 @@ async function handleResendWebhook(request: NextRequest): Promise<NextResponse> 
 
   const apiKey = process.env.RESEND_API_KEY?.trim();
   if (!apiKey) {
-    console.error('[inbound-email] RESEND_API_KEY missing — cannot fetch received email body');
+    console.error('[inbound-email] RESEND_API_KEY missing');
     return NextResponse.json({ error: 'RESEND_API_KEY not configured' }, { status: 503 });
   }
 
@@ -150,67 +164,4 @@ async function handleResendWebhook(request: NextRequest): Promise<NextResponse> 
     messageId,
     resendEmailId: emailId,
   });
-}
-
-async function handleSendGridInboundParse(request: NextRequest): Promise<NextResponse> {
-  let form: FormData;
-  try {
-    form = await request.formData();
-  } catch {
-    return NextResponse.json({ error: 'Expected multipart form data' }, { status: 400 });
-  }
-
-  const fromRaw = String(form.get('from') ?? form.get('sender') ?? '');
-  let toRaw = String(form.get('to') ?? '');
-  if (!toRaw.trim()) {
-    const envRaw = form.get('envelope');
-    if (envRaw && typeof envRaw === 'string') {
-      try {
-        const env = JSON.parse(envRaw) as { to?: string[] };
-        if (Array.isArray(env.to) && env.to[0]) toRaw = env.to[0];
-      } catch {
-        /* ignore */
-      }
-    }
-  }
-  const subject = String(form.get('subject') ?? '') || null;
-  let text = String(form.get('text') ?? '');
-  const html = String(form.get('html') ?? '');
-
-  const headersRaw = String(form.get('headers') ?? '');
-  let messageId: string | null = null;
-  if (headersRaw) {
-    const mid = /^Message-ID:\s*(.+)$/im.exec(headersRaw);
-    if (mid) messageId = mid[1].trim().replace(/^<|>$/g, '');
-  }
-  if (!messageId) {
-    const mid = String(form.get('message-id') ?? form.get('Message-ID') ?? '').trim();
-    if (mid) messageId = mid.replace(/^<|>$/g, '');
-  }
-
-  return ingestFromParsedFields({
-    fromRaw,
-    toRaw,
-    subject,
-    text,
-    html,
-    messageId,
-  });
-}
-
-export async function POST(request: NextRequest) {
-  const token = process.env.INBOUND_EMAIL_WEBHOOK_TOKEN?.trim();
-  if (token) {
-    const q = request.nextUrl.searchParams.get('token') ?? '';
-    if (q !== token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-  }
-
-  const ct = request.headers.get('content-type') ?? '';
-  if (ct.includes('application/json')) {
-    return handleResendWebhook(request);
-  }
-
-  return handleSendGridInboundParse(request);
 }

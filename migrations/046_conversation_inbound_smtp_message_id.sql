@@ -1,4 +1,4 @@
--- Dedupe inbound emails (SendGrid Inbound Parse, etc.) by RFC Message-ID or provider id.
+-- Dedupe inbound emails (e.g. Resend receiving) by RFC Message-ID or provider id.
 
 ALTER TABLE public.conversation_messages
   ADD COLUMN IF NOT EXISTS smtp_message_id text NULL;

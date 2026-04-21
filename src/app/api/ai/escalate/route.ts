@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { sendEmail } from '@/lib/email';
 
 const SUPPORT_EMAIL = 'clients@storyvenuemarketing.com';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
@@ -25,11 +26,13 @@ export async function POST(request: NextRequest) {
   if (!venue) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
 
   const timestamp = new Date().toLocaleString('en-US', {
-    dateStyle: 'full', timeStyle: 'short', timeZone: 'America/New_York',
+    dateStyle: 'full',
+    timeStyle: 'short',
+    timeZone: 'America/New_York',
   });
 
   const convoText = (conversation as { role: string; content: string }[])
-    .map(m => `${m.role === 'user' ? 'Client' : 'Ask AI'}: ${m.content}`)
+    .map((m) => `${m.role === 'user' ? 'Client' : 'Ask AI'}: ${m.content}`)
     .join('\n\n');
 
   const subject = `Support Request | ${venue.name} | ${venue.email || venueId}`;
@@ -78,76 +81,33 @@ export async function POST(request: NextRequest) {
     </div>
   `;
 
-  const sendgridKey = process.env.SENDGRID_API_KEY;
-  const resendKey   = process.env.RESEND_API_KEY;
+  const result = await sendEmail({
+    to: SUPPORT_EMAIL,
+    replyTo: venue.email || SUPPORT_EMAIL,
+    subject,
+    html,
+    from: { email: 'noreply@storypay.io', name: 'StoryPay Ask AI' },
+  });
 
-  if (!sendgridKey && !resendKey) {
-    console.error('[escalate] No email API key set (SENDGRID_API_KEY or RESEND_API_KEY)');
-    return NextResponse.json({ error: 'Email service not configured. Please contact clients@storyvenuemarketing.com directly.' }, { status: 503 });
-  }
-
-  // Try SendGrid first (most reliable, no domain restrictions)
-  if (sendgridKey) {
-    try {
-      const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${sendgridKey}`,
-          'Content-Type': 'application/json',
+  if (!result.success) {
+    if (result.error?.includes('RESEND_API_KEY')) {
+      return NextResponse.json(
+        {
+          error:
+            'Email service not configured. Please contact clients@storyvenuemarketing.com directly.',
         },
-        body: JSON.stringify({
-          personalizations: [{ to: [{ email: SUPPORT_EMAIL }] }],
-          from: { email: 'noreply@storypay.io', name: 'StoryPay Ask AI' },
-          reply_to: { email: venue.email || SUPPORT_EMAIL, name: venue.name },
-          subject,
-          content: [{ type: 'text/html', value: html }],
-        }),
-      });
-
-      if (res.status === 202) {
-        console.log('[escalate] Email sent via SendGrid');
-        return NextResponse.json({ success: true });
-      }
-
-      const errText = await res.text();
-      console.error('[escalate] SendGrid error:', res.status, errText);
-      // Fall through to try Resend
-    } catch (err) {
-      console.error('[escalate] SendGrid exception:', err);
-      // Fall through to try Resend
+        { status: 503 },
+      );
     }
+    return NextResponse.json(
+      {
+        error:
+          result.error ||
+          'Failed to send support email. Please email clients@storyvenuemarketing.com directly.',
+      },
+      { status: 500 },
+    );
   }
 
-  // Fallback: Resend
-  if (resendKey) {
-    try {
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${resendKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: 'StoryPay Ask AI <noreply@storypay.io>',
-          to: [SUPPORT_EMAIL],
-          reply_to: venue.email || SUPPORT_EMAIL,
-          subject,
-          html,
-        }),
-      });
-
-      const result = await res.json();
-      if (res.ok) {
-        console.log('[escalate] Email sent via Resend, id:', result.id);
-        return NextResponse.json({ success: true });
-      }
-      console.error('[escalate] Resend error:', result);
-    } catch (err) {
-      console.error('[escalate] Resend exception:', err);
-    }
-  }
-
-  return NextResponse.json({
-    error: 'Failed to send support email. Please email clients@storyvenuemarketing.com directly.',
-  }, { status: 500 });
+  return NextResponse.json({ success: true });
 }
