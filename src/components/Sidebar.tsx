@@ -21,6 +21,7 @@ import {
   FileSpreadsheet,
   Layers,
 } from 'lucide-react';
+import { classNames } from '@/lib/utils';
 
 interface Venue { id: string; name: string; ghl_location_id: string; }
 type UserRole = 'owner' | 'admin' | 'member';
@@ -118,10 +119,35 @@ export default function Sidebar({
   const [flyout, setFlyout] = useState<FlyoutGroup>(null);
   const [flyoutPos, setFlyoutPos] = useState<{ top: number; left: number } | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [convUnread, setConvUnread] = useState(0);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  const refreshConvUnread = useCallback(() => {
+    void fetch('/api/conversations/unread-count')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { count?: number } | null) => {
+        if (d && typeof d.count === 'number') setConvUnread(d.count);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    refreshConvUnread();
+    const t = setInterval(refreshConvUnread, 45000);
+    const onEvt = () => refreshConvUnread();
+    window.addEventListener('storypay:conversations-unread', onEvt);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener('storypay:conversations-unread', onEvt);
+    };
+  }, [refreshConvUnread]);
+
+  useEffect(() => {
+    if (pathname.startsWith('/dashboard/conversations')) refreshConvUnread();
+  }, [pathname, refreshConvUnread]);
 
   const isOnSettings = pathname.startsWith('/dashboard/settings');
   const isOnMarketing = pathname.startsWith('/dashboard/marketing');
@@ -313,6 +339,8 @@ export default function Sidebar({
           const active = isActive(item.href);
           const isAI = item.label === 'Ask AI' || item.label === 'Support';
           const isHelpCenter = item.label === 'Help Center';
+          const isConversations = item.href === '/dashboard/conversations';
+          const showConvBadge = isConversations && convUnread > 0;
           return (
             <Link
               key={item.label}
@@ -326,12 +354,32 @@ export default function Sidebar({
                   }
                   : () => onCloseMobile?.()
               }
-              title={rail ? item.label : undefined}
-              className={navItem(active && !isAI, rail)}
+              title={
+                rail
+                  ? isConversations && showConvBadge
+                    ? `${item.label} (${convUnread} unread)`
+                    : item.label
+                  : undefined
+              }
+              className={classNames(navItem(active && !isAI, rail), !rail && isConversations ? 'w-full' : '')}
               style={navItemStyle(active && !isAI)}
             >
-              <Icon size={16} className="shrink-0" />
-              {!rail && <span className="truncate">{item.label}</span>}
+              <span className={rail && showConvBadge ? 'relative inline-flex' : 'inline-flex'}>
+                <Icon size={16} className="shrink-0" />
+                {rail && showConvBadge ? (
+                  <span className="absolute -right-1 -top-0.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
+                ) : null}
+              </span>
+              {!rail && (
+                <>
+                  <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                  {showConvBadge ? (
+                    <span className="ml-auto shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold leading-none text-white tabular-nums">
+                      {convUnread > 99 ? '99+' : convUnread}
+                    </span>
+                  ) : null}
+                </>
+              )}
             </Link>
           );
         })}

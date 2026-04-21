@@ -1,13 +1,31 @@
 // Shared email utility — tries SendGrid first, falls back to Resend
 
+function normalizeEmailList(list: string[] | undefined): { email: string }[] {
+  if (!list?.length) return [];
+  const seen = new Set<string>();
+  const out: { email: string }[] = [];
+  for (const raw of list) {
+    const e = raw.trim().toLowerCase();
+    if (!e || !e.includes('@')) continue;
+    if (seen.has(e)) continue;
+    seen.add(e);
+    out.push({ email: raw.trim() });
+  }
+  return out;
+}
+
 export async function sendEmail({
   to,
+  cc,
+  bcc,
   replyTo,
   subject,
   html,
   from,
 }: {
   to: string;
+  cc?: string[];
+  bcc?: string[];
   replyTo?: string;
   subject: string;
   html: string;
@@ -18,10 +36,15 @@ export async function sendEmail({
   const resendKey   = process.env.RESEND_API_KEY;
   const fromEmail = from?.email?.trim() || 'noreply@storypay.io';
   const fromName = from?.name?.trim() || 'StoryPay';
+  const ccList = normalizeEmailList(cc);
+  const bccList = normalizeEmailList(bcc);
 
   // Try SendGrid
   if (sendgridKey) {
     try {
+      const personalization: Record<string, unknown> = { to: [{ email: to }] };
+      if (ccList.length) personalization.cc = ccList;
+      if (bccList.length) personalization.bcc = bccList;
       const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
         method: 'POST',
         headers: {
@@ -29,7 +52,7 @@ export async function sendEmail({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          personalizations: [{ to: [{ email: to }] }],
+          personalizations: [personalization],
           from: { email: fromEmail, name: fromName },
           reply_to: replyTo ? { email: replyTo } : undefined,
           subject,
@@ -56,6 +79,8 @@ export async function sendEmail({
         body: JSON.stringify({
           from: `${fromName} <${fromEmail}>`,
           to: [to],
+          cc: ccList.length ? ccList.map((c) => c.email) : undefined,
+          bcc: bccList.length ? bccList.map((c) => c.email) : undefined,
           reply_to: replyTo,
           subject,
           html,

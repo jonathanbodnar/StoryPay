@@ -49,6 +49,7 @@ export async function applySmsDndForVenueCustomer(params: {
       sms_dnd: true,
       sms_dnd_at: now,
       sms_dnd_source: source,
+      conversation_dnd_inbound_sms: true,
     })
     .eq('id', venueCustomerId)
     .eq('venue_id', venueId);

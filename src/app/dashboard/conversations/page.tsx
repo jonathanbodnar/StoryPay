@@ -16,6 +16,13 @@ import {
   ChevronRight,
   X,
   Smartphone,
+  Star,
+  Pin,
+  Link2,
+  ClipboardList,
+  ListTodo,
+  Info,
+  Phone,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
 
@@ -46,6 +53,11 @@ interface ThreadDetail {
     last_name: string;
     customer_email: string;
     phone: string | null;
+    sms_dnd?: boolean;
+    conversation_dnd_all?: boolean;
+    conversation_dnd_email?: boolean;
+    conversation_dnd_calls?: boolean;
+    conversation_dnd_inbound_sms?: boolean;
   } | null;
 }
 
@@ -61,6 +73,33 @@ interface Msg {
   mentioned_member_ids?: string[];
   author_label?: string;
   email_subject?: string | null;
+  is_starred?: boolean;
+  is_pinned?: boolean;
+  email_cc?: string | null;
+  email_bcc?: string | null;
+  trigger_link?: { short_code: string; name: string | null } | null;
+  trigger_link_id?: string | null;
+}
+
+interface CrmNote {
+  id: string;
+  content: string;
+  author_name: string | null;
+  created_at: string;
+}
+
+interface CrmTask {
+  id: string;
+  title: string;
+  due_date: string | null;
+  completed_at: string | null;
+  created_at: string;
+}
+
+interface TriggerLinkOpt {
+  id: string;
+  name: string;
+  short_code: string;
 }
 
 interface TeamMember {
@@ -71,6 +110,7 @@ interface TeamMember {
 }
 
 type ComposerTab = 'team' | 'email' | 'sms';
+type MessageFilter = 'all' | 'starred' | 'pinned';
 
 export default function ConversationsPage() {
   const [threads, setThreads] = useState<ThreadRow[]>([]);
@@ -93,6 +133,21 @@ export default function ConversationsPage() {
   const [contactResults, setContactResults] = useState<{ id: string; first_name: string; last_name: string; customer_email: string }[]>([]);
   const [creatingThread, setCreatingThread] = useState(false);
   const [newConversationError, setNewConversationError] = useState('');
+  const [threadSearch, setThreadSearch] = useState('');
+  const [messageFilter, setMessageFilter] = useState<MessageFilter>('all');
+  const [emailCc, setEmailCc] = useState('');
+  const [emailBcc, setEmailBcc] = useState('');
+  const [triggerLinkOptions, setTriggerLinkOptions] = useState<TriggerLinkOpt[]>([]);
+  const [selectedTriggerLinkId, setSelectedTriggerLinkId] = useState<string>('');
+  const [dndSaving, setDndSaving] = useState(false);
+  const [crmNotes, setCrmNotes] = useState<CrmNote[]>([]);
+  const [crmTasks, setCrmTasks] = useState<CrmTask[]>([]);
+  const [newCrmNote, setNewCrmNote] = useState('');
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskDue, setNewTaskDue] = useState('');
+  const [savingCrmNote, setSavingCrmNote] = useState(false);
+  const [savingCrmTask, setSavingCrmTask] = useState(false);
+  const [crmPanelOpen, setCrmPanelOpen] = useState(true);
   const listRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const deepLinkConsumed = useRef(false);
@@ -108,6 +163,9 @@ export default function ConversationsPage() {
       }
     } finally {
       setLoadingList(false);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('storypay:conversations-unread'));
+      }
     }
   }, [filterUnread]);
 
@@ -188,6 +246,45 @@ export default function ConversationsPage() {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    fetch('/api/marketing/trigger-links')
+      .then((r) => r.json())
+      .then((d: { links?: TriggerLinkOpt[] }) => {
+        if (Array.isArray(d?.links)) setTriggerLinkOptions(d.links);
+      })
+      .catch(() => {});
+  }, []);
+
+  const reloadCrmData = useCallback(async (customerId: string) => {
+    try {
+      const [nRes, tRes] = await Promise.all([
+        fetch(`/api/venue-customers/${customerId}/notes`),
+        fetch(`/api/venue-customers/${customerId}/tasks`),
+      ]);
+      if (nRes.ok) {
+        const n = await nRes.json();
+        if (Array.isArray(n)) setCrmNotes(n);
+      }
+      if (tRes.ok) {
+        const t = await tRes.json();
+        if (Array.isArray(t)) setCrmTasks(t);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const customerIdForCrm = threadDetail?.venue_customers?.id ?? null;
+
+  useEffect(() => {
+    if (!customerIdForCrm) {
+      setCrmNotes([]);
+      setCrmTasks([]);
+      return;
+    }
+    void reloadCrmData(customerIdForCrm);
+  }, [customerIdForCrm, reloadCrmData]);
+
   const reloadMessages = useCallback(async (id: string) => {
     setLoadingThread(true);
     setSendError('');
@@ -237,6 +334,10 @@ export default function ConversationsPage() {
     setBody('');
     setMentionedIds([]);
     setSendError('');
+    setEmailCc('');
+    setEmailBcc('');
+    setSelectedTriggerLinkId('');
+    setMessageFilter('all');
   }, [selectedId]);
 
   const contactLabel = useMemo(() => {
@@ -255,6 +356,26 @@ export default function ConversationsPage() {
     ? `/dashboard/contacts/${threadDetail.venue_customer_id}`
     : null;
 
+  const threadsFiltered = useMemo(() => {
+    const q = threadSearch.trim().toLowerCase();
+    if (!q) return threads;
+    return threads.filter((t) => {
+      const name = [t.contact_first_name, t.contact_last_name]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      const em = (t.contact_email || '').toLowerCase();
+      const ph = (t.contact_phone || '').toLowerCase();
+      return name.includes(q) || em.includes(q) || ph.includes(q);
+    });
+  }, [threads, threadSearch]);
+
+  const visibleMessages = useMemo(() => {
+    if (messageFilter === 'starred') return messages.filter((m) => m.is_starred);
+    if (messageFilter === 'pinned') return messages.filter((m) => m.is_pinned);
+    return messages;
+  }, [messages, messageFilter]);
+
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedId || !body.trim()) return;
@@ -272,6 +393,9 @@ export default function ConversationsPage() {
       if (composerTab === 'email') {
         payload.external_channel = 'email';
         payload.email_subject = emailSubject.trim();
+        if (emailCc.trim()) payload.email_cc = emailCc.trim();
+        if (emailBcc.trim()) payload.email_bcc = emailBcc.trim();
+        if (selectedTriggerLinkId) payload.trigger_link_id = selectedTriggerLinkId;
       }
       if (composerTab === 'sms') {
         payload.external_channel = 'sms';
@@ -290,6 +414,9 @@ export default function ConversationsPage() {
       setBody('');
       setEmailSubject('');
       setMentionedIds([]);
+      setEmailCc('');
+      setEmailBcc('');
+      setSelectedTriggerLinkId('');
       await reloadMessages(selectedId);
       await loadThreads();
     } finally {
@@ -299,6 +426,90 @@ export default function ConversationsPage() {
 
   function toggleMention(id: string) {
     setMentionedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  async function patchContactDnd(updates: Record<string, boolean>) {
+    const cid = threadDetail?.venue_customers?.id;
+    if (!cid) return;
+    setDndSaving(true);
+    try {
+      const res = await fetch(`/api/venue-customers/${cid}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) return;
+      if (selectedId) await reloadMessages(selectedId);
+      await loadThreads();
+    } finally {
+      setDndSaving(false);
+    }
+  }
+
+  async function toggleMessageMeta(m: Msg, field: 'is_starred' | 'is_pinned') {
+    if (!selectedId) return;
+    const next = !m[field];
+    const res = await fetch(`/api/conversations/threads/${selectedId}/messages/${m.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [field]: next }),
+    });
+    if (!res.ok) return;
+    const row = (await res.json()) as Msg;
+    setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, ...row } : x)));
+  }
+
+  async function submitCrmNote() {
+    const cid = threadDetail?.venue_customers?.id;
+    if (!cid || !newCrmNote.trim()) return;
+    setSavingCrmNote(true);
+    try {
+      const res = await fetch(`/api/venue-customers/${cid}/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: newCrmNote.trim() }),
+      });
+      if (!res.ok) return;
+      setNewCrmNote('');
+      await reloadCrmData(cid);
+    } finally {
+      setSavingCrmNote(false);
+    }
+  }
+
+  async function submitCrmTask() {
+    const cid = threadDetail?.venue_customers?.id;
+    if (!cid || !newTaskTitle.trim()) return;
+    setSavingCrmTask(true);
+    try {
+      const res = await fetch(`/api/venue-customers/${cid}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: newTaskTitle.trim(),
+          due_date: newTaskDue.trim() || null,
+        }),
+      });
+      if (!res.ok) return;
+      setNewTaskTitle('');
+      setNewTaskDue('');
+      await reloadCrmData(cid);
+    } finally {
+      setSavingCrmTask(false);
+    }
+  }
+
+  async function toggleTaskDone(task: CrmTask) {
+    const cid = threadDetail?.venue_customers?.id;
+    if (!cid) return;
+    const done = !!task.completed_at;
+    const res = await fetch(`/api/venue-customers/${cid}/tasks/${task.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ completed_at: done ? null : new Date().toISOString() }),
+    });
+    if (!res.ok) return;
+    await reloadCrmData(cid);
   }
 
   useEffect(() => {
@@ -400,9 +611,11 @@ export default function ConversationsPage() {
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
-                readOnly
-                placeholder="Search (select a thread below)"
-                className="w-full cursor-default rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm text-gray-400"
+                value={threadSearch}
+                onChange={(e) => setThreadSearch(e.target.value)}
+                placeholder="Search by name, email, or phone…"
+                className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-400"
+                style={{ fontSize: 16 }}
               />
             </div>
           </div>
@@ -415,13 +628,18 @@ export default function ConversationsPage() {
               <p className="px-4 py-10 text-center text-sm text-gray-500">
                 No conversations yet. Start one with a contact.
               </p>
+            ) : threadsFiltered.length === 0 ? (
+              <p className="px-4 py-10 text-center text-sm text-gray-500">
+                No threads match your search.
+              </p>
             ) : (
-              threads.map((t) => {
+              threadsFiltered.map((t) => {
                 const name =
                   [t.contact_first_name, t.contact_last_name].filter(Boolean).join(' ') ||
                   t.contact_email ||
                   'Contact';
-                const unread = (t.unread_count ?? 0) > 0;
+                const unreadN = Number(t.unread_count ?? 0);
+                const unread = unreadN > 0;
                 return (
                   <button
                     key={t.thread_id}
@@ -439,7 +657,17 @@ export default function ConversationsPage() {
                       <span className={classNames('truncate text-sm font-semibold', unread ? 'text-gray-900' : 'text-gray-700')}>
                         {name}
                       </span>
-                      {unread && <span className="h-2 w-2 flex-shrink-0 rounded-full bg-sky-500" />}
+                      {unread ? (
+                        <span className="flex shrink-0 items-center gap-1">
+                          {unreadN > 1 ? (
+                            <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white tabular-nums">
+                              {unreadN > 99 ? '99+' : unreadN}
+                            </span>
+                          ) : (
+                            <span className="h-2 w-2 rounded-full bg-red-500" />
+                          )}
+                        </span>
+                      ) : null}
                     </div>
                     <p className="truncate text-xs text-gray-500">
                       {t.last_message_preview || t.subject || 'No messages'}
@@ -520,6 +748,105 @@ export default function ConversationsPage() {
                 )}
               </header>
 
+              {threadDetail.venue_customers ? (
+                <div className="flex-shrink-0 border-b border-gray-100 bg-white px-3 py-3 sm:px-5">
+                  <div className="mx-auto max-w-xl rounded-2xl border border-gray-200 bg-gray-50/60 p-4">
+                    <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                      Do not disturb
+                    </p>
+                    <p className="mb-3 text-xs text-gray-500">
+                      Blocks outbound messages from this inbox. If a lead texts STOP, SMS DND is turned on
+                      automatically (and inbound SMS preference below).
+                    </p>
+                    <label className="mb-4 flex cursor-pointer items-center justify-between gap-3 border-b border-gray-200 pb-4 text-sm font-medium text-gray-800">
+                      <span>DND all channels</span>
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-gray-300"
+                        checked={!!threadDetail.venue_customers.conversation_dnd_all}
+                        disabled={dndSaving}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            void patchContactDnd({
+                              conversation_dnd_all: true,
+                              conversation_dnd_email: true,
+                              sms_dnd: true,
+                              conversation_dnd_inbound_sms: true,
+                            });
+                          } else {
+                            void patchContactDnd({ conversation_dnd_all: false });
+                          }
+                        }}
+                      />
+                    </label>
+                    <p className="mb-3 text-center text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                      or
+                    </p>
+                    <div className="flex flex-col gap-3 text-sm font-medium text-gray-800">
+                      <label className="flex cursor-pointer items-center justify-between gap-3">
+                        <span className="flex items-center gap-2">
+                          <Mail size={16} className="shrink-0 text-gray-500" /> Email
+                        </span>
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-gray-300"
+                          checked={!!threadDetail.venue_customers.conversation_dnd_email}
+                          disabled={dndSaving}
+                          onChange={(e) => void patchContactDnd({ conversation_dnd_email: e.target.checked })}
+                        />
+                      </label>
+                      <label className="flex cursor-pointer items-center justify-between gap-3">
+                        <span className="flex items-center gap-2">
+                          <MessageCircle size={16} className="shrink-0 text-gray-500" /> Text messages
+                        </span>
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-gray-300"
+                          checked={!!threadDetail.venue_customers.sms_dnd}
+                          disabled={dndSaving}
+                          onChange={(e) => void patchContactDnd({ sms_dnd: e.target.checked })}
+                        />
+                      </label>
+                      <label className="flex cursor-pointer items-center justify-between gap-3">
+                        <span className="flex items-center gap-2">
+                          <Phone size={16} className="shrink-0 text-gray-500" /> Calls &amp; voicemail
+                        </span>
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-gray-300"
+                          checked={!!threadDetail.venue_customers.conversation_dnd_calls}
+                          disabled={dndSaving}
+                          onChange={(e) => void patchContactDnd({ conversation_dnd_calls: e.target.checked })}
+                        />
+                      </label>
+                      <label className="flex cursor-pointer items-center justify-between gap-3">
+                        <span className="flex flex-1 items-center gap-2">
+                          <span className="shrink-0 text-gray-500" aria-hidden>
+                            ↙
+                          </span>
+                          <span>Inbound calls &amp; SMS</span>
+                          <span
+                            className="inline-flex text-gray-400"
+                            title="Preference for inbound handling. Opt-out keywords also set SMS DND."
+                          >
+                            <Info size={14} />
+                          </span>
+                        </span>
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 shrink-0 rounded border-gray-300"
+                          checked={!!threadDetail.venue_customers.conversation_dnd_inbound_sms}
+                          disabled={dndSaving}
+                          onChange={(e) =>
+                            void patchContactDnd({ conversation_dnd_inbound_sms: e.target.checked })
+                          }
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
               <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-6">
                 {loadingThread ? (
                   <div className="flex justify-center py-16 text-gray-400">
@@ -529,11 +856,42 @@ export default function ConversationsPage() {
                   <p className="py-12 text-center text-sm text-gray-500">No messages yet. Say hello below.</p>
                 ) : (
                   <div className="mx-auto flex max-w-xl flex-col gap-3">
-                    {messages.map((m) => {
+                    <div className="flex flex-wrap gap-2">
+                      {(
+                        [
+                          { id: 'all' as const, label: 'All messages' },
+                          { id: 'starred' as const, label: 'Starred' },
+                          { id: 'pinned' as const, label: 'Pinned' },
+                        ] as const
+                      ).map((f) => (
+                        <button
+                          key={f.id}
+                          type="button"
+                          onClick={() => setMessageFilter(f.id)}
+                          className={classNames(
+                            'rounded-full px-3 py-1.5 text-xs font-semibold transition-colors',
+                            messageFilter === f.id
+                              ? 'bg-gray-900 text-white'
+                              : 'border border-gray-200 bg-white text-gray-600 hover:border-gray-300',
+                          )}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+                    {visibleMessages.length === 0 ? (
+                      <p className="py-8 text-center text-sm text-gray-500">No messages match this filter.</p>
+                    ) : null}
+                    {visibleMessages.map((m) => {
                       const isInternal = m.visibility === 'internal';
                       const fromContact = m.sender_kind === 'contact';
                       const fromUs = m.sender_kind === 'owner' || m.sender_kind === 'team';
                       const alignRight = fromUs && !fromContact;
+                      const host =
+                        typeof window !== 'undefined' ? window.location.host : 'app';
+                      const triggerHref = m.trigger_link?.short_code
+                        ? `/t/${m.trigger_link.short_code}`
+                        : null;
                       return (
                         <div
                           key={m.id}
@@ -573,6 +931,35 @@ export default function ConversationsPage() {
                               </p>
                             )}
                             <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                            {!isInternal && fromUs && m.channel === 'email' && (m.email_cc || m.email_bcc) && (
+                              <div className="mt-2 border-t border-white/10 pt-2 text-[11px] text-white/75">
+                                {m.email_cc ? <p>CC: {m.email_cc}</p> : null}
+                                {m.email_bcc ? <p>BCC: {m.email_bcc}</p> : null}
+                              </div>
+                            )}
+                            {triggerHref && m.trigger_link && (
+                              <p
+                                className={classNames(
+                                  'mt-2 text-xs',
+                                  fromUs && !isInternal ? 'text-white/85' : 'text-gray-600',
+                                )}
+                              >
+                                <Link
+                                  href={triggerHref}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className={classNames(
+                                    'font-medium underline',
+                                    fromUs && !isInternal ? 'text-white' : 'text-sky-700',
+                                  )}
+                                >
+                                  {host}/t/{m.trigger_link.short_code}
+                                </Link>
+                                {m.trigger_link.name ? (
+                                  <span className="text-gray-500"> — {m.trigger_link.name}</span>
+                                ) : null}
+                              </p>
+                            )}
                           </div>
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 px-1 text-[10px] text-gray-400">
                             <span>{m.author_label}</span>
@@ -590,6 +977,25 @@ export default function ConversationsPage() {
                                 {m.channel === 'sms' ? 'SMS not sent' : 'Email not sent'}: {m.send_error}
                               </span>
                             )}
+                            <button
+                              type="button"
+                              title={m.is_starred ? 'Unstar' : 'Star'}
+                              onClick={() => void toggleMessageMeta(m, 'is_starred')}
+                              className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-amber-600"
+                            >
+                              <Star
+                                size={14}
+                                className={m.is_starred ? 'fill-amber-400 text-amber-500' : ''}
+                              />
+                            </button>
+                            <button
+                              type="button"
+                              title={m.is_pinned ? 'Unpin' : 'Pin'}
+                              onClick={() => void toggleMessageMeta(m, 'is_pinned')}
+                              className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                            >
+                              <Pin size={14} className={m.is_pinned ? 'text-sky-600' : ''} />
+                            </button>
                           </div>
                         </div>
                       );
@@ -597,6 +1003,132 @@ export default function ConversationsPage() {
                     <div ref={bottomRef} />
                   </div>
                 )}
+              </div>
+
+              <div className="flex-shrink-0 border-t border-gray-100 bg-white px-3 py-3 sm:px-5">
+                <div className="mx-auto max-w-xl">
+                  <button
+                    type="button"
+                    onClick={() => setCrmPanelOpen((o) => !o)}
+                    className="flex w-full items-center justify-between rounded-xl border border-gray-200 bg-gray-50/80 px-3 py-2 text-left text-sm font-semibold text-gray-900"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <ClipboardList size={16} />
+                      Notes &amp; tasks
+                    </span>
+                    <ChevronRight
+                      size={16}
+                      className={classNames('text-gray-400 transition-transform', crmPanelOpen ? 'rotate-90' : '')}
+                    />
+                  </button>
+                  {crmPanelOpen && threadDetail.venue_customers?.id ? (
+                    <div className="mt-3 space-y-4 border-t border-gray-100 pt-3">
+                      <div>
+                        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                          Notes
+                        </p>
+                        <ul className="mb-2 max-h-40 space-y-2 overflow-y-auto text-sm text-gray-700">
+                          {crmNotes.map((n) => (
+                            <li key={n.id} className="rounded-lg border border-gray-100 bg-white px-2.5 py-2">
+                              <p className="whitespace-pre-wrap">{n.content}</p>
+                              <p className="mt-1 text-[10px] text-gray-400">
+                                {n.author_name || 'Team'} ·{' '}
+                                {new Date(n.created_at).toLocaleString(undefined, {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: 'numeric',
+                                  minute: '2-digit',
+                                })}
+                              </p>
+                            </li>
+                          ))}
+                          {crmNotes.length === 0 ? (
+                            <li className="text-xs text-gray-400">No notes yet.</li>
+                          ) : null}
+                        </ul>
+                        <textarea
+                          value={newCrmNote}
+                          onChange={(e) => setNewCrmNote(e.target.value)}
+                          rows={2}
+                          placeholder="Add a note (syncs to contact profile)…"
+                          className="w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                          style={{ fontSize: 16 }}
+                        />
+                        <div className="mt-2 flex justify-end">
+                          <button
+                            type="button"
+                            disabled={savingCrmNote || !newCrmNote.trim()}
+                            onClick={() => void submitCrmNote()}
+                            className="rounded-xl bg-[#171717] px-4 py-2 text-xs font-medium text-white disabled:opacity-50"
+                          >
+                            {savingCrmNote ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save note'}
+                          </button>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                          <ListTodo size={12} /> Tasks
+                        </p>
+                        <ul className="mb-2 max-h-40 space-y-2 overflow-y-auto text-sm">
+                          {crmTasks.map((tk) => (
+                            <li
+                              key={tk.id}
+                              className="flex items-start gap-2 rounded-lg border border-gray-100 bg-white px-2.5 py-2"
+                            >
+                              <input
+                                type="checkbox"
+                                className="mt-1 h-4 w-4 rounded border-gray-300"
+                                checked={!!tk.completed_at}
+                                onChange={() => void toggleTaskDone(tk)}
+                              />
+                              <div className="min-w-0 flex-1">
+                                <p
+                                  className={classNames(
+                                    tk.completed_at ? 'text-gray-400 line-through' : 'text-gray-900',
+                                  )}
+                                >
+                                  {tk.title}
+                                </p>
+                                {tk.due_date ? (
+                                  <p className="text-[10px] text-gray-400">Due {tk.due_date}</p>
+                                ) : null}
+                              </div>
+                            </li>
+                          ))}
+                          {crmTasks.length === 0 ? (
+                            <li className="text-xs text-gray-400">No tasks yet.</li>
+                          ) : null}
+                        </ul>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <input
+                            type="text"
+                            value={newTaskTitle}
+                            onChange={(e) => setNewTaskTitle(e.target.value)}
+                            placeholder="Task title"
+                            className="min-w-0 flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                            style={{ fontSize: 16 }}
+                          />
+                          <input
+                            type="date"
+                            value={newTaskDue}
+                            onChange={(e) => setNewTaskDue(e.target.value)}
+                            className="rounded-xl border border-gray-200 px-3 py-2 text-sm sm:w-40"
+                          />
+                        </div>
+                        <div className="mt-2 flex justify-end">
+                          <button
+                            type="button"
+                            disabled={savingCrmTask || !newTaskTitle.trim()}
+                            onClick={() => void submitCrmTask()}
+                            className="rounded-xl bg-[#171717] px-4 py-2 text-xs font-medium text-white disabled:opacity-50"
+                          >
+                            {savingCrmTask ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Add task'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
               </div>
 
               <div className="flex-shrink-0 border-t border-gray-100 bg-gray-50/90 px-3 py-3 sm:px-5">
@@ -696,19 +1228,71 @@ export default function ConversationsPage() {
 
                   <form onSubmit={handleSend} className="flex flex-col gap-2">
                     {composerTab === 'email' && (
-                      <div>
-                        <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                          Subject
-                        </label>
-                        <input
-                          type="text"
-                          value={emailSubject}
-                          onChange={(e) => setEmailSubject(e.target.value)}
-                          placeholder="Enter subject"
-                          className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
-                          style={{ fontSize: 16 }}
-                        />
-                      </div>
+                      <>
+                        <div>
+                          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                            Subject
+                          </label>
+                          <input
+                            type="text"
+                            value={emailSubject}
+                            onChange={(e) => setEmailSubject(e.target.value)}
+                            placeholder="Enter subject"
+                            className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
+                            style={{ fontSize: 16 }}
+                          />
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <div>
+                            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                              CC
+                            </label>
+                            <input
+                              type="text"
+                              value={emailCc}
+                              onChange={(e) => setEmailCc(e.target.value)}
+                              placeholder="email@example.com, …"
+                              className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
+                              style={{ fontSize: 16 }}
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                              BCC
+                            </label>
+                            <input
+                              type="text"
+                              value={emailBcc}
+                              onChange={(e) => setEmailBcc(e.target.value)}
+                              placeholder="email@example.com, …"
+                              className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
+                              style={{ fontSize: 16 }}
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                            <Link2 size={12} />
+                            Trigger link (optional)
+                          </label>
+                          <select
+                            value={selectedTriggerLinkId}
+                            onChange={(e) => setSelectedTriggerLinkId(e.target.value)}
+                            className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:border-gray-500 focus:outline-none"
+                          >
+                            <option value="">None</option>
+                            {triggerLinkOptions.map((tl) => (
+                              <option key={tl.id} value={tl.id}>
+                                {tl.name} ({tl.short_code})
+                              </option>
+                            ))}
+                          </select>
+                          <p className="mt-1 text-[10px] text-gray-500">
+                            Adds a short tracked link to the email body; clicks go through your trigger link and count
+                            toward analytics.
+                          </p>
+                        </div>
+                      </>
                     )}
                     <div>
                       {composerTab === 'email' && (

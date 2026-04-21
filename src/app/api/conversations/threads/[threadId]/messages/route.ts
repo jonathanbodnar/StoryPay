@@ -20,6 +20,18 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
+function parseEmailRecipientsField(v: unknown): string[] {
+  if (typeof v !== 'string' || !v.trim()) return [];
+  return v
+    .split(/[,;\n]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.includes('@'));
+}
+
+function appOrigin(): string {
+  return (process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io').replace(/\/$/, '');
+}
+
 async function assertThreadVenue(threadId: string, venueId: string) {
   const { data, error } = await supabaseAdmin
     .from('conversation_threads')
@@ -63,11 +75,31 @@ export async function GET(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  const tlIds = [
+    ...new Set(
+      (messages ?? [])
+        .map((m) => m.trigger_link_id as string | null | undefined)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0),
+    ),
+  ];
+  const triggerById: Record<string, { short_code: string; name: string | null }> = {};
+  if (tlIds.length > 0) {
+    const { data: links } = await supabaseAdmin
+      .from('trigger_links')
+      .select('id, short_code, name')
+      .eq('venue_id', venueId)
+      .in('id', tlIds);
+    for (const L of links ?? []) {
+      const row = L as { id: string; short_code: string; name: string | null };
+      triggerById[row.id] = { short_code: row.short_code, name: row.name };
+    }
+  }
+
   const memberIds = new Set<string>();
   for (const m of messages ?? []) {
     if (m.venue_team_member_id) memberIds.add(m.venue_team_member_id as string);
   }
-  let memberNames: Record<string, string> = {};
+  const memberNames: Record<string, string> = {};
   if (memberIds.size > 0) {
     const { data: members } = await supabaseAdmin
       .from('venue_team_members')
@@ -86,17 +118,24 @@ export async function GET(
     }
   }
 
-  const enriched = (messages ?? []).map((m) => ({
-    ...m,
-    author_label:
-      m.sender_kind === 'owner'
-        ? 'Owner'
-        : m.sender_kind === 'contact'
-          ? (m.contact_from_name as string) || 'Contact'
-          : m.sender_kind === 'system'
-            ? 'System'
-            : memberNames[m.venue_team_member_id as string] || 'Team member',
-  }));
+  const enriched = (messages ?? []).map((m) => {
+    const tid = m.trigger_link_id as string | null | undefined;
+    const tmeta = tid ? triggerById[tid] : undefined;
+    return {
+      ...m,
+      trigger_link: tmeta
+        ? { short_code: tmeta.short_code, name: tmeta.name }
+        : null,
+      author_label:
+        m.sender_kind === 'owner'
+          ? 'Owner'
+          : m.sender_kind === 'contact'
+            ? (m.contact_from_name as string) || 'Contact'
+            : m.sender_kind === 'system'
+              ? 'System'
+              : memberNames[m.venue_team_member_id as string] || 'Team member',
+    };
+  });
 
   return NextResponse.json(enriched);
 }
@@ -121,6 +160,14 @@ export async function POST(
   const rawSubject =
     typeof body.email_subject === 'string' ? body.email_subject.trim() : '';
   const externalChannelOverride = body.external_channel as string | undefined;
+  const emailCcList = parseEmailRecipientsField(body.email_cc);
+  const emailBccList = parseEmailRecipientsField(body.email_bcc);
+  const emailCcStored = emailCcList.length ? emailCcList.join(', ') : null;
+  const emailBccStored = emailBccList.length ? emailBccList.join(', ') : null;
+  const triggerLinkId =
+    typeof body.trigger_link_id === 'string' && /^[\da-f-]{36}$/i.test(body.trigger_link_id)
+      ? body.trigger_link_id
+      : null;
   const mentionedIds = Array.isArray(body.mentioned_member_ids)
     ? (body.mentioned_member_ids as string[]).filter((id) => typeof id === 'string')
     : [];
@@ -165,12 +212,56 @@ export async function POST(
       ? externalChannelOverride
       : threadReplyChannel;
 
+  if (
+    triggerLinkId &&
+    (visibility !== 'external' || replyChannel !== 'email')
+  ) {
+    return NextResponse.json(
+      { error: 'Trigger links can only be attached to outbound email.' },
+      { status: 400 },
+    );
+  }
+
+  const venueCustomerId = (gate.thread as { venue_customer_id: string }).venue_customer_id;
+
+  if (visibility === 'external') {
+    const { data: dndRow } = await supabaseAdmin
+      .from('venue_customers')
+      .select('sms_dnd, conversation_dnd_all, conversation_dnd_email')
+      .eq('id', venueCustomerId)
+      .eq('venue_id', venueId)
+      .maybeSingle();
+    const dnd = dndRow as {
+      sms_dnd?: boolean;
+      conversation_dnd_all?: boolean;
+      conversation_dnd_email?: boolean;
+    } | null;
+    if (dnd?.conversation_dnd_all) {
+      return NextResponse.json(
+        { error: 'This contact has Do Not Disturb (all channels) enabled.' },
+        { status: 400 },
+      );
+    }
+    if (replyChannel === 'email' && dnd?.conversation_dnd_email) {
+      return NextResponse.json(
+        { error: 'This contact has email Do Not Disturb enabled.' },
+        { status: 400 },
+      );
+    }
+    if (replyChannel === 'sms' && dnd?.sms_dnd) {
+      return NextResponse.json(
+        { error: 'This contact has SMS Do Not Disturb enabled (e.g. they texted STOP).' },
+        { status: 400 },
+      );
+    }
+  }
+
   if (visibility === 'external') {
     if (replyChannel === 'sms') {
       const { data: contact } = await supabaseAdmin
         .from('venue_customers')
         .select('customer_email, first_name, last_name, phone, ghl_contact_id')
-        .eq('id', gate.thread.venue_customer_id)
+        .eq('id', venueCustomerId)
         .eq('venue_id', venueId)
         .maybeSingle();
 
@@ -211,7 +302,7 @@ export async function POST(
       try {
         if (!contactId) {
           contactId = await findOrCreateContact(ghlToken, vrow.ghl_location_id as string, {
-            email: email || `ghl.${gate.thread.venue_customer_id}@${PLACEHOLDER_SMS_EMAIL_DOMAIN}`,
+            email: email || `ghl.${venueCustomerId}@${PLACEHOLDER_SMS_EMAIL_DOMAIN}`,
             phone: phoneE164,
             firstName,
             lastName,
@@ -219,7 +310,7 @@ export async function POST(
           await supabaseAdmin
             .from('venue_customers')
             .update({ ghl_contact_id: contactId })
-            .eq('id', gate.thread.venue_customer_id)
+            .eq('id', venueCustomerId)
             .eq('venue_id', venueId);
         }
         if (!contactId) {
@@ -235,7 +326,7 @@ export async function POST(
       const { data: contact } = await supabaseAdmin
         .from('venue_customers')
         .select('customer_email, first_name, last_name')
-        .eq('id', gate.thread.venue_customer_id)
+        .eq('id', venueCustomerId)
         .eq('venue_id', venueId)
         .maybeSingle();
 
@@ -253,12 +344,61 @@ export async function POST(
       const venueName = (venue as { name?: string })?.name ?? 'Venue';
       const brandEmail = (venue as { brand_email?: string | null })?.brand_email?.trim();
 
+      let resolvedTrigger:
+        | { short_code: string; name: string | null; href: string; displayText: string }
+        | null = null;
+      if (triggerLinkId) {
+        const { data: tl, error: tlErr } = await supabaseAdmin
+          .from('trigger_links')
+          .select('id, short_code, name')
+          .eq('id', triggerLinkId)
+          .eq('venue_id', venueId)
+          .maybeSingle();
+        if (tlErr || !tl) {
+          return NextResponse.json({ error: 'Invalid trigger link for this venue.' }, { status: 400 });
+        }
+        const shortCode = String(tl.short_code);
+        const { data: leadRow } = await supabaseAdmin
+          .from('leads')
+          .select('track_token')
+          .eq('venue_id', venueId)
+          .ilike('email', to)
+          .maybeSingle();
+        const token = (leadRow as { track_token?: string } | null)?.track_token?.trim().toLowerCase();
+        const base = appOrigin();
+        const q =
+          token && /^[0-9a-f]{32}$/i.test(token) ? `?t=${encodeURIComponent(token)}` : '';
+        const href = `${base}/t/${encodeURIComponent(shortCode)}${q}`;
+        let displayHost: string;
+        try {
+          displayHost = new URL(base).hostname;
+        } catch {
+          displayHost = 'storypay.io';
+        }
+        const displayText = `${displayHost}/t/${shortCode}`;
+        resolvedTrigger = {
+          short_code: shortCode,
+          name: (tl.name as string) || null,
+          href,
+          displayText,
+        };
+      }
+
+      const triggerBlock = resolvedTrigger
+        ? `<p style="margin:16px 0 12px"><a href="${escapeHtml(resolvedTrigger.href)}" style="color:#111827;font-weight:600;text-decoration:underline">${escapeHtml(resolvedTrigger.displayText)}</a>${
+            resolvedTrigger.name
+              ? `<span style="color:#6b7280;font-size:13px"> — ${escapeHtml(resolvedTrigger.name)}</span>`
+              : ''
+          }</p>`
+        : '';
+
       const html = `
 <div style="font-family:'Open Sans',Arial,sans-serif;font-size:15px;line-height:1.6;color:#111827">
 ${escapeHtml(rawBody)
   .split(/\n+/)
   .map((p) => `<p style="margin:0 0 12px">${p}</p>`)
   .join('')}
+${triggerBlock}
 <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0" />
 <p style="font-size:12px;color:#6b7280">Sent via StoryPay Conversations — reply to this email to continue the thread.</p>
 </div>`;
@@ -270,6 +410,8 @@ ${escapeHtml(rawBody)
 
       const result = await sendEmail({
         to,
+        cc: emailCcList.length ? emailCcList : undefined,
+        bcc: emailBccList.length ? emailBccList : undefined,
         replyTo: brandEmail || undefined,
         subject: subjectLine,
         html,
@@ -293,6 +435,9 @@ ${escapeHtml(rawBody)
   const messageChannel =
     visibility === 'external' && replyChannel === 'sms' ? 'sms' : 'email';
 
+  const insertTriggerId =
+    visibility === 'external' && messageChannel === 'email' && triggerLinkId ? triggerLinkId : null;
+
   const { data: row, error: insErr } = await supabaseAdmin
     .from('conversation_messages')
     .insert({
@@ -302,6 +447,9 @@ ${escapeHtml(rawBody)
       body: rawBody,
       email_subject:
         visibility === 'external' && messageChannel === 'email' ? rawSubject || null : null,
+      email_cc: visibility === 'external' && messageChannel === 'email' ? emailCcStored : null,
+      email_bcc: visibility === 'external' && messageChannel === 'email' ? emailBccStored : null,
+      trigger_link_id: insertTriggerId,
       sender_kind,
       venue_team_member_id,
       mentioned_member_ids: visibility === 'internal' ? mentionedIds : [],

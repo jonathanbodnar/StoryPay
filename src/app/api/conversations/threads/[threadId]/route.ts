@@ -26,7 +26,9 @@ export async function GET(
 
   const { data: contact } = await supabaseAdmin
     .from('venue_customers')
-    .select('id, first_name, last_name, customer_email, phone')
+    .select(
+      'id, first_name, last_name, customer_email, phone, sms_dnd, conversation_dnd_all, conversation_dnd_email, conversation_dnd_calls, conversation_dnd_inbound_sms',
+    )
     .eq('id', thread.venue_customer_id)
     .eq('venue_id', venueId)
     .maybeSingle();

@@ -110,6 +110,18 @@ export async function PATCH(
     if (!updates.sms_dnd) {
       updates.sms_dnd_at = null;
       updates.sms_dnd_source = null;
+      updates.conversation_dnd_inbound_sms = false;
+    }
+  }
+
+  for (const key of [
+    'conversation_dnd_all',
+    'conversation_dnd_email',
+    'conversation_dnd_calls',
+    'conversation_dnd_inbound_sms',
+  ] as const) {
+    if (key in body) {
+      updates[key] = body[key] === true;
     }
   }
 
