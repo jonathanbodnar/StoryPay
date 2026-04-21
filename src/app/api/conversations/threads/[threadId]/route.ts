@@ -6,6 +6,49 @@ import { slugifyStageLabel } from '@/lib/pipeline-stage-slug';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+type StagePill = { name: string; color: string | null };
+
+function humanizePipelineSlug(slug: string): string {
+  return slug
+    .split('_')
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
+
+async function stageById(venueId: string, stageId: string): Promise<StagePill | null> {
+  const { data: st } = await supabaseAdmin
+    .from('lead_pipeline_stages')
+    .select('name, color')
+    .eq('id', stageId)
+    .eq('venue_id', venueId)
+    .maybeSingle();
+  if (!st) return null;
+  return {
+    name: String((st as { name?: string }).name || 'Stage'),
+    color: ((st as { color?: string | null }).color ?? null) as string | null,
+  };
+}
+
+async function stageFromPipelineSlug(
+  venueId: string,
+  pipelineId: string,
+  pipelineKey: string,
+): Promise<StagePill | null> {
+  if (!pipelineKey) return null;
+  const { data: stages } = await supabaseAdmin
+    .from('lead_pipeline_stages')
+    .select('name, color')
+    .eq('pipeline_id', pipelineId)
+    .eq('venue_id', venueId);
+  const match = (stages ?? []).find((s) => slugifyStageLabel(String(s.name)) === pipelineKey);
+  if (!match) return null;
+  return {
+    name: String(match.name),
+    color: ((match as { color?: string | null }).color ?? null) as string | null,
+  };
+}
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ threadId: string }> },
@@ -34,54 +77,58 @@ export async function GET(
     .eq('venue_id', venueId)
     .maybeSingle();
 
-  function humanizePipelineSlug(slug: string): string {
-    return slug
-      .split('_')
-      .filter(Boolean)
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-      .join(' ');
-  }
-
-  let contact_stage: { name: string; color: string | null } | null = null;
   const c = contact as {
     stage_id?: string | null;
     pipeline_id?: string | null;
     pipeline_stage?: string | null;
+    customer_email?: string | null;
   } | null;
 
+  const email = (c?.customer_email ?? '').trim();
+  const pipelineSlugRaw = (c?.pipeline_stage ?? '').trim();
+  const pipelineKey = pipelineSlugRaw ? slugifyStageLabel(pipelineSlugRaw) : '';
+
+  let contact_stage: StagePill | null = null;
+
   if (c?.stage_id) {
-    const { data: st } = await supabaseAdmin
-      .from('lead_pipeline_stages')
-      .select('name, color')
-      .eq('id', c.stage_id)
+    contact_stage = await stageById(venueId, c.stage_id);
+  }
+
+  if (!contact_stage && c?.pipeline_id && pipelineKey) {
+    contact_stage = await stageFromPipelineSlug(venueId, c.pipeline_id, pipelineKey);
+  }
+
+  if (email) {
+    const { data: lead } = await supabaseAdmin
+      .from('leads')
+      .select('stage_id, pipeline_id, status')
       .eq('venue_id', venueId)
+      .ilike('email', email)
       .maybeSingle();
-    if (st) {
-      contact_stage = {
-        name: String((st as { name?: string }).name || 'Stage'),
-        color: ((st as { color?: string | null }).color ?? null) as string | null,
-      };
+    const lr = lead as {
+      stage_id?: string | null;
+      pipeline_id?: string | null;
+      status?: string | null;
+    } | null;
+
+    if (!contact_stage && lr?.stage_id) {
+      contact_stage = await stageById(venueId, lr.stage_id as string);
+    }
+
+    if (!contact_stage && lr?.pipeline_id && pipelineKey) {
+      contact_stage = await stageFromPipelineSlug(venueId, lr.pipeline_id as string, pipelineKey);
+    }
+
+    if (!contact_stage) {
+      const status = (lr?.status ?? '').trim();
+      if (status) {
+        contact_stage = { name: humanizePipelineSlug(slugifyStageLabel(status)), color: null };
+      }
     }
   }
 
-  const pipelineSlug = (c?.pipeline_stage ?? '').trim();
-  if (!contact_stage && c?.pipeline_id && pipelineSlug) {
-    const { data: stages } = await supabaseAdmin
-      .from('lead_pipeline_stages')
-      .select('name, color')
-      .eq('pipeline_id', c.pipeline_id)
-      .eq('venue_id', venueId);
-    const match = (stages ?? []).find((s) => slugifyStageLabel(String(s.name)) === pipelineSlug);
-    if (match) {
-      contact_stage = {
-        name: String(match.name),
-        color: ((match as { color?: string | null }).color ?? null) as string | null,
-      };
-    }
-  }
-
-  if (!contact_stage && pipelineSlug) {
-    contact_stage = { name: humanizePipelineSlug(pipelineSlug), color: null };
+  if (!contact_stage && pipelineKey) {
+    contact_stage = { name: humanizePipelineSlug(pipelineKey), color: null };
   }
 
   return NextResponse.json({

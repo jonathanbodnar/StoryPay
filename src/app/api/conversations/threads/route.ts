@@ -5,6 +5,7 @@ import { getSessionUser } from '@/lib/session';
 import { conversationReaderRef } from '@/lib/conversation-reader';
 import { conversationHttpError } from '@/lib/conversation-db-errors';
 import {
+  isMissingMessageStarPinColumnsError,
   isMissingThreadStarPinColumnsError,
   starPinFlagsFromMessages,
 } from '@/lib/conversation-thread-flags';
@@ -100,11 +101,16 @@ async function threadIdsWithThreadColumn(
     .eq('venue_id', venueId);
   const tids = (venueThreads ?? []).map((t) => t.id as string);
   if (tids.length === 0) return new Set();
-  const { data: msgs } = await supabaseAdmin
+  const { data: msgs, error: msgErr } = await supabaseAdmin
     .from('conversation_messages')
     .select('thread_id')
     .eq(col, true)
     .in('thread_id', tids);
+  if (msgErr) {
+    if (isMissingMessageStarPinColumnsError(msgErr)) return new Set();
+    console.warn('[conversations/threads] star/pin filter on messages:', msgErr.message);
+    return new Set();
+  }
   return new Set((msgs ?? []).map((m) => m.thread_id as string));
 }
 

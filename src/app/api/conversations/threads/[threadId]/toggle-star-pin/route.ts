@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
 import {
   isMissingThreadStarPinColumnsError,
+  starPinMigrationHint,
   toggleStarPinOnMessages,
 } from '@/lib/conversation-thread-flags';
 
@@ -33,7 +34,15 @@ export async function POST(
 
   const tryMessages = async () => {
     const r = await toggleStarPinOnMessages(threadId, field);
-    if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
+    if (!r.ok) {
+      return NextResponse.json(
+        {
+          error: r.error,
+          hint: r.status === 503 ? starPinMigrationHint() : undefined,
+        },
+        { status: r.status },
+      );
+    }
     return NextResponse.json({ ok: true, mode: 'messages' as const });
   };
 
@@ -67,7 +76,7 @@ export async function POST(
     return NextResponse.json(
       {
         error: uErr.message,
-        hint: 'If this mentions is_starred/is_pinned, run migrations/044_conversation_threads_star_pin.sql',
+        hint: starPinMigrationHint(),
       },
       { status: 500 },
     );
