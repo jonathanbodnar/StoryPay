@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { RESEND_FROM_FALLBACK } from '@/lib/email';
 import { supabaseAdmin } from '@/lib/supabase';
 
 const NOTIFY_EMAIL = 'jason@storyvenuemarketing.com';
@@ -67,14 +68,14 @@ async function sendEmail(data: {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-          from: 'StoryPay <noreply@storypay.io>',
+        from: process.env.RESEND_DEFAULT_FROM?.trim() || RESEND_FROM_FALLBACK,
         to: [NOTIFY_EMAIL],
         reply_to: data.email,
-        subject: 'New StoryPay invite requested',
+        subject: 'New StoryVenue invite requested',
         html: `
           <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
             <div style="background:#1b1b1b;padding:24px 32px;border-radius:12px 12px 0 0">
-              <h1 style="color:white;font-size:18px;margin:0;font-weight:400">New StoryPay Invite Request</h1>
+              <h1 style="color:white;font-size:18px;margin:0;font-weight:400">New StoryVenue invite request</h1>
             </div>
             <div style="padding:32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
               <table style="width:100%;border-collapse:collapse">

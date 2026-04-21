@@ -19,10 +19,10 @@ RESEND_API_KEY=re_xxxxxxxx
 3. Set the default **From** for the app (must use that domain):
 
 ```bash
-RESEND_DEFAULT_FROM="StoryVenue <mail@yourdomain.com>"
+RESEND_DEFAULT_FROM="StoryVenue <noreply@storyvenue.com>"
 ```
 
-If unset, the app falls back to `StoryPay <noreply@storypay.io>` — that address must also be verified in **your** Resend account, or sends will fail.
+Use the exact From you verified in Resend (bare `noreply@storyvenue.com` is fine). If unset locally, the code falls back to `StoryVenue <noreply@storyvenue.com>`.
 
 Per-email `from` overrides still apply (e.g. venue **brand email** in Settings → **Branding**) — those addresses must be verified in Resend. If brand email is empty, the **display name** is still your venue name and the **address** comes from `RESEND_DEFAULT_FROM`.
 

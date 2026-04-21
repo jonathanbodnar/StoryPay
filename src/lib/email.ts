@@ -1,5 +1,8 @@
 // Transactional email — Resend only (https://resend.com/docs/send-with-nextjs)
-// Requires RESEND_API_KEY. Verify your sending domain in Resend for production deliverability.
+// Requires RESEND_API_KEY. Set RESEND_DEFAULT_FROM on the host (e.g. Railway) — verified in Resend.
+
+/** Used when `RESEND_DEFAULT_FROM` is unset (e.g. local). Production: set env to your verified address. */
+export const RESEND_FROM_FALLBACK = 'StoryVenue <noreply@storyvenue.com>';
 
 function normalizeEmailList(list: string[] | undefined): string[] {
   if (!list?.length) return [];
@@ -15,12 +18,10 @@ function normalizeEmailList(list: string[] | undefined): string[] {
   return out;
 }
 
-/**
- * Parse RESEND_DEFAULT_FROM: `"Name <email@domain.com>"` or bare `email@domain.com`.
- */
-function getDefaultFrom(): { header: string; email: string } {
-  const raw = process.env.RESEND_DEFAULT_FROM?.trim() || 'StoryPay <noreply@storypay.io>';
-  const m = /^(.+?)\s*<([^>]+)>$/u.exec(raw);
+/** Parse `"Name <email@domain.com>"` or bare `email@domain.com`. */
+function parseFromString(raw: string): { header: string; email: string } {
+  const s = raw.trim();
+  const m = /^(.+?)\s*<([^>]+)>$/u.exec(s);
   if (m) {
     const name = m[1].replace(/^["']|["']$/g, '').trim();
     const email = m[2].trim();
@@ -29,10 +30,15 @@ function getDefaultFrom(): { header: string; email: string } {
       header: name ? `${name} <${email}>` : email,
     };
   }
-  if (raw.includes('@')) {
-    return { header: raw, email: raw };
+  if (s.includes('@')) {
+    return { header: s, email: s };
   }
-  return { header: 'StoryPay <noreply@storypay.io>', email: 'noreply@storypay.io' };
+  return parseFromString(RESEND_FROM_FALLBACK);
+}
+
+function getDefaultFrom(): { header: string; email: string } {
+  const raw = process.env.RESEND_DEFAULT_FROM?.trim() || RESEND_FROM_FALLBACK;
+  return parseFromString(raw);
 }
 
 /**

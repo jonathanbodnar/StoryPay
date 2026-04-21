@@ -4,7 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 
 const SUPPORT_EMAIL = 'clients@storyvenuemarketing.com';
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com';
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
   const html = `
     <div style="font-family:'Open Sans',Arial,sans-serif;max-width:680px;margin:0 auto">
       <div style="background:#1b1b1b;padding:24px 32px;border-radius:12px 12px 0 0">
-        <h1 style="color:white;font-size:18px;margin:0;font-weight:400">Support Request — Ask AI Escalation</h1>
+        <h1 style="color:white;font-size:18px;margin:0;font-weight:400">Support request — StoryVenue Ask AI</h1>
         <p style="color:rgba(255,255,255,0.6);font-size:12px;margin:6px 0 0">${timestamp}</p>
       </div>
       <div style="padding:28px 32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
 
         <div style="text-align:center;border-top:1px solid #e5e7eb;padding-top:16px">
           <a href="${APP_URL}/admin" style="color:#1b1b1b;font-size:12px;font-weight:600;text-decoration:none">View in Admin Panel</a>
-          <p style="color:#9ca3af;font-size:11px;margin:8px 0 0">Sent from StoryPay Ask AI · ${timestamp}</p>
+          <p style="color:#9ca3af;font-size:11px;margin:8px 0 0">Sent from StoryVenue Ask AI · ${timestamp}</p>
         </div>
       </div>
     </div>
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
     replyTo: venue.email || SUPPORT_EMAIL,
     subject,
     html,
-    from: { email: 'noreply@storypay.io', name: 'StoryPay Ask AI' },
+    from: { email: 'noreply@storyvenue.com', name: 'StoryVenue Ask AI' },
   });
 
   if (!result.success) {
