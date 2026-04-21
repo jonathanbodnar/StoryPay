@@ -5,6 +5,22 @@ import { getVenueId } from '@/lib/auth-helpers';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+/**
+ * PostgREST `.or()` parses each clause as column.operator.value using `.` as delimiter.
+ * Unquoted ilike patterns containing `.` (e.g. `%user@gmail.com%`) break parsing, so
+ * values must be wrapped in double quotes; double quotes inside are escaped as `""`.
+ */
+function venueCustomerSearchOrFilter(searchRaw: string): string {
+  const escaped = searchRaw
+    .replace(/\\/g, '\\\\')
+    .replace(/%/g, '\\%')
+    .replace(/_/g, '\\_');
+  const pat = `%${escaped}%`;
+  const q = (v: string) => `"${v.replace(/"/g, '""')}"`;
+  const p = q(pat);
+  return `first_name.ilike.${p},last_name.ilike.${p},customer_email.ilike.${p},phone.ilike.${p}`;
+}
+
 export async function GET(request: NextRequest) {
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -18,21 +34,22 @@ export async function GET(request: NextRequest) {
     .order('created_at', { ascending: false });
 
   if (search) {
-    const pat = `%${search}%`;
-    query = query.or(
-      `first_name.ilike.${pat},last_name.ilike.${pat},customer_email.ilike.${pat}`,
-    );
+    query = query.or(venueCustomerSearchOrFilter(search)).limit(80);
   }
 
   const { data, error } = await query;
   if (error) {
     console.error('[venue-customers GET]', error);
     // Gracefully degrade if the FK to venue_spaces doesn't exist on this project.
-    const { data: plain, error: plainErr } = await supabaseAdmin
+    let plainQuery = supabaseAdmin
       .from('venue_customers')
       .select('*')
       .eq('venue_id', venueId)
       .order('created_at', { ascending: false });
+    if (search) {
+      plainQuery = plainQuery.or(venueCustomerSearchOrFilter(search)).limit(80);
+    }
+    const { data: plain, error: plainErr } = await plainQuery;
     if (plainErr) {
       return NextResponse.json({ error: plainErr.message }, { status: 500 });
     }

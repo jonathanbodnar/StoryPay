@@ -667,7 +667,7 @@ export default function ConversationsPage() {
                 <input
                   value={contactSearch}
                   onChange={(e) => setContactSearch(e.target.value)}
-                  placeholder="Search contacts by name or email…"
+                  placeholder="Search contacts by name, email, or phone…"
                   className="w-full rounded-xl border border-gray-200 py-2.5 pl-9 pr-3 text-sm"
                   style={{ fontSize: 16 }}
                   autoFocus
