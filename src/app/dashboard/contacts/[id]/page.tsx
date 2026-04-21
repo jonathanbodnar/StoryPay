@@ -821,7 +821,10 @@ export default function CustomerDetailPage() {
                 <div className="flex flex-wrap items-center gap-2 mt-3">
                   <Link
                     href={conversationsOutreach.emailHref}
-                    className="inline-flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3.5 py-2 text-sm font-semibold text-violet-900 shadow-sm transition-colors hover:border-violet-300 hover:bg-violet-100"
+                    className="inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-semibold text-white transition-colors"
+                    style={{ backgroundColor: '#1b1b1b' }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#333333')}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1b1b1b')}
                     title="Open Conversations — reuses their thread or creates one, then email composer"
                     aria-label={`Email ${conversationsOutreach.labelName} in Conversations`}
                   >
@@ -830,7 +833,10 @@ export default function CustomerDetailPage() {
                   </Link>
                   <Link
                     href={conversationsOutreach.smsHref}
-                    className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2 text-sm font-semibold text-emerald-950 shadow-sm transition-colors hover:border-emerald-300 hover:bg-emerald-100"
+                    className="inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-semibold text-white transition-colors"
+                    style={{ backgroundColor: '#1b1b1b' }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#333333')}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1b1b1b')}
                     title="Open Conversations — reuses their thread or creates one, then SMS composer"
                     aria-label={`SMS ${conversationsOutreach.labelName} in Conversations`}
                   >
@@ -1049,7 +1055,10 @@ export default function CustomerDetailPage() {
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mr-1">Outreach</span>
                 <Link
                   href={conversationsOutreach.emailHref}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-xs font-semibold text-violet-900 transition-colors hover:bg-violet-100"
+                  className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-white transition-colors"
+                  style={{ backgroundColor: '#1b1b1b' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#333333')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1b1b1b')}
                   title="Email in Conversations"
                   aria-label={`Email ${conversationsOutreach.labelName} in Conversations`}
                 >
@@ -1058,7 +1067,10 @@ export default function CustomerDetailPage() {
                 </Link>
                 <Link
                   href={conversationsOutreach.smsHref}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-950 transition-colors hover:bg-emerald-100"
+                  className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-white transition-colors"
+                  style={{ backgroundColor: '#1b1b1b' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#333333')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1b1b1b')}
                   title="SMS in Conversations"
                   aria-label={`SMS ${conversationsOutreach.labelName} in Conversations`}
                 >

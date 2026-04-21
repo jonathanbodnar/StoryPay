@@ -322,7 +322,10 @@ export default function ContactsPage() {
                         <>
                           <Link
                             href={emailConvHref}
-                            className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-violet-800 transition-colors hover:bg-violet-50"
+                            className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-semibold text-white transition-colors"
+                            style={{ backgroundColor: '#1b1b1b' }}
+                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#333333')}
+                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1b1b1b')}
                             title="Open or start email thread in Conversations"
                             aria-label={`Email ${c.name || c.email || 'contact'} in Conversations`}
                           >
@@ -331,7 +334,10 @@ export default function ContactsPage() {
                           </Link>
                           <Link
                             href={smsConvHref}
-                            className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-emerald-900 transition-colors hover:bg-emerald-50"
+                            className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-semibold text-white transition-colors"
+                            style={{ backgroundColor: '#1b1b1b' }}
+                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#333333')}
+                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1b1b1b')}
                             title="Open or start SMS thread in Conversations"
                             aria-label={`SMS ${c.name || c.email || 'contact'} in Conversations`}
                           >
