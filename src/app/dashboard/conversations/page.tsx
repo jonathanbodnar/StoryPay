@@ -226,7 +226,7 @@ export default function ConversationsPage() {
         setContactResults([]);
         return;
       }
-      fetch(`/api/venue-customers?search=${encodeURIComponent(contactSearch.trim())}`)
+      fetch(`/api/conversations/contact-search?search=${encodeURIComponent(contactSearch.trim())}`)
         .then((r) => r.json())
         .then((d) => {
           if (Array.isArray(d)) setContactResults(d.slice(0, 20));

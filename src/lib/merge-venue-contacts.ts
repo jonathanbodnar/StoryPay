@@ -156,3 +156,96 @@ export async function mergeVenueContacts(
 
   return filtered;
 }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Resolve or create a `venue_customers` row for a merged contact so conversation threads
+ * can use `venue_customer_id` (FK). Contacts list uses merge (GHL/LP/native); conversations
+ * must anchor to StoryPay customer rows.
+ */
+export async function ensureVenueCustomerIdForMergedContact(
+  venueId: string,
+  c: MergedContact,
+): Promise<string | null> {
+  const sid = String(c.id);
+  const emailRaw = (c.email || '').trim().toLowerCase();
+
+  if (UUID_RE.test(sid)) {
+    const { data: byPk } = await supabaseAdmin
+      .from('venue_customers')
+      .select('id')
+      .eq('venue_id', venueId)
+      .eq('id', sid)
+      .maybeSingle();
+    if (byPk?.id) return byPk.id as string;
+  }
+
+  const { data: byGhl } = await supabaseAdmin
+    .from('venue_customers')
+    .select('id')
+    .eq('venue_id', venueId)
+    .eq('ghl_contact_id', sid)
+    .maybeSingle();
+  if (byGhl?.id) return byGhl.id as string;
+
+  const { data: byLp } = await supabaseAdmin
+    .from('venue_customers')
+    .select('id')
+    .eq('venue_id', venueId)
+    .eq('lunarpay_customer_id', sid)
+    .maybeSingle();
+  if (byLp?.id) return byLp.id as string;
+
+  if (
+    emailRaw &&
+    !emailRaw.endsWith('@storypay.internal') &&
+    !emailRaw.includes('@ghl-sms.storypay.placeholder')
+  ) {
+    const { data: byEmail } = await supabaseAdmin
+      .from('venue_customers')
+      .select('id')
+      .eq('venue_id', venueId)
+      .ilike('customer_email', emailRaw)
+      .maybeSingle();
+    if (byEmail?.id) return byEmail.id as string;
+  }
+
+  const ghlId = c.source === 'ghl' ? sid : null;
+  const lpId = c.source === 'lunarpay' ? sid : null;
+  let ghlContactId = ghlId;
+  let lunarpayCustomerId = lpId;
+  if (c.source === 'storypay') {
+    if (/^\d+$/.test(sid)) lunarpayCustomerId = sid;
+    else if (!UUID_RE.test(sid)) ghlContactId = sid;
+  }
+
+  const customer_email =
+    emailRaw ||
+    (ghlContactId ? `ghl.${ghlContactId}@ghl-sms.storypay.placeholder` : '') ||
+    `no-email-${sid.replace(/[^a-z0-9]/gi, '-')}@storypay.internal`;
+
+  const { data: upserted, error } = await supabaseAdmin
+    .from('venue_customers')
+    .upsert(
+      {
+        venue_id: venueId,
+        customer_email,
+        first_name: c.firstName || '',
+        last_name: c.lastName || '',
+        phone: c.phone || null,
+        ghl_contact_id: ghlContactId,
+        lunarpay_customer_id: lunarpayCustomerId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'venue_id,customer_email' },
+    )
+    .select('id')
+    .single();
+
+  if (error) {
+    console.error('[ensureVenueCustomerIdForMergedContact]', error);
+    return null;
+  }
+  return (upserted?.id as string) ?? null;
+}
