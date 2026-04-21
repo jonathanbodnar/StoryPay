@@ -116,13 +116,18 @@ export async function sendSms(
   contactId: string,
   message: string
 ) {
+  const cid = String(contactId ?? '').trim();
+  if (!cid) {
+    throw new Error('GHL sendSms: contactId is required');
+  }
+
   // Exchange agency token → location token if needed
   const token = await resolveLocationToken(accessToken, locationId);
 
   // Get or create a conversation, then send SMS through it
   try {
     const convRes = await ghlRequest(
-      `/conversations/search?locationId=${locationId}&contactId=${contactId}&limit=1`,
+      `/conversations/search?locationId=${locationId}&contactId=${cid}&limit=1`,
       token,
       { locationId }
     );
@@ -131,16 +136,17 @@ export async function sendSms(
     if (!conversationId) {
       const newConv = await ghlRequest('/conversations/', token, {
         method: 'POST',
-        body: { locationId, contactId },
+        body: { locationId, contactId: cid },
         locationId,
       });
       conversationId = newConv?.conversation?.id || newConv?.id;
     }
 
     if (conversationId) {
+      // GHL requires contactId on this route even when conversationId is set (otherwise 404 "Contact id not given").
       const result = await ghlRequest('/conversations/messages', token, {
         method: 'POST',
-        body: { type: 'SMS', conversationId, message, locationId },
+        body: { type: 'SMS', conversationId, contactId: cid, message, locationId },
         locationId,
       });
       console.log(`[ghl] SMS sent via conversation ${conversationId}`);
@@ -150,10 +156,10 @@ export async function sendSms(
     console.error('[ghl] sendSms conversation path failed, trying direct:', err);
   }
 
-  // Direct fallback
+  // Direct fallback (contact only — still must include contactId)
   return ghlRequest('/conversations/messages', token, {
     method: 'POST',
-    body: { type: 'SMS', contactId, message, locationId },
+    body: { type: 'SMS', contactId: cid, message, locationId },
     locationId,
   });
 }
