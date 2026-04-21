@@ -80,6 +80,75 @@ export function firstEmailFromList(raw: string): string {
   return (m ? m[1] : s).trim().toLowerCase();
 }
 
+function normalizeRecipientChunks(v: unknown): string[] {
+  if (v == null) return [];
+  if (Array.isArray(v)) return v.flatMap((x) => normalizeRecipientChunks(x));
+  if (typeof v === 'string') {
+    return v
+      .split(/[,;\n]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+const INBOUND_HEADER_KEYS = [
+  'delivered-to',
+  'envelope-to',
+  'x-original-to',
+  'x-forwarded-to',
+  'to',
+] as const;
+
+/**
+ * Resend's `to` array is not always ordered with our `reply+{thread}+{sig}@...` first.
+ * Scan To, Cc, and common envelope headers for the routing local part.
+ */
+export function pickReplyRoutingAddressFromInboundEmail(email: {
+  to?: unknown;
+  cc?: unknown;
+  headers?: unknown;
+}): string {
+  const chunks: string[] = [];
+  const push = (u: unknown) => chunks.push(...normalizeRecipientChunks(u));
+
+  push(email.to);
+  push(email.cc);
+
+  const headers = email.headers;
+  if (headers && typeof headers === 'object' && !Array.isArray(headers)) {
+    const h = headers as Record<string, unknown>;
+    for (const key of INBOUND_HEADER_KEYS) {
+      const direct = h[key];
+      if (direct != null) push(direct);
+      const title =
+        key.split('-').map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join('-');
+      if (title !== key && h[title] != null) push(h[title]);
+    }
+  }
+
+  for (const raw of chunks) {
+    const addr = firstEmailFromList(raw);
+    const local = addr.split('@')[0] ?? '';
+    if (parseReplyLocalPart(local)) return raw.trim();
+  }
+  return '';
+}
+
+/** Strict match, plus Gmail-style dots in the local part (contact vs MUA From). */
+export function inboundReplyFromMatchesContact(storedEmail: string, fromEmail: string): boolean {
+  const a = storedEmail.trim().toLowerCase();
+  const b = fromEmail.trim().toLowerCase();
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const [al, ad] = a.split('@');
+  const [bl, bd] = b.split('@');
+  if (!al || !ad || !bl || !bd || ad !== bd) return false;
+  const gmail = ad === 'gmail.com' || ad === 'googlemail.com';
+  if (gmail && al.replace(/\./g, '') === bl.replace(/\./g, '')) return true;
+  return false;
+}
+
 export async function insertInboundConversationEmail(params: {
   threadId: string;
   venueId: string;
@@ -125,7 +194,8 @@ export async function insertInboundConversationEmail(params: {
   const expectedEmail = ((contact as { customer_email?: string } | null)?.customer_email ?? '')
     .trim()
     .toLowerCase();
-  if (!expectedEmail || fromEmail.trim().toLowerCase() !== expectedEmail) {
+  const fromNorm = fromEmail.trim().toLowerCase();
+  if (!expectedEmail || !inboundReplyFromMatchesContact(expectedEmail, fromNorm)) {
     return { ok: false, error: 'from_mismatch' };
   }
 

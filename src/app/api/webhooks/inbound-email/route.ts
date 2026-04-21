@@ -6,6 +6,7 @@ import {
   insertInboundConversationEmail,
   parseFromHeader,
   parseReplyLocalPart,
+  pickReplyRoutingAddressFromInboundEmail,
   verifyReplySignature,
 } from '@/lib/conversations-inbound-email';
 
@@ -46,6 +47,7 @@ async function ingestFromParsedFields(params: {
 
   const { email: fromEmail, name: fromName } = parseFromHeader(fromRaw);
   if (!fromEmail || !toRaw.trim()) {
+    console.warn('[inbound-email] skipped: missing_from_or_to');
     return NextResponse.json({ ok: true, skipped: 'missing_from_or_to' });
   }
 
@@ -53,6 +55,7 @@ async function ingestFromParsedFields(params: {
   const local = toEmail.split('@')[0] ?? '';
   const parsed = parseReplyLocalPart(local);
   if (!parsed) {
+    console.warn('[inbound-email] skipped: not_reply_address', { local: local.slice(0, 72) });
     return NextResponse.json({ ok: true, skipped: 'not_reply_address' });
   }
 
@@ -86,8 +89,19 @@ async function ingestFromParsedFields(params: {
   });
 
   if (!r.ok) {
+    const skippable = new Set(['from_mismatch', 'thread_not_found', 'thread_not_email']);
+    if (r.error && skippable.has(r.error)) {
+      console.warn('[inbound-email] skipped ingest:', r.error, { threadId: parsed.threadId });
+      return NextResponse.json({ ok: true, skipped: r.error });
+    }
     console.error('[inbound-email] ingest', r.error);
     return NextResponse.json({ error: r.error ?? 'insert_failed' }, { status: 500 });
+  }
+
+  if (!r.inserted && text.trim()) {
+    console.warn('[inbound-email] no row inserted (duplicate or empty body?)', {
+      threadId: parsed.threadId,
+    });
   }
 
   return NextResponse.json({ ok: true, inserted: r.inserted ?? false });
@@ -102,22 +116,22 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const ct = request.headers.get('content-type') ?? '';
-  if (!ct.includes('application/json')) {
-    return NextResponse.json(
-      {
-        error: 'Expected application/json (Resend email.received webhook)',
-      },
-      { status: 415 },
-    );
-  }
-
   const raw = await request.text();
   let event: { type?: string; data?: { email_id?: string } };
   try {
     event = JSON.parse(raw) as typeof event;
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+
+  const ct = request.headers.get('content-type') ?? '';
+  if (!ct.includes('application/json') && typeof event.type !== 'string') {
+    return NextResponse.json(
+      {
+        error: 'Expected application/json (Resend email.received webhook)',
+      },
+      { status: 415 },
+    );
   }
 
   if (event.type !== 'email.received' || !event.data?.email_id) {
@@ -144,14 +158,28 @@ export async function POST(request: NextRequest) {
   const email = (await res.json()) as {
     from?: string;
     to?: string[];
+    cc?: string[];
     subject?: string;
     text?: string | null;
     html?: string | null;
     message_id?: string;
+    headers?: Record<string, unknown>;
   };
 
   const fromRaw = email.from ?? '';
-  const toRaw = Array.isArray(email.to) && email.to.length ? email.to[0] : '';
+  const replyRoute = pickReplyRoutingAddressFromInboundEmail(email);
+  const toRaw =
+    replyRoute ||
+    (Array.isArray(email.to) && email.to.length ? String(email.to[0]) : '');
+  if (toRaw) {
+    const local = firstEmailFromList(toRaw).split('@')[0] ?? '';
+    if (!parseReplyLocalPart(local)) {
+      console.warn('[inbound-email] no reply+thread+sig in to/cc/headers', {
+        usedFallbackTo: !replyRoute,
+        toPreview: JSON.stringify(email.to ?? []).slice(0, 160),
+      });
+    }
+  }
   const subject = email.subject ? String(email.subject) : null;
   const messageId = email.message_id ? String(email.message_id) : null;
 
