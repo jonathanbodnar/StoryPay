@@ -65,9 +65,9 @@ const quickLinks: { href: string; label: string; desc: string; Icon: typeof Mail
     Icon: Megaphone,
   },
   {
-    href: '/dashboard/marketing/email/automations',
-    label: 'Email workflows',
-    desc: 'Delays & automated sends',
+    href: '/dashboard/marketing/workflows',
+    label: 'Workflows',
+    desc: 'Triggers, delays, email & SMS (more channels later)',
     Icon: Workflow,
   },
   {
