@@ -1,8 +1,8 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import {
   getGhlContact,
-  getGhlConversationIdForContact,
   getGhlToken,
+  listGhlConversationIdsForContactOrdered,
   listGhlConversationMessages,
   normalizePhone,
 } from '@/lib/ghl';
@@ -384,14 +384,23 @@ export async function insertInboundGhlSms(params: {
 function ghlApiMessagesFromResponse(raw: unknown): Record<string, unknown>[] {
   if (!raw || typeof raw !== 'object') return [];
   const o = raw as Record<string, unknown>;
-  const direct = o.messages;
-  if (Array.isArray(direct)) return direct as Record<string, unknown>[];
-  if (direct && typeof direct === 'object') {
-    const inner = (direct as Record<string, unknown>).messages;
-    if (Array.isArray(inner)) return inner as Record<string, unknown>[];
+  const candidates: unknown[] = [
+    o.messages,
+    o.messageList,
+    o.results,
+    o.data,
+    o.items,
+  ];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate as Record<string, unknown>[];
+    if (candidate && typeof candidate === 'object') {
+      const bag = candidate as Record<string, unknown>;
+      for (const key of ['messages', 'data', 'items', 'nodes']) {
+        const inner = bag[key];
+        if (Array.isArray(inner)) return inner as Record<string, unknown>[];
+      }
+    }
   }
-  if (Array.isArray(o.data)) return o.data as Record<string, unknown>[];
-  if (Array.isArray(o.items)) return o.items as Record<string, unknown>[];
   return [];
 }
 
@@ -409,8 +418,21 @@ function isGhlApiInboundSmsMessage(msg: Record<string, unknown>): boolean {
 }
 
 function bodyFromGhlApiMessage(msg: Record<string, unknown>): string {
+  const content = msg.content;
+  const fromContent =
+    content && typeof content === 'object'
+      ? (content as Record<string, unknown>).text ??
+        (content as Record<string, unknown>).body ??
+        (content as Record<string, unknown>).message
+      : undefined;
   const raw =
-    msg.body ?? msg.text ?? msg.message ?? msg.content ?? msg.messageBody ?? '';
+    fromContent ??
+    msg.body ??
+    msg.text ??
+    msg.message ??
+    (typeof msg.content === 'string' ? msg.content : '') ??
+    msg.messageBody ??
+    '';
   let s = String(raw ?? '').trim();
   if (!s && msg.html) {
     s = String(msg.html)
@@ -463,38 +485,63 @@ export async function syncInboundSmsFromGhlForThread(params: {
     const contactId = (vc as { ghl_contact_id?: string | null } | null)?.ghl_contact_id;
     if (!contactId) return { imported: 0 };
 
-    const conversationId = await getGhlConversationIdForContact(token, locationId, contactId);
-    if (!conversationId) return { imported: 0 };
+    const convIds = await listGhlConversationIdsForContactOrdered(token, locationId, contactId, 25);
+    if (convIds.length === 0) return { imported: 0 };
 
-    const rawList = await listGhlConversationMessages(token, locationId, conversationId);
-    const list = ghlApiMessagesFromResponse(rawList);
+    const maxConv = Math.min(
+      8,
+      Math.max(1, Number.parseInt(process.env.GHL_SMS_SYNC_MAX_CONVERSATIONS ?? '8', 10) || 8)
+    );
+    const debug = process.env.GHL_SMS_SYNC_DEBUG === '1';
 
     let imported = 0;
-    for (const msg of list) {
-      // Only contact→venue SMS; require explicit inbound (avoids importing outbound without direction).
-      if (String(msg.direction ?? '').toLowerCase() !== 'inbound') continue;
-      if (!isGhlApiInboundSmsMessage(msg)) continue;
-      const body = bodyFromGhlApiMessage(msg);
-      if (!body) continue;
-      const ghlMessageId = ghlApiMessageId(msg);
-      if (!ghlMessageId) continue;
+    for (const ghlConversationId of convIds.slice(0, maxConv)) {
+      let rawList: unknown;
+      try {
+        rawList = await listGhlConversationMessages(token, locationId, ghlConversationId);
+      } catch (e) {
+        if (debug) console.warn('[ghl-sms] list messages failed for conversation', ghlConversationId, e);
+        continue;
+      }
+      const list = ghlApiMessagesFromResponse(rawList);
+      if (debug) {
+        console.log(
+          '[ghl-sms] sync scan',
+          JSON.stringify({
+            ghlConversationId,
+            messageCount: list.length,
+            sampleKeys: list[0] ? Object.keys(list[0]).slice(0, 18) : [],
+          })
+        );
+      }
 
-      const createdAt =
-        (msg.dateAdded as string | undefined) ||
-        (msg.createdAt as string | undefined) ||
-        (msg.date as string | undefined) ||
-        null;
+      for (const msg of list) {
+        const dir = String(msg.direction ?? '').toLowerCase();
+        if (dir === 'outbound') continue;
+        if (!isGhlApiInboundSmsMessage(msg)) continue;
+        const body = bodyFromGhlApiMessage(msg);
+        if (!body) continue;
+        const ghlMessageId = ghlApiMessageId(msg);
+        if (!ghlMessageId) continue;
 
-      const r = await insertInboundGhlSms({
-        venueId,
-        locationId,
-        contactId,
-        messageBody: body,
-        ghlMessageId,
-        threadId,
-        createdAt,
-      });
-      if (r.inserted) imported++;
+        const createdAt =
+          (msg.dateAdded as string | undefined) ||
+          (msg.createdAt as string | undefined) ||
+          (msg.date as string | undefined) ||
+          (msg.sentAt as string | undefined) ||
+          null;
+
+        const r = await insertInboundGhlSms({
+          venueId,
+          locationId,
+          contactId,
+          messageBody: body,
+          ghlMessageId,
+          threadId,
+          createdAt,
+        });
+        if (r.inserted) imported++;
+      }
     }
 
     return { imported };

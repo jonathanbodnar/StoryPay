@@ -126,12 +126,7 @@ export async function sendSms(
 
   // Get or create a conversation, then send SMS through it
   try {
-    const convRes = await ghlRequest(
-      `/conversations/search?locationId=${locationId}&contactId=${cid}&limit=1`,
-      token,
-      { locationId }
-    );
-    let conversationId = convRes?.conversations?.[0]?.id;
+    let conversationId: string | null = await getGhlConversationIdForContact(accessToken, locationId, cid);
 
     if (!conversationId) {
       const newConv = await ghlRequest('/conversations/', token, {
@@ -164,20 +159,52 @@ export async function sendSms(
   });
 }
 
-/** Resolve the primary GHL conversation id for a contact (SMS thread lives here). */
+/**
+ * Conversation ids for a contact, best-first for SMS: TYPE_SMS / SMS channel sorts ahead of email threads.
+ * A contact often has multiple GHL conversations; inbound texts may not be on conversations[0].
+ */
+export async function listGhlConversationIdsForContactOrdered(
+  accessToken: string,
+  locationId: string,
+  contactId: string,
+  searchLimit = 25
+): Promise<string[]> {
+  const token = await resolveLocationToken(accessToken, locationId);
+  const convRes = await ghlRequest(
+    `/conversations/search?locationId=${encodeURIComponent(locationId)}&contactId=${encodeURIComponent(contactId)}&limit=${searchLimit}`,
+    token,
+    { locationId }
+  );
+  const list = (convRes?.conversations ?? []) as Record<string, unknown>[];
+  const scored = list
+    .map((c) => {
+      const id = c.id != null ? String(c.id) : '';
+      if (!id) return null;
+      const lm = String(c.lastMessageType ?? '').toUpperCase();
+      let score = lm.includes('SMS') ? 20 : 0;
+      const lom = String(
+        (c as { lastOutboundMessageType?: string }).lastOutboundMessageType ?? ''
+      ).toUpperCase();
+      if (lom.includes('SMS')) score += 8;
+      const lmm = String((c as { lastManualMessageChannel?: string }).lastManualMessageChannel ?? '').toUpperCase();
+      if (lmm === 'SMS') score += 12;
+      const lu = c.dateUpdated ?? c.updatedAt ?? c.lastMessageDate ?? c.createdAt ?? '';
+      const ts = new Date(String(lu || 0)).getTime() || 0;
+      return { id, score, ts };
+    })
+    .filter((x): x is NonNullable<typeof x> => x != null);
+  scored.sort((a, b) => (b.score - a.score) || (b.ts - a.ts));
+  return scored.map((s) => s.id);
+}
+
+/** Best conversation id for SMS-heavy use (first after SMS-prioritized ordering). */
 export async function getGhlConversationIdForContact(
   accessToken: string,
   locationId: string,
   contactId: string
 ): Promise<string | null> {
-  const token = await resolveLocationToken(accessToken, locationId);
-  const convRes = await ghlRequest(
-    `/conversations/search?locationId=${encodeURIComponent(locationId)}&contactId=${encodeURIComponent(contactId)}&limit=1`,
-    token,
-    { locationId }
-  );
-  const id = convRes?.conversations?.[0]?.id;
-  return id != null ? String(id) : null;
+  const ids = await listGhlConversationIdsForContactOrdered(accessToken, locationId, contactId, 25);
+  return ids[0] ?? null;
 }
 
 /** List messages in a conversation (inbound replies appear here even when webhooks are not configured). */
