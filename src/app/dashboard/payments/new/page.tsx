@@ -817,7 +817,7 @@ export default function NewProposalInvoicePage() {
  <div className="flex items-center gap-3 flex-wrap">
  <p className="text-sm font-semibold text-gray-900">Line Items</p>
  <Link href="/dashboard/offerings" className="text-xs font-medium text-gray-500 hover:text-gray-800 underline underline-offset-2">
- Offerings catalog
+ Package catalog
  </Link>
  </div>
  <div className="flex flex-wrap items-center gap-2">

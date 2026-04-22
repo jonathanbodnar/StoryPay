@@ -126,7 +126,7 @@ export default function OfferingsPage() {
         setBundles(Array.isArray(pkJson) ? pkJson : []);
       }
     } catch {
-      setError('Network error while loading offerings.');
+      setError('Network error while loading packages.');
     } finally {
       setLoading(false);
     }
@@ -178,9 +178,9 @@ export default function OfferingsPage() {
     <div>
       <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="font-heading text-2xl text-gray-900">Offerings</h1>
+          <h1 className="font-heading text-2xl text-gray-900">Packages</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Items and bundles your venue sells. Use them on invoices and proposals.
+            Everything your venue sells — simple items and bundled packages. Use them on invoices and proposals.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -247,7 +247,7 @@ export default function OfferingsPage() {
           <div className="py-14 text-center">
             <Package size={36} className="mx-auto mb-3 text-gray-200" />
             <p className="text-sm font-medium text-gray-500">
-              {search ? 'No offerings match your search.' : 'No offerings yet.'}
+              {search ? 'No packages match your search.' : 'No packages yet.'}
             </p>
             {!search ? (
               <p className="mt-1 text-xs text-gray-400">
