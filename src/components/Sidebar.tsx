@@ -17,7 +17,6 @@ import {
   BadgeCheck,
   Ticket,
   Package,
-  Smartphone,
   FileSpreadsheet,
   Layers,
 } from 'lucide-react';
@@ -52,7 +51,6 @@ const menuItems: NavItem[] = [
   { label: 'Conversations', href: '/dashboard/conversations', icon: MessageCircle, navId: 'nav_main_conversations' },
   { label: 'Calendar', href: '/dashboard/calendar', icon: Calendar, navId: 'nav_main_calendar' },
   { label: 'Leads', href: '/dashboard/leads', icon: Inbox, navId: 'nav_main_leads' },
-  { label: 'Floor', href: '/dashboard/floor', icon: Smartphone, navId: 'nav_main_floor' },
   { label: 'Reports', href: '/dashboard/reports', icon: BarChart2, navId: 'nav_main_reports' },
   { label: "What's New", href: '/dashboard/updates', icon: Megaphone, navId: 'nav_main_updates' },
   { label: 'Help Center', href: '/dashboard/help', icon: BookOpen, navId: 'nav_main_help' },
