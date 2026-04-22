@@ -40,8 +40,12 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const { firstName, lastName, email, phone, address, city, state, zip } = body;
 
-  if (!firstName || !lastName || !email) {
-    return NextResponse.json({ error: 'firstName, lastName, and email are required' }, { status: 400 });
+  // Require at least one of first/last name plus email. Phone is enforced
+  // client-side so we don't reject legacy lead-to-customer conversions where
+  // an older lead never captured a phone number.
+  const hasName = Boolean((firstName && String(firstName).trim()) || (lastName && String(lastName).trim()));
+  if (!hasName || !email) {
+    return NextResponse.json({ error: 'Name and email are required' }, { status: 400 });
   }
 
   const { data: venue } = await supabaseAdmin

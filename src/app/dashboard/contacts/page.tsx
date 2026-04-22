@@ -31,7 +31,18 @@ interface ContactRow {
 
 const PAGE_SIZE = 20;
 
-const emptyForm = {
+type ContactForm = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+};
+
+const emptyForm: ContactForm = {
   firstName: '',
   lastName: '',
   email: '',
@@ -47,9 +58,6 @@ export default function ContactsPage() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState(emptyForm);
-  const [creating, setCreating] = useState(false);
-  const [error, setError] = useState('');
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [importBusy, setImportBusy] = useState(false);
@@ -90,39 +98,6 @@ export default function ContactsPage() {
   function handlePageChange(newPage: number) {
     setPage(newPage);
     fetchContacts(search, newPage);
-  }
-
-  function handleFormChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-  }
-
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    if (!form.firstName || !form.lastName || !form.email) return;
-
-    setCreating(true);
-    setError('');
-
-    try {
-      const res = await fetch('/api/customers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
-
-      if (res.ok) {
-        setShowModal(false);
-        setForm(emptyForm);
-        fetchContacts(search, page);
-      } else {
-        const data = await res.json();
-        setError(data.error || 'Failed to create contact');
-      }
-    } catch {
-      setError('Network error - please try again');
-    } finally {
-      setCreating(false);
-    }
   }
 
   async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -362,155 +337,176 @@ export default function ContactsPage() {
         </div>
       )}
 
-      {/* Add contact modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="relative w-full max-w-lg rounded-2xl bg-white p-6">
+        <AddContactModal
+          onClose={() => setShowModal(false)}
+          onSaved={() => {
+            setShowModal(false);
+            fetchContacts(search, page);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Add contact modal ───────────────────────────────────────────────────────
+// Mirrors the "New lead" modal on the Leads page: full-screen overlay, a
+// rounded-3xl card with a scrollable body, uppercase-tracked labels, and
+// the brand-color footer button. Required fields are name (first OR last),
+// email, and phone — matching the leads form.
+
+function AddContactModal({
+  onClose,
+  onSaved,
+}: {
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [form, setForm] = useState<ContactForm>(emptyForm);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const set = <K extends keyof ContactForm>(key: K, value: ContactForm[K]) =>
+    setForm((prev) => ({ ...prev, [key]: value }));
+
+  async function submit() {
+    const hasName = form.firstName.trim() !== '' || form.lastName.trim() !== '';
+    if (!hasName) {
+      setError('Please provide at least a first or last name.');
+      return;
+    }
+    if (!form.email.trim()) {
+      setError('Email is required.');
+      return;
+    }
+    if (!form.phone.trim()) {
+      setError('Phone is required.');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    try {
+      const res = await fetch('/api/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError((data && typeof data.error === 'string' && data.error) || 'Failed to create contact.');
+        return;
+      }
+      onSaved();
+    } catch {
+      setError('Network error — please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="absolute inset-0 flex items-center justify-center p-4">
+        <div className="relative w-full max-w-2xl max-h-[90vh] rounded-3xl border border-gray-200 bg-white overflow-hidden flex flex-col">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+            <h3 className="font-heading text-lg text-gray-900 flex items-center gap-2">
+              <UserPlus className="w-4.5 h-4.5" /> New contact
+            </h3>
             <button
-              type="button"
-              onClick={() => {
-                setShowModal(false);
-                setForm(emptyForm);
-                setError('');
-              }}
-              className="absolute right-4 top-4 text-gray-400 hover:text-gray-600"
+              onClick={onClose}
+              className="rounded-xl p-1.5 text-gray-400 hover:bg-gray-100"
+              aria-label="Close"
             >
-              <X size={20} />
+              <X className="w-4 h-4" />
             </button>
+          </div>
+          <div className="p-6 overflow-y-auto space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <ContactField label="First name" value={form.firstName} onChange={(v) => set('firstName', v)} />
+              <ContactField label="Last name" value={form.lastName} onChange={(v) => set('lastName', v)} />
+            </div>
+            <ContactField
+              label="Email"
+              value={form.email}
+              type="email"
+              required
+              onChange={(v) => set('email', v)}
+            />
+            <ContactField
+              label="Phone"
+              value={form.phone}
+              type="tel"
+              required
+              placeholder="(555) 000-0000"
+              onChange={(v) => set('phone', v)}
+            />
+            <ContactField label="Address" value={form.address} onChange={(v) => set('address', v)} />
+            <div className="grid grid-cols-3 gap-3">
+              <ContactField label="City" value={form.city} onChange={(v) => set('city', v)} />
+              <ContactField label="State" value={form.state} onChange={(v) => set('state', v)} />
+              <ContactField label="Zip" value={form.zip} onChange={(v) => set('zip', v)} />
+            </div>
 
-            <h2 className="font-heading text-lg font-semibold text-gray-900 mb-5">Add contact</h2>
-
-            <form onSubmit={handleCreate} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-400">
-                    First name *
-                  </label>
-                  <input
-                    name="firstName"
-                    value={form.firstName}
-                    onChange={handleFormChange}
-                    required
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-400">
-                    Last name *
-                  </label>
-                  <input
-                    name="lastName"
-                    value={form.lastName}
-                    onChange={handleFormChange}
-                    required
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none"
-                  />
-                </div>
+            {error && (
+              <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {error}
               </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-400">
-                  Email *
-                </label>
-                <input
-                  name="email"
-                  type="email"
-                  value={form.email}
-                  onChange={handleFormChange}
-                  required
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none"
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-400">
-                  Phone *
-                </label>
-                <input
-                  name="phone"
-                  type="tel"
-                  value={form.phone}
-                  onChange={handleFormChange}
-                  required
-                  placeholder="(555) 000-0000"
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none"
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-400">
-                  Address
-                </label>
-                <input
-                  name="address"
-                  value={form.address}
-                  onChange={handleFormChange}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none"
-                />
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-400">
-                    City
-                  </label>
-                  <input
-                    name="city"
-                    value={form.city}
-                    onChange={handleFormChange}
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-400">
-                    State
-                  </label>
-                  <input
-                    name="state"
-                    value={form.state}
-                    onChange={handleFormChange}
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-400">
-                    Zip
-                  </label>
-                  <input
-                    name="zip"
-                    value={form.zip}
-                    onChange={handleFormChange}
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none"
-                  />
-                </div>
-              </div>
-
-              {error && <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowModal(false);
-                    setForm(emptyForm);
-                    setError('');
-                  }}
-                  className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium text-white transition-colors disabled:opacity-50"
-                  style={{ backgroundColor: '#1b1b1b' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#333333')}
-                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1b1b1b')}
-                >
-                  {creating && <Loader2 size={16} className="animate-spin" />}
-                  {creating ? 'Creating...' : 'Create contact'}
-                </button>
-              </div>
-            </form>
+            )}
+          </div>
+          <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-100">
+            <button
+              onClick={onClose}
+              className="rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={submit}
+              disabled={saving}
+              className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+              style={{ backgroundColor: '#1b1b1b' }}
+            >
+              {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              Create contact
+            </button>
           </div>
         </div>
-      )}
+      </div>
+    </div>
+  );
+}
+
+function ContactField({
+  label,
+  value,
+  onChange,
+  type = 'text',
+  required,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  type?: string;
+  required?: boolean;
+  placeholder?: string;
+}) {
+  return (
+    <div>
+      <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">
+        {label}
+        {required ? ' *' : ''}
+      </label>
+      <input
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-xl border border-gray-200 px-3 py-1.5 text-sm focus:border-gray-400 focus:outline-none"
+      />
     </div>
   );
 }

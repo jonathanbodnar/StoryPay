@@ -3248,6 +3248,10 @@ function AddLeadModal({
       alert('Email is required');
       return;
     }
+    if (!draft.phone.trim()) {
+      alert('Phone is required');
+      return;
+    }
     setSaving(true);
     try {
       await onSave(draft);
@@ -3439,8 +3443,8 @@ function AddLeadModal({
               <DraftField label="First name" value={draft.firstName} onChange={(v) => set('firstName', v)} />
               <DraftField label="Last name" value={draft.lastName} onChange={(v) => set('lastName', v)} />
             </div>
-            <DraftField label="Email" value={draft.email} type="email" onChange={(v) => set('email', v)} />
-            <DraftField label="Phone" value={draft.phone} type="tel" onChange={(v) => set('phone', v)} />
+            <DraftField label="Email *" value={draft.email} type="email" onChange={(v) => set('email', v)} />
+            <DraftField label="Phone *" value={draft.phone} type="tel" onChange={(v) => set('phone', v)} />
             <div className="grid grid-cols-2 gap-3">
               <DraftField label="Venue name" value={draft.venueName} onChange={(v) => set('venueName', v)} />
               <DraftField label="Venue website" value={draft.venueWebsiteUrl} type="url" onChange={(v) => set('venueWebsiteUrl', v)} />
