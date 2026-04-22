@@ -71,7 +71,10 @@ function emptyListing(): Listing {
     id: null, slug: null, name: null, description: null, venue_type: null,
     location_full: null, location_city: null, location_state: null,
     lat: null, lng: null,
-    capacity_min: null, capacity_max: null, price_min: null, price_max: null,
+    // Minimum guests defaults to 0 so owners see a concrete value rather
+    // than an empty field — venues that accept intimate bookings still
+    // show "0–max" instead of a blank where couples expect a number.
+    capacity_min: 0, capacity_max: null, price_min: null, price_max: null,
     indoor_outdoor: null, features: [], cover_image_url: null, gallery_images: [],
     availability_notes: null, is_published: false, onboarding_completed: false,
     social_links: {}, faq: [], show_map: true,
@@ -163,6 +166,10 @@ export default function ListingPage() {
               show_map: data.listing.show_map !== false,
               lat: data.listing.lat != null ? Number(data.listing.lat) : null,
               lng: data.listing.lng != null ? Number(data.listing.lng) : null,
+              // Older listings may have a null capacity_min in the DB. The
+              // field's contract is "always a concrete number, defaulting
+              // to 0", so normalize on read.
+              capacity_min: data.listing.capacity_min != null ? Number(data.listing.capacity_min) : 0,
             };
             setListing(next);
             // If slug is blank or already matches slugify(name), keep auto-mode on
@@ -229,6 +236,7 @@ export default function ListingPage() {
         show_map: data.listing.show_map !== false,
         lat: data.listing.lat != null ? Number(data.listing.lat) : null,
         lng: data.listing.lng != null ? Number(data.listing.lng) : null,
+        capacity_min: data.listing.capacity_min != null ? Number(data.listing.capacity_min) : 0,
       });
       setStatus('saved');
       setLastSavedAt(new Date());
@@ -835,8 +843,19 @@ export default function ListingPage() {
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <div>
             <label className={LABEL}>Min guests</label>
-            <input type="number" className={INPUT} value={listing.capacity_min ?? ''}
-              onChange={(e) => update('capacity_min', e.target.value ? Number(e.target.value) : null)} />
+            <input
+              type="number"
+              min={0}
+              className={INPUT}
+              value={listing.capacity_min ?? 0}
+              onChange={(e) => {
+                // Empty string or a negative value both fall back to 0 so
+                // this field can never be left "unset" — matches what
+                // couples see on the public listing page.
+                const n = e.target.value === '' ? 0 : Number(e.target.value);
+                update('capacity_min', Number.isFinite(n) && n >= 0 ? n : 0);
+              }}
+            />
           </div>
           <div>
             <label className={LABEL}>Max guests</label>
