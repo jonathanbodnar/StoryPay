@@ -108,8 +108,12 @@ export async function createLeadFromVenueCustomerIfMissing(
  * - Reset leads whose pipeline_id points at a deleted pipeline to the default
  * - Fill stage_id when pipeline_id is set but stage is null OR the stage_id
  *   references a deleted/cross-pipeline stage
+ * - Snap each lead to the pipeline/stage stored on its matching
+ *   `venue_customers` row so "contact stage" is always the source of truth
+ *   (otherwise a lead stuck in an older pipeline never shows up in the
+ *   pipeline the user picked on the contacts/leads page).
  * - Insert a `leads` row for venue_customers with no matching lead (real
- *   emails only)
+ *   emails only) so every contact is visible on the Kanban.
  *
  * All failures are swallowed (logged) so a slow/stale DB doesn't 500 the
  * leads page — a lead stuck in the wrong place is preferable to no leads
@@ -122,24 +126,28 @@ export async function reconcileLeadsForKanban(venueId: string): Promise<void> {
 
   const now = new Date().toISOString();
 
-  // Load the venue's current pipelines + stages once so we can diff against
-  // whatever the leads table has. A single round-trip keeps this cheap even
-  // for venues with hundreds of leads.
-  const [{ data: pipelineRows }, { data: stageRows }, { data: leadRows }] = await Promise.all([
-    supabaseAdmin
-      .from('lead_pipelines')
-      .select('id')
-      .eq('venue_id', venueId),
-    supabaseAdmin
-      .from('lead_pipeline_stages')
-      .select('id, pipeline_id, name, position')
-      .eq('venue_id', venueId)
-      .order('position', { ascending: true }),
-    supabaseAdmin
-      .from('leads')
-      .select('id, pipeline_id, stage_id')
-      .eq('venue_id', venueId),
-  ]);
+  // Load the venue's current pipelines + stages + leads + contacts in one
+  // round-trip. Cheap even for venues with hundreds of rows.
+  const [{ data: pipelineRows }, { data: stageRows }, { data: leadRows }, { data: vcs }] =
+    await Promise.all([
+      supabaseAdmin
+        .from('lead_pipelines')
+        .select('id')
+        .eq('venue_id', venueId),
+      supabaseAdmin
+        .from('lead_pipeline_stages')
+        .select('id, pipeline_id, name, position')
+        .eq('venue_id', venueId)
+        .order('position', { ascending: true }),
+      supabaseAdmin
+        .from('leads')
+        .select('id, email, pipeline_id, stage_id')
+        .eq('venue_id', venueId),
+      supabaseAdmin
+        .from('venue_customers')
+        .select('customer_email, first_name, last_name, phone, pipeline_id, stage_id')
+        .eq('venue_id', venueId),
+    ]);
 
   const pipelineIds = new Set<string>(((pipelineRows ?? []) as Array<{ id: string }>).map((p) => p.id));
   type StageMini = { id: string; pipeline_id: string; name: string; position: number };
@@ -152,10 +160,52 @@ export async function reconcileLeadsForKanban(venueId: string): Promise<void> {
     if (!existing || s.position < existing.position) firstStageByPipeline.set(s.pipeline_id, s);
   }
 
-  // Bucket leads that need fixing by the stage they should land in so we can
-  // do a single UPDATE per target stage instead of one query per lead.
-  const repairs = new Map<string, { pipeline_id: string; stage_id: string; status: string; ids: string[] }>();
-  const needsRepair = (l: { id: string; pipeline_id: string | null; stage_id: string | null }) => {
+  type LeadMini = { id: string; email: string | null; pipeline_id: string | null; stage_id: string | null };
+  const leads = (leadRows ?? []) as LeadMini[];
+
+  // Build a lookup from contact email → its preferred pipeline/stage on the
+  // venue_customers row. That's what the user just edited on the contacts
+  // page, so leads should follow it.
+  type VcPipelineInfo = { pipeline_id: string; stage_id: string; name: string };
+  const vcPipelineByEmail = new Map<string, VcPipelineInfo>();
+  for (const vc of (vcs ?? []) as Array<{
+    customer_email: string | null;
+    pipeline_id: string | null;
+    stage_id: string | null;
+  }>) {
+    const em = String(vc.customer_email || '').trim().toLowerCase();
+    const sid = vc.stage_id;
+    if (!em || !sid) continue;
+    const st = stagesById.get(sid);
+    if (!st) continue;
+    // Trust the stage's real pipeline so a stale/missing vc.pipeline_id doesn't
+    // orphan the contact. Reject only when vc.pipeline_id is set AND contradicts.
+    if (vc.pipeline_id && vc.pipeline_id !== st.pipeline_id) continue;
+    vcPipelineByEmail.set(em, {
+      pipeline_id: st.pipeline_id,
+      stage_id: sid,
+      name: st.name,
+    });
+  }
+
+  // Bucket leads that need fixing by the target stage they should land in so
+  // we can issue a single UPDATE per target stage instead of one per lead.
+  type Repair = { pipeline_id: string; stage_id: string; status: string; ids: string[] };
+  const repairs = new Map<string, Repair>();
+  type StageTarget = { id: string; name: string };
+  const bucketLead = (leadId: string, pid: string, stage: StageTarget) => {
+    const key = `${pid}::${stage.id}`;
+    const bucket = repairs.get(key) ?? {
+      pipeline_id: pid,
+      stage_id: stage.id,
+      status: legacyStatusForStageName(stage.name),
+      ids: [] as string[],
+    };
+    bucket.ids.push(leadId);
+    repairs.set(key, bucket);
+  };
+
+  const healBrokenRefs = (l: LeadMini): { pid: string; stage: StageTarget } | null => {
     // Case 1: no pipeline at all → default + first stage
     if (!l.pipeline_id) return { pid: defaultPipelineId, stage: defFirst };
     // Case 2: pipeline points to a deleted pipeline → default + first stage
@@ -175,18 +225,20 @@ export async function reconcileLeadsForKanban(venueId: string): Promise<void> {
     return null;
   };
 
-  for (const l of (leadRows ?? []) as Array<{ id: string; pipeline_id: string | null; stage_id: string | null }>) {
-    const fix = needsRepair(l);
+  for (const l of leads) {
+    // Contact-profile stage wins when set: this is what the user just picked
+    // on the contact, so the lead MUST appear in that pipeline + stage.
+    const em = String(l.email || '').trim().toLowerCase();
+    const vcTarget = em ? vcPipelineByEmail.get(em) : undefined;
+    if (vcTarget && (l.pipeline_id !== vcTarget.pipeline_id || l.stage_id !== vcTarget.stage_id)) {
+      bucketLead(l.id, vcTarget.pipeline_id, { id: vcTarget.stage_id, name: vcTarget.name });
+      continue;
+    }
+    if (vcTarget) continue; // already in the right place
+
+    const fix = healBrokenRefs(l);
     if (!fix) continue;
-    const key = `${fix.pid}::${fix.stage.id}`;
-    const bucket = repairs.get(key) ?? {
-      pipeline_id: fix.pid,
-      stage_id: fix.stage.id,
-      status: legacyStatusForStageName(fix.stage.name),
-      ids: [] as string[],
-    };
-    bucket.ids.push(l.id);
-    repairs.set(key, bucket);
+    bucketLead(l.id, fix.pid, fix.stage);
   }
 
   for (const bucket of repairs.values()) {
@@ -204,17 +256,18 @@ export async function reconcileLeadsForKanban(venueId: string): Promise<void> {
     if (error) console.error('[reconcileLeadsForKanban] repair update failed:', error.message);
   }
 
-  const { data: leadEmailRows } = await supabaseAdmin.from('leads').select('email').eq('venue_id', venueId);
   const emailSet = new Set(
-    (leadEmailRows ?? []).map((x) => String(x.email || '').trim().toLowerCase()).filter(Boolean),
+    leads.map((l) => String(l.email || '').trim().toLowerCase()).filter(Boolean),
   );
 
-  const { data: vcs } = await supabaseAdmin
-    .from('venue_customers')
-    .select('customer_email, first_name, last_name, phone, pipeline_id, stage_id')
-    .eq('venue_id', venueId);
-
-  for (const vc of vcs ?? []) {
+  for (const vc of (vcs ?? []) as Array<{
+    customer_email: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    phone: string | null;
+    pipeline_id: string | null;
+    stage_id: string | null;
+  }>) {
     const em = String(vc.customer_email || '').trim().toLowerCase();
     if (!isRealLeadEmail(em) || emailSet.has(em)) continue;
 
@@ -222,8 +275,8 @@ export async function reconcileLeadsForKanban(venueId: string): Promise<void> {
     let sid = vc.stage_id as string | null;
 
     if (pid && sid) {
-      const ok = await validateStageInPipeline(venueId, pid, sid);
-      if (!ok) {
+      const st = stagesById.get(sid);
+      if (!st || st.pipeline_id !== pid) {
         pid = null;
         sid = null;
       }
@@ -234,8 +287,7 @@ export async function reconcileLeadsForKanban(venueId: string): Promise<void> {
       sid = defFirst.id;
     }
 
-    const stOk = await validateStageInPipeline(venueId, pid, sid);
-    const stageNameForStatus = stOk?.name ?? defFirst.name;
+    const stageNameForStatus = stagesById.get(sid)?.name ?? defFirst.name;
     const fn = String(vc.first_name || '');
     const ln = String(vc.last_name || '');
     const name = [fn, ln].filter(Boolean).join(' ') || em;
