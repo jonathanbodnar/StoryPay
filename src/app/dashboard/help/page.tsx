@@ -1495,15 +1495,15 @@ export default function HelpPage() {
  <div key={cat.id} className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <button onClick={() => toggleCat(cat.id)}
  className="w-full flex items-start justify-between gap-3 px-4 py-3.5 text-left">
- <div className="flex min-w-0 flex-1 items-start gap-3">
- <div className="h-8 w-8 flex-shrink-0 rounded-lg flex items-center justify-center"style={{ backgroundColor: cat.color + '18' }}>
- <Icon size={15} style={{ color: cat.color }} />
- </div>
- <div className="min-w-0 pt-0.5">
- <span className="text-sm font-semibold text-gray-900">{cat.label}</span>
- <span className="ml-2 text-xs text-gray-400 tabular-nums">{cat.articles.length}</span>
- </div>
- </div>
+                                            <div className="flex min-w-0 flex-1 items-start gap-3">
+                                                <div className="h-8 w-8 flex-shrink-0 rounded-lg flex items-center justify-center" style={{ backgroundColor: cat.color + '18' }}>
+                                                    <Icon size={15} style={{ color: cat.color }} />
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-sm font-semibold leading-tight text-gray-900">{cat.label}</p>
+                                                    <p className="text-xs text-gray-400 leading-tight mt-1 tabular-nums">{cat.articles.length} article{cat.articles.length !== 1 ? 's' : ''}</p>
+                                                </div>
+                                            </div>
  <ChevronDown size={14} className={`mt-1 flex-shrink-0 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
  </button>
  {open && (
@@ -1522,40 +1522,40 @@ export default function HelpPage() {
  })}
  </div>
 
- {/* Desktop: category cards grid */}
- <div className="hidden lg:grid grid-cols-2 xl:grid-cols-3 gap-4">
- {CATEGORIES.map(cat => {
- const Icon = cat.icon;
- return (
- <button
- key={cat.id}
- onClick={() => { setActiveCat(cat.id); setActiveArticle(null); }}
- className="text-left rounded-2xl border border-gray-200 bg-white hover: hover:border-gray-300 transition-all p-5 group"
- >
- <div className="flex items-start gap-3 mb-3">
- <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl transition-colors"style={{ backgroundColor: cat.color + '18' }}>
- <Icon size={18} style={{ color: cat.color }} />
- </div>
- <div className="min-w-0 flex-1 pt-0.5">
- <p className="text-sm font-bold leading-snug text-gray-900 group-hover:text-gray-700">{cat.label}</p>
- <p className="text-xs text-gray-400 mt-0.5">{cat.articles.length} article{cat.articles.length !== 1 ? 's' : ''}</p>
- </div>
- </div>
- <div className="space-y-1.5">
- {cat.articles.slice(0, 3).map(a => (
- <p key={a.id} className="text-xs text-gray-500 flex items-center gap-1.5">
- <span className="h-1 w-1 rounded-full bg-gray-300 flex-shrink-0"/>
- {a.title}
- </p>
- ))}
- {cat.articles.length > 3 && (
- <p className="text-xs text-gray-400 pl-2.5">+{cat.articles.length - 3} more</p>
- )}
- </div>
- </button>
- );
- })}
- </div>
+                                {/* Desktop: category cards grid */}
+                                <div className="hidden lg:grid grid-cols-2 xl:grid-cols-3 gap-4 auto-rows-fr">
+                                    {CATEGORIES.map(cat => {
+                                        const Icon = cat.icon;
+                                        return (
+                                            <button
+                                                key={cat.id}
+                                                onClick={() => { setActiveCat(cat.id); setActiveArticle(null); }}
+                                                className="h-full flex flex-col text-left rounded-2xl border border-gray-200 bg-white hover: hover:border-gray-300 transition-all p-5 group"
+                                            >
+                                                <div className="flex items-start gap-3 mb-3">
+                                                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl transition-colors" style={{ backgroundColor: cat.color + '18' }}>
+                                                        <Icon size={18} style={{ color: cat.color }} />
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="text-sm font-bold leading-tight text-gray-900 group-hover:text-gray-700">{cat.label}</p>
+                                                        <p className="text-xs text-gray-400 leading-tight mt-1">{cat.articles.length} article{cat.articles.length !== 1 ? 's' : ''}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-1.5 flex-1">
+                                                    {cat.articles.slice(0, 3).map(a => (
+                                                        <p key={a.id} className="text-xs text-gray-500 flex items-start gap-1.5">
+                                                            <span className="mt-1.5 h-1 w-1 rounded-full bg-gray-300 flex-shrink-0"/>
+                                                            <span className="leading-snug">{a.title}</span>
+                                                        </p>
+                                                    ))}
+                                                    {cat.articles.length > 3 && (
+                                                        <p className="text-xs text-gray-400 pl-2.5">+{cat.articles.length - 3} more</p>
+                                                    )}
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
  </div>
  )}
  </>
