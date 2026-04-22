@@ -22,6 +22,11 @@ import { normaliseHelpQuery } from '@/lib/help-search';
 
 const GETTING_STARTED_CATEGORY_ID = 'getting-started';
 
+// Brand dark surface color — matches AskAIWidget. Tailwind's `bg-gray-900`
+// (#111827) has a subtle blue tint that reads as navy/blue on the Ask AI
+// toggle + panel header; we use this neutral dark instead.
+const BRAND = '#1b1b1b';
+
 /** Help Center cards: Getting Started first, then every other category A–Z by label. */
 function sortHelpCategoriesForDisplay(categories: HelpCategory[]): HelpCategory[] {
   const first = categories.find((c) => c.id === GETTING_STARTED_CATEGORY_ID);
@@ -713,10 +718,10 @@ function InlineAI() {
  <div className="space-y-3">
  <div className="rounded-xl bg-gray-50 border border-gray-200 p-3.5">
  <div className="flex items-center gap-2 mb-1.5">
- <div className="h-6 w-6 rounded-full flex items-center justify-center bg-gray-900">
- <Sparkles size={12} className="text-white"/>
- </div>
- <span className="text-sm font-semibold text-gray-900">Ask AI</span>
+                            <div className="h-6 w-6 rounded-full flex items-center justify-center" style={{ backgroundColor: BRAND }}>
+                                <Sparkles size={12} className="text-white"/>
+                            </div>
+                            <span className="text-sm font-semibold text-gray-900">Ask AI</span>
  </div>
  <p className="text-sm text-gray-600 leading-relaxed">
  I have access to your live account data. Ask me anything about the platform or your account.
@@ -824,8 +829,9 @@ function InlineAI() {
  </button>
  )}
  </div>
- <button onClick={() => send()} disabled={(!input.trim() && !pendingImage) || loading}
- className="h-7 w-7 rounded-full bg-gray-900 text-white flex items-center justify-center disabled:opacity-40 transition-all">
+                        <button onClick={() => send()} disabled={(!input.trim() && !pendingImage) || loading}
+                            className="h-7 w-7 rounded-full text-white flex items-center justify-center disabled:opacity-40 transition-all"
+                            style={{ backgroundColor: BRAND }}>
  {loading ? <Loader2 size={12} className="animate-spin"/> : <Send size={12} />}
  </button>
  </div>
@@ -1179,13 +1185,14 @@ export default function HelpPage() {
  )}
  </div>
  </div>
- <button
- onClick={() => { setShowAI(v => !v); setActiveArticle(null); setActiveCat(null); setQuery(''); }}
- className={`flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm font-medium transition-all ${showAI ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'}`}
- >
- <Sparkles size={15} />
- Ask AI
- </button>
+                        <button
+                            onClick={() => { setShowAI(v => !v); setActiveArticle(null); setActiveCat(null); setQuery(''); }}
+                            className={`flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm font-medium transition-all ${showAI ? 'text-white' : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'}`}
+                            style={showAI ? { backgroundColor: BRAND, borderColor: BRAND } : undefined}
+                        >
+                            <Sparkles size={15} />
+                            Ask AI
+                        </button>
  </div>
 
  <div className="flex gap-6 items-start">
@@ -1228,7 +1235,8 @@ export default function HelpPage() {
  <button
  key={cat.id}
  onClick={() => { setActiveCat(cat.id); setActiveArticle(null); setQuery(''); setShowAI(false); }}
- className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-left ${isActive ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                                                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-left ${isActive ? 'text-white' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                                                    style={isActive ? { backgroundColor: BRAND } : undefined}
  >
  <Icon size={14} />
  <span className="flex-1">{cat.label}</span>
@@ -1246,7 +1254,7 @@ export default function HelpPage() {
  {/* Ask AI panel */}
  {showAI && (
  <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden mb-6"style={{ height: 520 }}>
- <div className="flex items-center gap-2.5 px-4 py-3.5 border-b border-gray-200 bg-gray-900">
+                                <div className="flex items-center gap-2.5 px-4 py-3.5 border-b border-gray-200" style={{ backgroundColor: BRAND }}>
  <div className="h-7 w-7 rounded-full bg-white/20 flex items-center justify-center">
  <Sparkles size={14} className="text-white"/>
  </div>
@@ -1312,10 +1320,11 @@ export default function HelpPage() {
  <HelpCircle size={32} className="text-gray-300 mx-auto mb-3"/>
  <p className="text-gray-500 text-sm mb-1">No articles match your search.</p>
  <p className="text-gray-400 text-xs mb-5">Try different words, or ask AI directly.</p>
- <button onClick={() => { setShowAI(true); setQuery(''); }}
- className="inline-flex items-center gap-2 rounded-xl bg-gray-900 text-white px-4 py-2.5 text-sm font-medium hover:bg-gray-800 transition-colors">
- <Sparkles size={14} /> Ask AI instead
- </button>
+                                            <button onClick={() => { setShowAI(true); setQuery(''); }}
+                                                className="inline-flex items-center gap-2 rounded-xl text-white px-4 py-2.5 text-sm font-medium hover:opacity-90 transition-opacity"
+                                                style={{ backgroundColor: BRAND }}>
+                                                <Sparkles size={14} /> Ask AI instead
+                                            </button>
  </div>
  )}
 
@@ -1447,10 +1456,11 @@ export default function HelpPage() {
  </div>
  <div className="flex items-center justify-between">
  <p className="text-xs text-gray-400">Not what you were looking for?</p>
- <button onClick={() => setShowAI(true)}
- className="flex items-center gap-1.5 rounded-xl bg-gray-900 text-white px-3.5 py-2 text-xs font-medium hover:bg-gray-800 transition-colors">
- <Sparkles size={12} /> Ask AI
- </button>
+                                                            <button onClick={() => setShowAI(true)}
+                                                                className="flex items-center gap-1.5 rounded-xl text-white px-3.5 py-2 text-xs font-medium hover:opacity-90 transition-opacity"
+                                                                style={{ backgroundColor: BRAND }}>
+                                                                <Sparkles size={12} /> Ask AI
+                                                            </button>
  </div>
  </div>
  </div>
