@@ -2916,11 +2916,17 @@ function PipelineEditor({
   );
 }
 
+const STAGE_COLOR_PRESETS = [
+  '#3b82f6', '#0ea5e9', '#6366f1', '#8b5cf6', '#ec4899',
+  '#ef4444', '#f59e0b', '#10b981', '#14b8a6', '#64748b',
+];
+
 /**
- * Native color picker + hex text input. Power users type the hex for their
- * brand, everyone else uses the swatch. `commitOn="blur"` is used in row
- * mode so we don't flood the API on every keystroke; the "new stage" form
- * uses the default ("change") because it only commits once on Add.
+ * Swatch button that opens a popover containing both the color picker AND the
+ * hex input together — one place to eyedrop/pick visually or paste a brand
+ * hex. Click-outside or Esc closes. `commitOn="blur"` is used in row mode so
+ * we don't flood the API on every keystroke; the "new stage" form uses the
+ * default ("change") because it only commits once on Add.
  */
 function HexColorField({
   value, onChange, commitOn = 'change', ariaLabel,
@@ -2930,8 +2936,28 @@ function HexColorField({
   commitOn?: 'change' | 'blur';
   ariaLabel?: string;
 }) {
+  const [open, setOpen] = useState(false);
   const [text, setText] = useState<string>(value || '');
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => { setText(value || ''); }, [value]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDocPointer(e: MouseEvent) {
+      if (!wrapRef.current) return;
+      if (!wrapRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('mousedown', onDocPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
 
   const canonical = normalizeHexColor(text);
   const displayColor = canonical ?? (normalizeHexColor(value) ?? '#d1d5db');
@@ -2942,42 +2968,108 @@ function HexColorField({
     else setText(value || '');
   };
 
+  const applyHex = (raw: string) => {
+    setText(raw);
+    if (commitOn === 'change') {
+      const next = normalizeHexColor(raw);
+      if (next) onChange(next);
+    }
+  };
+
+  const applyPreset = (hex: string) => {
+    const next = normalizeHexColor(hex);
+    if (!next) return;
+    setText(next);
+    onChange(next);
+  };
+
   return (
-    <div className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-1.5 py-1">
-      <label className="relative inline-block w-5 h-5 cursor-pointer rounded overflow-hidden border border-gray-200" title={ariaLabel ?? 'Color'}>
-        <span className="block w-full h-full" style={{ backgroundColor: displayColor }} />
-        <input
-          type="color"
-          value={displayColor}
-          onChange={(e) => {
-            const next = normalizeHexColor(e.target.value);
-            if (!next) return;
-            setText(next);
-            if (commitOn === 'change') onChange(next);
-          }}
-          onBlur={() => { if (commitOn === 'blur') commit(); }}
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-          aria-label={ariaLabel ?? 'Color'}
+    <div ref={wrapRef} className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white p-0.5 shadow-sm hover:border-gray-300"
+        aria-label={ariaLabel ?? 'Color'}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        title={canonical ?? value}
+      >
+        <span
+          className="block h-full w-full rounded-[4px] border border-black/5"
+          style={{ backgroundColor: displayColor }}
         />
-      </label>
-      <input
-        type="text"
-        value={text}
-        onChange={(e) => {
-          const v = e.target.value;
-          setText(v);
-          if (commitOn === 'change') {
-            const next = normalizeHexColor(v);
-            if (next) onChange(next);
-          }
-        }}
-        onBlur={commit}
-        onKeyDown={(e) => { if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); } }}
-        placeholder="#3b82f6"
-        spellCheck={false}
-        aria-label={ariaLabel ? `${ariaLabel} hex` : 'Hex color'}
-        className={`w-[88px] rounded border-0 bg-transparent px-1 py-0.5 font-mono text-[11px] uppercase tracking-wide focus:outline-none ${canonical ? 'text-gray-800' : 'text-red-500'}`}
-      />
+      </button>
+
+      {open && (
+        <div
+          role="dialog"
+          className="absolute left-0 top-[calc(100%+6px)] z-50 w-56 rounded-xl border border-gray-200 bg-white p-3 shadow-xl"
+        >
+          <label className="relative block h-12 w-full cursor-pointer overflow-hidden rounded-lg border border-gray-200">
+            <span className="block h-full w-full" style={{ backgroundColor: displayColor }} />
+            <input
+              type="color"
+              value={displayColor}
+              onChange={(e) => {
+                const next = normalizeHexColor(e.target.value);
+                if (!next) return;
+                setText(next);
+                if (commitOn === 'change') onChange(next);
+              }}
+              onBlur={() => { if (commitOn === 'blur') commit(); }}
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+              aria-label={ariaLabel ?? 'Color'}
+            />
+          </label>
+
+          <div className="mt-2.5">
+            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+              Hex code
+            </label>
+            <input
+              type="text"
+              value={text}
+              onChange={(e) => applyHex(e.target.value)}
+              onBlur={commit}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  commit();
+                  setOpen(false);
+                }
+              }}
+              placeholder="#3b82f6"
+              spellCheck={false}
+              aria-label={ariaLabel ? `${ariaLabel} hex` : 'Hex color'}
+              className={`w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 font-mono text-xs uppercase tracking-wide focus:border-gray-400 focus:outline-none ${canonical ? 'text-gray-800' : 'text-red-500'}`}
+            />
+          </div>
+
+          <div className="mt-2.5">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+              Presets
+            </div>
+            <div className="grid grid-cols-5 gap-1.5">
+              {STAGE_COLOR_PRESETS.map((hex) => {
+                const isActive = normalizeHexColor(value)?.toLowerCase() === hex.toLowerCase();
+                return (
+                  <button
+                    key={hex}
+                    type="button"
+                    onClick={() => applyPreset(hex)}
+                    className={`h-6 w-6 rounded-md border transition-transform hover:scale-110 ${
+                      isActive ? 'border-gray-900 ring-2 ring-gray-900/20' : 'border-gray-200'
+                    }`}
+                    style={{ backgroundColor: hex }}
+                    aria-label={`Pick ${hex}`}
+                    title={hex}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
