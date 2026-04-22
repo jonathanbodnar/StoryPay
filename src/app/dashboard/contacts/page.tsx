@@ -14,17 +14,10 @@ import {
   User,
   Download,
   Upload,
-  Mail,
-  Smartphone,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
 
 const capitalizeName = (name: string) => name.replace(/\b\w/g, (c) => c.toUpperCase());
-
-function isPlaceholderContactEmail(email: string): boolean {
-  const e = email.trim().toLowerCase();
-  return !e || !e.includes('@') || e.endsWith('@storypay.internal') || e.includes('@ghl-sms.storypay.placeholder');
-}
 
 interface ContactRow {
   id: string | number;
@@ -269,18 +262,7 @@ export default function ContactsPage() {
                 </td>
               </tr>
             ) : (
-              contacts.map((c) => {
-                const emailNorm = (c.email || '').trim().toLowerCase();
-                const canOpenConversations =
-                  !!c.venueCustomerId || !isPlaceholderContactEmail(c.email || '');
-                const emailConvHref = c.venueCustomerId
-                  ? `/dashboard/conversations?customer=${encodeURIComponent(c.venueCustomerId)}&compose=email`
-                  : `/dashboard/conversations?customerFromEmail=${encodeURIComponent(emailNorm)}&compose=email`;
-                const smsConvHref = c.venueCustomerId
-                  ? `/dashboard/conversations?customer=${encodeURIComponent(c.venueCustomerId)}&compose=sms`
-                  : `/dashboard/conversations?customerFromEmail=${encodeURIComponent(emailNorm)}&compose=sms`;
-
-                return (
+              contacts.map((c) => (
                 <tr key={String(c.id)} className="group hover:bg-gray-50/50 transition-colors">
                   <td className="px-5 py-3.5">
                     <Link
@@ -318,51 +300,6 @@ export default function ContactsPage() {
                   </td>
                   <td className="px-3 sm:px-5 py-3.5 text-right">
                     <div className="flex flex-wrap items-center justify-end gap-1">
-                      {canOpenConversations ? (
-                        <>
-                          <Link
-                            href={emailConvHref}
-                            className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-semibold text-white transition-colors"
-                            style={{ backgroundColor: '#1b1b1b' }}
-                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#333333')}
-                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1b1b1b')}
-                            title="Open or start email thread in Conversations"
-                            aria-label={`Email ${c.name || c.email || 'contact'} in Conversations`}
-                          >
-                            <Mail size={14} strokeWidth={2} className="flex-shrink-0" aria-hidden />
-                            <span className="hidden sm:inline">Email</span>
-                          </Link>
-                          <Link
-                            href={smsConvHref}
-                            className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-semibold text-white transition-colors"
-                            style={{ backgroundColor: '#1b1b1b' }}
-                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#333333')}
-                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1b1b1b')}
-                            title="Open or start SMS thread in Conversations"
-                            aria-label={`SMS ${c.name || c.email || 'contact'} in Conversations`}
-                          >
-                            <Smartphone size={14} strokeWidth={2} className="flex-shrink-0" aria-hidden />
-                            <span className="hidden sm:inline">SMS</span>
-                          </Link>
-                        </>
-                      ) : (
-                        <>
-                          <span
-                            className="inline-flex cursor-not-allowed items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-400"
-                            title="Add a real email for this contact to use Conversations"
-                          >
-                            <Mail size={14} aria-hidden />
-                            <span className="hidden sm:inline">Email</span>
-                          </span>
-                          <span
-                            className="inline-flex cursor-not-allowed items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-400"
-                            title="Add a real email for this contact to use Conversations"
-                          >
-                            <Smartphone size={14} aria-hidden />
-                            <span className="hidden sm:inline">SMS</span>
-                          </span>
-                        </>
-                      )}
                       <Link
                         href={`/dashboard/contacts/${encodeURIComponent(String(c.id))}`}
                         className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
@@ -390,8 +327,7 @@ export default function ContactsPage() {
                     </div>
                   </td>
                 </tr>
-                );
-              })
+              ))
             )}
           </tbody>
         </table>
