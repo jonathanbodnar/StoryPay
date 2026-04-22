@@ -84,17 +84,24 @@ function sanitizeFaq(raw: unknown): { question: string; answer: string }[] {
 }
 
 /**
- * USA-only SaaS — store notification phones in E.164 (+1XXXXXXXXXX).
- * Accepts whatever the user typed: "(614) 555-1234", "6145551234",
- * "+1 614 555 1234", etc. Returns null for empty input or a number that
- * clearly isn't a US 10-digit number.
+ * USA-only SaaS — store notification phones as "+1" followed by 0–10
+ * digits. Autosave fires while the owner is still typing, so if we rejected
+ * partial values here ("+16145" isn't a 10-digit US number yet) the server
+ * round trip would wipe the input and make the field feel broken. We
+ * preserve whatever digits were typed (dropping a leading "1" country
+ * prefix and anything beyond 10 digits) so the value round-trips cleanly
+ * from the first keystroke.
+ *
+ * Consumers that actually place a call/SMS should check that the stored
+ * value has 10 trailing digits before trusting it.
  */
 function normalizeUsPhone(v: unknown): string | null {
   if (v === null || v === undefined) return null;
   const s = String(v).trim();
   if (!s) return null;
-  const digits = s.replace(/\D+/g, '');
-  if (digits.length === 10) return `+1${digits}`;
-  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
-  return null;
+  let digits = s.replace(/\D+/g, '');
+  if (digits.startsWith('1') && digits.length > 10) digits = digits.slice(1);
+  digits = digits.slice(0, 10);
+  if (!digits) return null;
+  return `+1${digits}`;
 }
