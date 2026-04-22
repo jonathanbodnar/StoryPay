@@ -10,13 +10,14 @@ import {
   Megaphone, Plus, Trash2, Pencil, X, Loader2, ThumbsUp, ThumbsDown,
   Check, BarChart2, ExternalLink, ChevronRight, Search,
   LayoutDashboard, Menu, Lightbulb, BookOpen, Star, Globe, Layers,
-  Repeat, Wallet,
+  Repeat, Wallet, BadgeCheck,
 } from 'lucide-react';
 import {
   VenueManagementPortal,
   type AdminVenueRow,
 } from '@/components/admin/VenueManagementPortal';
 import { DirectoryPlansAdminPanel } from '@/components/admin/DirectoryPlansAdminPanel';
+import { DirectoryBadgesAdminPanel } from '@/components/admin/DirectoryBadgesAdminPanel';
 
 // Lazy-load the WYSIWYG editor so it doesn't affect admin initial load
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
@@ -35,6 +36,7 @@ type AdminTabKey =
   | 'dashboard'
   | 'venues'
   | 'directory-plans'
+  | 'directory-badges'
   | 'announcements'
   | 'feature-requests'
   | 'suggested-articles'
@@ -48,6 +50,7 @@ const ADMIN_TAB_KEYS: ReadonlySet<string> = new Set<AdminTabKey>([
   'dashboard',
   'venues',
   'directory-plans',
+  'directory-badges',
   'announcements',
   'feature-requests',
   'suggested-articles',
@@ -409,6 +412,7 @@ function FeatureRequestsAdminTab({
 const ADMIN_NAV_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { key: 'venues', label: 'Venue management', icon: Building2 },
+  { key: 'directory-badges', label: 'Verified & Sponsored', icon: BadgeCheck },
   { key: 'directory-plans', label: 'Directory plans', icon: Layers },
   { key: 'blog', label: 'Blog Posts', icon: BookOpen },
   { key: 'seo-pages', label: 'SEO / Pages', icon: Globe },
@@ -1353,6 +1357,14 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
         {/* ── Venue management (plans, badges, impersonation) ── */}
         {activeTab === 'venues' && (
           <VenueManagementPortal
+            venues={venues as unknown as AdminVenueRow[]}
+            venuesLoading={venuesLoading}
+            onRefresh={fetchVenues}
+          />
+        )}
+
+        {activeTab === 'directory-badges' && (
+          <DirectoryBadgesAdminPanel
             venues={venues as unknown as AdminVenueRow[]}
             venuesLoading={venuesLoading}
             onRefresh={fetchVenues}
