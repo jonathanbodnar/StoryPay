@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Loader2, Save, CheckCircle2, Store, Globe, MapPin, Users, DollarSign,
   Image as ImageIcon, ExternalLink, Eye, EyeOff, AlertCircle, RotateCcw,
-  Link2, HelpCircle, Plus, Trash2,
+  Link2, HelpCircle, Plus, Trash2, ChevronDown,
 } from 'lucide-react';
 import { slugify } from '@/lib/directory';
 
@@ -123,6 +123,11 @@ export default function ListingPage() {
   const [addrSuggestions, setAddrSuggestions] = useState<AddressSuggestion[]>([]);
   const [addrOpen, setAddrOpen] = useState(false);
   const [addrLoading, setAddrLoading] = useState(false);
+
+  // Which FAQ row is currently expanded in the accordion. null = all collapsed.
+  // Newly added rows auto-open so the owner can immediately fill them in; the
+  // "Save" button on each row just collapses it (autosave handles persistence).
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
   // True until the user manually edits the slug field. While true, the slug
   // auto-tracks the venue name (e.g. "The Barn at New Albany" → "the-barn-at-new-albany").
   const [autoSlug, setAutoSlug] = useState(false);
@@ -377,7 +382,12 @@ export default function ListingPage() {
   }
 
   function addFaq() {
-    setListing((prev) => ({ ...prev, faq: [...prev.faq, { question: '', answer: '' }] }));
+    setListing((prev) => {
+      const faq = [...prev.faq, { question: '', answer: '' }];
+      // Open the row we just added so the owner can start typing immediately.
+      setOpenFaq(faq.length - 1);
+      return { ...prev, faq };
+    });
     scheduleAutosave();
   }
 
@@ -393,6 +403,13 @@ export default function ListingPage() {
 
   function removeFaqRow(index: number) {
     setListing((prev) => ({ ...prev, faq: prev.faq.filter((_, i) => i !== index) }));
+    // If we removed the currently-open row (or a row before it), reindex the
+    // "open" pointer so the accordion stays consistent.
+    setOpenFaq((cur) => {
+      if (cur == null) return cur;
+      if (cur === index) return null;
+      return cur > index ? cur - 1 : cur;
+    });
     scheduleAutosave();
   }
 
@@ -714,38 +731,94 @@ export default function ListingPage() {
 
       <section className={CARD}>
         <h2 className={SECTION_TITLE}><HelpCircle className="inline w-4 h-4 -mt-0.5" /> FAQ</h2>
-        <p className={SECTION_HINT}>Questions and answers for couples visiting your venue page.</p>
-        <div className="space-y-4">
-          {listing.faq.map((row, i) => (
-            <div key={i} className="rounded-2xl border border-gray-200 bg-gray-50/80 p-4">
-              <div className="mb-3 flex items-start justify-between gap-2">
-                <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">Item {i + 1}</span>
-                <button
-                  type="button"
-                  onClick={() => removeFaqRow(i)}
-                  className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-200 hover:text-gray-700"
-                  aria-label="Remove FAQ item"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+        <p className={SECTION_HINT}>Questions and answers for couples visiting your venue page. Click an item to edit.</p>
+        <div className="space-y-2">
+          {listing.faq.map((row, i) => {
+            const isOpen = openFaq === i;
+            const preview = row.question.trim() || `Item ${i + 1} — click to write a question`;
+            return (
+              <div
+                key={i}
+                className={`overflow-hidden rounded-2xl border transition-colors ${
+                  isOpen ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50/80'
+                }`}
+              >
+                {/* Collapsed/summary row: click anywhere to toggle. Separate
+                    trash button keeps remove action explicit. */}
+                <div className="flex items-center gap-2 px-4 py-3">
+                  <button
+                    type="button"
+                    onClick={() => setOpenFaq(isOpen ? null : i)}
+                    className="flex flex-1 items-center gap-3 text-left"
+                    aria-expanded={isOpen}
+                  >
+                    <ChevronDown
+                      className={`h-4 w-4 flex-shrink-0 text-gray-400 transition-transform ${
+                        isOpen ? 'rotate-180' : ''
+                      }`}
+                    />
+                    <span
+                      className={`truncate text-sm ${
+                        row.question.trim() ? 'font-medium text-gray-900' : 'italic text-gray-400'
+                      }`}
+                    >
+                      {preview}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeFaqRow(i)}
+                    className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-200 hover:text-gray-700"
+                    aria-label="Remove FAQ item"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+                {isOpen && (
+                  <div className="border-t border-gray-200 px-4 py-4">
+                    <label className={LABEL}>Question</label>
+                    <input
+                      type="text"
+                      className={`${INPUT} mb-3`}
+                      value={row.question}
+                      onChange={(e) => updateFaqRow(i, 'question', e.target.value)}
+                      placeholder="Do you allow outside catering?"
+                      autoFocus
+                    />
+                    <label className={LABEL}>Answer</label>
+                    <textarea
+                      className={`${INPUT} min-h-[100px]`}
+                      value={row.answer}
+                      onChange={(e) => updateFaqRow(i, 'answer', e.target.value)}
+                      placeholder="We offer in-house catering and can accommodate licensed vendors…"
+                    />
+                    <div className="mt-3 flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => removeFaqRow(i)}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" /> Delete
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          // Flush the pending autosave so the user knows their
+                          // edits are persisted the moment the row collapses.
+                          await flushAndSave();
+                          setOpenFaq(null);
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium text-white hover:opacity-90"
+                        style={{ backgroundColor: '#1b1b1b' }}
+                      >
+                        <Save className="h-3.5 w-3.5" /> Save
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-              <label className={LABEL}>Question</label>
-              <input
-                type="text"
-                className={`${INPUT} mb-3`}
-                value={row.question}
-                onChange={(e) => updateFaqRow(i, 'question', e.target.value)}
-                placeholder="Do you allow outside catering?"
-              />
-              <label className={LABEL}>Answer</label>
-              <textarea
-                className={`${INPUT} min-h-[80px]`}
-                value={row.answer}
-                onChange={(e) => updateFaqRow(i, 'answer', e.target.value)}
-                placeholder="We offer in-house catering and can accommodate licensed vendors…"
-              />
-            </div>
-          ))}
+            );
+          })}
           <button
             type="button"
             onClick={addFaq}
