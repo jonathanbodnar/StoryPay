@@ -45,6 +45,7 @@ interface Listing {
   faq: FaqRow[];
   show_map: boolean;
   notification_email: string | null;
+  notification_phone: string | null;
   email_notifications: boolean;
 }
 
@@ -74,7 +75,7 @@ function emptyListing(): Listing {
     indoor_outdoor: null, features: [], cover_image_url: null, gallery_images: [],
     availability_notes: null, is_published: false, onboarding_completed: false,
     social_links: {}, faq: [], show_map: true,
-    notification_email: null, email_notifications: true,
+    notification_email: null, notification_phone: null, email_notifications: true,
   };
 }
 
@@ -82,12 +83,46 @@ type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 
 const AUTOSAVE_DEBOUNCE_MS = 800;
 
+// US state name → USPS two-letter code. Nominatim returns full state names
+// ("Ohio") so we normalize them here to match the "State" field's convention.
+const US_STATE_ABBR: Record<string, string> = {
+  alabama: 'AL', alaska: 'AK', arizona: 'AZ', arkansas: 'AR', california: 'CA',
+  colorado: 'CO', connecticut: 'CT', delaware: 'DE', 'district of columbia': 'DC',
+  florida: 'FL', georgia: 'GA', hawaii: 'HI', idaho: 'ID', illinois: 'IL',
+  indiana: 'IN', iowa: 'IA', kansas: 'KS', kentucky: 'KY', louisiana: 'LA',
+  maine: 'ME', maryland: 'MD', massachusetts: 'MA', michigan: 'MI', minnesota: 'MN',
+  mississippi: 'MS', missouri: 'MO', montana: 'MT', nebraska: 'NE', nevada: 'NV',
+  'new hampshire': 'NH', 'new jersey': 'NJ', 'new mexico': 'NM', 'new york': 'NY',
+  'north carolina': 'NC', 'north dakota': 'ND', ohio: 'OH', oklahoma: 'OK',
+  oregon: 'OR', pennsylvania: 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
+  'south dakota': 'SD', tennessee: 'TN', texas: 'TX', utah: 'UT', vermont: 'VT',
+  virginia: 'VA', washington: 'WA', 'west virginia': 'WV', wisconsin: 'WI',
+  wyoming: 'WY',
+};
+
+type AddressSuggestion = {
+  /** OpenStreetMap place id, used as the React key. */
+  place_id: string;
+  /** Single-line formatted address for the dropdown + "Full address" field. */
+  display_name: string;
+  /** Parsed USA components used to auto-fill city / state coords. */
+  lat: number;
+  lng: number;
+  city: string;
+  state: string;
+};
+
 export default function ListingPage() {
   const [listing, setListing] = useState<Listing>(emptyListing());
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<SaveStatus>('idle');
   const [error, setError] = useState('');
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+
+  // Address autocomplete state (see LocationAutocomplete section below).
+  const [addrSuggestions, setAddrSuggestions] = useState<AddressSuggestion[]>([]);
+  const [addrOpen, setAddrOpen] = useState(false);
+  const [addrLoading, setAddrLoading] = useState(false);
   // True until the user manually edits the slug field. While true, the slug
   // auto-tracks the venue name (e.g. "The Barn at New Albany" → "the-barn-at-new-albany").
   const [autoSlug, setAutoSlug] = useState(false);
@@ -215,6 +250,83 @@ export default function ListingPage() {
     scheduleAutosave();
   }
 
+  // Debounced address suggestions, powered by Nominatim (OpenStreetMap). Same
+  // provider as the embedded map on the public listing, so the lat/lng we
+  // record here lines up perfectly with the pin the couple eventually sees.
+  // Re-fires whenever the "Full address" input changes and the dropdown is
+  // open; closes when the user picks a suggestion or clicks outside.
+  useEffect(() => {
+    const q = (listing.location_full ?? '').trim();
+    if (!addrOpen || q.length < 4) {
+      setAddrSuggestions([]);
+      setAddrLoading(false);
+      return;
+    }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      setAddrLoading(true);
+      try {
+        const url =
+          `https://nominatim.openstreetmap.org/search` +
+          `?q=${encodeURIComponent(q)}` +
+          `&format=json&addressdetails=1&limit=5&countrycodes=us`;
+        const res = await fetch(url, {
+          headers: { Accept: 'application/json' },
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        type NomAddress = {
+          city?: string; town?: string; village?: string; hamlet?: string;
+          suburb?: string; county?: string; state?: string;
+        };
+        type NomItem = {
+          place_id: number | string;
+          display_name: string;
+          lat: string;
+          lon: string;
+          address?: NomAddress;
+        };
+        const rows = (await res.json()) as NomItem[];
+        if (cancelled) return;
+        const mapped: AddressSuggestion[] = rows.map((r) => {
+          const a = r.address ?? {};
+          const cityRaw = a.city || a.town || a.village || a.hamlet || a.suburb || a.county || '';
+          const stateRaw = a.state ?? '';
+          return {
+            place_id: String(r.place_id),
+            display_name: r.display_name,
+            lat: parseFloat(r.lat),
+            lng: parseFloat(r.lon),
+            city: cityRaw,
+            state: US_STATE_ABBR[stateRaw.toLowerCase()] ?? stateRaw,
+          };
+        });
+        setAddrSuggestions(mapped);
+      } catch {
+        if (!cancelled) setAddrSuggestions([]);
+      } finally {
+        if (!cancelled) setAddrLoading(false);
+      }
+    }, 350);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [listing.location_full, addrOpen]);
+
+  function pickAddress(s: AddressSuggestion) {
+    setListing((prev) => ({
+      ...prev,
+      location_full: s.display_name,
+      location_city: s.city || prev.location_city,
+      location_state: s.state || prev.location_state,
+      lat: Number.isFinite(s.lat) ? s.lat : prev.lat,
+      lng: Number.isFinite(s.lng) ? s.lng : prev.lng,
+    }));
+    setAddrOpen(false);
+    setAddrSuggestions([]);
+    scheduleAutosave();
+  }
+
   function updateName(value: string) {
     setListing((prev) => {
       const next = { ...prev, name: value };
@@ -257,9 +369,8 @@ export default function ListingPage() {
   function updateSocial(key: keyof SocialLinks, value: string) {
     setListing((prev) => {
       const next = { ...prev.social_links };
-      const t = value.trim();
-      if (!t) delete next[key];
-      else next[key] = t;
+      if (!value) delete next[key];
+      else next[key] = value;
       return { ...prev, social_links: next };
     });
     scheduleAutosave();
@@ -451,15 +562,55 @@ export default function ListingPage() {
         <h2 className={SECTION_TITLE}><MapPin className="inline w-4 h-4 -mt-0.5" /> Location</h2>
         <p className={SECTION_HINT}>Where couples will find you.</p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-6">
-          <div className="sm:col-span-4">
+          <div className="sm:col-span-4 relative">
             <label className={LABEL}>Full address</label>
             <input
               type="text"
               className={INPUT}
               value={listing.location_full ?? ''}
-              onChange={(e) => update('location_full', e.target.value)}
-              placeholder="1234 Country Lane, Austin, TX 78701"
+              onChange={(e) => {
+                update('location_full', e.target.value);
+                setAddrOpen(true);
+              }}
+              onFocus={() => setAddrOpen(true)}
+              onBlur={() => {
+                // Delay so clicks on a suggestion register before we close.
+                setTimeout(() => setAddrOpen(false), 150);
+              }}
+              placeholder="Start typing — we'll find your location on the map"
+              autoComplete="off"
             />
+            {addrOpen && (listing.location_full ?? '').trim().length >= 4 && (
+              <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
+                {addrLoading && addrSuggestions.length === 0 ? (
+                  <div className="px-4 py-3 text-xs text-gray-400">Searching…</div>
+                ) : addrSuggestions.length === 0 ? (
+                  <div className="px-4 py-3 text-xs text-gray-400">No matches — keep typing.</div>
+                ) : (
+                  <ul className="max-h-64 overflow-auto py-1">
+                    {addrSuggestions.map((s) => (
+                      <li key={s.place_id}>
+                        <button
+                          type="button"
+                          onMouseDown={(e) => {
+                            // Keep the input focused; onBlur's timeout will close.
+                            e.preventDefault();
+                            pickAddress(s);
+                          }}
+                          className="flex w-full items-start gap-2 px-3 py-2 text-left text-xs hover: focus:bg-gray-50"
+                        >
+                          <MapPin className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
+                          <span className="text-gray-700">{s.display_name}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+            <p className="mt-1 text-[11px] text-gray-400">
+              Picking a suggestion auto-fills city, state, latitude, and longitude.
+            </p>
           </div>
           <div className="sm:col-span-3">
             <label className={LABEL}>City</label>
@@ -732,7 +883,31 @@ export default function ListingPage() {
               placeholder="Defaults to your account email"
             />
           </div>
-          <label className="flex items-center gap-3 self-end pb-2">
+          <div>
+            <label className={LABEL}>Notification phone (SMS)</label>
+            <div className="relative">
+              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-gray-500">
+                +1
+              </span>
+              <input
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel-national"
+                className={`${INPUT} pl-10`}
+                value={formatUsLocal(listing.notification_phone)}
+                onChange={(e) => {
+                  // Strip non-digits and the country code so the owner types
+                  // "614 555 1234" naturally. We store E.164 on save (see
+                  // listing-sanitize.ts → normalizeUsPhone).
+                  const digits = e.target.value.replace(/\D+/g, '').slice(0, 10);
+                  update('notification_phone', digits ? `+1${digits}` : null);
+                }}
+                placeholder="(614) 555-1234"
+              />
+            </div>
+            <p className="mt-1 text-[11px] text-gray-400">USA only — the +1 country code is added automatically.</p>
+          </div>
+          <label className="flex items-center gap-3 self-end pb-2 sm:col-span-2">
             <input
               type="checkbox"
               checked={listing.email_notifications}
@@ -796,6 +971,22 @@ function StatusBadge({
     );
   }
   return null;
+}
+
+/**
+ * Render a stored E.164 number ("+16145551234") back into a human-friendly
+ * "(614) 555-1234" so the owner sees exactly what they'll receive SMS on.
+ * Also gracefully handles the intermediate "+1614555" while they're typing.
+ */
+function formatUsLocal(phone: string | null): string {
+  if (!phone) return '';
+  const digits = phone.replace(/\D+/g, '');
+  const local = digits.startsWith('1') ? digits.slice(1) : digits;
+  const d = local.slice(0, 10);
+  if (d.length === 0) return '';
+  if (d.length <= 3) return `(${d}`;
+  if (d.length <= 6) return `(${d.slice(0, 3)}) ${d.slice(3)}`;
+  return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
 }
 
 function formatRelative(d: Date): string {

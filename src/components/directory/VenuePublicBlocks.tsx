@@ -28,8 +28,17 @@ export function VenueMapEmbed({
   show: boolean;
 }) {
   if (!show || lat == null || lng == null) return null;
-  const pad = 0.03;
+  const pad = 0.01; // ≈ 1 km zoom, matches the suggestion pick precision
   const bbox = `${lng - pad},${lat - pad},${lng + pad},${lat + pad}`;
+  const iframeSrc =
+    `https://www.openstreetmap.org/export/embed.html` +
+    `?bbox=${encodeURIComponent(bbox)}` +
+    `&layer=mapnik` +
+    `&marker=${encodeURIComponent(`${lat},${lng}`)}`;
+  const directionsHref =
+    `https://www.openstreetmap.org/?mlat=${encodeURIComponent(String(lat))}` +
+    `&mlon=${encodeURIComponent(String(lng))}#map=16/${lat}/${lng}`;
+
   return (
     <section className="space-y-3">
       <h2
@@ -38,14 +47,44 @@ export function VenueMapEmbed({
       >
         Location
       </h2>
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+      <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white">
         <iframe
           title="Venue location map"
-          className="h-[min(320px,50vh)] w-full"
+          className="h-[min(360px,55vh)] w-full"
           loading="lazy"
           referrerPolicy="no-referrer-when-downgrade"
-          src={`https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${encodeURIComponent(`${lat},${lng}`)}`}
+          src={iframeSrc}
         />
+        {/* Absolute-positioned red pin centered on the iframe. The bbox is
+            centered on (lat, lng), so the visual center of the iframe matches
+            the venue coordinate and the overlay pin always lands on the spot
+            the couple cares about — regardless of OSM's default marker color. */}
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <svg
+            width="28"
+            height="40"
+            viewBox="0 0 28 40"
+            aria-label="Venue location"
+            className="drop-shadow-md"
+            style={{ transform: 'translateY(-14px)' }}
+          >
+            <path
+              d="M14 0C6.3 0 0 6.3 0 14c0 9.3 12.6 24.5 13.1 25.1.5.6 1.3.6 1.8 0C15.4 38.5 28 23.3 28 14 28 6.3 21.7 0 14 0z"
+              fill="#dc2626"
+              stroke="#ffffff"
+              strokeWidth="1.5"
+            />
+            <circle cx="14" cy="14" r="5" fill="#ffffff" />
+          </svg>
+        </div>
+        <a
+          href={directionsHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="absolute bottom-3 right-3 rounded-full bg-white/95 px-3 py-1.5 text-xs font-medium text-gray-800 shadow hover:bg-white"
+        >
+          Open in maps
+        </a>
       </div>
     </section>
   );

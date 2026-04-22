@@ -59,7 +59,10 @@ export default function ListingImagesPage() {
     try {
       const added: string[] = [];
       for (const file of Array.from(files)) {
-        const signedRes = await fetch('/api/listing/me/images', {
+        // 1) Sign an upload URL into the shared venue-images bucket, using the
+        //    media-library storage prefix so the asset can be registered in
+        //    venue_media_assets and appear in the owner's media library.
+        const signedRes = await fetch('/api/venue-media/sign', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -72,13 +75,35 @@ export default function ListingImagesPage() {
           const data = await signedRes.json().catch(() => ({}));
           throw new Error(data.error ?? `Failed to prepare upload for ${file.name}`);
         }
-        const { signedUrl, publicUrl } = await signedRes.json() as { signedUrl: string; publicUrl: string };
+        const { signedUrl, path, publicUrl } = (await signedRes.json()) as {
+          signedUrl: string; path: string; publicUrl: string;
+        };
+        // 2) Upload directly to Supabase Storage.
         const putRes = await fetch(signedUrl, {
           method: 'PUT',
           headers: { 'Content-Type': file.type || 'application/octet-stream' },
           body: file,
         });
         if (!putRes.ok) throw new Error(`Upload failed for ${file.name}`);
+        // 3) Register in venue_media_assets so the photo is reusable from the
+        //    media library (forms, emails, branding, other listings, …). If
+        //    this step fails we still want the photo on the listing, so we
+        //    log the error instead of aborting.
+        try {
+          await fetch('/api/venue-media', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              path,
+              publicUrl,
+              fileName: file.name,
+              contentType: file.type || 'application/octet-stream',
+              sizeBytes: file.size,
+            }),
+          });
+        } catch (regErr) {
+          console.warn('[listing/images] media library registration failed:', regErr);
+        }
         added.push(publicUrl);
       }
       const nextGallery = [...listing.gallery_images, ...added];

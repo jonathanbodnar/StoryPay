@@ -30,6 +30,7 @@ const SELECT_COLUMNS = [
   'is_published',
   'onboarding_completed',
   'notification_email',
+  'notification_phone',
   'email_notifications',
   'social_links',
   'faq',
@@ -43,15 +44,33 @@ async function getVenueId(): Promise<string | null> {
   return c.get('venue_id')?.value ?? null;
 }
 
+const SELECT_COLUMNS_FALLBACK = SELECT_COLUMNS
+  .split(',')
+  .filter((c) => c !== 'notification_phone')
+  .join(',');
+
+function isMissingNotificationPhone(err: { message?: string } | null): boolean {
+  if (!err?.message) return false;
+  return /notification_phone/i.test(err.message) && /column|does not exist|schema cache/i.test(err.message);
+}
+
 export async function GET() {
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { data, error } = await supabaseAdmin
+  let { data, error } = await supabaseAdmin
     .from('venues')
     .select(SELECT_COLUMNS)
     .eq('id', venueId)
     .maybeSingle();
+
+  if (error && isMissingNotificationPhone(error)) {
+    ({ data, error } = await supabaseAdmin
+      .from('venues')
+      .select(SELECT_COLUMNS_FALLBACK)
+      .eq('id', venueId)
+      .maybeSingle());
+  }
 
   if (error) {
     console.error('[GET /api/listing/me] failed:', error);
@@ -119,12 +138,26 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
-  const { data: updated, error } = await supabaseAdmin
+  let { data: updated, error } = await supabaseAdmin
     .from('venues')
     .update(updates)
     .eq('id', venueId)
     .select(SELECT_COLUMNS)
     .maybeSingle();
+
+  // Migration 050 (notification_phone) may not be deployed yet. If either the
+  // update payload or the post-update select tripped on the missing column,
+  // retry without it so owners can still save the rest of their listing.
+  if (error && isMissingNotificationPhone(error)) {
+    const retryUpdates = { ...updates };
+    delete retryUpdates.notification_phone;
+    ({ data: updated, error } = await supabaseAdmin
+      .from('venues')
+      .update(retryUpdates)
+      .eq('id', venueId)
+      .select(SELECT_COLUMNS_FALLBACK)
+      .maybeSingle());
+  }
 
   if (error) {
     const msg = error.message || 'Unknown error';

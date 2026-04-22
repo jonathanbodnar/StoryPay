@@ -31,6 +31,7 @@ export const LISTING_WRITABLE_FIELDS = [
   'availability_notes',
   'is_published',
   'notification_email',
+  'notification_phone',
   'email_notifications',
   /** { facebook?, instagram?, tiktok?, pinterest?, website? } — full URLs */
   'social_links',

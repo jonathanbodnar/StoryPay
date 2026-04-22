@@ -29,6 +29,10 @@ export function sanitizeListingUpdates(
     out.faq = sanitizeFaq(out.faq);
   }
 
+  if ('notification_phone' in out) {
+    out.notification_phone = normalizeUsPhone(out.notification_phone);
+  }
+
   return out;
 }
 
@@ -41,29 +45,56 @@ function parseCoord(v: unknown, kind: 'lat' | 'lng'): number | null {
   return n;
 }
 
+/**
+ * Autosave sends intermediate values while the venue owner is still typing
+ * (e.g. "www.facebook.com/" before they paste the rest). We used to reject
+ * anything without a leading http(s)://, which meant the server response
+ * round-trip would overwrite the in-progress value with an empty string and
+ * the text would disappear from the input. Now we preserve whatever the
+ * author typed (trimmed, length-capped) and leave the "must start with http"
+ * decision to the public page renderer.
+ */
 function sanitizeSocialLinks(raw: unknown): Record<string, string> {
   const out: Record<string, string> = {};
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
     if (!SOCIAL_KEYS.has(k)) continue;
     if (typeof v !== 'string') continue;
-    const t = v.trim();
-    if (!t || t.length > 500) continue;
-    if (!/^https?:\/\//i.test(t)) continue;
+    const t = v.trim().slice(0, 500);
+    if (!t) continue;
     out[k] = t;
   }
   return out;
 }
 
+/**
+ * Preserve blank rows so clicking "Add FAQ item" (which inserts an empty
+ * row the user then fills in) doesn't vanish on the next autosave.
+ */
 function sanitizeFaq(raw: unknown): { question: string; answer: string }[] {
   if (!Array.isArray(raw)) return [];
   const out: { question: string; answer: string }[] = [];
   for (const row of raw.slice(0, 20)) {
     if (!row || typeof row !== 'object') continue;
-    const q = String((row as { question?: unknown }).question ?? '').trim().slice(0, 500);
-    const a = String((row as { answer?: unknown }).answer ?? '').trim().slice(0, 8000);
-    if (!q && !a) continue;
+    const q = String((row as { question?: unknown }).question ?? '').slice(0, 500);
+    const a = String((row as { answer?: unknown }).answer ?? '').slice(0, 8000);
     out.push({ question: q, answer: a });
   }
   return out;
+}
+
+/**
+ * USA-only SaaS — store notification phones in E.164 (+1XXXXXXXXXX).
+ * Accepts whatever the user typed: "(614) 555-1234", "6145551234",
+ * "+1 614 555 1234", etc. Returns null for empty input or a number that
+ * clearly isn't a US 10-digit number.
+ */
+function normalizeUsPhone(v: unknown): string | null {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  if (!s) return null;
+  const digits = s.replace(/\D+/g, '');
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+  return null;
 }
