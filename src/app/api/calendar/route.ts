@@ -13,14 +13,26 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 type SpaceLite = { id: string; name: string; color: string };
+type TeamMemberLite = { id: string; name: string | null; first_name: string | null; last_name: string | null; email: string | null };
 
 // supabase-js returns a nested object when selecting a FK join. Normalize that
 // to the single-row shape the UI expects: `venue_spaces: { id, name, color } | null`
-function flattenSpace<T extends { venue_spaces?: SpaceLite | SpaceLite[] | null }>(row: T) {
+function flattenRow<T extends {
+  venue_spaces?: SpaceLite | SpaceLite[] | null;
+  venue_team_members?: TeamMemberLite | TeamMemberLite[] | null;
+}>(row: T) {
   const v = row.venue_spaces;
-  const flat = Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
-  return { ...row, venue_spaces: flat };
+  const flatSpace = Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
+  const t = row.venue_team_members;
+  const flatTeam = Array.isArray(t) ? (t[0] ?? null) : (t ?? null);
+  return { ...row, venue_spaces: flatSpace, venue_team_members: flatTeam };
 }
+
+// Select list used for reads + returning inserts. The team-member join is
+// optional — if the migration hasn't run yet or the FK doesn't resolve we
+// fall back to a plain select in the caller.
+const CAL_EVENT_SELECT =
+  '*, venue_spaces:space_id(id, name, color), venue_team_members:assigned_team_member_id(id, name, first_name, last_name, email)';
 
 export async function GET(request: NextRequest) {
   const venueId = await getVenueId();
@@ -36,7 +48,7 @@ export async function GET(request: NextRequest) {
   // use the old simple `.gte('start_at', from)` filter anymore.
   let query = supabaseAdmin
     .from('calendar_events')
-    .select('*, venue_spaces:space_id(id, name, color)')
+    .select(CAL_EVENT_SELECT)
     .eq('venue_id', venueId)
     .neq('status', 'cancelled')
     .order('start_at', { ascending: true });
@@ -49,8 +61,21 @@ export async function GET(request: NextRequest) {
   const { data, error } = await query;
 
   if (error) {
-    // If the FK embed fails (e.g. cache stale), fall back to a plain select.
+    // Migration 047 may not be applied yet, or PostgREST's FK cache is stale.
+    // Retry with just the space embed first; if that also fails drop all
+    // embeds and do a plain select.
     console.error('[calendar GET]', error);
+    let fallback = supabaseAdmin
+      .from('calendar_events')
+      .select('*, venue_spaces:space_id(id, name, color)')
+      .eq('venue_id', venueId)
+      .neq('status', 'cancelled')
+      .order('start_at', { ascending: true });
+    if (to) fallback = fallback.lte('start_at', to);
+    const fbRes = await fallback;
+    if (!fbRes.error) {
+      return NextResponse.json(expandRows((fbRes.data ?? []).map(flattenRow), from, to));
+    }
     let plain = supabaseAdmin
       .from('calendar_events')
       .select('*')
@@ -63,7 +88,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(expandRows(rows ?? [], from, to));
   }
 
-  return NextResponse.json(expandRows((data ?? []).map(flattenSpace), from, to));
+  return NextResponse.json(expandRows((data ?? []).map(flattenRow), from, to));
 }
 
 // Expand every row into the set of occurrences that land in [from, to].
@@ -112,7 +137,7 @@ export async function POST(request: NextRequest) {
   const {
     space_id, customer_email, title, event_type, status,
     start_at, end_at, all_day, proposal_id, notes, override_conflict,
-    recurrence_rule,
+    recurrence_rule, assigned_team_member_id,
   } = body;
 
   if (!title?.trim()) return NextResponse.json({ error: 'Title is required' }, { status: 400 });
@@ -153,25 +178,53 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const { data: row, error } = await supabaseAdmin
-    .from('calendar_events')
-    .insert({
-      venue_id:          venueId,
-      space_id:          space_id || null,
-      customer_email:    customer_email || null,
-      title:             title.trim(),
-      event_type:        event_type || 'other',
-      status:            status || 'confirmed',
-      start_at,
-      end_at,
-      all_day:           all_day ?? false,
-      proposal_id:       proposal_id || null,
-      notes:             notes || null,
-      override_conflict: override_conflict ?? false,
-      recurrence_rule:   rule,
-    })
-    .select('*, venue_spaces:space_id(id, name, color)')
-    .single();
+  // Assigned team-member FK is optional and guarded because the column was
+  // added in migration 047. If that migration hasn't run yet we silently
+  // strip the field so the insert keeps working on older schemas.
+  const insertPayload: Record<string, unknown> = {
+    venue_id:          venueId,
+    space_id:          space_id || null,
+    customer_email:    customer_email || null,
+    title:             title.trim(),
+    event_type:        event_type || 'other',
+    status:            status || 'confirmed',
+    start_at,
+    end_at,
+    all_day:           all_day ?? false,
+    proposal_id:       proposal_id || null,
+    notes:             notes || null,
+    override_conflict: override_conflict ?? false,
+    recurrence_rule:   rule,
+  };
+  if (assigned_team_member_id !== undefined) {
+    insertPayload.assigned_team_member_id = assigned_team_member_id || null;
+  }
+
+  let row: Record<string, unknown> | null = null;
+  let error: { message: string } | null = null;
+  {
+    const res = await supabaseAdmin
+      .from('calendar_events')
+      .insert(insertPayload)
+      .select(CAL_EVENT_SELECT)
+      .single();
+    row = res.data as Record<string, unknown> | null;
+    error = res.error ?? null;
+  }
+
+  // Migration 047 adds `assigned_team_member_id`. On older DBs the insert or
+  // the FK embed will fail — retry without that column / embed so venues on
+  // stale schemas can still create events.
+  if (error && /assigned_team_member_id|venue_team_members/i.test(error.message)) {
+    delete insertPayload.assigned_team_member_id;
+    const retry = await supabaseAdmin
+      .from('calendar_events')
+      .insert(insertPayload)
+      .select('*, venue_spaces:space_id(id, name, color)')
+      .single();
+    row = retry.data as Record<string, unknown> | null;
+    error = retry.error ?? null;
+  }
 
   if (error || !row) {
     console.error('[calendar POST insert]', error);
@@ -180,5 +233,5 @@ export async function POST(request: NextRequest) {
 
   void syncAppointmentRemindersForEvent(String((row as { id: string }).id));
 
-  return NextResponse.json(flattenSpace(row), { status: 201 });
+  return NextResponse.json(flattenRow(row as Parameters<typeof flattenRow>[0]), { status: 201 });
 }

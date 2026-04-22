@@ -8,12 +8,21 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 type SpaceLite = { id: string; name: string; color: string };
+type TeamMemberLite = { id: string; name: string | null; first_name: string | null; last_name: string | null; email: string | null };
 
-function flattenSpace<T extends { venue_spaces?: SpaceLite | SpaceLite[] | null }>(row: T) {
+function flattenRow<T extends {
+  venue_spaces?: SpaceLite | SpaceLite[] | null;
+  venue_team_members?: TeamMemberLite | TeamMemberLite[] | null;
+}>(row: T) {
   const v = row.venue_spaces;
-  const flat = Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
-  return { ...row, venue_spaces: flat };
+  const flatSpace = Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
+  const t = row.venue_team_members;
+  const flatTeam = Array.isArray(t) ? (t[0] ?? null) : (t ?? null);
+  return { ...row, venue_spaces: flatSpace, venue_team_members: flatTeam };
 }
+
+const CAL_EVENT_SELECT =
+  '*, venue_spaces:space_id(id, name, color), venue_team_members:assigned_team_member_id(id, name, first_name, last_name, email)';
 
 // Occurrences come back from GET with a synthetic id like
 // `<uuid>@YYYY-MM-DD`. Edits/deletes apply to the parent series as the MVP
@@ -36,8 +45,11 @@ export async function PATCH(
   const {
     space_id, customer_email, title, event_type, status,
     start_at, end_at, all_day, notes, override_conflict,
-    recurrence_rule,
+    recurrence_rule, assigned_team_member_id,
   } = body;
+  // Silence unused warnings — assigned_team_member_id is referenced via the
+  // `in body` check below so we just discard the destructured value here.
+  void assigned_team_member_id;
 
   // Conflict detection on reschedule: pull the current start/end for columns
   // that weren't submitted in this patch, then check the same-space window.
@@ -89,6 +101,9 @@ export async function PATCH(
   if ('all_day'           in body) updates.all_day           = all_day ?? false;
   if ('notes'             in body) updates.notes             = notes || null;
   if ('override_conflict' in body) updates.override_conflict = override_conflict ?? false;
+  if ('assigned_team_member_id' in body) {
+    updates.assigned_team_member_id = body.assigned_team_member_id || null;
+  }
   if ('recurrence_rule'   in body) {
     // `null` explicitly clears the rule; anything else must normalize cleanly.
     if (recurrence_rule === null) {
@@ -105,20 +120,55 @@ export async function PATCH(
   if (Object.keys(updates).length === 0) {
     const { data: current } = await supabaseAdmin
       .from('calendar_events')
+      .select(CAL_EVENT_SELECT)
+      .eq('id', id)
+      .eq('venue_id', venueId)
+      .maybeSingle();
+    if (current) return NextResponse.json(flattenRow(current));
+    // Fallback for stale schemas without migration 047.
+    const { data: plain } = await supabaseAdmin
+      .from('calendar_events')
       .select('*, venue_spaces:space_id(id, name, color)')
       .eq('id', id)
       .eq('venue_id', venueId)
       .maybeSingle();
-    return NextResponse.json(current ? flattenSpace(current) : null);
+    return NextResponse.json(plain ? flattenRow(plain) : null);
   }
 
-  const { data: row, error } = await supabaseAdmin
-    .from('calendar_events')
-    .update(updates)
-    .eq('id', id)
-    .eq('venue_id', venueId)
-    .select('*, venue_spaces:space_id(id, name, color)')
-    .maybeSingle();
+  // Try the full update (including the new team-member FK embed) — if that
+  // fails because migration 047 hasn't been applied, drop the FK fields and
+  // retry so venues on stale schemas can still save events.
+  type RowShape = {
+    venue_spaces?: SpaceLite | SpaceLite[] | null;
+    venue_team_members?: TeamMemberLite | TeamMemberLite[] | null;
+  } & Record<string, unknown>;
+
+  let row: RowShape | null = null;
+  let error: { message: string } | null = null;
+  {
+    const res = await supabaseAdmin
+      .from('calendar_events')
+      .update(updates)
+      .eq('id', id)
+      .eq('venue_id', venueId)
+      .select(CAL_EVENT_SELECT)
+      .maybeSingle();
+    row = (res.data as RowShape | null) ?? null;
+    error = res.error ?? null;
+  }
+  if (error && /assigned_team_member_id|venue_team_members/i.test(error.message)) {
+    const safe = { ...updates };
+    delete safe.assigned_team_member_id;
+    const retry = await supabaseAdmin
+      .from('calendar_events')
+      .update(safe)
+      .eq('id', id)
+      .eq('venue_id', venueId)
+      .select('*, venue_spaces:space_id(id, name, color)')
+      .maybeSingle();
+    row = (retry.data as RowShape | null) ?? null;
+    error = retry.error ?? null;
+  }
 
   if (error) {
     console.error('[calendar PATCH]', error);
@@ -127,7 +177,7 @@ export async function PATCH(
 
   void syncAppointmentRemindersForEvent(id);
 
-  return NextResponse.json(row ? flattenSpace(row) : null);
+  return NextResponse.json(row ? flattenRow(row) : null);
 }
 
 export async function DELETE(

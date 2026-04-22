@@ -5,6 +5,7 @@ import Link from 'next/link';
 import {
   ChevronLeft, ChevronRight, Plus, X, Loader2, Calendar,
   AlertTriangle, ExternalLink, Download, Info, Printer, Repeat,
+  Search, Pencil, Trash2, Check, User,
 } from 'lucide-react';
 import { describeRule, type RecurrenceRule } from '@/lib/recurrence';
 import { formatInTimeZone, toDate } from 'date-fns-tz';
@@ -24,6 +25,24 @@ import {
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface VenueSpace { id: string; name: string; color: string; capacity?: number | null; }
 
+interface TeamMemberLite {
+  id: string;
+  name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  status?: string;
+  role?: string;
+}
+
+interface ContactLite {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  customer_email: string | null;
+  phone: string | null;
+}
+
 interface CalEvent {
   id: string;
   title: string;
@@ -36,10 +55,17 @@ interface CalEvent {
   customer_email: string | null;
   notes: string | null;
   venue_spaces: { id: string; name: string; color: string } | null;
+  assigned_team_member_id?: string | null;
+  venue_team_members?: TeamMemberLite | null;
   // Recurrence fields (present after API expansion)
   recurrence_rule?: RecurrenceRule | null;
   parent_id?: string;
   is_occurrence?: boolean;
+}
+
+function teamMemberLabel(m: { name?: string | null; first_name?: string | null; last_name?: string | null; email?: string | null }) {
+  const full = [m.first_name, m.last_name].filter(Boolean).join(' ').trim();
+  return m.name?.trim() || full || m.email || 'Unnamed';
 }
 
 interface ConflictInfo { id: string; title: string; start_at: string; end_at: string; }
@@ -118,6 +144,7 @@ type RepeatEnd  = 'never' | 'on' | 'after';
 const emptyForm = () => ({
   title: '', event_type: 'wedding', status: 'confirmed',
   space_id: '', customer_email: '',
+  assigned_team_member_id: '',
   // start & end dates — end defaults to start for single-day events
   date: '', end_date: '',
   start_time: '10:00', end_time: '18:00', all_day: false, notes: '',
@@ -173,7 +200,22 @@ export default function CalendarPage() {
   const [selectedEvent, setSelectedEvent] = useState<CalEvent | null>(null);
   const [deleting,      setDeleting]      = useState(false);
 
-  // Space management (spaces managed in Customer Profile → Overview → Venue Spaces)
+  // Team members for the "assigned to" selector in the event modal
+  const [teamMembers, setTeamMembers] = useState<TeamMemberLite[]>([]);
+
+  // Contact typeahead state (used inside the event modal)
+  const [contactQuery, setContactQuery]             = useState('');
+  const [contactResults, setContactResults]         = useState<ContactLite[]>([]);
+  const [contactSearching, setContactSearching]     = useState(false);
+  const [contactDropdownOpen, setContactDropdownOpen] = useState(false);
+
+  // Inline "manage spaces" panel inside the event modal
+  const [manageSpaces, setManageSpaces]     = useState(false);
+  const [newSpaceName, setNewSpaceName]     = useState('');
+  const [newSpaceColor, setNewSpaceColor]   = useState('#6366f1');
+  const [editingSpaceId, setEditingSpaceId] = useState<string | null>(null);
+  const [editSpaceDraft, setEditSpaceDraft] = useState<{ name: string; color: string }>({ name: '', color: '#6366f1' });
+  const [spaceBusy, setSpaceBusy]           = useState(false);
 
   const [icalCopied, setIcalCopied] = useState(false);
 
@@ -246,6 +288,106 @@ export default function CalendarPage() {
   }, [year, month, view, anchorDate, venueTz]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  // Load the team-member list once on mount. The "Assigned to" dropdown is
+  // only rendered when the list is non-empty so venues without team members
+  // see the form unchanged.
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/team', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: TeamMemberLite[]) => {
+        if (cancelled) return;
+        setTeamMembers(Array.isArray(rows) ? rows : []);
+      })
+      .catch(() => { if (!cancelled) setTeamMembers([]); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // ── Contact search (debounced) ─────────────────────────────────────────────
+  useEffect(() => {
+    const q = contactQuery.trim();
+    if (!contactDropdownOpen) return;
+    if (q.length < 2) { setContactResults([]); setContactSearching(false); return; }
+    setContactSearching(true);
+    const t = setTimeout(() => {
+      fetch(`/api/venue-customers?search=${encodeURIComponent(q)}`, { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : []))
+        .then((rows: ContactLite[]) => setContactResults(Array.isArray(rows) ? rows.slice(0, 20) : []))
+        .catch(() => setContactResults([]))
+        .finally(() => setContactSearching(false));
+    }, 220);
+    return () => clearTimeout(t);
+  }, [contactQuery, contactDropdownOpen]);
+
+  // ── Space CRUD helpers (used by the "Manage spaces" panel) ────────────────
+  async function createSpace() {
+    const name = newSpaceName.trim();
+    if (!name) return;
+    setSpaceBusy(true);
+    try {
+      const res = await fetch('/api/spaces', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, color: newSpaceColor }),
+      });
+      if (res.ok) {
+        const row = await res.json();
+        setSpaces((prev) => [...prev, row]);
+        setForm((p) => ({ ...p, space_id: row.id }));
+        setNewSpaceName('');
+      }
+    } finally {
+      setSpaceBusy(false);
+    }
+  }
+
+  async function saveSpaceEdit(id: string) {
+    const name = editSpaceDraft.name.trim();
+    if (!name) return;
+    setSpaceBusy(true);
+    try {
+      const res = await fetch(`/api/spaces/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, color: editSpaceDraft.color }),
+      });
+      if (res.ok) {
+        const row = await res.json();
+        setSpaces((prev) => prev.map((s) => (s.id === id ? { ...s, ...row } : s)));
+        setEditingSpaceId(null);
+      }
+    } finally {
+      setSpaceBusy(false);
+    }
+  }
+
+  async function deleteSpace(id: string) {
+    const space = spaces.find((s) => s.id === id);
+    const ok = window.confirm(
+      `Delete space${space ? ` "${space.name}"` : ''}? Events assigned to this space will keep their date/time but lose the space label.`,
+    );
+    if (!ok) return;
+    setSpaceBusy(true);
+    try {
+      const res = await fetch(`/api/spaces/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setSpaces((prev) => prev.filter((s) => s.id !== id));
+        setForm((p) => (p.space_id === id ? { ...p, space_id: '' } : p));
+        if (activeSpaceFilter === id) setActiveSpaceFilter('all');
+      }
+    } finally {
+      setSpaceBusy(false);
+    }
+  }
+
+  function pickContact(c: ContactLite) {
+    const display = [c.first_name, c.last_name].filter(Boolean).join(' ').trim();
+    const email = c.customer_email ?? '';
+    setForm((p) => ({ ...p, customer_email: email }));
+    setContactQuery(display ? `${display}${email ? ` <${email}>` : ''}` : email);
+    setContactDropdownOpen(false);
+  }
 
   // ── Navigation ─────────────────────────────────────────────────────────────
   function prev() {
@@ -411,6 +553,7 @@ export default function CalendarPage() {
     const payload = {
       title: form.title, event_type: form.event_type, status: form.status,
       space_id: form.space_id || null, customer_email: form.customer_email || null,
+      assigned_team_member_id: form.assigned_team_member_id || null,
       start_at: startLocal.toISOString(), end_at: endLocal.toISOString(), all_day: form.all_day,
       notes: form.notes || null, override_conflict: override,
       recurrence_rule,
@@ -481,6 +624,11 @@ export default function CalendarPage() {
     if (time)    { f.start_time = time; f.end_time = `${String(Math.min(23, parseInt(time) + 1)).padStart(2, '0')}:00`; }
     setEditingId(null);
     setForm(f);
+    setContactQuery('');
+    setContactResults([]);
+    setContactDropdownOpen(false);
+    setManageSpaces(false);
+    setEditingSpaceId(null);
     setConflicts([]);
     setSaveError('');
     setShowModal(true);
@@ -498,6 +646,7 @@ export default function CalendarPage() {
       status: e.status,
       space_id: e.space_id ?? '',
       customer_email: e.customer_email ?? '',
+      assigned_team_member_id: e.assigned_team_member_id ?? '',
       date:     dateStrInTimeZone(e.start_at, z),
       end_date: dateStrInTimeZone(e.end_at, z),
       start_time: timeStrInTimeZone(e.start_at, z),
@@ -514,6 +663,13 @@ export default function CalendarPage() {
     const parentId = e.id.includes('@') ? e.id.split('@')[0] : e.id;
     setEditingId(parentId);
     setSelectedEvent(null);
+    // Pre-fill the contact-search box with the customer's email so the user
+    // sees a populated input when opening an existing event.
+    setContactQuery(e.customer_email ?? '');
+    setContactResults([]);
+    setContactDropdownOpen(false);
+    setManageSpaces(false);
+    setEditingSpaceId(null);
     setConflicts([]);
     setSaveError('');
     setShowModal(true);
@@ -860,15 +1016,6 @@ export default function CalendarPage() {
           </div>
         )}
 
-        {/* Legend */}
-        <div className="mt-4 flex flex-wrap gap-3">
-          {EVENT_TYPE_ORDER.map((key) => (
-            <div key={key} className="flex items-center gap-1.5 text-xs text-gray-500">
-              <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: EVENT_COLORS[key] }} />
-              {EVENT_TYPE_LABELS[key]}
-            </div>
-          ))}
-        </div>
       </div>{/* end cal-print-area */}
 
       {/* ── Create / Edit Event Modal ── */}
@@ -930,20 +1077,225 @@ export default function CalendarPage() {
                   </select>
                 </div>
               </div>
+              {/* ── Space selector + inline manage panel ─────────────── */}
               <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Space</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400">Space</label>
+                  <button
+                    type="button"
+                    onClick={() => setManageSpaces((v) => !v)}
+                    className="flex items-center gap-1 text-[11px] font-medium text-gray-500 hover:text-gray-900 transition-colors"
+                  >
+                    {manageSpaces ? <><X size={11} /> Done</> : <><Pencil size={11} /> Manage</>}
+                  </button>
+                </div>
                 <select value={form.space_id} onChange={e => setForm(p => ({ ...p, space_id: e.target.value }))}
                   className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-700 focus:border-gray-400 focus:outline-none">
                   <option value="">No specific space</option>
-                  {spaces.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  {spaces.map(s => <option key={s.id} value={s.id}>{s.name}{s.capacity ? ` (cap ${s.capacity})` : ''}</option>)}
                 </select>
+
+                {manageSpaces && (
+                  <div className="mt-2 rounded-xl border border-gray-200 bg-gray-50/60 p-3 space-y-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Customize spaces</p>
+                    {spaces.length === 0 && (
+                      <p className="text-[11px] text-gray-500">No spaces yet. Add one below.</p>
+                    )}
+                    {spaces.map((s) => {
+                      const isEditing = editingSpaceId === s.id;
+                      return (
+                        <div key={s.id} className="flex items-center gap-2">
+                          {isEditing ? (
+                            <>
+                              <input
+                                type="color"
+                                value={editSpaceDraft.color}
+                                onChange={(e) => setEditSpaceDraft((d) => ({ ...d, color: e.target.value }))}
+                                className="h-7 w-7 cursor-pointer rounded border border-gray-200 bg-white p-0.5"
+                                aria-label="Space color"
+                              />
+                              <input
+                                value={editSpaceDraft.name}
+                                onChange={(e) => setEditSpaceDraft((d) => ({ ...d, name: e.target.value }))}
+                                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); saveSpaceEdit(s.id); } }}
+                                className="flex-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm text-gray-800 focus:border-gray-400 focus:outline-none"
+                                autoFocus
+                              />
+                              <button
+                                type="button"
+                                onClick={() => saveSpaceEdit(s.id)}
+                                disabled={spaceBusy || !editSpaceDraft.name.trim()}
+                                className="rounded-lg border border-gray-300 bg-white p-1.5 text-gray-700 hover:bg-gray-100 disabled:opacity-40"
+                                aria-label="Save"
+                              >
+                                <Check size={13} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingSpaceId(null)}
+                                className="rounded-lg border border-gray-300 bg-white p-1.5 text-gray-700 hover:bg-gray-100"
+                                aria-label="Cancel"
+                              >
+                                <X size={13} />
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <span className="inline-block h-3 w-3 flex-shrink-0 rounded-full border border-white shadow" style={{ backgroundColor: s.color }} />
+                              <span className="flex-1 truncate text-sm text-gray-800">
+                                {s.name}
+                                {s.capacity ? <span className="ml-1 text-[11px] text-gray-400">cap {s.capacity}</span> : null}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => { setEditingSpaceId(s.id); setEditSpaceDraft({ name: s.name, color: s.color || '#6366f1' }); }}
+                                className="rounded-lg border border-gray-200 bg-white p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                                aria-label="Edit space"
+                              >
+                                <Pencil size={12} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => deleteSpace(s.id)}
+                                disabled={spaceBusy}
+                                className="rounded-lg border border-red-200 bg-white p-1.5 text-red-500 hover:bg-red-50 disabled:opacity-40"
+                                aria-label="Delete space"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                    <div className="flex items-center gap-2 pt-1">
+                      <input
+                        type="color"
+                        value={newSpaceColor}
+                        onChange={(e) => setNewSpaceColor(e.target.value)}
+                        className="h-7 w-7 cursor-pointer rounded border border-gray-200 bg-white p-0.5"
+                        aria-label="New space color"
+                      />
+                      <input
+                        value={newSpaceName}
+                        onChange={(e) => setNewSpaceName(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); createSpace(); } }}
+                        placeholder="New space name"
+                        className="flex-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm text-gray-800 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={createSpace}
+                        disabled={spaceBusy || !newSpaceName.trim()}
+                        className="flex items-center gap-1 rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-black disabled:opacity-40"
+                      >
+                        <Plus size={12} /> Add
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
+
+              {/* ── Contact search (replaces raw email field) ─────────── */}
               <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Customer Email</label>
-                <input type="email" value={form.customer_email} onChange={e => setForm(p => ({ ...p, customer_email: e.target.value }))}
-                  placeholder="couple@example.com"
-                  className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
+                <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Contact</label>
+                <div className="relative">
+                  <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={contactQuery}
+                    onFocus={() => setContactDropdownOpen(true)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setContactQuery(v);
+                      setContactDropdownOpen(true);
+                      // If the user types or pastes a raw email, reflect it
+                      // into customer_email so saves still capture it even
+                      // without picking from the dropdown.
+                      const match = v.match(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/);
+                      setForm((p) => ({ ...p, customer_email: match ? match[0] : '' }));
+                    }}
+                    onBlur={() => setTimeout(() => setContactDropdownOpen(false), 150)}
+                    placeholder="Search by name, email, or phone"
+                    className="w-full rounded-xl border border-gray-200 pl-9 pr-9 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
+                  />
+                  {contactQuery && (
+                    <button
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        setContactQuery('');
+                        setForm((p) => ({ ...p, customer_email: '' }));
+                        setContactResults([]);
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                      aria-label="Clear contact"
+                    >
+                      <X size={13} />
+                    </button>
+                  )}
+                  {contactDropdownOpen && (contactQuery.trim().length >= 2) && (
+                    <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-60 overflow-auto rounded-xl border border-gray-200 bg-white shadow-lg">
+                      {contactSearching && (
+                        <div className="flex items-center gap-2 px-3 py-2 text-xs text-gray-500">
+                          <Loader2 size={12} className="animate-spin" /> Searching…
+                        </div>
+                      )}
+                      {!contactSearching && contactResults.length === 0 && (
+                        <div className="px-3 py-2 text-xs text-gray-500">
+                          No matching contacts.
+                          {form.customer_email && (
+                            <span className="block mt-0.5 text-gray-400">Will use <span className="font-mono text-[10px]">{form.customer_email}</span> as the customer email.</span>
+                          )}
+                        </div>
+                      )}
+                      {!contactSearching && contactResults.map((c) => {
+                        const display = [c.first_name, c.last_name].filter(Boolean).join(' ').trim() || c.customer_email || 'Unnamed';
+                        return (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onMouseDown={(e) => { e.preventDefault(); pickContact(c); }}
+                            className="block w-full px-3 py-2 text-left hover:bg-gray-50"
+                          >
+                            <p className="text-sm font-medium text-gray-900 truncate">{display}</p>
+                            {(c.customer_email || c.phone) && (
+                              <p className="text-[11px] text-gray-500 truncate">
+                                {c.customer_email}{c.customer_email && c.phone ? ' · ' : ''}{c.phone}
+                              </p>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                {form.customer_email && (
+                  <p className="mt-1 text-[11px] text-gray-500">Email: <span className="font-mono">{form.customer_email}</span></p>
+                )}
               </div>
+
+              {/* ── Assigned team member (only when members exist) ───── */}
+              {teamMembers.length > 0 && (
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
+                    <span className="inline-flex items-center gap-1"><User size={11} /> Assigned To</span>
+                  </label>
+                  <select
+                    value={form.assigned_team_member_id}
+                    onChange={(e) => setForm((p) => ({ ...p, assigned_team_member_id: e.target.value }))}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-700 focus:border-gray-400 focus:outline-none"
+                  >
+                    <option value="">Unassigned</option>
+                    {teamMembers.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {teamMemberLabel(m)}
+                        {m.role ? ` — ${m.role}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Start Date *</label>
@@ -1139,6 +1491,9 @@ export default function CalendarPage() {
                 </p>
               )}
               {selectedEvent.venue_spaces && <p><span className="text-gray-400">Space:</span> {selectedEvent.venue_spaces.name}</p>}
+              {selectedEvent.venue_team_members && (
+                <p><span className="text-gray-400">Assigned to:</span> {teamMemberLabel(selectedEvent.venue_team_members)}</p>
+              )}
               {selectedEvent.customer_email && (
                 <p>
                   <span className="text-gray-400">Customer:</span>{' '}
