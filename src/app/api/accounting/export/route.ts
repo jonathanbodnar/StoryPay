@@ -11,6 +11,26 @@ function csvEscape(s: string): string {
   return t;
 }
 
+// Plain decimal dollars (parseable by Excel / QuickBooks / FreshBooks).
+// e.g. 1234.56  or  -1234.56
+function formatAmountDecimal(cents: number): string {
+  const dollars = cents / 100;
+  const sign = dollars < 0 ? '-' : '';
+  return `${sign}${Math.abs(dollars).toFixed(2)}`;
+}
+
+// Human-readable dollars and cents with thousands separators.
+// e.g. $1,234.56  or  -$1,234.56
+function formatAmountCurrency(cents: number): string {
+  const dollars = cents / 100;
+  const sign = dollars < 0 ? '-' : '';
+  const abs = Math.abs(dollars).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return `${sign}$${abs}`;
+}
+
 export async function GET(request: NextRequest) {
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -56,6 +76,8 @@ export async function GET(request: NextRequest) {
   const header = [
     'posting_date',
     'entry_type',
+    'amount',
+    'amount_formatted',
     'amount_cents',
     'currency',
     'customer_name',
@@ -73,12 +95,14 @@ export async function GET(request: NextRequest) {
     const postingRaw = isRefund ? ((r.updated_at as string) || (r.paid_at as string)) : (r.paid_at as string);
     const postingDate = postingRaw ? new Date(postingRaw).toISOString().slice(0, 10) : '';
     const gross = Number(r.price ?? 0) || 0;
-    const amount = isRefund ? -gross : gross;
+    const amountCents = isRefund ? -gross : gross;
     lines.push(
       [
         csvEscape(postingDate),
         isRefund ? 'refund' : 'payment',
-        String(amount),
+        formatAmountDecimal(amountCents),
+        csvEscape(formatAmountCurrency(amountCents)),
+        String(amountCents),
         'USD',
         csvEscape(String(r.customer_name ?? '')),
         csvEscape(String(r.customer_email ?? '')),
