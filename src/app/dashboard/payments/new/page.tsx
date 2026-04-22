@@ -816,11 +816,8 @@ export default function NewProposalInvoicePage() {
  <div className="px-5 py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
  <div className="flex items-center gap-3 flex-wrap">
  <p className="text-sm font-semibold text-gray-900">Line Items</p>
- <Link href="/dashboard/payments/products" className="text-xs font-medium text-gray-500 hover:text-gray-800 underline underline-offset-2">
- Product catalog
- </Link>
- <Link href="/dashboard/payments/packages" className="text-xs font-medium text-gray-500 hover:text-gray-800 underline underline-offset-2">
- Packages
+ <Link href="/dashboard/offerings" className="text-xs font-medium text-gray-500 hover:text-gray-800 underline underline-offset-2">
+ Offerings catalog
  </Link>
  </div>
  <div className="flex flex-wrap items-center gap-2">

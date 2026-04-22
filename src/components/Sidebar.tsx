@@ -18,7 +18,6 @@ import {
   Ticket,
   Package,
   FileSpreadsheet,
-  Layers,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
 
@@ -58,8 +57,7 @@ const menuItems: NavItem[] = [
 
 const paymentsItems: NavItem[] = [
   { label: 'New', href: '/dashboard/payments/new', icon: Plus, navId: 'nav_payments_new' },
-  { label: 'Products', href: '/dashboard/payments/products', icon: Package, navId: 'nav_payments_products' },
-  { label: 'Packages', href: '/dashboard/payments/packages', icon: Layers, navId: 'nav_payments_packages' },
+  { label: 'Offerings', href: '/dashboard/offerings', icon: Package, navId: 'nav_offerings' },
   { label: 'Coupons', href: '/dashboard/payments/coupons', icon: Ticket, navId: 'nav_payments_coupons' },
   { label: 'Proposals', href: '/dashboard/payments/proposals', icon: FileText, navId: 'nav_payments_proposals' },
   { label: 'Proposal Templates', href: '/dashboard/proposals/templates', icon: Receipt, navId: 'nav_proposals_hub' },
