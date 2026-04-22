@@ -183,6 +183,21 @@ function splitName(full: string): { firstName: string; lastName: string } {
   return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
 }
 
+/**
+ * Accept loose hex input (with or without `#`, 3 or 6 digits) and return the
+ * canonical `#rrggbb` form. Returns null when the input isn't a valid hex so
+ * callers can fall back to a default.
+ */
+function normalizeHexColor(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  let h = raw.trim().replace(/^#/, '');
+  if (/^[0-9a-fA-F]{3}$/.test(h)) {
+    h = h.split('').map((c) => c + c).join('');
+  }
+  if (!/^[0-9a-fA-F]{6}$/.test(h)) return null;
+  return `#${h.toLowerCase()}`;
+}
+
 // Contrast helper — pick white vs dark text for a stage chip color.
 function readableOn(hex: string): string {
   const h = hex.replace('#', '');
@@ -2603,6 +2618,7 @@ function PipelineEditor({
   const [editingPipelineId, setEditingPipelineId] = useState<string | null>(activeId);
   const [newPipelineName, setNewPipelineName] = useState('');
   const [newStageName, setNewStageName] = useState('');
+  const [newStageColor, setNewStageColor] = useState('#3b82f6');
   const [busy, setBusy] = useState(false);
 
   const editing = pipelines.find((p) => p.id === editingPipelineId) ?? pipelines[0];
@@ -2659,10 +2675,11 @@ function PipelineEditor({
     if (!editing) return;
     const name = newStageName.trim();
     if (!name) return;
+    const color = normalizeHexColor(newStageColor) ?? '#3b82f6';
     const res = await fetch(`/api/pipelines/${editing.id}/stages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, color }),
     });
     await apply(res);
     setNewStageName('');
@@ -2840,12 +2857,17 @@ function PipelineEditor({
                     ))}
                   </ul>
 
-                  <div className="mt-3 flex gap-2">
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <HexColorField
+                      value={newStageColor}
+                      onChange={setNewStageColor}
+                      ariaLabel="New stage color"
+                    />
                     <input
                       value={newStageName}
                       onChange={(e) => setNewStageName(e.target.value)}
                       placeholder="New stage name"
-                      className="flex-1 rounded-xl border border-gray-200 px-3 py-1.5 text-sm focus:border-gray-400 focus:outline-none"
+                      className="flex-1 min-w-[140px] rounded-xl border border-gray-200 px-3 py-1.5 text-sm focus:border-gray-400 focus:outline-none"
                     />
                     <button
                       onClick={addStage}
@@ -2864,6 +2886,72 @@ function PipelineEditor({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Native color picker + hex text input. Power users type the hex for their
+ * brand, everyone else uses the swatch. `commitOn="blur"` is used in row
+ * mode so we don't flood the API on every keystroke; the "new stage" form
+ * uses the default ("change") because it only commits once on Add.
+ */
+function HexColorField({
+  value, onChange, commitOn = 'change', ariaLabel,
+}: {
+  value: string;
+  onChange: (color: string) => void;
+  commitOn?: 'change' | 'blur';
+  ariaLabel?: string;
+}) {
+  const [text, setText] = useState<string>(value || '');
+  useEffect(() => { setText(value || ''); }, [value]);
+
+  const canonical = normalizeHexColor(text);
+  const displayColor = canonical ?? (normalizeHexColor(value) ?? '#d1d5db');
+
+  const commit = () => {
+    const next = normalizeHexColor(text);
+    if (next && next !== value) onChange(next);
+    else setText(value || '');
+  };
+
+  return (
+    <div className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-1.5 py-1">
+      <label className="relative inline-block w-5 h-5 cursor-pointer rounded overflow-hidden border border-gray-200" title={ariaLabel ?? 'Color'}>
+        <span className="block w-full h-full" style={{ backgroundColor: displayColor }} />
+        <input
+          type="color"
+          value={displayColor}
+          onChange={(e) => {
+            const next = normalizeHexColor(e.target.value);
+            if (!next) return;
+            setText(next);
+            if (commitOn === 'change') onChange(next);
+          }}
+          onBlur={() => { if (commitOn === 'blur') commit(); }}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          aria-label={ariaLabel ?? 'Color'}
+        />
+      </label>
+      <input
+        type="text"
+        value={text}
+        onChange={(e) => {
+          const v = e.target.value;
+          setText(v);
+          if (commitOn === 'change') {
+            const next = normalizeHexColor(v);
+            if (next) onChange(next);
+          }
+        }}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); } }}
+        placeholder="#3b82f6"
+        spellCheck={false}
+        aria-label={ariaLabel ? `${ariaLabel} hex` : 'Hex color'}
+        className={`w-[88px] rounded border-0 bg-transparent px-1 py-0.5 font-mono text-[11px] uppercase tracking-wide focus:outline-none ${canonical ? 'text-gray-800' : 'text-red-500'}`}
+      />
     </div>
   );
 }
@@ -2888,12 +2976,11 @@ function StageRow({
 
   return (
     <li className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white p-2">
-      <input
-        type="color"
+      <HexColorField
         value={stage.color}
-        onChange={(e) => onChangeColor(e.target.value)}
-        className="w-7 h-7 rounded cursor-pointer border border-gray-200"
-        title="Stage color"
+        onChange={onChangeColor}
+        commitOn="blur"
+        ariaLabel="Stage color"
       />
       <input
         value={name}

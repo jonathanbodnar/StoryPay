@@ -105,8 +105,15 @@ export async function createLeadFromVenueCustomerIfMissing(
 /**
  * Idempotent fixes so the sales pipeline shows every inquirer:
  * - Assign default pipeline + first stage to leads missing pipeline_id
- * - Fill stage_id when pipeline_id is set but stage is null
- * - Insert a `leads` row for venue_customers with no matching lead (real emails only)
+ * - Reset leads whose pipeline_id points at a deleted pipeline to the default
+ * - Fill stage_id when pipeline_id is set but stage is null OR the stage_id
+ *   references a deleted/cross-pipeline stage
+ * - Insert a `leads` row for venue_customers with no matching lead (real
+ *   emails only)
+ *
+ * All failures are swallowed (logged) so a slow/stale DB doesn't 500 the
+ * leads page — a lead stuck in the wrong place is preferable to no leads
+ * showing up at all.
  */
 export async function reconcileLeadsForKanban(venueId: string): Promise<void> {
   const defaultPipelineId = await ensureDefaultPipeline(venueId);
@@ -115,42 +122,91 @@ export async function reconcileLeadsForKanban(venueId: string): Promise<void> {
 
   const now = new Date().toISOString();
 
-  await supabaseAdmin
-    .from('leads')
-    .update({
-      pipeline_id: defaultPipelineId,
-      stage_id: defFirst.id,
-      status: legacyStatusForStageName(defFirst.name),
-      updated_at: now,
-    })
-    .eq('venue_id', venueId)
-    .is('pipeline_id', null);
-
-  const { data: missingStage } = await supabaseAdmin
-    .from('leads')
-    .select('id, pipeline_id')
-    .eq('venue_id', venueId)
-    .is('stage_id', null)
-    .not('pipeline_id', 'is', null);
-
-  for (const r of missingStage ?? []) {
-    const pid = r.pipeline_id as string;
-    const first = await firstStageForPipeline(venueId, pid);
-    if (!first) continue;
-    await supabaseAdmin
+  // Load the venue's current pipelines + stages once so we can diff against
+  // whatever the leads table has. A single round-trip keeps this cheap even
+  // for venues with hundreds of leads.
+  const [{ data: pipelineRows }, { data: stageRows }, { data: leadRows }] = await Promise.all([
+    supabaseAdmin
+      .from('lead_pipelines')
+      .select('id')
+      .eq('venue_id', venueId),
+    supabaseAdmin
+      .from('lead_pipeline_stages')
+      .select('id, pipeline_id, name, position')
+      .eq('venue_id', venueId)
+      .order('position', { ascending: true }),
+    supabaseAdmin
       .from('leads')
-      .update({
-        stage_id: first.id,
-        status: legacyStatusForStageName(first.name),
-        updated_at: now,
-      })
-      .eq('id', r.id as string)
-      .eq('venue_id', venueId);
+      .select('id, pipeline_id, stage_id')
+      .eq('venue_id', venueId),
+  ]);
+
+  const pipelineIds = new Set<string>(((pipelineRows ?? []) as Array<{ id: string }>).map((p) => p.id));
+  type StageMini = { id: string; pipeline_id: string; name: string; position: number };
+  const stagesById = new Map<string, StageMini>(
+    ((stageRows ?? []) as StageMini[]).map((s) => [s.id, s]),
+  );
+  const firstStageByPipeline = new Map<string, StageMini>();
+  for (const s of (stageRows ?? []) as StageMini[]) {
+    const existing = firstStageByPipeline.get(s.pipeline_id);
+    if (!existing || s.position < existing.position) firstStageByPipeline.set(s.pipeline_id, s);
   }
 
-  const { data: leadRows } = await supabaseAdmin.from('leads').select('email').eq('venue_id', venueId);
+  // Bucket leads that need fixing by the stage they should land in so we can
+  // do a single UPDATE per target stage instead of one query per lead.
+  const repairs = new Map<string, { pipeline_id: string; stage_id: string; status: string; ids: string[] }>();
+  const needsRepair = (l: { id: string; pipeline_id: string | null; stage_id: string | null }) => {
+    // Case 1: no pipeline at all → default + first stage
+    if (!l.pipeline_id) return { pid: defaultPipelineId, stage: defFirst };
+    // Case 2: pipeline points to a deleted pipeline → default + first stage
+    if (!pipelineIds.has(l.pipeline_id)) return { pid: defaultPipelineId, stage: defFirst };
+    // Case 3: no stage → first stage of the existing pipeline
+    if (!l.stage_id) {
+      const first = firstStageByPipeline.get(l.pipeline_id);
+      return first ? { pid: l.pipeline_id, stage: first } : null;
+    }
+    // Case 4: stage points to a deleted stage OR belongs to a different
+    // pipeline than the lead claims → first stage of the lead's pipeline
+    const st = stagesById.get(l.stage_id);
+    if (!st || st.pipeline_id !== l.pipeline_id) {
+      const first = firstStageByPipeline.get(l.pipeline_id);
+      return first ? { pid: l.pipeline_id, stage: first } : null;
+    }
+    return null;
+  };
+
+  for (const l of (leadRows ?? []) as Array<{ id: string; pipeline_id: string | null; stage_id: string | null }>) {
+    const fix = needsRepair(l);
+    if (!fix) continue;
+    const key = `${fix.pid}::${fix.stage.id}`;
+    const bucket = repairs.get(key) ?? {
+      pipeline_id: fix.pid,
+      stage_id: fix.stage.id,
+      status: legacyStatusForStageName(fix.stage.name),
+      ids: [] as string[],
+    };
+    bucket.ids.push(l.id);
+    repairs.set(key, bucket);
+  }
+
+  for (const bucket of repairs.values()) {
+    if (bucket.ids.length === 0) continue;
+    const { error } = await supabaseAdmin
+      .from('leads')
+      .update({
+        pipeline_id: bucket.pipeline_id,
+        stage_id: bucket.stage_id,
+        status: bucket.status,
+        updated_at: now,
+      })
+      .eq('venue_id', venueId)
+      .in('id', bucket.ids);
+    if (error) console.error('[reconcileLeadsForKanban] repair update failed:', error.message);
+  }
+
+  const { data: leadEmailRows } = await supabaseAdmin.from('leads').select('email').eq('venue_id', venueId);
   const emailSet = new Set(
-    (leadRows ?? []).map((x) => String(x.email || '').trim().toLowerCase()).filter(Boolean),
+    (leadEmailRows ?? []).map((x) => String(x.email || '').trim().toLowerCase()).filter(Boolean),
   );
 
   const { data: vcs } = await supabaseAdmin

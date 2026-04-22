@@ -75,9 +75,20 @@ export async function GET(request: NextRequest) {
   const maxValue      = searchParams.get('max_value');
 
   // Make sure the default pipeline exists before we query leads — otherwise
-  // new venues see an empty screen on their first visit.
-  await ensureDefaultPipeline(venueId);
-  await reconcileLeadsForKanban(venueId);
+  // new venues see an empty screen on their first visit. Reconcile is best-
+  // effort: a transient DB error here shouldn't block the user from seeing
+  // the leads that were already fine.
+  let defaultPipelineId: string | null = null;
+  try {
+    defaultPipelineId = await ensureDefaultPipeline(venueId);
+  } catch (err) {
+    console.error('[GET /api/leads] ensureDefaultPipeline failed:', err);
+  }
+  try {
+    await reconcileLeadsForKanban(venueId);
+  } catch (err) {
+    console.error('[GET /api/leads] reconcileLeadsForKanban failed:', err);
+  }
 
   let query = supabaseAdmin
     .from('leads')
@@ -124,6 +135,45 @@ export async function GET(request: NextRequest) {
   }
 
   const leadRows = (rows ?? []) as unknown as LeadRow[];
+
+  // Safety net for the default-pipeline view: even if reconcile couldn't
+  // move every lead (e.g. because it races with a concurrent write, or the
+  // lead references a since-deleted pipeline), we don't want those leads to
+  // silently vanish. Pull in any leads for this venue that are still
+  // orphaned from a live pipeline and append them to the result so the user
+  // can at least see the cards and drag them somewhere sensible.
+  const isDefaultView = !!pipelineId && defaultPipelineId != null && pipelineId === defaultPipelineId;
+  if (isDefaultView && !stageId && !status && !q && !createdAfter && !createdBefore && !minValue && !maxValue) {
+    const { data: validPipelineRows } = await supabaseAdmin
+      .from('lead_pipelines')
+      .select('id')
+      .eq('venue_id', venueId);
+    const validPipelineIds = new Set<string>(
+      ((validPipelineRows ?? []) as Array<{ id: string }>).map((p) => p.id),
+    );
+
+    let orphanQuery = supabaseAdmin
+      .from('leads')
+      .select(
+        'id, venue_id, track_token, first_name, last_name, name, email, phone, wedding_date, guest_count, ' +
+        'booking_timeline, message, notes, status, source, created_at, updated_at, ' +
+        'venue_name, venue_website_url, opportunity_value, pipeline_id, stage_id, position, ' +
+        'lost_reason, referral_source, first_touch_utm, assigned_member_id, marketing_email_opt_in',
+      )
+      .eq('venue_id', venueId)
+      .limit(500);
+    orphanQuery = orphanQuery.or(
+      `pipeline_id.is.null,pipeline_id.not.in.(${[...validPipelineIds].join(',') || '00000000-0000-0000-0000-000000000000'})`,
+    );
+    const { data: orphanRows } = await orphanQuery;
+    const seenIds = new Set(leadRows.map((l) => l.id));
+    for (const o of (orphanRows ?? []) as unknown as LeadRow[]) {
+      if (seenIds.has(o.id)) continue;
+      leadRows.push(o);
+      seenIds.add(o.id);
+    }
+  }
+
   const leadIds = leadRows.map((l) => l.id);
 
   // Count notes per lead so the Kanban cards can show a "3 notes" badge.
