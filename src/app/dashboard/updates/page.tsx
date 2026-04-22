@@ -492,6 +492,14 @@ type Tab = 'changelog' | 'requests';
 export default function UpdatesPage() {
  const [tab, setTab] = useState<Tab>('changelog');
 
+ useEffect(() => {
+   fetch('/api/changelog/mark-seen', { method: 'POST' })
+     .catch(() => {})
+     .finally(() => {
+       window.dispatchEvent(new Event('storypay:updates-seen'));
+     });
+ }, []);
+
  return (
  <div className="max-w-3xl">
  {/* Header */}

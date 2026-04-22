@@ -118,6 +118,7 @@ export default function Sidebar({
   const [flyoutPos, setFlyoutPos] = useState<{ top: number; left: number } | null>(null);
   const [mounted, setMounted] = useState(false);
   const [convUnread, setConvUnread] = useState(0);
+  const [updatesUnread, setUpdatesUnread] = useState(0);
 
   useEffect(() => {
     setMounted(true);
@@ -128,6 +129,15 @@ export default function Sidebar({
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { count?: number } | null) => {
         if (d && typeof d.count === 'number') setConvUnread(d.count);
+      })
+      .catch(() => {});
+  }, []);
+
+  const refreshUpdatesUnread = useCallback(() => {
+    void fetch('/api/changelog/unread-count')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { count?: number } | null) => {
+        if (d && typeof d.count === 'number') setUpdatesUnread(d.count);
       })
       .catch(() => {});
   }, []);
@@ -144,8 +154,23 @@ export default function Sidebar({
   }, [refreshConvUnread]);
 
   useEffect(() => {
+    refreshUpdatesUnread();
+    const t = setInterval(refreshUpdatesUnread, 5 * 60 * 1000);
+    const onSeen = () => setUpdatesUnread(0);
+    window.addEventListener('storypay:updates-seen', onSeen);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener('storypay:updates-seen', onSeen);
+    };
+  }, [refreshUpdatesUnread]);
+
+  useEffect(() => {
     if (pathname.startsWith('/dashboard/conversations')) refreshConvUnread();
   }, [pathname, refreshConvUnread]);
+
+  useEffect(() => {
+    if (pathname.startsWith('/dashboard/updates')) setUpdatesUnread(0);
+  }, [pathname]);
 
   const isOnSettings = pathname.startsWith('/dashboard/settings');
   const isOnMarketing = pathname.startsWith('/dashboard/marketing');
@@ -338,7 +363,15 @@ export default function Sidebar({
           const isAI = item.label === 'Ask AI' || item.label === 'Support';
           const isHelpCenter = item.label === 'Help Center';
           const isConversations = item.href === '/dashboard/conversations';
+          const isUpdates = item.href === '/dashboard/updates';
           const showConvBadge = isConversations && convUnread > 0;
+          const showUpdatesBadge = isUpdates && updatesUnread > 0;
+          const badgeCount = showConvBadge
+            ? convUnread
+            : showUpdatesBadge
+              ? updatesUnread
+              : 0;
+          const showBadge = showConvBadge || showUpdatesBadge;
           return (
             <Link
               key={item.label}
@@ -354,26 +387,29 @@ export default function Sidebar({
               }
               title={
                 rail
-                  ? isConversations && showConvBadge
-                    ? `${item.label} (${convUnread} unread)`
+                  ? showBadge
+                    ? `${item.label} (${badgeCount} unread)`
                     : item.label
                   : undefined
               }
-              className={classNames(navItem(active && !isAI, rail), !rail && isConversations ? 'w-full' : '')}
+              className={classNames(
+                navItem(active && !isAI, rail),
+                !rail && (isConversations || isUpdates) ? 'w-full' : '',
+              )}
               style={navItemStyle(active && !isAI)}
             >
-              <span className={rail && showConvBadge ? 'relative inline-flex' : 'inline-flex'}>
+              <span className={rail && showBadge ? 'relative inline-flex' : 'inline-flex'}>
                 <Icon size={16} className="shrink-0" />
-                {rail && showConvBadge ? (
+                {rail && showBadge ? (
                   <span className="absolute -right-1 -top-0.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
                 ) : null}
               </span>
               {!rail && (
                 <>
                   <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                  {showConvBadge ? (
+                  {showBadge ? (
                     <span className="ml-auto shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold leading-none text-white tabular-nums">
-                      {convUnread > 99 ? '99+' : convUnread}
+                      {badgeCount > 99 ? '99+' : badgeCount}
                     </span>
                   ) : null}
                 </>

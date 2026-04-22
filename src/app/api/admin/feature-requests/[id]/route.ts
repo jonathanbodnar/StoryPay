@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { generateChangelogCopy } from '@/lib/changelog-copy';
 
 async function verifyAdmin() {
   const cookieStore = await cookies();
@@ -67,7 +68,39 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await request.json();
-  const { status, changelogTitle, changelogDescription, changelogCategory } = body;
+  const {
+    status,
+    title: editTitle,
+    description: editDescription,
+    changelogTitle,
+    changelogDescription,
+    changelogCategory,
+  } = body as {
+    status?: string;
+    title?: string;
+    description?: string;
+    changelogTitle?: string;
+    changelogDescription?: string;
+    changelogCategory?: 'feature' | 'improvement' | 'fix';
+  };
+
+  // Admin-only "edit" path — title/description changes without a status flip.
+  if (!status) {
+    if (typeof editTitle !== 'string' && typeof editDescription !== 'string') {
+      return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
+    }
+    const edits: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (typeof editTitle === 'string') {
+      if (!editTitle.trim()) return NextResponse.json({ error: 'Title is required' }, { status: 400 });
+      edits.title = editTitle.trim();
+    }
+    if (typeof editDescription === 'string') {
+      edits.description = editDescription.trim() || null;
+    }
+    const { error } = await supabaseAdmin.from('feature_requests').update(edits).eq('id', id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ id, ...edits });
+  }
 
   const valid = ['open', 'planned', 'in_progress', 'completed'];
   if (!valid.includes(status)) return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
@@ -80,22 +113,59 @@ export async function PATCH(
   if (status === 'completed') {
     updateFields.completed_at = new Date().toISOString();
 
-    if (changelogTitle?.trim()) {
-      const { data: entry, error: clErr } = await supabaseAdmin
-        .from('changelog_entries')
-        .insert({
-          title: changelogTitle.trim(),
-          description: changelogDescription?.trim() || '',
-          category: changelogCategory || 'feature',
-          released_at: new Date().toISOString(),
-        })
-        .select('id')
-        .single();
+    const { data: fr } = await supabaseAdmin
+      .from('feature_requests')
+      .select('title, description')
+      .eq('id', id)
+      .maybeSingle();
 
-      if (!clErr && entry) {
-        updateFields.changelog_id = entry.id;
+    const manualTitle = changelogTitle?.trim();
+    const manualDesc = changelogDescription?.trim();
+    const needsAutoGen = !manualTitle || !manualDesc;
+
+    const copy = needsAutoGen
+      ? await generateChangelogCopy({
+          requestTitle: fr?.title ?? manualTitle ?? 'Update shipped',
+          requestDescription: fr?.description ?? manualDesc ?? null,
+          category: changelogCategory,
+        })
+      : { title: manualTitle!, description: manualDesc!, category: (changelogCategory || 'feature') as 'feature' | 'improvement' | 'fix' };
+
+    const finalTitle = manualTitle || copy.title;
+    const finalDescription = manualDesc || copy.description;
+    const finalCategory = changelogCategory || copy.category;
+
+    // First insert with the feature_request_id back-link; if the column does
+    // not exist yet (pre-migration 048) retry without it so approvals never fail.
+    const baseInsert = {
+      title: finalTitle,
+      description: finalDescription,
+      category: finalCategory,
+      released_at: new Date().toISOString(),
+    } as const;
+
+    let entryId: string | null = null;
+    const first = await supabaseAdmin
+      .from('changelog_entries')
+      .insert({ ...baseInsert, feature_request_id: id })
+      .select('id')
+      .single();
+    if (first.error) {
+      if (/feature_request_id/i.test(first.error.message)) {
+        const retry = await supabaseAdmin
+          .from('changelog_entries')
+          .insert(baseInsert)
+          .select('id')
+          .single();
+        if (!retry.error && retry.data) entryId = retry.data.id as string;
+        else console.error('[feature-request PATCH] changelog insert error:', retry.error?.message);
+      } else {
+        console.error('[feature-request PATCH] changelog insert error:', first.error.message);
       }
+    } else if (first.data) {
+      entryId = first.data.id as string;
     }
+    if (entryId) updateFields.changelog_id = entryId;
   }
 
   const { error } = await supabaseAdmin

@@ -531,6 +531,11 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
   const [frDetailError, setFrDetailError] = useState('');
   const [frDeleting, setFrDeleting]       = useState<string | null>(null);
   const [frStatusSaving, setFrStatusSaving] = useState(false);
+  // Inline edit state
+  const [frEditing, setFrEditing] = useState(false);
+  const [frEditTitle, setFrEditTitle] = useState('');
+  const [frEditDesc, setFrEditDesc] = useState('');
+  const [frEditSaving, setFrEditSaving] = useState(false);
   // Changelog form (shown when marking a request completed)
   const [showChangelogForm, setShowChangelogForm] = useState(false);
   const [clTitle, setClTitle]   = useState('');
@@ -741,6 +746,45 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
       description: clDesc,
       category: clCat,
     });
+  }
+
+  async function approveAutoGenerate() {
+    if (!frDetail) return;
+    // Pass empty strings — the API will auto-generate an outcome-based
+    // headline + description from the feature-request copy.
+    await updateFeatureRequestStatus(frDetail.id, 'completed', {
+      title: '',
+      description: '',
+      category: clCat,
+    });
+  }
+
+  function startFrEdit() {
+    if (!frDetail) return;
+    setFrEditTitle(frDetail.title);
+    setFrEditDesc(frDetail.description || '');
+    setFrEditing(true);
+  }
+
+  async function saveFrEdit() {
+    if (!frDetail) return;
+    if (!frEditTitle.trim()) return;
+    setFrEditSaving(true);
+    try {
+      const res = await fetch(`/api/admin/feature-requests/${frDetail.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: frEditTitle.trim(), description: frEditDesc.trim() || null }),
+      });
+      if (res.ok) {
+        setFrDetail(prev => prev ? { ...prev, title: frEditTitle.trim(), description: frEditDesc.trim() || null } : prev);
+        setFrEditing(false);
+        fetchStats(dateRange);
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setFrDetailError(d.error || 'Failed to save edits');
+      }
+    } finally { setFrEditSaving(false); }
   }
 
   async function openDrill(key: DrillKey) {
@@ -1432,16 +1476,61 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
               ) : frDetail ? (
                 <div className="space-y-5">
                   {/* Title & meta */}
-                  <div>
-                    <h4 className="text-base font-bold text-gray-900 mb-1">{frDetail.title}</h4>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_COLORS_FR[frDetail.status] || 'bg-gray-100 text-gray-600'}`}>{STATUS_LABELS_FR[frDetail.status] || frDetail.status}</span>
-                      <span className="text-xs text-gray-400">{new Date(frDetail.created_at).toLocaleDateString('en-US', { dateStyle: 'medium' })}</span>
+                  {frEditing ? (
+                    <div className="space-y-2">
+                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400">Request Title</label>
+                      <input
+                        type="text"
+                        value={frEditTitle}
+                        onChange={e => setFrEditTitle(e.target.value)}
+                        style={{ fontSize: 16 }}
+                        className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 focus:border-gray-500 focus:outline-none"
+                      />
+                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mt-2">Request Description</label>
+                      <textarea
+                        value={frEditDesc}
+                        onChange={e => setFrEditDesc(e.target.value)}
+                        rows={3}
+                        placeholder="Request details from the venue..."
+                        className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none resize-none"
+                      />
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={saveFrEdit}
+                          disabled={frEditSaving || !frEditTitle.trim()}
+                          className="flex items-center gap-1.5 rounded-xl bg-gray-900 px-4 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50 transition-all"
+                        >
+                          {frEditSaving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Save
+                        </button>
+                        <button
+                          onClick={() => setFrEditing(false)}
+                          className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div>
+                      <div className="flex items-start justify-between gap-3">
+                        <h4 className="text-base font-bold text-gray-900 mb-1 flex-1">{frDetail.title}</h4>
+                        <button
+                          onClick={startFrEdit}
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
+                          title="Edit request"
+                        >
+                          <Pencil size={12} />
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_COLORS_FR[frDetail.status] || 'bg-gray-100 text-gray-600'}`}>{STATUS_LABELS_FR[frDetail.status] || frDetail.status}</span>
+                        <span className="text-xs text-gray-400">{new Date(frDetail.created_at).toLocaleDateString('en-US', { dateStyle: 'medium' })}</span>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Description */}
-                  {frDetail.description && (
+                  {!frEditing && frDetail.description && (
                     <div className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3">
                       <p className="text-sm text-gray-700 leading-relaxed">{frDetail.description}</p>
                     </div>
@@ -1469,16 +1558,44 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
                           {STATUS_LABELS_FR[val]}
                         </button>
                       ))}
-                      {frDetail.status !== 'completed' ? (
-                        <button onClick={() => { setShowChangelogForm(v => !v); setClTitle(frDetail.title); setClDesc(frDetail.description || ''); }}
-                          className="rounded-full px-3 py-1.5 text-xs font-semibold border-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50 transition-all">
-                          ✓ Mark Completed
-                        </button>
-                      ) : (
+                      {frDetail.status === 'completed' && (
                         <span className="rounded-full px-3 py-1.5 text-xs font-semibold border-2 border-emerald-400 bg-emerald-500 text-white">✓ Completed</span>
                       )}
                     </div>
                   </div>
+
+                  {/* Approve — auto-publishes to What's New with a generated headline + outcome copy */}
+                  {frDetail.status !== 'completed' && (
+                    <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/60 p-4">
+                      <div className="flex items-start gap-3 mb-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white border border-emerald-200">
+                          <Check size={16} className="text-emerald-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-900">Approve &amp; publish to What&apos;s New</p>
+                          <p className="text-xs text-gray-600 mt-0.5">
+                            Approving generates an outcome-based headline and description, publishes it to the venue changelog, and hides this request from the venue side.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={approveAutoGenerate}
+                          disabled={frStatusSaving}
+                          className="flex items-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50 transition-colors"
+                        >
+                          {frStatusSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                          Approve &amp; auto-publish
+                        </button>
+                        <button
+                          onClick={() => { setShowChangelogForm(v => !v); setClTitle(frDetail.title); setClDesc(frDetail.description || ''); }}
+                          className="rounded-xl border border-emerald-300 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors"
+                        >
+                          {showChangelogForm ? 'Hide custom copy' : 'Customize changelog copy'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Changelog form — shown when marking completed */}
                   {showChangelogForm && frDetail.status !== 'completed' && (
