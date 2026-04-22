@@ -12,6 +12,7 @@ import {
   Globe, CalendarPlus, Clock, GripVertical, ArrowLeft, ArrowRight,
   ChevronDown, Filter, Link2, Copy, Tags,
   History, ListTodo, CheckSquare, Square, Send, Activity,
+  Pencil, Check,
 } from 'lucide-react';
 import LeadInsightsStrip, { type LeadInsightsPayload } from '@/components/leads/LeadInsightsStrip';
 import { TimezoneSelect } from '@/components/TimezoneSelect';
@@ -253,6 +254,7 @@ type LeadDraft = {
   message: string;
   pipelineId: string;
   stageId: string;
+  spaceId: string;
   tagIds: string[];
 };
 
@@ -262,8 +264,16 @@ const emptyDraft = (pipelineId: string): LeadDraft => ({
   weddingDate: '', guestCount: '', bookingTimeline: '', message: '',
   pipelineId,
   stageId: '',
+  spaceId: '',
   tagIds: [],
 });
+
+interface VenueSpaceLite {
+  id: string;
+  name: string;
+  color: string;
+  capacity?: number | null;
+}
 
 // ─── Main page ───────────────────────────────────────────────────────────────
 
@@ -280,6 +290,9 @@ export default function LeadsPage() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [addingOpen, setAddingOpen] = useState(false);
   const [allTags, setAllTags] = useState<MarketingTag[]>([]);
+  // Shared with the AddLeadModal; same CRUD surface that the calendar
+  // modal uses so venues can manage spaces without leaving the leads page.
+  const [spaces, setSpaces] = useState<VenueSpaceLite[]>([]);
   const [hideRevenue, setHideRevenue] = useState(false);
   const [insights, setInsights] = useState<LeadInsightsPayload | null>(null);
   const [insightsLoading, setInsightsLoading] = useState(true);
@@ -293,6 +306,16 @@ export default function LeadsPage() {
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadTags(); }, [loadTags]);
+
+  const loadSpaces = useCallback(async () => {
+    const res = await fetch('/api/spaces', { cache: 'no-store' });
+    if (!res.ok) return;
+    const rows = (await res.json()) as VenueSpaceLite[];
+    setSpaces(Array.isArray(rows) ? rows : []);
+  }, []);
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void loadSpaces(); }, [loadSpaces]);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
@@ -498,6 +521,7 @@ export default function LeadsPage() {
         message:           draft.message,
         pipelineId:        draft.pipelineId || activePipelineId,
         stageId:           draft.stageId || undefined,
+        spaceId:           draft.spaceId || null,
         tagIds:            draft.tagIds,
       }),
     });
@@ -791,6 +815,8 @@ export default function LeadsPage() {
           key={activePipelineId}
           pipelines={pipelines}
           allTags={allTags}
+          spaces={spaces}
+          onSpacesChange={setSpaces}
           defaultPipelineId={activePipelineId}
           onClose={() => setAddingOpen(false)}
           onSave={createLead}
@@ -3029,10 +3055,12 @@ function StageRow({
 // ─── Add-lead modal ──────────────────────────────────────────────────────────
 
 function AddLeadModal({
-  pipelines, allTags, defaultPipelineId, onClose, onSave, onVenueTagCreated,
+  pipelines, allTags, spaces, onSpacesChange, defaultPipelineId, onClose, onSave, onVenueTagCreated,
 }: {
   pipelines: Pipeline[];
   allTags: MarketingTag[];
+  spaces: VenueSpaceLite[];
+  onSpacesChange: (next: VenueSpaceLite[] | ((prev: VenueSpaceLite[]) => VenueSpaceLite[])) => void;
   defaultPipelineId: string;
   onClose: () => void;
   onSave: (draft: LeadDraft) => void;
@@ -3046,10 +3074,78 @@ function AddLeadModal({
   });
   const [saving, setSaving] = useState(false);
 
+  // Inline "manage spaces" panel — mirrors the calendar event modal so venues
+  // get add/edit/remove here without a separate settings page.
+  const [manageSpaces, setManageSpaces]     = useState(false);
+  const [newSpaceName, setNewSpaceName]     = useState('');
+  const [newSpaceColor, setNewSpaceColor]   = useState('#6366f1');
+  const [editingSpaceId, setEditingSpaceId] = useState<string | null>(null);
+  const [editSpaceDraft, setEditSpaceDraft] = useState<{ name: string; color: string }>({ name: '', color: '#6366f1' });
+  const [spaceBusy, setSpaceBusy]           = useState(false);
+
   const stagesForPipeline = useMemo(() => {
     const p = pipelines.find((x) => x.id === draft.pipelineId);
     return p?.stages ?? [];
   }, [pipelines, draft.pipelineId]);
+
+  async function createSpace() {
+    const name = newSpaceName.trim();
+    if (!name) return;
+    setSpaceBusy(true);
+    try {
+      const res = await fetch('/api/spaces', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, color: newSpaceColor }),
+      });
+      if (res.ok) {
+        const row = (await res.json()) as VenueSpaceLite;
+        onSpacesChange((prev) => [...prev, row]);
+        setDraft((p) => ({ ...p, spaceId: row.id }));
+        setNewSpaceName('');
+      }
+    } finally {
+      setSpaceBusy(false);
+    }
+  }
+
+  async function saveSpaceEdit(id: string) {
+    const name = editSpaceDraft.name.trim();
+    if (!name) return;
+    setSpaceBusy(true);
+    try {
+      const res = await fetch(`/api/spaces/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, color: editSpaceDraft.color }),
+      });
+      if (res.ok) {
+        const row = (await res.json()) as VenueSpaceLite;
+        onSpacesChange((prev) => prev.map((s) => (s.id === id ? { ...s, ...row } : s)));
+        setEditingSpaceId(null);
+      }
+    } finally {
+      setSpaceBusy(false);
+    }
+  }
+
+  async function deleteSpace(id: string) {
+    const space = spaces.find((s) => s.id === id);
+    const ok = window.confirm(
+      `Delete space${space ? ` "${space.name}"` : ''}? Leads and events assigned to this space will keep their data but lose the space label.`,
+    );
+    if (!ok) return;
+    setSpaceBusy(true);
+    try {
+      const res = await fetch(`/api/spaces/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        onSpacesChange((prev) => prev.filter((s) => s.id !== id));
+        setDraft((p) => (p.spaceId === id ? { ...p, spaceId: '' } : p));
+      }
+    } finally {
+      setSpaceBusy(false);
+    }
+  }
 
   async function submit() {
     if (!draft.firstName.trim() && !draft.lastName.trim()) {
@@ -3122,6 +3218,131 @@ function AddLeadModal({
                 </div>
               </div>
             )}
+            {/* ── Space selector + inline manage panel ─────────────── */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400">Space</label>
+                <button
+                  type="button"
+                  onClick={() => setManageSpaces((v) => !v)}
+                  className="flex items-center gap-1 text-[11px] font-medium text-gray-500 hover:text-gray-900 transition-colors"
+                >
+                  {manageSpaces ? <><X size={11} /> Done</> : <><Pencil size={11} /> Manage</>}
+                </button>
+              </div>
+              <select
+                value={draft.spaceId}
+                onChange={(e) => set('spaceId', e.target.value)}
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+              >
+                <option value="">No specific space</option>
+                {spaces.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}{s.capacity ? ` (cap ${s.capacity})` : ''}
+                  </option>
+                ))}
+              </select>
+
+              {manageSpaces && (
+                <div className="mt-2 rounded-xl border border-gray-200 bg-gray-50/60 p-3 space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Customize spaces</p>
+                  {spaces.length === 0 && (
+                    <p className="text-[11px] text-gray-500">No spaces yet. Add one below.</p>
+                  )}
+                  {spaces.map((s) => {
+                    const isEditing = editingSpaceId === s.id;
+                    return (
+                      <div key={s.id} className="flex items-center gap-2">
+                        {isEditing ? (
+                          <>
+                            <input
+                              type="color"
+                              value={editSpaceDraft.color}
+                              onChange={(e) => setEditSpaceDraft((d) => ({ ...d, color: e.target.value }))}
+                              className="h-7 w-7 cursor-pointer rounded border border-gray-200 bg-white p-0.5"
+                              aria-label="Space color"
+                            />
+                            <input
+                              value={editSpaceDraft.name}
+                              onChange={(e) => setEditSpaceDraft((d) => ({ ...d, name: e.target.value }))}
+                              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void saveSpaceEdit(s.id); } }}
+                              className="flex-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm text-gray-800 focus:border-gray-400 focus:outline-none"
+                              autoFocus
+                            />
+                            <button
+                              type="button"
+                              onClick={() => void saveSpaceEdit(s.id)}
+                              disabled={spaceBusy || !editSpaceDraft.name.trim()}
+                              className="rounded-lg border border-gray-300 bg-white p-1.5 text-gray-700 hover:bg-gray-100 disabled:opacity-40"
+                              aria-label="Save"
+                            >
+                              <Check size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingSpaceId(null)}
+                              className="rounded-lg border border-gray-300 bg-white p-1.5 text-gray-700 hover:bg-gray-100"
+                              aria-label="Cancel"
+                            >
+                              <X size={13} />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <span className="inline-block h-3 w-3 flex-shrink-0 rounded-full border border-white shadow" style={{ backgroundColor: s.color }} />
+                            <span className="flex-1 truncate text-sm text-gray-800">
+                              {s.name}
+                              {s.capacity ? <span className="ml-1 text-[11px] text-gray-400">cap {s.capacity}</span> : null}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => { setEditingSpaceId(s.id); setEditSpaceDraft({ name: s.name, color: s.color || '#6366f1' }); }}
+                              className="rounded-lg border border-gray-200 bg-white p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                              aria-label="Edit space"
+                            >
+                              <Pencil size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void deleteSpace(s.id)}
+                              disabled={spaceBusy}
+                              className="rounded-lg border border-red-200 bg-white p-1.5 text-red-500 hover:bg-red-50 disabled:opacity-40"
+                              aria-label="Delete space"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="color"
+                      value={newSpaceColor}
+                      onChange={(e) => setNewSpaceColor(e.target.value)}
+                      className="h-7 w-7 cursor-pointer rounded border border-gray-200 bg-white p-0.5"
+                      aria-label="New space color"
+                    />
+                    <input
+                      value={newSpaceName}
+                      onChange={(e) => setNewSpaceName(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void createSpace(); } }}
+                      placeholder="New space name"
+                      className="flex-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm text-gray-800 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void createSpace()}
+                      disabled={spaceBusy || !newSpaceName.trim()}
+                      className="flex items-center gap-1 rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-black disabled:opacity-40"
+                    >
+                      <Plus size={12} /> Add
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <DraftField label="First name" value={draft.firstName} onChange={(v) => set('firstName', v)} />
               <DraftField label="Last name" value={draft.lastName} onChange={(v) => set('lastName', v)} />

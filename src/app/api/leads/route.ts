@@ -41,6 +41,7 @@ interface LeadRow {
   first_touch_utm?: Record<string, unknown> | null;
   assigned_member_id?: string | null;
   marketing_email_opt_in?: boolean | null;
+  space_id?: string | null;
 }
 
 async function getVenueId(): Promise<string | null> {
@@ -90,14 +91,22 @@ export async function GET(request: NextRequest) {
     console.error('[GET /api/leads] reconcileLeadsForKanban failed:', err);
   }
 
+  // `space_id` is added by migration 049 and might be missing on older DBs;
+  // try with it first, fall back to the legacy column list on schema errors.
+  const SELECT_WITH_SPACE =
+    'id, venue_id, track_token, first_name, last_name, name, email, phone, wedding_date, guest_count, ' +
+    'booking_timeline, message, notes, status, source, created_at, updated_at, ' +
+    'venue_name, venue_website_url, opportunity_value, pipeline_id, stage_id, position, ' +
+    'lost_reason, referral_source, first_touch_utm, assigned_member_id, marketing_email_opt_in, space_id';
+  const SELECT_LEGACY =
+    'id, venue_id, track_token, first_name, last_name, name, email, phone, wedding_date, guest_count, ' +
+    'booking_timeline, message, notes, status, source, created_at, updated_at, ' +
+    'venue_name, venue_website_url, opportunity_value, pipeline_id, stage_id, position, ' +
+    'lost_reason, referral_source, first_touch_utm, assigned_member_id, marketing_email_opt_in';
+
   let query = supabaseAdmin
     .from('leads')
-    .select(
-      'id, venue_id, track_token, first_name, last_name, name, email, phone, wedding_date, guest_count, ' +
-      'booking_timeline, message, notes, status, source, created_at, updated_at, ' +
-      'venue_name, venue_website_url, opportunity_value, pipeline_id, stage_id, position, ' +
-      'lost_reason, referral_source, first_touch_utm, assigned_member_id, marketing_email_opt_in',
-    )
+    .select(SELECT_WITH_SPACE)
     .eq('venue_id', venueId)
     .order('position', { ascending: true })
     .order('created_at', { ascending: false })
@@ -128,7 +137,20 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const { data: rows, error } = await query;
+  let { data: rows, error } = await query;
+  if (error && /column .*space_id/i.test(error.message)) {
+    // Migration 049 not applied yet — re-run with the legacy column list so
+    // the leads page still works on pre-migration databases.
+    const legacy = await supabaseAdmin
+      .from('leads')
+      .select(SELECT_LEGACY)
+      .eq('venue_id', venueId)
+      .order('position', { ascending: true })
+      .order('created_at', { ascending: false })
+      .limit(1000);
+    rows = legacy.data;
+    error = legacy.error;
+  }
   if (error) {
     console.error('[GET /api/leads] failed:', error);
     return NextResponse.json({ error: `Failed to load leads: ${error.message}` }, { status: 500 });
@@ -152,22 +174,27 @@ export async function GET(request: NextRequest) {
       ((validPipelineRows ?? []) as Array<{ id: string }>).map((p) => p.id),
     );
 
-    let orphanQuery = supabaseAdmin
+    const orphanFilter = `pipeline_id.is.null,pipeline_id.not.in.(${[...validPipelineIds].join(',') || '00000000-0000-0000-0000-000000000000'})`;
+    let orphanRows: LeadRow[] | null = null;
+    const orphanFirst = await supabaseAdmin
       .from('leads')
-      .select(
-        'id, venue_id, track_token, first_name, last_name, name, email, phone, wedding_date, guest_count, ' +
-        'booking_timeline, message, notes, status, source, created_at, updated_at, ' +
-        'venue_name, venue_website_url, opportunity_value, pipeline_id, stage_id, position, ' +
-        'lost_reason, referral_source, first_touch_utm, assigned_member_id, marketing_email_opt_in',
-      )
+      .select(SELECT_WITH_SPACE)
       .eq('venue_id', venueId)
+      .or(orphanFilter)
       .limit(500);
-    orphanQuery = orphanQuery.or(
-      `pipeline_id.is.null,pipeline_id.not.in.(${[...validPipelineIds].join(',') || '00000000-0000-0000-0000-000000000000'})`,
-    );
-    const { data: orphanRows } = await orphanQuery;
+    if (orphanFirst.error && /column .*space_id/i.test(orphanFirst.error.message)) {
+      const orphanLegacy = await supabaseAdmin
+        .from('leads')
+        .select(SELECT_LEGACY)
+        .eq('venue_id', venueId)
+        .or(orphanFilter)
+        .limit(500);
+      orphanRows = (orphanLegacy.data ?? null) as unknown as LeadRow[] | null;
+    } else {
+      orphanRows = (orphanFirst.data ?? null) as unknown as LeadRow[] | null;
+    }
     const seenIds = new Set(leadRows.map((l) => l.id));
-    for (const o of (orphanRows ?? []) as unknown as LeadRow[]) {
+    for (const o of (orphanRows ?? []) as LeadRow[]) {
       if (seenIds.has(o.id)) continue;
       leadRows.push(o);
       seenIds.add(o.id);
@@ -216,17 +243,19 @@ export async function GET(request: NextRequest) {
       .filter((id) => !foundIds.has(id));
 
     if (missingNoteLeadIds.length > 0) {
-      const { data: more } = await supabaseAdmin
+      let more = await supabaseAdmin
         .from('leads')
-        .select(
-          'id, venue_id, track_token, first_name, last_name, name, email, phone, wedding_date, guest_count, ' +
-          'booking_timeline, message, notes, status, source, created_at, updated_at, ' +
-          'venue_name, venue_website_url, opportunity_value, pipeline_id, stage_id, position, ' +
-          'lost_reason, referral_source, first_touch_utm, assigned_member_id, marketing_email_opt_in',
-        )
+        .select(SELECT_WITH_SPACE)
         .eq('venue_id', venueId)
         .in('id', missingNoteLeadIds);
-      extraLeads = (more ?? []) as unknown as LeadRow[];
+      if (more.error && /column .*space_id/i.test(more.error.message)) {
+        more = await supabaseAdmin
+          .from('leads')
+          .select(SELECT_LEGACY)
+          .eq('venue_id', venueId)
+          .in('id', missingNoteLeadIds);
+      }
+      extraLeads = (more.data ?? []) as unknown as LeadRow[];
     }
   }
 
@@ -361,6 +390,7 @@ export async function POST(request: NextRequest) {
     bookingTimeline?: string;
     pipelineId?: string;
     stageId?: string;
+    spaceId?: string | null;
     tagIds?: string[];
   };
   try {
@@ -410,30 +440,49 @@ export async function POST(request: NextRequest) {
       ? null
       : Number(body.opportunityValue);
 
-  const { data, error } = await supabaseAdmin
-    .from('leads')
-    .insert({
-      venue_id:           venueId,
-      name:               fullName,
-      first_name:         firstName || null,
-      last_name:          lastName  || null,
-      email,
-      phone:              body.phone || '',
-      venue_name:         body.venueName || null,
-      venue_website_url:  body.venueWebsiteUrl || null,
-      opportunity_value:  opportunityValue,
-      wedding_date:       body.weddingDate || null,
-      guest_count:        body.guestCount ?? null,
-      booking_timeline:   body.bookingTimeline?.trim() || null,
-      message:            body.message || null,
-      source:             'manual',
-      status:             initialStatus,
-      pipeline_id:        pipelineId,
-      stage_id:           stageId ?? null,
-      position:           0,
-    })
-    .select('*')
-    .single();
+  const spaceId = typeof body.spaceId === 'string' && body.spaceId.trim() ? body.spaceId.trim() : null;
+  if (spaceId) {
+    const { data: sp } = await supabaseAdmin
+      .from('venue_spaces')
+      .select('id')
+      .eq('id', spaceId)
+      .eq('venue_id', venueId)
+      .maybeSingle();
+    if (!sp) return NextResponse.json({ error: 'Invalid space' }, { status: 400 });
+  }
+
+  const basePayload: Record<string, unknown> = {
+    venue_id:           venueId,
+    name:               fullName,
+    first_name:         firstName || null,
+    last_name:          lastName  || null,
+    email,
+    phone:              body.phone || '',
+    venue_name:         body.venueName || null,
+    venue_website_url:  body.venueWebsiteUrl || null,
+    opportunity_value:  opportunityValue,
+    wedding_date:       body.weddingDate || null,
+    guest_count:        body.guestCount ?? null,
+    booking_timeline:   body.bookingTimeline?.trim() || null,
+    message:            body.message || null,
+    source:             'manual',
+    status:             initialStatus,
+    pipeline_id:        pipelineId,
+    stage_id:           stageId ?? null,
+    position:           0,
+  };
+  if (spaceId) basePayload.space_id = spaceId;
+
+  let insert = await supabaseAdmin.from('leads').insert(basePayload).select('*').single();
+  if (insert.error && spaceId && /column .*space_id/i.test(insert.error.message)) {
+    // Migration 049 not applied yet — insert without the space so lead
+    // creation still works, log a hint so the operator can apply it.
+    console.warn('[POST /api/leads] leads.space_id column missing; dropping field (apply migration 049)');
+    const { space_id: _omit, ...withoutSpace } = basePayload as Record<string, unknown> & { space_id?: string | null };
+    void _omit;
+    insert = await supabaseAdmin.from('leads').insert(withoutSpace).select('*').single();
+  }
+  const { data, error } = insert;
 
   if (error) {
     console.error('[POST /api/leads] failed:', error);
