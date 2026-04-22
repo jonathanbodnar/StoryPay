@@ -135,8 +135,28 @@ export function createSubscription(secretKey: string, data: Record<string, unkno
   return lpFetch('/api/v1/subscriptions', { method: 'POST', body: data, key: secretKey });
 }
 
-export function getSubscription(secretKey: string, id: number) {
+export function getSubscription(secretKey: string, id: number | string) {
   return lpFetch(`/api/v1/subscriptions/${id}`, { key: secretKey });
+}
+
+export function updateSubscription(
+  secretKey: string,
+  id: number | string,
+  data: { amount?: number; frequency?: string; nextPaymentOn?: string },
+) {
+  return lpFetch(`/api/v1/subscriptions/${id}`, {
+    method: 'PATCH',
+    body: data as unknown as Record<string, unknown>,
+    key: secretKey,
+  });
+}
+
+export function cancelSubscription(secretKey: string, id: number | string) {
+  return lpFetch(`/api/v1/subscriptions/${id}`, { method: 'DELETE', key: secretKey });
+}
+
+export function getCustomer(secretKey: string, id: number | string) {
+  return lpFetch(`/api/v1/customers/${id}`, { key: secretKey });
 }
 
 export function refundCharge(secretKey: string, chargeId: number | string, amountCents?: number) {
