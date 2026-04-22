@@ -186,9 +186,7 @@ Four views (top-right toggle):
 
 Click any empty day (or hour slot in Week/Day view) to add a new event. Click any event chip to open its details where you can Edit or Delete it.
 
-Event types are color-coded:
-- Wedding (pink), Reception (purple), Tour (blue), Phone call (cyan), Tasting (amber)
-- Meeting (green), Rehearsal (indigo), Hold/Tentative (gray), Blocked (dark gray)
+Event colors come from your **venue spaces** — when you assign a space to an event, the event chip uses that space's color so the calendar reads at a glance by venue area. Events without a space use a neutral style. (The old per-event-type color legend was removed to keep the calendar focused on your own spaces.)
 
 Events can be single-day, multi-day (for wedding weekends), or recurring (for weekly tastings, monthly maintenance days, etc.). Multi-day events render on every day they span; continuation days in Week/Day view show small left/right arrows to indicate the event extends before or after.
 
@@ -197,34 +195,44 @@ The "Today" button snaps back to the current date. The Prev / Next arrows move f
       {
         id: 'cal-spaces',
         title: 'Managing venue spaces',
-        tags: ['spaces', 'barn', 'garden', 'ballroom', 'room', 'venue space'],
-        body: `If your venue has multiple bookable spaces (e.g. Barn, Garden, Ballroom, Vineyard), set them up first so you can track bookings per space and prevent double-bookings.
+        tags: ['spaces', 'barn', 'garden', 'ballroom', 'room', 'venue space', 'add space', 'edit space', 'remove space'],
+        body: `If your venue has multiple bookable spaces (e.g. Barn, Garden, Ballroom, Vineyard), set them up first so you can track bookings per space, color-code the calendar, and prevent double-bookings.
 
-To add a space:
-1. Click "Manage Spaces" (top-right of the Calendar page)
-2. Enter a name, choose a color (used for event chips on the calendar), and optionally set a capacity
-3. Click Add Space
+**Two places to manage spaces**
 
-Spaces appear as filter pills above the calendar. Click a space pill to filter the calendar to that space only. Click "All Spaces" to show everything.
+1. **Calendar page → "Manage Spaces"** (top-right) — the main editor for all your spaces.
+2. **Inline from the New Event modal** — when adding or editing a calendar event, open the **Space** dropdown and click **Manage** to add, rename, recolor, or remove spaces right there without leaving the event form. The same controls now live on the **Leads** page New Lead modal (Space field → **Manage**), so you can add a space the moment a new inquiry tells you which one they want.
 
-To remove a space, open Manage Spaces and click Remove next to it.`,
+**To add a space**
+1. Open Manage Spaces (Calendar or New Event/New Lead modal)
+2. Enter a name and pick a color — the color is used for event chips on the calendar
+3. Click Add
+
+**To edit a space**
+- Click the pencil next to a space, change the name or color, click Save.
+
+**To remove a space**
+- Click the trash icon. Events and leads that referenced it aren't deleted; their Space field just becomes empty.
+
+Spaces also appear as filter pills above the calendar. Click a space pill to filter the calendar to that space only; click "All Spaces" to show everything.`,
       },
       {
         id: 'cal-add-event',
         title: 'Adding, editing, and deleting events',
-        tags: ['add event', 'new event', 'book', 'schedule', 'create event', 'edit event', 'update event', 'change event', 'delete event'],
+        tags: ['add event', 'new event', 'book', 'schedule', 'create event', 'edit event', 'update event', 'change event', 'delete event', 'contact search', 'assign team member', 'team member'],
         body: `To add an event, click the "+ Add Event" button or click directly on any day (or hour slot in Week/Day view) in the calendar grid.
 
 Fill in:
-- Event Title (e.g. "Smith & Johnson Wedding")
-- Type — Wedding, Reception, Tour, Phone call, Tasting, Meeting, Rehearsal, Hold, Blocked, Other
-- Status — Confirmed, Tentative/Hold, Cancelled
-- Space — which bookable space this event uses (optional; enables conflict detection)
-- Customer Email — links the event to a customer profile (optional)
-- Start Date + End Date — End Date auto-fills to match Start Date for single-day events. Change it to a later date for a multi-day event (e.g. a three-day wedding weekend).
-- Start Time + End Time (or check All Day)
-- Repeats — keep at "Does not repeat" for a one-off event, or pick Daily / Weekly / Monthly / Yearly for a recurring event (see the dedicated recurring events article for details)
-- Notes
+- **Event Title** (e.g. "Smith & Johnson Wedding")
+- **Type** — Wedding, Reception, Tour, Phone call, Tasting, Meeting, Rehearsal, Hold, Blocked, Other
+- **Status** — Confirmed, Tentative/Hold, Cancelled
+- **Space** — pick from your saved venue spaces. Click **Manage** right in the modal to **add, edit, or remove** spaces without leaving the form (see the Spaces article). Assigning a space enables conflict detection and colors the event chip.
+- **Contact** — start typing a name, email, or phone to **search your contacts** and attach the event to a customer profile with one click. The linked contact's email/phone come along for the ride, and the event shows up on their profile timeline. You can still leave it blank for internal holds/blocks.
+- **Assigned team member** — if your venue has team members, pick the owner/coordinator responsible for the event. Their name shows on the event detail panel and keeps handoffs clear. Leave empty for unassigned.
+- **Start Date + End Date** — End Date auto-fills to match Start Date for single-day events. Change it to a later date for a multi-day event (e.g. a three-day wedding weekend).
+- **Start Time + End Time** (or check All Day)
+- **Repeats** — keep at "Does not repeat" for a one-off event, or pick Daily / Weekly / Monthly / Yearly for a recurring event (see the dedicated recurring events article for details)
+- **Notes**
 
 Click Save Event.
 
@@ -391,6 +399,25 @@ Tips:
 - If something fails to send, check that the contact has an email address and that your venue email settings are configured.
 
 Technical note: the feature relies on database tables and RPCs created by migration **022_conversations.sql** on Supabase. The app server uses the service role to read/write threads.`,
+      },
+      {
+        id: 'conversations-inbound',
+        title: 'Replies from contacts land back in the thread',
+        tags: ['inbound', 'reply', 'email reply', 'sms reply', 'resend', 'ghl', 'webhook', 'two way', 'threading'],
+        body: `Conversations is **two-way**. When a couple replies to an email you sent from the thread — or texts back the number you use for SMS — their reply appears in the same thread on the contact's Conversations page. No copy-paste, no checking two inboxes.
+
+**Email replies (Resend inbound)**
+- Every outbound email from Conversations uses a **Reply-To** address on your inbound subdomain (for example \`reply+<thread>+<token>@inbound.storyvenue.com\`). When the couple hits Reply, their mail client sends back to that address.
+- Resend receives the message through the \`email.received\` webhook wired at \`/api/webhooks/inbound-email\`, verifies the signed token, and appends the reply to the same thread. Quoted history is stripped so you only see what they typed.
+- What you need in your workspace: a Resend inbound domain (MX records added in DNS), the \`email.received\` webhook pointed at \`<your-host>/api/webhooks/inbound-email\`, and the environment variables \`RESEND_API_KEY\`, \`CONVERSATIONS_INBOUND_DOMAIN\`, \`CONVERSATIONS_INBOUND_SECRET\` set on the host. (Optional \`INBOUND_EMAIL_WEBHOOK_TOKEN\` lets you reject unknown callers.)
+
+**SMS replies (GHL inbound)**
+- Outbound SMS goes through your connected GoHighLevel sub-account's A2P-approved number. Inbound replies hit GHL first, which posts them to StoryPay's inbound SMS webhook, and the message is attached to the matching thread by phone number.
+- Troubleshooting: if SMS replies aren't appearing, confirm the contact's phone is on file in E.164 format, that the GHL integration still shows "Connected" in Settings → Integrations, and that the GHL webhook/private integration that posts inbound SMS to StoryPay is live.
+
+**If a reply doesn't show up**
+- For email: check that DNS MX records are still valid, the Resend inbound webhook is \`Active\`, and your Railway (or other host) logs show the \`/api/webhooks/inbound-email\` route receiving the event. "Address not found" bounces usually mean the reply-to domain isn't set up on Resend yet.
+- For SMS: GHL must be connected and the sending number must match the contact. Messages to numbers not linked to any contact are dropped silently.`,
       },
     ],
   },
@@ -587,12 +614,14 @@ Database: reviews live in **listing_reviews** (migration 024). An optional read-
       {
         id: 'leads-overview',
         title: 'Leads and sales pipeline overview',
-        tags: ['leads', 'pipeline', 'kanban', 'sales', 'inbox', 'directory leads', 'form'],
+        tags: ['leads', 'pipeline', 'kanban', 'sales', 'inbox', 'directory leads', 'form', 'space', 'contact stage'],
         body: `The Leads page is your sales pipeline. Open it from the sidebar → Leads.
+
+**Every contact is always visible in some pipeline stage.** When you open Leads, StoryPay reconciles your leads and contacts so that every contact with a real email shows up in the pipeline, and every lead is snapped to the pipeline + stage stored on its matching contact profile. If you move a contact's stage on the Contacts page, the Leads Kanban reflects it — and vice versa. Leads pointing at a deleted pipeline/stage automatically heal to the default pipeline's first stage instead of disappearing from the board.
 
 Two ways leads arrive:
 - Inquiries submitted through your storyvenue.com directory listing show up automatically.
-- You can add leads by hand with the "+ Add Lead" button in the top-right (paste in contact info from a phone call, Instagram DM, referral, wedding show, etc.)
+- You can add leads by hand with the "+ Add Lead" button in the top-right (paste in contact info from a phone call, Instagram DM, referral, wedding show, etc.) — the New Lead modal now includes a **Space** picker so you can capture which venue space the couple is most interested in (with inline add/edit/remove just like the calendar event modal).
 
 Two views:
 - Kanban — your pipeline as columns. Each stage is a column; each lead is a card. Drag a card between columns to change its stage.
@@ -678,12 +707,12 @@ Open the editor:
 
 Editing stages (right panel):
 - Rename — click a stage name and type a new one; it saves when you tab/click away.
-- Change color — click the color swatch next to the stage name.
+- **Change color** — click the color swatch next to the stage name to open a color picker popover. Inside the popover you get the native color wheel, a **Hex code** field (type any color like #1b1b1b), and a grid of preset swatches. Press Enter or click outside to commit. The same popover is available when adding a new stage.
 - Stage kind — each stage is classified as Active (open), Won, or Lost. Won stages count as booked revenue in stats; Lost stages are excluded. Change the dropdown next to each stage.
 - **Win probability** — used for weighted pipeline totals on the board and in insights. Advanced accounts may set a 0–100% value per stage (API); otherwise defaults apply from the stage kind.
 - Reorder — use the up/down arrow buttons.
 - Delete — trash icon. Any leads in that stage become unassigned and show in the first column.
-- Add — type a name in the "New stage" box and click Add stage.
+- Add — type a name in the "New stage" box, pick a color from the same popover, and click Add stage.
 
 Creating a new pipeline:
 - Type a name in the "New pipeline name" box on the left panel → Add pipeline
@@ -833,6 +862,24 @@ Not receiving emails?
 - Leads are still saved in the dashboard even if the email fails — open /dashboard/leads to see them
 
 SMS for high-value leads is not currently on by default; contact support if you want to enable it.`,
+      },
+      {
+        id: 'leads-space',
+        title: 'Capturing a space on a new lead',
+        tags: ['space', 'venue space', 'new lead', 'primary space', 'barn', 'garden', 'ballroom', 'add space', 'edit space'],
+        body: `The **+ Add Lead** modal on the Leads page includes a **Space** field so you can record which venue space the couple is most interested in at the moment the inquiry comes in — no extra step later.
+
+**How it works**
+- Open the Space dropdown and pick any saved space (Barn, Garden, Ballroom, etc.).
+- Click **Manage** next to the field to add, rename, recolor, or remove spaces inline — you don't have to jump to the Calendar page. The exact same controls you already use when creating a calendar event are mirrored here.
+- Leave it empty if the couple hasn't decided yet; you can fill it in later from the lead drawer.
+
+**Why it matters**
+- Space is carried through to calendar events and proposals, so when you book a tour or send a quote the correct space is already attached.
+- Insights and reports can slice inquiry volume by space to help you see which areas are driving demand.
+
+**If the field looks missing**
+- This feature needs a one-time database migration (migrations/049_leads_space_id.sql). Until your workspace runs it, the API silently drops the space on new leads so nothing breaks — but the picker will look like it isn't saving. Apply the migration on Supabase and the field starts sticking.`,
       },
       {
         id: 'leads-to-proposal',
@@ -1409,6 +1456,56 @@ Note: SMS uses your GHL sub-account's verified A2P phone number automatically �
     ],
   },
   {
+    id: 'updates',
+    label: "What's New",
+    iconName: 'Bell',
+    color: '#f97316',
+    articles: [
+      {
+        id: 'updates-overview',
+        title: "What's New — release notes and unread badge",
+        tags: ["what's new", 'whats new', 'updates', 'release notes', 'changelog', 'red dot', 'unread', 'notifications'],
+        body: `**What's New** (sidebar → What's New) is your running changelog for StoryPay. Every time we ship a new feature, improvement, or fix, it lands here as an entry with a short outcome-focused headline and description so you can see at a glance what changed and why it matters to your venue.
+
+**Unread indicator**
+- The sidebar shows a small **red dot** on the What's New menu item whenever there are updates you haven't reviewed yet. The dot carries a **count** of unread entries (1+).
+- Click What's New to open the page. Visiting the page **marks every entry as read** — the red dot and count disappear automatically for your user. (Each teammate has their own unread state, so clearing it for you doesn't clear it for them.)
+- Entries stay on the page forever; the badge just tracks what's new *to you* since your last visit.
+
+**What you'll see on each entry**
+- Category pill: **New Feature**, **Improvement**, or **Fix** (color-coded).
+- Outcome-based description — written to explain the impact on you, not just the technical change.
+- Date.
+
+If the red dot sticks around after you visit the page, refresh once. If it still persists, sign out and back in so the read timestamp is re-synced.`,
+      },
+      {
+        id: 'updates-feature-requests',
+        title: 'Submitting a feature request',
+        tags: ['feature request', 'suggest', 'feedback', 'idea', 'roadmap', 'vote', "what's new"],
+        body: `You can ask for new features directly inside StoryPay — no external form.
+
+**How to submit**
+1. Open **What's New** (sidebar) and switch to the **Feature Requests** tab.
+2. Click **Submit a request**.
+3. Enter a short title and a description (at least ~300 characters is a good target — explain the problem, how you'd use the feature, and the outcome you want).
+4. Click Submit.
+
+Your request appears on the board and other teammates can **vote** on it to signal priority.
+
+**What happens next**
+- A StoryPay super admin reviews every request and can **approve**, **edit**, or **remove** it.
+- **Approved**: the request instantly becomes a new **What's New** entry with an auto-generated outcome-based headline and description. It also disappears from your Feature Requests list because the feature is now live (or scheduled) and tracked in the changelog.
+- **Removed**: if the request is a duplicate, out of scope, or won't be built, it's removed from your Feature Requests list. No extra action needed from you.
+
+**Editing or deleting your own request**
+- You can edit the title/description or delete a request you submitted, as long as it hasn't been approved or removed by an admin yet.
+
+Tip: write the description as an outcome — "I want to be able to X so that Y" — so the admin team can capture the right headline when the feature ships.`,
+      },
+    ],
+  },
+  {
     id: 'ai',
     label: 'Ask AI',
     iconName: 'Sparkles',
@@ -1492,10 +1589,10 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/contacts': ['cust-add', 'cust-search', 'cust-profile', 'cust-pipeline', 'cust-tasks', 'cust-documents'],
 
   // Conversations (unified inbox)
-  '/dashboard/conversations': ['conversations-overview', 'cust-profile', 'gs-overview'],
+  '/dashboard/conversations': ['conversations-overview', 'conversations-inbound', 'cust-profile', 'gs-overview'],
 
   // Calendar
-  '/dashboard/calendar': ['cal-overview', 'cal-spaces', 'cal-add-event', 'cal-conflicts'],
+  '/dashboard/calendar': ['cal-overview', 'cal-add-event', 'cal-spaces', 'cal-conflicts', 'cal-multi-day', 'cal-recurring'],
 
   // Venue listing (directory + reviews)
   '/dashboard/listing/media': ['listing-media-library', 'listing-photos', 'listing-overview', 'brand-setup'],
@@ -1504,7 +1601,7 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/listing':        ['listing-overview', 'listing-media-library', 'listing-reviews', 'listing-autosave', 'listing-photos', 'listing-publish', 'listing-slug'],
 
   // Leads
-  '/dashboard/leads': ['leads-overview', 'leads-crm-intelligence', 'leads-kanban', 'leads-filter-search', 'leads-notifications', 'leads-to-proposal'],
+  '/dashboard/leads': ['leads-overview', 'leads-space', 'leads-edit-pipelines', 'leads-crm-intelligence', 'leads-kanban', 'leads-filter-search', 'leads-notifications', 'leads-to-proposal'],
 
   // Marketing — native email
   '/dashboard/marketing/analytics': ['leads-overview', 'email-types', 'gs-overview'],
@@ -1539,7 +1636,7 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/settings':                 ['gs-overview', 'gs-onboarding'],
 
   // What's New / Updates
-  '/dashboard/updates': ['ai-overview', 'gs-overview'],
+  '/dashboard/updates': ['updates-overview', 'updates-feature-requests', 'ai-overview', 'gs-overview'],
 
   // AI
   '/dashboard/ai':   ['ai-overview', 'listing-media-library', 'ai-screenshot', 'ai-voice', 'ai-escalate'],
