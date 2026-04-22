@@ -1,4 +1,6 @@
 -- Venue-scoped discount coupons for proposals and invoices (line-item discounts).
+-- Idempotent; safe to re-run. Proposals-related FK / columns only attach if the
+-- proposals table exists in this database.
 
 CREATE TABLE IF NOT EXISTS public.venue_coupons (
   id                    uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -34,7 +36,7 @@ CREATE TABLE IF NOT EXISTS public.coupon_redemptions (
   id              uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   coupon_id       uuid        NOT NULL REFERENCES public.venue_coupons(id) ON DELETE CASCADE,
   venue_id        uuid        NOT NULL REFERENCES public.venues(id) ON DELETE CASCADE,
-  proposal_id     uuid        REFERENCES public.proposals(id) ON DELETE SET NULL,
+  proposal_id     uuid,
   discount_cents  int         NOT NULL CHECK (discount_cents >= 0),
   created_at      timestamptz NOT NULL DEFAULT now()
 );
@@ -42,12 +44,41 @@ CREATE TABLE IF NOT EXISTS public.coupon_redemptions (
 CREATE INDEX IF NOT EXISTS coupon_redemptions_coupon_id_idx ON public.coupon_redemptions (coupon_id);
 CREATE INDEX IF NOT EXISTS coupon_redemptions_proposal_id_idx ON public.coupon_redemptions (proposal_id);
 
-ALTER TABLE public.proposals
-  ADD COLUMN IF NOT EXISTS line_items jsonb;
-ALTER TABLE public.proposals
-  ADD COLUMN IF NOT EXISTS applied_coupon_id uuid REFERENCES public.venue_coupons(id) ON DELETE SET NULL;
+-- Only attach proposals FK / columns if the proposals table is present in this DB.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'proposals'
+  ) THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.table_constraints
+      WHERE table_schema = 'public'
+        AND table_name = 'coupon_redemptions'
+        AND constraint_name = 'coupon_redemptions_proposal_id_fkey'
+    ) THEN
+      ALTER TABLE public.coupon_redemptions
+        ADD CONSTRAINT coupon_redemptions_proposal_id_fkey
+        FOREIGN KEY (proposal_id) REFERENCES public.proposals(id) ON DELETE SET NULL;
+    END IF;
 
-COMMENT ON COLUMN public.proposals.line_items IS 'Snapshot of line items (name, description, amount cents, flags) when created from payments/new.';
+    ALTER TABLE public.proposals ADD COLUMN IF NOT EXISTS line_items jsonb;
+    ALTER TABLE public.proposals ADD COLUMN IF NOT EXISTS applied_coupon_id uuid;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.table_constraints
+      WHERE table_schema = 'public'
+        AND table_name = 'proposals'
+        AND constraint_name = 'proposals_applied_coupon_id_fkey'
+    ) THEN
+      ALTER TABLE public.proposals
+        ADD CONSTRAINT proposals_applied_coupon_id_fkey
+        FOREIGN KEY (applied_coupon_id) REFERENCES public.venue_coupons(id) ON DELETE SET NULL;
+    END IF;
+
+    COMMENT ON COLUMN public.proposals.line_items IS 'Snapshot of line items (name, description, amount cents, flags) when created from payments/new.';
+  END IF;
+END $$;
 
 ALTER TABLE public.venue_coupons DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.coupon_redemptions DISABLE ROW LEVEL SECURITY;

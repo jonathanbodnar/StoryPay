@@ -10,6 +10,13 @@ async function getVenueId(): Promise<string | null> {
   return c.get('venue_id')?.value ?? null;
 }
 
+function missingCouponsTable(message: string): boolean {
+  return /venue_coupons/i.test(message) && /(schema cache|does not exist|relation .* does not exist)/i.test(message);
+}
+
+const MIGRATION_HINT =
+  'The venue_coupons table is not deployed to this database yet. Run migration 032_venue_coupons.sql in Supabase (SQL editor or scripts/apply-migrations-yolo.mjs 032).';
+
 export async function GET() {
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -20,7 +27,12 @@ export async function GET() {
     .eq('venue_id', venueId)
     .order('created_at', { ascending: false });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    if (missingCouponsTable(error.message)) {
+      return NextResponse.json({ coupons: [], schema_missing: true, hint: MIGRATION_HINT });
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
   return NextResponse.json({ coupons: data ?? [] });
 }
 
@@ -84,6 +96,12 @@ export async function POST(request: NextRequest) {
   const { data, error } = await supabaseAdmin.from('venue_coupons').insert(insert).select('*').single();
 
   if (error) {
+    if (missingCouponsTable(error.message)) {
+      return NextResponse.json(
+        { error: MIGRATION_HINT, schema_missing: true },
+        { status: 503 },
+      );
+    }
     if (/duplicate|unique/i.test(error.message)) {
       return NextResponse.json({ error: 'A coupon with this code already exists.' }, { status: 409 });
     }
