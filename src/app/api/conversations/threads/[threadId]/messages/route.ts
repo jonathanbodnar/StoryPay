@@ -448,6 +448,12 @@ ${triggerBlock}
         'Message from ' + venueName;
 
       const replyRouting = buildConversationsReplyToEmail(threadId, venueId);
+      console.log('[conversations] outbound email', {
+        threadId,
+        inboundDomainSet: Boolean(process.env.CONVERSATIONS_INBOUND_DOMAIN?.trim()),
+        inboundSecretSet: Boolean(process.env.CONVERSATIONS_INBOUND_SECRET?.trim()),
+        replyToBuilt: Boolean(replyRouting),
+      });
       const result = await sendEmail({
         to,
         cc: emailCcList.length ? emailCcList : undefined,
