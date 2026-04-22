@@ -475,6 +475,11 @@ export async function syncInboundSmsFromGhlForThread(params: {
 }): Promise<{ imported: number }> {
   const { venueId, threadId, venueCustomerId } = params;
 
+  const logSkip = (reason: string, extra?: Record<string, unknown>) => {
+    console.log('[ghl-sms sync] skip', { threadId, reason, ...extra });
+    return { imported: 0 } as const;
+  };
+
   try {
     const { data: venue } = await supabaseAdmin
       .from('venues')
@@ -482,12 +487,14 @@ export async function syncInboundSmsFromGhlForThread(params: {
       .eq('id', venueId)
       .maybeSingle();
 
-    if (!(venue as { ghl_connected?: boolean } | null)?.ghl_connected) return { imported: 0 };
+    if (!(venue as { ghl_connected?: boolean } | null)?.ghl_connected) {
+      return logSkip('ghl_not_connected');
+    }
     const locationId = (venue as { ghl_location_id?: string | null })?.ghl_location_id;
-    if (!locationId) return { imported: 0 };
+    if (!locationId) return logSkip('no_location_id');
 
     const token = getGhlToken(venue as { ghl_access_token?: string | null });
-    if (!token) return { imported: 0 };
+    if (!token) return logSkip('no_ghl_token');
 
     const { data: vc } = await supabaseAdmin
       .from('venue_customers')
@@ -497,10 +504,22 @@ export async function syncInboundSmsFromGhlForThread(params: {
       .maybeSingle();
 
     const contactId = (vc as { ghl_contact_id?: string | null } | null)?.ghl_contact_id;
-    if (!contactId) return { imported: 0 };
+    if (!contactId) return logSkip('no_ghl_contact_id', { venueCustomerId });
 
-    const convIds = await listGhlConversationIdsForContactOrdered(token, locationId, contactId, 25);
-    if (convIds.length === 0) return { imported: 0 };
+    let convIds: string[] = [];
+    try {
+      convIds = await listGhlConversationIdsForContactOrdered(token, locationId, contactId, 25);
+    } catch (e) {
+      console.error('[ghl-sms sync] list conversations failed', {
+        threadId,
+        contactId,
+        error: e instanceof Error ? e.message : String(e),
+      });
+      return { imported: 0 };
+    }
+    if (convIds.length === 0) {
+      return logSkip('no_conversations_for_contact', { contactId });
+    }
 
     const maxConv = Math.min(
       8,
@@ -509,12 +528,16 @@ export async function syncInboundSmsFromGhlForThread(params: {
     const debug = process.env.GHL_SMS_SYNC_DEBUG === '1';
 
     let imported = 0;
+    let inboundCandidates = 0;
     for (const ghlConversationId of convIds.slice(0, maxConv)) {
       let rawList: unknown;
       try {
         rawList = await listGhlConversationMessages(token, locationId, ghlConversationId);
       } catch (e) {
-        if (debug) console.warn('[ghl-sms] list messages failed for conversation', ghlConversationId, e);
+        console.warn('[ghl-sms sync] list messages failed', {
+          ghlConversationId,
+          error: e instanceof Error ? e.message : String(e),
+        });
         continue;
       }
       const list = ghlApiMessagesFromResponse(rawList);
@@ -535,6 +558,7 @@ export async function syncInboundSmsFromGhlForThread(params: {
         if (!isGhlApiInboundSmsMessage(msg)) continue;
         const body = bodyFromGhlApiMessage(msg);
         if (!body) continue;
+        inboundCandidates++;
         const createdAt =
           (msg.dateAdded as string | undefined) ||
           (msg.createdAt as string | undefined) ||
@@ -560,9 +584,22 @@ export async function syncInboundSmsFromGhlForThread(params: {
           createdAt,
         });
         if (r.inserted) imported++;
+        else if (!r.ok) {
+          console.warn('[ghl-sms sync] insert skipped', {
+            ghlConversationId,
+            error: r.error,
+          });
+        }
       }
     }
 
+    console.log('[ghl-sms sync] done', {
+      threadId,
+      contactId,
+      conversationsScanned: Math.min(convIds.length, maxConv),
+      inboundCandidates,
+      imported,
+    });
     return { imported };
   } catch (e) {
     console.error('[ghl-sms] syncInboundSmsFromGhlForThread', e);
