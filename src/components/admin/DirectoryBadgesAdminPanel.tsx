@@ -54,7 +54,7 @@ export function DirectoryBadgesAdminPanel({
   venuesLoading: boolean;
   onRefresh: () => Promise<void>;
 }) {
-  const [view, setView] = useState<ViewMode>('queue');
+  const [view, setView] = useState<ViewMode>('all');
   const [search, setSearch] = useState('');
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
@@ -81,8 +81,21 @@ export function DirectoryBadgesAdminPanel({
     return c;
   }, [venues]);
 
+  const searchFilter = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (v: AdminVenueRow) => {
+      if (!q) return true;
+      const blob = [v.name, v.email, v.phone, v.slug, v.ghl_location_id]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return blob.includes(q);
+    };
+  }, [search]);
+
   const queue = useMemo(() => {
     return venues
+      .filter(searchFilter)
       .map((v) => ({
         venue: v,
         verified: getStatus(v, 'directory_verified_status'),
@@ -94,19 +107,9 @@ export function DirectoryBadgesAdminPanel({
         const bDate = (b.venue.created_at as string) || '';
         return aDate < bDate ? 1 : aDate > bDate ? -1 : 0;
       });
-  }, [venues]);
+  }, [venues, searchFilter]);
 
-  const allFiltered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return venues.filter((v) => {
-      if (!q) return true;
-      const blob = [v.name, v.email, v.phone, v.slug, v.ghl_location_id]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-      return blob.includes(q);
-    });
-  }, [venues, search]);
+  const allFiltered = useMemo(() => venues.filter(searchFilter), [venues, searchFilter]);
 
   async function patchBadge(
     venueId: string,
@@ -155,18 +158,19 @@ export function DirectoryBadgesAdminPanel({
         <MetricCard label="Rejected" value={counts.rejected} tone="red" />
       </div>
 
+      <div className="rounded-xl border border-gray-200 bg-white p-3">
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search venues by name, email, phone, slug…"
+            className="w-full rounded-xl border border-gray-200 pl-9 pr-3 py-2 text-sm"
+          />
+        </div>
+      </div>
+
       <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setView('queue')}
-          className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors ${
-            view === 'queue'
-              ? 'border-gray-900 bg-gray-900 text-white'
-              : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-          }`}
-        >
-          Pending queue ({queue.length})
-        </button>
         <button
           type="button"
           onClick={() => setView('all')}
@@ -176,7 +180,19 @@ export function DirectoryBadgesAdminPanel({
               : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
           }`}
         >
-          Manage all ({venues.length})
+          All venues ({allFiltered.length}
+          {search ? ` / ${venues.length}` : ''})
+        </button>
+        <button
+          type="button"
+          onClick={() => setView('queue')}
+          className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors ${
+            view === 'queue'
+              ? 'border-gray-900 bg-gray-900 text-white'
+              : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+          }`}
+        >
+          Pending only ({queue.length})
         </button>
       </div>
 
@@ -195,9 +211,13 @@ export function DirectoryBadgesAdminPanel({
           ) : queue.length === 0 ? (
             <div className="py-12 text-center">
               <BadgeCheck size={32} className="mx-auto mb-2 text-gray-200" />
-              <p className="text-sm font-medium text-gray-600">No pending requests</p>
+              <p className="text-sm font-medium text-gray-600">
+                {search ? 'No pending requests match your search' : 'No pending requests'}
+              </p>
               <p className="mt-1 text-xs text-gray-400">
-                New Verified or Sponsored submissions from venues will appear here.
+                {search
+                  ? 'Clear the search or switch to All venues to edit statuses directly.'
+                  : 'New Verified or Sponsored submissions from venues will appear here.'}
               </p>
             </div>
           ) : (
@@ -262,6 +282,46 @@ export function DirectoryBadgesAdminPanel({
                           }
                         />
                       )}
+                      <div className="flex flex-wrap gap-1.5 md:justify-end">
+                        <label className="inline-flex items-center gap-1 text-[11px] text-gray-500">
+                          <BadgeCheck size={11} />
+                          <select
+                            value={verified}
+                            disabled={savingKey !== null}
+                            onChange={(e) =>
+                              patchBadge(venue.id, {
+                                directory_verified_status: e.target.value as DirectoryBadgeStatus,
+                              })
+                            }
+                            className={`rounded-lg border px-2 py-1 text-[11px] ${statusBadgeClass(verified)}`}
+                          >
+                            {DIRECTORY_BADGE_STATUSES.map((s) => (
+                              <option key={s} value={s}>
+                                {directoryBadgeLabel(s)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="inline-flex items-center gap-1 text-[11px] text-gray-500">
+                          <Sparkles size={11} />
+                          <select
+                            value={sponsored}
+                            disabled={savingKey !== null}
+                            onChange={(e) =>
+                              patchBadge(venue.id, {
+                                directory_sponsored_status: e.target.value as DirectoryBadgeStatus,
+                              })
+                            }
+                            className={`rounded-lg border px-2 py-1 text-[11px] ${statusBadgeClass(sponsored)}`}
+                          >
+                            {DIRECTORY_BADGE_STATUSES.map((s) => (
+                              <option key={s} value={s}>
+                                {directoryBadgeLabel(s)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
                     </div>
                   </div>
                 </li>
@@ -271,18 +331,6 @@ export function DirectoryBadgesAdminPanel({
         </div>
       ) : (
         <div className="space-y-3">
-          <div className="rounded-xl border border-gray-200 bg-white p-3">
-            <div className="relative">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search venues by name, email, phone, slug…"
-                className="w-full rounded-xl border border-gray-200 pl-9 pr-3 py-2 text-sm"
-              />
-            </div>
-          </div>
-
           <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -304,7 +352,7 @@ export function DirectoryBadgesAdminPanel({
                   ) : allFiltered.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="text-center py-8 text-gray-400 text-sm">
-                        No venues match
+                        {search ? 'No venues match your search.' : 'No venues yet.'}
                       </td>
                     </tr>
                   ) : (
