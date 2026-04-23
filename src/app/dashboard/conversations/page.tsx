@@ -5,8 +5,10 @@ import Link from 'next/link';
 import {
   ArrowLeft,
   ChevronDown,
+  ChevronUp,
   Loader2,
   MessageCircle,
+  MessageSquare,
   Minus,
   Plus,
   Search,
@@ -17,7 +19,6 @@ import {
   Mail,
   ChevronRight,
   X,
-  Smartphone,
   Star,
   Pin,
   Info,
@@ -116,6 +117,7 @@ export default function ConversationsPage() {
   // blooms into the full editor on focus or as soon as the user types.
   const [composerExpanded, setComposerExpanded] = useState(false);
   const [composerMenuOpen, setComposerMenuOpen] = useState(false);
+  const [expandedEmailIds, setExpandedEmailIds] = useState<Set<string>>(new Set());
   const [emailSubject, setEmailSubject] = useState('');
   const [body, setBody] = useState('');
   const [mentionedIds, setMentionedIds] = useState<string[]>([]);
@@ -327,6 +329,7 @@ export default function ConversationsPage() {
     setSelectedTriggerLinkId('');
     setComposerExpanded(false);
     setComposerMenuOpen(false);
+    setExpandedEmailIds(new Set());
   }, [selectedId]);
 
   const contactLabel = useMemo(() => {
@@ -722,7 +725,7 @@ export default function ConversationsPage() {
                     <div className="mt-0.5 flex items-center gap-2 text-[10px] text-gray-400">
                       {t.external_reply_channel === 'sms' && (
                         <span className="inline-flex items-center gap-0.5 rounded bg-violet-100 px-1.5 py-0 text-violet-900">
-                          <Smartphone size={10} /> SMS
+                          <MessageSquare size={10} /> SMS
                         </span>
                       )}
                       {t.last_message_visibility === 'internal' && (
@@ -772,7 +775,7 @@ export default function ConversationsPage() {
                     {threadDetail.external_reply_channel === 'sms' ? (
                       <>
                         <span className="inline-flex items-center gap-0.5 font-medium text-violet-800">
-                          <Smartphone size={12} /> SMS
+                          <MessageSquare size={12} /> SMS
                         </span>
                         {threadDetail.venue_customers?.phone ?
                           <> · {threadDetail.venue_customers.phone}</>
@@ -928,12 +931,26 @@ export default function ConversationsPage() {
                       const fromContact = m.sender_kind === 'contact';
                       const fromUs = m.sender_kind === 'owner' || m.sender_kind === 'team';
                       const alignRight = fromUs && !fromContact;
+                      const isEmail = !isInternal && m.channel === 'email';
+                      const emailExpanded = expandedEmailIds.has(m.id);
+                      const toggleEmail = () => {
+                        setExpandedEmailIds((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(m.id)) next.delete(m.id);
+                          else next.add(m.id);
+                          return next;
+                        });
+                      };
                       const host =
                         typeof window !== 'undefined' ? window.location.host : 'app';
                       const triggerHref = m.trigger_link?.short_code
                         ? `/t/${m.trigger_link.short_code}`
                         : null;
-                      const ChannelIcon = isInternal ? Lock : m.channel === 'sms' ? Smartphone : Mail;
+                      const ChannelIcon = isInternal
+                        ? Lock
+                        : m.channel === 'sms'
+                          ? MessageSquare
+                          : Mail;
                       const channelLabel = isInternal
                         ? 'Team only'
                         : m.channel === 'sms'
@@ -942,14 +959,22 @@ export default function ConversationsPage() {
                       const badgeClass = isInternal
                         ? 'border-amber-200 bg-amber-50 text-amber-700'
                         : m.channel === 'sms'
-                          ? 'border-sky-200 bg-sky-50 text-sky-600'
-                          : 'border-emerald-200 bg-emerald-50 text-emerald-600';
+                          ? 'border-gray-300 bg-gray-100 text-gray-600'
+                          : 'border-gray-300 bg-gray-100 text-gray-600';
+                      const timestamp = new Date(m.created_at).toLocaleString(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      });
                       return (
                         <div
                           key={m.id}
                           className={classNames(
-                            'flex max-w-[88%] items-start gap-1.5',
-                            alignRight ? 'ml-auto flex-row-reverse' : 'mr-auto',
+                            'flex items-start gap-1.5',
+                            isEmail ? 'w-full max-w-full' : 'max-w-[88%]',
+                            alignRight && !isEmail ? 'ml-auto flex-row-reverse' : 'mr-auto',
+                            alignRight && isEmail ? 'flex-row-reverse' : '',
                           )}
                         >
                           <div
@@ -965,70 +990,65 @@ export default function ConversationsPage() {
                           <div
                             className={classNames(
                               'flex min-w-0 flex-col gap-0.5',
-                              alignRight ? 'items-end' : 'items-start',
+                              isEmail ? 'flex-1' : '',
+                              alignRight && !isEmail ? 'items-end' : 'items-start',
                             )}
                           >
-                            <div
-                              className={classNames(
-                                'rounded-2xl px-3 py-1.5 text-[13px] leading-snug',
-                                isInternal
-                                  ? 'border border-amber-200/80 bg-amber-50 text-amber-950'
-                                  : fromContact
-                                    ? 'border border-gray-200 bg-gray-100 text-gray-900'
-                                    : 'border border-neutral-800 bg-[#171717] text-white',
-                              )}
-                            >
-                              {!isInternal && fromUs && m.channel === 'email' && m.email_subject && (
-                                <p className="mb-1 border-b border-white/15 pb-1 text-[11px] font-medium text-white/95">
-                                  Subject: {m.email_subject}
-                                </p>
-                              )}
-                              <p className="whitespace-pre-wrap break-words">{m.body}</p>
-                              {!isInternal && fromUs && m.channel === 'email' && (m.email_cc || m.email_bcc) && (
-                                <div className="mt-1.5 border-t border-white/10 pt-1.5 text-[10px] text-white/75">
-                                  {m.email_cc ? <p>CC: {m.email_cc}</p> : null}
-                                  {m.email_bcc ? <p>BCC: {m.email_bcc}</p> : null}
-                                </div>
-                              )}
-                              {triggerHref && m.trigger_link && (
-                                <p
+                            {isEmail ? (
+                              <EmailCard
+                                subject={m.email_subject || '(no subject)'}
+                                body={m.body}
+                                cc={m.email_cc || null}
+                                bcc={m.email_bcc || null}
+                                timestamp={timestamp}
+                                authorLabel={m.author_label}
+                                direction={fromUs ? 'outgoing' : 'incoming'}
+                                expanded={emailExpanded}
+                                onToggle={toggleEmail}
+                                triggerHref={triggerHref}
+                                triggerShort={m.trigger_link?.short_code ?? null}
+                                triggerName={m.trigger_link?.name ?? null}
+                                host={host}
+                              />
+                            ) : (
+                              <>
+                                <div
                                   className={classNames(
-                                    'mt-1.5 text-[11px]',
-                                    fromUs && !isInternal ? 'text-white/85' : 'text-gray-600',
+                                    'rounded-2xl px-3 py-1.5 text-[13px] leading-snug',
+                                    isInternal
+                                      ? 'border border-amber-200/80 bg-amber-50 text-amber-950'
+                                      : fromContact
+                                        ? 'border border-gray-200 bg-gray-100 text-gray-900'
+                                        : 'border border-gray-300 bg-gray-200 text-gray-900',
                                   )}
                                 >
-                                  <Link
-                                    href={triggerHref}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className={classNames(
-                                      'font-medium underline',
-                                      fromUs && !isInternal ? 'text-white' : 'text-sky-700',
-                                    )}
-                                  >
-                                    {host}/t/{m.trigger_link.short_code}
-                                  </Link>
-                                  {m.trigger_link.name ? (
-                                    <span className="text-gray-500"> — {m.trigger_link.name}</span>
-                                  ) : null}
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 px-1 text-[10px] text-gray-400">
-                              <span>
-                                {new Date(m.created_at).toLocaleString(undefined, {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  hour: 'numeric',
-                                  minute: '2-digit',
-                                })}
-                              </span>
-                              {m.visibility === 'external' && m.external_email_sent === false && m.send_error && (
-                                <span className="text-amber-600">
-                                  {m.channel === 'sms' ? 'SMS not sent' : 'Email not sent'}: {m.send_error}
-                                </span>
-                              )}
-                            </div>
+                                  <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                                  {triggerHref && m.trigger_link && (
+                                    <p className="mt-1.5 text-[11px] text-gray-700">
+                                      <Link
+                                        href={triggerHref}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="font-medium text-sky-700 underline"
+                                      >
+                                        {host}/t/{m.trigger_link.short_code}
+                                      </Link>
+                                      {m.trigger_link.name ? (
+                                        <span className="text-gray-500"> — {m.trigger_link.name}</span>
+                                      ) : null}
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 px-1 text-[10px] text-gray-400">
+                                  <span>{timestamp}</span>
+                                  {m.visibility === 'external' && m.external_email_sent === false && m.send_error && (
+                                    <span className="text-amber-600">
+                                      {m.channel === 'sms' ? 'SMS not sent' : 'Email not sent'}: {m.send_error}
+                                    </span>
+                                  )}
+                                </div>
+                              </>
+                            )}
                           </div>
                         </div>
                       );
@@ -1120,7 +1140,7 @@ export default function ConversationsPage() {
                           : 'text-gray-600 hover:text-gray-900',
                       )}
                     >
-                      <Smartphone size={14} className="hidden shrink-0 sm:inline" />
+                      <MessageSquare size={14} className="hidden shrink-0 sm:inline" />
                       <span className="truncate">SMS</span>
                     </button>
                     </div>
@@ -1505,6 +1525,166 @@ export default function ConversationsPage() {
   );
 }
 
+function EmailCard({
+  subject,
+  body,
+  cc,
+  bcc,
+  timestamp,
+  authorLabel,
+  direction,
+  expanded,
+  onToggle,
+  triggerHref,
+  triggerShort,
+  triggerName,
+  host,
+}: {
+  subject: string;
+  body: string;
+  cc: string | null;
+  bcc: string | null;
+  timestamp: string;
+  authorLabel?: string;
+  direction: 'incoming' | 'outgoing';
+  expanded: boolean;
+  onToggle: () => void;
+  triggerHref: string | null;
+  triggerShort: string | null;
+  triggerName: string | null;
+  host: string;
+}) {
+  // Strip heavy whitespace for the collapsed preview so we don't stretch the
+  // one-line summary with stray newlines/indents copy-pasted from the email.
+  const preview = body.replace(/\s+/g, ' ').trim();
+  const accent = direction === 'outgoing' ? 'bg-gray-50' : 'bg-white';
+
+  return (
+    <div
+      className={classNames(
+        'w-full overflow-hidden rounded-xl border border-gray-200 shadow-sm',
+        accent,
+      )}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center justify-between gap-2 border-b border-gray-200 bg-gray-50/80 px-3 py-2 text-left"
+        aria-expanded={expanded}
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-gray-500 shadow-sm ring-1 ring-gray-200">
+            <Mail size={12} />
+          </span>
+          <span className="min-w-0 truncate text-[13px] font-semibold text-gray-900">
+            {subject}
+          </span>
+        </span>
+        <span className="flex shrink-0 items-center gap-2 text-[11px] text-gray-500">
+          <span className="hidden sm:inline">{timestamp}</span>
+          {expanded ? (
+            <ChevronUp size={14} className="text-gray-500" />
+          ) : (
+            <ChevronDown size={14} className="text-gray-500" />
+          )}
+        </span>
+      </button>
+
+      {expanded ? (
+        <div className="space-y-2 px-3 py-3 text-[13px] leading-relaxed text-gray-800">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 border-b border-gray-100 pb-2 text-[11px] text-gray-500">
+            {authorLabel ? (
+              <span>
+                <span className="text-gray-400">From: </span>
+                <span className="font-medium text-gray-700">{authorLabel}</span>
+              </span>
+            ) : null}
+            {cc ? (
+              <span>
+                <span className="text-gray-400">CC: </span>
+                <span className="text-gray-600">{cc}</span>
+              </span>
+            ) : null}
+            {bcc ? (
+              <span>
+                <span className="text-gray-400">BCC: </span>
+                <span className="text-gray-600">{bcc}</span>
+              </span>
+            ) : null}
+            <span className="sm:hidden">{timestamp}</span>
+          </div>
+          <EmailBody body={body} />
+          {triggerHref && triggerShort ? (
+            <p className="border-t border-gray-100 pt-2 text-[12px]">
+              <Link
+                href={triggerHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-sky-700 underline"
+              >
+                {host}/t/{triggerShort}
+              </Link>
+              {triggerName ? <span className="text-gray-500"> — {triggerName}</span> : null}
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <div className="px-3 py-2 text-[12px] text-gray-500">
+          <p className="line-clamp-1">{preview}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Render an email body with some basic polish:
+ * - Collapse runs of 3+ newlines to a blank line so verbose templates
+ *   (e.g. proposal notification emails) stop towering down the thread.
+ * - Break the body into paragraphs so we can add proper spacing/rhythm.
+ * - Linkify http(s) URLs.
+ */
+function EmailBody({ body }: { body: string }) {
+  const cleaned = body.replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  const paragraphs = cleaned.split(/\n{2,}/);
+  return (
+    <div className="space-y-2 text-[13px] leading-relaxed text-gray-800">
+      {paragraphs.map((para, idx) => (
+        <p key={idx} className="whitespace-pre-wrap break-words">
+          {linkify(para)}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+const URL_RE = /(https?:\/\/[^\s<>"')]+)/g;
+
+function linkify(text: string): React.ReactNode[] {
+  const out: React.ReactNode[] = [];
+  let last = 0;
+  let match: RegExpExecArray | null;
+  URL_RE.lastIndex = 0;
+  while ((match = URL_RE.exec(text)) !== null) {
+    if (match.index > last) out.push(text.slice(last, match.index));
+    const url = match[0];
+    out.push(
+      <Link
+        key={`${match.index}-${url}`}
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="font-medium text-sky-700 underline break-all"
+      >
+        {url}
+      </Link>,
+    );
+    last = match.index + url.length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out.length > 0 ? out : [text];
+}
+
 function CollapsedComposer({
   composerTab,
   menuOpen,
@@ -1522,11 +1702,11 @@ function CollapsedComposer({
   onExpand: () => void;
   onInputChange: (value: string) => void;
 }) {
-  const CurrentIcon = composerTab === 'team' ? Lock : composerTab === 'email' ? Mail : Smartphone;
+  const CurrentIcon = composerTab === 'team' ? Lock : composerTab === 'email' ? Mail : MessageSquare;
   const options: Array<{ id: ComposerTab; label: string; icon: typeof Lock }> = [
     { id: 'team', label: 'Team only', icon: Lock },
     { id: 'email', label: 'Email', icon: Mail },
-    { id: 'sms', label: 'SMS', icon: Smartphone },
+    { id: 'sms', label: 'SMS', icon: MessageSquare },
   ];
 
   return (
