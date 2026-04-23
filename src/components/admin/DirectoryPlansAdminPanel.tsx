@@ -257,7 +257,7 @@ export function DirectoryPlansAdminPanel() {
         {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
       </div>
 
-      <section className="rounded-2xl border border-gray-200 bg-white p-6">
+      <section className="rounded-2xl border border-gray-200 bg-white p-6 hidden">
         <h3 className="font-semibold text-gray-900 mb-3">Legacy feature catalog</h3>
         <p className="text-xs text-gray-500 mb-3 max-w-3xl">
           Optional registry keys for older tooling. Live gating uses <span className="font-mono">nav_permissions</span> when
