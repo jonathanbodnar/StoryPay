@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
  Sparkles, Zap, Wrench, ThumbsUp, Plus, X, Loader2, Trash2, Pencil,
  ChevronRight, Megaphone, Clock, CheckCircle2, AlertCircle, Lightbulb,
@@ -182,6 +182,7 @@ function FeatureRequestsTab() {
  const [desc, setDesc] = useState('');
  const [submitting, setSubmitting] = useState(false);
  const [votingId, setVotingId] = useState<string | null>(null);
+ const votingInFlight = useRef<Set<string>>(new Set());
  const [deletingId, setDeletingId] = useState<string | null>(null);
  const [editingId, setEditingId] = useState<string | null>(null);
  const [editTitle, setEditTitle] = useState('');
@@ -233,17 +234,21 @@ function FeatureRequestsTab() {
  }
 
  async function handleVote(req: FeatureRequest) {
- if (votingId) return;
+ // useRef-based lock is synchronous — prevents double-fire even before React
+ // re-renders with the updated votingId state.
+ if (votingInFlight.current.has(req.id)) return;
+ votingInFlight.current.add(req.id);
  setVotingId(req.id);
  try {
  const res = await fetch(`/api/feature-requests/${req.id}/vote`, { method: 'POST' });
  if (!res.ok) return;
- const { voted, vote_count } = await res.json();
+ const { voted, vote_count } = await res.json() as { voted: boolean; vote_count: number };
  setRequests(prev =>
  [...prev.map(r => r.id === req.id ? { ...r, has_voted: voted, vote_count } : r)]
  .sort((a, b) => b.vote_count - a.vote_count)
  );
  } finally {
+ votingInFlight.current.delete(req.id);
  setVotingId(null);
  }
  }
