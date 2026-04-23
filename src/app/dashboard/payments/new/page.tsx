@@ -291,11 +291,13 @@ export default function NewProposalInvoicePage() {
  const [productSuggestions, setProductSuggestions] = useState<Record<string,Product[]>>({});
  const [showSuggestions, setShowSuggestions] = useState<Record<string,boolean>>({});
  const suggestTimers = useRef<Record<string,ReturnType<typeof setTimeout>>>({});
- // Add-line-item picker
- const [addPickerOpen, setAddPickerOpen] = useState(false);
- const [addPickerMode, setAddPickerMode] = useState<'menu' | 'package' | 'coupon'>('menu');
- const [pickerPackageId, setPickerPackageId] = useState('');
- const [pickerCouponId, setPickerCouponId] = useState('');
+ // Inline line-item type picker (per-row dropdown)
+ const [itemPickerId, setItemPickerId] = useState<string | null>(null);
+ const [itemPickerMode, setItemPickerMode] = useState<'menu' | 'package' | 'coupon'>('menu');
+ const [itemPickerPkgId, setItemPickerPkgId] = useState('');
+ const [itemPickerCpnId, setItemPickerCpnId] = useState('');
+ // Track rows where the user has already committed to manual typing
+ const activatedItems = useRef<Set<string>>(new Set());
  const addPickerRef = useRef<HTMLDivElement>(null);
 
  // Payment
@@ -390,15 +392,15 @@ export default function NewProposalInvoicePage() {
    });
  }, []);
 
- // Escape key closes the picker modal
+ // Escape key closes the inline picker
  useEffect(() => {
-   if (!addPickerOpen) return;
+   if (!itemPickerId) return;
    function handler(e: KeyboardEvent) {
-     if (e.key === 'Escape') { setAddPickerOpen(false); setAddPickerMode('menu'); }
+     if (e.key === 'Escape') { setItemPickerId(null); setItemPickerMode('menu'); }
    }
    document.addEventListener('keydown', handler);
    return () => document.removeEventListener('keydown', handler);
- }, [addPickerOpen]);
+ }, [itemPickerId]);
 
  // Customer search
  const searchCustomers = useCallback(async (q: string) => {
@@ -486,11 +488,15 @@ export default function NewProposalInvoicePage() {
  }
 
  function addItem() {
+   const newItem = emptyItem();
    setLineItems((prev) => {
      const hasSurcharge = prev.some((i) => i.isSurcharge);
-     const core = [...stripDerived(prev), emptyItem()];
+     const core = [...stripDerived(prev), newItem];
      return withDerivedFromCore(core, hasSurcharge, appliedCouponId, venueCoupons);
    });
+   // New rows start fresh — picker will open on first focus
+   activatedItems.current.delete(newItem.id);
+   return newItem.id;
  }
 
  function selectProduct(itemId: string, p: Product) {
@@ -858,7 +864,7 @@ export default function NewProposalInvoicePage() {
  {lineItems.map((item,idx)=>(
  <div key={item.id} className={`px-5 py-3 ${item.isSurcharge?'bg-gray-50/60':''} ${item.isCoupon?'bg-emerald-50/40':''}`}>
  <div className="flex flex-col sm:grid sm:grid-cols-[1fr_180px_110px_36px] gap-2 sm:gap-3 items-start sm:items-center">
- {/* Name with autocomplete */}
+ {/* Name with inline type picker */}
  <div className="relative w-full">
  {item.isCoupon ? (
  <div className="w-full rounded-lg border border-emerald-200 bg-emerald-50/50 px-3 py-2 text-sm font-medium text-emerald-900">
@@ -866,22 +872,34 @@ export default function NewProposalInvoicePage() {
  </div>
  ) : (
  <input type="text"value={item.name}
- onChange={e=>{updateItem(item.id,'name',e.target.value);}}
+ onChange={e=>{
+   // First keystroke in an empty unactivated field = manual mode, close picker
+   if (!activatedItems.current.has(item.id) && e.target.value !== '') {
+     activatedItems.current.add(item.id);
+     setItemPickerId(null);
+     setItemPickerMode('menu');
+   }
+   updateItem(item.id,'name',e.target.value);
+ }}
  onFocus={() => {
-   // Open the picker whenever an empty non-derived item gets focus
-   if (!item.isSurcharge && !item.isCoupon && item.name === '') {
-     setAddPickerOpen(true);
-     setAddPickerMode('menu');
-     setPickerPackageId('');
-     setPickerCouponId('');
+   if (!item.isSurcharge && !item.isCoupon && item.name === '' && !activatedItems.current.has(item.id)) {
+     setItemPickerId(item.id);
+     setItemPickerMode('menu');
+     setItemPickerPkgId('');
+     setItemPickerCpnId(appliedCouponId ?? '');
    }
  }}
- onBlur={()=>setTimeout(()=>setShowSuggestions(p=>({...p,[item.id]:false})),150)}
+ onBlur={()=>{
+   setTimeout(()=>setShowSuggestions(p=>({...p,[item.id]:false})),150);
+   // Close picker on blur (small delay so option clicks register first)
+   setTimeout(()=>setItemPickerId(id=>id===item.id?null:id),200);
+ }}
  placeholder={item.isSurcharge?'Processing Fee (2.75%)':`Item ${idx+1}`}
  className={`w-full rounded-lg border px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none transition-colors ${item.isSurcharge?'border-gray-200 bg-gray-100 text-gray-600 font-medium':'border-gray-200 text-gray-900 focus:border-gray-400'}`}/>
  )}
+ {/* Autocomplete product suggestions */}
  {!item.isSurcharge && !item.isCoupon && showSuggestions[item.id] && (productSuggestions[item.id]||[]).length>0 && (
- <div className="absolute top-full left-0 right-0 z-20 mt-1 rounded-2xl border border-gray-200 bg-white overflow-hidden">
+ <div className="absolute top-full left-0 right-0 z-30 mt-1 rounded-2xl border border-gray-200 bg-white shadow-lg overflow-hidden">
  {(productSuggestions[item.id]||[]).map(p=>(
  <button key={p.id} type="button"onMouseDown={()=>selectProduct(item.id,p)}
  className="w-full flex items-center justify-between px-3 py-2.5 text-left hover:bg-gray-50 border-b border-gray-50 last:border-0">
@@ -889,6 +907,119 @@ export default function NewProposalInvoicePage() {
  <span className="text-xs font-semibold text-gray-600 ml-3 flex-shrink-0">{formatCents(p.price)}</span>
  </button>
  ))}
+ </div>
+ )}
+
+ {/* Inline type picker dropdown (only on empty, unfocused items) */}
+ {!item.isSurcharge && !item.isCoupon && itemPickerId === item.id && (
+ <div className="absolute top-full left-0 right-0 z-20 mt-1 rounded-2xl border border-gray-200 bg-white shadow-lg overflow-hidden">
+   {itemPickerMode === 'menu' && (
+     <div className="py-1">
+       {/* Manual */}
+       <button type="button" onMouseDown={() => { activatedItems.current.add(item.id); setItemPickerId(null); setItemPickerMode('menu'); }}
+         className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm hover:bg-gray-50 transition-colors">
+         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600"><PenLine size={13}/></span>
+         <div><p className="font-medium text-gray-900 text-sm">Manual entry</p><p className="text-[11px] text-gray-400">Type in a custom item &amp; price</p></div>
+       </button>
+       {/* Package */}
+       {packages.filter(p => packageAppliesToday(p, venueTimezone)).length > 0 && (
+         <button type="button" onMouseDown={() => { setItemPickerMode('package'); setItemPickerPkgId(''); }}
+           className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm hover:bg-gray-50 transition-colors border-t border-gray-50">
+           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600"><Package size={13}/></span>
+           <div className="flex-1"><p className="font-medium text-gray-900 text-sm">From package</p><p className="text-[11px] text-gray-400">Load lines from a saved package</p></div>
+           <ChevronRight size={12} className="text-gray-400 shrink-0"/>
+         </button>
+       )}
+       {/* Coupon */}
+       {venueCoupons.filter(c => c.active && canRedeemCoupon(c as VenueCouponRow).ok).length > 0 && (
+         <button type="button" onMouseDown={() => { setItemPickerMode('coupon'); setItemPickerCpnId(appliedCouponId ?? ''); }}
+           className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm hover:bg-gray-50 transition-colors border-t border-gray-50">
+           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"><Tag size={13}/></span>
+           <div className="flex-1"><p className="font-medium text-gray-900 text-sm">Apply coupon</p><p className="text-[11px] text-gray-400">{appliedCouponId ? 'Change or remove discount' : 'Add a discount code'}</p></div>
+           <ChevronRight size={12} className="text-gray-400 shrink-0"/>
+         </button>
+       )}
+       {/* Processing fee */}
+       {!hasSurcharge() && (
+         <button type="button" onMouseDown={() => {
+           setLineItems((prev) => {
+             if (prev.some(i => i.isSurcharge)) return prev;
+             return withDerivedFromCore(stripDerived(prev), true, appliedCouponId, venueCoupons);
+           });
+           activatedItems.current.add(item.id);
+           setItemPickerId(null);
+         }}
+           className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm hover:bg-gray-50 transition-colors border-t border-gray-50">
+           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600"><Percent size={13}/></span>
+           <div><p className="font-medium text-gray-900 text-sm">Processing fee</p><p className="text-[11px] text-gray-400">Add 2.75% card surcharge</p></div>
+         </button>
+       )}
+     </div>
+   )}
+   {itemPickerMode === 'package' && (
+     <div className="p-3 space-y-2">
+       <div className="flex items-center gap-2 pb-1">
+         <button type="button" onMouseDown={() => setItemPickerMode('menu')} className="text-gray-400 hover:text-gray-700"><ChevronRight size={13} className="rotate-180"/></button>
+         <p className="text-xs font-semibold text-gray-700">Choose a package</p>
+       </div>
+       <select value={itemPickerPkgId} onChange={e => setItemPickerPkgId(e.target.value)}
+         className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none">
+         <option value="">Select…</option>
+         {packages.filter(p => packageAppliesToday(p, venueTimezone)).map(p => (
+           <option key={p.id} value={p.id}>{p.name}{p.season_label ? ` — ${p.season_label}` : ''}</option>
+         ))}
+       </select>
+       <button type="button"
+         onMouseDown={() => {
+           const pkg = packages.find(p => p.id === itemPickerPkgId);
+           if (!pkg) return;
+           const hasSurchargeRow = lineItems.some(i => i.isSurcharge);
+           const core: LineItem[] = [];
+           for (const line of pkg.venue_package_lines ?? []) {
+             const p = packageProduct(line);
+             if (!p || p.active === false) continue;
+             const unitCents = line.price_override_cents ?? p.price;
+             const totalCents = unitCents * Math.max(1, line.quantity || 1);
+             core.push({ id: uid(), name: line.quantity > 1 ? `${p.name} × ${line.quantity}` : p.name, description: p.description || '', amount: (totalCents / 100).toFixed(2) });
+           }
+           if (!core.length) { setError('This package has no active products.'); setItemPickerId(null); return; }
+           setAppliedPackage({ id: pkg.id, name: pkg.name, minimum_subtotal_cents: pkg.minimum_subtotal_cents ?? 0 });
+           setLineItems(withDerivedFromCore(core, hasSurchargeRow, appliedCouponId, venueCoupons));
+           setError('');
+           setItemPickerId(null);
+           setItemPickerMode('menu');
+         }}
+         disabled={!itemPickerPkgId}
+         className="w-full rounded-xl bg-gray-900 px-3 py-2 text-sm font-semibold text-white hover:bg-gray-700 disabled:opacity-40 transition-colors"
+       >Apply package</button>
+     </div>
+   )}
+   {itemPickerMode === 'coupon' && (
+     <div className="p-3 space-y-2">
+       <div className="flex items-center gap-2 pb-1">
+         <button type="button" onMouseDown={() => setItemPickerMode('menu')} className="text-gray-400 hover:text-gray-700"><ChevronRight size={13} className="rotate-180"/></button>
+         <p className="text-xs font-semibold text-gray-700">Apply coupon</p>
+       </div>
+       <select value={itemPickerCpnId} onChange={e => setItemPickerCpnId(e.target.value)}
+         className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none">
+         <option value="">None (remove discount)</option>
+         {venueCoupons.map(c => {
+           const ok = c.active && canRedeemCoupon(c as VenueCouponRow).ok;
+           const label = c.discount_type === 'percent' ? `${c.code} — ${Number(c.discount_percent)}% off` : `${c.code} — $${((c.discount_amount_cents ?? 0) / 100).toFixed(2)} off`;
+           return <option key={c.id} value={c.id} disabled={!ok}>{label}{!ok ? ' (unavailable)' : ''}</option>;
+         })}
+       </select>
+       <button type="button"
+         onMouseDown={() => {
+           setCouponSelection(itemPickerCpnId || null);
+           activatedItems.current.add(item.id);
+           setItemPickerId(null);
+           setItemPickerMode('menu');
+         }}
+         className="w-full rounded-xl bg-gray-900 px-3 py-2 text-sm font-semibold text-white hover:bg-gray-700 transition-colors"
+       >{itemPickerCpnId ? 'Apply coupon' : 'Remove discount'}</button>
+     </div>
+   )}
  </div>
  )}
  </div>
@@ -925,160 +1056,13 @@ export default function NewProposalInvoicePage() {
  </div>
  {/* Footer */}
  <div className="px-5 py-3 border-t border-gray-200 flex items-center justify-between bg-gray-50/50">
- <div ref={addPickerRef}>
-   <button
-     type="button"
-     onClick={() => { setAddPickerOpen(true); setAddPickerMode('menu'); setPickerPackageId(''); setPickerCouponId(''); }}
-     className="flex items-center gap-1.5 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
-   >
-     <Plus size={14}/> Add Line Item
-   </button>
- </div>
-
- {/* ── Picker modal (fixed overlay, always fully visible) ── */}
- {addPickerOpen && (
-   <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) { setAddPickerOpen(false); setAddPickerMode('menu'); } }}>
-     <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white shadow-2xl">
-       {addPickerMode === 'menu' && (
-         <div className="p-2">
-           <div className="flex items-center justify-between px-3 py-2">
-             <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Choose line item type</p>
-             <button type="button" onClick={() => { setAddPickerOpen(false); setAddPickerMode('menu'); }} className="text-gray-400 hover:text-gray-700"><X size={14}/></button>
-           </div>
-           <div className="space-y-0.5">
-             {/* Manual entry */}
-             <button type="button" onClick={() => { addItem(); setAddPickerOpen(false); setAddPickerMode('menu'); }}
-               className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm hover:bg-gray-50 transition-colors">
-               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-600"><PenLine size={15}/></span>
-               <div><p className="font-medium text-gray-900">Manual entry</p><p className="text-[11px] text-gray-400">Type in a custom item &amp; price</p></div>
-             </button>
-             {/* Package */}
-             {packages.filter(p => packageAppliesToday(p, venueTimezone)).length > 0 && (
-               <button type="button" onClick={() => { setAddPickerMode('package'); setPickerPackageId(''); }}
-                 className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm hover:bg-gray-50 transition-colors">
-                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><Package size={15}/></span>
-                 <div className="flex-1"><p className="font-medium text-gray-900">From package</p><p className="text-[11px] text-gray-400">Load lines from a saved package</p></div>
-                 <ChevronRight size={13} className="text-gray-400 shrink-0"/>
-               </button>
-             )}
-             {/* Coupon */}
-             {venueCoupons.filter(c => c.active && canRedeemCoupon(c as VenueCouponRow).ok).length > 0 && (
-               <button type="button" onClick={() => { setAddPickerMode('coupon'); setPickerCouponId(appliedCouponId ?? ''); }}
-                 className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm hover:bg-gray-50 transition-colors">
-                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600"><Tag size={15}/></span>
-                 <div className="flex-1"><p className="font-medium text-gray-900">Apply coupon</p><p className="text-[11px] text-gray-400">{appliedCouponId ? 'Change or remove discount' : 'Add a discount code'}</p></div>
-                 <ChevronRight size={13} className="text-gray-400 shrink-0"/>
-               </button>
-             )}
-             {/* Processing fee */}
-             {!hasSurcharge() && (
-               <button type="button" onClick={() => {
-                 setLineItems((prev) => {
-                   if (prev.some((i) => i.isSurcharge)) return prev;
-                   const core = stripDerived(prev);
-                   return withDerivedFromCore(core, true, appliedCouponId, venueCoupons);
-                 });
-                 setAddPickerOpen(false);
-               }}
-                 className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm hover:bg-gray-50 transition-colors">
-                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600"><Percent size={15}/></span>
-                 <div><p className="font-medium text-gray-900">Processing fee</p><p className="text-[11px] text-gray-400">Add 2.75% credit card surcharge</p></div>
-               </button>
-             )}
-           </div>
-           <div className="border-t border-gray-100 mt-2 pt-1 px-1">
-             <Link href="/dashboard/payments/coupons" onClick={() => setAddPickerOpen(false)} className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-colors">
-               <Tag size={11}/> Manage coupons
-             </Link>
-             <Link href="/dashboard/offerings" onClick={() => setAddPickerOpen(false)} className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-colors">
-               <Package size={11}/> Package catalog
-             </Link>
-           </div>
-         </div>
-       )}
-
-       {addPickerMode === 'package' && (
-         <div className="p-4 space-y-4">
-           <div className="flex items-center gap-2">
-             <button type="button" onClick={() => setAddPickerMode('menu')} className="text-gray-400 hover:text-gray-700"><ChevronRight size={14} className="rotate-180"/></button>
-             <p className="text-sm font-semibold text-gray-900 flex-1">From package</p>
-             <button type="button" onClick={() => { setAddPickerOpen(false); setAddPickerMode('menu'); }} className="text-gray-400 hover:text-gray-700"><X size={14}/></button>
-           </div>
-           <select
-             value={pickerPackageId}
-             onChange={(e) => setPickerPackageId(e.target.value)}
-             className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
-           >
-             <option value="">Choose a package…</option>
-             {packages.filter(p => packageAppliesToday(p, venueTimezone)).map(p => (
-               <option key={p.id} value={p.id}>{p.name}{p.season_label ? ` — ${p.season_label}` : ''}</option>
-             ))}
-           </select>
-           <button type="button"
-             onClick={() => {
-               setSelectedPackageId(pickerPackageId);
-               const pkg = packages.find(p => p.id === pickerPackageId);
-               if (!pkg) return;
-               const hasSurchargeRow = lineItems.some(i => i.isSurcharge);
-               const core: LineItem[] = [];
-               for (const line of pkg.venue_package_lines ?? []) {
-                 const p = packageProduct(line);
-                 if (!p || p.active === false) continue;
-                 const unitCents = line.price_override_cents ?? p.price;
-                 const totalCents = unitCents * Math.max(1, line.quantity || 1);
-                 core.push({ id: uid(), name: line.quantity > 1 ? `${p.name} × ${line.quantity}` : p.name, description: p.description || '', amount: (totalCents / 100).toFixed(2) });
-               }
-               if (!core.length) { setError('This package has no active products.'); setAddPickerOpen(false); return; }
-               setAppliedPackage({ id: pkg.id, name: pkg.name, minimum_subtotal_cents: pkg.minimum_subtotal_cents ?? 0 });
-               setLineItems(withDerivedFromCore(core, hasSurchargeRow, appliedCouponId, venueCoupons));
-               setError('');
-               setAddPickerOpen(false);
-               setAddPickerMode('menu');
-             }}
-             disabled={!pickerPackageId}
-             className="w-full rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-gray-700 disabled:opacity-40 transition-colors"
-           >
-             Apply package
-           </button>
-         </div>
-       )}
-
-       {addPickerMode === 'coupon' && (
-         <div className="p-4 space-y-4">
-           <div className="flex items-center gap-2">
-             <button type="button" onClick={() => setAddPickerMode('menu')} className="text-gray-400 hover:text-gray-700"><ChevronRight size={14} className="rotate-180"/></button>
-             <p className="text-sm font-semibold text-gray-900 flex-1">Apply coupon</p>
-             <button type="button" onClick={() => { setAddPickerOpen(false); setAddPickerMode('menu'); }} className="text-gray-400 hover:text-gray-700"><X size={14}/></button>
-           </div>
-           <select
-             value={pickerCouponId}
-             onChange={(e) => setPickerCouponId(e.target.value)}
-             className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
-           >
-             <option value="">None (remove discount)</option>
-             {venueCoupons.map(c => {
-               const ok = c.active && canRedeemCoupon(c as VenueCouponRow).ok;
-               const label = c.discount_type === 'percent'
-                 ? `${c.code} — ${Number(c.discount_percent)}% off`
-                 : `${c.code} — $${((c.discount_amount_cents ?? 0) / 100).toFixed(2)} off`;
-               return <option key={c.id} value={c.id} disabled={!ok}>{label}{!ok ? ' (unavailable)' : ''}</option>;
-             })}
-           </select>
-           <button type="button"
-             onClick={() => {
-               setCouponSelection(pickerCouponId || null);
-               setAddPickerOpen(false);
-               setAddPickerMode('menu');
-             }}
-             className="w-full rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-gray-700 transition-colors"
-           >
-             {pickerCouponId ? 'Apply coupon' : 'Remove discount'}
-           </button>
-         </div>
-       )}
-     </div>
-   </div>
- )}
+ <button
+   type="button"
+   onClick={() => addItem()}
+   className="flex items-center gap-1.5 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
+ >
+   <Plus size={14}/> Add Line Item
+ </button>
  <div className="text-sm space-y-0.5 text-right">
  {hasSurcharge() && <div className="flex items-center gap-3 text-gray-400 text-xs"><span>Subtotal</span><span className="min-w-[70px]">{formatCents(subtotalCents)}</span></div>}
  <div className="flex items-center gap-3 font-bold text-gray-900"><span>Total</span><span className="min-w-[70px]">{formatCents(totalCents)}</span></div>
