@@ -17,11 +17,34 @@ export async function GET(
 
   const { id } = await params;
 
-  const { data: req } = await supabaseAdmin
-    .from('feature_requests')
-    .select('id, title, description, vote_count, status, created_at, completed_at, changelog_id')
-    .eq('id', id)
-    .single();
+  // Try full select; fall back to base columns if optional ones are missing.
+  let req: Record<string, unknown> | null = null;
+  {
+    const { data, error } = await supabaseAdmin
+      .from('feature_requests')
+      .select('id, title, description, vote_count, status, created_at, completed_at, changelog_id')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error && /completed_at|changelog_id/i.test(error.message)) {
+      // Production DB missing optional columns — retry without them.
+      const { data: plain, error: plainErr } = await supabaseAdmin
+        .from('feature_requests')
+        .select('id, title, description, vote_count, status, created_at')
+        .eq('id', id)
+        .maybeSingle();
+      if (plainErr) {
+        console.error('[admin feature GET] fallback error:', plainErr.message);
+        return NextResponse.json({ error: plainErr.message }, { status: 500 });
+      }
+      req = plain ? { ...plain, completed_at: null, changelog_id: null } : null;
+    } else if (error) {
+      console.error('[admin feature GET] error:', error.message);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    } else {
+      req = data;
+    }
+  }
 
   if (!req) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
