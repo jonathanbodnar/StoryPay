@@ -126,11 +126,6 @@ export default function ConversationsPage() {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState('');
   const [team, setTeam] = useState<TeamMember[]>([]);
-  const [venueMe, setVenueMe] = useState<{
-    name?: string | null;
-    brand_email?: string | null;
-    brand_phone?: string | null;
-  } | null>(null);
   const [mobileShowThread, setMobileShowThread] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [contactSearch, setContactSearch] = useState('');
@@ -258,23 +253,6 @@ export default function ConversationsPage() {
       .then((r) => r.json())
       .then((d: { links?: TriggerLinkOpt[] }) => {
         if (Array.isArray(d?.links)) setTriggerLinkOptions(d.links);
-      })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    // Lightweight fetch for the venue's brand phone + email so the composer
-    // can show "From: <venue>" when drafting SMS or email.
-    fetch('/api/venues/me')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (d && typeof d === 'object') {
-          setVenueMe({
-            name: d.name ?? null,
-            brand_email: d.brand_email ?? null,
-            brand_phone: d.brand_phone ?? null,
-          });
-        }
       })
       .catch(() => {});
   }, []);
@@ -1241,29 +1219,10 @@ export default function ConversationsPage() {
                       <Minus size={14} />
                     </button>
                   </div>
-                  {composerTab === 'team' ? (
+                  {composerTab === 'team' && (
                     <p className="mb-2 text-[11px] text-gray-500">
                       Visible only to your team. @mentions notify teammates.
                     </p>
-                  ) : (
-                    <div className="mb-2 grid grid-cols-1 gap-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[12px] sm:grid-cols-2 sm:gap-x-4">
-                      <div className="flex min-w-0 items-baseline gap-2">
-                        <span className="shrink-0 text-gray-500">From:</span>
-                        <span className="min-w-0 truncate font-medium text-gray-900">
-                          {composerTab === 'sms'
-                            ? venueMe?.brand_phone || 'Your GHL line'
-                            : venueMe?.brand_email || venueMe?.name || 'Your address'}
-                        </span>
-                      </div>
-                      <div className="flex min-w-0 items-baseline gap-2 sm:border-l sm:border-gray-200 sm:pl-4">
-                        <span className="shrink-0 text-gray-500">To:</span>
-                        <span className="min-w-0 truncate font-medium text-gray-900">
-                          {composerTab === 'sms'
-                            ? threadDetail.venue_customers?.phone || 'No phone on profile'
-                            : threadDetail.venue_customers?.customer_email || 'No email on profile'}
-                        </span>
-                      </div>
-                    </div>
                   )}
 
                   {composerTab === 'team' && team.length > 0 && (
