@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import {
   Eye, Users, MousePointerClick, TrendingUp,
   Smartphone, Monitor, Tablet, MapPin,
   RefreshCw, CheckCircle, AlertCircle, Clock,
   ArrowUpRight, ArrowDownRight, Minus, Search,
+  Radio, DollarSign, CalendarDays, UserCheck,
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -52,9 +53,40 @@ type AnalyticsPayload = {
   _migration_pending?: boolean;
 };
 
+// ── Realtime + lead insight types ─────────────────────────────────────────────
+type RealtimePayload = {
+  active_5m: number;
+  active_30m: number;
+  today_views: number;
+  activity: {
+    session_id: string;
+    event_type: string;
+    label: string;
+    country: string | null;
+    city: string | null;
+    flag: string;
+    device_type: string | null;
+    ago_seconds: number;
+  }[];
+  geo_live: { country: string; flag: string; count: number; cities: string[] }[];
+  _migration_pending?: boolean;
+};
+
+type LeadInsightsPayload = {
+  total_leads: number;
+  avg_guest_count: number | null;
+  avg_opportunity_value: number | null;
+  guest_buckets: { label: string; count: number }[];
+  sources: { source: string; count: number }[];
+  event_months: { month: string; count: number }[];
+  value_buckets: { label: string; count: number }[];
+  timelines: { label: string; count: number }[];
+  lead_trend: { month: string; count: number }[];
+};
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const DAYS_OPTIONS = [7, 14, 30, 60, 90];
+const DAYS_OPTIONS = [1, 7, 14, 30, 60, 90];
 const CHART_BLUE  = '#3b82f6';
 const CHART_DARK  = '#1b1b1b';
 
@@ -75,6 +107,17 @@ function fmtDuration(seconds: number): string {
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function fmtAgo(seconds: number): string {
+  if (seconds < 60) return `${seconds}s ago`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  return `${Math.floor(seconds / 3600)}h ago`;
+}
+
+function fmtCents(cents: number | null): string {
+  if (!cents) return '—';
+  return `$${(cents / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -178,6 +221,12 @@ export default function ListingAnalyticsPage() {
   const [days, setDays] = useState(30);
   const [error, setError] = useState('');
 
+  const [rt, setRt] = useState<RealtimePayload | null>(null);
+  const [rtLoading, setRtLoading] = useState(true);
+  const rtInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const [insights, setInsights] = useState<LeadInsightsPayload | null>(null);
+
   async function load(d: number) {
     setLoading(true);
     setError('');
@@ -192,7 +241,30 @@ export default function ListingAnalyticsPage() {
     }
   }
 
+  async function loadRealtime() {
+    try {
+      const res = await fetch('/api/listing-analytics/realtime');
+      if (res.ok) setRt(await res.json() as RealtimePayload);
+    } catch { /* silent */ } finally {
+      setRtLoading(false);
+    }
+  }
+
+  async function loadInsights() {
+    try {
+      const res = await fetch('/api/listing-analytics/lead-insights?days=365');
+      if (res.ok) setInsights(await res.json() as LeadInsightsPayload);
+    } catch { /* silent */ }
+  }
+
   useEffect(() => { void load(days); }, [days]);
+
+  useEffect(() => {
+    void loadRealtime();
+    void loadInsights();
+    rtInterval.current = setInterval(() => void loadRealtime(), 30000);
+    return () => { if (rtInterval.current) clearInterval(rtInterval.current); };
+  }, []);
 
   const totalDevices = data ? Object.values(data.devices).reduce((a, b) => a + b, 0) : 0;
   const hasImpressions = (data?.total_impressions ?? 0) > 0;
@@ -250,6 +322,105 @@ export default function ListingAnalyticsPage() {
           <CheckCircle size={14} /> Tracking active — collecting data from your public listing
         </div>
       )}
+
+      {/* ── Realtime panel ─────────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+            </span>
+            <h2 className="text-sm font-semibold text-gray-900">Live right now</h2>
+            <span className="text-xs text-gray-400">· auto-refreshes every 30s</span>
+          </div>
+          <button onClick={() => { setRtLoading(true); void loadRealtime(); }} disabled={rtLoading}
+            className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-50 disabled:opacity-40 transition-colors">
+            <RefreshCw size={13} className={rtLoading ? 'animate-spin' : ''} />
+          </button>
+        </div>
+
+        {/* Live stats */}
+        <div className="grid grid-cols-3 divide-x divide-gray-100">
+          {[
+            { label: 'Active now', value: rt?.active_5m ?? '—', sub: 'last 5 min' },
+            { label: 'Active today', value: rt?.today_views ?? '—', sub: 'page views' },
+            { label: 'Last 30 min', value: rt?.active_30m ?? '—', sub: 'unique sessions' },
+          ].map(({ label, value, sub }) => (
+            <div key={label} className="px-6 py-4 text-center">
+              <p className="text-2xl font-bold text-gray-900">{value}</p>
+              <p className="text-[11px] font-semibold text-gray-500 mt-0.5">{label}</p>
+              <p className="text-[10px] text-gray-400">{sub}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Activity feed + geo side by side */}
+        {rt && !rt._migration_pending && (rt.activity.length > 0 || rt.geo_live.length > 0) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-100">
+
+            {/* Activity feed */}
+            <div className="px-5 py-4">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Recent activity</p>
+              {rt.activity.length > 0 ? (
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {rt.activity.map((a, i) => (
+                    <div key={i} className="flex items-center gap-3 py-1.5">
+                      <span className="text-lg leading-none">{a.flag}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-gray-800 truncate">{a.label}</p>
+                        <p className="text-[10px] text-gray-400 truncate">
+                          {[a.city, a.country].filter(Boolean).join(', ') || 'Unknown location'}
+                          {a.device_type ? ` · ${a.device_type}` : ''}
+                        </p>
+                      </div>
+                      <span className="text-[10px] text-gray-400 shrink-0">{fmtAgo(a.ago_seconds)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400 py-4 text-center">No activity in the last 30 minutes</p>
+              )}
+            </div>
+
+            {/* Live geo breakdown */}
+            <div className="px-5 py-4">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Where visitors are right now</p>
+              {rt.geo_live.length > 0 ? (
+                <div className="space-y-2">
+                  {rt.geo_live.map(g => (
+                    <div key={g.country} className="flex items-center gap-3">
+                      <span className="text-lg leading-none w-6 shrink-0">{g.flag}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-gray-800">{g.country}</p>
+                        {g.cities.length > 0 && (
+                          <p className="text-[10px] text-gray-400 truncate">{g.cities.join(', ')}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-16 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                          <div className="h-full rounded-full bg-emerald-400"
+                            style={{ width: `${rt.geo_live[0] ? (g.count / rt.geo_live[0].count) * 100 : 0}%` }} />
+                        </div>
+                        <span className="text-[11px] font-semibold text-gray-600 w-5 text-right">{g.count}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400 py-4 text-center">No location data available yet</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {rt?._migration_pending && (
+          <div className="px-6 py-4 text-xs text-gray-400 text-center">
+            Run migration 056_listing_analytics.sql to enable live tracking
+          </div>
+        )}
+      </div>
 
       {/* ── Loading skeletons ───────────────────────────────────────────── */}
       {loading && !d && (
@@ -505,12 +676,99 @@ export default function ListingAnalyticsPage() {
               ))}
             </div>
           )}
+          {/* ── Lead insights (demographics from your own data) ──────── */}
+          {insights && insights.total_leads > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 pt-2">
+                <UserCheck size={16} className="text-gray-400" />
+                <h2 className="text-base font-semibold text-gray-900">Lead insights</h2>
+                <span className="text-xs text-gray-400">— from {insights.total_leads} inquiries (all time)</span>
+              </div>
+              <p className="text-xs text-gray-500 -mt-2">
+                Demographic-style breakdowns built from your actual inquiry data — no third-party tracking needed.
+              </p>
+
+              {/* Summary KPIs */}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <KpiCard icon={Users} label="Avg guest count" value={insights.avg_guest_count ?? '—'} sub="Per inquiry" color="blue" />
+                <KpiCard icon={DollarSign} label="Avg deal value" value={fmtCents(insights.avg_opportunity_value)} sub="When set" color="green" />
+                <KpiCard icon={Users} label="Total leads" value={insights.total_leads.toLocaleString()} sub="All time" color="purple" />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Guest count distribution */}
+                {insights.guest_buckets.length > 0 && (
+                  <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-3">
+                    <div className="flex items-center gap-2"><Users size={13} className="text-gray-400" /><SectionTitle>Guest count breakdown</SectionTitle></div>
+                    {insights.guest_buckets.map(b => (
+                      <MiniBarRow key={b.label} label={b.label} value={b.count} max={Math.max(...insights.guest_buckets.map(x=>x.count), 1)} />
+                    ))}
+                  </div>
+                )}
+
+                {/* Lead sources */}
+                {insights.sources.length > 0 && (
+                  <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-3">
+                    <div className="flex items-center gap-2"><ArrowUpRight size={13} className="text-gray-400" /><SectionTitle>How leads found you</SectionTitle></div>
+                    {insights.sources.map(s => (
+                      <MiniBarRow key={s.source} label={s.source} value={s.count} max={insights.sources[0]?.count ?? 1} />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Event month distribution */}
+              {insights.event_months.some(m => m.count > 0) && (
+                <div className="rounded-2xl border border-gray-200 bg-white p-6">
+                  <div className="flex items-center gap-2 mb-1"><CalendarDays size={13} className="text-gray-400" /><SectionTitle>Wedding month popularity</SectionTitle></div>
+                  <p className="text-xs text-gray-400 mb-5">Which months your leads are planning their events</p>
+                  <ResponsiveContainer width="100%" height={140}>
+                    <BarChart data={insights.event_months} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                      <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+                      <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+                      <Tooltip content={<ChartTooltip />} />
+                      <Bar dataKey="count" name="Leads" radius={[4,4,0,0]}>
+                        {insights.event_months.map((m, i) => (
+                          <Cell key={i} fill={m.count === Math.max(...insights.event_months.map(x=>x.count)) ? CHART_BLUE : '#e5e7eb'} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Opportunity value ranges */}
+                {insights.value_buckets.length > 0 && (
+                  <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-3">
+                    <div className="flex items-center gap-2"><DollarSign size={13} className="text-gray-400" /><SectionTitle>Deal value ranges</SectionTitle></div>
+                    {insights.value_buckets.map(b => (
+                      <MiniBarRow key={b.label} label={b.label} value={b.count} max={Math.max(...insights.value_buckets.map(x=>x.count),1)} />
+                    ))}
+                  </div>
+                )}
+
+                {/* Booking timelines */}
+                {insights.timelines.length > 0 && (
+                  <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-3">
+                    <div className="flex items-center gap-2"><Clock size={13} className="text-gray-400" /><SectionTitle>Booking timeline</SectionTitle></div>
+                    {insights.timelines.filter(t=>t.label !== 'Unknown').map(t => (
+                      <MiniBarRow key={t.label} label={t.label} value={t.count} max={Math.max(...insights.timelines.map(x=>x.count),1)} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </>
       )}
 
       <div className="pb-4">
         <p className="text-xs text-gray-400 text-center">
           Delta % compares current period to the previous equal-length period. All times are UTC.
+          <span className="mx-2">·</span>
+          <Radio size={10} className="inline" /> Live panel refreshes every 30 seconds.
         </p>
       </div>
     </div>
