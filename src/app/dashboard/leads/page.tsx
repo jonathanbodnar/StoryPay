@@ -639,10 +639,10 @@ export default function LeadsPage() {
             onChange={setActivePipelineId}
             onManage={() => setEditorOpen(true)}
           />
-          <div className="inline-flex rounded-2xl border border-gray-200 bg-white p-0.5">
+          <div className="inline-flex h-9 rounded-2xl border border-gray-200 bg-white p-0.5">
             <button
               onClick={() => setView('kanban')}
-              className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-colors ${
+              className={`inline-flex h-full items-center gap-1.5 rounded-xl px-3.5 text-sm font-medium transition-colors ${
                 view === 'kanban' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'
               }`}
             >
@@ -650,7 +650,7 @@ export default function LeadsPage() {
             </button>
             <button
               onClick={() => setView('list')}
-              className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-colors ${
+              className={`inline-flex h-full items-center gap-1.5 rounded-xl px-3.5 text-sm font-medium transition-colors ${
                 view === 'list' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'
               }`}
             >
@@ -659,7 +659,7 @@ export default function LeadsPage() {
           </div>
           <button
             onClick={() => setAddingOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-2xl px-3 py-1.5 text-xs font-medium text-white transition-colors"
+            className="inline-flex h-9 items-center gap-1.5 rounded-2xl px-3.5 text-sm font-medium text-white transition-colors"
             style={{ backgroundColor: '#1b1b1b' }}
           >
             <Plus className="w-3.5 h-3.5" /> Add Lead
@@ -834,15 +834,15 @@ function PipelineControls({
   const active = pipelines.find((p) => p.id === activeId) ?? pipelines[0];
   if (pipelines.length <= 1) {
     return (
-      <div className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-3 py-2">
-        <span className="text-xs font-medium text-gray-800 max-w-[200px] truncate">
+      <div className="inline-flex h-9 items-center gap-2 rounded-2xl border border-gray-200 bg-white px-3">
+        <span className="text-sm font-medium text-gray-800 max-w-[200px] truncate">
           {active?.name ?? 'Pipeline'}
         </span>
         <button
           type="button"
           onClick={onManage}
           title="Edit pipelines"
-          className="inline-flex items-center gap-1 rounded-xl border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-100"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-gray-50 px-2.5 text-sm font-medium text-gray-700 hover:bg-gray-100 h-[26px]"
         >
           <Settings2 className="w-3.5 h-3.5" /> Edit
         </button>
@@ -870,7 +870,7 @@ function PipelineControls({
         type="button"
         onClick={onManage}
         title="Edit pipelines"
-        className="inline-flex items-center gap-1 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+        className="inline-flex h-9 items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-3.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
       >
         <Settings2 className="w-3.5 h-3.5" /> Edit
       </button>

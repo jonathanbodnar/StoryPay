@@ -130,7 +130,13 @@ export async function reconcileLeadsForKanban(venueId: string): Promise<void> {
   // round-trip. Cheap even for venues with hundreds of rows.
   const leadsSelectWithFlag = 'id, email, pipeline_id, stage_id, excluded_from_pipeline';
   const leadsSelectLegacy = 'id, email, pipeline_id, stage_id';
-  const [{ data: pipelineRows }, { data: stageRows }, leadsResult, { data: vcs }] =
+  // venue_customers gained pipeline_id + stage_id in migration 016. On older
+  // databases those columns may not exist yet so we try with them first and
+  // fall back to the basic contact fields if PostgREST rejects the query.
+  const vcSelectFull = 'customer_email, first_name, last_name, phone, pipeline_id, stage_id';
+  const vcSelectBasic = 'customer_email, first_name, last_name, phone';
+
+  const [{ data: pipelineRows }, { data: stageRows }, leadsResult, vcResult] =
     await Promise.all([
       supabaseAdmin
         .from('lead_pipelines')
@@ -147,9 +153,28 @@ export async function reconcileLeadsForKanban(venueId: string): Promise<void> {
         .eq('venue_id', venueId),
       supabaseAdmin
         .from('venue_customers')
-        .select('customer_email, first_name, last_name, phone, pipeline_id, stage_id')
+        .select(vcSelectFull)
         .eq('venue_id', venueId),
     ]);
+
+  // If venue_customers is missing pipeline_id/stage_id columns (migration 016
+  // not yet applied), fall back to the basic column set so the reconciler can
+  // still create leads from contacts even without stage info.
+  let vcs = vcResult.data as Array<{
+    customer_email: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    phone: string | null;
+    pipeline_id?: string | null;
+    stage_id?: string | null;
+  }> | null;
+  if (vcResult.error && /column .*pipeline_id|column .*stage_id/i.test(vcResult.error.message)) {
+    const fallback = await supabaseAdmin
+      .from('venue_customers')
+      .select(vcSelectBasic)
+      .eq('venue_id', venueId);
+    vcs = (fallback.data ?? null) as typeof vcs;
+  }
 
   let leadRows: Array<{
     id: string;
@@ -212,8 +237,8 @@ export async function reconcileLeadsForKanban(venueId: string): Promise<void> {
   const vcPipelineByEmail = new Map<string, VcPipelineInfo>();
   for (const vc of (vcs ?? []) as Array<{
     customer_email: string | null;
-    pipeline_id: string | null;
-    stage_id: string | null;
+    pipeline_id?: string | null;
+    stage_id?: string | null;
   }>) {
     const em = String(vc.customer_email || '').trim().toLowerCase();
     const sid = vc.stage_id;
@@ -310,14 +335,14 @@ export async function reconcileLeadsForKanban(venueId: string): Promise<void> {
     first_name: string | null;
     last_name: string | null;
     phone: string | null;
-    pipeline_id: string | null;
-    stage_id: string | null;
+    pipeline_id?: string | null;
+    stage_id?: string | null;
   }>) {
     const em = String(vc.customer_email || '').trim().toLowerCase();
     if (!isRealLeadEmail(em) || emailSet.has(em)) continue;
 
-    let pid = vc.pipeline_id as string | null;
-    let sid = vc.stage_id as string | null;
+    let pid = (vc.pipeline_id ?? null) as string | null;
+    let sid = (vc.stage_id ?? null) as string | null;
 
     if (pid && sid) {
       const st = stagesById.get(sid);
