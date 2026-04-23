@@ -50,9 +50,6 @@ export default function VenueMediaPage() {
             <ArrowLeft className="w-3.5 h-3.5" /> Back to listing
           </Link>
           <h1 className="font-heading text-2xl text-gray-900 mt-1">Media library</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Shared images for your listing, emails, forms, and branding. Upload photos here, then pick them wherever an image URL is needed.
-          </p>
         </div>
         <div>
           <input
