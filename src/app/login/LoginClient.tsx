@@ -41,7 +41,7 @@ export function LoginClient() {
       <div className="w-full max-w-sm">
         <div className="flex justify-center mb-8">
           <Link href="/">
-            <Image src="/storypay-logo-dark.png" alt="StoryPay" width={130} height={32} />
+            <Image src="/storyvenue-logo-dark.png" alt="StoryVenue" width={130} height={32} />
           </Link>
         </div>
 
