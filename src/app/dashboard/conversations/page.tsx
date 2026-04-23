@@ -543,8 +543,7 @@ export default function ConversationsPage() {
         <div>
           <h1 className="font-heading text-2xl text-gray-900">Conversations</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Pick Team only, Email (subject and message body), or SMS before you send — similar to Go High Level. SMS
-            uses your GHL line; email goes to the contact&apos;s address from their profile.
+            Pick Team only, Email (subject and message body), or SMS before you send.
           </p>
         </div>
         <button
