@@ -21,7 +21,15 @@ export async function GET() {
   const active = (data ?? []).filter(
     (r: { status?: string }) => r.status !== 'completed',
   );
-  return NextResponse.json(active);
+
+  // If the RPC was updated (migration 054) it already includes category.
+  // For any row missing it (pre-migration), fall back to 'feature_request'.
+  const withCategory = active.map((r: Record<string, unknown>) => ({
+    ...r,
+    category: (r.category as string | undefined) ?? 'feature_request',
+  }));
+
+  return NextResponse.json(withCategory);
 }
 
 export async function POST(request: NextRequest) {
@@ -29,13 +37,17 @@ export async function POST(request: NextRequest) {
   const venueId = cookieStore.get('venue_id')?.value;
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { title, description } = await request.json();
+  const { title, description, category } = await request.json();
   if (!title?.trim()) return NextResponse.json({ error: 'Title is required' }, { status: 400 });
+
+  const VALID_CATEGORIES = ['feature_request', 'bug_report', 'improvement', 'other'] as const;
+  const safeCategory = VALID_CATEGORIES.includes(category) ? category : 'feature_request';
 
   const { data, error } = await supabaseAdmin.rpc('submit_feature_request', {
     p_venue_id: venueId,
     p_title: title.trim(),
     p_description: description?.trim() || null,
+    p_category: safeCategory,
   });
 
   if (error) {

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
  Sparkles, Zap, Wrench, ThumbsUp, Plus, X, Loader2, Trash2, Pencil,
- ChevronRight, ChevronUp, Megaphone, Clock, CheckCircle2, AlertCircle, Lightbulb,
+ ChevronRight, ChevronUp, Megaphone, Clock, CheckCircle2, AlertCircle, Lightbulb, Bug,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
 
@@ -18,6 +18,8 @@ interface ChangelogEntry {
  released_at: string;
 }
 
+type RequestCategory = 'feature_request' | 'bug_report' | 'improvement' | 'other';
+
 interface FeatureRequest {
  id: string;
  title: string;
@@ -28,6 +30,7 @@ interface FeatureRequest {
  completed_at: string | null;
  has_voted: boolean;
  is_mine: boolean;
+ category: RequestCategory;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -43,6 +46,13 @@ const STATUS_CONFIG = {
  planned: { label: 'Planned', icon: Clock, bg: 'bg-blue-50', text: 'text-blue-600' },
  in_progress: { label: 'In Progress', icon: Zap, bg: 'bg-amber-50', text: 'text-amber-600' },
  completed: { label: 'Completed', icon: CheckCircle2, bg: 'bg-emerald-50', text: 'text-emerald-600' },
+};
+
+const REQUEST_CATEGORY_CONFIG: Record<RequestCategory, { label: string; icon: React.ElementType; bg: string; text: string; border: string }> = {
+ feature_request: { label: 'Feature Request', icon: Sparkles,  bg: 'bg-violet-50',  text: 'text-violet-700', border: 'border-violet-200' },
+ bug_report:      { label: 'Bug Report',      icon: Bug,        bg: 'bg-red-50',     text: 'text-red-700',    border: 'border-red-200'    },
+ improvement:     { label: 'Improvement',     icon: Zap,        bg: 'bg-blue-50',    text: 'text-blue-700',   border: 'border-blue-200'   },
+ other:           { label: 'Other',           icon: Lightbulb,  bg: 'bg-gray-100',   text: 'text-gray-600',   border: 'border-gray-200'   },
 };
 
 function timeAgo(iso: string) {
@@ -183,6 +193,7 @@ function FeatureRequestsTab() {
  const [showForm, setShowForm] = useState(false);
  const [title, setTitle] = useState('');
  const [desc, setDesc] = useState('');
+ const [category, setCategory] = useState<RequestCategory>('feature_request');
  const [submitting, setSubmitting] = useState(false);
  const [votingId, setVotingId] = useState<string | null>(null);
  const votingInFlight = useRef<Set<string>>(new Set());
@@ -270,7 +281,7 @@ function FeatureRequestsTab() {
  const res = await fetch('/api/feature-requests', {
  method: 'POST',
  headers: { 'Content-Type': 'application/json' },
- body: JSON.stringify({ title, description: desc }),
+ body: JSON.stringify({ title, description: desc, category }),
  });
  if (!res.ok) {
  const d = await res.json();
@@ -279,8 +290,8 @@ function FeatureRequestsTab() {
  }
  const newReq = await res.json();
  // Always mark newly submitted requests as is_mine = true
- setRequests(prev => [{ ...newReq, is_mine: true }, ...prev].sort((a, b) => b.vote_count - a.vote_count));
- setTitle(''); setDesc('');
+ setRequests(prev => [{ ...newReq, is_mine: true, category }, ...prev].sort((a, b) => b.vote_count - a.vote_count));
+ setTitle(''); setDesc(''); setCategory('feature_request');
  setShowForm(false);
  } catch {
  setFormError('Network error — please try again');
@@ -306,21 +317,58 @@ function FeatureRequestsTab() {
  {/* Submission form */}
  {showForm && (
  <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-5">
- <h3 className="text-base font-bold text-gray-900 mb-4"style={{ fontFamily:"'Open Sans', sans-serif", fontWeight: 700 }}>Submit a Feature Request</h3>
- <form onSubmit={handleSubmit} className="space-y-3">
+ <h3 className="text-base font-bold text-gray-900 mb-4" style={{ fontFamily:"'Open Sans', sans-serif", fontWeight: 700 }}>Submit a Request</h3>
+ <form onSubmit={handleSubmit} className="space-y-4">
+ {/* Category selector */}
+ <div>
+   <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">
+     Category <span className="text-red-400">*</span>
+   </label>
+   <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+     {(Object.entries(REQUEST_CATEGORY_CONFIG) as [RequestCategory, typeof REQUEST_CATEGORY_CONFIG[RequestCategory]][]).map(([key, cfg]) => {
+       const CatIcon = cfg.icon;
+       const isSelected = category === key;
+       return (
+         <button
+           key={key}
+           type="button"
+           onClick={() => setCategory(key)}
+           className={classNames(
+             'flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-xs font-semibold transition-all',
+             isSelected
+               ? `${cfg.bg} ${cfg.text} ${cfg.border} ring-2 ring-offset-1 ring-current`
+               : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50'
+           )}
+         >
+           <CatIcon size={13} className={isSelected ? cfg.text : 'text-gray-400'} />
+           {cfg.label}
+         </button>
+       );
+     })}
+   </div>
+ </div>
+
+ {/* Title */}
  <div>
  <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
- Feature Title <span className="text-red-400">*</span>
+ Title <span className="text-red-400">*</span>
  </label>
  <input
  type="text"
  value={title}
  onChange={e => setTitle(e.target.value)}
- placeholder="e.g. Email reminders for unsigned proposals"
+ placeholder={
+   category === 'bug_report'  ? 'e.g. Contact phone number not saving' :
+   category === 'improvement' ? 'e.g. Make the calendar week view the default' :
+   category === 'other'       ? 'e.g. Question about billing' :
+   'e.g. Email reminders for unsigned proposals'
+ }
  maxLength={120}
  className="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
  />
  </div>
+
+ {/* Details */}
  <div>
  <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
  Details <span className="text-gray-300">(optional)</span>
@@ -328,11 +376,15 @@ function FeatureRequestsTab() {
  <textarea
  value={desc}
  onChange={e => setDesc(e.target.value)}
- placeholder="Describe what you'd like and why it would help your workflow..."
+ placeholder={
+   category === 'bug_report' ? 'Describe the steps to reproduce the issue and what you expected to happen...' :
+   'Describe what you\'d like and why it would help your workflow...'
+ }
  rows={3}
  className="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900 resize-none"
  />
  </div>
+
  {formError && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{formError}</p>}
  <div className="flex justify-end">
  <button
@@ -342,7 +394,7 @@ function FeatureRequestsTab() {
  style={{ backgroundColor: '#1b1b1b' }}
  >
  {submitting && <Loader2 size={14} className="animate-spin flex-shrink-0"/>}
- <span>{submitting ? 'Submitting...' : 'Submit Request'}</span>
+ <span>{submitting ? 'Submitting...' : 'Submit'}</span>
  </button>
  </div>
  </form>
@@ -378,6 +430,9 @@ function FeatureRequestsTab() {
  const StatusIcon = statusConf.icon;
  const isVoting = votingId === req.id;
  const isTopRequest = idx === 0 && req.vote_count > 1;
+
+ const catConf = REQUEST_CATEGORY_CONFIG[req.category ?? 'feature_request'] ?? REQUEST_CATEGORY_CONFIG.feature_request;
+ const CatIcon = catConf.icon;
 
  return (
  <div
@@ -420,17 +475,21 @@ function FeatureRequestsTab() {
  </div>
  ) : (
  <>
- <div className="flex items-start gap-2 flex-wrap">
- <h4 className="text-sm font-bold text-gray-900 leading-snug">{req.title}</h4>
- <span className={classNames('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold flex-shrink-0', statusConf.bg, statusConf.text)}>
- <StatusIcon size={9} />{statusConf.label}
- </span>
- {isTopRequest && (
- <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-600">
- ★ Top request
- </span>
- )}
+ {/* Category + status badges */}
+ <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+   <span className={classNames('inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold flex-shrink-0', catConf.bg, catConf.text, catConf.border)}>
+     <CatIcon size={9} />{catConf.label}
+   </span>
+   <span className={classNames('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold flex-shrink-0', statusConf.bg, statusConf.text)}>
+     <StatusIcon size={9} />{statusConf.label}
+   </span>
+   {isTopRequest && (
+     <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-600">
+       ★ Top request
+     </span>
+   )}
  </div>
+ <h4 className="text-sm font-bold text-gray-900 leading-snug">{req.title}</h4>
  {req.description && <p className="mt-1 text-xs text-gray-500 leading-relaxed">{req.description}</p>}
  <p className="mt-1 text-[11px] text-gray-400">{timeAgo(req.created_at)}</p>
  </>
