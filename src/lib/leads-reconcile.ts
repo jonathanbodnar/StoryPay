@@ -128,7 +128,9 @@ export async function reconcileLeadsForKanban(venueId: string): Promise<void> {
 
   // Load the venue's current pipelines + stages + leads + contacts in one
   // round-trip. Cheap even for venues with hundreds of rows.
-  const [{ data: pipelineRows }, { data: stageRows }, { data: leadRows }, { data: vcs }] =
+  const leadsSelectWithFlag = 'id, email, pipeline_id, stage_id, excluded_from_pipeline';
+  const leadsSelectLegacy = 'id, email, pipeline_id, stage_id';
+  const [{ data: pipelineRows }, { data: stageRows }, leadsResult, { data: vcs }] =
     await Promise.all([
       supabaseAdmin
         .from('lead_pipelines')
@@ -141,13 +143,43 @@ export async function reconcileLeadsForKanban(venueId: string): Promise<void> {
         .order('position', { ascending: true }),
       supabaseAdmin
         .from('leads')
-        .select('id, email, pipeline_id, stage_id')
+        .select(leadsSelectWithFlag)
         .eq('venue_id', venueId),
       supabaseAdmin
         .from('venue_customers')
         .select('customer_email, first_name, last_name, phone, pipeline_id, stage_id')
         .eq('venue_id', venueId),
     ]);
+
+  let leadRows: Array<{
+    id: string;
+    email: string | null;
+    pipeline_id: string | null;
+    stage_id: string | null;
+    excluded_from_pipeline?: boolean | null;
+  }> | null = leadsResult.data as unknown as Array<{
+    id: string;
+    email: string | null;
+    pipeline_id: string | null;
+    stage_id: string | null;
+    excluded_from_pipeline?: boolean | null;
+  }> | null;
+  if (leadsResult.error && /column .*excluded_from_pipeline/i.test(leadsResult.error.message)) {
+    // Migration 051 not applied yet — reconcile against the legacy columns
+    // so the kanban still loads. Contact-only leads (when they exist) will
+    // be re-bucketed into the default pipeline until the migration lands.
+    const retry = await supabaseAdmin
+      .from('leads')
+      .select(leadsSelectLegacy)
+      .eq('venue_id', venueId);
+    leadRows = (retry.data ?? null) as unknown as Array<{
+      id: string;
+      email: string | null;
+      pipeline_id: string | null;
+      stage_id: string | null;
+      excluded_from_pipeline?: boolean | null;
+    }> | null;
+  }
 
   const pipelineIds = new Set<string>(((pipelineRows ?? []) as Array<{ id: string }>).map((p) => p.id));
   type StageMini = { id: string; pipeline_id: string; name: string; position: number };
@@ -160,8 +192,18 @@ export async function reconcileLeadsForKanban(venueId: string): Promise<void> {
     if (!existing || s.position < existing.position) firstStageByPipeline.set(s.pipeline_id, s);
   }
 
-  type LeadMini = { id: string; email: string | null; pipeline_id: string | null; stage_id: string | null };
-  const leads = (leadRows ?? []) as LeadMini[];
+  type LeadMini = {
+    id: string;
+    email: string | null;
+    pipeline_id: string | null;
+    stage_id: string | null;
+    excluded_from_pipeline?: boolean | null;
+  };
+  // Contact-only leads ("None" stage) must be skipped for healing + kanban
+  // placement, but they still claim the email so we don't accidentally
+  // clone them into the default pipeline down below.
+  const allLeads = (leadRows ?? []) as LeadMini[];
+  const leads = allLeads.filter((l) => l.excluded_from_pipeline !== true);
 
   // Build a lookup from contact email → its preferred pipeline/stage on the
   // venue_customers row. That's what the user just edited on the contacts
@@ -256,8 +298,11 @@ export async function reconcileLeadsForKanban(venueId: string): Promise<void> {
     if (error) console.error('[reconcileLeadsForKanban] repair update failed:', error.message);
   }
 
+  // Use *all* leads (including contact-only ones) so we don't clone a
+  // contact-only lead into the default pipeline just because it was skipped
+  // by the reconcile filter above.
   const emailSet = new Set(
-    leads.map((l) => String(l.email || '').trim().toLowerCase()).filter(Boolean),
+    allLeads.map((l) => String(l.email || '').trim().toLowerCase()).filter(Boolean),
   );
 
   for (const vc of (vcs ?? []) as Array<{

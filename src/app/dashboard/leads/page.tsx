@@ -14,7 +14,7 @@ import {
   History, ListTodo, CheckSquare, Square, Send, Activity,
 } from 'lucide-react';
 import LeadInsightsStrip, { type LeadInsightsPayload } from '@/components/leads/LeadInsightsStrip';
-import AddLeadModal from '@/components/leads/AddLeadModal';
+import AddLeadModal, { NO_PIPELINE_STAGE } from '@/components/leads/AddLeadModal';
 import { TimezoneSelect } from '@/components/TimezoneSelect';
 import { DEFAULT_VENUE_TIMEZONE, resolveVenueTimezone, wallClockToUtc } from '@/lib/venue-timezone';
 import { effectiveWinProbability } from '@/lib/pipelines';
@@ -494,6 +494,7 @@ export default function LeadsPage() {
   }
 
   async function createLead(draft: LeadDraft) {
+    const excludeFromPipeline = draft.stageId === NO_PIPELINE_STAGE;
     const res = await fetch('/api/leads', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -509,8 +510,9 @@ export default function LeadsPage() {
         guestCount:        draft.guestCount ? Number(draft.guestCount) : null,
         bookingTimeline:   draft.bookingTimeline.trim() || undefined,
         message:           draft.message,
-        pipelineId:        draft.pipelineId || activePipelineId,
-        stageId:           draft.stageId || undefined,
+        pipelineId:        excludeFromPipeline ? undefined : (draft.pipelineId || activePipelineId),
+        stageId:           excludeFromPipeline ? undefined : (draft.stageId || undefined),
+        excludeFromPipeline: excludeFromPipeline || undefined,
         spaceId:           draft.spaceId || null,
         tagIds:            draft.tagIds,
       }),

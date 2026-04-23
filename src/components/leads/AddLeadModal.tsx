@@ -63,10 +63,21 @@ export type LeadDraft = {
   bookingTimeline: string;
   message: string;
   pipelineId: string;
+  /**
+   * Regular stage UUID, or `NO_PIPELINE_STAGE` for the special "None" option
+   * (creates a contact without placing it in any visible pipeline stage).
+   */
   stageId: string;
   spaceId: string;
   tagIds: string[];
 };
+
+/**
+ * Sentinel value used by the shared stage dropdown to mean "no pipeline at
+ * all". Consumers should translate this into `excludeFromPipeline: true` on
+ * the API payload instead of forwarding it as a real stage id.
+ */
+export const NO_PIPELINE_STAGE = '__none__';
 
 export const emptyLeadDraft = (pipelineId: string): LeadDraft => ({
   firstName: '',
@@ -272,12 +283,18 @@ export default function AddLeadModal({
                     onChange={(e) => set('stageId', e.target.value)}
                     className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
                   >
+                    <option value={NO_PIPELINE_STAGE}>None — contact only (not in pipeline)</option>
                     {stagesForPipeline.map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.name}
                       </option>
                     ))}
                   </select>
+                  {draft.stageId === NO_PIPELINE_STAGE && (
+                    <p className="mt-1 text-[11px] text-gray-500">
+                      They&rsquo;ll appear on the Contacts page but won&rsquo;t show up in the leads pipeline.
+                    </p>
+                  )}
                 </div>
               </div>
             )}

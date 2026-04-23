@@ -79,16 +79,31 @@ export async function syncLeadFromVenueCustomerRow(
     const prevStageId = row.stage_id ?? null;
     const leadId = row.id;
 
-    await supabaseAdmin
+    // Clear the contact-only flag when the contact is moved into a real
+    // pipeline/stage so the lead re-appears on the kanban.
+    const { error: updErr } = await supabaseAdmin
       .from('leads')
       .update({
         pipeline_id: vc.pipeline_id,
         stage_id: vc.stage_id,
         status,
+        excluded_from_pipeline: false,
         updated_at: updatedAt,
       })
       .eq('id', leadId)
       .eq('venue_id', venueId);
+    if (updErr && /column .*excluded_from_pipeline/i.test(updErr.message)) {
+      await supabaseAdmin
+        .from('leads')
+        .update({
+          pipeline_id: vc.pipeline_id,
+          stage_id: vc.stage_id,
+          status,
+          updated_at: updatedAt,
+        })
+        .eq('id', leadId)
+        .eq('venue_id', venueId);
+    }
 
     if (prevStageId && vc.stage_id && prevStageId !== vc.stage_id) {
       void onMarketingStageChanged(venueId, leadId, vc.stage_id);

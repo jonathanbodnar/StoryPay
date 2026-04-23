@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
 import AddLeadModal, {
+  NO_PIPELINE_STAGE,
   type LeadDraft,
   type LeadPipeline,
   type MarketingTag,
@@ -380,6 +381,7 @@ export default function ContactsPage() {
 }
 
 async function createContactFromDraft(draft: LeadDraft) {
+  const excludeFromPipeline = draft.stageId === NO_PIPELINE_STAGE;
   const payload = {
     firstName: draft.firstName,
     lastName: draft.lastName,
@@ -392,8 +394,9 @@ async function createContactFromDraft(draft: LeadDraft) {
     guestCount: draft.guestCount ? Number(draft.guestCount) : null,
     bookingTimeline: draft.bookingTimeline.trim() || undefined,
     message: draft.message,
-    pipelineId: draft.pipelineId || undefined,
-    stageId: draft.stageId || undefined,
+    pipelineId: excludeFromPipeline ? undefined : draft.pipelineId || undefined,
+    stageId: excludeFromPipeline ? undefined : draft.stageId || undefined,
+    excludeFromPipeline: excludeFromPipeline || undefined,
     spaceId: draft.spaceId || null,
     tagIds: draft.tagIds,
   };

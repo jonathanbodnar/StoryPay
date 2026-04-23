@@ -108,6 +108,9 @@ export async function GET(request: NextRequest) {
     .from('leads')
     .select(SELECT_WITH_SPACE)
     .eq('venue_id', venueId)
+    // Contact-only leads (stage = "None") should never appear in the pipeline
+    // list or kanban — they live only on the Contacts page.
+    .or('excluded_from_pipeline.is.null,excluded_from_pipeline.eq.false')
     .order('position', { ascending: true })
     .order('created_at', { ascending: false })
     .limit(1000);
@@ -138,6 +141,24 @@ export async function GET(request: NextRequest) {
   }
 
   let { data: rows, error } = await query;
+  if (error && /column .*excluded_from_pipeline/i.test(error.message)) {
+    // Migration 051 not applied yet — drop the filter so the page still
+    // works. Contact-only leads will show up in the kanban until the
+    // migration runs, but nothing breaks.
+    let q2 = supabaseAdmin
+      .from('leads')
+      .select(SELECT_WITH_SPACE)
+      .eq('venue_id', venueId)
+      .order('position', { ascending: true })
+      .order('created_at', { ascending: false })
+      .limit(1000);
+    if (status)     q2 = q2.eq('status', status);
+    if (pipelineId) q2 = q2.eq('pipeline_id', pipelineId);
+    if (stageId)    q2 = q2.eq('stage_id', stageId);
+    const retry = await q2;
+    rows = retry.data;
+    error = retry.error;
+  }
   if (error && /column .*space_id/i.test(error.message)) {
     // Migration 049 not applied yet — re-run with the legacy column list so
     // the leads page still works on pre-migration databases.
@@ -174,19 +195,34 @@ export async function GET(request: NextRequest) {
       ((validPipelineRows ?? []) as Array<{ id: string }>).map((p) => p.id),
     );
 
-    const orphanFilter = `pipeline_id.is.null,pipeline_id.not.in.(${[...validPipelineIds].join(',') || '00000000-0000-0000-0000-000000000000'})`;
+    // Only pull in leads whose pipeline_id points at a deleted pipeline —
+    // leads with pipeline_id=NULL are intentionally "contact only" now (see
+    // migration 051), so they must stay out of every kanban view.
+    const orphanFilter = `pipeline_id.not.in.(${[...validPipelineIds].join(',') || '00000000-0000-0000-0000-000000000000'})`;
     let orphanRows: LeadRow[] | null = null;
     const orphanFirst = await supabaseAdmin
       .from('leads')
       .select(SELECT_WITH_SPACE)
       .eq('venue_id', venueId)
+      .or(`excluded_from_pipeline.is.null,excluded_from_pipeline.eq.false`)
+      .not('pipeline_id', 'is', null)
       .or(orphanFilter)
       .limit(500);
-    if (orphanFirst.error && /column .*space_id/i.test(orphanFirst.error.message)) {
+    if (orphanFirst.error && /column .*excluded_from_pipeline/i.test(orphanFirst.error.message)) {
+      const retry = await supabaseAdmin
+        .from('leads')
+        .select(SELECT_WITH_SPACE)
+        .eq('venue_id', venueId)
+        .not('pipeline_id', 'is', null)
+        .or(orphanFilter)
+        .limit(500);
+      orphanRows = (retry.data ?? null) as unknown as LeadRow[] | null;
+    } else if (orphanFirst.error && /column .*space_id/i.test(orphanFirst.error.message)) {
       const orphanLegacy = await supabaseAdmin
         .from('leads')
         .select(SELECT_LEGACY)
         .eq('venue_id', venueId)
+        .not('pipeline_id', 'is', null)
         .or(orphanFilter)
         .limit(500);
       orphanRows = (orphanLegacy.data ?? null) as unknown as LeadRow[] | null;
@@ -392,6 +428,12 @@ export async function POST(request: NextRequest) {
     stageId?: string;
     spaceId?: string | null;
     tagIds?: string[];
+    /**
+     * When true, the lead is created without a pipeline/stage so it only
+     * surfaces on the Contacts page and never in the Kanban. A mirror
+     * venue_customers row is upserted so the contact is still searchable.
+     */
+    excludeFromPipeline?: boolean;
   };
   try {
     body = await request.json();
@@ -407,32 +449,41 @@ export async function POST(request: NextRequest) {
   if (!fullName) return NextResponse.json({ error: 'Name is required' }, { status: 400 });
   if (!email)    return NextResponse.json({ error: 'Email is required' }, { status: 400 });
 
-  // Figure out which pipeline/stage to drop the lead into.
-  const defaultPipelineId = await ensureDefaultPipeline(venueId);
-  const pipelineId = body.pipelineId || defaultPipelineId;
+  // Intentionally skip pipeline assignment when the caller asked for a
+  // contact-only record ("None" stage in the Add lead / Add contact modal).
+  const excludeFromPipeline = body.excludeFromPipeline === true;
 
-  let stageId = body.stageId;
-  if (!stageId) {
-    const { data: firstStage } = await supabaseAdmin
-      .from('lead_pipeline_stages')
-      .select('id')
-      .eq('pipeline_id', pipelineId)
-      .eq('venue_id', venueId)
-      .order('position', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    stageId = firstStage?.id;
-  }
-
+  // Figure out which pipeline/stage to drop the lead into (if any).
+  let pipelineId: string | null = null;
+  let stageId: string | undefined = undefined;
   let initialStatus = 'new';
-  if (stageId) {
-    const { data: stRow } = await supabaseAdmin
-      .from('lead_pipeline_stages')
-      .select('name')
-      .eq('id', stageId)
-      .eq('venue_id', venueId)
-      .maybeSingle();
-    if (stRow?.name) initialStatus = legacyStatusForStageName(stRow.name);
+
+  if (!excludeFromPipeline) {
+    const defaultPipelineId = await ensureDefaultPipeline(venueId);
+    pipelineId = body.pipelineId || defaultPipelineId;
+
+    stageId = body.stageId;
+    if (!stageId) {
+      const { data: firstStage } = await supabaseAdmin
+        .from('lead_pipeline_stages')
+        .select('id')
+        .eq('pipeline_id', pipelineId)
+        .eq('venue_id', venueId)
+        .order('position', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      stageId = firstStage?.id;
+    }
+
+    if (stageId) {
+      const { data: stRow } = await supabaseAdmin
+        .from('lead_pipeline_stages')
+        .select('name')
+        .eq('id', stageId)
+        .eq('venue_id', venueId)
+        .maybeSingle();
+      if (stRow?.name) initialStatus = legacyStatusForStageName(stRow.name);
+    }
   }
 
   const opportunityValue =
@@ -472,6 +523,7 @@ export async function POST(request: NextRequest) {
     position:           0,
   };
   if (spaceId) basePayload.space_id = spaceId;
+  if (excludeFromPipeline) basePayload.excluded_from_pipeline = true;
 
   let insert = await supabaseAdmin.from('leads').insert(basePayload).select('*').single();
   if (insert.error && spaceId && /column .*space_id/i.test(insert.error.message)) {
@@ -481,6 +533,16 @@ export async function POST(request: NextRequest) {
     const { space_id: _omit, ...withoutSpace } = basePayload as Record<string, unknown> & { space_id?: string | null };
     void _omit;
     insert = await supabaseAdmin.from('leads').insert(withoutSpace).select('*').single();
+  }
+  if (insert.error && /column .*excluded_from_pipeline/i.test(insert.error.message)) {
+    // Migration 051 not applied yet — fall back to the legacy path so the
+    // lead is still created. Without the column the kanban reconciler will
+    // push this lead into the default pipeline on the next fetch, but
+    // that's still better than failing the whole request.
+    console.warn('[POST /api/leads] leads.excluded_from_pipeline column missing; dropping field (apply migration 051)');
+    const { excluded_from_pipeline: _omit, ...withoutFlag } = basePayload as Record<string, unknown> & { excluded_from_pipeline?: boolean };
+    void _omit;
+    insert = await supabaseAdmin.from('leads').insert(withoutFlag).select('*').single();
   }
   const { data, error } = insert;
 
@@ -498,6 +560,32 @@ export async function POST(request: NextRequest) {
     body.phone?.trim() || null,
     String(row.created_at ?? new Date().toISOString()),
   );
+
+  // Contact-only leads live on the Contacts page, which reads from
+  // venue_customers. Upsert a mirror row so the new contact is searchable
+  // there even though it has no pipeline/stage. (The kanban reconciler also
+  // syncs contacts → leads in the other direction for regular leads.)
+  if (excludeFromPipeline) {
+    const emailLower = email.toLowerCase();
+    const { error: vcErr } = await supabaseAdmin
+      .from('venue_customers')
+      .upsert(
+        {
+          venue_id:       venueId,
+          customer_email: emailLower,
+          first_name:     firstName || null,
+          last_name:      lastName || null,
+          phone:          body.phone?.trim() || null,
+          pipeline_id:    null,
+          stage_id:       null,
+          updated_at:     new Date().toISOString(),
+        },
+        { onConflict: 'venue_id,customer_email' },
+      );
+    if (vcErr) {
+      console.warn('[POST /api/leads] venue_customers upsert failed:', vcErr.message);
+    }
+  }
 
   if (Array.isArray(body.tagIds) && body.tagIds.length > 0) {
     await setLeadTagIds(
