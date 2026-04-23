@@ -639,30 +639,32 @@ export default function LeadsPage() {
             onChange={setActivePipelineId}
             onManage={() => setEditorOpen(true)}
           />
-          <div className="inline-flex h-9 rounded-2xl border border-gray-200 bg-white p-0.5">
+          <div className="flex rounded-lg border border-gray-200 bg-white overflow-hidden">
             <button
               onClick={() => setView('kanban')}
-              className={`inline-flex h-full items-center gap-1.5 rounded-xl px-3.5 text-sm font-medium transition-colors ${
-                view === 'kanban' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+                view === 'kanban' ? 'bg-gray-900 text-white' : 'text-gray-800 hover:bg-gray-50'
               }`}
             >
-              <LayoutGrid className="w-3.5 h-3.5" /> Kanban
+              <LayoutGrid className="w-4 h-4" /> Kanban
             </button>
             <button
               onClick={() => setView('list')}
-              className={`inline-flex h-full items-center gap-1.5 rounded-xl px-3.5 text-sm font-medium transition-colors ${
-                view === 'list' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'
+              className={`flex items-center gap-2 border-l border-gray-200 px-4 py-2.5 text-sm font-medium transition-colors ${
+                view === 'list' ? 'bg-gray-900 text-white' : 'text-gray-800 hover:bg-gray-50'
               }`}
             >
-              <ListIcon className="w-3.5 h-3.5" /> List
+              <ListIcon className="w-4 h-4" /> List
             </button>
           </div>
           <button
             onClick={() => setAddingOpen(true)}
-            className="inline-flex h-9 items-center gap-1.5 rounded-2xl px-3.5 text-sm font-medium text-white transition-colors"
+            className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-colors"
             style={{ backgroundColor: '#1b1b1b' }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#333333')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1b1b1b')}
           >
-            <Plus className="w-3.5 h-3.5" /> Add Lead
+            <Plus className="w-4 h-4" /> Add Lead
           </button>
         </div>
       </header>
@@ -834,17 +836,15 @@ function PipelineControls({
   const active = pipelines.find((p) => p.id === activeId) ?? pipelines[0];
   if (pipelines.length <= 1) {
     return (
-      <div className="inline-flex h-9 items-center gap-2 rounded-2xl border border-gray-200 bg-white px-3">
-        <span className="text-sm font-medium text-gray-800 max-w-[200px] truncate">
-          {active?.name ?? 'Pipeline'}
-        </span>
+      <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-800">
+        <span className="max-w-[200px] truncate">{active?.name ?? 'Pipeline'}</span>
         <button
           type="button"
           onClick={onManage}
           title="Edit pipelines"
-          className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-gray-50 px-2.5 text-sm font-medium text-gray-700 hover:bg-gray-100 h-[26px]"
+          className="flex items-center gap-1.5 rounded border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-700 hover:bg-gray-100"
         >
-          <Settings2 className="w-3.5 h-3.5" /> Edit
+          <Settings2 className="w-3 h-3" /> Edit
         </button>
       </div>
     );
@@ -870,9 +870,9 @@ function PipelineControls({
         type="button"
         onClick={onManage}
         title="Edit pipelines"
-        className="inline-flex h-9 items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-3.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-50"
       >
-        <Settings2 className="w-3.5 h-3.5" /> Edit
+        <Settings2 className="w-4 h-4" /> Edit
       </button>
     </div>
   );
