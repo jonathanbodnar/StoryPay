@@ -3000,7 +3000,7 @@ function HexColorField({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white p-0.5 shadow-sm hover:border-gray-300"
+        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white p-0.5 hover:border-gray-300"
         aria-label={ariaLabel ?? 'Color'}
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -3015,7 +3015,7 @@ function HexColorField({
       {open && (
         <div
           role="dialog"
-          className="absolute left-0 top-[calc(100%+6px)] z-50 w-56 rounded-xl border border-gray-200 bg-white p-3 shadow-xl"
+          className="absolute left-0 top-[calc(100%+6px)] z-50 w-56 rounded-xl border border-gray-200 bg-white p-3"
         >
           {!isTransparent ? (
             <label className="relative block h-12 w-full cursor-pointer overflow-hidden rounded-lg border border-gray-200">
