@@ -15,7 +15,13 @@ export async function GET() {
     console.error('[feature-requests] RPC error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json(data ?? []);
+
+  // Exclude completed requests — those are shown only in the dedicated
+  // /api/feature-requests/completed endpoint (the Completed section).
+  const active = (data ?? []).filter(
+    (r: { status?: string }) => r.status !== 'completed',
+  );
+  return NextResponse.json(active);
 }
 
 export async function POST(request: NextRequest) {
