@@ -105,6 +105,7 @@ function renderBlock(
       const sel = builder?.selectedId === block.id;
       const sty: CSSProperties = {
         color: block.style?.color ?? theme.primaryColor,
+        fontFamily: block.style?.fontFamily ?? (theme.headingFontFamily || undefined),
         ...blockStyleCss(block.style),
       };
       return (
@@ -640,32 +641,44 @@ export function MarketingFormView({
             {definition.blocks.length === 0 && emptyCanvasSlot ? (
               emptyCanvasSlot
             ) : (
-              definition.blocks.map((b) => {
-                const inner = renderBlock(b, theme, preview || !!builder, venueContact, builder);
-                let node: ReactNode;
-                if (!builder) {
-                  node = inner;
-                } else {
-                  node = (
-                    <div
-                      role="presentation"
-                      className={`relative rounded-md transition ${
-                        builder.selectedId === b.id
-                          ? 'ring-2 ring-brand-500 ring-offset-2'
-                          : 'hover:ring-1 hover:ring-gray-200'
-                      }`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        builder.onSelectBlock(b.id);
-                      }}
-                    >
-                      {inner}
+              <div className="grid grid-cols-2 gap-x-3">
+                {definition.blocks.map((b) => {
+                  // Layout/content blocks always span full width; input blocks use colSpan
+                  const isLayoutBlock = ['heading', 'rich_text', 'image', 'html', 'submit', 'button', 'venue_contact'].includes(b.type);
+                  const colClass = isLayoutBlock || (b.colSpan ?? 2) === 2
+                    ? 'col-span-2'
+                    : 'col-span-1';
+
+                  const inner = renderBlock(b, theme, preview || !!builder, venueContact, builder);
+                  let node: ReactNode;
+                  if (!builder) {
+                    node = inner;
+                  } else {
+                    node = (
+                      <div
+                        role="presentation"
+                        className={`relative rounded-md transition ${
+                          builder.selectedId === b.id
+                            ? 'ring-2 ring-brand-500 ring-offset-2'
+                            : 'hover:ring-1 hover:ring-gray-200'
+                        }`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          builder.onSelectBlock(b.id);
+                        }}
+                      >
+                        {inner}
+                      </div>
+                    );
+                  }
+                  if (wrapBlock) node = wrapBlock(b, node);
+                  return (
+                    <div key={b.id} className={colClass}>
+                      {node}
                     </div>
                   );
-                }
-                if (wrapBlock) node = wrapBlock(b, node);
-                return <Fragment key={b.id}>{node}</Fragment>;
-              })
+                })}
+              </div>
             )}
           </form>
         </div>

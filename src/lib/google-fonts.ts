@@ -7,6 +7,8 @@ export function collectGoogleFontFamiliesFromDefinition(
   const out: string[] = [];
   const t = extractGoogleFontName(def.theme?.fontFamily);
   if (t) out.push(t);
+  const h = extractGoogleFontName(def.theme?.headingFontFamily);
+  if (h) out.push(h);
   for (const b of def.blocks) {
     const f = extractGoogleFontName(b.style?.fontFamily);
     if (f) out.push(f);

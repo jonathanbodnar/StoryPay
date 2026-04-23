@@ -48,7 +48,10 @@ export interface FormTheme {
   primaryColor?: string;
   background?: string;
   surface?: string;
+  /** Body / general font stack */
   fontFamily?: string;
+  /** Heading-specific font (h1-h6). Falls back to fontFamily if unset. */
+  headingFontFamily?: string;
   borderRadius?: string;
   labelColor?: string;
   inputBorder?: string;
@@ -75,6 +78,8 @@ export interface FormBlock {
   /** optional stable key for exports (defaults to block id in payloads) */
   fieldKey?: string;
   style?: FormBlockStyle;
+  /** Grid column span: 1 = half-width, 2 = full-width (default full) */
+  colSpan?: 1 | 2;
 }
 
 /** Per-form submission routing and notification settings. */
@@ -119,6 +124,14 @@ export const FORM_BLOCK_TYPES: FormBlockType[] = [
   'venue_contact',
 ];
 
+/** These blocks are always required — the toggle is hidden in the builder. */
+export const ALWAYS_REQUIRED_TYPES: FormBlockType[] = [
+  'first_name',
+  'last_name',
+  'email',
+  'phone',
+];
+
 /** Blocks that collect user input (excludes submit/button/layout). */
 export const INPUT_BLOCK_TYPES: FormBlockType[] = [
   'first_name',
@@ -142,6 +155,7 @@ const DEFAULT_THEME: Required<FormTheme> = {
   surface: '#ffffff',
   fontFamily:
     "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+  headingFontFamily: '',
   borderRadius: '10px',
   labelColor: '#374151',
   inputBorder: '#e5e7eb',
@@ -205,13 +219,13 @@ export function createBlock(type: FormBlockType): FormBlock {
     case 'rich_text':
       return { id, type, content: '<p>Paragraph text</p>' };
     case 'first_name':
-      return { id, type, label: 'First name', placeholder: 'Jane', required: false };
+      return { id, type, label: 'First name', placeholder: 'Jane', required: true };
     case 'last_name':
-      return { id, type, label: 'Last name', placeholder: 'Doe', required: false };
+      return { id, type, label: 'Last name', placeholder: 'Doe', required: true };
     case 'email':
       return { id, type, label: 'Email', placeholder: 'you@example.com', required: true };
     case 'phone':
-      return { id, type, label: 'Phone', placeholder: '+1 (555) 000-0000', required: false };
+      return { id, type, label: 'Phone', placeholder: '+1 (555) 000-0000', required: true };
     case 'url':
       return { id, type, label: 'Website', placeholder: 'https://', required: false };
     case 'number':

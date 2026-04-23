@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 import {
+  ALWAYS_REQUIRED_TYPES,
   INPUT_BLOCK_TYPES,
   formFieldName,
   parseDefinition,
@@ -119,7 +120,8 @@ export async function POST(
 
     const raw = fd.get(name);
     const str = typeof raw === 'string' ? raw.trim() : '';
-    if (block.required && !str) {
+    const effectivelyRequired = block.required || ALWAYS_REQUIRED_TYPES.includes(block.type);
+    if (effectivelyRequired && !str) {
       return NextResponse.json({ error: `Field required: ${block.label || block.type}` }, { status: 400 });
     }
     if (str) payload[block.id] = str;

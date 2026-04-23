@@ -82,6 +82,8 @@ import {
 } from '@/components/marketing-form/MarketingFormView';
 import { useFormHistory } from '@/hooks/useFormHistory';
 import {
+  ALWAYS_REQUIRED_TYPES,
+  INPUT_BLOCK_TYPES,
   type FormBlock,
   type FormBlockStyle,
   type FormBlockType,
@@ -708,15 +710,42 @@ function BlockInspector({
               />
             </SettingsRow>
           ) : null}
-          <label className="mb-5 flex cursor-pointer items-center gap-2.5">
-            <input
-              type="checkbox"
-              className="h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-400"
-              checked={!!block.required}
-              onChange={(e) => onChange({ required: e.target.checked })}
-            />
-            <span className="text-[13px] text-gray-700">Required</span>
-          </label>
+          {ALWAYS_REQUIRED_TYPES.includes(block.type) ? (
+            <div className="mb-5 flex items-center gap-2.5 text-[13px] text-gray-400">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-gray-300 text-gray-400"
+                checked
+                disabled
+                readOnly
+              />
+              <span>Required (always on)</span>
+            </div>
+          ) : (
+            <label className="mb-5 flex cursor-pointer items-center gap-2.5">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-400"
+                checked={!!block.required}
+                onChange={(e) => onChange({ required: e.target.checked })}
+              />
+              <span className="text-[13px] text-gray-700">Required</span>
+            </label>
+          )}
+          <SettingsRow label="Width">
+            <SettingsSelectWrap>
+              <select
+                className={SETTINGS_SELECT}
+                value={String(block.colSpan ?? 2)}
+                onChange={(e) =>
+                  onChange({ colSpan: Number(e.target.value) as 1 | 2 })
+                }
+              >
+                <option value="2">Full width</option>
+                <option value="1">Half width (2-col layout)</option>
+              </select>
+            </SettingsSelectWrap>
+          </SettingsRow>
         </>
       )}
 
@@ -907,6 +936,36 @@ function BlockInspector({
   );
 }
 
+function ColorField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const safeColor = /^#[0-9a-f]{3,8}$/i.test(value.trim()) ? value.trim() : '#000000';
+  return (
+    <div className="flex items-center gap-2">
+      <div className="relative h-[34px] w-9 shrink-0 overflow-hidden rounded-md border border-gray-200">
+        <div className="absolute inset-0" style={{ background: value }} />
+        <input
+          type="color"
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+          value={safeColor}
+          onChange={(e) => onChange(e.target.value)}
+          title="Pick color"
+        />
+      </div>
+      <input
+        className={`${SETTINGS_INPUT} font-mono text-[12px]`}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="#000000"
+      />
+    </div>
+  );
+}
+
 function ThemeInspector({
   theme,
   onChange,
@@ -917,37 +976,56 @@ function ThemeInspector({
   fontDatalistId: string;
 }) {
   const T = theme;
-  const row = (key: keyof ReturnType<typeof mergeTheme>, label: string) => (
-    <SettingsRow key={String(key)} label={label}>
-      {key === 'fontFamily' ? (
-        <input
-          className={`${SETTINGS_INPUT} font-mono text-[12px]`}
-          value={T[key]}
-          onChange={(e) => onChange({ [key]: e.target.value })}
-          list={fontDatalistId}
-        />
-      ) : (
-        <input
-          className={SETTINGS_INPUT}
-          value={T[key]}
-          onChange={(e) => onChange({ [key]: e.target.value })}
-        />
-      )}
+  const fontRow = (key: 'fontFamily' | 'headingFontFamily', label: string) => (
+    <SettingsRow key={key} label={label}>
+      <input
+        className={`${SETTINGS_INPUT} font-mono text-[12px]`}
+        value={T[key] ?? ''}
+        onChange={(e) => onChange({ [key]: e.target.value })}
+        list={fontDatalistId}
+        placeholder={key === 'headingFontFamily' ? 'Same as body' : 'Font name or stack'}
+      />
+    </SettingsRow>
+  );
+  const colorRow = (key: 'primaryColor' | 'background' | 'surface' | 'labelColor' | 'inputBorder' | 'mutedColor', label: string) => (
+    <SettingsRow key={key} label={label}>
+      <ColorField value={T[key]} onChange={(v) => onChange({ [key]: v })} />
     </SettingsRow>
   );
 
   return (
     <div className="text-[13px] text-gray-900">
-      <SettingsPanelTitle>Theme</SettingsPanelTitle>
-      {row('maxWidth', 'Max width')}
-      {row('primaryColor', 'Primary / button')}
-      {row('background', 'Page background')}
-      {row('surface', 'Card background')}
-      {row('fontFamily', 'Font stack')}
-      {row('borderRadius', 'Corner radius')}
-      {row('labelColor', 'Label color')}
-      {row('inputBorder', 'Field border')}
-      {row('mutedColor', 'Muted text')}
+      <SettingsPanelTitle>Colors</SettingsPanelTitle>
+      {colorRow('primaryColor', 'Primary / button')}
+      {colorRow('background', 'Page background')}
+      {colorRow('surface', 'Card background')}
+      {colorRow('labelColor', 'Label color')}
+      {colorRow('inputBorder', 'Field border')}
+      {colorRow('mutedColor', 'Muted text')}
+
+      <div className="my-5 h-px w-full bg-gray-200/90" />
+      <SettingsPanelTitle>Typography</SettingsPanelTitle>
+      {fontRow('fontFamily', 'Body font')}
+      {fontRow('headingFontFamily', 'Heading font')}
+
+      <div className="my-5 h-px w-full bg-gray-200/90" />
+      <SettingsPanelTitle>Layout</SettingsPanelTitle>
+      <SettingsRow label="Max width">
+        <input
+          className={SETTINGS_INPUT}
+          value={T.maxWidth}
+          onChange={(e) => onChange({ maxWidth: e.target.value })}
+          placeholder="520px"
+        />
+      </SettingsRow>
+      <SettingsRow label="Corner radius">
+        <input
+          className={SETTINGS_INPUT}
+          value={T.borderRadius}
+          onChange={(e) => onChange({ borderRadius: e.target.value })}
+          placeholder="10px"
+        />
+      </SettingsRow>
     </div>
   );
 }
@@ -1157,7 +1235,7 @@ export function FormBuilderEditor({
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
   const mediaApplyRef = useRef<(url: string) => void>(() => {});
   const [rightTab, setRightTab] = useState<
-    'block' | 'settings' | 'theme' | 'submissions' | 'versions'
+    'block' | 'settings' | 'theme' | 'submissions'
   >('block');
   const [previewOpen, setPreviewOpen] = useState(false);
   const [activeDrag, setActiveDrag] = useState<PaletteDrag | null>(null);
@@ -1169,10 +1247,6 @@ export function FormBuilderEditor({
     []
   );
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
-  const [revisions, setRevisions] = useState<
-    { id: string; createdAt: string; definition: MarketingFormDefinition }[]
-  >([]);
-  const [revisionsLoading, setRevisionsLoading] = useState(false);
 
   const presentRef = useRef(present);
   presentRef.current = present;
@@ -1263,25 +1337,6 @@ export function FormBuilderEditor({
     };
   }, [rightTab, formId]);
 
-  useEffect(() => {
-    if (rightTab !== 'versions') return;
-    let cancelled = false;
-    setRevisionsLoading(true);
-    void (async () => {
-      try {
-        const res = await fetch(`/api/marketing/forms/${formId}/revisions`);
-        const j = (await res.json()) as {
-          revisions?: { id: string; createdAt: string; definition: MarketingFormDefinition }[];
-        };
-        if (!cancelled && j.revisions) setRevisions(j.revisions);
-      } finally {
-        if (!cancelled) setRevisionsLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [rightTab, formId]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -1844,7 +1899,6 @@ export function FormBuilderEditor({
                   ['settings', 'Settings'],
                   ['theme', 'Theme'],
                   ['submissions', 'Inbox'],
-                  ['versions', 'History'],
                 ] as const
               ).map(([id, lab]) => (
                 <button
@@ -1931,83 +1985,84 @@ export function FormBuilderEditor({
                         className="animate-pulse rounded-lg border border-gray-200/80 bg-white p-3"
                       >
                         <div className="h-3 w-36 rounded bg-gray-200" />
-                        <div className="mt-3 h-20 rounded bg-gray-100" />
+                        <div className="mt-1.5 h-3 w-28 rounded bg-gray-100" />
                       </div>
                     ))}
                   </div>
                 ) : submissions.length === 0 ? (
                   <p className="text-[13px] text-gray-400">No submissions yet.</p>
                 ) : (
-                  <ul className="max-h-[min(50vh,480px)] space-y-2 overflow-y-auto">
-                    {submissions.map((s) => (
-                      <li
-                        key={s.id}
-                        className="rounded-lg border border-gray-200/80 bg-white p-3"
-                      >
-                        <p className="text-[12px] font-medium text-gray-700">
-                          {new Date(s.created_at).toLocaleString()}
-                        </p>
-                        <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-gray-500">
-                          {JSON.stringify(s.payload, null, 2)}
-                        </pre>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            ) : null}
+                  <ul className="space-y-2">
+                    {submissions.map((s) => {
+                      const p = (typeof s.payload === 'object' && s.payload !== null
+                        ? s.payload
+                        : {}) as Record<string, unknown>;
+                      const firstNameBlock = definition.blocks.find((b) => b.type === 'first_name');
+                      const lastNameBlock = definition.blocks.find((b) => b.type === 'last_name');
+                      const emailBlock = definition.blocks.find((b) => b.type === 'email');
+                      const phoneBlock = definition.blocks.find((b) => b.type === 'phone');
+                      const firstName = firstNameBlock ? String(p[firstNameBlock.id] ?? '') : '';
+                      const lastName = lastNameBlock ? String(p[lastNameBlock.id] ?? '') : '';
+                      const email = emailBlock ? String(p[emailBlock.id] ?? '') : '';
+                      const phone = phoneBlock ? String(p[phoneBlock.id] ?? '') : '';
+                      const fullName = [firstName, lastName].filter(Boolean).join(' ');
+                      const otherFields = definition.blocks
+                        .filter(
+                          (b) =>
+                            INPUT_BLOCK_TYPES.includes(b.type) &&
+                            !['first_name', 'last_name', 'email', 'phone'].includes(b.type) &&
+                            p[b.id] !== undefined,
+                        )
+                        .map((b) => ({
+                          label: b.label || b.type,
+                          value: Array.isArray(p[b.id])
+                            ? (p[b.id] as string[]).join(', ')
+                            : typeof p[b.id] === 'object'
+                              ? '[file]'
+                              : String(p[b.id] ?? ''),
+                        }))
+                        .filter((f) => f.value);
 
-            {rightTab === 'versions' ? (
-              <div className="text-[13px] text-gray-900">
-                <SettingsPanelTitle>Versions</SettingsPanelTitle>
-                <p className="mb-4 text-[12px] leading-relaxed text-gray-500">
-                  Saved when you click Save. Restore replaces the editor — save again to publish.
-                </p>
-                {revisionsLoading ? (
-                  <div className="space-y-2" aria-hidden>
-                    {[0, 1, 2, 3].map((i) => (
-                      <div
-                        key={i}
-                        className="flex animate-pulse items-center justify-between gap-2 rounded-lg border border-gray-200/80 bg-white px-3 py-2.5"
-                      >
-                        <div className="h-3 w-44 rounded bg-gray-200" />
-                        <div className="h-7 w-16 shrink-0 rounded bg-gray-100" />
-                      </div>
-                    ))}
-                  </div>
-                ) : revisions.length === 0 ? (
-                  <p className="text-[13px] text-gray-400">No versions yet.</p>
-                ) : (
-                  <ul className="max-h-[min(50vh,480px)] space-y-2 overflow-y-auto">
-                    {revisions.map((r) => (
-                      <li
-                        key={r.id}
-                        className="flex items-center justify-between gap-2 rounded-lg border border-gray-200/80 bg-white px-3 py-2.5"
-                      >
-                        <span className="text-[12px] text-gray-700">
-                          {new Date(r.createdAt).toLocaleString()}
-                        </span>
-                        <button
-                          type="button"
-                          className="shrink-0 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-800 hover:bg-gray-50"
-                          onClick={() => {
-                            if (
-                              typeof window !== 'undefined' &&
-                              window.confirm('Replace the canvas with this version?')
-                            ) {
-                              reset({
-                                ...present,
-                                definition: r.definition,
-                              });
-                              setSelectedId(r.definition.blocks[0]?.id ?? null);
-                              setRightTab('block');
-                            }
-                          }}
+                      return (
+                        <li
+                          key={s.id}
+                          className="overflow-hidden rounded-lg border border-gray-200/80 bg-white"
                         >
-                          Restore
-                        </button>
-                      </li>
-                    ))}
+                          <div className="flex items-start justify-between gap-3 p-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-[13px] font-semibold text-gray-900">
+                                {fullName || '—'}
+                              </p>
+                              {email && (
+                                <p className="mt-0.5 truncate text-[12px] text-gray-500">{email}</p>
+                              )}
+                              {phone && (
+                                <p className="mt-0.5 text-[12px] text-gray-400">{phone}</p>
+                              )}
+                            </div>
+                            <p className="shrink-0 text-right text-[11px] text-gray-400">
+                              {new Date(s.created_at).toLocaleDateString()}<br />
+                              {new Date(s.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                            </p>
+                          </div>
+                          {otherFields.length > 0 && (
+                            <details className="border-t border-gray-100">
+                              <summary className="cursor-pointer px-3 py-1.5 text-[11px] font-medium text-gray-400 hover:text-gray-700">
+                                {otherFields.length} more field{otherFields.length !== 1 ? 's' : ''}
+                              </summary>
+                              <div className="space-y-1 px-3 pb-3">
+                                {otherFields.map((f, i) => (
+                                  <div key={i} className="flex gap-1.5 text-[11px]">
+                                    <span className="shrink-0 text-gray-400">{f.label}:</span>
+                                    <span className="break-all text-gray-700">{f.value}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </details>
+                          )}
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </div>
