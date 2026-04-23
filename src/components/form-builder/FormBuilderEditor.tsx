@@ -1317,7 +1317,12 @@ export function FormBuilderEditor({
       const payload = presentRef.current;
       const json = JSON.stringify(payload);
       if (json === lastPersistedJsonRef.current) {
-        if (source === 'manual') setPersistError(null);
+        // Nothing changed — show "Saved" feedback on manual saves so the button
+        // always gives a visible response rather than silently doing nothing.
+        if (source === 'manual') {
+          setPersistError(null);
+          setLastSavedAt(new Date());
+        }
         return;
       }
       if (source === 'manual') setSaving(true);
@@ -1341,6 +1346,10 @@ export function FormBuilderEditor({
         if (JSON.stringify(presentRef.current) !== json) return;
         lastPersistedJsonRef.current = json;
         setLastSavedAt(new Date());
+      } catch (e) {
+        if (source === 'manual') {
+          setPersistError(e instanceof Error ? e.message : 'Save failed — check connection');
+        }
       } finally {
         if (source === 'manual') setSaving(false);
         else setAutoSaving(false);
