@@ -81,6 +81,7 @@ export function VenueMapEmbed({
           href={directionsHref}
           target="_blank"
           rel="noopener noreferrer"
+          data-track="map_click"
           className="absolute bottom-3 right-3 rounded-full bg-white/95 px-3 py-1.5 text-xs font-medium text-gray-800 shadow hover:bg-white"
         >
           Open in maps
@@ -141,6 +142,8 @@ export function VenueSocialRow({ social }: { social: PublicVenueSocialLinks }) {
               href={u}
               target="_blank"
               rel="noopener noreferrer"
+              data-track="social_click"
+              data-track-platform={key}
               className={linkBtn}
               aria-label={label}
             >
@@ -165,7 +168,12 @@ export function VenueFaqSection({ items }: { items: PublicVenueFaqItem[] }) {
       </h2>
       <dl className="space-y-4">
         {items.map((item, i) => (
-          <div key={i} className="rounded-2xl border border-gray-200 bg-white px-4 py-4">
+          <div
+            key={i}
+            data-track="faq_open"
+            data-track-faq={i}
+            className="rounded-2xl border border-gray-200 bg-white px-4 py-4"
+          >
             <dt className="font-semibold text-gray-900">{item.question}</dt>
             <dd className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-gray-600">{item.answer}</dd>
           </div>

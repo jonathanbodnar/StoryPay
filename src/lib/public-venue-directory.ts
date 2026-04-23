@@ -58,6 +58,7 @@ function publicGoogleFromCache(cache: GoogleReviewsCachePayload | null): {
 
 export type PublicVenuePayload = {
   venue: {
+    id: string;
     name: string;
     slug: string;
     description: string | null;
@@ -254,6 +255,7 @@ export async function getPublicVenueBySlug(rawSlug: string): Promise<PublicVenue
 
   return {
     venue: {
+      id: venueId,
       name: String(v.name ?? ''),
       slug: String(v.slug ?? slug),
       description: v.description != null ? String(v.description) : null,
