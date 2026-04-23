@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, Plus, Trash2, Pencil, Check } from 'lucide-react';
+import { Loader2, Plus, Trash2, Pencil, Check, ChevronDown, Copy } from 'lucide-react';
 import {
   DIRECTORY_NAV_GROUP_LABELS,
   DIRECTORY_NAV_REGISTRY,
@@ -57,6 +57,8 @@ export function DirectoryPlansAdminPanel() {
     is_default: false,
   });
   const [planSaving, setPlanSaving] = useState(false);
+  const [newPlanOpen, setNewPlanOpen] = useState(false);
+  const [duplicating, setDuplicating] = useState<string | null>(null);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editNav, setEditNav] = useState<Record<string, boolean>>({});
@@ -165,6 +167,7 @@ export function DirectoryPlansAdminPanel() {
         fortis_merchant_id: '',
         is_default: false,
       });
+      setNewPlanOpen(false);
       await load();
     } finally {
       setPlanSaving(false);
@@ -228,6 +231,40 @@ export function DirectoryPlansAdminPanel() {
     const res = await fetch(`/api/admin/directory-plans/${id}`, { method: 'DELETE' });
     if (!res.ok) alert('Delete failed');
     await load();
+  }
+
+  async function duplicatePlan(p: PlanRow) {
+    setDuplicating(p.id);
+    try {
+      const baseName = `${p.name} (copy)`;
+      const baseSlug = `${p.slug}-copy`;
+      const { nav_permissions, feature_flags } = buildPlanNavPayloadFromEditor(
+        mergeNavPermissionsForEditor(p.nav_permissions, p.feature_flags)
+      );
+      const res = await fetch('/api/admin/directory-plans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: baseName,
+          slug: baseSlug,
+          description: p.description,
+          sort_order: p.sort_order + 1,
+          is_default: false,
+          price_monthly_cents: p.price_monthly_cents,
+          fortis_merchant_id: p.fortis_merchant_id?.trim() || null,
+          nav_permissions,
+          feature_flags,
+        }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        alert(j.error || 'Duplicate failed');
+        return;
+      }
+      await load();
+    } finally {
+      setDuplicating(null);
+    }
   }
 
   if (loading) {
@@ -333,91 +370,107 @@ export function DirectoryPlansAdminPanel() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-gray-200 bg-white p-6">
-        <h3 className="font-semibold text-gray-900 mb-3">New plan</h3>
-        <p className="text-xs text-gray-500 mb-3">
-          New plans start with <strong>all current features enabled</strong>. Edit the plan to turn features off.
-        </p>
-        <form onSubmit={createPlan} className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl">
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Name *</label>
-            <input
-              value={planForm.name}
-              onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-              required
-            />
+      <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setNewPlanOpen(o => !o)}
+          className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-gray-50 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gray-900 text-white">
+              <Plus size={14} />
+            </span>
+            <span className="font-semibold text-gray-900">New plan</span>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Slug *</label>
-            <input
-              value={planForm.slug}
-              onChange={(e) => setPlanForm({ ...planForm, slug: e.target.value })}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-mono"
-              placeholder="starter-tier"
-              required
-            />
+          <ChevronDown size={16} className={`text-gray-400 transition-transform ${newPlanOpen ? 'rotate-180' : ''}`} />
+        </button>
+        {newPlanOpen && (
+          <div className="px-6 pb-6 border-t border-gray-100">
+            <p className="text-xs text-gray-500 mt-4 mb-3">
+              New plans start with <strong>all current features enabled</strong>. Edit the plan to turn features off.
+            </p>
+            <form onSubmit={createPlan} className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Name *</label>
+                <input
+                  value={planForm.name}
+                  onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Slug *</label>
+                <input
+                  value={planForm.slug}
+                  onChange={(e) => setPlanForm({ ...planForm, slug: e.target.value })}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-mono"
+                  placeholder="starter-tier"
+                  required
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>
+                <input
+                  value={planForm.description}
+                  onChange={(e) => setPlanForm({ ...planForm, description: e.target.value })}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Sort order</label>
+                <input
+                  type="number"
+                  value={planForm.sort_order}
+                  onChange={(e) => setPlanForm({ ...planForm, sort_order: parseInt(e.target.value, 10) || 0 })}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Monthly price (USD)</label>
+                <input
+                  value={planForm.price_monthly_cents}
+                  onChange={(e) => setPlanForm({ ...planForm, price_monthly_cents: e.target.value })}
+                  placeholder="0.00"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Fortis merchant id (optional override)
+                </label>
+                <input
+                  value={planForm.fortis_merchant_id}
+                  onChange={(e) => setPlanForm({ ...planForm, fortis_merchant_id: e.target.value })}
+                  placeholder="Leave blank for env default"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 font-mono text-xs"
+                />
+              </div>
+              <div className="md:col-span-2 flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="ndef"
+                  checked={planForm.is_default}
+                  onChange={(e) => setPlanForm({ ...planForm, is_default: e.target.checked })}
+                />
+                <label htmlFor="ndef" className="text-sm text-gray-700">
+                  Default plan for new assignments
+                </label>
+              </div>
+              <div className="md:col-span-2">
+                <button
+                  type="submit"
+                  disabled={planSaving}
+                  className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                  style={{ backgroundColor: BRAND }}
+                >
+                  {planSaving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                  Create plan
+                </button>
+              </div>
+            </form>
           </div>
-          <div className="md:col-span-2">
-            <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>
-            <input
-              value={planForm.description}
-              onChange={(e) => setPlanForm({ ...planForm, description: e.target.value })}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Sort order</label>
-            <input
-              type="number"
-              value={planForm.sort_order}
-              onChange={(e) => setPlanForm({ ...planForm, sort_order: parseInt(e.target.value, 10) || 0 })}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Monthly price (USD)</label>
-            <input
-              value={planForm.price_monthly_cents}
-              onChange={(e) => setPlanForm({ ...planForm, price_monthly_cents: e.target.value })}
-              placeholder="0.00"
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              Fortis merchant id (optional override)
-            </label>
-            <input
-              value={planForm.fortis_merchant_id}
-              onChange={(e) => setPlanForm({ ...planForm, fortis_merchant_id: e.target.value })}
-              placeholder="Leave blank for env default"
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 font-mono text-xs"
-            />
-          </div>
-          <div className="md:col-span-2 flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="ndef"
-              checked={planForm.is_default}
-              onChange={(e) => setPlanForm({ ...planForm, is_default: e.target.checked })}
-            />
-            <label htmlFor="ndef" className="text-sm text-gray-700">
-              Default plan for new assignments
-            </label>
-          </div>
-          <div className="md:col-span-2">
-            <button
-              type="submit"
-              disabled={planSaving}
-              className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-              style={{ backgroundColor: BRAND }}
-            >
-              {planSaving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-              Create plan
-            </button>
-          </div>
-        </form>
+        )}
       </section>
 
       <section className="rounded-2xl border border-gray-200 bg-white p-6">
@@ -570,6 +623,16 @@ export function DirectoryPlansAdminPanel() {
                       aria-label="Edit plan"
                     >
                       <Pencil size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void duplicatePlan(p)}
+                      disabled={duplicating === p.id}
+                      className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-blue-50 hover:text-blue-600 disabled:opacity-40"
+                      aria-label="Duplicate plan"
+                      title="Duplicate plan"
+                    >
+                      {duplicating === p.id ? <Loader2 size={16} className="animate-spin" /> : <Copy size={16} />}
                     </button>
                     <button
                       type="button"
