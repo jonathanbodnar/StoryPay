@@ -916,7 +916,7 @@ export default function ConversationsPage() {
               ) : null}
 
               <div
-                className="min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 sm:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               >
                 {loadingThread ? (
                   <div className="flex justify-center py-16 text-gray-400">
@@ -925,7 +925,7 @@ export default function ConversationsPage() {
                 ) : messages.length === 0 ? (
                   <p className="py-12 text-center text-sm text-gray-500">No messages yet. Say hello below.</p>
                 ) : (
-                  <div className="mx-auto flex max-w-xl flex-col gap-2">
+                  <div className="mx-auto flex w-full max-w-xl flex-col gap-2 overflow-hidden">
                     {messages.map((m) => {
                       const isInternal = m.visibility === 'internal';
                       const fromContact = m.sender_kind === 'contact';
@@ -971,7 +971,7 @@ export default function ConversationsPage() {
                         <div
                           key={m.id}
                           className={classNames(
-                            'flex items-start gap-1.5',
+                            'flex min-w-0 items-start gap-1.5',
                             isEmail ? 'w-full max-w-full' : 'max-w-[88%]',
                             alignRight && !isEmail ? 'ml-auto flex-row-reverse' : 'mr-auto',
                             alignRight && isEmail ? 'flex-row-reverse' : '',
@@ -1014,7 +1014,7 @@ export default function ConversationsPage() {
                               <>
                                 <div
                                   className={classNames(
-                                    'rounded-2xl px-3 py-1.5 text-[13px] leading-snug',
+                                    'max-w-full rounded-2xl px-3 py-1.5 text-[13px] leading-snug [overflow-wrap:anywhere]',
                                     isInternal
                                       ? 'border border-amber-200/80 bg-amber-50 text-amber-950'
                                       : fromContact
@@ -1562,21 +1562,21 @@ function EmailCard({
   return (
     <div
       className={classNames(
-        'w-full overflow-hidden rounded-xl border border-gray-200 shadow-sm',
+        'w-full min-w-0 max-w-full overflow-hidden rounded-xl border border-gray-200 shadow-sm',
         accent,
       )}
     >
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full items-center justify-between gap-2 border-b border-gray-200 bg-gray-50/80 px-3 py-2 text-left"
+        className="flex w-full min-w-0 items-center justify-between gap-2 border-b border-gray-200 bg-gray-50/80 px-3 py-2 text-left"
         aria-expanded={expanded}
       >
-        <span className="flex min-w-0 items-center gap-2">
+        <span className="flex min-w-0 flex-1 items-center gap-2">
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-gray-500 shadow-sm ring-1 ring-gray-200">
             <Mail size={12} />
           </span>
-          <span className="min-w-0 truncate text-[13px] font-semibold text-gray-900">
+          <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-gray-900">
             {subject}
           </span>
         </span>
@@ -1591,22 +1591,22 @@ function EmailCard({
       </button>
 
       {expanded ? (
-        <div className="space-y-2 px-3 py-3 text-[13px] leading-relaxed text-gray-800">
+        <div className="min-w-0 space-y-2 px-3 py-3 text-[13px] leading-relaxed text-gray-800 [overflow-wrap:anywhere]">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 border-b border-gray-100 pb-2 text-[11px] text-gray-500">
             {authorLabel ? (
-              <span>
+              <span className="min-w-0 max-w-full truncate">
                 <span className="text-gray-400">From: </span>
                 <span className="font-medium text-gray-700">{authorLabel}</span>
               </span>
             ) : null}
             {cc ? (
-              <span>
+              <span className="min-w-0 max-w-full truncate">
                 <span className="text-gray-400">CC: </span>
                 <span className="text-gray-600">{cc}</span>
               </span>
             ) : null}
             {bcc ? (
-              <span>
+              <span className="min-w-0 max-w-full truncate">
                 <span className="text-gray-400">BCC: </span>
                 <span className="text-gray-600">{bcc}</span>
               </span>
@@ -1615,7 +1615,7 @@ function EmailCard({
           </div>
           <EmailBody body={body} />
           {triggerHref && triggerShort ? (
-            <p className="border-t border-gray-100 pt-2 text-[12px]">
+            <p className="border-t border-gray-100 pt-2 text-[12px] [overflow-wrap:anywhere]">
               <Link
                 href={triggerHref}
                 target="_blank"
@@ -1630,7 +1630,7 @@ function EmailCard({
         </div>
       ) : (
         <div className="px-3 py-2 text-[12px] text-gray-500">
-          <p className="line-clamp-1">{preview}</p>
+          <p className="truncate">{preview}</p>
         </div>
       )}
     </div>
@@ -1648,9 +1648,9 @@ function EmailBody({ body }: { body: string }) {
   const cleaned = body.replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
   const paragraphs = cleaned.split(/\n{2,}/);
   return (
-    <div className="space-y-2 text-[13px] leading-relaxed text-gray-800">
+    <div className="min-w-0 max-w-full space-y-2 text-[13px] leading-relaxed text-gray-800 [overflow-wrap:anywhere]">
       {paragraphs.map((para, idx) => (
-        <p key={idx} className="whitespace-pre-wrap break-words">
+        <p key={idx} className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
           {linkify(para)}
         </p>
       ))}
