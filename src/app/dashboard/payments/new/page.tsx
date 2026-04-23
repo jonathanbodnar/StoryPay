@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
  Send, Save, Plus, Trash2, Search, UserPlus, X, ChevronDown,
  FileText, Eye, EyeOff, Loader2, CheckCircle2, Sparkles, ArrowLeft,
+ PenLine, Package, Tag, Percent, ChevronRight,
 } from 'lucide-react';
 import { formatCents } from '@/lib/utils';
 import dynamic from 'next/dynamic';
@@ -290,6 +291,12 @@ export default function NewProposalInvoicePage() {
  const [productSuggestions, setProductSuggestions] = useState<Record<string,Product[]>>({});
  const [showSuggestions, setShowSuggestions] = useState<Record<string,boolean>>({});
  const suggestTimers = useRef<Record<string,ReturnType<typeof setTimeout>>>({});
+ // Add-line-item picker
+ const [addPickerOpen, setAddPickerOpen] = useState(false);
+ const [addPickerMode, setAddPickerMode] = useState<'menu' | 'package' | 'coupon'>('menu');
+ const [pickerPackageId, setPickerPackageId] = useState('');
+ const [pickerCouponId, setPickerCouponId] = useState('');
+ const addPickerRef = useRef<HTMLDivElement>(null);
 
  // Payment
  const [paymentType, setPaymentType] = useState<PaymentType>('full');
@@ -382,6 +389,19 @@ export default function NewProposalInvoicePage() {
      setVenueCoupons(Array.isArray(d?.coupons) ? d!.coupons! : []);
    });
  }, []);
+
+ // Close add-picker when clicking outside
+ useEffect(() => {
+   if (!addPickerOpen) return;
+   function handler(e: MouseEvent) {
+     if (addPickerRef.current && !addPickerRef.current.contains(e.target as Node)) {
+       setAddPickerOpen(false);
+       setAddPickerMode('menu');
+     }
+   }
+   document.addEventListener('mousedown', handler);
+   return () => document.removeEventListener('mousedown', handler);
+ }, [addPickerOpen]);
 
  // Customer search
  const searchCustomers = useCallback(async (q: string) => {
@@ -813,86 +833,23 @@ export default function NewProposalInvoicePage() {
 
  {/* Line Items */}
  <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
- <div className="px-5 py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
- <div className="flex items-center gap-3 flex-wrap">
- <p className="text-sm font-semibold text-gray-900">Line Items</p>
- <Link href="/dashboard/offerings" className="text-xs font-medium text-gray-500 hover:text-gray-800 underline underline-offset-2">
- Package catalog
- </Link>
+ <div className="px-5 py-3.5 border-b border-gray-200 flex items-center justify-between">
+   <p className="text-sm font-semibold text-gray-900">Line Items</p>
+   <div className="flex items-center gap-3">
+     {appliedCouponId && (
+       <span className="flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
+         <Tag size={10} />
+         {venueCoupons.find(c => c.id === appliedCouponId)?.code ?? 'Coupon'}
+         <button type="button" onClick={() => setCouponSelection(null)} className="ml-0.5 text-emerald-500 hover:text-emerald-800"><X size={10}/></button>
+       </span>
+     )}
+     {appliedPackage && appliedPackage.minimum_subtotal_cents > 0 && (
+       <span className={`text-xs ${subtotalCents < appliedPackage.minimum_subtotal_cents ? 'text-amber-700 font-medium' : 'text-gray-400'}`}>
+         Min {formatCents(appliedPackage.minimum_subtotal_cents)}
+       </span>
+     )}
+   </div>
  </div>
- <div className="flex flex-wrap items-center gap-2">
- <label className="text-xs text-gray-500 whitespace-nowrap">Coupon</label>
- <select
- value={appliedCouponId ?? ''}
- onChange={(e) => setCouponSelection(e.target.value || null)}
- className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none min-w-[180px]"
- >
- <option value="">None</option>
- {venueCoupons.map((c) => {
- const ok = c.active && canRedeemCoupon(c as VenueCouponRow).ok;
- const label =
-   c.discount_type === 'percent'
-     ? `${c.code} (${Number(c.discount_percent)}% off)`
-     : `${c.code} ($${((c.discount_amount_cents ?? 0) / 100).toFixed(2)} off)`;
- return (
- <option key={c.id} value={c.id} disabled={!ok}>
- {label}{!c.active ? ' (inactive)' : ''}{!ok && c.active ? ' (unavailable)' : ''}
- </option>
- );
- })}
- </select>
- <Link
- href="/dashboard/payments/coupons"
- className="text-xs font-medium text-gray-600 hover:text-gray-900 underline underline-offset-2"
- >
- Manage coupons
- </Link>
- </div>
- </div>
- {packages.length > 0 ? (
- <div className="border-b border-gray-100 bg-gray-50/50 px-5 py-3 space-y-2">
- <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap">
- <label className="text-xs font-medium text-gray-600">Apply package</label>
- <select
- value={selectedPackageId}
- onChange={(e) => setSelectedPackageId(e.target.value)}
- className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none min-w-[200px]"
- >
- <option value="">Choose a package…</option>
- {packages
- .filter((p) => packageAppliesToday(p, venueTimezone))
- .map((p) => (
- <option key={p.id} value={p.id}>
- {p.name}
- {p.season_label ? ` — ${p.season_label}` : ''}
- </option>
- ))}
- </select>
- <button
- type="button"
- onClick={() => applySelectedPackage()}
- className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-100"
- >
- Replace lines from package
- </button>
- {appliedPackage ? (
- <button
- type="button"
- onClick={() => clearAppliedPackage()}
- className="text-xs font-medium text-gray-500 hover:text-gray-800 underline underline-offset-2"
- >
- Clear package minimum
- </button>
- ) : null}
- </div>
- {appliedPackage && appliedPackage.minimum_subtotal_cents > 0 ? (
- <p className={`text-xs ${subtotalCents < appliedPackage.minimum_subtotal_cents ? 'text-amber-800' : 'text-gray-500'}`}>
- Minimum subtotal for <span className="font-medium">{appliedPackage.name}</span>:{' '}
- {formatCents(appliedPackage.minimum_subtotal_cents)} · Current: {formatCents(subtotalCents)}
- </p>
- ) : null}
- </div>
- ) : null}
  <div>
  {/* Desktop headers */}
  <div className="hidden sm:grid grid-cols-[1fr_180px_110px_36px] gap-3 bg-gray-50 px-5 py-2.5 border-b border-gray-200">
@@ -962,26 +919,152 @@ export default function NewProposalInvoicePage() {
  </div>
  {/* Footer */}
  <div className="px-5 py-3 border-t border-gray-200 flex items-center justify-between bg-gray-50/50">
- <div className="flex items-center gap-3">
- <button type="button"onClick={addItem}
- className="flex items-center gap-1.5 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors">
- <Plus size={14}/> Add Line Item
- </button>
- {!hasSurcharge() && (
- <button
- type="button"
- onClick={() =>
- setLineItems((prev) => {
- if (prev.some((i) => i.isSurcharge)) return prev;
- const core = stripDerived(prev);
- return withDerivedFromCore(core, true, appliedCouponId, venueCoupons);
- })
- }
- className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
- >
- + 2.75% fee
- </button>
- )}
+ <div className="relative" ref={addPickerRef}>
+   {/* Trigger */}
+   <button
+     type="button"
+     onClick={() => { setAddPickerOpen(v => !v); setAddPickerMode('menu'); setPickerPackageId(''); setPickerCouponId(''); }}
+     className="flex items-center gap-1.5 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
+   >
+     <Plus size={14}/> Add Line Item
+   </button>
+
+   {/* Picker popover */}
+   {addPickerOpen && (
+     <div className="absolute bottom-[calc(100%+8px)] left-0 z-50 w-72 rounded-2xl border border-gray-200 bg-white shadow-xl">
+       {addPickerMode === 'menu' && (
+         <div className="p-2 space-y-0.5">
+           <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Choose line item type</p>
+           {/* Manual entry */}
+           <button type="button" onClick={() => { addItem(); setAddPickerOpen(false); setAddPickerMode('menu'); }}
+             className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm hover:bg-gray-50 transition-colors">
+             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600"><PenLine size={14}/></span>
+             <div><p className="font-medium text-gray-900">Manual entry</p><p className="text-[11px] text-gray-400">Type in a custom item &amp; price</p></div>
+           </button>
+           {/* Package */}
+           {packages.filter(p => packageAppliesToday(p, venueTimezone)).length > 0 && (
+             <button type="button" onClick={() => { setAddPickerMode('package'); setPickerPackageId(''); }}
+               className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm hover:bg-gray-50 transition-colors">
+               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600"><Package size={14}/></span>
+               <div className="flex-1"><p className="font-medium text-gray-900">From package</p><p className="text-[11px] text-gray-400">Load lines from a saved package</p></div>
+               <ChevronRight size={13} className="text-gray-400 shrink-0"/>
+             </button>
+           )}
+           {/* Coupon */}
+           {venueCoupons.filter(c => c.active && canRedeemCoupon(c as VenueCouponRow).ok).length > 0 && (
+             <button type="button" onClick={() => { setAddPickerMode('coupon'); setPickerCouponId(appliedCouponId ?? ''); }}
+               className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm hover:bg-gray-50 transition-colors">
+               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"><Tag size={14}/></span>
+               <div className="flex-1"><p className="font-medium text-gray-900">Apply coupon</p><p className="text-[11px] text-gray-400">{appliedCouponId ? 'Change or remove discount' : 'Add a discount code'}</p></div>
+               <ChevronRight size={13} className="text-gray-400 shrink-0"/>
+             </button>
+           )}
+           {/* Processing fee */}
+           {!hasSurcharge() && (
+             <button type="button" onClick={() => {
+               setLineItems((prev) => {
+                 if (prev.some((i) => i.isSurcharge)) return prev;
+                 const core = stripDerived(prev);
+                 return withDerivedFromCore(core, true, appliedCouponId, venueCoupons);
+               });
+               setAddPickerOpen(false);
+             }}
+               className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm hover:bg-gray-50 transition-colors">
+               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600"><Percent size={14}/></span>
+               <div><p className="font-medium text-gray-900">Processing fee</p><p className="text-[11px] text-gray-400">Add 2.75% credit card surcharge</p></div>
+             </button>
+           )}
+           <div className="border-t border-gray-100 mt-1 pt-1 px-1">
+             <Link href="/dashboard/payments/coupons" className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-colors">
+               <Tag size={11}/> Manage coupons
+             </Link>
+             <Link href="/dashboard/offerings" className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-colors">
+               <Package size={11}/> Package catalog
+             </Link>
+           </div>
+         </div>
+       )}
+
+       {addPickerMode === 'package' && (
+         <div className="p-3 space-y-3">
+           <div className="flex items-center gap-2">
+             <button type="button" onClick={() => setAddPickerMode('menu')} className="text-gray-400 hover:text-gray-700"><ChevronRight size={14} className="rotate-180"/></button>
+             <p className="text-sm font-semibold text-gray-900">From package</p>
+           </div>
+           <select
+             value={pickerPackageId}
+             onChange={(e) => setPickerPackageId(e.target.value)}
+             className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
+           >
+             <option value="">Choose a package…</option>
+             {packages.filter(p => packageAppliesToday(p, venueTimezone)).map(p => (
+               <option key={p.id} value={p.id}>{p.name}{p.season_label ? ` — ${p.season_label}` : ''}</option>
+             ))}
+           </select>
+           <button type="button"
+             onClick={() => {
+               setSelectedPackageId(pickerPackageId);
+               // Apply immediately using the picker selection
+               const pkg = packages.find(p => p.id === pickerPackageId);
+               if (!pkg) return;
+               const hasSurchargeRow = lineItems.some(i => i.isSurcharge);
+               const core: LineItem[] = [];
+               for (const line of pkg.venue_package_lines ?? []) {
+                 const p = packageProduct(line);
+                 if (!p || p.active === false) continue;
+                 const unitCents = line.price_override_cents ?? p.price;
+                 const totalCents = unitCents * Math.max(1, line.quantity || 1);
+                 core.push({ id: uid(), name: line.quantity > 1 ? `${p.name} × ${line.quantity}` : p.name, description: p.description || '', amount: (totalCents / 100).toFixed(2) });
+               }
+               if (!core.length) { setError('This package has no active products.'); setAddPickerOpen(false); return; }
+               setAppliedPackage({ id: pkg.id, name: pkg.name, minimum_subtotal_cents: pkg.minimum_subtotal_cents ?? 0 });
+               setLineItems(withDerivedFromCore(core, hasSurchargeRow, appliedCouponId, venueCoupons));
+               setError('');
+               setAddPickerOpen(false);
+               setAddPickerMode('menu');
+             }}
+             disabled={!pickerPackageId}
+             className="w-full rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-gray-700 disabled:opacity-40 transition-colors"
+           >
+             Apply package
+           </button>
+         </div>
+       )}
+
+       {addPickerMode === 'coupon' && (
+         <div className="p-3 space-y-3">
+           <div className="flex items-center gap-2">
+             <button type="button" onClick={() => setAddPickerMode('menu')} className="text-gray-400 hover:text-gray-700"><ChevronRight size={14} className="rotate-180"/></button>
+             <p className="text-sm font-semibold text-gray-900">Apply coupon</p>
+           </div>
+           <select
+             value={pickerCouponId}
+             onChange={(e) => setPickerCouponId(e.target.value)}
+             className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
+           >
+             <option value="">None (remove discount)</option>
+             {venueCoupons.map(c => {
+               const ok = c.active && canRedeemCoupon(c as VenueCouponRow).ok;
+               const label = c.discount_type === 'percent'
+                 ? `${c.code} — ${Number(c.discount_percent)}% off`
+                 : `${c.code} — $${((c.discount_amount_cents ?? 0) / 100).toFixed(2)} off`;
+               return <option key={c.id} value={c.id} disabled={!ok}>{label}{!ok ? ' (unavailable)' : ''}</option>;
+             })}
+           </select>
+           <button type="button"
+             onClick={() => {
+               setCouponSelection(pickerCouponId || null);
+               setAddPickerOpen(false);
+               setAddPickerMode('menu');
+             }}
+             className="w-full rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-gray-700 transition-colors"
+           >
+             {pickerCouponId ? 'Apply coupon' : 'Remove discount'}
+           </button>
+         </div>
+       )}
+     </div>
+   )}
  </div>
  <div className="text-sm space-y-0.5 text-right">
  {hasSurcharge() && <div className="flex items-center gap-3 text-gray-400 text-xs"><span>Subtotal</span><span className="min-w-[70px]">{formatCents(subtotalCents)}</span></div>}
