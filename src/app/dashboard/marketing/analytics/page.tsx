@@ -329,7 +329,7 @@ function MetricCard({
     <button
       type="button"
       onClick={onClick}
-      className={`group w-full rounded-lg border px-4 py-3 text-left transition hover:shadow-md hover:ring-1 hover:ring-gray-200 ${bgClass}`}
+      className={`group w-full rounded-lg border px-4 py-3 text-left transition hover:ring-1 hover:ring-gray-300 ${bgClass}`}
     >
       <div className={`flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide ${accentClass}`}>
         <Icon size={12} />
@@ -338,7 +338,7 @@ function MetricCard({
       <p className="mt-1 text-2xl font-semibold tabular-nums text-gray-900">{value}</p>
       {sub && <p className={`mt-0.5 text-xs ${accentClass}`}>{sub}</p>}
       {note && <p className="mt-1 text-[11px] text-gray-400">{note}</p>}
-      <p className="mt-1.5 text-[10px] font-medium text-gray-400 opacity-0 transition group-hover:opacity-100">
+      <p className="mt-1.5 text-[10px] font-medium text-gray-400">
         Click to view contacts →
       </p>
     </button>
