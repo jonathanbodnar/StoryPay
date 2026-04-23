@@ -927,7 +927,7 @@ export default function ConversationsPage() {
                 ) : messages.length === 0 ? (
                   <p className="py-12 text-center text-sm text-gray-500">No messages yet. Say hello below.</p>
                 ) : (
-                  <div className="mx-auto flex w-full max-w-xl flex-col gap-2 overflow-hidden">
+                  <div className="mx-auto flex w-full max-w-2xl flex-col gap-2">
                     {messages.map((m) => {
                       const isInternal = m.visibility === 'internal';
                       const fromContact = m.sender_kind === 'contact';
@@ -1684,11 +1684,19 @@ function EmailCard({
   );
 
   return (
-    <div className="w-full min-w-0 max-w-full overflow-hidden rounded-xl border border-gray-200 bg-white">
+    <div
+      className={classNames(
+        'relative w-full min-w-0 max-w-full rounded-xl border border-gray-200 bg-white',
+        expanded ? '' : 'overflow-hidden',
+      )}
+    >
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full min-w-0 items-center justify-between gap-2 border-b border-gray-200 bg-gray-100 px-3 py-2 text-left"
+        className={classNames(
+          'flex w-full min-w-0 items-center justify-between gap-2 border-b border-gray-200 bg-gray-100 px-3 py-2 text-left',
+          expanded ? 'rounded-t-xl' : 'rounded-t-xl',
+        )}
         aria-expanded={expanded}
       >
         <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-gray-900">
@@ -1743,7 +1751,24 @@ function EmailCard({
                   <ChevronDown size={12} />
                 </button>
                 {detailsOpen ? (
-                  <div className="absolute left-0 top-full z-20 mt-1 w-[min(22rem,calc(100vw-3rem))] rounded-lg border border-gray-200 bg-white p-3 shadow-lg">
+                  <div
+                    role="dialog"
+                    className="absolute left-0 top-full z-30 mt-1 w-[min(24rem,calc(100vw-2rem))] max-h-[60vh] overflow-y-auto rounded-lg border border-gray-200 bg-white p-3 shadow-xl"
+                  >
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDetailsOpen(false);
+                      }}
+                      className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                      aria-label="Close details"
+                    >
+                      <X size={12} />
+                    </button>
+                    <p className="mb-2 pr-6 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                      Message details
+                    </p>
                     {details}
                   </div>
                 ) : null}
@@ -1781,12 +1806,28 @@ function EmailCard({
                   <KebabIcon />
                 </button>
                 {menuOpen ? (
-                  <div className="absolute right-0 top-full z-20 mt-1 w-[min(22rem,calc(100vw-3rem))] rounded-lg border border-gray-200 bg-white p-3 shadow-lg">
-                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-                      Message details
-                    </p>
+                  <div
+                    role="dialog"
+                    className="absolute right-0 top-full z-30 mt-1 w-[min(24rem,calc(100vw-2rem))] max-h-[60vh] overflow-y-auto rounded-lg border border-gray-200 bg-white p-3 shadow-xl"
+                  >
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                        Message details
+                      </p>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMenuOpen(false);
+                        }}
+                        className="flex h-6 w-6 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                        aria-label="Close"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
                     {details}
-                    <div className="mt-2 flex justify-end border-t border-gray-100 pt-2">
+                    <div className="mt-3 flex justify-end border-t border-gray-100 pt-2">
                       <button
                         type="button"
                         onClick={() => {
