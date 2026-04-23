@@ -93,7 +93,7 @@ interface AdminStats {
   waitlistCount: number; venueCount: number;
   statusBreakdown: Record<string, number>;
   monthlyChart: { month: string; label: string; revenue: number; proposals: number }[];
-  featureRequests: { id: string; title: string; vote_count: number; status: string; created_at: string }[];
+  featureRequests: { id: string; title: string; vote_count: number; status: string; created_at: string; admin_read_at: string | null; category: string; venue_id: string | null }[];
   directoryActiveMrrCents?: number;
   directoryAssignedMrrCents?: number;
   directoryActiveSubscriptionCount?: number;
@@ -253,20 +253,22 @@ function AnnouncementForm({ initial, onSave, onCancel }: {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 // ─── Feature Requests Admin Tab ──────────────────────────────────────────────
 function FeatureRequestsAdminTab({
-  requests, loading, onDelete, onOpen, onRefresh, frDeleting,
+  requests, loading, onDelete, onOpen, onRefresh, frDeleting, onToggleRead,
 }: {
-  requests: { id: string; title: string; vote_count: number; status: string; created_at: string }[];
+  requests: { id: string; title: string; vote_count: number; status: string; created_at: string; admin_read_at: string | null; category: string; venue_id: string | null }[];
   loading: boolean;
   onDelete: (id: string) => void;
   onOpen: (id: string) => void;
   onRefresh: () => void;
   frDeleting: string | null;
+  onToggleRead: (id: string, markRead: boolean) => void;
 }) {
   const [showForm, setShowForm] = useState(false);
   const [title, setTitle]       = useState('');
   const [desc, setDesc]         = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError]   = useState('');
+  const [togglingRead, setTogglingRead] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -285,11 +287,33 @@ function FeatureRequestsAdminTab({
     finally { setSubmitting(false); }
   }
 
+  async function handleToggleRead(id: string, markRead: boolean) {
+    setTogglingRead(id);
+    try {
+      await fetch(`/api/admin/feature-requests/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ admin_read: markRead }),
+      });
+      onToggleRead(id, markRead);
+    } catch { /* non-critical */ }
+    finally { setTogglingRead(null); }
+  }
+
+  const unreadCount = requests.filter(r => r.venue_id && r.status !== 'completed' && !r.admin_read_at).length;
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="font-heading text-2xl text-gray-900">Feature Requests</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="font-heading text-2xl text-gray-900">Feature Requests</h1>
+            {unreadCount > 0 && (
+              <span className="flex items-center gap-1.5 rounded-full bg-red-500 px-2.5 py-0.5 text-[11px] font-bold text-white">
+                {unreadCount} new
+              </span>
+            )}
+          </div>
           <p className="text-sm text-gray-500 mt-0.5">Manage and prioritize venue feature requests</p>
         </div>
         <button
@@ -334,39 +358,83 @@ function FeatureRequestsAdminTab({
       {loading ? (
         <div className="flex justify-center py-16"><Loader2 size={24} className="animate-spin text-gray-400" /></div>
       ) : (() => {
+        // Venue-submitted requests first, then admin-created; within each group, by date desc
         const active = requests.filter(r => r.status !== 'completed');
         const completed = requests.filter(r => r.status === 'completed');
 
-        const RequestRow = ({ req, i }: { req: typeof requests[0]; i: number }) => (
-          <div key={req.id} className="hover:bg-gray-50 transition-colors">
-            <div className="sm:hidden flex items-center gap-3 px-4 py-3.5">
-              <button onClick={() => onOpen(req.id)} className="flex-1 min-w-0 text-left">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-medium text-gray-900 truncate">{req.title}</span>
-                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${STATUS_COLORS_FR[req.status] || 'bg-gray-100 text-gray-600'}`}>{STATUS_LABELS_FR[req.status] || req.status}</span>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-gray-400"><ThumbsUp size={11}/> {req.vote_count} · {new Date(req.created_at).toLocaleDateString()}</div>
-              </button>
-              <button onClick={() => onDelete(req.id)} disabled={frDeleting === req.id}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 disabled:opacity-40">
-                {frDeleting === req.id ? <Loader2 size={13} className="animate-spin"/> : <Trash2 size={13}/>}
-              </button>
+        // Sort: unread venue submissions at top, then read venue, then admin-created
+        const sortedActive = [...active].sort((a, b) => {
+          const aUnread = a.venue_id && !a.admin_read_at ? 1 : 0;
+          const bUnread = b.venue_id && !b.admin_read_at ? 1 : 0;
+          if (bUnread !== aUnread) return bUnread - aUnread;
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        });
+
+        const RequestRow = ({ req, i }: { req: typeof requests[0]; i: number }) => {
+          const isUnread = !!req.venue_id && !req.admin_read_at && req.status !== 'completed';
+          const isToggling = togglingRead === req.id;
+          return (
+            <div className={`transition-colors ${isUnread ? 'bg-red-50/40' : 'hover:bg-gray-50'}`}>
+              {/* Mobile layout */}
+              <div className="sm:hidden flex items-center gap-3 px-4 py-3.5">
+                {isUnread && <span className="h-2 w-2 shrink-0 rounded-full bg-red-500" />}
+                <button onClick={() => onOpen(req.id)} className="flex-1 min-w-0 text-left">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`text-sm font-medium truncate ${isUnread ? 'text-gray-900 font-semibold' : 'text-gray-900'}`}>{req.title}</span>
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${STATUS_COLORS_FR[req.status] || 'bg-gray-100 text-gray-600'}`}>{STATUS_LABELS_FR[req.status] || req.status}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-gray-400"><ThumbsUp size={11}/> {req.vote_count} · {new Date(req.created_at).toLocaleDateString()}</div>
+                </button>
+                {req.venue_id && (
+                  <button
+                    onClick={() => handleToggleRead(req.id, !req.admin_read_at ? true : false)}
+                    disabled={isToggling}
+                    title={isUnread ? 'Mark as read' : 'Mark as unread'}
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors disabled:opacity-40 ${
+                      isUnread ? 'border-red-200 text-red-500 hover:bg-red-50' : 'border-gray-200 text-gray-400 hover:bg-gray-50'
+                    }`}
+                  >
+                    {isToggling ? <Loader2 size={13} className="animate-spin"/> : isUnread ? <Check size={13}/> : <Repeat size={13}/>}
+                  </button>
+                )}
+                <button onClick={() => onDelete(req.id)} disabled={frDeleting === req.id}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 disabled:opacity-40">
+                  {frDeleting === req.id ? <Loader2 size={13} className="animate-spin"/> : <Trash2 size={13}/>}
+                </button>
+              </div>
+              {/* Desktop layout */}
+              <div className="hidden sm:grid grid-cols-[1fr_110px_80px_120px_48px_48px] gap-4 px-6 py-4 items-center">
+                <button onClick={() => onOpen(req.id)} className="text-left flex items-center gap-3 min-w-0">
+                  {isUnread
+                    ? <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-red-500"><span className="h-2 w-2 rounded-full bg-white" /></span>
+                    : <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold text-white" style={{ backgroundColor: i===0?'#f59e0b':i===1?'#6b7280':i===2?'#cd7c2f':'#1b1b1b' }}>#{i+1}</div>
+                  }
+                  <span className={`text-sm truncate hover:underline ${isUnread ? 'font-semibold text-gray-900' : 'font-medium text-gray-900'}`}>{req.title}</span>
+                  {isUnread && <span className="shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-600">NEW</span>}
+                </button>
+                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full w-fit ${STATUS_COLORS_FR[req.status] || 'bg-gray-100 text-gray-600'}`}>{STATUS_LABELS_FR[req.status] || req.status}</span>
+                <div className="flex items-center gap-1 text-sm text-gray-600"><ThumbsUp size={13} className="text-gray-400"/>{req.vote_count}</div>
+                <span className="text-sm text-gray-500">{new Date(req.created_at).toLocaleDateString()}</span>
+                {req.venue_id ? (
+                  <button
+                    onClick={() => handleToggleRead(req.id, !req.admin_read_at ? true : false)}
+                    disabled={isToggling}
+                    title={isUnread ? 'Mark as read' : 'Mark as unread'}
+                    className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-colors disabled:opacity-40 ${
+                      isUnread ? 'border-red-200 text-red-500 hover:bg-red-50' : 'border-gray-200 text-gray-400 hover:bg-gray-50'
+                    }`}
+                  >
+                    {isToggling ? <Loader2 size={13} className="animate-spin"/> : isUnread ? <Check size={13}/> : <Repeat size={13}/>}
+                  </button>
+                ) : <span />}
+                <button onClick={() => onDelete(req.id)} disabled={frDeleting === req.id}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 disabled:opacity-40">
+                  {frDeleting === req.id ? <Loader2 size={13} className="animate-spin"/> : <Trash2 size={13}/>}
+                </button>
+              </div>
             </div>
-            <div className="hidden sm:grid grid-cols-[1fr_110px_80px_120px_48px] gap-4 px-6 py-4 items-center">
-              <button onClick={() => onOpen(req.id)} className="text-left flex items-center gap-3 min-w-0">
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold text-white" style={{ backgroundColor: i===0?'#f59e0b':i===1?'#6b7280':i===2?'#cd7c2f':'#1b1b1b' }}>#{i+1}</div>
-                <span className="text-sm font-medium text-gray-900 truncate hover:underline">{req.title}</span>
-              </button>
-              <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full w-fit ${STATUS_COLORS_FR[req.status] || 'bg-gray-100 text-gray-600'}`}>{STATUS_LABELS_FR[req.status] || req.status}</span>
-              <div className="flex items-center gap-1 text-sm text-gray-600"><ThumbsUp size={13} className="text-gray-400"/>{req.vote_count}</div>
-              <span className="text-sm text-gray-500">{new Date(req.created_at).toLocaleDateString()}</span>
-              <button onClick={() => onDelete(req.id)} disabled={frDeleting === req.id}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 disabled:opacity-40">
-                {frDeleting === req.id ? <Loader2 size={13} className="animate-spin"/> : <Trash2 size={13}/>}
-              </button>
-            </div>
-          </div>
-        );
+          );
+        };
 
         return (
           <div className="space-y-8">
@@ -380,11 +448,11 @@ function FeatureRequestsAdminTab({
                 </div>
               ) : (
                 <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-                  <div className="hidden sm:grid grid-cols-[1fr_110px_80px_120px_48px] gap-4 px-6 py-3 bg-gray-50 border-b border-gray-100">
-                    {['Title','Status','Votes','Date',''].map(h => <span key={h} className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{h}</span>)}
+                  <div className="hidden sm:grid grid-cols-[1fr_110px_80px_120px_48px_48px] gap-4 px-6 py-3 bg-gray-50 border-b border-gray-100">
+                    {['Title','Status','Votes','Date','Read',''].map(h => <span key={h} className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{h}</span>)}
                   </div>
                   <div className="divide-y divide-gray-100">
-                    {active.map((req, i) => <RequestRow key={req.id} req={req} i={i} />)}
+                    {sortedActive.map((req, i) => <RequestRow key={req.id} req={req} i={i} />)}
                   </div>
                 </div>
               )}
@@ -395,8 +463,8 @@ function FeatureRequestsAdminTab({
               <div>
                 <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">✅ Completed &amp; Shipped ({completed.length})</h2>
                 <div className="rounded-2xl border border-emerald-200 bg-white overflow-hidden">
-                  <div className="hidden sm:grid grid-cols-[1fr_110px_80px_120px_48px] gap-4 px-6 py-3 bg-emerald-50 border-b border-emerald-100">
-                    {['Title','Status','Votes','Completed',''].map(h => <span key={h} className="text-[11px] font-semibold uppercase tracking-wider text-emerald-600">{h}</span>)}
+                  <div className="hidden sm:grid grid-cols-[1fr_110px_80px_120px_48px_48px] gap-4 px-6 py-3 bg-emerald-50 border-b border-emerald-100">
+                    {['Title','Status','Votes','Completed','',''].map(h => <span key={h} className="text-[11px] font-semibold uppercase tracking-wider text-emerald-600">{h}</span>)}
                   </div>
                   <div className="divide-y divide-gray-100">
                     {completed.map((req, i) => <RequestRow key={req.id} req={req} i={i} />)}
@@ -432,10 +500,12 @@ function AdminNavSidebar({
   activeTab,
   onMobileClose,
   onLogout,
+  frUnreadCount,
 }: {
   activeTab: AdminTabKey;
   onMobileClose: () => void;
   onLogout: () => void;
+  frUnreadCount: number;
 }) {
   return (
     <div className="flex flex-col h-full" style={{ backgroundColor: '#fafaf9' }}>
@@ -452,6 +522,7 @@ function AdminNavSidebar({
             key === 'seo-pages'
               ? adminHref('seo-pages', ['home'])
               : adminHref(key as AdminTabKey);
+          const showBadge = key === 'feature-requests' && frUnreadCount > 0;
           return (
             <Link
               key={key}
@@ -462,8 +533,13 @@ function AdminNavSidebar({
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${active ? 'text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
               style={active ? { backgroundColor: BRAND } : {}}
             >
-              <Icon size={16} />
-              <span>{label}</span>
+              <Icon size={16} className="shrink-0" />
+              <span className="flex-1">{label}</span>
+              {showBadge && (
+                <span className="ml-auto shrink-0 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white tabular-nums">
+                  {frUnreadCount > 99 ? '99+' : frUnreadCount}
+                </span>
+              )}
             </Link>
           );
         })}
@@ -510,6 +586,19 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
   const [secret, setSecret]         = useState('');
   const [loginError, setLoginError] = useState('');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  // Feature request unread badge
+  const [frUnreadCount, setFrUnreadCount] = useState(0);
+
+  const fetchFrUnreadCount = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/feature-requests/unread-count');
+      if (res.ok) {
+        const d = await res.json() as { count?: number };
+        if (typeof d.count === 'number') setFrUnreadCount(d.count);
+      }
+    } catch { /* non-critical */ }
+  }, []);
 
   // Stats
   const [stats, setStats]       = useState<AdminStats | null>(null);
@@ -701,7 +790,7 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
     router.replace(adminHref('blog'));
   }, [authState, activeTab, tabRest, router]);
 
-  useEffect(() => { if (authState === 'authenticated') { fetchStats(dateRange); fetchAnnouncements(); } }, [authState, fetchStats, fetchAnnouncements, dateRange]);
+  useEffect(() => { if (authState === 'authenticated') { fetchStats(dateRange); fetchAnnouncements(); fetchFrUnreadCount(); } }, [authState, fetchStats, fetchAnnouncements, fetchFrUnreadCount, dateRange]);
   useEffect(() => { if (authState === 'authenticated' && activeTab === 'suggested-articles') fetchSuggestedArticles(); }, [authState, activeTab, fetchSuggestedArticles]);
   useEffect(() => { if (authState === 'authenticated' && activeTab === 'search-analytics') fetchSearchAnalytics(); }, [authState, activeTab, fetchSearchAnalytics]);
   useEffect(() => { if (authState === 'authenticated' && activeTab === 'article-ratings') fetchArticleRatings(); }, [authState, activeTab, fetchArticleRatings]);
@@ -713,7 +802,19 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
     try {
       const res = await fetch(`/api/admin/feature-requests/${id}`);
       if (res.ok) {
-        setFrDetail(await res.json());
+        const detail = await res.json();
+        setFrDetail(detail);
+        // Auto-mark as read when admin opens the detail view (only venue-submitted requests)
+        const listItem = stats?.featureRequests.find(r => r.id === id);
+        if (listItem && listItem.venue_id && !listItem.admin_read_at && listItem.status !== 'completed') {
+          // Fire-and-forget — don't block modal open on this
+          fetch(`/api/admin/feature-requests/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ admin_read: true }),
+          }).catch(() => {});
+          toggleFeatureRequestRead(id, true);
+        }
       } else {
         const d = await res.json().catch(() => ({}));
         setFrDetailError(d.error || `Error ${res.status}`);
@@ -728,6 +829,20 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
 
 
 
+  function toggleFeatureRequestRead(id: string, markRead: boolean) {
+    setStats(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        featureRequests: prev.featureRequests.map(r =>
+          r.id === id ? { ...r, admin_read_at: markRead ? new Date().toISOString() : null } : r
+        ),
+      };
+    });
+    // Keep sidebar badge count in sync
+    setFrUnreadCount(prev => markRead ? Math.max(0, prev - 1) : prev + 1);
+  }
+
   async function deleteFeatureRequest(id: string, fromModal = false) {
     // Skip confirm dialog — just delete directly (admin-only action)
     setFrDeleting(id);
@@ -735,7 +850,15 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
       const res = await fetch(`/api/admin/feature-requests/${id}`, { method: 'DELETE' });
       if (res.ok) {
         if (fromModal) setFrDetail(null);
-        setStats(prev => prev ? { ...prev, featureRequests: prev.featureRequests.filter(r => r.id !== id) } : prev);
+        setStats(prev => {
+          if (!prev) return prev;
+          const removed = prev.featureRequests.find(r => r.id === id);
+          // If the removed request was unread, decrement badge
+          if (removed && removed.venue_id && !removed.admin_read_at && removed.status !== 'completed') {
+            setFrUnreadCount(c => Math.max(0, c - 1));
+          }
+          return { ...prev, featureRequests: prev.featureRequests.filter(r => r.id !== id) };
+        });
       } else {
         const d = await res.json().catch(() => ({}));
         alert(d.error || 'Delete failed');
@@ -1066,6 +1189,7 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
           activeTab={activeTab}
           onMobileClose={() => {}}
           onLogout={handleLogout}
+          frUnreadCount={frUnreadCount}
         />
       </aside>
 
@@ -1085,6 +1209,7 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
           activeTab={activeTab}
           onMobileClose={() => setMobileSidebarOpen(false)}
           onLogout={handleLogout}
+          frUnreadCount={frUnreadCount}
         />
       </aside>
 
@@ -1616,6 +1741,7 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
             onOpen={openFeatureRequest}
             onRefresh={() => fetchStats(dateRange)}
             frDeleting={frDeleting}
+            onToggleRead={toggleFeatureRequestRead}
           />
         )}
 

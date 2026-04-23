@@ -22,11 +22,11 @@ export async function GET(
   {
     const { data, error } = await supabaseAdmin
       .from('feature_requests')
-      .select('id, title, description, vote_count, status, created_at, completed_at, changelog_id')
+      .select('id, title, description, vote_count, status, created_at, completed_at, changelog_id, admin_read_at, category')
       .eq('id', id)
       .maybeSingle();
 
-    if (error && /completed_at|changelog_id/i.test(error.message)) {
+    if (error && /completed_at|changelog_id|admin_read_at|category/i.test(error.message)) {
       // Production DB missing optional columns — retry without them.
       const { data: plain, error: plainErr } = await supabaseAdmin
         .from('feature_requests')
@@ -37,7 +37,7 @@ export async function GET(
         console.error('[admin feature GET] fallback error:', plainErr.message);
         return NextResponse.json({ error: plainErr.message }, { status: 500 });
       }
-      req = plain ? { ...plain, completed_at: null, changelog_id: null } : null;
+      req = plain ? { ...plain, completed_at: null, changelog_id: null, admin_read_at: null, category: 'feature_request' } : null;
     } else if (error) {
       console.error('[admin feature GET] error:', error.message);
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -98,6 +98,7 @@ export async function PATCH(
     changelogTitle,
     changelogDescription,
     changelogCategory,
+    admin_read,
   } = body as {
     status?: string;
     title?: string;
@@ -105,7 +106,24 @@ export async function PATCH(
     changelogTitle?: string;
     changelogDescription?: string;
     changelogCategory?: 'feature' | 'improvement' | 'fix';
+    admin_read?: boolean;
   };
+
+  // Mark-as-read / unread toggle — fast path.
+  if (typeof admin_read === 'boolean') {
+    const { error } = await supabaseAdmin
+      .from('feature_requests')
+      .update({ admin_read_at: admin_read ? new Date().toISOString() : null })
+      .eq('id', id);
+    if (error) {
+      if (/admin_read_at/i.test(error.message)) {
+        // Column not yet migrated; pretend success so the UI doesn't error.
+        return NextResponse.json({ id, admin_read });
+      }
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ id, admin_read });
+  }
 
   // Admin-only "edit" path — title/description changes without a status flip.
   if (!status) {

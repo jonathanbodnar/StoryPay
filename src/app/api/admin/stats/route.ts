@@ -175,12 +175,30 @@ export async function GET(request: NextRequest) {
     revenue,
   }));
 
-  // Top feature requests
-  const { data: featureRequests } = await supabaseAdmin
-    .from('feature_requests')
-    .select('id, title, description, vote_count, status, created_at')
-    .order('vote_count', { ascending: false })
-    .limit(10);
+  // Feature requests — all of them (no limit) so the admin tab has the full list.
+  // admin_read_at and category are optional columns; fall back gracefully if missing.
+  let featureRequests: { id: string; title: string; vote_count: number; status: string; created_at: string; admin_read_at: string | null; category: string; venue_id: string | null }[] = [];
+  {
+    const { data, error } = await supabaseAdmin
+      .from('feature_requests')
+      .select('id, title, vote_count, status, created_at, admin_read_at, category, venue_id')
+      .order('created_at', { ascending: false });
+    if (error && /admin_read_at|category/i.test(error.message)) {
+      // Pre-migration fallback
+      const { data: plain } = await supabaseAdmin
+        .from('feature_requests')
+        .select('id, title, vote_count, status, created_at, venue_id')
+        .order('created_at', { ascending: false });
+      featureRequests = (plain ?? []).map(r => ({ ...r, admin_read_at: null, category: 'feature_request' }));
+    } else {
+      featureRequests = (data ?? []).map(r => ({
+        ...r,
+        admin_read_at: (r as Record<string, unknown>).admin_read_at as string | null ?? null,
+        category: (r as Record<string, unknown>).category as string ?? 'feature_request',
+        venue_id: (r as Record<string, unknown>).venue_id as string | null ?? null,
+      }));
+    }
+  }
 
   return NextResponse.json({
     totalRevenue,
