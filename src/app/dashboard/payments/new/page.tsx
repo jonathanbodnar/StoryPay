@@ -390,17 +390,14 @@ export default function NewProposalInvoicePage() {
    });
  }, []);
 
- // Close add-picker when clicking outside
+ // Escape key closes the picker modal
  useEffect(() => {
    if (!addPickerOpen) return;
-   function handler(e: MouseEvent) {
-     if (addPickerRef.current && !addPickerRef.current.contains(e.target as Node)) {
-       setAddPickerOpen(false);
-       setAddPickerMode('menu');
-     }
+   function handler(e: KeyboardEvent) {
+     if (e.key === 'Escape') { setAddPickerOpen(false); setAddPickerMode('menu'); }
    }
-   document.addEventListener('mousedown', handler);
-   return () => document.removeEventListener('mousedown', handler);
+   document.addEventListener('keydown', handler);
+   return () => document.removeEventListener('keydown', handler);
  }, [addPickerOpen]);
 
  // Customer search
@@ -870,6 +867,15 @@ export default function NewProposalInvoicePage() {
  ) : (
  <input type="text"value={item.name}
  onChange={e=>{updateItem(item.id,'name',e.target.value);}}
+ onFocus={() => {
+   // Open the picker whenever an empty non-derived item gets focus
+   if (!item.isSurcharge && !item.isCoupon && item.name === '') {
+     setAddPickerOpen(true);
+     setAddPickerMode('menu');
+     setPickerPackageId('');
+     setPickerCouponId('');
+   }
+ }}
  onBlur={()=>setTimeout(()=>setShowSuggestions(p=>({...p,[item.id]:false})),150)}
  placeholder={item.isSurcharge?'Processing Fee (2.75%)':`Item ${idx+1}`}
  className={`w-full rounded-lg border px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none transition-colors ${item.isSurcharge?'border-gray-200 bg-gray-100 text-gray-600 font-medium':'border-gray-200 text-gray-900 focus:border-gray-400'}`}/>
@@ -919,66 +925,72 @@ export default function NewProposalInvoicePage() {
  </div>
  {/* Footer */}
  <div className="px-5 py-3 border-t border-gray-200 flex items-center justify-between bg-gray-50/50">
- <div className="relative" ref={addPickerRef}>
-   {/* Trigger */}
+ <div ref={addPickerRef}>
    <button
      type="button"
-     onClick={() => { setAddPickerOpen(v => !v); setAddPickerMode('menu'); setPickerPackageId(''); setPickerCouponId(''); }}
+     onClick={() => { setAddPickerOpen(true); setAddPickerMode('menu'); setPickerPackageId(''); setPickerCouponId(''); }}
      className="flex items-center gap-1.5 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
    >
      <Plus size={14}/> Add Line Item
    </button>
+ </div>
 
-   {/* Picker popover */}
-   {addPickerOpen && (
-     <div className="absolute bottom-[calc(100%+8px)] left-0 z-50 w-72 rounded-2xl border border-gray-200 bg-white shadow-xl">
+ {/* ── Picker modal (fixed overlay, always fully visible) ── */}
+ {addPickerOpen && (
+   <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) { setAddPickerOpen(false); setAddPickerMode('menu'); } }}>
+     <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white shadow-2xl">
        {addPickerMode === 'menu' && (
-         <div className="p-2 space-y-0.5">
-           <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Choose line item type</p>
-           {/* Manual entry */}
-           <button type="button" onClick={() => { addItem(); setAddPickerOpen(false); setAddPickerMode('menu'); }}
-             className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm hover:bg-gray-50 transition-colors">
-             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600"><PenLine size={14}/></span>
-             <div><p className="font-medium text-gray-900">Manual entry</p><p className="text-[11px] text-gray-400">Type in a custom item &amp; price</p></div>
-           </button>
-           {/* Package */}
-           {packages.filter(p => packageAppliesToday(p, venueTimezone)).length > 0 && (
-             <button type="button" onClick={() => { setAddPickerMode('package'); setPickerPackageId(''); }}
+         <div className="p-2">
+           <div className="flex items-center justify-between px-3 py-2">
+             <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Choose line item type</p>
+             <button type="button" onClick={() => { setAddPickerOpen(false); setAddPickerMode('menu'); }} className="text-gray-400 hover:text-gray-700"><X size={14}/></button>
+           </div>
+           <div className="space-y-0.5">
+             {/* Manual entry */}
+             <button type="button" onClick={() => { addItem(); setAddPickerOpen(false); setAddPickerMode('menu'); }}
                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm hover:bg-gray-50 transition-colors">
-               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600"><Package size={14}/></span>
-               <div className="flex-1"><p className="font-medium text-gray-900">From package</p><p className="text-[11px] text-gray-400">Load lines from a saved package</p></div>
-               <ChevronRight size={13} className="text-gray-400 shrink-0"/>
+               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-600"><PenLine size={15}/></span>
+               <div><p className="font-medium text-gray-900">Manual entry</p><p className="text-[11px] text-gray-400">Type in a custom item &amp; price</p></div>
              </button>
-           )}
-           {/* Coupon */}
-           {venueCoupons.filter(c => c.active && canRedeemCoupon(c as VenueCouponRow).ok).length > 0 && (
-             <button type="button" onClick={() => { setAddPickerMode('coupon'); setPickerCouponId(appliedCouponId ?? ''); }}
-               className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm hover:bg-gray-50 transition-colors">
-               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"><Tag size={14}/></span>
-               <div className="flex-1"><p className="font-medium text-gray-900">Apply coupon</p><p className="text-[11px] text-gray-400">{appliedCouponId ? 'Change or remove discount' : 'Add a discount code'}</p></div>
-               <ChevronRight size={13} className="text-gray-400 shrink-0"/>
-             </button>
-           )}
-           {/* Processing fee */}
-           {!hasSurcharge() && (
-             <button type="button" onClick={() => {
-               setLineItems((prev) => {
-                 if (prev.some((i) => i.isSurcharge)) return prev;
-                 const core = stripDerived(prev);
-                 return withDerivedFromCore(core, true, appliedCouponId, venueCoupons);
-               });
-               setAddPickerOpen(false);
-             }}
-               className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm hover:bg-gray-50 transition-colors">
-               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600"><Percent size={14}/></span>
-               <div><p className="font-medium text-gray-900">Processing fee</p><p className="text-[11px] text-gray-400">Add 2.75% credit card surcharge</p></div>
-             </button>
-           )}
-           <div className="border-t border-gray-100 mt-1 pt-1 px-1">
-             <Link href="/dashboard/payments/coupons" className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-colors">
+             {/* Package */}
+             {packages.filter(p => packageAppliesToday(p, venueTimezone)).length > 0 && (
+               <button type="button" onClick={() => { setAddPickerMode('package'); setPickerPackageId(''); }}
+                 className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm hover:bg-gray-50 transition-colors">
+                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><Package size={15}/></span>
+                 <div className="flex-1"><p className="font-medium text-gray-900">From package</p><p className="text-[11px] text-gray-400">Load lines from a saved package</p></div>
+                 <ChevronRight size={13} className="text-gray-400 shrink-0"/>
+               </button>
+             )}
+             {/* Coupon */}
+             {venueCoupons.filter(c => c.active && canRedeemCoupon(c as VenueCouponRow).ok).length > 0 && (
+               <button type="button" onClick={() => { setAddPickerMode('coupon'); setPickerCouponId(appliedCouponId ?? ''); }}
+                 className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm hover:bg-gray-50 transition-colors">
+                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600"><Tag size={15}/></span>
+                 <div className="flex-1"><p className="font-medium text-gray-900">Apply coupon</p><p className="text-[11px] text-gray-400">{appliedCouponId ? 'Change or remove discount' : 'Add a discount code'}</p></div>
+                 <ChevronRight size={13} className="text-gray-400 shrink-0"/>
+               </button>
+             )}
+             {/* Processing fee */}
+             {!hasSurcharge() && (
+               <button type="button" onClick={() => {
+                 setLineItems((prev) => {
+                   if (prev.some((i) => i.isSurcharge)) return prev;
+                   const core = stripDerived(prev);
+                   return withDerivedFromCore(core, true, appliedCouponId, venueCoupons);
+                 });
+                 setAddPickerOpen(false);
+               }}
+                 className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm hover:bg-gray-50 transition-colors">
+                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600"><Percent size={15}/></span>
+                 <div><p className="font-medium text-gray-900">Processing fee</p><p className="text-[11px] text-gray-400">Add 2.75% credit card surcharge</p></div>
+               </button>
+             )}
+           </div>
+           <div className="border-t border-gray-100 mt-2 pt-1 px-1">
+             <Link href="/dashboard/payments/coupons" onClick={() => setAddPickerOpen(false)} className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-colors">
                <Tag size={11}/> Manage coupons
              </Link>
-             <Link href="/dashboard/offerings" className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-colors">
+             <Link href="/dashboard/offerings" onClick={() => setAddPickerOpen(false)} className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-colors">
                <Package size={11}/> Package catalog
              </Link>
            </div>
@@ -986,10 +998,11 @@ export default function NewProposalInvoicePage() {
        )}
 
        {addPickerMode === 'package' && (
-         <div className="p-3 space-y-3">
+         <div className="p-4 space-y-4">
            <div className="flex items-center gap-2">
              <button type="button" onClick={() => setAddPickerMode('menu')} className="text-gray-400 hover:text-gray-700"><ChevronRight size={14} className="rotate-180"/></button>
-             <p className="text-sm font-semibold text-gray-900">From package</p>
+             <p className="text-sm font-semibold text-gray-900 flex-1">From package</p>
+             <button type="button" onClick={() => { setAddPickerOpen(false); setAddPickerMode('menu'); }} className="text-gray-400 hover:text-gray-700"><X size={14}/></button>
            </div>
            <select
              value={pickerPackageId}
@@ -1004,7 +1017,6 @@ export default function NewProposalInvoicePage() {
            <button type="button"
              onClick={() => {
                setSelectedPackageId(pickerPackageId);
-               // Apply immediately using the picker selection
                const pkg = packages.find(p => p.id === pickerPackageId);
                if (!pkg) return;
                const hasSurchargeRow = lineItems.some(i => i.isSurcharge);
@@ -1032,10 +1044,11 @@ export default function NewProposalInvoicePage() {
        )}
 
        {addPickerMode === 'coupon' && (
-         <div className="p-3 space-y-3">
+         <div className="p-4 space-y-4">
            <div className="flex items-center gap-2">
              <button type="button" onClick={() => setAddPickerMode('menu')} className="text-gray-400 hover:text-gray-700"><ChevronRight size={14} className="rotate-180"/></button>
-             <p className="text-sm font-semibold text-gray-900">Apply coupon</p>
+             <p className="text-sm font-semibold text-gray-900 flex-1">Apply coupon</p>
+             <button type="button" onClick={() => { setAddPickerOpen(false); setAddPickerMode('menu'); }} className="text-gray-400 hover:text-gray-700"><X size={14}/></button>
            </div>
            <select
              value={pickerCouponId}
@@ -1064,8 +1077,8 @@ export default function NewProposalInvoicePage() {
          </div>
        )}
      </div>
-   )}
- </div>
+   </div>
+ )}
  <div className="text-sm space-y-0.5 text-right">
  {hasSurcharge() && <div className="flex items-center gap-3 text-gray-400 text-xs"><span>Subtotal</span><span className="min-w-[70px]">{formatCents(subtotalCents)}</span></div>}
  <div className="flex items-center gap-3 font-bold text-gray-900"><span>Total</span><span className="min-w-[70px]">{formatCents(totalCents)}</span></div>
