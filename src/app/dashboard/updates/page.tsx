@@ -375,39 +375,15 @@ function FeatureRequestsTab() {
  <div
  key={req.id}
  className={classNames(
- 'flex items-start gap-4 rounded-2xl border bg-white p-4 transition-colors hover:border-gray-300',
+ 'rounded-2xl border bg-white p-4 transition-colors hover:border-gray-300',
  isTopRequest ? 'border-brand-900/20 bg-brand-900/[0.02]' : 'border-gray-200'
  )}
  >
- {/* Vote button */}
- <div className="flex flex-col items-center gap-1 flex-shrink-0">
- <button
- onClick={() => handleVote(req)}
- disabled={isVoting}
- className={classNames(
- 'flex flex-col items-center justify-center rounded-2xl border-2 w-12 h-12 transition-all',
- req.has_voted
- ? 'border-brand-900 bg-brand-900 text-white'
- : 'border-gray-200 text-gray-400 hover:border-brand-900 hover:text-brand-900 hover:bg-brand-900/5',
- isVoting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
- )}
- >
- {isVoting
- ? <Loader2 size={14} className="animate-spin"/>
- : <ThumbsUp size={14} className={req.has_voted ? '' : ''} />
- }
- <span className="text-[11px] font-bold mt-0.5 leading-none">{req.vote_count}</span>
- </button>
- {isTopRequest && (
- <span className="text-[9px] font-semibold text-amber-500 uppercase tracking-wider">Top</span>
- )}
- </div>
-
- {/* Content */}
+ {/* Top row: title + status + rank/actions */}
+ <div className="flex items-start gap-3">
  <div className="flex-1 min-w-0">
  {editingId === req.id ? (
- /* Inline edit form */
- <div className="space-y-2 pr-1">
+ <div className="space-y-2">
  <input
  type="text"
  value={editTitle}
@@ -441,39 +417,81 @@ function FeatureRequestsTab() {
  <span className={classNames('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold flex-shrink-0', statusConf.bg, statusConf.text)}>
  <StatusIcon size={9} />{statusConf.label}
  </span>
+ {isTopRequest && (
+ <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-600">
+ ★ Top request
+ </span>
+ )}
  </div>
  {req.description && <p className="mt-1 text-xs text-gray-500 leading-relaxed">{req.description}</p>}
- <p className="mt-1.5 text-[11px] text-gray-400">
- {timeAgo(req.created_at)}
- {req.vote_count > 1 && <><span className="ml-1.5 text-gray-300">·</span><span className="ml-1.5">{req.vote_count} votes</span></>}
- </p>
+ <p className="mt-1 text-[11px] text-gray-400">{timeAgo(req.created_at)}</p>
  </>
  )}
  </div>
 
  {/* Rank + edit + delete */}
- <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
- {idx < 3 && req.vote_count > 0 && (
- <div className={classNames(
- 'flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-bold',
- idx === 0 ? 'bg-amber-100 text-amber-700' :
- idx === 1 ? 'bg-gray-100 text-gray-600' : 'bg-orange-50 text-orange-600'
- )}>#{idx + 1}</div>
- )}
+ <div className="flex items-center gap-1 flex-shrink-0">
  {req.is_mine && editingId !== req.id && (
  <>
  <button onClick={() => startEdit(req)}
- className="flex items-center justify-center h-6 w-6 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+ className="flex items-center justify-center h-7 w-7 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
  title="Edit">
- <Pencil size={11} />
+ <Pencil size={12} />
  </button>
  <button onClick={() => handleDelete(req)} disabled={deletingId === req.id}
- className="flex items-center justify-center h-6 w-6 rounded-md text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40"
+ className="flex items-center justify-center h-7 w-7 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40"
  title="Delete">
- {deletingId === req.id ? <Loader2 size={11} className="animate-spin"/> : <Trash2 size={11}/>}
+ {deletingId === req.id ? <Loader2 size={12} className="animate-spin"/> : <Trash2 size={12}/>}
  </button>
  </>
  )}
+ </div>
+ </div>
+
+ {/* Bottom row: vote chips + vote button */}
+ <div className="mt-3 flex items-center gap-2 flex-wrap">
+ {/* One thumbs-up chip per vote already cast */}
+ {Array.from({ length: Math.min(req.vote_count, 8) }).map((_, i) => {
+ const isOwn = req.has_voted && i === req.vote_count - 1;
+ return (
+ <span
+ key={i}
+ className={classNames(
+ 'inline-flex items-center justify-center h-7 w-7 rounded-full border-2 text-[13px]',
+ isOwn
+ ? 'border-[#1b1b1b] bg-[#1b1b1b] text-white'
+ : 'border-gray-200 bg-gray-50 text-gray-500'
+ )}
+ title={isOwn ? 'Your vote' : 'Vote'}
+ >
+ <ThumbsUp size={12} strokeWidth={2.25} />
+ </span>
+ );
+ })}
+ {req.vote_count > 8 && (
+ <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-semibold text-gray-500">
+ +{req.vote_count - 8} more
+ </span>
+ )}
+
+ {/* Vote / un-vote action button */}
+ <button
+ onClick={() => handleVote(req)}
+ disabled={isVoting}
+ className={classNames(
+ 'ml-auto inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[12px] font-semibold transition-all',
+ req.has_voted
+ ? 'border-[#1b1b1b] bg-[#1b1b1b] text-white hover:bg-gray-800'
+ : 'border-gray-300 bg-white text-gray-600 hover:border-[#1b1b1b] hover:text-[#1b1b1b]',
+ isVoting && 'opacity-50 cursor-not-allowed'
+ )}
+ >
+ {isVoting
+ ? <Loader2 size={12} className="animate-spin"/>
+ : <ThumbsUp size={12} strokeWidth={2.25} />
+ }
+ {req.has_voted ? 'Voted' : 'Vote'}
+ </button>
  </div>
  </div>
  );
