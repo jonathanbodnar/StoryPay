@@ -1065,6 +1065,7 @@ export function FormBuilderEditor({
     }
     return 'desktop';
   });
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [embedOpen, setEmbedOpen] = useState(false);
   const [thankYouOpen, setThankYouOpen] = useState(false);
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
@@ -1276,6 +1277,11 @@ export function FormBuilderEditor({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
+      if (paletteOpen) {
+        e.preventDefault();
+        setPaletteOpen(false);
+        return;
+      }
       if (previewOpen) {
         e.preventDefault();
         setPreviewOpen(false);
@@ -1293,7 +1299,7 @@ export function FormBuilderEditor({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [previewOpen, embedOpen, thankYouOpen]);
+  }, [paletteOpen, previewOpen, embedOpen, thankYouOpen]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -1388,6 +1394,8 @@ export function FormBuilderEditor({
       const type = event.active.data.current?.blockType as FormBlockType;
       const label = (event.active.data.current?.label as string) ?? String(type);
       setActiveDrag({ kind: 'palette', blockType: type, label });
+      // Close flyout once the user grabs an item so the canvas is fully visible
+      setPaletteOpen(false);
     } else {
       setCanvasDragId(id);
       setActiveDrag(null);
@@ -1518,13 +1526,17 @@ export function FormBuilderEditor({
             <span className="text-gray-300" aria-hidden>
               ›
             </span>
-            <input
-              className="min-w-0 max-w-[11rem] border-0 border-b border-transparent bg-transparent py-0.5 text-[12px] font-semibold text-gray-900 placeholder:text-gray-400 focus:border-gray-300 focus:outline-none sm:max-w-xs md:max-w-md"
-              value={name}
-              placeholder="Untitled"
-              onChange={(e) => setSnapshot((s) => ({ ...s, name: e.target.value }))}
-              aria-label="Form name"
-            />
+            <div className="group relative flex min-w-0 items-center gap-1.5">
+              <input
+                className="min-w-0 max-w-[11rem] rounded-md border border-transparent bg-transparent px-2 py-1 text-[15px] font-bold text-gray-900 placeholder:text-gray-400 transition hover:border-gray-200 hover:bg-gray-50 focus:border-gray-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-gray-200 sm:max-w-xs md:max-w-md"
+                value={name}
+                placeholder="Untitled form"
+                onChange={(e) => setSnapshot((s) => ({ ...s, name: e.target.value }))}
+                aria-label="Form title — click to edit"
+                title="Click to edit form title"
+              />
+              <Sparkles size={12} className="shrink-0 text-gray-300 group-focus-within:text-gray-400 pointer-events-none" aria-hidden />
+            </div>
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2">
             <button
@@ -1583,19 +1595,35 @@ export function FormBuilderEditor({
             onDragCancel={onDragCancel}
             onDragEnd={onDragEnd}
           >
-            <aside className="flex min-h-0 max-h-[min(44vh,22rem)] w-full shrink-0 flex-col border-b border-gray-200 bg-white lg:max-h-none lg:min-h-0 lg:w-[280px] lg:shrink-0 lg:overflow-hidden lg:border-b-0 lg:border-r">
-              <div className="flex h-14 shrink-0 items-center gap-2 border-b border-gray-100 px-4">
-                <LayoutTemplate size={16} className="shrink-0 text-gray-400" strokeWidth={1.75} />
-                <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-500">
-                  Sections
-                </h2>
+            {/* Collapsible palette flyout — hidden when closed, slides in when open */}
+            <aside
+              className={`flex flex-col bg-white transition-[width] duration-200 ease-out overflow-hidden shrink-0 border-gray-200
+                ${paletteOpen
+                  ? 'w-full border-b lg:w-[272px] lg:border-b-0 lg:border-r max-h-[min(44vh,22rem)] lg:max-h-none'
+                  : 'w-0 max-h-0 border-0 lg:max-h-none'}`}
+            >
+              <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-gray-100 px-4">
+                <div className="flex items-center gap-2">
+                  <LayoutTemplate size={15} className="shrink-0 text-gray-400" strokeWidth={1.75} />
+                  <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-500">
+                    Add blocks
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  title="Close"
+                  onClick={() => setPaletteOpen(false)}
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                >
+                  <Minus size={14} strokeWidth={2.5} />
+                </button>
               </div>
               <div
                 ref={modulesScroll.ref}
                 className={`min-h-0 grow overflow-y-auto overscroll-contain px-3 pb-4 pt-2 ${modulesScroll.className}`}
               >
                 <p className="mb-2 px-1 text-[12px] leading-snug text-gray-400">
-                  Drag modules to the canvas or use + to add.
+                  Drag a block onto the canvas, or click + to add at the end.
                 </p>
                 <div className="flex flex-col gap-1.5">
                   {PALETTE.map((p) => (
@@ -1603,7 +1631,7 @@ export function FormBuilderEditor({
                       key={p.type}
                       type={p.type}
                       label={p.label}
-                      onQuickAdd={addBlock}
+                      onQuickAdd={(t) => { addBlock(t); setPaletteOpen(false); }}
                     />
                   ))}
                 </div>
@@ -1611,7 +1639,23 @@ export function FormBuilderEditor({
             </aside>
 
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-white lg:min-h-0">
-              <div className="flex h-14 shrink-0 items-center justify-center border-b border-gray-100 bg-white px-4">
+              <div className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-gray-100 bg-white px-4">
+                {/* + Add Block trigger */}
+                <button
+                  type="button"
+                  onClick={() => setPaletteOpen((o) => !o)}
+                  title={paletteOpen ? 'Close blocks panel' : 'Add a block'}
+                  className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[13px] font-semibold transition ${
+                    paletteOpen
+                      ? 'border-gray-900 bg-gray-900 text-white'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <Plus size={15} strokeWidth={2.5} />
+                  <span className="hidden sm:inline">Add block</span>
+                </button>
+
+                {/* Viewport toggle — centered */}
                 <div className="inline-flex rounded-full border border-gray-200 bg-white p-0.5">
                   {(
                     [
@@ -1634,6 +1678,9 @@ export function FormBuilderEditor({
                     </button>
                   ))}
                 </div>
+
+                {/* Spacer so viewport toggle stays roughly centered */}
+                <div className="hidden w-[100px] sm:block" aria-hidden />
               </div>
               <div
                 ref={canvasScroll.ref}
