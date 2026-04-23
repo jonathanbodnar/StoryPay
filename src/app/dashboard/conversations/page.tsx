@@ -114,7 +114,7 @@ export default function ConversationsPage() {
   const [threadDetail, setThreadDetail] = useState<ThreadDetail | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [loadingThread, setLoadingThread] = useState(false);
-  const [composerTab, setComposerTab] = useState<ComposerTab>('team');
+  const [composerTab, setComposerTab] = useState<ComposerTab>('sms');
   // Collapsed by default — the composer starts as a single-line input and
   // blooms into the full editor on focus or as soon as the user types.
   const [composerExpanded, setComposerExpanded] = useState(false);
@@ -126,6 +126,11 @@ export default function ConversationsPage() {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState('');
   const [team, setTeam] = useState<TeamMember[]>([]);
+  const [venueMe, setVenueMe] = useState<{
+    name?: string | null;
+    brand_email?: string | null;
+    brand_phone?: string | null;
+  } | null>(null);
   const [mobileShowThread, setMobileShowThread] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [contactSearch, setContactSearch] = useState('');
@@ -253,6 +258,23 @@ export default function ConversationsPage() {
       .then((r) => r.json())
       .then((d: { links?: TriggerLinkOpt[] }) => {
         if (Array.isArray(d?.links)) setTriggerLinkOptions(d.links);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    // Lightweight fetch for the venue's brand phone + email so the composer
+    // can show "From: <venue>" when drafting SMS or email.
+    fetch('/api/venues/me')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d && typeof d === 'object') {
+          setVenueMe({
+            name: d.name ?? null,
+            brand_email: d.brand_email ?? null,
+            brand_phone: d.brand_phone ?? null,
+          });
+        }
       })
       .catch(() => {});
   }, []);
@@ -1148,18 +1170,19 @@ export default function ConversationsPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        setComposerTab('team');
+                        setComposerTab('sms');
+                        setMentionedIds([]);
                         setSendError('');
                       }}
                       className={classNames(
                         'flex min-w-0 flex-1 items-center justify-center gap-1 rounded-xl py-2 text-[11px] font-semibold transition-colors sm:text-xs',
-                        composerTab === 'team'
+                        composerTab === 'sms'
                           ? 'bg-white text-gray-900 border border-gray-200'
                           : 'text-gray-600 hover:text-gray-900',
                       )}
                     >
-                      <Lock size={14} className="hidden shrink-0 sm:inline" />
-                      <span className="truncate">Team only</span>
+                      <MessageSquare size={14} className="hidden shrink-0 sm:inline" />
+                      <span className="truncate">SMS</span>
                     </button>
                     <button
                       type="button"
@@ -1186,19 +1209,18 @@ export default function ConversationsPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        setComposerTab('sms');
-                        setMentionedIds([]);
+                        setComposerTab('team');
                         setSendError('');
                       }}
                       className={classNames(
                         'flex min-w-0 flex-1 items-center justify-center gap-1 rounded-xl py-2 text-[11px] font-semibold transition-colors sm:text-xs',
-                        composerTab === 'sms'
+                        composerTab === 'team'
                           ? 'bg-white text-gray-900 border border-gray-200'
                           : 'text-gray-600 hover:text-gray-900',
                       )}
                     >
-                      <MessageSquare size={14} className="hidden shrink-0 sm:inline" />
-                      <span className="truncate">SMS</span>
+                      <Lock size={14} className="hidden shrink-0 sm:inline" />
+                      <span className="truncate">Team only</span>
                     </button>
                     </div>
                     <button
@@ -1219,13 +1241,30 @@ export default function ConversationsPage() {
                       <Minus size={14} />
                     </button>
                   </div>
-                  <p className="mb-2 text-[11px] text-gray-500">
-                    {composerTab === 'team'
-                      ? 'Visible only to your team. @mentions notify teammates (stored on this message).'
-                      : composerTab === 'email'
-                        ? `Email ${threadDetail.venue_customers?.customer_email || 'the contact'} with a subject line and body (like Go High Level). No @mentions.`
-                        : `Text ${threadDetail.venue_customers?.phone || 'the contact'} via Go High Level (A2P on your GHL account). No @mentions.`}
-                  </p>
+                  {composerTab === 'team' ? (
+                    <p className="mb-2 text-[11px] text-gray-500">
+                      Visible only to your team. @mentions notify teammates.
+                    </p>
+                  ) : (
+                    <div className="mb-2 grid grid-cols-1 gap-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[12px] sm:grid-cols-2 sm:gap-x-4">
+                      <div className="flex min-w-0 items-baseline gap-2">
+                        <span className="shrink-0 text-gray-500">From:</span>
+                        <span className="min-w-0 truncate font-medium text-gray-900">
+                          {composerTab === 'sms'
+                            ? venueMe?.brand_phone || 'Your GHL line'
+                            : venueMe?.brand_email || venueMe?.name || 'Your address'}
+                        </span>
+                      </div>
+                      <div className="flex min-w-0 items-baseline gap-2 sm:border-l sm:border-gray-200 sm:pl-4">
+                        <span className="shrink-0 text-gray-500">To:</span>
+                        <span className="min-w-0 truncate font-medium text-gray-900">
+                          {composerTab === 'sms'
+                            ? threadDetail.venue_customers?.phone || 'No phone on profile'
+                            : threadDetail.venue_customers?.customer_email || 'No email on profile'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
 
                   {composerTab === 'team' && team.length > 0 && (
                     <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -1307,49 +1346,49 @@ export default function ConversationsPage() {
                           Message
                         </label>
                       )}
-                      <textarea
-                        ref={composerTextareaRef}
-                        value={body}
-                        onChange={(e) => setBody(e.target.value)}
-                        rows={composerTab === 'team' ? 3 : 4}
-                        placeholder={
-                          composerTab === 'team'
-                            ? 'Write a team note…'
-                            : composerTab === 'sms'
-                              ? 'Type a message…'
+                      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white focus-within:border-gray-500">
+                        <textarea
+                          ref={composerTextareaRef}
+                          value={body}
+                          onChange={(e) => setBody(e.target.value)}
+                          rows={composerTab === 'team' ? 3 : 4}
+                          placeholder={
+                            composerTab === 'team'
+                              ? 'Write a team note…'
                               : 'Type a message…'
-                        }
-                        className="w-full resize-none rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
-                        style={{ fontSize: 16 }}
-                      />
-                      {(composerTab === 'email' || composerTab === 'sms') && (
-                        <div className="mt-2 space-y-2">
-                          {selectedTriggerMeta && (
-                            <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-950">
-                              <Zap size={14} className="shrink-0 text-amber-700" />
-                              <span className="min-w-0 flex-1 font-medium truncate">{selectedTriggerMeta.name}</span>
-                              <button
-                                type="button"
-                                onClick={() => setSelectedTriggerLinkId('')}
-                                className="shrink-0 rounded-lg p-1 text-amber-800 hover:bg-amber-100"
-                                aria-label="Remove trigger link"
-                              >
-                                <X size={14} />
-                              </button>
-                            </div>
-                          )}
-                          <div className="relative flex flex-wrap items-center gap-0.5 border-t border-gray-100 pt-2">
+                          }
+                          className="block w-full resize-none border-0 bg-transparent px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none"
+                          style={{ fontSize: 16 }}
+                        />
+                        {selectedTriggerMeta && (composerTab === 'email' || composerTab === 'sms') && (
+                          <div className="mx-3 mb-2 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-950">
+                            <Zap size={14} className="shrink-0 text-amber-700" />
+                            <span className="min-w-0 flex-1 font-medium truncate">
+                              {selectedTriggerMeta.name}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedTriggerLinkId('')}
+                              className="shrink-0 rounded-lg p-1 text-amber-800 hover:bg-amber-100"
+                              aria-label="Remove trigger link"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        )}
+                        {(composerTab === 'email' || composerTab === 'sms') && (
+                          <div className="flex flex-wrap items-center gap-0.5 border-t border-gray-100 bg-white px-2 py-1">
                             <div className="relative">
                               <button
                                 type="button"
                                 onClick={() => setEmojiPickerOpen((o) => !o)}
                                 className={classNames(
-                                  'rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800',
+                                  'rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800',
                                   emojiPickerOpen && 'bg-gray-100 text-gray-800',
                                 )}
                                 aria-label="Insert emoji"
                               >
-                                <Smile size={18} strokeWidth={1.75} />
+                                <Smile size={16} strokeWidth={1.75} />
                               </button>
                               {emojiPickerOpen && (
                                 <EmojiPickerPopover
@@ -1358,26 +1397,26 @@ export default function ConversationsPage() {
                                 />
                               )}
                             </div>
-                            <>
-                              <input
-                                ref={composerFileRef}
-                                type="file"
-                                className="sr-only"
-                                onChange={handleComposerAttachmentChange}
-                              />
-                              <button
-                                type="button"
-                                disabled={fileAttaching}
-                                onClick={() => composerFileRef.current?.click()}
-                                className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 disabled:opacity-50"
-                                aria-label="Attach file"
-                                title="Upload a file (link is inserted into the message)"
-                              >
-                                {fileAttaching ?
-                                  <Loader2 size={18} className="animate-spin" strokeWidth={1.75} />
-                                : <Paperclip size={18} strokeWidth={1.75} />}
-                              </button>
-                            </>
+                            <input
+                              ref={composerFileRef}
+                              type="file"
+                              className="sr-only"
+                              onChange={handleComposerAttachmentChange}
+                            />
+                            <button
+                              type="button"
+                              disabled={fileAttaching}
+                              onClick={() => composerFileRef.current?.click()}
+                              className="rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 disabled:opacity-50"
+                              aria-label="Attach file"
+                              title="Upload a file (link is inserted into the message)"
+                            >
+                              {fileAttaching ? (
+                                <Loader2 size={16} className="animate-spin" strokeWidth={1.75} />
+                              ) : (
+                                <Paperclip size={16} strokeWidth={1.75} />
+                              )}
+                            </button>
                             <button
                               type="button"
                               onClick={() => {
@@ -1385,24 +1424,25 @@ export default function ConversationsPage() {
                                 setTriggerModalOpen(true);
                               }}
                               className={classNames(
-                                'rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800',
+                                'rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800',
                                 selectedTriggerLinkId && 'bg-sky-50 text-sky-700',
                               )}
                               aria-label="Trigger links"
+                              title="Insert a trigger link"
                             >
-                              <Zap size={18} strokeWidth={1.75} />
+                              <Zap size={16} strokeWidth={1.75} />
                             </button>
+                            {composerTab === 'sms' && (
+                              <span className="ml-auto pr-1 text-[10px] tabular-nums text-gray-400">
+                                {body.length} chars
+                                {body.length > 0 ? (
+                                  <> · {Math.max(1, Math.ceil(body.length / 160))} seg</>
+                                ) : null}
+                              </span>
+                            )}
                           </div>
-                        </div>
-                      )}
-                      {composerTab === 'sms' && (
-                        <p className="mt-1 text-right text-[10px] tabular-nums text-gray-400">
-                          Chars: {body.length}
-                          {body.length > 0 ?
-                            <> · Segs: ~{Math.max(1, Math.ceil(body.length / 160))}</>
-                          : null}
-                        </p>
-                      )}
+                        )}
+                      </div>
                     </div>
                     {sendError && <p className="text-xs text-red-600">{sendError}</p>}
                     <div className="flex justify-end">
@@ -1968,9 +2008,9 @@ function CollapsedComposer({
 }) {
   const CurrentIcon = composerTab === 'team' ? Lock : composerTab === 'email' ? Mail : MessageSquare;
   const options: Array<{ id: ComposerTab; label: string; icon: typeof Lock }> = [
-    { id: 'team', label: 'Team only', icon: Lock },
-    { id: 'email', label: 'Email', icon: Mail },
     { id: 'sms', label: 'SMS', icon: MessageSquare },
+    { id: 'email', label: 'Email', icon: Mail },
+    { id: 'team', label: 'Team only', icon: Lock },
   ];
 
   return (
