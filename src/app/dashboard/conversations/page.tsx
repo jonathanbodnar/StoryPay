@@ -591,7 +591,7 @@ export default function ConversationsPage() {
         {/* Thread list */}
         <aside
           className={classNames(
-            'flex w-full flex-shrink-0 flex-col border-gray-200 bg-gray-50/80 md:w-[min(100%,380px)] md:border-r',
+            'flex w-full flex-shrink-0 flex-col border-gray-200 bg-gray-50/80 md:w-[min(100%,300px)] md:border-r',
             mobileShowThread ? 'hidden md:flex' : 'flex',
           )}
         >
