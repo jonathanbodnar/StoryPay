@@ -10,7 +10,7 @@ import {
   Megaphone, Plus, Trash2, Pencil, X, Loader2, ThumbsUp, ThumbsDown,
   Check, BarChart2, ExternalLink, ChevronRight, Search,
   LayoutDashboard, Menu, Lightbulb, BookOpen, Star, Globe, Layers,
-  Repeat, Wallet, BadgeCheck,
+  Repeat, Wallet, BadgeCheck, Sparkles, CalendarDays,
 } from 'lucide-react';
 import {
   VenueManagementPortal,
@@ -39,6 +39,7 @@ type AdminTabKey =
   | 'directory-badges'
   | 'announcements'
   | 'feature-requests'
+  | 'changelog'
   | 'suggested-articles'
   | 'search-analytics'
   | 'article-ratings'
@@ -53,6 +54,7 @@ const ADMIN_TAB_KEYS: ReadonlySet<string> = new Set<AdminTabKey>([
   'directory-badges',
   'announcements',
   'feature-requests',
+  'changelog',
   'suggested-articles',
   'search-analytics',
   'article-ratings',
@@ -419,6 +421,7 @@ const ADMIN_NAV_ITEMS = [
   { key: 'trends', label: 'Google Trends', icon: TrendingUp },
   { key: 'announcements', label: 'Announcements', icon: Megaphone },
   { key: 'feature-requests', label: 'Feature Requests', icon: Lightbulb },
+  { key: 'changelog', label: 'Changelog', icon: Sparkles },
   { key: 'suggested-articles', label: 'Suggested Articles', icon: BookOpen },
   { key: 'search-analytics', label: 'Search Analytics', icon: BarChart2 },
   { key: 'article-ratings', label: 'Article Ratings', icon: Star },
@@ -545,6 +548,35 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
   const [clTitle, setClTitle]   = useState('');
   const [clDesc, setClDesc]     = useState('');
   const [clCat, setClCat]       = useState<'feature' | 'improvement' | 'fix'>('feature');
+
+  // Inline edit for linked changelog entry inside FR modal
+  const [clEditingId, setClEditingId]   = useState<string | null>(null);
+  const [clEditTitle, setClEditTitle]   = useState('');
+  const [clEditDesc, setClEditDesc]     = useState('');
+  const [clEditCat, setClEditCat]       = useState<'feature' | 'improvement' | 'fix'>('feature');
+  const [clEditSaving, setClEditSaving] = useState(false);
+  const [clDeleting, setClDeleting]     = useState<string | null>(null);
+
+  // Standalone Changelog admin tab
+  interface ChangelogAdminEntry { id: string; title: string; description: string; category: string; version: string | null; released_at: string; }
+  const [clEntries, setClEntries]           = useState<ChangelogAdminEntry[]>([]);
+  const [clLoading, setClLoading]           = useState(false);
+  const [clCreateOpen, setClCreateOpen]     = useState(false);
+  const [clNewTitle, setClNewTitle]         = useState('');
+  const [clNewDesc, setClNewDesc]           = useState('');
+  const [clNewCat, setClNewCat]             = useState<'feature' | 'improvement' | 'fix'>('feature');
+  const [clNewVersion, setClNewVersion]     = useState('');
+  const [clNewDate, setClNewDate]           = useState('');
+  const [clCreating, setClCreating]         = useState(false);
+  const [clCreateError, setClCreateError]   = useState('');
+  const [clTabEditId, setClTabEditId]       = useState<string | null>(null);
+  const [clTabEditTitle, setClTabEditTitle] = useState('');
+  const [clTabEditDesc, setClTabEditDesc]   = useState('');
+  const [clTabEditCat, setClTabEditCat]     = useState<'feature' | 'improvement' | 'fix'>('feature');
+  const [clTabEditVersion, setClTabEditVersion] = useState('');
+  const [clTabEditDate, setClTabEditDate]   = useState('');
+  const [clTabEditSaving, setClTabEditSaving] = useState(false);
+  const [clTabDeleting, setClTabDeleting]   = useState<string | null>(null);
 
   // ── Suggested Articles ──────────────────────────────────────────────────────
   interface SuggestedArticle { id: string; title: string; body: string; source_question: string | null; venue_id: string | null; status: string; created_at: string; }
@@ -673,6 +705,7 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
   useEffect(() => { if (authState === 'authenticated' && activeTab === 'suggested-articles') fetchSuggestedArticles(); }, [authState, activeTab, fetchSuggestedArticles]);
   useEffect(() => { if (authState === 'authenticated' && activeTab === 'search-analytics') fetchSearchAnalytics(); }, [authState, activeTab, fetchSearchAnalytics]);
   useEffect(() => { if (authState === 'authenticated' && activeTab === 'article-ratings') fetchArticleRatings(); }, [authState, activeTab, fetchArticleRatings]);
+  useEffect(() => { if (authState === 'authenticated' && activeTab === 'changelog') loadClEntries(); }, [authState, activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
   async function openFeatureRequest(id: string) {
     setFrDetailLoading(true);
     setFrDetail(null);
@@ -789,6 +822,130 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
         setFrDetailError(d.error || 'Failed to save edits');
       }
     } finally { setFrEditSaving(false); }
+  }
+
+  // ── Changelog entry helpers (linked entry in FR modal) ──────────────────
+  function startClEdit(entry: { id: string; title: string; description: string; category: string }) {
+    setClEditingId(entry.id);
+    setClEditTitle(entry.title);
+    setClEditDesc(entry.description || '');
+    setClEditCat((entry.category as 'feature' | 'improvement' | 'fix') || 'feature');
+  }
+
+  async function saveClEdit() {
+    if (!clEditingId || !clEditTitle.trim()) return;
+    setClEditSaving(true);
+    try {
+      const res = await fetch(`/api/admin/changelog-entries/${clEditingId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: clEditTitle.trim(), description: clEditDesc.trim(), category: clEditCat }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setFrDetail(prev => prev ? {
+          ...prev,
+          changelogEntry: prev.changelogEntry ? { ...prev.changelogEntry, ...updated } : prev.changelogEntry,
+        } : prev);
+        setClEditingId(null);
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setFrDetailError(d.error || 'Failed to save changelog entry');
+      }
+    } finally { setClEditSaving(false); }
+  }
+
+  async function deleteClEntry(id: string) {
+    if (!confirm('Delete this changelog entry? This will remove it from the What\'s New page.')) return;
+    setClDeleting(id);
+    try {
+      const res = await fetch(`/api/admin/changelog-entries/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setFrDetail(prev => prev ? { ...prev, changelogEntry: null, changelog_id: null } : prev);
+      } else {
+        const d = await res.json().catch(() => ({}));
+        alert(d.error || 'Delete failed');
+      }
+    } finally { setClDeleting(null); }
+  }
+
+  // ── Standalone Changelog tab helpers ────────────────────────────────────
+  async function loadClEntries() {
+    setClLoading(true);
+    try {
+      const res = await fetch('/api/admin/changelog-entries');
+      if (res.ok) setClEntries(await res.json());
+    } finally { setClLoading(false); }
+  }
+
+  async function createClEntry() {
+    if (!clNewTitle.trim() || !clNewDesc.trim()) return;
+    setClCreating(true);
+    setClCreateError('');
+    try {
+      const res = await fetch('/api/admin/changelog-entries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: clNewTitle.trim(),
+          description: clNewDesc.trim(),
+          category: clNewCat,
+          version: clNewVersion.trim() || null,
+          released_at: clNewDate ? new Date(clNewDate).toISOString() : new Date().toISOString(),
+        }),
+      });
+      if (res.ok) {
+        const entry = await res.json();
+        setClEntries(prev => [entry, ...prev]);
+        setClCreateOpen(false);
+        setClNewTitle(''); setClNewDesc(''); setClNewCat('feature'); setClNewVersion(''); setClNewDate('');
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setClCreateError(d.error || 'Failed to create entry');
+      }
+    } finally { setClCreating(false); }
+  }
+
+  function startClTabEdit(e: { id: string; title: string; description: string; category: string; version: string | null; released_at: string }) {
+    setClTabEditId(e.id);
+    setClTabEditTitle(e.title);
+    setClTabEditDesc(e.description || '');
+    setClTabEditCat((e.category as 'feature' | 'improvement' | 'fix') || 'feature');
+    setClTabEditVersion(e.version || '');
+    setClTabEditDate(e.released_at ? e.released_at.slice(0, 10) : '');
+  }
+
+  async function saveClTabEdit() {
+    if (!clTabEditId || !clTabEditTitle.trim()) return;
+    setClTabEditSaving(true);
+    try {
+      const res = await fetch(`/api/admin/changelog-entries/${clTabEditId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: clTabEditTitle.trim(),
+          description: clTabEditDesc.trim(),
+          category: clTabEditCat,
+          version: clTabEditVersion.trim() || null,
+          released_at: clTabEditDate ? new Date(clTabEditDate + 'T12:00:00').toISOString() : undefined,
+        }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setClEntries(prev => prev.map(e => e.id === clTabEditId ? { ...e, ...updated } : e));
+        setClTabEditId(null);
+      }
+    } finally { setClTabEditSaving(false); }
+  }
+
+  async function deleteClTabEntry(id: string) {
+    if (!confirm('Delete this changelog entry? Venues will no longer see it in What\'s New.')) return;
+    setClTabDeleting(id);
+    try {
+      const res = await fetch(`/api/admin/changelog-entries/${id}`, { method: 'DELETE' });
+      if (res.ok) setClEntries(prev => prev.filter(e => e.id !== id));
+      else { const d = await res.json().catch(() => ({})); alert(d.error || 'Delete failed'); }
+    } finally { setClTabDeleting(null); }
   }
 
   async function openDrill(key: DrillKey) {
@@ -1462,6 +1619,172 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
           />
         )}
 
+        {/* ── Changelog Tab ── */}
+        {activeTab === 'changelog' && (
+          <div className="space-y-6">
+            {/* Header */}
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h1 className="font-heading text-2xl text-gray-900">Changelog</h1>
+                <p className="mt-0.5 text-sm text-gray-500">Manage all What&apos;s New entries visible to venues.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={loadClEntries} disabled={clLoading}
+                  className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors">
+                  {clLoading ? <Loader2 size={14} className="animate-spin"/> : <TrendingUp size={14}/>} Refresh
+                </button>
+                <button onClick={() => setClCreateOpen(v => !v)}
+                  className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90 transition-all"
+                  style={{ backgroundColor: '#1b1b1b' }}>
+                  {clCreateOpen ? <><X size={14}/> Cancel</> : <><Plus size={14}/> New Entry</>}
+                </button>
+              </div>
+            </div>
+
+            {/* Create form */}
+            {clCreateOpen && (
+              <div className="rounded-2xl border border-gray-200 bg-white p-5 space-y-4">
+                <h3 className="text-sm font-bold text-gray-900">New Changelog Entry</h3>
+                {/* Category */}
+                <div className="flex gap-2 flex-wrap">
+                  {([
+                    { val: 'feature',     label: '✨ New Feature',  cls: 'border-violet-300 text-violet-700 bg-violet-50' },
+                    { val: 'improvement', label: '⚡ Improvement',  cls: 'border-blue-300 text-blue-700 bg-blue-50' },
+                    { val: 'fix',         label: '🔧 Bug Fix',      cls: 'border-amber-300 text-amber-700 bg-amber-50' },
+                  ] as const).map(({ val, label, cls }) => (
+                    <button key={val} type="button" onClick={() => setClNewCat(val)}
+                      className={`rounded-full px-3 py-1.5 text-xs font-semibold border-2 transition-all ${clNewCat === val ? cls + ' ring-2 ring-offset-1 ring-current' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="col-span-2">
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Headline <span className="text-red-400">*</span></label>
+                    <input type="text" value={clNewTitle} onChange={e => setClNewTitle(e.target.value)} placeholder="What did we ship?"
+                      style={{ fontSize: 16 }}
+                      className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none" />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Description <span className="text-red-400">*</span></label>
+                    <textarea value={clNewDesc} onChange={e => setClNewDesc(e.target.value)} rows={3}
+                      placeholder="Outcome-based description for venue owners..."
+                      className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none resize-none" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Version (optional)</label>
+                    <input type="text" value={clNewVersion} onChange={e => setClNewVersion(e.target.value)} placeholder="e.g. 2.4.0"
+                      className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Release Date (optional)</label>
+                    <input type="date" value={clNewDate} onChange={e => setClNewDate(e.target.value)}
+                      className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 focus:border-gray-500 focus:outline-none" />
+                  </div>
+                </div>
+                {clCreateError && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{clCreateError}</p>}
+                <div className="flex gap-2">
+                  <button onClick={createClEntry} disabled={clCreating || !clNewTitle.trim() || !clNewDesc.trim()}
+                    className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50 transition-colors"
+                    style={{ backgroundColor: '#1b1b1b' }}>
+                    {clCreating ? <Loader2 size={14} className="animate-spin"/> : <Plus size={14}/>} Create Entry
+                  </button>
+                  <button onClick={() => setClCreateOpen(false)} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
+                </div>
+              </div>
+            )}
+
+            {/* Entries list */}
+            {clLoading ? (
+              <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-gray-300"/></div>
+            ) : clEntries.length === 0 ? (
+              <div className="py-16 text-center text-gray-400">
+                <Sparkles size={36} className="mx-auto mb-3 opacity-30"/>
+                <p className="text-sm">No changelog entries yet.</p>
+                <p className="text-xs mt-1">Click &ldquo;New Entry&rdquo; to create one.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {clEntries.map(entry => {
+                  const CAT_STYLES: Record<string, { label: string; cls: string }> = {
+                    feature:     { label: '✨ New Feature',  cls: 'bg-violet-50 text-violet-700 border-violet-200' },
+                    improvement: { label: '⚡ Improvement',  cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+                    fix:         { label: '🔧 Bug Fix',      cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+                  };
+                  const cat = CAT_STYLES[entry.category] ?? CAT_STYLES.feature;
+                  const isEditing = clTabEditId === entry.id;
+
+                  return (
+                    <div key={entry.id} className="rounded-2xl border border-gray-200 bg-white p-4">
+                      {isEditing ? (
+                        <div className="space-y-3">
+                          <div className="flex gap-2 flex-wrap">
+                            {(['feature','improvement','fix'] as const).map(v => {
+                              const s = CAT_STYLES[v];
+                              return (
+                                <button key={v} type="button" onClick={() => setClTabEditCat(v)}
+                                  className={`rounded-full px-2.5 py-1 text-[11px] font-semibold border-2 transition-all ${clTabEditCat === v ? s.cls + ' ring-2 ring-offset-1 ring-current' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}>
+                                  {s.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <input type="text" value={clTabEditTitle} onChange={e => setClTabEditTitle(e.target.value)}
+                            style={{ fontSize: 16 }}
+                            className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 focus:border-gray-500 focus:outline-none" />
+                          <textarea value={clTabEditDesc} onChange={e => setClTabEditDesc(e.target.value)} rows={3}
+                            className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 focus:border-gray-500 focus:outline-none resize-none" />
+                          <div className="flex gap-2">
+                            <input type="text" value={clTabEditVersion} onChange={e => setClTabEditVersion(e.target.value)} placeholder="Version (optional)"
+                              className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none w-32" />
+                            <input type="date" value={clTabEditDate} onChange={e => setClTabEditDate(e.target.value)}
+                              className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-500 focus:outline-none" />
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={saveClTabEdit} disabled={clTabEditSaving || !clTabEditTitle.trim()}
+                              className="flex items-center gap-1.5 rounded-xl bg-gray-900 px-4 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50 transition-all">
+                              {clTabEditSaving ? <Loader2 size={12} className="animate-spin"/> : <Check size={12}/>} Save
+                            </button>
+                            <button onClick={() => setClTabEditId(null)}
+                              className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-start gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                              <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${cat.cls}`}>{cat.label}</span>
+                              {entry.version && (
+                                <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-mono text-gray-500">v{entry.version}</span>
+                              )}
+                              <span className="flex items-center gap-1 text-[11px] text-gray-400">
+                                <CalendarDays size={10}/>{new Date(entry.released_at).toLocaleDateString('en-US', { dateStyle: 'medium' })}
+                              </span>
+                            </div>
+                            <p className="text-sm font-bold text-gray-900">{entry.title}</p>
+                            <p className="mt-0.5 text-xs text-gray-500 leading-relaxed">{entry.description}</p>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button onClick={() => startClTabEdit(entry)} title="Edit"
+                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors">
+                              <Pencil size={13}/>
+                            </button>
+                            <button onClick={() => deleteClTabEntry(entry.id)} disabled={clTabDeleting === entry.id} title="Delete"
+                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-100 text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40">
+                              {clTabDeleting === entry.id ? <Loader2 size={13} className="animate-spin"/> : <Trash2 size={13}/>}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                <p className="text-center text-xs text-gray-400 pt-1">{clEntries.length} entr{clEntries.length === 1 ? 'y' : 'ies'} total</p>
+              </div>
+            )}
+          </div>
+        )}
+
       {/* Feature Request Detail Modal */}
       {(frDetail || frDetailLoading || frDetailError) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -1655,11 +1978,54 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
 
                   {/* Linked changelog entry */}
                   {frDetail.changelogEntry && (
-                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-600 mb-1">📢 Posted to Changelog</p>
-                      <p className="text-sm font-semibold text-gray-900">{frDetail.changelogEntry.title}</p>
-                      {frDetail.changelogEntry.description && <p className="text-xs text-gray-600 mt-0.5">{frDetail.changelogEntry.description}</p>}
-                      <p className="text-[11px] text-emerald-600 mt-1 capitalize">{frDetail.changelogEntry.category} · {new Date(frDetail.changelogEntry.released_at).toLocaleDateString()}</p>
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-600">📢 Posted to Changelog</p>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => startClEdit(frDetail.changelogEntry!)}
+                            title="Edit changelog entry"
+                            className="flex h-6 w-6 items-center justify-center rounded-md text-emerald-600 hover:bg-emerald-100 transition-colors"
+                          ><Pencil size={11} /></button>
+                          <button
+                            onClick={() => deleteClEntry(frDetail.changelogEntry!.id)}
+                            disabled={clDeleting === frDetail.changelogEntry.id}
+                            title="Delete changelog entry"
+                            className="flex h-6 w-6 items-center justify-center rounded-md text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40"
+                          >{clDeleting === frDetail.changelogEntry.id ? <Loader2 size={11} className="animate-spin"/> : <Trash2 size={11}/>}</button>
+                        </div>
+                      </div>
+                      {clEditingId === frDetail.changelogEntry.id ? (
+                        <div className="space-y-2">
+                          <input type="text" value={clEditTitle} onChange={e => setClEditTitle(e.target.value)}
+                            style={{ fontSize: 16 }}
+                            className="w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-emerald-400 focus:outline-none" />
+                          <textarea value={clEditDesc} onChange={e => setClEditDesc(e.target.value)} rows={3}
+                            className="w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-emerald-400 focus:outline-none resize-none" />
+                          <div className="flex gap-1.5 flex-wrap">
+                            {(['feature','improvement','fix'] as const).map(v => (
+                              <button key={v} type="button" onClick={() => setClEditCat(v)}
+                                className={`rounded-full px-2.5 py-1 text-[11px] font-semibold border transition-all ${clEditCat === v ? 'border-emerald-400 bg-emerald-500 text-white' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}>
+                                {v === 'feature' ? '✨ Feature' : v === 'improvement' ? '⚡ Improvement' : '🔧 Fix'}
+                              </button>
+                            ))}
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={saveClEdit} disabled={clEditSaving || !clEditTitle.trim()}
+                              className="flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-600 disabled:opacity-50 transition-colors">
+                              {clEditSaving ? <Loader2 size={11} className="animate-spin"/> : <Check size={11}/>} Save
+                            </button>
+                            <button onClick={() => setClEditingId(null)}
+                              className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-sm font-semibold text-gray-900">{frDetail.changelogEntry.title}</p>
+                          {frDetail.changelogEntry.description && <p className="text-xs text-gray-600">{frDetail.changelogEntry.description}</p>}
+                          <p className="text-[11px] text-emerald-600 capitalize">{frDetail.changelogEntry.category} · {new Date(frDetail.changelogEntry.released_at).toLocaleDateString()}</p>
+                        </>
+                      )}
                     </div>
                   )}
 
