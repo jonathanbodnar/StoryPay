@@ -4,164 +4,235 @@ import { supabaseAdmin } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
+type EventRow = {
+  session_id: string;
+  event_type: string;
+  event_data: Record<string, unknown>;
+  referrer: string | null;
+  utm_source: string | null;
+  device_type: string | null;
+  country: string | null;
+  city: string | null;
+  created_at: string;
+};
+
 export async function GET(req: Request) {
   const c = await cookies();
   const venueId = c.get('venue_id')?.value;
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  // Verify venue exists
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('id')
+    .select('id, gallery_images, cover_image_url')
     .eq('id', venueId)
     .maybeSingle();
   if (!venue) return NextResponse.json({ error: 'No venue' }, { status: 404 });
 
   const url = new URL(req.url);
   const days = Math.min(parseInt(url.searchParams.get('days') || '30', 10), 365);
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
-  // Fetch all events in range
-  const { data: events, error } = await supabaseAdmin
+  const now = Date.now();
+  const since     = new Date(now - days * 86400000).toISOString();
+  const priorFrom = new Date(now - days * 2 * 86400000).toISOString();
+
+  // Fetch current + prior period in one wide query then split
+  const { data: allEvents, error } = await supabaseAdmin
     .from('listing_events')
     .select('session_id, event_type, event_data, referrer, utm_source, device_type, country, city, created_at')
     .eq('venue_id', venueId)
-    .gte('created_at', since)
+    .gte('created_at', priorFrom)
     .order('created_at', { ascending: true });
 
   if (error) {
-    // Migration not yet run
-    if (/listing_events/i.test(error.message)) {
-      return NextResponse.json(emptyPayload(days));
-    }
+    if (/listing_events/i.test(error.message)) return NextResponse.json(emptyPayload(days));
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const rows = events ?? [];
+  const rows = (allEvents ?? []) as EventRow[];
+  const current = rows.filter(r => r.created_at >= since);
+  const prior    = rows.filter(r => r.created_at < since);
 
-  // ── Totals ───────────────────────────────────────────────────────────
+  // Also fetch leads created in period (for funnel bottom)
+  const { data: leads } = await supabaseAdmin
+    .from('leads')
+    .select('id, created_at, source')
+    .eq('venue_id', venueId)
+    .gte('created_at', since);
+  const { data: priorLeads } = await supabaseAdmin
+    .from('leads')
+    .select('id')
+    .eq('venue_id', venueId)
+    .gte('created_at', priorFrom)
+    .lt('created_at', since);
+
+  const galleryImages = Array.isArray((venue as Record<string,unknown>).gallery_images)
+    ? (venue as Record<string,unknown>).gallery_images as string[]
+    : [];
+
+  return NextResponse.json({
+    days,
+    gallery_images: galleryImages,
+    ...buildMetrics(current, leads ?? [], days),
+    prior: buildPriorMetrics(prior, priorLeads ?? []),
+  });
+}
+
+// ── Core metric builder ────────────────────────────────────────────────────────
+
+function buildMetrics(rows: EventRow[], leads: { id: string; created_at: string }[], days: number) {
   const pageViews = rows.filter(r => r.event_type === 'page_view');
-  const uniqueSessions = new Set(rows.map(r => r.session_id)).size;
-  const uniqueViewSessions = new Set(pageViews.map(r => r.session_id)).size;
+  const impressions = rows.filter(r => r.event_type === 'listing_impression');
+  const allSessions = new Set(rows.map(r => r.session_id));
+  const viewSessions = new Set(pageViews.map(r => r.session_id));
+  const formOpenSessions = new Set(rows.filter(r => r.event_type === 'contact_form_open').map(r => r.session_id));
+  const formSubmitSessions = new Set(rows.filter(r => r.event_type === 'contact_form_submit').map(r => r.session_id));
 
-  // ── Daily views (for sparkline / chart) ──────────────────────────────
-  const dailyMap: Record<string, { views: number; sessions: Set<string> }> = {};
-  for (const row of pageViews) {
+  const conversionRate = viewSessions.size
+    ? Math.round((formSubmitSessions.size / viewSessions.size) * 1000) / 10
+    : 0;
+
+  // ── Session duration (seconds) ────────────────────────────────────────────
+  const sessionTimes: Record<string, { first: number; last: number }> = {};
+  for (const row of rows) {
+    const t = new Date(row.created_at).getTime();
+    if (!sessionTimes[row.session_id]) sessionTimes[row.session_id] = { first: t, last: t };
+    else {
+      if (t < sessionTimes[row.session_id].first) sessionTimes[row.session_id].first = t;
+      if (t > sessionTimes[row.session_id].last) sessionTimes[row.session_id].last = t;
+    }
+  }
+  const durations = Object.values(sessionTimes)
+    .map(s => (s.last - s.first) / 1000)
+    .filter(d => d > 0 && d < 3600); // ignore 0s bounces and outliers
+  const avgSessionDuration = durations.length
+    ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length)
+    : 0;
+
+  // ── Daily breakdown ───────────────────────────────────────────────────────
+  const dailyMap: Record<string, { views: number; sessions: Set<string>; impressions: number }> = {};
+  for (const row of [...pageViews, ...impressions]) {
     const day = row.created_at.slice(0, 10);
-    if (!dailyMap[day]) dailyMap[day] = { views: 0, sessions: new Set() };
-    dailyMap[day].views++;
-    dailyMap[day].sessions.add(row.session_id);
+    if (!dailyMap[day]) dailyMap[day] = { views: 0, sessions: new Set(), impressions: 0 };
+    if (row.event_type === 'page_view') { dailyMap[day].views++; dailyMap[day].sessions.add(row.session_id); }
+    if (row.event_type === 'listing_impression') dailyMap[day].impressions++;
   }
   const daily = Object.entries(dailyMap)
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, v]) => ({ date, views: v.views, unique_sessions: v.sessions.size }));
+    .map(([date, v]) => ({ date, views: v.views, unique_sessions: v.sessions.size, impressions: v.impressions }));
 
-  // ── Event breakdown ───────────────────────────────────────────────────
-  const eventCounts: Record<string, number> = {};
-  for (const row of rows) {
-    eventCounts[row.event_type] = (eventCounts[row.event_type] ?? 0) + 1;
-  }
-
-  // ── Scroll depth (% of sessions reaching each depth) ─────────────────
-  const scrollSessions = { s25: new Set<string>(), s50: new Set<string>(), s75: new Set<string>(), s100: new Set<string>() };
-  for (const row of rows) {
-    if (row.event_type === 'scroll_25') scrollSessions.s25.add(row.session_id);
-    if (row.event_type === 'scroll_50') scrollSessions.s50.add(row.session_id);
-    if (row.event_type === 'scroll_75') scrollSessions.s75.add(row.session_id);
-    if (row.event_type === 'scroll_100') scrollSessions.s100.add(row.session_id);
-  }
+  // ── Scroll depth ──────────────────────────────────────────────────────────
+  const s25 = new Set(rows.filter(r => r.event_type === 'scroll_25').map(r => r.session_id)).size;
+  const s50 = new Set(rows.filter(r => r.event_type === 'scroll_50').map(r => r.session_id)).size;
+  const s75 = new Set(rows.filter(r => r.event_type === 'scroll_75').map(r => r.session_id)).size;
+  const s100 = new Set(rows.filter(r => r.event_type === 'scroll_100').map(r => r.session_id)).size;
+  const vsz = viewSessions.size || 1;
   const scrollDepth = {
-    pct_25: uniqueViewSessions ? Math.round((scrollSessions.s25.size / uniqueViewSessions) * 100) : 0,
-    pct_50: uniqueViewSessions ? Math.round((scrollSessions.s50.size / uniqueViewSessions) * 100) : 0,
-    pct_75: uniqueViewSessions ? Math.round((scrollSessions.s75.size / uniqueViewSessions) * 100) : 0,
-    pct_100: uniqueViewSessions ? Math.round((scrollSessions.s100.size / uniqueViewSessions) * 100) : 0,
+    pct_25:  Math.round((s25  / vsz) * 100),
+    pct_50:  Math.round((s50  / vsz) * 100),
+    pct_75:  Math.round((s75  / vsz) * 100),
+    pct_100: Math.round((s100 / vsz) * 100),
   };
 
-  // ── Device breakdown ──────────────────────────────────────────────────
+  // ── Event counts ──────────────────────────────────────────────────────────
+  const eventCounts: Record<string, number> = {};
+  for (const row of rows) eventCounts[row.event_type] = (eventCounts[row.event_type] ?? 0) + 1;
+
+  // ── Devices ───────────────────────────────────────────────────────────────
   const deviceMap: Record<string, number> = {};
   for (const row of pageViews) {
     const d = row.device_type || 'unknown';
     deviceMap[d] = (deviceMap[d] ?? 0) + 1;
   }
 
-  // ── Referrer breakdown ────────────────────────────────────────────────
+  // ── Referrers ─────────────────────────────────────────────────────────────
   const referrerMap: Record<string, number> = {};
   for (const row of pageViews) {
     const ref = parseReferrerLabel(row.referrer, row.utm_source);
     referrerMap[ref] = (referrerMap[ref] ?? 0) + 1;
   }
   const referrers = Object.entries(referrerMap)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 10)
+    .sort(([, a], [, b]) => b - a).slice(0, 10)
     .map(([source, count]) => ({ source, count }));
 
-  // ── Geography (top countries + cities) ───────────────────────────────
+  // ── Geography ─────────────────────────────────────────────────────────────
   const countryMap: Record<string, number> = {};
   const cityMap: Record<string, number> = {};
   for (const row of pageViews) {
     if (row.country) countryMap[row.country] = (countryMap[row.country] ?? 0) + 1;
     if (row.city) cityMap[row.city] = (cityMap[row.city] ?? 0) + 1;
   }
-  const topCountries = Object.entries(countryMap)
-    .sort(([, a], [, b]) => b - a).slice(0, 10)
-    .map(([country, count]) => ({ country, count }));
-  const topCities = Object.entries(cityMap)
-    .sort(([, a], [, b]) => b - a).slice(0, 10)
-    .map(([city, count]) => ({ city, count }));
+  const topCountries = Object.entries(countryMap).sort(([,a],[,b])=>b-a).slice(0,10).map(([country,count])=>({country,count}));
+  const topCities    = Object.entries(cityMap).sort(([,a],[,b])=>b-a).slice(0,10).map(([city,count])=>({city,count}));
 
-  // ── Engagement metrics ────────────────────────────────────────────────
-  const contactFormSessions = new Set(
-    rows.filter(r => r.event_type === 'contact_form_open').map(r => r.session_id)
-  ).size;
-  const contactSubmitSessions = new Set(
-    rows.filter(r => r.event_type === 'contact_form_submit').map(r => r.session_id)
-  ).size;
-  const conversionRate = uniqueViewSessions
-    ? Math.round((contactSubmitSessions / uniqueViewSessions) * 100 * 10) / 10
-    : 0;
-
-  // ── Inquiry day-of-week heatmap (0=Sun … 6=Sat) ──────────────────────
+  // ── DOW heatmap ───────────────────────────────────────────────────────────
   const dowCounts = Array(7).fill(0) as number[];
   for (const row of rows.filter(r => r.event_type === 'contact_form_submit')) {
     dowCounts[new Date(row.created_at).getDay()]++;
   }
 
-  // ── Photo interaction counts ──────────────────────────────────────────
+  // ── Photos ────────────────────────────────────────────────────────────────
   const photoIndexMap: Record<number, number> = {};
   for (const row of rows.filter(r => r.event_type === 'photo_view')) {
     const idx = (row.event_data as { photo_index?: number })?.photo_index ?? 0;
     photoIndexMap[idx] = (photoIndexMap[idx] ?? 0) + 1;
   }
   const photoViews = Object.entries(photoIndexMap)
-    .sort(([a], [b]) => Number(a) - Number(b))
-    .map(([index, count]) => ({ index: Number(index), count }));
+    .sort(([a],[b]) => Number(a)-Number(b))
+    .map(([index,count]) => ({ index: Number(index), count }));
 
-  // ── Social link clicks ────────────────────────────────────────────────
+  // ── Social ────────────────────────────────────────────────────────────────
   const socialMap: Record<string, number> = {};
   for (const row of rows.filter(r => r.event_type === 'social_click')) {
     const p = (row.event_data as { platform?: string })?.platform || 'unknown';
     socialMap[p] = (socialMap[p] ?? 0) + 1;
   }
 
-  return NextResponse.json({
-    days,
-    total_views: pageViews.length,
-    unique_sessions: uniqueViewSessions,
-    total_interactions: rows.length,
-    conversion_rate: conversionRate,
-    contact_form_opens: contactFormSessions,
-    contact_form_submits: contactSubmitSessions,
+  // ── Funnel ────────────────────────────────────────────────────────────────
+  const funnel = [
+    { step: 'Impressions',    count: impressions.length,          pct: 100 },
+    { step: 'Listing views',  count: pageViews.length,            pct: impressions.length ? Math.round((pageViews.length / impressions.length) * 100) : null },
+    { step: 'Unique visitors',count: viewSessions.size,           pct: pageViews.length ? Math.round((viewSessions.size / pageViews.length) * 100) : null },
+    { step: 'Form opens',     count: formOpenSessions.size,       pct: viewSessions.size ? Math.round((formOpenSessions.size / viewSessions.size) * 100) : null },
+    { step: 'Inquiries sent', count: formSubmitSessions.size,     pct: formOpenSessions.size ? Math.round((formSubmitSessions.size / formOpenSessions.size) * 100) : null },
+    { step: 'Leads created',  count: leads.length,                pct: formSubmitSessions.size ? Math.round((leads.length / formSubmitSessions.size) * 100) : null },
+  ];
+
+  return {
+    total_views:            pageViews.length,
+    total_impressions:      impressions.length,
+    unique_sessions:        viewSessions.size,
+    total_interactions:     allSessions.size,
+    conversion_rate:        conversionRate,
+    contact_form_opens:     formOpenSessions.size,
+    contact_form_submits:   formSubmitSessions.size,
+    leads_created:          leads.length,
+    avg_session_duration:   avgSessionDuration,
     daily,
-    event_counts: eventCounts,
-    scroll_depth: scrollDepth,
-    devices: deviceMap,
+    event_counts:           eventCounts,
+    scroll_depth:           scrollDepth,
+    devices:                deviceMap,
     referrers,
-    top_countries: topCountries,
-    top_cities: topCities,
-    inquiry_dow: dowCounts,
-    photo_views: photoViews,
-    social_clicks: socialMap,
-  });
+    top_countries:          topCountries,
+    top_cities:             topCities,
+    inquiry_dow:            dowCounts,
+    photo_views:            photoViews,
+    social_clicks:          socialMap,
+    funnel,
+  };
+}
+
+function buildPriorMetrics(rows: EventRow[], leads: { id: string }[]) {
+  const pageViews = rows.filter(r => r.event_type === 'page_view');
+  const viewSessions = new Set(pageViews.map(r => r.session_id));
+  const formSubmits = new Set(rows.filter(r => r.event_type === 'contact_form_submit').map(r => r.session_id));
+  return {
+    total_views:          pageViews.length,
+    unique_sessions:      viewSessions.size,
+    contact_form_submits: formSubmits.size,
+    leads_created:        leads.length,
+    conversion_rate: viewSessions.size
+      ? Math.round((formSubmits.size / viewSessions.size) * 1000) / 10 : 0,
+  };
 }
 
 function parseReferrerLabel(referrer: string | null, utmSource: string | null): string {
@@ -169,38 +240,29 @@ function parseReferrerLabel(referrer: string | null, utmSource: string | null): 
   if (!referrer) return 'Direct / Unknown';
   try {
     const host = new URL(referrer).hostname.replace(/^www\./, '');
-    if (host.includes('google')) return 'Google';
+    if (host.includes('google'))    return 'Google';
     if (host.includes('facebook') || host.includes('fb.com')) return 'Facebook';
     if (host.includes('instagram')) return 'Instagram';
     if (host.includes('pinterest')) return 'Pinterest';
-    if (host.includes('tiktok')) return 'TikTok';
-    if (host.includes('bing')) return 'Bing';
-    if (host.includes('yahoo')) return 'Yahoo';
+    if (host.includes('tiktok'))    return 'TikTok';
+    if (host.includes('bing'))      return 'Bing';
+    if (host.includes('yahoo'))     return 'Yahoo';
     return host;
-  } catch {
-    return 'Direct / Unknown';
-  }
+  } catch { return 'Direct / Unknown'; }
 }
 
 function emptyPayload(days: number) {
   return {
-    days,
-    total_views: 0,
-    unique_sessions: 0,
-    total_interactions: 0,
-    conversion_rate: 0,
-    contact_form_opens: 0,
-    contact_form_submits: 0,
-    daily: [],
-    event_counts: {},
+    days, gallery_images: [],
+    total_views: 0, total_impressions: 0, unique_sessions: 0, total_interactions: 0,
+    conversion_rate: 0, contact_form_opens: 0, contact_form_submits: 0,
+    leads_created: 0, avg_session_duration: 0,
+    daily: [], event_counts: {},
     scroll_depth: { pct_25: 0, pct_50: 0, pct_75: 0, pct_100: 0 },
-    devices: {},
-    referrers: [],
-    top_countries: [],
-    top_cities: [],
-    inquiry_dow: [0, 0, 0, 0, 0, 0, 0],
-    photo_views: [],
-    social_clicks: {},
+    devices: {}, referrers: [], top_countries: [], top_cities: [],
+    inquiry_dow: [0,0,0,0,0,0,0], photo_views: [], social_clicks: {},
+    funnel: [],
+    prior: { total_views: 0, unique_sessions: 0, contact_form_submits: 0, leads_created: 0, conversion_rate: 0 },
     _migration_pending: true,
   };
 }
