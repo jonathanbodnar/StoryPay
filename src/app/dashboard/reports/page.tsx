@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react';
 import {
  DollarSign, FileText, Users, Clock, CreditCard, RotateCcw,
  Download, FileSpreadsheet, Table2, Loader2, ChevronDown, ChevronUp,
- Landmark,
+ Landmark, BookOpen,
 } from 'lucide-react';
 import DateRangePicker, { DateRange, PRESETS } from '@/components/DateRangePicker';
 import { classNames } from '@/lib/utils';
@@ -371,6 +371,43 @@ function ReportCard({ report, dateRange }: { report: ReportDef; dateRange: DateR
  );
 }
 
+// ─── Accounting export card ───────────────────────────────────────────────────
+
+function AccountingExportCard({ dateRange }: { dateRange: DateRange }) {
+ const href = `/api/accounting/export?from=${encodeURIComponent(dateRange.from)}&to=${encodeURIComponent(dateRange.to)}`;
+
+ return (
+  <div className="rounded-2xl bg-white border border-gray-200 overflow-hidden">
+   <div className="p-5">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+     <div className="flex items-start gap-3">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-teal-50">
+       <BookOpen size={17} style={{ color: '#0d9488' }} />
+      </div>
+      <div>
+       <h3 className="text-sm font-semibold text-gray-900">Accounting Export</h3>
+       <p className="text-xs text-gray-500 mt-0.5 leading-relaxed max-w-lg">
+        Paid proposals and refunds formatted for your bookkeeper or accounting software. Posting dates use paid time for payments and last-update time for refunds (refunds export as negative amounts).
+       </p>
+      </div>
+     </div>
+
+     <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+      <a
+       href={href}
+       download
+       className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+      >
+       <Download size={12} />
+       Download CSV
+      </a>
+     </div>
+    </div>
+   </div>
+  </div>
+ );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ReportsPage() {
@@ -398,6 +435,7 @@ export default function ReportsPage() {
  {REPORTS.map((report) => (
  <ReportCard key={report.type} report={report} dateRange={dateRange} />
  ))}
+ <AccountingExportCard dateRange={dateRange} />
  </div>
  </div>
  );

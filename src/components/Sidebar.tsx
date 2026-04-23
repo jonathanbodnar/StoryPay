@@ -17,7 +17,6 @@ import {
   BadgeCheck,
   Ticket,
   Package,
-  FileSpreadsheet,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
 
@@ -64,7 +63,6 @@ const paymentsItems: NavItem[] = [
   { label: 'Installments', href: '/dashboard/payments/installments', icon: Calendar, navId: 'nav_payments_installments' },
   { label: 'Subscriptions', href: '/dashboard/payments/subscriptions', icon: RefreshCw, navId: 'nav_payments_subscriptions' },
   { label: 'Transactions', href: '/dashboard/transactions', icon: CreditCard, navId: 'nav_transactions' },
-  { label: 'Accounting', href: '/dashboard/payments/accounting', icon: FileSpreadsheet, navId: 'nav_payments_accounting' },
 ];
 
 const marketingItems: NavItem[] = [
@@ -349,7 +347,7 @@ export default function Sidebar({
         )}
       </div>
 
-      <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {menuItems.filter((item) => {
           if (!navOk(item.navId)) return false;
           if (!isAdmin && item.label === 'Reports') return false;
