@@ -85,6 +85,7 @@ import {
   type FormBlock,
   type FormBlockStyle,
   type FormBlockType,
+  type FormSettings,
   type MarketingFormDefinition,
   type PostSubmitConfig,
   createBlock,
@@ -1019,6 +1020,91 @@ function PostSubmitInspector({
   );
 }
 
+// ── Pipeline stage option shape for the settings dropdown ──────────────────
+interface StageOption {
+  stageId: string;
+  stageName: string;
+  pipelineName: string;
+}
+
+function FormSettingsPanel({
+  settings,
+  onChange,
+}: {
+  settings: FormSettings | undefined;
+  onChange: (s: FormSettings) => void;
+}) {
+  const s: FormSettings = settings ?? {};
+  const [stages, setStages] = useState<StageOption[]>([]);
+  const [stagesLoading, setStagesLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setStagesLoading(true);
+    fetch('/api/pipelines')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { pipelines?: Array<{ name: string; stages?: Array<{ id: string; name: string }> }> } | null) => {
+        if (cancelled || !data?.pipelines) return;
+        const opts: StageOption[] = [];
+        for (const p of data.pipelines) {
+          for (const st of p.stages ?? []) {
+            opts.push({ stageId: st.id, stageName: st.name, pipelineName: p.name });
+          }
+        }
+        setStages(opts);
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setStagesLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  return (
+    <div className="text-[13px] text-gray-900">
+      <div className="mb-5">
+        <h3 className="text-[15px] font-medium tracking-tight text-gray-900">Submission settings</h3>
+        <div className="mt-3 h-px w-full bg-gray-200/90" />
+      </div>
+
+      {/* Notification emails */}
+      <SettingsRow label="Notify emails">
+        <input
+          className={SETTINGS_INPUT}
+          placeholder="you@example.com, team@example.com"
+          value={s.notificationEmails ?? ''}
+          onChange={(e) => onChange({ ...s, notificationEmails: e.target.value })}
+        />
+        <p className="mt-1 text-[11px] leading-relaxed text-gray-400">
+          Comma-separated. We'll email these addresses on every new submission.
+        </p>
+      </SettingsRow>
+
+      {/* Pipeline stage routing */}
+      <SettingsRow label="Send leads to">
+        <SettingsSelectWrap>
+          <select
+            className={SETTINGS_SELECT}
+            value={s.pipelineStageId ?? ''}
+            disabled={stagesLoading}
+            onChange={(e) =>
+              onChange({ ...s, pipelineStageId: e.target.value || null })
+            }
+          >
+            <option value="">Don't add to pipeline</option>
+            {stages.map((opt) => (
+              <option key={opt.stageId} value={opt.stageId}>
+                {opt.pipelineName} → {opt.stageName}
+              </option>
+            ))}
+          </select>
+        </SettingsSelectWrap>
+        <p className="mt-1 text-[11px] leading-relaxed text-gray-400">
+          Submissions with an email are saved as contacts automatically. Select a stage to also create a lead.
+        </p>
+      </SettingsRow>
+    </div>
+  );
+}
+
 export function FormBuilderEditor({
   formId,
   initialName,
@@ -1330,6 +1416,13 @@ export function FormBuilderEditor({
   const patchPostSubmit = useCallback(
     (next: PostSubmitConfig) => {
       patchDefinition((d) => ({ ...d, postSubmit: next }));
+    },
+    [patchDefinition]
+  );
+
+  const patchSettings = useCallback(
+    (next: FormSettings) => {
+      patchDefinition((d) => ({ ...d, settings: next }));
     },
     [patchDefinition]
   );
@@ -1800,11 +1893,18 @@ export function FormBuilderEditor({
             ) : null}
 
             {rightTab === 'settings' ? (
-              <PostSubmitInspector
-                postSubmit={definition.postSubmit}
-                onChange={patchPostSubmit}
-                onPreviewThankYou={() => setThankYouOpen(true)}
-              />
+              <div className="space-y-6">
+                <FormSettingsPanel
+                  settings={definition.settings}
+                  onChange={patchSettings}
+                />
+                <div className="h-px w-full bg-gray-100" />
+                <PostSubmitInspector
+                  postSubmit={definition.postSubmit}
+                  onChange={patchPostSubmit}
+                  onPreviewThankYou={() => setThankYouOpen(true)}
+                />
+              </div>
             ) : null}
 
             {rightTab === 'theme' ? (
@@ -1963,10 +2063,10 @@ export function FormBuilderEditor({
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 id="form-preview-title" className="text-lg font-semibold text-gray-900">
-                  Form preview
+                  Live preview
                 </h2>
                 <p className="mt-1 text-sm text-gray-600">
-                  How visitors see your form (theme, labels, and fields). Submit is disabled.
+                  Fill out and submit to test your form. Real submissions are saved and notifications sent.
                 </p>
                 <a
                   href={embedUrl}
@@ -1990,10 +2090,8 @@ export function FormBuilderEditor({
               <MarketingFormView
                 definition={definition}
                 embedToken={embedToken}
-                preview
                 formTitle={name}
                 venueContact={venueContact}
-                onPreviewSubmit={() => setCanvasHint('Preview only — not submitted')}
               />
             </div>
           </div>

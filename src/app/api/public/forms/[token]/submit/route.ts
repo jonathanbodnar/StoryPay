@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { sendEmail } from '@/lib/email';
 import {
   INPUT_BLOCK_TYPES,
   formFieldName,
@@ -28,6 +29,19 @@ function safeFileSegment(name: string): string {
   return base || 'file';
 }
 
+function isEmail(s: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ token: string }> }
@@ -45,9 +59,6 @@ export async function POST(
 
   if (loadErr || !formRow) {
     return NextResponse.json({ error: 'Form not found' }, { status: 404 });
-  }
-  if (!formRow.published) {
-    return NextResponse.json({ error: 'Form is not published' }, { status: 403 });
   }
 
   const definition = parseDefinition(formRow.definition_json);
@@ -143,6 +154,140 @@ export async function POST(
     console.error('[form submit insert]', insErr);
     return NextResponse.json({ error: 'Could not save submission' }, { status: 500 });
   }
+
+  // ── Extract contact fields from the submission payload ────────────────────
+  let firstNameVal = '';
+  let lastNameVal = '';
+  let emailVal = '';
+  let phoneVal = '';
+
+  for (const block of definition.blocks) {
+    const val = payload[block.id];
+    if (typeof val !== 'string') continue;
+    if (block.type === 'first_name') firstNameVal = val.trim();
+    else if (block.type === 'last_name') lastNameVal = val.trim();
+    else if (block.type === 'email') emailVal = val.trim().toLowerCase();
+    else if (block.type === 'phone') phoneVal = val.trim();
+  }
+
+  const contactName = [firstNameVal, lastNameVal].filter(Boolean).join(' ') || emailVal;
+  const settings = definition.settings;
+
+  // ── Always upsert to venue_customers (contacts) if we have an email ───────
+  let customerId: string | null = null;
+  if (emailVal && isEmail(emailVal)) {
+    try {
+      const { data: vc } = await supabaseAdmin
+        .from('venue_customers')
+        .upsert(
+          {
+            venue_id:       formRow.venue_id,
+            customer_email: emailVal,
+            first_name:     firstNameVal || null,
+            last_name:      lastNameVal || null,
+            phone:          phoneVal || null,
+            updated_at:     new Date().toISOString(),
+          },
+          { onConflict: 'venue_id,customer_email' },
+        )
+        .select('id')
+        .maybeSingle();
+      if (vc) customerId = vc.id as string;
+    } catch (e) {
+      console.warn('[form submit] venue_customers upsert failed:', e);
+    }
+
+    // ── Route submission into a pipeline stage (create lead) ─────────────
+    if (settings?.pipelineStageId) {
+      try {
+        const { data: stageRow } = await supabaseAdmin
+          .from('lead_pipeline_stages')
+          .select('id, name, pipeline_id')
+          .eq('id', settings.pipelineStageId)
+          .eq('venue_id', formRow.venue_id)
+          .maybeSingle();
+
+        if (stageRow) {
+          const { error: leadErr } = await supabaseAdmin.from('leads').insert({
+            venue_id:    formRow.venue_id,
+            name:        contactName,
+            first_name:  firstNameVal || null,
+            last_name:   lastNameVal || null,
+            email:       emailVal,
+            phone:       phoneVal || null,
+            source:      'form',
+            status:      'lead',
+            pipeline_id: stageRow.pipeline_id,
+            stage_id:    stageRow.id,
+            position:    0,
+          });
+          if (leadErr) {
+            console.warn('[form submit] lead insert failed:', leadErr.message);
+          }
+        }
+      } catch (e) {
+        console.warn('[form submit] lead routing failed:', e);
+      }
+    }
+  }
+
+  // ── Notification emails ───────────────────────────────────────────────────
+  if (settings?.notificationEmails) {
+    const recipients = settings.notificationEmails
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => isEmail(s));
+
+    if (recipients.length > 0) {
+      try {
+        const { data: venueRow } = await supabaseAdmin
+          .from('venues')
+          .select('name')
+          .eq('id', formRow.venue_id)
+          .maybeSingle();
+        const venueName = venueRow?.name ?? 'your venue';
+
+        const { data: formMeta } = await supabaseAdmin
+          .from('marketing_forms')
+          .select('name')
+          .eq('id', formRow.id)
+          .maybeSingle();
+        const formName = formMeta?.name ?? 'Form submission';
+
+        const fieldRows = definition.blocks
+          .filter((b) => INPUT_BLOCK_TYPES.includes(b.type) && payload[b.id] !== undefined)
+          .map((b) => {
+            const val = Array.isArray(payload[b.id])
+              ? (payload[b.id] as string[]).join(', ')
+              : typeof payload[b.id] === 'object'
+                ? '[file attachment]'
+                : String(payload[b.id] ?? '');
+            return `<tr><td style="padding:4px 12px 4px 0;color:#666;white-space:nowrap;">${escapeHtml(b.label || b.type)}</td><td style="padding:4px 0;">${escapeHtml(val)}</td></tr>`;
+          })
+          .join('');
+
+        const html = `
+          <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:0 auto;color:#1b1b1b;">
+            <h2 style="margin:0 0 8px;">New form submission</h2>
+            <p style="margin:0 0 16px;color:#555;">${escapeHtml(formName)} · ${escapeHtml(venueName)}</p>
+            <table style="width:100%;border-collapse:collapse;">${fieldRows}</table>
+          </div>`;
+
+        for (const to of recipients) {
+          await sendEmail({
+            to,
+            subject: `New submission: ${formName} — ${venueName}`,
+            html,
+            ...(emailVal ? { replyTo: emailVal } : {}),
+          }).catch((e) => console.warn('[form submit] notification email error:', e));
+        }
+      } catch (e) {
+        console.warn('[form submit] notification email setup failed:', e);
+      }
+    }
+  }
+
+  void customerId; // suppress unused-variable warning
 
   const ps = resolvePostSubmit(definition);
   return NextResponse.json({

@@ -77,11 +77,20 @@ export interface FormBlock {
   style?: FormBlockStyle;
 }
 
+/** Per-form submission routing and notification settings. */
+export interface FormSettings {
+  /** Comma-separated email addresses to notify on every submission. */
+  notificationEmails?: string;
+  /** Pipeline stage ID to route new submissions into (creates a lead + contact). */
+  pipelineStageId?: string | null;
+}
+
 export interface MarketingFormDefinition {
   version: typeof MARKETING_FORM_SCHEMA_VERSION;
   blocks: FormBlock[];
   theme?: FormTheme;
   postSubmit?: PostSubmitConfig;
+  settings?: FormSettings;
 }
 
 export function defaultPostSubmit(): PostSubmitConfig {
@@ -297,11 +306,26 @@ export function parseDefinition(raw: unknown): MarketingFormDefinition {
   }
   const theme = isObject(raw.theme) ? (raw.theme as FormTheme) : undefined;
   const postSubmit = parsePostSubmit(raw.postSubmit);
+  const settings = parseFormSettings(raw.settings);
   return {
     version: MARKETING_FORM_SCHEMA_VERSION,
     blocks,
     theme: theme ? mergeTheme(theme) : undefined,
     postSubmit,
+    ...(settings ? { settings } : {}),
+  };
+}
+
+function parseFormSettings(raw: unknown): FormSettings | undefined {
+  if (!isObject(raw)) return undefined;
+  const notificationEmails =
+    typeof raw.notificationEmails === 'string' ? raw.notificationEmails : undefined;
+  const pipelineStageId =
+    typeof raw.pipelineStageId === 'string' ? raw.pipelineStageId : null;
+  if (!notificationEmails && pipelineStageId === null) return undefined;
+  return {
+    ...(notificationEmails !== undefined ? { notificationEmails } : {}),
+    ...(pipelineStageId !== null ? { pipelineStageId } : {}),
   };
 }
 
@@ -322,6 +346,7 @@ export function serializeDefinition(def: MarketingFormDefinition): MarketingForm
     blocks: def.blocks.map((b) => ({ ...b })),
     theme: def.theme ? mergeTheme(def.theme) : mergeTheme({}),
     ...(def.postSubmit ? { postSubmit: { ...def.postSubmit } } : {}),
+    ...(def.settings ? { settings: { ...def.settings } } : {}),
   };
 }
 
