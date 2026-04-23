@@ -32,14 +32,14 @@ export const HELP_CATEGORIES: HelpCategory[] = [
 
 After logging in you land on the Home dashboard which shows your revenue, pipeline, recent proposals, and recent transactions at a glance.
 
-Navigation lives in the left sidebar (or the hamburger menu on mobile). Top-level items include Home, Ask AI, Contacts, **Conversations**, Calendar, Leads, Reports, What's New, and Help Center. **Venue listing** (directory **Dashboard**, **Media library**, **Photos**, **Analytics**, **Reviews**), **Payments**, **Marketing** (analytics, lead capture forms, email tools, trigger links & tags), and **Settings** open as flyout submenus. On desktop you can **collapse** the sidebar with the chevron next to the logo — it becomes a narrow icon rail with a compact mark; your choice is remembered in the browser.
+Navigation lives in the left sidebar (or the hamburger menu on mobile). Top-level items include Home, Ask AI, Contacts, Conversations, Calendar, Leads, Reports, What's New, and Help Center. Venue listing (directory Dashboard, Media library, Photos, Analytics, Reviews), Payments, Marketing (analytics, lead capture forms, email tools, trigger links & tags), and Settings open as flyout submenus. On desktop you can collapse the sidebar with the chevron next to the logo — it becomes a narrow icon rail with a compact mark; your choice is remembered in the browser.
 
 The main areas:
 - Home — revenue snapshot and recent activity
-- Contacts — CRM profiles with tabs (Overview, Notes, Activity, Payments, Tasks, Documents) and a **pipeline + stage** control in the header (same sales pipelines as Leads)
-- Conversations — unified inbox per contact: **Team only** notes vs **Email contact** messages
+- Contacts — CRM profiles with tabs (Overview, Notes, Activity, Payments, Tasks, Documents) and a pipeline + stage control in the header (same sales pipelines as Leads)
+- Conversations — unified inbox per contact: Team only notes vs Email contact messages
 - Calendar — tours, weddings, and events
-- Venue listing — **Dashboard** for how you appear on storyvenue.com (description, publish); **Media library** for shared images you reuse across listing, emails, forms, and branding; **Photos** for cover and gallery on the directory page; **Analytics** for GA4 measurement ID; **Reviews** for star ratings and testimonials (published reviews feed the public API/embed)
+- Venue listing — Dashboard for how you appear on storyvenue.com (description, publish); Media library for shared images you reuse across listing, emails, forms, and branding; Photos for cover and gallery on the directory page; Analytics for GA4 measurement ID; Reviews for star ratings and testimonials (published reviews feed the public API/embed)
 - Leads — Kanban/list pipeline for inquiries; editable stages and pipelines
 - Reports — financial exports (owners and admins)
 - Payments flyout — new proposal/invoice, proposals list, templates, installments, subscriptions, transactions
@@ -63,9 +63,9 @@ The browser tab shows the StoryVenue icon. If it still looks wrong after an app 
         id: 'gs-sidebar-chrome',
         title: 'Sidebar collapse and browser tab icon',
         tags: ['sidebar', 'collapse', 'narrow', 'rail', 'favicon', 'tab icon', 'icon', 'chevron'],
-        body: `On large screens, the left sidebar can be collapsed: click the **chevron** next to the StoryVenue logo (points left when expanded, right when collapsed). The sidebar shrinks to a narrow **icon rail** so you gain horizontal space for the main content. The logo switches to a **compact mark** instead of the full wordmark. Your preference is saved in this browser.
+        body: `On large screens, the left sidebar can be collapsed: click the chevron next to the StoryVenue logo (points left when expanded, right when collapsed). The sidebar shrinks to a narrow icon rail so you gain horizontal space for the main content. The logo switches to a compact mark instead of the full wordmark. Your preference is saved in this browser.
 
-The **browser tab** uses the StoryVenue icon (favicon), not the full logo. Hosting platforms sometimes show a default icon until the app loads — if you still see an old icon after an update, hard-refresh the page or clear cached data for app.storyvenue.com.`,
+The browser tab uses the StoryVenue icon (favicon), not the full logo. Hosting platforms sometimes show a default icon until the app loads — if you still see an old icon after an update, hard-refresh the page or clear cached data for app.storyvenue.com.`,
       },
       {
         id: 'gs-signup',
@@ -81,7 +81,7 @@ On the signup page:
 You'll see a "Check your inbox" confirmation. We email a magic login link to the address you entered — open it on the same device and you are logged straight into a brand-new dashboard with a blank directory listing ready to fill in.
 
 First things to do after signing up:
-- Go to **Venue listing → Dashboard** in the sidebar and fill in your venue name, description, location, capacity, pricing, amenities, and photos
+- Go to Venue listing → Dashboard in the sidebar and fill in your venue name, description, location, capacity, pricing, amenities, and photos
 - Toggle the Publish switch on when you're ready for couples to find you on storyvenue.com
 - Head to Settings → Branding to upload your logo and brand colors (these appear on proposals and outgoing emails)
 - Invite team members at Settings → Team
@@ -180,13 +180,13 @@ The two tables at the bottom show your 5 most recent proposals (with links to vi
 
 Four views (top-right toggle):
 - Month — traditional grid, best for scheduling at a glance
-- Week — seven columns with an hour-by-hour timeline
-- Day — single-column timeline for a chosen date
+- Week — seven-column timeline; always opens anchored to the current week in your timezone
+- Day — single-column timeline; always opens on today in your timezone
 - Year — 12-month grid showing how many weddings and tours fall in each month; click any month to jump to it
 
 Click any empty day (or hour slot in Week/Day view) to add a new event. Click any event chip to open its details where you can Edit or Delete it.
 
-Event colors come from your **venue spaces** — when you assign a space to an event, the event chip uses that space's color so the calendar reads at a glance by venue area. Events without a space use a neutral style. (The old per-event-type color legend was removed to keep the calendar focused on your own spaces.)
+Event colors come from your venue spaces — when you assign a space to an event, the event chip uses that space's color so the calendar reads at a glance by venue area. Events without a space use a neutral style.
 
 Events can be single-day, multi-day (for wedding weekends), or recurring (for weekly tastings, monthly maintenance days, etc.). Multi-day events render on every day they span; continuation days in Week/Day view show small left/right arrows to indicate the event extends before or after.
 
@@ -198,23 +198,21 @@ The "Today" button snaps back to the current date. The Prev / Next arrows move f
         tags: ['spaces', 'barn', 'garden', 'ballroom', 'room', 'venue space', 'add space', 'edit space', 'remove space'],
         body: `If your venue has multiple bookable spaces (e.g. Barn, Garden, Ballroom, Vineyard), set them up first so you can track bookings per space, color-code the calendar, and prevent double-bookings.
 
-**Two places to manage spaces**
+Two places to manage spaces
 
-1. **Calendar page → "Manage Spaces"** (top-right) — the main editor for all your spaces.
-2. **Inline from the New Event modal** — when adding or editing a calendar event, open the **Space** dropdown and click **Manage** to add, rename, recolor, or remove spaces right there without leaving the event form. The same controls now live on the **Leads** page New Lead modal (Space field → **Manage**), so you can add a space the moment a new inquiry tells you which one they want.
+1. Calendar page → "Manage Spaces" (top-right) — the main editor for all your spaces.
+2. Inline from the New Event modal — when adding or editing a calendar event, open the Space dropdown and click Manage to add, rename, recolor, or remove spaces right there without leaving the event form. The same controls are available on the Leads page New Lead modal (Space field → Manage) and the Contacts New Contact modal.
 
-**To add a space**
-1. Open Manage Spaces (Calendar or New Event/New Lead modal)
+To add a space
+1. Open Manage Spaces (Calendar or New Event / New Lead / New Contact modal)
 2. Enter a name and pick a color — the color is used for event chips on the calendar
 3. Click Add
 
-**To edit a space**
+To edit a space
 - Click the pencil next to a space, change the name or color, click Save.
 
-**To remove a space**
-- Click the trash icon. Events and leads that referenced it aren't deleted; their Space field just becomes empty.
-
-Spaces also appear as filter pills above the calendar. Click a space pill to filter the calendar to that space only; click "All Spaces" to show everything.`,
+To remove a space
+- Click the trash icon. Events and leads that referenced it aren't deleted; their Space field just becomes empty.`,
       },
       {
         id: 'cal-add-event',
@@ -223,16 +221,16 @@ Spaces also appear as filter pills above the calendar. Click a space pill to fil
         body: `To add an event, click the "+ Add Event" button or click directly on any day (or hour slot in Week/Day view) in the calendar grid.
 
 Fill in:
-- **Event Title** (e.g. "Smith & Johnson Wedding")
-- **Type** — Wedding, Reception, Tour, Phone call, Tasting, Meeting, Rehearsal, Hold, Blocked, Other
-- **Status** — Confirmed, Tentative/Hold, Cancelled
-- **Space** — pick from your saved venue spaces. Click **Manage** right in the modal to **add, edit, or remove** spaces without leaving the form (see the Spaces article). Assigning a space enables conflict detection and colors the event chip.
-- **Contact** — start typing a name, email, or phone to **search your contacts** and attach the event to a customer profile with one click. The linked contact's email/phone come along for the ride, and the event shows up on their profile timeline. You can still leave it blank for internal holds/blocks.
-- **Assigned team member** — if your venue has team members, pick the owner/coordinator responsible for the event. Their name shows on the event detail panel and keeps handoffs clear. Leave empty for unassigned.
-- **Start Date + End Date** — End Date auto-fills to match Start Date for single-day events. Change it to a later date for a multi-day event (e.g. a three-day wedding weekend).
-- **Start Time + End Time** (or check All Day)
-- **Repeats** — keep at "Does not repeat" for a one-off event, or pick Daily / Weekly / Monthly / Yearly for a recurring event (see the dedicated recurring events article for details)
-- **Notes**
+- Event Title (e.g. "Smith & Johnson Wedding")
+- Type — Wedding, Reception, Tour, Phone call, Tasting, Meeting, Rehearsal, Hold, Blocked, Other
+- Status — Confirmed, Tentative/Hold, Cancelled
+- Space — pick from your saved venue spaces. Click Manage right in the modal to add, edit, or remove spaces without leaving the form (see the Spaces article). Assigning a space enables conflict detection and colors the event chip.
+- Contact — start typing a name, email, or phone to search your contacts and attach the event to a customer profile with one click. The linked contact's email/phone come along for the ride, and the event shows up on their profile timeline. You can still leave it blank for internal holds/blocks.
+- Assigned team member — if your venue has team members, pick the owner/coordinator responsible for the event. Their name shows on the event detail panel and keeps handoffs clear. Leave empty for unassigned.
+- Start Date + End Date — End Date auto-fills to match Start Date for single-day events. Change it to a later date for a multi-day event (e.g. a three-day wedding weekend).
+- Start Time + End Time (or check All Day)
+- Repeats — keep at "Does not repeat" for a one-off event, or pick Daily / Weekly / Monthly / Yearly for a recurring event (see the dedicated recurring events article for details)
+- Notes
 
 Click Save Event.
 
@@ -387,35 +385,37 @@ Prospects can navigate forward and back through months. No customer information 
         id: 'conversations-overview',
         title: 'Conversations — team notes vs email to contact',
         tags: ['conversations', 'inbox', 'messages', 'email', 'team', 'mentions'],
-        body: `**Conversations** is the unified inbox for messages with each contact (sidebar → Conversations, or under the same area on mobile).
+        body: `Conversations is the unified inbox for messages with each contact (sidebar → Conversations).
 
-How it works:
-- Pick or start a **thread** tied to a venue customer (contact).
-- **Team only** — Internal notes visible only to your team. You can **@mention** teammates on a message; they are notified according to your setup.
-- **Email contact** — Sends an email to the couple through StoryPay (they need a real email on the contact profile). Client-visible messages cannot include @mentions — switch to Team only for that.
+Pick a thread on the left to open it. The message composer at the bottom has three tabs — choose before typing:
+
+- SMS — texts the contact via your connected Go High Level line. No @mentions. A character/segment counter shows in the toolbar.
+- Email — sends an email to the contact's address from their profile. You can add a subject line, and the message is styled as a clean email in the thread.
+- Team only — internal notes visible only to your team. Use @mentions to notify teammates.
+
+The composer starts small and expands as you type. Icons for emoji, file attachment, and trigger links live inside the input bubble. Outgoing SMS shows grey bubbles; Email messages render as expandable email cards with From/To/Date details; Team notes appear in amber.
 
 Tips:
-- Use Team only for logistics and staff coordination; use Email contact when the couple should see the message in their inbox.
-- If something fails to send, check that the contact has an email address and that your venue email settings are configured.
-
-Technical note: the feature relies on database tables and RPCs created by migration **022_conversations.sql** on Supabase. The app server uses the service role to read/write threads.`,
+- Use Team only for logistics and staff coordination.
+- Use SMS or Email when the couple should receive the message.
+- If something fails to send, check that the contact has an email address (for Email) or a valid phone number (for SMS) and that your GHL integration is connected.`,
       },
       {
         id: 'conversations-inbound',
         title: 'Replies from contacts land back in the thread',
         tags: ['inbound', 'reply', 'email reply', 'sms reply', 'resend', 'ghl', 'webhook', 'two way', 'threading'],
-        body: `Conversations is **two-way**. When a couple replies to an email you sent from the thread — or texts back the number you use for SMS — their reply appears in the same thread on the contact's Conversations page. No copy-paste, no checking two inboxes.
+        body: `Conversations is two-way. When a couple replies to an email you sent from the thread — or texts back the number you use for SMS — their reply appears in the same thread on the contact's Conversations page. No copy-paste, no checking two inboxes.
 
-**Email replies (Resend inbound)**
-- Every outbound email from Conversations uses a **Reply-To** address on your inbound subdomain (for example \`reply+<thread>+<token>@inbound.storyvenue.com\`). When the couple hits Reply, their mail client sends back to that address.
+Email replies (Resend inbound)
+- Every outbound email from Conversations uses a Reply-To address on your inbound subdomain (for example \`reply+<thread>+<token>@inbound.storyvenue.com\`). When the couple hits Reply, their mail client sends back to that address.
 - Resend receives the message through the \`email.received\` webhook wired at \`/api/webhooks/inbound-email\`, verifies the signed token, and appends the reply to the same thread. Quoted history is stripped so you only see what they typed.
 - What you need in your workspace: a Resend inbound domain (MX records added in DNS), the \`email.received\` webhook pointed at \`<your-host>/api/webhooks/inbound-email\`, and the environment variables \`RESEND_API_KEY\`, \`CONVERSATIONS_INBOUND_DOMAIN\`, \`CONVERSATIONS_INBOUND_SECRET\` set on the host. (Optional \`INBOUND_EMAIL_WEBHOOK_TOKEN\` lets you reject unknown callers.)
 
-**SMS replies (GHL inbound)**
+SMS replies (GHL inbound)
 - Outbound SMS goes through your connected GoHighLevel sub-account's A2P-approved number. Inbound replies hit GHL first, which posts them to StoryPay's inbound SMS webhook, and the message is attached to the matching thread by phone number.
 - Troubleshooting: if SMS replies aren't appearing, confirm the contact's phone is on file in E.164 format, that the GHL integration still shows "Connected" in Settings → Integrations, and that the GHL webhook/private integration that posts inbound SMS to StoryPay is live.
 
-**If a reply doesn't show up**
+If a reply doesn't show up
 - For email: check that DNS MX records are still valid, the Resend inbound webhook is \`Active\`, and your Railway (or other host) logs show the \`/api/webhooks/inbound-email\` route receiving the event. "Address not found" bounces usually mean the reply-to domain isn't set up on Resend yet.
 - For SMS: GHL must be connected and the sending number must match the contact. Messages to numbers not linked to any contact are dropped silently.`,
       },
@@ -433,9 +433,9 @@ Technical note: the feature relies on database tables and RPCs created by migrat
         tags: ['directory', 'listing', 'public page', 'storyvenue', 'venue page', 'seo'],
         body: `Your public listing is your venue profile on storyvenue.com. It's what couples see when they browse the directory or land on your page from a Google search.
 
-Open it from the sidebar → **Venue listing** → **Dashboard** (the listing editor). Everything on that page mirrors what appears at storyvenue.com/venue/<your-slug> when **Publish** is on.
+Open it from the sidebar → Venue listing → Dashboard (the listing editor). Everything on that page mirrors what appears at storyvenue.com/venue/<your-slug> when Publish is on.
 
-A second item under the same flyout — **Reviews** — is where you collect star ratings and written testimonials. Reviews can be **published**, **pending**, or **hidden**. Only **published** reviews are included in the public read API and embed for the marketing site.
+A second item under the same flyout — Reviews — is where you collect star ratings and written testimonials. Reviews can be published, pending, or hidden. Only published reviews are included in the public read API and embed for the marketing site.
 
 The listing has these sections:
 
@@ -459,7 +459,7 @@ Description
 Amenities
 - Check off the features your venue offers: Ceremony site, Reception site, Bridal suite, Groom's suite, On-site parking, Wheelchair accessible, In-house catering, BYO catering allowed, Bar service, Dance floor, Overnight accommodations, Pet friendly, Outdoor ceremony, Tented options, etc.
 
-Photos — see the "Uploading photos" article. For images you want to reuse in multiple places (listing gallery, marketing emails, lead capture forms, logo), use **Media library** first — see the dedicated article.
+Photos — see the "Uploading photos" article. For images you want to reuse in multiple places (listing gallery, marketing emails, lead capture forms, logo), use Media library first — see the dedicated article.
 
 Availability notes
 - Free-form text shown on your listing (e.g. "Booking 2026-2027 now, limited Saturdays in fall").
@@ -474,7 +474,7 @@ Publish toggle — at the top of the page. Off = not visible to the public. On =
         id: 'listing-autosave',
         title: 'Autosave and how changes are saved',
         tags: ['save', 'autosave', 'draft', 'saving', 'unsaved'],
-        body: `The **Venue listing → Dashboard** page saves automatically as you edit — there is no "lose your work if you forget to click Save" moment.
+        body: `The Venue listing → Dashboard page saves automatically as you edit — there is no "lose your work if you forget to click Save" moment.
 
 How it works:
 - Every change you make (typing, toggling a feature, uploading a photo) queues up an autosave
@@ -496,12 +496,12 @@ Tip: this makes it safe to start the description, switch tabs to upload photos t
         body: `Your listing supports one cover photo (the hero at the top of the page) and an unlimited gallery below.
 
 Two ways to add images:
-1. **Venue listing → Photos** (/dashboard/listing/images) — upload files from your computer, or click **From media library** to pick an image you already uploaded under **Venue listing → Media library**.
-2. **Venue listing → Dashboard** — the Photos section links to the same photo tools; you can also open **Media library** from the listing overview.
+1. Venue listing → Photos (/dashboard/listing/images) — upload files from your computer, or click From media library to pick an image you already uploaded under Venue listing → Media library.
+2. Venue listing → Dashboard — the Photos section links to the same photo tools; you can also open Media library from the listing overview.
 
 Direct upload from Photos:
 1. Go to Venue listing → Photos (or Dashboard → Photos section → Manage photos)
-2. Click **Upload photos** and choose files, or **From media library** to reuse a shared image
+2. Click Upload photos and choose files, or From media library to reuse a shared image
 3. Images upload to secure cloud storage and appear on your listing immediately
 
 Best practices:
@@ -524,28 +524,28 @@ Uploaded photos are public — they're served directly from a CDN so your listin
         id: 'listing-media-library',
         title: 'Media library — shared images for listing, email, forms, and branding',
         tags: ['media library', 'images', 'assets', 'upload', 'reuse', 'photos', 'cdn', 'logo'],
-        body: `The **Media library** is your venue-wide folder for image files. Open it from the sidebar → **Venue listing** → **Media library** (path: /dashboard/listing/media).
+        body: `The Media library is your venue-wide folder for image files. Open it from the sidebar → Venue listing → Media library (path: /dashboard/listing/media).
 
 What it is for:
-- Upload images once, then reuse them wherever StoryPay needs an image URL — directory **Photos**, **marketing email** templates (Image block), **lead capture forms** (Image block), and **Settings → Branding** (logo — "Choose from media library").
+- Upload images once, then reuse them wherever StoryPay needs an image URL — directory Photos, marketing email templates (Image block), lead capture forms (Image block), and Settings → Branding (logo — "Choose from media library").
 - Copy any asset's public URL from the library to paste elsewhere if needed.
 
 Rules:
-- **Images only** — JPEG, PNG, WebP, AVIF, or GIF. Max 10 MB per file.
-- **Video uploads are not supported** (use a hosted video link in text/HTML if you need video elsewhere).
+- Images only — JPEG, PNG, WebP, AVIF, or GIF. Max 10 MB per file.
+- Video uploads are not supported (use a hosted video link in text/HTML if you need video elsewhere).
 
 Managing files:
 - Upload multiple images from the Media library page; each appears in a grid with file name and size.
-- Use **Copy URL** to put the link on your clipboard.
-- **Delete** removes the file from storage permanently. Any page or email that still pointed at that URL will show a broken image — update those spots after deleting.
+- Use Copy URL to put the link on your clipboard.
+- Delete removes the file from storage permanently. Any page or email that still pointed at that URL will show a broken image — update those spots after deleting.
 
-Tip: On **Venue listing → Photos**, use **From media library** to add a library image to your gallery without uploading a second copy.`,
+Tip: On Venue listing → Photos, use From media library to add a library image to your gallery without uploading a second copy.`,
       },
       {
         id: 'listing-publish',
         title: 'Publishing and unpublishing your listing',
         tags: ['publish', 'unpublish', 'live', 'visible', 'hidden', 'public'],
-        body: `The Publish toggle (top of the **Venue listing → Dashboard** page) controls whether couples can find your venue on storyvenue.com.
+        body: `The Publish toggle (top of the Venue listing → Dashboard page) controls whether couples can find your venue on storyvenue.com.
 
 Off (default for new accounts)
 - Your listing page returns "not found" to the public
@@ -587,21 +587,21 @@ Caution: changing the slug changes your public URL. Any links on your website, I
         id: 'listing-reviews',
         title: 'Listing reviews and your public venue page',
         tags: ['reviews', 'testimonials', 'stars', 'storyvenue', 'embed', 'public api', 'published'],
-        body: `Under **Venue listing → Reviews** you manage testimonials: star rating (1–5), optional title, review text, couple name, optional wedding date and email.
+        body: `Under Venue listing → Reviews you manage testimonials: star rating (1–5), optional title, review text, couple name, optional wedding date and email.
 
 Statuses:
-- **Published** — included in the public JSON API and in the reviews embed (see below).
-- **Pending** — hold for moderation (useful when you later let couples submit reviews).
-- **Hidden** — not shown publicly.
+- Published — included in the public JSON API and in the reviews embed (see below).
+- Pending — hold for moderation (useful when you later let couples submit reviews).
+- Hidden — not shown publicly.
 
 Showing reviews on storyvenue.com:
-- The main directory site may use a **custom page template**. To display reviews, either:
-  1. Paste the **iframe** snippet from the Reviews page (it points to app.storyvenue.com/embed/listing-reviews/<your-slug>), or
+- The main directory site may use a custom page template. To display reviews, either:
+  1. Paste the iframe snippet from the Reviews page (it points to app.storyvenue.com/embed/listing-reviews/<your-slug>), or
   2. Have your developer call the public JSON endpoint "GET https://app.storyvenue.com/api/public/venues/<slug>" and render the reviews array (only when your listing is published and reviews are published).
 
 On the app domain you can preview the path /venue/<your-slug> — same data as the API.
 
-Database: reviews live in **listing_reviews** (migration 024). An optional read-only view **listing_reviews_public** (migration 025) exposes published rows safely to Supabase anon for external sites that query Postgres directly.`,
+Database: reviews live in listing_reviews (migration 024). An optional read-only view listing_reviews_public (migration 025) exposes published rows safely to Supabase anon for external sites that query Postgres directly.`,
       },
     ],
   },
@@ -617,11 +617,11 @@ Database: reviews live in **listing_reviews** (migration 024). An optional read-
         tags: ['leads', 'pipeline', 'kanban', 'sales', 'inbox', 'directory leads', 'form', 'space', 'contact stage'],
         body: `The Leads page is your sales pipeline. Open it from the sidebar → Leads.
 
-**Every contact is always visible in some pipeline stage.** When you open Leads, StoryPay reconciles your leads and contacts so that every contact with a real email shows up in the pipeline, and every lead is snapped to the pipeline + stage stored on its matching contact profile. If you move a contact's stage on the Contacts page, the Leads Kanban reflects it — and vice versa. Leads pointing at a deleted pipeline/stage automatically heal to the default pipeline's first stage instead of disappearing from the board.
+Every contact is always visible in some pipeline stage. When you open Leads, StoryPay reconciles your leads and contacts so that every contact with a real email shows up in the pipeline, and every lead is snapped to the pipeline + stage stored on its matching contact profile. If you move a contact's stage on the Contacts page, the Leads Kanban reflects it — and vice versa. Leads pointing at a deleted pipeline/stage automatically heal to the default pipeline's first stage instead of disappearing from the board.
 
 Two ways leads arrive:
 - Inquiries submitted through your storyvenue.com directory listing show up automatically.
-- You can add leads by hand with the "+ Add Lead" button in the top-right (paste in contact info from a phone call, Instagram DM, referral, wedding show, etc.) — the New Lead modal now includes a **Space** picker so you can capture which venue space the couple is most interested in (with inline add/edit/remove just like the calendar event modal).
+- You can add leads by hand with the "+ Add Lead" button in the top-right. The New Lead modal includes a Space picker and a Pipeline / Stage picker. Choose "None" as the stage to track a contact without placing them in an active pipeline column — they'll appear only on the Contacts page, not the Kanban.
 
 Two views:
 - Kanban — your pipeline as columns. Each stage is a column; each lead is a card. Drag a card between columns to change its stage.
@@ -640,11 +640,11 @@ Click any card (or list row) to open the full lead drawer — edit any field, ad
 
 The pipeline picker (top-right) lets you switch between multiple pipelines. Everyone starts with a default "Sales Pipeline" with 8 stages: Lead, Conversations Started, Lead Contacted, Tour Booked, Proposal Sent, Wedding Booked, Follow up, Not Interested. You can rename, add, remove, and reorder stages — or create a brand-new pipeline — with the Edit button.
 
-When a **customer profile** exists with the same email as a lead, updating the stage on the customer profile or moving the card on the Kanban can keep both in sync (see the customer profile pipeline section).
+When a customer profile exists with the same email as a lead, updating the stage on the customer profile or moving the card on the Kanban can keep both in sync (see the customer profile pipeline section).
 
-**Pipeline intelligence** — Below the page header, an insights strip summarizes **open pipeline** (sum of opportunity values), **weighted pipeline** (deal value × each stage's win probability; see next articles), rough **booked revenue** by referral label vs **directory**-sourced leads (from paid proposals matched by email), and a simple **ROI** vs optional **listing marketing monthly spend** when that budget is stored on your venue. This is directional, not accounting-grade.
+Pipeline intelligence — Below the page header, an insights strip summarizes open pipeline (sum of opportunity values), weighted pipeline (deal value × each stage's win probability; see next articles), rough booked revenue by referral label vs directory-sourced leads (from paid proposals matched by email), and a simple ROI vs optional listing marketing monthly spend when that budget is stored on your venue. This is directional, not accounting-grade.
 
-**Tags & attribution** — Leads support **marketing tags** and **trigger links** (Marketing) for attribution; the drawer can show personalized trigger URLs for this lead.`,
+Tags & attribution — Leads support marketing tags and trigger links (Marketing) for attribution; the drawer can show personalized trigger URLs for this lead.`,
       },
       {
         id: 'leads-crm-intelligence',
@@ -652,24 +652,24 @@ When a **customer profile** exists with the same email as a lead, updating the s
         tags: ['weighted', 'forecast', 'roi', 'audit', 'owner', 'assign', 'hide revenue', 'permissions', 'log call', 'insights', 'listing spend'],
         body: `The Leads page includes tools for forecasting, accountability, and team permissions.
 
-**Weighted pipeline**
-- Each stage has a **win probability** (0–100%). If unset, StoryPay uses sensible defaults from the stage **kind** (open vs won vs lost).
-- **Weighted** amounts multiply opportunity value by that probability. You'll see **wtd** on Kanban column headers and on cards, plus a venue-wide weighted total in the insights strip.
+Weighted pipeline
+- Each stage has a win probability (0–100%). If unset, StoryPay uses sensible defaults from the stage kind (open vs won vs lost).
+- Weighted amounts multiply opportunity value by that probability. You'll see wtd on Kanban column headers and on cards, plus a venue-wide weighted total in the insights strip.
 
-**Deal value**
-- Set **Opportunity value** on the lead (drawer or when adding a lead). Cards and list rows show the amount unless hidden by role (below).
+Deal value
+- Set Opportunity value on the lead (drawer or when adding a lead). Cards and list rows show the amount unless hidden by role (below).
 
-**Assigning an owner**
-- Open the lead drawer → **Owner** → choose an active team member or **Unassigned**. Initials can appear on Kanban cards.
+Assigning an owner
+- Open the lead drawer → Owner → choose an active team member or Unassigned. Initials can appear on Kanban cards.
 
-**Activity & audit**
-- The drawer includes **Activity & audit** — a chronological log when someone changes **stage**, **opportunity value**, or **owner**, and when someone uses **Log a call** (free-text summary). This is separate from the **Timeline** (notes, tasks, marketing events, etc.).
+Activity & audit
+- The drawer includes Activity & audit — a chronological log when someone changes stage, opportunity value, or owner, and when someone uses Log a call (free-text summary). This is separate from the Timeline (notes, tasks, marketing events, etc.).
 
-**Who can see dollar amounts**
-- The **venue owner** can enable **Hide $** per team member on **Settings → Team** (for active members who are not the Owner role). Those users see **•••** instead of opportunity and weighted money lines in Leads.
+Who can see dollar amounts
+- The venue owner can enable Hide $ per team member on Settings → Team (for active members who are not the Owner role). Those users see ••• instead of opportunity and weighted money lines in Leads.
 
-**Listing spend & ROI**
-- Venues can store an optional **listing marketing monthly spend** on the account. When present, the Leads insights strip compares rough **directory-attributed booked revenue** to that budget as a simple ROI hint.`,
+Listing spend & ROI
+- Venues can store an optional listing marketing monthly spend on the account. When present, the Leads insights strip compares rough directory-attributed booked revenue to that budget as a simple ROI hint.`,
       },
       {
         id: 'leads-kanban',
@@ -687,9 +687,9 @@ The change saves instantly. There's no "undo" in the UI, but dragging the card b
 Each column shows at the top:
 - Stage name and its color dot
 - Lead count
-- **Total opportunity value** for that column, and a **weighted (wtd)** line derived from each card's value × stage win probability (unless dollars are hidden for your role)
+- Total opportunity value for that column, and a weighted (wtd) line derived from each card's value × stage win probability (unless dollars are hidden for your role)
 
-Cards show the lead's name, venue, email, phone, wedding date, note count, **assignee initials** when an owner is set, **opportunity value** with a **wtd** line under it, marketing **tags**, and date created.
+Cards show the lead's name, venue, email, phone, wedding date, note count, assignee initials when an owner is set, opportunity value with a wtd line under it, marketing tags, and date created.
 
 Scroll horizontally if you have many stages — the board always fits a single row of columns, even on wide pipelines.
 
@@ -707,9 +707,9 @@ Open the editor:
 
 Editing stages (right panel):
 - Rename — click a stage name and type a new one; it saves when you tab/click away.
-- **Change color** — click the color swatch next to the stage name to open a color picker popover. Inside the popover you get the native color wheel, a **Hex code** field (type any color like #1b1b1b), and a grid of preset swatches. Press Enter or click outside to commit. The same popover is available when adding a new stage.
+- Change color — click the color swatch next to the stage name to open a color picker popover. Inside the popover you get the native color wheel, a Hex code field (type any color like #1b1b1b), and a grid of preset swatches. Press Enter or click outside to commit. The same popover is available when adding a new stage.
 - Stage kind — each stage is classified as Active (open), Won, or Lost. Won stages count as booked revenue in stats; Lost stages are excluded. Change the dropdown next to each stage.
-- **Win probability** — used for weighted pipeline totals on the board and in insights. Advanced accounts may set a 0–100% value per stage (API); otherwise defaults apply from the stage kind.
+- Win probability — used for weighted pipeline totals on the board and in insights. Advanced accounts may set a 0–100% value per stage (API); otherwise defaults apply from the stage kind.
 - Reorder — use the up/down arrow buttons.
 - Delete — trash icon. Any leads in that stage become unassigned and show in the first column.
 - Add — type a name in the "New stage" box, pick a color from the same popover, and click Add stage.
@@ -717,6 +717,9 @@ Editing stages (right panel):
 Creating a new pipeline:
 - Type a name in the "New pipeline name" box on the left panel → Add pipeline
 - New pipelines start with the default 8-stage template — edit freely from there.
+
+The "None" stage
+- Both the New Lead and New Contact forms include a "None" option in the Stage dropdown. Choosing None saves the contact without placing them in any pipeline column — they appear on the Contacts page but not on the Kanban board. Useful for contacts you want to track without actively working as a pipeline lead.
 
 Making a pipeline default:
 - The default pipeline is what new leads land in. Pick any pipeline → Make default.
@@ -735,20 +738,20 @@ Use "Use this pipeline" to make a pipeline the one you're viewing on the Leads p
 At the top you'll see the lead's name and the date they were added.
 
 Stage picker
-- Tap any stage chip to move this lead to that stage. The chip lights up in the stage's color. Stage changes are recorded under **Activity & audit**.
+- Tap any stage chip to move this lead to that stage. The chip lights up in the stage's color. Stage changes are recorded under Activity & audit.
 
-**Owner**
-- Use the **Owner** dropdown to assign the lead to an active team member (or leave unassigned).
+Owner
+- Use the Owner dropdown to assign the lead to an active team member (or leave unassigned).
 
 Editable fields (click to edit, blur or press Enter to save)
 - First name, Last name
 - Email, Phone
-- Opportunity value — expected deal size in dollars (may show as hidden if your role has **Hide $** enabled by the venue owner)
+- Opportunity value — expected deal size in dollars (may show as hidden if your role has Hide $ enabled by the venue owner)
 - Venue name, Venue website (URL)
 - Wedding date, Guest count
 - Referral / partner (free text)
 
-**Marketing tags**
+Marketing tags
 - Add or remove tags; create new tags from the lead or manage them under Marketing → Trigger Links & Tags.
 
 Inquiry message
@@ -757,13 +760,12 @@ Inquiry message
 Timestamped notes
 - Type in the "Add a note…" box and click Add note.
 - Every note is stamped with the exact time it was created.
-- Edit (pencil) or delete (trash) your own notes. System-generated notes (like "Appointment scheduled") can't be edited, but you can delete them.
+- Edit (pencil) or delete (trash) your own notes.
 - Notes are sorted newest-first.
-- The Kanban cards show a small "3" badge next to the message icon when a lead has notes.
 
-**Activity & audit** (above the timeline)
-- Lists **who** changed **stage**, **opportunity value**, or **owner**, plus **Log a call** entries you add here.
-- Type a short summary and click **Log a call** — it appears in this feed and helps with handoffs.
+Activity & audit (above the timeline)
+- Lists who changed stage, opportunity value, or owner, plus Log a call entries you add here.
+- Type a short summary and click Log a call — it appears in this feed and helps with handoffs.
 
 Quick actions
 - Reply (opens your email client with the lead's email pre-filled)
@@ -771,7 +773,7 @@ Quick actions
 - Listing (jumps to the directory page the lead came from)
 - Create customer (saves this lead as a customer in your CRM)
 - Schedule appointment (see next article)
-- Delete (permanent — requires confirmation)`,
+- Delete — removes the lead permanently (requires confirmation). Deleting a lead also removes the matching contact record.`,
       },
       {
         id: 'leads-schedule-appointment',
@@ -838,7 +840,7 @@ Things to ask:
 - "Explain weighted pipeline vs open pipeline"
 - "What's my directory vs referral booked revenue?" (insights strip uses your data; Ask AI also has leads context when you're on this page)
 
-Ask AI uses **server-side** pipeline data when you're on the Leads page (totals, recent leads, notes snippets). It does not change leads for you — use the Kanban board or drawer. If your user session **hides revenue** in the UI, you may still get numeric answers in chat depending on backend context; treat the **dashboard** as the source of truth for what your role may view.
+Ask AI uses server-side pipeline data when you're on the Leads page (totals, recent leads, notes snippets). It does not change leads for you — use the Kanban board or drawer. If your user session hides revenue in the UI, you may still get numeric answers in chat depending on backend context; treat the dashboard as the source of truth for what your role may view.
 
 If AI gives a stale answer, refresh the page to reset the context.`,
       },
@@ -867,18 +869,18 @@ SMS for high-value leads is not currently on by default; contact support if you 
         id: 'leads-space',
         title: 'Capturing a space on a new lead',
         tags: ['space', 'venue space', 'new lead', 'primary space', 'barn', 'garden', 'ballroom', 'add space', 'edit space'],
-        body: `The **+ Add Lead** modal on the Leads page includes a **Space** field so you can record which venue space the couple is most interested in at the moment the inquiry comes in — no extra step later.
+        body: `The + Add Lead modal on the Leads page includes a Space field so you can record which venue space the couple is most interested in at the moment the inquiry comes in — no extra step later.
 
-**How it works**
+How it works
 - Open the Space dropdown and pick any saved space (Barn, Garden, Ballroom, etc.).
-- Click **Manage** next to the field to add, rename, recolor, or remove spaces inline — you don't have to jump to the Calendar page. The exact same controls you already use when creating a calendar event are mirrored here.
+- Click Manage next to the field to add, rename, recolor, or remove spaces inline — you don't have to jump to the Calendar page. The exact same controls you already use when creating a calendar event are mirrored here.
 - Leave it empty if the couple hasn't decided yet; you can fill it in later from the lead drawer.
 
-**Why it matters**
+Why it matters
 - Space is carried through to calendar events and proposals, so when you book a tour or send a quote the correct space is already attached.
 - Insights and reports can slice inquiry volume by space to help you see which areas are driving demand.
 
-**If the field looks missing**
+If the field looks missing
 - This feature needs a one-time database migration (migrations/049_leads_space_id.sql). Until your workspace runs it, the API silently drops the space on new leads so nothing breaks — but the picker will look like it isn't saving. Apply the migration on Supabase and the field starts sticking.`,
       },
       {
@@ -913,14 +915,17 @@ Note: auto-conversion of a lead into a customer profile with a single click is a
         tags: ['add contact', 'new contact', 'create contact'],
         body: `Go to Contacts in the sidebar. Click the "+ Add contact" button (top right). You can also use Import CSV or Export CSV for bulk work.
 
-Fill in:
+The New Contact form is identical to the New Lead form and includes:
 - First Name (required)
 - Last Name (required)
 - Email (required)
 - Phone
+- Pipeline and Stage (same pipelines used on the Leads page — pick "None" to track without placing them in an active pipeline stage)
 - Address, City, State, Zip
 
 Click Save. The contact appears in your list immediately.
+
+To delete a contact: click the red trash / Delete button on the right side of the contact's row in the table. You'll be asked to confirm. Deleting a contact also removes their matching lead record.
 
 Tip: You can also create a contact inline while building a new proposal or invoice — just type their name in the contact search field and select "Add new contact".`,
       },
@@ -967,7 +972,7 @@ Documents
 - Each file has a type and a status (Pending / Received / Approved)
 - Click a filename to download; update status inline; delete files
 
-Below the main header row, the **Pipeline** section lets you choose which **sales pipeline** applies (same pipelines you manage under Leads — e.g. default "Sales Pipeline") and shows **stage pills** for that pipeline. Click a pill to move the contact to that stage; the selection saves to the server and the UI updates right away. If a lead exists with the **same email**, you may see a note that the profile is linked to a lead and stages can stay in sync both ways.
+Below the main header row, the Pipeline section lets you choose which sales pipeline applies (same pipelines you manage under Leads — e.g. default "Sales Pipeline") and shows stage pills for that pipeline. Click a pill to move the contact to that stage; the selection saves to the server and the UI updates right away. If a lead exists with the same email, you may see a note that the profile is linked to a lead and stages can stay in sync both ways.
 
 The header also shows a stage badge, referral source when set, and KPIs: proposals count, total paid, pending amount, open tasks.
 
@@ -977,15 +982,15 @@ On the Contacts list page itself, each row also has "Create Proposal" and "Creat
         id: 'cust-pipeline',
         title: 'Sales pipeline, stages, and referral source',
         tags: ['pipeline', 'stage', 'lead', 'referral', 'source', 'funnel', 'crm', 'kanban', 'sales pipeline'],
-        body: `Customer profiles use the same **configurable sales pipelines** as the Leads page (Kanban). Your venue can have one or more pipelines; each pipeline has ordered **stages** with names and colors (the default template often includes stages like Lead, Conversations Started, Lead Contacted, Tour Booked, Proposal Sent, Wedding Booked, Follow up, and Not Interested — you can rename, add, remove, or reorder them from Leads).
+        body: `Customer profiles use the same configurable sales pipelines as the Leads page (Kanban). Your venue can have one or more pipelines; each pipeline has ordered stages with names and colors (the default template often includes stages like Lead, Conversations Started, Lead Contacted, Tour Booked, Proposal Sent, Wedding Booked, Follow up, and Not Interested — you can rename, add, remove, or reorder them from Leads).
 
 On the customer profile:
-1. Choose the **Pipeline** from the dropdown (e.g. "Sales Pipeline").
-2. Click a **stage pill** to move the customer to that stage. The UI updates immediately and the change is saved.
+1. Choose the Pipeline from the dropdown (e.g. "Sales Pipeline").
+2. Click a stage pill to move the customer to that stage. The UI updates immediately and the change is saved.
 
-If a **lead** in your inbox shares the same email as this customer, the profile may show that it is linked to a lead — **stage can sync both ways** between Leads and the customer record.
+If a lead in your inbox shares the same email as this customer, the profile may show that it is linked to a lead — stage can sync both ways between Leads and the customer record.
 
-**Referral source** (how the couple found you) is separate from pipeline: Instagram, Google, Wedding Wire, The Knot, Referral, Venue Website, Facebook, or Other. Set it from the Overview tab / contact area.
+Referral source (how the couple found you) is separate from pipeline: Instagram, Google, Wedding Wire, The Knot, Referral, Venue Website, Facebook, or Other. Set it from the Overview tab / contact area.
 
 If pipeline or stage changes fail with a database-related error, your environment may need the latest database migration applied — contact whoever manages your StoryPay database or support.`,
       },
@@ -1192,7 +1197,7 @@ Downloads happen instantly in your browser — no email required. For large date
         tags: ['branding', 'logo', 'colors', 'brand', 'customize', 'email colors'],
         body: `Go to Settings → Branding.
 
-Upload your logo by clicking "Upload Logo" and selecting a PNG, JPG, or SVG file (max 5MB). Or click **Choose from media library** to pick an image you already uploaded in **Venue listing → Media library** (shared images: JPEG, PNG, WebP, AVIF, GIF — no video). The logo appears in all outgoing emails — it shows in a white header with a colored strip underneath.
+Upload your logo by clicking "Upload Logo" and selecting a PNG, JPG, or SVG file (max 5MB). Or click Choose from media library to pick an image you already uploaded in Venue listing → Media library (shared images: JPEG, PNG, WebP, AVIF, GIF — no video). The logo appears in all outgoing emails — it shows in a white header with a colored strip underneath.
 
 Choose brand colors:
 - Click a Color Preset (Default, Ivory & Gold, Sage & Stone, Blush & Cream, Coastal Blue, etc.) — saves automatically when clicked.
@@ -1374,7 +1379,7 @@ Team members can update their own name and email at any time by clicking their n
 
 Note: Only owners and admins can manage team members.
 
-**Hide pipeline dollars (CRM)** — When you are logged in as the **venue owner** (not as an invited team member), each active team member who is **not** assigned the Owner role may show a **Hide $** checkbox on their row. Turning it on hides opportunity amounts, weighted totals, and related money lines for that person in Leads.`,
+Hide pipeline dollars (CRM) — When you are logged in as the venue owner (not as an invited team member), each active team member who is not assigned the Owner role may show a Hide $ checkbox on their row. Turning it on hides opportunity amounts, weighted totals, and related money lines for that person in Leads.`,
       },
       {
         id: 'team-roles',
@@ -1405,7 +1410,7 @@ To change a member's role: click the three-dot menu (...) on their row → Edit 
 
 Team members can update their own profile (name, email) by clicking their name in the sidebar footer.
 
-**Pipeline revenue visibility** — The **venue owner** can enable **Hide $** for individual team members (Settings → Team) so those users see masked amounts (•••) on Leads instead of dollar figures. Owners always see full amounts.`,
+Pipeline revenue visibility — The venue owner can enable Hide $ for individual team members (Settings → Team) so those users see masked amounts (•••) on Leads instead of dollar figures. Owners always see full amounts.`,
       },
     ],
   },
@@ -1465,17 +1470,19 @@ Note: SMS uses your GHL sub-account's verified A2P phone number automatically �
         id: 'updates-overview',
         title: "What's New — release notes and unread badge",
         tags: ["what's new", 'whats new', 'updates', 'release notes', 'changelog', 'red dot', 'unread', 'notifications'],
-        body: `**What's New** (sidebar → What's New) is your running changelog for StoryPay. Every time we ship a new feature, improvement, or fix, it lands here as an entry with a short outcome-focused headline and description so you can see at a glance what changed and why it matters to your venue.
+        body: `What's New (sidebar → What's New) is your running changelog for StoryPay. Every time we ship a new feature, improvement, or fix, it lands here as an entry with a short outcome-focused headline and description so you can see at a glance what changed and why it matters to your venue.
 
-**Unread indicator**
-- The sidebar shows a small **red dot** on the What's New menu item whenever there are updates you haven't reviewed yet. The dot carries a **count** of unread entries (1+).
-- Click What's New to open the page. Visiting the page **marks every entry as read** — the red dot and count disappear automatically for your user. (Each teammate has their own unread state, so clearing it for you doesn't clear it for them.)
-- Entries stay on the page forever; the badge just tracks what's new *to you* since your last visit.
+The page has two tabs: What's New (changelog) and Feature Requests.
 
-**What you'll see on each entry**
-- Category pill: **New Feature**, **Improvement**, or **Fix** (color-coded).
+Unread indicator
+- The sidebar shows a small red dot on the What's New menu item whenever there are updates you haven't reviewed yet. The dot carries a count of unread entries (1+).
+- Click What's New to open the page. Visiting the page marks every entry as read — the red dot and count disappear automatically for your user. Each teammate has their own unread state.
+- Entries stay on the page forever; the badge just tracks what's new to you since your last visit.
+
+What you'll see on each changelog entry
+- Category pill: New Feature, Improvement, or Fix (color-coded).
 - Outcome-based description — written to explain the impact on you, not just the technical change.
-- Date.
+- Date released.
 
 If the red dot sticks around after you visit the page, refresh once. If it still persists, sign out and back in so the read timestamp is re-synced.`,
       },
@@ -1485,20 +1492,28 @@ If the red dot sticks around after you visit the page, refresh once. If it still
         tags: ['feature request', 'suggest', 'feedback', 'idea', 'roadmap', 'vote', "what's new"],
         body: `You can ask for new features directly inside StoryPay — no external form.
 
-**How to submit**
-1. Open **What's New** (sidebar) and switch to the **Feature Requests** tab.
-2. Click **Submit a request**.
-3. Enter a short title and a description (at least ~300 characters is a good target — explain the problem, how you'd use the feature, and the outcome you want).
+How to submit
+1. Open What's New (sidebar) and switch to the Feature Requests tab.
+2. Click Submit Request.
+3. Enter a short title and a description (explain the problem, how you'd use the feature, and the outcome you want).
 4. Click Submit.
 
-Your request appears on the board and other teammates can **vote** on it to signal priority.
+Voting
+- Every venue account can vote once per request using the Vote button on each card.
+- The vote count is shown as individual thumbs-up chips — one chip per venue that voted. Your own vote chip is filled black; others are outlined grey. When 3 venues have voted, you see 3 thumbs-up chips. Up to 8 are shown; beyond that a "+N more" badge appears.
+- Click Vote again to remove your vote.
+- Requests are sorted by most votes so the most popular ideas rise to the top.
 
-**What happens next**
-- A StoryPay super admin reviews every request and can **approve**, **edit**, or **remove** it.
-- **Approved**: the request instantly becomes a new **What's New** entry with an auto-generated outcome-based headline and description. It also disappears from your Feature Requests list because the feature is now live (or scheduled) and tracked in the changelog.
-- **Removed**: if the request is a duplicate, out of scope, or won't be built, it's removed from your Feature Requests list. No extra action needed from you.
+What happens next
+- A StoryPay admin reviews every request and can approve, edit, or remove it.
+- Approved: the request becomes a new What's New entry with an auto-generated outcome-based headline and description. It disappears from the active list because the feature is now live and tracked in the changelog.
+- Removed: if the request is a duplicate, out of scope, or won't be built, it's removed. No action needed from you.
 
-**Editing or deleting your own request**
+Completed section
+- At the bottom of the Feature Requests tab is a collapsible Completed requests section.
+- It shows any request you submitted or voted on that has since been approved and shipped. Each card shows a "Your request" or "You voted" tag plus the date it shipped.
+
+Editing or deleting your own request
 - You can edit the title/description or delete a request you submitted, as long as it hasn't been approved or removed by an admin yet.
 
 Tip: write the description as an outcome — "I want to be able to X so that Y" — so the admin team can capture the right headline when the feature ships.`,
@@ -1515,7 +1530,7 @@ Tip: write the description as an outcome — "I want to be able to X so that Y" 
         id: 'ai-overview',
         title: 'What is Ask AI?',
         tags: ['ask ai', 'ai', 'chat', 'assistant', 'help'],
-        body: `Ask AI is your built-in assistant, powered by your live account data and an internal summary of the StoryPay product — navigation, CRM, **Conversations** inbox, **Venue listing** (directory, **Media library** for shared images, photos, analytics, reviews), Leads pipelines and intelligence, calendar, payments, marketing tools (including email templates and lead capture forms that can use Media library images), team permissions, settings, public listing API/embed notes, and Help Center–style guidance. It knows your current revenue, recent proposals, and — when you're on the **Leads** page — a detailed snapshot of leads, stages, and notes.
+        body: `Ask AI is your built-in assistant, powered by your live account data and an internal summary of the StoryPay product — navigation, CRM, Conversations inbox (SMS / Email / Team tabs, two-way replies), Venue listing (directory, Media library, photos, analytics, reviews), Leads pipelines and intelligence, calendar, payments, marketing tools, team permissions, settings, What's New / changelog, feature requests, and Help Center guidance. It knows your current revenue, recent proposals, and — when you're on the Leads page — a detailed snapshot of leads, stages, and notes.
 
 Open it by clicking the sparkle button (bottom-right corner of any page) or by clicking Ask AI in the sidebar.
 
@@ -1526,12 +1541,14 @@ You can ask questions like:
 - "What reports are available?"
 - "How do I connect Calendly?"
 - "How do I sync my calendar with Google Calendar?"
-- "How do listing reviews show on storyvenue.com?" or "Where is the reviews embed?"
-- "What's the difference between Team only and Email contact in Conversations?"
+- "How do listing reviews show on storyvenue.com?"
+- "What's the difference between SMS, Email, and Team only in Conversations?"
+- "How do I delete a contact or lead?"
+- "What is the None stage on leads?"
 - On Leads: "What's my total pipeline value?", "Which leads have wedding dates in June?", "Explain weighted vs open pipeline"
-- "What is the Media library?" or "How do I reuse photos in my emails and forms?" or "Where do I upload images for my listing and logo?"
+- "What is the Media library?" or "How do I reuse photos in my emails and forms?"
 
-Ask AI answers in plain language without jargon. It uses your real account data to give accurate, personalised answers. The in-app documentation it reads includes weighted pipeline, audit logs, assignable owners, team **Hide $** settings, and up-to-date product areas listed above.`,
+Ask AI answers in plain language. It uses your real account data to give accurate, personalised answers. If AI gives a stale answer, refresh the page to reset the context.`,
       },
       {
         id: 'ai-screenshot',
