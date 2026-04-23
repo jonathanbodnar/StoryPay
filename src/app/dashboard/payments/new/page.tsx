@@ -655,17 +655,17 @@ export default function NewProposalInvoicePage() {
  </div>
  <div className="flex items-center gap-2">
  <button onClick={()=>setShowPreviewModal(true)}
- className="flex items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors whitespace-nowrap">
+ className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 hover:bg-gray-50 transition-colors whitespace-nowrap">
  <Eye size={14}/> Preview
  </button>
  <button onClick={()=>submit(true)} disabled={saving||submitting}
- className="flex items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50 whitespace-nowrap">
+ className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 hover:bg-gray-50 transition-colors disabled:opacity-50 whitespace-nowrap">
  {saving ? <Loader2 size={14} className="animate-spin"/> : <Save size={14}/>}
  <span className="hidden sm:inline">{saving ? 'Saving...' : 'Save Draft'}</span>
  <span className="sm:hidden">{saving ? '...' : 'Draft'}</span>
  </button>
  <button onClick={()=>submit(false)} disabled={saving||submitting}
- className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50 transition-all whitespace-nowrap"
+ className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-colors whitespace-nowrap"
  style={{backgroundColor:'#1b1b1b'}}>
  {submitting ? <Loader2 size={14} className="animate-spin"/> : <Send size={14}/>}
  {submitting ? 'Sending...' : 'Send'}
