@@ -996,13 +996,42 @@ export default function NewProposalInvoicePage() {
        </div>
      )}
      {itemPickerMode === 'package' && (
-       <div className="px-5 py-4">
-         <div className="flex items-center gap-2 mb-3">
+       <div className="px-5 py-4 flex flex-col" style={{maxHeight:'calc(100% - 16px)'}}>
+         <div className="flex items-center gap-2 mb-3 shrink-0">
            <button type="button" onMouseDown={e => { e.preventDefault(); setItemPickerMode('menu'); }} className="text-gray-400 hover:text-gray-700"><ChevronRight size={14} className="rotate-180"/></button>
-           <p className="text-sm font-semibold text-gray-900 flex-1">Choose a package</p>
+           <p className="text-sm font-semibold text-gray-900 flex-1">Choose an item or bundle</p>
            <button type="button" onMouseDown={e => { e.preventDefault(); activatedItems.current.add(itemPickerId!); setItemPickerId(null); setItemPickerMode('menu'); }} className="text-gray-400 hover:text-gray-700"><X size={14}/></button>
          </div>
-         <div className="space-y-1.5 max-h-56 overflow-y-auto">
+         <div className="space-y-1.5 overflow-y-auto flex-1 pr-0.5">
+           {/* Individual items */}
+           {products.length > 0 && (
+             <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 px-1 pt-1 pb-0.5">Items</p>
+           )}
+           {products.map(prod => (
+             <button key={prod.id} type="button"
+               onMouseDown={e => {
+                 e.preventDefault();
+                 const id = itemPickerId!;
+                 activatedItems.current.add(id);
+                 updateItem(id, 'name', prod.name);
+                 updateItem(id, 'description', prod.description ?? '');
+                 updateItem(id, 'amount', (prod.price / 100).toFixed(2));
+                 setItemPickerId(null);
+                 setItemPickerMode('menu');
+               }}
+               className="flex w-full items-center justify-between rounded-xl border-2 border-gray-100 bg-gray-50 px-4 py-3 text-left hover:border-blue-200 hover:bg-blue-50 transition-all"
+             >
+               <div>
+                 <p className="font-semibold text-gray-900 text-sm">{prod.name}</p>
+                 {prod.description && <p className="text-xs text-gray-400 mt-0.5 truncate max-w-[220px]">{prod.description}</p>}
+               </div>
+               <span className="text-sm font-semibold text-gray-700 ml-3 shrink-0">{formatCents(prod.price)}</span>
+             </button>
+           ))}
+           {/* Bundles / packages */}
+           {packages.filter(p => packageAppliesToday(p, venueTimezone)).length > 0 && (
+             <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 px-1 pt-2 pb-0.5">Bundles</p>
+           )}
            {packages.filter(p => packageAppliesToday(p, venueTimezone)).map(pkg => {
              const lineCount = (pkg.venue_package_lines ?? []).length;
              const totalCents = (pkg.venue_package_lines ?? []).reduce((sum, line) => {
@@ -1040,6 +1069,9 @@ export default function NewProposalInvoicePage() {
                </button>
              );
            })}
+           {products.length === 0 && packages.filter(p => packageAppliesToday(p, venueTimezone)).length === 0 && (
+             <p className="text-sm text-gray-400 text-center py-6">No items or bundles found.</p>
+           )}
          </div>
        </div>
      )}
