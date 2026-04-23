@@ -130,6 +130,7 @@ const BLOCK_TYPE_ICONS: Record<FormBlockType, LucideIcon> = {
   radio: CircleDot,
   select: ListFilter,
   checkbox_group: ListChecks,
+  textarea: AlignLeft,
   venue_contact: Building2,
   submit: Send,
   button: MousePointerClick,
@@ -143,6 +144,7 @@ const PALETTE: { type: FormBlockType; label: string }[] = [
   { type: 'last_name', label: 'Last name' },
   { type: 'email', label: 'Email' },
   { type: 'phone', label: 'Phone' },
+  { type: 'textarea', label: 'Comments / Questions' },
   { type: 'url', label: 'Website URL' },
   { type: 'number', label: 'Number' },
   { type: 'date', label: 'Date' },
@@ -163,6 +165,11 @@ const SETTINGS_SELECT =
 
 const SETTINGS_INPUT =
   'w-full rounded border border-gray-200 bg-white px-3 py-2 text-[13px] text-gray-900 placeholder:text-gray-400 focus:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200';
+
+const segBtn = (active: boolean) =>
+  `flex h-9 flex-1 items-center justify-center rounded-md border text-gray-600 transition ${
+    active ? 'border-gray-200 bg-gray-100 text-gray-900' : 'border-transparent bg-transparent hover:bg-gray-50'
+  }`;
 
 function formatSavedTime(d: Date): string {
   return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
@@ -411,11 +418,6 @@ function BlockStyleFields({
     googleFontNames.length === 0 ||
     googleFontNames.includes(fontFamily);
   const familySelectValue = fontFamily && !inCatalog ? '__custom' : fontFamily;
-
-  const segBtn = (active: boolean) =>
-    `flex h-9 flex-1 items-center justify-center rounded-md border text-gray-600 transition ${
-      active ? 'border-gray-200 bg-gray-100 text-gray-900' : 'border-transparent bg-transparent hover:bg-gray-50'
-    }`;
 
   return (
     <div>
@@ -689,7 +691,8 @@ function BlockInspector({
         block.type === 'file' ||
         block.type === 'radio' ||
         block.type === 'select' ||
-        block.type === 'checkbox_group') && (
+        block.type === 'checkbox_group' ||
+        block.type === 'textarea') && (
         <>
           <SettingsRow label="Label">
             <input
@@ -820,6 +823,65 @@ function BlockInspector({
         </SettingsRow>
       )}
 
+      {block.type === 'checkbox_group' && (
+        <SettingsRow label="Selection mode">
+          <SettingsSelectWrap>
+            <select
+              className={SETTINGS_SELECT}
+              value={block.checkboxMode ?? 'multiple'}
+              onChange={(e) =>
+                onChange({ checkboxMode: e.target.value as 'single' | 'multiple' })
+              }
+            >
+              <option value="multiple">Multiple (checkboxes)</option>
+              <option value="single">Single (radio style)</option>
+            </select>
+          </SettingsSelectWrap>
+        </SettingsRow>
+      )}
+
+      {block.type === 'textarea' && (
+        <SettingsRow label="Box size">
+          <SettingsSelectWrap>
+            <select
+              className={SETTINGS_SELECT}
+              value={block.textareaSize ?? 'medium'}
+              onChange={(e) =>
+                onChange({ textareaSize: e.target.value as 'small' | 'medium' | 'large' })
+              }
+            >
+              <option value="small">Small (3 rows)</option>
+              <option value="medium">Medium (6 rows)</option>
+              <option value="large">Large (10 rows)</option>
+            </select>
+          </SettingsSelectWrap>
+        </SettingsRow>
+      )}
+
+      {(block.type === 'rich_text' || block.type === 'html') && (
+        <SettingsRow label="Alignment">
+          <div className="flex gap-1 rounded-lg border border-gray-100 bg-gray-50/80 p-0.5">
+            {(
+              [
+                ['left', AlignLeft],
+                ['center', AlignCenter],
+                ['right', AlignRight],
+              ] as const
+            ).map(([key, Icon]) => (
+              <button
+                key={key}
+                type="button"
+                className={segBtn((block.style?.textAlign ?? 'left') === key)}
+                onClick={() => onChange({ style: { ...block.style, textAlign: key } })}
+                title={key}
+              >
+                <Icon className="h-4 w-4" strokeWidth={1.75} />
+              </button>
+            ))}
+          </div>
+        </SettingsRow>
+      )}
+
       {block.type === 'image' && (
         <>
           <SettingsRow label="Image URL">
@@ -859,6 +921,27 @@ function BlockInspector({
               value={block.buttonLabel ?? ''}
               onChange={(e) => onChange({ buttonLabel: e.target.value })}
             />
+          </SettingsRow>
+          <SettingsRow label="Alignment">
+            <div className="flex gap-1 rounded-lg border border-gray-100 bg-gray-50/80 p-0.5">
+              {(
+                [
+                  ['left', AlignLeft],
+                  ['center', AlignCenter],
+                  ['right', AlignRight],
+                ] as const
+              ).map(([key, Icon]) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={segBtn((block.buttonAlign ?? (block.type === 'submit' ? 'center' : 'left')) === key)}
+                  onClick={() => onChange({ buttonAlign: key })}
+                  title={key}
+                >
+                  <Icon className="h-4 w-4" strokeWidth={1.75} />
+                </button>
+              ))}
+            </div>
           </SettingsRow>
           {block.type === 'button' && (
             <>
@@ -901,7 +984,8 @@ function BlockInspector({
         block.type === 'number' ||
         block.type === 'date' ||
         block.type === 'address' ||
-        block.type === 'file') && (
+        block.type === 'file' ||
+        block.type === 'textarea') && (
         <SettingsRow label="Hint (optional)">
           <input
             className={SETTINGS_INPUT}

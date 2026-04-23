@@ -17,6 +17,7 @@ export type FormBlockType =
   | 'radio'
   | 'select'
   | 'checkbox_group'
+  | 'textarea'
   | 'submit'
   | 'button'
   | 'venue_contact';
@@ -73,6 +74,8 @@ export interface FormBlock {
   alt?: string;
   href?: string;
   buttonVariant?: 'primary' | 'secondary' | 'outline' | 'link';
+  /** Alignment for button / submit blocks (left | center | right) */
+  buttonAlign?: 'left' | 'center' | 'right';
   /** submit / button label */
   buttonLabel?: string;
   /** optional stable key for exports (defaults to block id in payloads) */
@@ -80,6 +83,10 @@ export interface FormBlock {
   style?: FormBlockStyle;
   /** Grid column span: 1 = half-width, 2 = full-width (default full) */
   colSpan?: 1 | 2;
+  /** textarea height: small (~3 rows), medium (~6 rows, default), large (~10 rows) */
+  textareaSize?: 'small' | 'medium' | 'large';
+  /** checkbox_group: 'single' behaves like radio (one choice), 'multiple' allows many */
+  checkboxMode?: 'single' | 'multiple';
 }
 
 /** Per-form submission routing and notification settings. */
@@ -119,6 +126,7 @@ export const FORM_BLOCK_TYPES: FormBlockType[] = [
   'radio',
   'select',
   'checkbox_group',
+  'textarea',
   'submit',
   'button',
   'venue_contact',
@@ -146,6 +154,7 @@ export const INPUT_BLOCK_TYPES: FormBlockType[] = [
   'radio',
   'select',
   'checkbox_group',
+  'textarea',
 ];
 
 const DEFAULT_THEME: Required<FormTheme> = {
@@ -263,6 +272,16 @@ export function createBlock(type: FormBlockType): FormBlock {
         label: 'Select any',
         options: ['Choice 1', 'Choice 2'],
         required: false,
+        checkboxMode: 'multiple' as const,
+      };
+    case 'textarea':
+      return {
+        id,
+        type,
+        label: 'Comments / Questions',
+        placeholder: 'Type your message here…',
+        required: false,
+        textareaSize: 'medium' as const,
       };
     case 'submit':
       return { id, type, buttonLabel: 'Submit' };

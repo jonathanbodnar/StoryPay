@@ -136,17 +136,20 @@ function renderBlock(
         <div
           key={block.id}
           className="prose prose-sm mb-4 max-w-none text-gray-700"
+          style={{ textAlign: block.style?.textAlign ?? 'left' }}
           dangerouslySetInnerHTML={{ __html: html || '<p></p>' }}
         />
       );
     }
     case 'html': {
       const html = sanitizeFormHtml(block.content);
+      if (!html) return null;
       return (
         <div
           key={block.id}
           className="mb-4 max-w-none text-gray-800"
-          dangerouslySetInnerHTML={{ __html: html || '' }}
+          style={{ textAlign: block.style?.textAlign ?? 'left' }}
+          dangerouslySetInnerHTML={{ __html: html }}
         />
       );
     }
@@ -360,6 +363,7 @@ function renderBlock(
     }
     case 'checkbox_group': {
       const opts = blockOptions(block);
+      const isSingle = block.checkboxMode === 'single';
       return (
         <fieldset key={block.id} className="mb-4">
           {label ? (
@@ -372,11 +376,12 @@ function renderBlock(
             {opts.map((opt) => (
               <label key={opt} className="flex cursor-pointer items-center gap-2 text-sm">
                 <input
-                  type="checkbox"
+                  type={isSingle ? 'radio' : 'checkbox'}
                   name={name}
                   value={opt}
+                  required={isSingle ? !!block.required : undefined}
                   disabled={preview}
-                  className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                  className={`h-4 w-4 border-gray-300 text-brand-600 focus:ring-brand-500 ${isSingle ? '' : 'rounded'}`}
                 />
                 <span style={{ color: theme.labelColor }}>{opt}</span>
               </label>
@@ -384,6 +389,23 @@ function renderBlock(
           </div>
           {hintEl}
         </fieldset>
+      );
+    }
+    case 'textarea': {
+      const rows = block.textareaSize === 'small' ? 3 : block.textareaSize === 'large' ? 10 : 6;
+      const id = `${name}_ta`;
+      return inputShell(
+        <textarea
+          id={id}
+          name={name}
+          rows={rows}
+          required={!!block.required}
+          disabled={preview}
+          placeholder={ph}
+          className="w-full resize-y border bg-white px-3 py-2 text-sm outline-none ring-brand-500 focus:ring-2"
+          style={{ borderRadius: theme.borderRadius, borderColor: theme.inputBorder }}
+        />,
+        id
       );
     }
     case 'venue_contact': {
@@ -418,13 +440,16 @@ function renderBlock(
         </div>
       );
     }
-    case 'submit':
+    case 'submit': {
+      const submitAlign = block.buttonAlign ?? 'center';
+      const submitWidth = submitAlign === 'center' ? 'w-full' : 'inline-flex';
+      const submitWrap = submitAlign === 'center' ? '' : submitAlign === 'right' ? 'flex justify-end' : 'flex justify-start';
       return (
-        <div key={block.id} className="mb-2 mt-2">
+        <div key={block.id} className={`mb-2 mt-2 ${submitWrap}`}>
           <button
             type="submit"
             disabled={preview}
-            className="w-full px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-95 disabled:opacity-50"
+            className={`${submitWidth} items-center justify-center px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-95 disabled:opacity-50`}
             style={{
               borderRadius: theme.borderRadius,
               background: theme.primaryColor,
@@ -434,10 +459,13 @@ function renderBlock(
           </button>
         </div>
       );
+    }
     case 'button': {
       const lab = block.buttonLabel?.trim() || 'Button';
       const href = block.href?.trim();
       const v = block.buttonVariant ?? 'secondary';
+      const align = block.buttonAlign ?? 'left';
+      const wrapAlign = align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left';
       const base =
         'inline-flex items-center justify-center px-4 py-2 text-sm font-medium transition rounded-lg';
       const styles =
@@ -450,7 +478,7 @@ function renderBlock(
               : 'border border-gray-200 bg-gray-50 text-gray-900 hover:bg-gray-100';
       if (href && /^https?:\/\//i.test(href)) {
         return (
-          <div key={block.id} className="mb-4">
+          <div key={block.id} className={`mb-4 ${wrapAlign}`}>
             <a
               href={href}
               target="_blank"
@@ -468,7 +496,7 @@ function renderBlock(
         );
       }
       return (
-        <div key={block.id} className="mb-4">
+        <div key={block.id} className={`mb-4 ${wrapAlign}`}>
           <button
             type="button"
             className={`${base} ${styles}`}
@@ -616,11 +644,6 @@ export function MarketingFormView({
             background: cardBg,
           }}
         >
-          {formTitle ? (
-            <h1 className="mb-1 text-lg font-semibold" style={{ color: theme.primaryColor }}>
-              {formTitle}
-            </h1>
-          ) : null}
           {status === 'success' || status === 'error' ? (
             <div
               className={`mb-4 rounded-lg px-3 py-2 text-sm ${
