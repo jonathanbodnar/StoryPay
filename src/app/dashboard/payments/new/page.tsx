@@ -298,6 +298,8 @@ export default function NewProposalInvoicePage() {
  const [itemPickerCpnId, setItemPickerCpnId] = useState('');
  // Track rows where the user has already committed to manual typing
  const activatedItems = useRef<Set<string>>(new Set());
+ // Refs for re-focusing inputs after picker closes
+ const itemInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
  const addPickerRef = useRef<HTMLDivElement>(null);
 
  // Payment
@@ -872,8 +874,8 @@ export default function NewProposalInvoicePage() {
  </div>
  ) : (
  <input type="text"value={item.name}
+ ref={el => { itemInputRefs.current[item.id] = el; }}
  onChange={e=>{
-   // First keystroke in an empty unactivated field = manual mode, close picker
    if (!activatedItems.current.has(item.id) && e.target.value !== '') {
      activatedItems.current.add(item.id);
      setItemPickerId(null);
@@ -891,8 +893,8 @@ export default function NewProposalInvoicePage() {
  }}
  onBlur={()=>{
    setTimeout(()=>setShowSuggestions(p=>({...p,[item.id]:false})),150);
-   // Close picker on blur (small delay so option clicks register first)
-   setTimeout(()=>setItemPickerId(id=>id===item.id?null:id),200);
+   // Only auto-close if picker is open for THIS item and user isn't interacting with picker
+   setTimeout(()=>setItemPickerId(id=>id===item.id?null:id),300);
  }}
  placeholder={item.isSurcharge?'Processing Fee (2.75%)':`Item ${idx+1}`}
  className={`w-full rounded-lg border px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none transition-colors ${item.isSurcharge?'border-gray-200 bg-gray-100 text-gray-600 font-medium':'border-gray-200 text-gray-900 focus:border-gray-400'}`}/>
@@ -944,47 +946,48 @@ export default function NewProposalInvoicePage() {
  </div>
  {/* ── Full-card line item type picker ── */}
  {itemPickerId !== null && (
-   <div
-     className="absolute inset-0 z-30 flex flex-col justify-center rounded-2xl bg-white"
-     onMouseDown={e => { if (e.target === e.currentTarget) { const id = itemPickerId; activatedItems.current.add(id); setItemPickerId(null); setItemPickerMode('menu'); } }}
+   <div className="absolute inset-0 z-30 flex flex-col justify-center rounded-2xl bg-white"
+     onMouseDown={e => e.preventDefault()}
    >
      {itemPickerMode === 'menu' && (
        <div className="px-5 py-4">
          <div className="flex items-center justify-between mb-4">
            <p className="text-sm font-semibold text-gray-900">What type of line item?</p>
-           <button type="button" onClick={() => { const id = itemPickerId; activatedItems.current.add(id!); setItemPickerId(null); setItemPickerMode('menu'); }} className="text-gray-400 hover:text-gray-700 transition-colors"><X size={15}/></button>
+           <button type="button"
+             onMouseDown={e => { e.preventDefault(); activatedItems.current.add(itemPickerId!); setItemPickerId(null); setItemPickerMode('menu'); itemInputRefs.current[itemPickerId!]?.focus(); }}
+             className="text-gray-400 hover:text-gray-700 transition-colors"><X size={15}/></button>
          </div>
          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
            {/* Manual entry */}
-           <button type="button" onClick={() => { activatedItems.current.add(itemPickerId!); setItemPickerId(null); setItemPickerMode('menu'); }}
-             className="flex items-center gap-3 rounded-xl border-2 border-gray-100 bg-gray-50 px-4 py-3.5 text-left hover:border-gray-300 hover:bg-gray-100 transition-all">
+           <button type="button"
+             onMouseDown={e => { e.preventDefault(); const id = itemPickerId!; activatedItems.current.add(id); setItemPickerId(null); setItemPickerMode('menu'); setTimeout(() => itemInputRefs.current[id]?.focus(), 0); }}
+             className="flex items-center gap-3 rounded-xl border-2 border-gray-100 bg-gray-50 px-4 py-3.5 text-left hover:border-gray-300 hover:bg-gray-100 transition-all cursor-pointer">
              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white border border-gray-200 text-gray-600 shadow-sm"><PenLine size={16}/></span>
              <div><p className="font-semibold text-gray-900">Manual entry</p><p className="text-xs text-gray-400 mt-0.5">Type a custom item &amp; price</p></div>
            </button>
            {/* Package */}
            {packages.filter(p => packageAppliesToday(p, venueTimezone)).length > 0 && (
-             <button type="button" onClick={() => { setItemPickerMode('package'); setItemPickerPkgId(''); }}
-               className="flex items-center gap-3 rounded-xl border-2 border-blue-100 bg-blue-50 px-4 py-3.5 text-left hover:border-blue-300 hover:bg-blue-100 transition-all">
+             <button type="button"
+               onMouseDown={e => { e.preventDefault(); setItemPickerMode('package'); setItemPickerPkgId(''); }}
+               className="flex items-center gap-3 rounded-xl border-2 border-blue-100 bg-blue-50 px-4 py-3.5 text-left hover:border-blue-300 hover:bg-blue-100 transition-all cursor-pointer">
                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white border border-blue-200 text-blue-600 shadow-sm"><Package size={16}/></span>
                <div><p className="font-semibold text-gray-900">From package</p><p className="text-xs text-gray-400 mt-0.5">Load lines from a saved package</p></div>
              </button>
            )}
            {/* Coupon */}
            {venueCoupons.filter(c => c.active && canRedeemCoupon(c as VenueCouponRow).ok).length > 0 && (
-             <button type="button" onClick={() => { setItemPickerMode('coupon'); setItemPickerCpnId(appliedCouponId ?? ''); }}
-               className="flex items-center gap-3 rounded-xl border-2 border-emerald-100 bg-emerald-50 px-4 py-3.5 text-left hover:border-emerald-300 hover:bg-emerald-100 transition-all">
+             <button type="button"
+               onMouseDown={e => { e.preventDefault(); setItemPickerMode('coupon'); setItemPickerCpnId(appliedCouponId ?? ''); }}
+               className="flex items-center gap-3 rounded-xl border-2 border-emerald-100 bg-emerald-50 px-4 py-3.5 text-left hover:border-emerald-300 hover:bg-emerald-100 transition-all cursor-pointer">
                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white border border-emerald-200 text-emerald-600 shadow-sm"><Tag size={16}/></span>
                <div><p className="font-semibold text-gray-900">Apply coupon</p><p className="text-xs text-gray-400 mt-0.5">{appliedCouponId ? 'Change or remove discount' : 'Add a discount code'}</p></div>
              </button>
            )}
            {/* Processing fee */}
            {!hasSurcharge() && (
-             <button type="button" onClick={() => {
-               setLineItems(prev => { if (prev.some(i => i.isSurcharge)) return prev; return withDerivedFromCore(stripDerived(prev), true, appliedCouponId, venueCoupons); });
-               activatedItems.current.add(itemPickerId!);
-               setItemPickerId(null);
-             }}
-               className="flex items-center gap-3 rounded-xl border-2 border-amber-100 bg-amber-50 px-4 py-3.5 text-left hover:border-amber-300 hover:bg-amber-100 transition-all">
+             <button type="button"
+               onMouseDown={e => { e.preventDefault(); setLineItems(prev => { if (prev.some(i => i.isSurcharge)) return prev; return withDerivedFromCore(stripDerived(prev), true, appliedCouponId, venueCoupons); }); activatedItems.current.add(itemPickerId!); setItemPickerId(null); }}
+               className="flex items-center gap-3 rounded-xl border-2 border-amber-100 bg-amber-50 px-4 py-3.5 text-left hover:border-amber-300 hover:bg-amber-100 transition-all cursor-pointer">
                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white border border-amber-200 text-amber-600 shadow-sm"><Percent size={16}/></span>
                <div><p className="font-semibold text-gray-900">Processing fee</p><p className="text-xs text-gray-400 mt-0.5">Add 2.75% card surcharge</p></div>
              </button>
@@ -995,9 +998,9 @@ export default function NewProposalInvoicePage() {
      {itemPickerMode === 'package' && (
        <div className="px-5 py-4 space-y-4">
          <div className="flex items-center gap-2">
-           <button type="button" onClick={() => setItemPickerMode('menu')} className="text-gray-400 hover:text-gray-700"><ChevronRight size={14} className="rotate-180"/></button>
+           <button type="button" onMouseDown={e => { e.preventDefault(); setItemPickerMode('menu'); }} className="text-gray-400 hover:text-gray-700"><ChevronRight size={14} className="rotate-180"/></button>
            <p className="text-sm font-semibold text-gray-900 flex-1">Choose a package</p>
-           <button type="button" onClick={() => { activatedItems.current.add(itemPickerId!); setItemPickerId(null); setItemPickerMode('menu'); }} className="text-gray-400 hover:text-gray-700"><X size={14}/></button>
+           <button type="button" onMouseDown={e => { e.preventDefault(); activatedItems.current.add(itemPickerId!); setItemPickerId(null); setItemPickerMode('menu'); }} className="text-gray-400 hover:text-gray-700"><X size={14}/></button>
          </div>
          <select value={itemPickerPkgId} onChange={e => setItemPickerPkgId(e.target.value)}
            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none">
@@ -1007,7 +1010,8 @@ export default function NewProposalInvoicePage() {
            ))}
          </select>
          <button type="button"
-           onClick={() => {
+           onMouseDown={e => {
+             e.preventDefault();
              const pkg = packages.find(p => p.id === itemPickerPkgId);
              if (!pkg) return;
              const hasSurchargeRow = lineItems.some(i => i.isSurcharge);
@@ -1034,9 +1038,9 @@ export default function NewProposalInvoicePage() {
      {itemPickerMode === 'coupon' && (
        <div className="px-5 py-4 space-y-4">
          <div className="flex items-center gap-2">
-           <button type="button" onClick={() => setItemPickerMode('menu')} className="text-gray-400 hover:text-gray-700"><ChevronRight size={14} className="rotate-180"/></button>
+           <button type="button" onMouseDown={e => { e.preventDefault(); setItemPickerMode('menu'); }} className="text-gray-400 hover:text-gray-700"><ChevronRight size={14} className="rotate-180"/></button>
            <p className="text-sm font-semibold text-gray-900 flex-1">Apply a coupon</p>
-           <button type="button" onClick={() => { activatedItems.current.add(itemPickerId!); setItemPickerId(null); setItemPickerMode('menu'); }} className="text-gray-400 hover:text-gray-700"><X size={14}/></button>
+           <button type="button" onMouseDown={e => { e.preventDefault(); activatedItems.current.add(itemPickerId!); setItemPickerId(null); setItemPickerMode('menu'); }} className="text-gray-400 hover:text-gray-700"><X size={14}/></button>
          </div>
          <select value={itemPickerCpnId} onChange={e => setItemPickerCpnId(e.target.value)}
            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none">
@@ -1048,7 +1052,8 @@ export default function NewProposalInvoicePage() {
            })}
          </select>
          <button type="button"
-           onClick={() => {
+           onMouseDown={e => {
+             e.preventDefault();
              setCouponSelection(itemPickerCpnId || null);
              activatedItems.current.add(itemPickerId!);
              setItemPickerId(null);
