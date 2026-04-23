@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import Image from 'next/image';
 import {
   Eye, Users, MousePointerClick, TrendingUp,
@@ -8,6 +8,8 @@ import {
   RefreshCw, CheckCircle, AlertCircle, Clock,
   ArrowUpRight, ArrowDownRight, Minus, Search,
   Radio, DollarSign, CalendarDays, UserCheck,
+  Link2, Mail, Bell, Copy, Download, Check, X,
+  Send, Zap, TrendingDown,
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -28,6 +30,8 @@ type PriorMetrics = {
 
 type AnalyticsPayload = {
   days: number;
+  venue_name: string;
+  venue_slug: string;
   gallery_images: string[];
   total_views: number;
   total_impressions: number;
@@ -89,6 +93,45 @@ const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const DAYS_OPTIONS = [1, 7, 14, 30, 60, 90];
 const CHART_BLUE  = '#3b82f6';
 const CHART_DARK  = '#1b1b1b';
+const DIRECTORY_SITE =
+  process.env.NEXT_PUBLIC_DIRECTORY_URL ||
+  process.env.NEXT_PUBLIC_DIRECTORY_SITE_URL ||
+  'https://storyvenue.com';
+
+const UTM_PRESETS = [
+  { id: 'instagram', label: 'Instagram bio', source: 'instagram', medium: 'social' },
+  { id: 'facebook',  label: 'Facebook post', source: 'facebook',  medium: 'social' },
+  { id: 'email',     label: 'Email signature', source: 'email',   medium: 'email' },
+  { id: 'print',     label: 'Print / flyer',  source: 'print',    medium: 'offline' },
+  { id: 'tiktok',    label: 'TikTok bio',     source: 'tiktok',   medium: 'social' },
+  { id: 'google',    label: 'Google Ads',     source: 'google',   medium: 'cpc' },
+  { id: 'custom',    label: 'Custom…',        source: '',          medium: '' },
+] as const;
+
+// ── Alert types ────────────────────────────────────────────────────────────────
+type Alert = { type: 'spike' | 'drought' | 'no_inquiry' | 'milestone' | 'photo'; title: string; body: string; color: 'green' | 'amber' | 'red' | 'blue' };
+
+function computeAlerts(d: AnalyticsPayload): Alert[] {
+  const alerts: Alert[] = [];
+  const pct = d.prior.total_views ? Math.round(((d.total_views - d.prior.total_views) / d.prior.total_views) * 100) : null;
+
+  if (pct !== null && pct >= 80 && d.total_views >= 10)
+    alerts.push({ type: 'spike', title: `Views are up ${pct}% this period`, body: 'Great momentum! Make sure your contact form is easy to find so visitors can reach you.', color: 'green' });
+
+  if (d.total_views === 0 && d.days >= 7)
+    alerts.push({ type: 'drought', title: 'No listing views in this period', body: 'Share your listing link on Instagram or in wedding Facebook groups to start getting traffic.', color: 'amber' });
+
+  if (d.contact_form_submits === 0 && d.total_views >= 15)
+    alerts.push({ type: 'no_inquiry', title: 'No inquiries despite steady traffic', body: `${d.total_views} views with 0 inquiries — make sure your contact form is visible and your pricing is clear.`, color: 'red' });
+
+  if ([100, 500, 1000, 5000].includes(d.total_views) || (d.total_views >= 100 && d.total_views <= 110 && d.prior.total_views < 100))
+    alerts.push({ type: 'milestone', title: `Milestone: ${d.total_views.toLocaleString()} listing views!`, body: 'Your listing is getting real attention. Keep your gallery and availability up to date.', color: 'blue' });
+
+  if (d.gallery_images.length < 6 && d.total_views > 0)
+    alerts.push({ type: 'photo', title: `You only have ${d.gallery_images.length} photos`, body: 'Venues with 15+ photos get 3× more inquiries. Upload more to make a stronger first impression.', color: 'amber' });
+
+  return alerts;
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -227,6 +270,26 @@ export default function ListingAnalyticsPage() {
 
   const [insights, setInsights] = useState<LeadInsightsPayload | null>(null);
 
+  // ── Digest state ──────────────────────────────────────────────────────────
+  const [digestSending, setDigestSending] = useState(false);
+  const [digestSent, setDigestSent] = useState(false);
+  const [digestError, setDigestError] = useState('');
+
+  // ── Alerts dismissed ─────────────────────────────────────────────────────
+  const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
+
+  // ── UTM builder state ─────────────────────────────────────────────────────
+  const [utmPreset, setUtmPreset] = useState<string>('instagram');
+  const [utmSource, setUtmSource] = useState('');
+  const [utmMedium, setUtmMedium] = useState('');
+  const [utmCampaign, setUtmCampaign] = useState('');
+  const [utmCopied, setUtmCopied] = useState(false);
+
+  // ── QR code state ─────────────────────────────────────────────────────────
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [qrWithUtm, setQrWithUtm] = useState(false);
+  const [qrGenerating, setQrGenerating] = useState(false);
+
   async function load(d: number) {
     setLoading(true);
     setError('');
@@ -257,6 +320,59 @@ export default function ListingAnalyticsPage() {
     } catch { /* silent */ }
   }
 
+  async function sendTestDigest() {
+    setDigestSending(true); setDigestError(''); setDigestSent(false);
+    try {
+      const res = await fetch('/api/analytics-digest-preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+      const json = await res.json() as { ok?: boolean; success?: boolean; error?: string };
+      if (json.ok || json.success) setDigestSent(true);
+      else setDigestError(json.error ?? 'Failed to send digest');
+    } catch { setDigestError('Network error'); } finally { setDigestSending(false); }
+  }
+
+  // UTM link builder
+  const buildUtmUrl = useCallback((): string => {
+    if (!data?.venue_slug) return '';
+    const base = `${DIRECTORY_SITE.replace(/\/$/, '')}/venue/${data.venue_slug}`;
+    const preset = UTM_PRESETS.find(p => p.id === utmPreset);
+    const source = utmPreset === 'custom' ? utmSource : (preset?.source ?? '');
+    const medium = utmPreset === 'custom' ? utmMedium : (preset?.medium ?? '');
+    const campaign = utmCampaign.trim();
+    const params = new URLSearchParams();
+    if (source) params.set('utm_source', source);
+    if (medium) params.set('utm_medium', medium);
+    if (campaign) params.set('utm_campaign', campaign);
+    const qs = params.toString();
+    return qs ? `${base}?${qs}` : base;
+  }, [data?.venue_slug, utmPreset, utmSource, utmMedium, utmCampaign]);
+
+  async function copyUtmUrl() {
+    const url = buildUtmUrl();
+    if (!url) return;
+    await navigator.clipboard.writeText(url);
+    setUtmCopied(true);
+    setTimeout(() => setUtmCopied(false), 2000);
+  }
+
+  async function generateQr() {
+    const url = qrWithUtm ? buildUtmUrl() : (data?.venue_slug ? `${DIRECTORY_SITE.replace(/\/$/, '')}/venue/${data.venue_slug}` : '');
+    if (!url) return;
+    setQrGenerating(true);
+    try {
+      const QRCode = (await import('qrcode')).default;
+      const dataUrl = await QRCode.toDataURL(url, { width: 400, margin: 2, color: { dark: '#111827', light: '#ffffff' } });
+      setQrDataUrl(dataUrl);
+    } catch { /* noop */ } finally { setQrGenerating(false); }
+  }
+
+  function downloadQr() {
+    if (!qrDataUrl) return;
+    const a = document.createElement('a');
+    a.href = qrDataUrl;
+    a.download = `${data?.venue_slug ?? 'listing'}-qr.png`;
+    a.click();
+  }
+
   useEffect(() => { void load(days); }, [days]);
 
   useEffect(() => {
@@ -265,6 +381,9 @@ export default function ListingAnalyticsPage() {
     rtInterval.current = setInterval(() => void loadRealtime(), 30000);
     return () => { if (rtInterval.current) clearInterval(rtInterval.current); };
   }, []);
+
+  // Reset QR when URL changes
+  useEffect(() => { setQrDataUrl(null); }, [data?.venue_slug, utmPreset, utmSource, utmMedium, utmCampaign, qrWithUtm]);
 
   const totalDevices = data ? Object.values(data.devices).reduce((a, b) => a + b, 0) : 0;
   const hasImpressions = (data?.total_impressions ?? 0) > 0;
@@ -322,6 +441,29 @@ export default function ListingAnalyticsPage() {
           <CheckCircle size={14} /> Tracking active — collecting data from your public listing
         </div>
       )}
+
+      {/* ── Smart alerts ───────────────────────────────────────────────── */}
+      {d && !d._migration_pending && computeAlerts(d).filter(a => !dismissedAlerts.has(a.type)).map(alert => {
+        const colors = {
+          green: 'bg-emerald-50 border-emerald-100 text-emerald-900',
+          amber: 'bg-amber-50 border-amber-100 text-amber-900',
+          red:   'bg-red-50 border-red-100 text-red-900',
+          blue:  'bg-blue-50 border-blue-100 text-blue-900',
+        };
+        const icons = { green: <Zap size={15} className="text-emerald-500 shrink-0" />, amber: <Bell size={15} className="text-amber-500 shrink-0" />, red: <TrendingDown size={15} className="text-red-500 shrink-0" />, blue: <CheckCircle size={15} className="text-blue-500 shrink-0" /> };
+        return (
+          <div key={alert.type} className={`flex items-start gap-3 rounded-xl border px-4 py-3 ${colors[alert.color]}`}>
+            {icons[alert.color]}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold">{alert.title}</p>
+              <p className="text-xs mt-0.5 opacity-80">{alert.body}</p>
+            </div>
+            <button onClick={() => setDismissedAlerts(s => new Set([...s, alert.type]))} className="shrink-0 opacity-50 hover:opacity-100 transition-opacity mt-0.5">
+              <X size={13} />
+            </button>
+          </div>
+        );
+      })}
 
       {/* ── Realtime panel ─────────────────────────────────────────────── */}
       <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
@@ -763,6 +905,140 @@ export default function ListingAnalyticsPage() {
           )}
         </>
       )}
+
+      {/* ── Tools: UTM link builder + QR code ─────────────────────────── */}
+      {d && d.venue_slug && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 pt-2">
+            <Link2 size={16} className="text-gray-400" />
+            <h2 className="text-base font-semibold text-gray-900">Marketing tools</h2>
+          </div>
+          <p className="text-xs text-gray-500 -mt-2">Create trackable links and QR codes so you know exactly which campaigns drive traffic to your listing.</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* UTM link builder */}
+            <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-4">
+              <div className="flex items-center gap-2">
+                <Link2 size={13} className="text-gray-400" />
+                <SectionTitle>UTM link builder</SectionTitle>
+              </div>
+
+              <div>
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Channel</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {UTM_PRESETS.map(p => (
+                    <button key={p.id} onClick={() => setUtmPreset(p.id)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${utmPreset === p.id ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {utmPreset === 'custom' && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1 block">Source</label>
+                    <input value={utmSource} onChange={e => setUtmSource(e.target.value)} placeholder="e.g. instagram" className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-200" />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1 block">Medium</label>
+                    <input value={utmMedium} onChange={e => setUtmMedium(e.target.value)} placeholder="e.g. social" className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-200" />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1 block">Campaign name <span className="font-normal normal-case opacity-60">(optional)</span></label>
+                <input value={utmCampaign} onChange={e => setUtmCampaign(e.target.value)} placeholder="e.g. spring2026" className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-200" />
+              </div>
+
+              <div className="rounded-xl bg-gray-50 border border-gray-100 px-3 py-2.5 flex items-center gap-2 min-w-0">
+                <span className="flex-1 text-[11px] text-gray-600 font-mono truncate">{buildUtmUrl()}</span>
+                <button onClick={() => void copyUtmUrl()} className={`shrink-0 flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all ${utmCopied ? 'bg-emerald-600 text-white' : 'bg-gray-900 text-white hover:bg-gray-700'}`}>
+                  {utmCopied ? <><Check size={11} /> Copied</> : <><Copy size={11} /> Copy</>}
+                </button>
+              </div>
+            </div>
+
+            {/* QR code generator */}
+            <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-4">
+              <div className="flex items-center gap-2">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/><rect x="18" y="14" width="3" height="3"/><rect x="14" y="18" width="3" height="3"/><rect x="18" y="18" width="3" height="3"/></svg>
+                <SectionTitle>QR code generator</SectionTitle>
+              </div>
+              <p className="text-xs text-gray-400">Generate a scannable QR for print materials, brochures, or your venue lobby.</p>
+
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <div onClick={() => setQrWithUtm(v => !v)} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${qrWithUtm ? 'bg-gray-900' : 'bg-gray-200'}`}>
+                  <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${qrWithUtm ? 'translate-x-4' : 'translate-x-1'}`} />
+                </div>
+                <span className="text-xs text-gray-600">Include UTM tracking from builder</span>
+              </label>
+
+              <div className="flex flex-col items-center gap-4">
+                {qrDataUrl ? (
+                  <div className="flex flex-col items-center gap-3">
+                    <Image src={qrDataUrl} alt="QR code" width={180} height={180} unoptimized className="rounded-xl border border-gray-100" />
+                    <button onClick={downloadQr} className="flex items-center gap-1.5 rounded-xl bg-gray-900 text-white px-4 py-2 text-xs font-semibold hover:bg-gray-700 transition-colors">
+                      <Download size={12} /> Download PNG
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={() => void generateQr()} disabled={qrGenerating} className="flex items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 px-6 py-8 text-sm text-gray-400 hover:border-gray-400 hover:text-gray-600 transition-all disabled:opacity-40 w-full justify-center">
+                    {qrGenerating ? <RefreshCw size={14} className="animate-spin" /> : <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg> Generate QR code</>}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Weekly digest ──────────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-6">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gray-900">
+              <Mail size={15} className="text-white" />
+            </span>
+            <div>
+              <p className="font-semibold text-gray-900 text-sm">Weekly email digest</p>
+              <p className="text-xs text-gray-400 mt-0.5">Auto-sends every Monday morning with views, inquiries, top photo, and one actionable tip.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {digestSent && (
+              <span className="flex items-center gap-1 text-xs text-emerald-600 font-semibold">
+                <Check size={12} /> Sent to your email
+              </span>
+            )}
+            {digestError && (
+              <span className="text-xs text-red-500">{digestError}</span>
+            )}
+            <button onClick={() => void sendTestDigest()} disabled={digestSending}
+              className="flex items-center gap-2 rounded-xl bg-gray-900 text-white px-4 py-2 text-xs font-semibold hover:bg-gray-700 disabled:opacity-40 transition-colors">
+              {digestSending ? <RefreshCw size={12} className="animate-spin" /> : <Send size={12} />}
+              {digestSending ? 'Sending…' : 'Send test digest'}
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { icon: Eye, label: 'Views this week', desc: 'With % vs prior week' },
+            { icon: MousePointerClick, label: 'Inquiries sent', desc: 'Form submits + leads' },
+            { icon: TrendingUp, label: 'Conversion rate', desc: 'Views → inquiry' },
+            { icon: Bell, label: 'Smart tip', desc: 'One actionable insight' },
+          ].map(({ icon: Icon, label, desc }) => (
+            <div key={label} className="rounded-xl bg-gray-50 border border-gray-100 px-3 py-3">
+              <Icon size={13} className="text-gray-400 mb-2" />
+              <p className="text-xs font-semibold text-gray-700">{label}</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">{desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
 
       <div className="pb-4">
         <p className="text-xs text-gray-400 text-center">

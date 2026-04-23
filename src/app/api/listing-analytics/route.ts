@@ -23,7 +23,7 @@ export async function GET(req: Request) {
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('id, gallery_images, cover_image_url')
+    .select('id, name, slug, gallery_images, cover_image_url')
     .eq('id', venueId)
     .maybeSingle();
   if (!venue) return NextResponse.json({ error: 'No venue' }, { status: 404 });
@@ -71,6 +71,8 @@ export async function GET(req: Request) {
 
   return NextResponse.json({
     days,
+    venue_name: String((venue as Record<string,unknown>).name ?? ''),
+    venue_slug: String((venue as Record<string,unknown>).slug ?? ''),
     gallery_images: galleryImages,
     ...buildMetrics(current, leads ?? [], days),
     prior: buildPriorMetrics(prior, priorLeads ?? []),
@@ -253,7 +255,7 @@ function parseReferrerLabel(referrer: string | null, utmSource: string | null): 
 
 function emptyPayload(days: number) {
   return {
-    days, gallery_images: [],
+    days, venue_name: '', venue_slug: '', gallery_images: [],
     total_views: 0, total_impressions: 0, unique_sessions: 0, total_interactions: 0,
     conversion_rate: 0, contact_form_opens: 0, contact_form_submits: 0,
     leads_created: 0, avg_session_duration: 0,
