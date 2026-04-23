@@ -4,8 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft,
+  ChevronDown,
   Loader2,
   MessageCircle,
+  Minus,
   Plus,
   Search,
   Send,
@@ -110,6 +112,10 @@ export default function ConversationsPage() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [loadingThread, setLoadingThread] = useState(false);
   const [composerTab, setComposerTab] = useState<ComposerTab>('team');
+  // Collapsed by default — the composer starts as a single-line input and
+  // blooms into the full editor on focus or as soon as the user types.
+  const [composerExpanded, setComposerExpanded] = useState(false);
+  const [composerMenuOpen, setComposerMenuOpen] = useState(false);
   const [emailSubject, setEmailSubject] = useState('');
   const [body, setBody] = useState('');
   const [mentionedIds, setMentionedIds] = useState<string[]>([]);
@@ -136,6 +142,7 @@ export default function ConversationsPage() {
   const listRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const composerFileRef = useRef<HTMLInputElement>(null);
+  const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
   const deepLinkConsumed = useRef(false);
 
   const loadThreads = useCallback(async () => {
@@ -297,6 +304,19 @@ export default function ConversationsPage() {
   }, [messages, selectedId]);
 
   useEffect(() => {
+    if (!composerExpanded) return;
+    const node = composerTextareaRef.current;
+    if (!node) return;
+    node.focus();
+    const len = node.value.length;
+    try {
+      node.setSelectionRange(len, len);
+    } catch {
+      // Some browsers throw for number/email inputs; safe to ignore.
+    }
+  }, [composerExpanded]);
+
+  useEffect(() => {
     setComposerTab('team');
     setEmailSubject('');
     setBody('');
@@ -305,6 +325,8 @@ export default function ConversationsPage() {
     setEmailCc('');
     setEmailBcc('');
     setSelectedTriggerLinkId('');
+    setComposerExpanded(false);
+    setComposerMenuOpen(false);
   }, [selectedId]);
 
   const contactLabel = useMemo(() => {
@@ -441,6 +463,7 @@ export default function ConversationsPage() {
       setEmailCc('');
       setEmailBcc('');
       setSelectedTriggerLinkId('');
+      setComposerExpanded(false);
       await reloadMessages(selectedId);
       await loadThreads();
     } finally {
@@ -889,7 +912,9 @@ export default function ConversationsPage() {
                 </div>
               ) : null}
 
-              <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-6">
+              <div
+                className="min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              >
                 {loadingThread ? (
                   <div className="flex justify-center py-16 text-gray-400">
                     <Loader2 className="h-8 w-8 animate-spin" />
@@ -897,7 +922,7 @@ export default function ConversationsPage() {
                 ) : messages.length === 0 ? (
                   <p className="py-12 text-center text-sm text-gray-500">No messages yet. Say hello below.</p>
                 ) : (
-                  <div className="mx-auto flex max-w-xl flex-col gap-3">
+                  <div className="mx-auto flex max-w-xl flex-col gap-2">
                     {messages.map((m) => {
                       const isInternal = m.visibility === 'internal';
                       const fromContact = m.sender_kind === 'contact';
@@ -908,91 +933,102 @@ export default function ConversationsPage() {
                       const triggerHref = m.trigger_link?.short_code
                         ? `/t/${m.trigger_link.short_code}`
                         : null;
+                      const ChannelIcon = isInternal ? Lock : m.channel === 'sms' ? Smartphone : Mail;
+                      const channelLabel = isInternal
+                        ? 'Team only'
+                        : m.channel === 'sms'
+                          ? 'SMS'
+                          : 'Email';
+                      const badgeClass = isInternal
+                        ? 'border-amber-200 bg-amber-50 text-amber-700'
+                        : m.channel === 'sms'
+                          ? 'border-sky-200 bg-sky-50 text-sky-600'
+                          : 'border-emerald-200 bg-emerald-50 text-emerald-600';
                       return (
                         <div
                           key={m.id}
                           className={classNames(
-                            'flex max-w-[92%] flex-col gap-1',
-                            alignRight ? 'ml-auto items-end' : 'mr-auto items-start',
+                            'flex max-w-[88%] items-start gap-1.5',
+                            alignRight ? 'ml-auto flex-row-reverse' : 'mr-auto',
                           )}
                         >
                           <div
                             className={classNames(
-                              'rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed',
-                              isInternal
-                                ? 'border border-amber-200/80 bg-amber-50 text-amber-950'
-                                : fromContact
-                                  ? 'border border-gray-200 bg-gray-100 text-gray-900'
-                                  : 'border border-neutral-800 bg-[#171717] text-white',
+                              'mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border',
+                              badgeClass,
+                            )}
+                            title={channelLabel}
+                            aria-label={channelLabel}
+                          >
+                            <ChannelIcon size={10} strokeWidth={2} />
+                          </div>
+                          <div
+                            className={classNames(
+                              'flex min-w-0 flex-col gap-0.5',
+                              alignRight ? 'items-end' : 'items-start',
                             )}
                           >
-                            {isInternal && (
-                              <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-amber-800/90">
-                                Team only
-                              </p>
-                            )}
-                            {!isInternal && fromUs && (
-                              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-white/70">
-                                {m.channel === 'sms' ? 'SMS to contact' : 'Email to contact'}
-                              </p>
-                            )}
-                            {!isInternal && fromUs && m.channel === 'email' && m.email_subject && (
-                              <p className="mb-1.5 border-b border-white/15 pb-1.5 text-xs font-medium text-white/95">
-                                Subject: {m.email_subject}
-                              </p>
-                            )}
-                            {!isInternal && fromContact && (
-                              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                                Contact
-                              </p>
-                            )}
-                            <p className="whitespace-pre-wrap break-words">{m.body}</p>
-                            {!isInternal && fromUs && m.channel === 'email' && (m.email_cc || m.email_bcc) && (
-                              <div className="mt-2 border-t border-white/10 pt-2 text-[11px] text-white/75">
-                                {m.email_cc ? <p>CC: {m.email_cc}</p> : null}
-                                {m.email_bcc ? <p>BCC: {m.email_bcc}</p> : null}
-                              </div>
-                            )}
-                            {triggerHref && m.trigger_link && (
-                              <p
-                                className={classNames(
-                                  'mt-2 text-xs',
-                                  fromUs && !isInternal ? 'text-white/85' : 'text-gray-600',
-                                )}
-                              >
-                                <Link
-                                  href={triggerHref}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
+                            <div
+                              className={classNames(
+                                'rounded-2xl px-3 py-1.5 text-[13px] leading-snug',
+                                isInternal
+                                  ? 'border border-amber-200/80 bg-amber-50 text-amber-950'
+                                  : fromContact
+                                    ? 'border border-gray-200 bg-gray-100 text-gray-900'
+                                    : 'border border-neutral-800 bg-[#171717] text-white',
+                              )}
+                            >
+                              {!isInternal && fromUs && m.channel === 'email' && m.email_subject && (
+                                <p className="mb-1 border-b border-white/15 pb-1 text-[11px] font-medium text-white/95">
+                                  Subject: {m.email_subject}
+                                </p>
+                              )}
+                              <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                              {!isInternal && fromUs && m.channel === 'email' && (m.email_cc || m.email_bcc) && (
+                                <div className="mt-1.5 border-t border-white/10 pt-1.5 text-[10px] text-white/75">
+                                  {m.email_cc ? <p>CC: {m.email_cc}</p> : null}
+                                  {m.email_bcc ? <p>BCC: {m.email_bcc}</p> : null}
+                                </div>
+                              )}
+                              {triggerHref && m.trigger_link && (
+                                <p
                                   className={classNames(
-                                    'font-medium underline',
-                                    fromUs && !isInternal ? 'text-white' : 'text-sky-700',
+                                    'mt-1.5 text-[11px]',
+                                    fromUs && !isInternal ? 'text-white/85' : 'text-gray-600',
                                   )}
                                 >
-                                  {host}/t/{m.trigger_link.short_code}
-                                </Link>
-                                {m.trigger_link.name ? (
-                                  <span className="text-gray-500"> — {m.trigger_link.name}</span>
-                                ) : null}
-                              </p>
-                            )}
-                          </div>
-                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 px-1 text-[10px] text-gray-400">
-                            <span>{m.author_label}</span>
-                            <span>·</span>
-                            <span>
-                              {new Date(m.created_at).toLocaleString(undefined, {
-                                month: 'short',
-                                day: 'numeric',
-                                hour: 'numeric',
-                                minute: '2-digit',
-                              })}
-                            </span>
-                            {m.visibility === 'external' && m.external_email_sent === false && m.send_error && (
-                              <span className="text-amber-600">
-                                {m.channel === 'sms' ? 'SMS not sent' : 'Email not sent'}: {m.send_error}
+                                  <Link
+                                    href={triggerHref}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={classNames(
+                                      'font-medium underline',
+                                      fromUs && !isInternal ? 'text-white' : 'text-sky-700',
+                                    )}
+                                  >
+                                    {host}/t/{m.trigger_link.short_code}
+                                  </Link>
+                                  {m.trigger_link.name ? (
+                                    <span className="text-gray-500"> — {m.trigger_link.name}</span>
+                                  ) : null}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 px-1 text-[10px] text-gray-400">
+                              <span>
+                                {new Date(m.created_at).toLocaleString(undefined, {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: 'numeric',
+                                  minute: '2-digit',
+                                })}
                               </span>
-                            )}
+                              {m.visibility === 'external' && m.external_email_sent === false && m.send_error && (
+                                <span className="text-amber-600">
+                                  {m.channel === 'sms' ? 'SMS not sent' : 'Email not sent'}: {m.send_error}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       );
@@ -1004,7 +1040,34 @@ export default function ConversationsPage() {
 
               <div className="flex-shrink-0 border-t border-gray-100 bg-gray-50/90 px-3 py-3 sm:px-5">
                 <div className="mx-auto max-w-xl">
-                  <div className="mb-2 flex rounded-2xl bg-gray-200/80 p-1">
+                  {!composerExpanded && !body.trim() && !emailSubject.trim() ? (
+                    <CollapsedComposer
+                      composerTab={composerTab}
+                      menuOpen={composerMenuOpen}
+                      onToggleMenu={() => setComposerMenuOpen((v) => !v)}
+                      onCloseMenu={() => setComposerMenuOpen(false)}
+                      onChooseTab={(tab) => {
+                        setComposerTab(tab);
+                        setComposerMenuOpen(false);
+                        if (tab !== 'team') setMentionedIds([]);
+                        if (tab === 'email') {
+                          setEmailSubject((s) => {
+                            if (s.trim()) return s;
+                            const sub = threadDetail.subject?.trim();
+                            return sub && sub !== 'Conversation' ? sub : '';
+                          });
+                        }
+                      }}
+                      onExpand={() => setComposerExpanded(true)}
+                      onInputChange={(v) => {
+                        setBody(v);
+                        setComposerExpanded(true);
+                      }}
+                    />
+                  ) : (
+                  <>
+                  <div className="mb-2 flex items-center gap-2">
+                    <div className="flex flex-1 rounded-2xl bg-gray-200/80 p-1">
                     <button
                       type="button"
                       onClick={() => {
@@ -1059,6 +1122,24 @@ export default function ConversationsPage() {
                     >
                       <Smartphone size={14} className="hidden shrink-0 sm:inline" />
                       <span className="truncate">SMS</span>
+                    </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setComposerExpanded(false);
+                        setBody('');
+                        setEmailSubject('');
+                        setEmailCc('');
+                        setEmailBcc('');
+                        setSelectedTriggerLinkId('');
+                        setSendError('');
+                      }}
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-gray-400 hover:bg-gray-200 hover:text-gray-700"
+                      aria-label="Minimize composer"
+                      title="Minimize"
+                    >
+                      <Minus size={14} />
                     </button>
                   </div>
                   <p className="mb-2 text-[11px] text-gray-500">
@@ -1150,6 +1231,7 @@ export default function ConversationsPage() {
                         </label>
                       )}
                       <textarea
+                        ref={composerTextareaRef}
                         value={body}
                         onChange={(e) => setBody(e.target.value)}
                         rows={composerTab === 'team' ? 3 : 4}
@@ -1264,6 +1346,8 @@ export default function ConversationsPage() {
                       </button>
                     </div>
                   </form>
+                  </>
+                  )}
                 </div>
               </div>
             </>
@@ -1417,6 +1501,94 @@ export default function ConversationsPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function CollapsedComposer({
+  composerTab,
+  menuOpen,
+  onToggleMenu,
+  onCloseMenu,
+  onChooseTab,
+  onExpand,
+  onInputChange,
+}: {
+  composerTab: ComposerTab;
+  menuOpen: boolean;
+  onToggleMenu: () => void;
+  onCloseMenu: () => void;
+  onChooseTab: (tab: ComposerTab) => void;
+  onExpand: () => void;
+  onInputChange: (value: string) => void;
+}) {
+  const CurrentIcon = composerTab === 'team' ? Lock : composerTab === 'email' ? Mail : Smartphone;
+  const options: Array<{ id: ComposerTab; label: string; icon: typeof Lock }> = [
+    { id: 'team', label: 'Team only', icon: Lock },
+    { id: 'email', label: 'Email', icon: Mail },
+    { id: 'sms', label: 'SMS', icon: Smartphone },
+  ];
+
+  return (
+    <div className="relative flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-2 py-1.5 shadow-sm">
+      <button
+        type="button"
+        onClick={onToggleMenu}
+        className="flex h-8 items-center gap-1 rounded-xl px-2 text-gray-600 transition-colors hover:bg-gray-100"
+        aria-label="Change channel"
+        title={`Channel: ${composerTab === 'team' ? 'Team only' : composerTab === 'email' ? 'Email' : 'SMS'}`}
+      >
+        <CurrentIcon size={16} className="text-sky-600" />
+        <ChevronDown size={12} className="text-gray-400" />
+      </button>
+
+      {menuOpen && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={onCloseMenu} aria-hidden />
+          <div
+            className="absolute bottom-full left-0 z-50 mb-2 w-48 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg"
+            role="menu"
+          >
+            {options.map((opt) => {
+              const Icon = opt.icon;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => onChooseTab(opt.id)}
+                  className={classNames(
+                    'flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors',
+                    composerTab === opt.id
+                      ? 'bg-gray-100 font-semibold text-gray-900'
+                      : 'text-gray-700 hover:bg-gray-50',
+                  )}
+                  role="menuitem"
+                >
+                  <Icon size={14} className="text-gray-500" />
+                  <span>{opt.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      <input
+        type="text"
+        placeholder="Type a message..."
+        onFocus={onExpand}
+        onChange={(e) => onInputChange(e.target.value)}
+        className="flex-1 bg-transparent text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none"
+      />
+
+      <button
+        type="button"
+        onClick={onExpand}
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#171717] text-white transition-colors hover:bg-black"
+        aria-label="Open composer"
+      >
+        <Send size={14} />
+      </button>
     </div>
   );
 }

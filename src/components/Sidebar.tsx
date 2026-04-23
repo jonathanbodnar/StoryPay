@@ -753,7 +753,7 @@ export default function Sidebar({
 
       <aside
         className={`hidden lg:block fixed left-0 top-0 bottom-0 z-30 transition-[width] duration-200 ease-out ${
-          collapsed ? 'w-[72px]' : 'w-[260px]'
+          collapsed ? 'w-[60px]' : 'w-[216px]'
         }`}
         style={{ backgroundColor: '#fafaf9', borderRight: '1px solid #e5e7eb' }}
       >

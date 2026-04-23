@@ -77,7 +77,7 @@ export default function DashboardShell({
 
       <div
         className={`transition-[margin] duration-200 ease-out ${
-          rail ? 'lg:ml-[72px]' : 'lg:ml-[260px]'
+          rail ? 'lg:ml-[60px]' : 'lg:ml-[216px]'
         }`}
       >
         <div className="h-14 lg:hidden" />
