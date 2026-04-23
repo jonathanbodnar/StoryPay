@@ -26,6 +26,9 @@ export async function GET() {
     formSubmissions7dRes,
     triggerLinkClicksRes,
     suppressionRes,
+    unsubscribeRes,
+    spamRes,
+    bouncedRes,
     formRowsRes,
   ] = await Promise.all([
     supabaseAdmin
@@ -74,10 +77,29 @@ export async function GET() {
       .select('id', { count: 'exact', head: true })
       .eq('venue_id', venueId)
       .eq('event_type', 'trigger_link_click'),
+    // Total suppressions (all reasons combined)
     supabaseAdmin
       .from('marketing_email_suppressions')
-      .select('id', { count: 'exact', head: true })
+      .select('lead_id', { count: 'exact', head: true })
       .eq('venue_id', venueId),
+    // Unsubscribes only
+    supabaseAdmin
+      .from('marketing_email_suppressions')
+      .select('lead_id', { count: 'exact', head: true })
+      .eq('venue_id', venueId)
+      .eq('reason', 'unsubscribe'),
+    // Spam reports only
+    supabaseAdmin
+      .from('marketing_email_suppressions')
+      .select('lead_id', { count: 'exact', head: true })
+      .eq('venue_id', venueId)
+      .eq('reason', 'spam'),
+    // Bounced / failed delivery attempts
+    supabaseAdmin
+      .from('marketing_campaign_recipients')
+      .select('id', { count: 'exact', head: true })
+      .eq('venue_id', venueId)
+      .eq('status', 'failed'),
     supabaseAdmin
       .from('marketing_form_submissions')
       .select('form_id')
@@ -111,6 +133,9 @@ export async function GET() {
   return NextResponse.json({
     emailsSent: sentRes.count ?? 0,
     emailsOpened: openedRes.count ?? 0,
+    emailsBounced: bouncedRes.count ?? 0,
+    unsubscribeCount: unsubscribeRes.count ?? 0,
+    spamReportCount: spamRes.count ?? 0,
     formSubmissions,
     templateCount: templateRes.count ?? 0,
     campaignCount: campaignRes.count ?? 0,

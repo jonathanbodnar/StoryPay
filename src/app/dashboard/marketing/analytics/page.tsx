@@ -4,21 +4,23 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import {
   BarChart3,
-  FileStack,
-  LayoutTemplate,
-  Link2,
   Loader2,
   Mail,
-  Megaphone,
   MousePointerClick,
   PieChart,
   RefreshCw,
-  Workflow,
+  AlertTriangle,
+  UserMinus,
+  XCircle,
+  Send,
 } from 'lucide-react';
 
 type MarketingAnalytics = {
   emailsSent: number;
   emailsOpened: number;
+  emailsBounced: number;
+  unsubscribeCount: number;
+  spamReportCount: number;
   formSubmissions: Array<{ formId: string; name: string; count: number }>;
   templateCount: number;
   campaignCount: number;
@@ -51,39 +53,6 @@ function fmtMoney(n: number) {
 const primaryBtn =
   'inline-flex items-center justify-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800 disabled:opacity-50';
 
-const quickLinks: { href: string; label: string; desc: string; Icon: typeof Mail }[] = [
-  {
-    href: '/dashboard/marketing/email/templates',
-    label: 'Email templates',
-    desc: 'Layouts, subjects, merge tags',
-    Icon: FileStack,
-  },
-  {
-    href: '/dashboard/marketing/email/campaigns',
-    label: 'Email campaigns',
-    desc: 'Broadcasts & scheduled sends',
-    Icon: Megaphone,
-  },
-  {
-    href: '/dashboard/marketing/workflows',
-    label: 'Workflows',
-    desc: 'Triggers, delays, email & SMS (more channels later)',
-    Icon: Workflow,
-  },
-  {
-    href: '/dashboard/marketing/form-builder',
-    label: 'Lead Capture Forms',
-    desc: 'Embeddable lead capture forms',
-    Icon: LayoutTemplate,
-  },
-  {
-    href: '/dashboard/marketing/trigger-links',
-    label: 'Trigger links & tags',
-    desc: 'Short URLs & lead tags',
-    Icon: Link2,
-  },
-];
-
 export default function MarketingAnalyticsPage() {
   const [m, setM] = useState<MarketingAnalytics | null>(null);
   const [crm, setCrm] = useState<CrmSummary | null>(null);
@@ -115,6 +84,15 @@ export default function MarketingAnalyticsPage() {
   const openRate =
     m && m.emailsSent > 0 ? Math.round((m.emailsOpened / m.emailsSent) * 1000) / 10 : null;
 
+  const bounceRate =
+    m && m.emailsSent > 0 ? Math.round((m.emailsBounced / m.emailsSent) * 1000) / 10 : null;
+
+  const unsubRate =
+    m && m.emailsSent > 0 ? Math.round((m.unsubscribeCount / m.emailsSent) * 1000) / 10 : null;
+
+  const spamRate =
+    m && m.emailsSent > 0 ? Math.round((m.spamReportCount / m.emailsSent) * 1000) / 10 : null;
+
   const formRecentShare =
     m && m.totalFormSubmissions > 0
       ? Math.round((m.formSubmissionsLast7Days / m.totalFormSubmissions) * 1000) / 10
@@ -143,26 +121,6 @@ export default function MarketingAnalyticsPage() {
           Refresh
         </button>
       </div>
-
-      <section className="mb-8 rounded-xl border border-gray-200 bg-white p-4">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Marketing tools</h2>
-        <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-          {quickLinks.map(({ href, label, desc, Icon }) => (
-            <li key={href}>
-              <Link
-                href={href}
-                className="flex items-start gap-3 rounded-lg border border-gray-100 bg-gray-50/50 px-3 py-3 transition hover:border-gray-300 hover:bg-white"
-              >
-                <Icon size={18} className="mt-0.5 shrink-0 text-gray-600" />
-                <span>
-                  <span className="block text-sm font-medium text-gray-900">{label}</span>
-                  <span className="block text-xs text-gray-500">{desc}</span>
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </section>
 
       {err ? <p className="mb-4 text-sm text-red-600">{err}</p> : null}
 
@@ -218,26 +176,74 @@ export default function MarketingAnalyticsPage() {
 
           <section className="rounded-xl border border-gray-200 bg-white p-5">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
-              <Mail size={18} className="text-brand-600" /> Email campaigns
+              <Mail size={18} className="text-brand-600" /> Email deliverability
             </h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-3">
-              <div>
-                <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">Sent</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {/* Sent */}
+              <div className="rounded-lg border border-gray-100 bg-gray-50/80 px-4 py-3">
+                <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                  <Send size={12} /> Sent
+                </div>
                 <p className="mt-1 text-2xl font-semibold tabular-nums text-gray-900">{m.emailsSent}</p>
               </div>
-              <div>
-                <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">Opened</p>
+
+              {/* Opens */}
+              <div className="rounded-lg border border-gray-100 bg-gray-50/80 px-4 py-3">
+                <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                  <Mail size={12} /> Opened
+                </div>
                 <p className="mt-1 text-2xl font-semibold tabular-nums text-gray-900">{m.emailsOpened}</p>
+                {openRate != null && (
+                  <p className="mt-0.5 text-xs text-gray-500">{openRate}% open rate</p>
+                )}
               </div>
-              <div>
-                <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">Open rate</p>
-                <p className="mt-1 text-2xl font-semibold tabular-nums text-gray-900">
-                  {openRate != null ? `${openRate}%` : '—'}
-                </p>
+
+              {/* Bounced */}
+              <div className="rounded-lg border border-gray-100 bg-amber-50/60 px-4 py-3">
+                <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide text-amber-600">
+                  <XCircle size={12} /> Bounced
+                </div>
+                <p className="mt-1 text-2xl font-semibold tabular-nums text-gray-900">{m.emailsBounced}</p>
+                {bounceRate != null && (
+                  <p className="mt-0.5 text-xs text-amber-700">{bounceRate}% of sent</p>
+                )}
+              </div>
+
+              {/* Unsubscribes */}
+              <div className="rounded-lg border border-gray-100 bg-orange-50/60 px-4 py-3">
+                <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide text-orange-600">
+                  <UserMinus size={12} /> Unsubscribes
+                </div>
+                <p className="mt-1 text-2xl font-semibold tabular-nums text-gray-900">{m.unsubscribeCount}</p>
+                {unsubRate != null && (
+                  <p className="mt-0.5 text-xs text-orange-700">{unsubRate}% of sent</p>
+                )}
+                <p className="mt-1 text-[11px] text-gray-400">Contacts who opted out of emails</p>
+              </div>
+
+              {/* Spam reports */}
+              <div className={`rounded-lg border px-4 py-3 ${m.spamReportCount > 0 ? 'border-red-200 bg-red-50/60' : 'border-gray-100 bg-gray-50/80'}`}>
+                <div className={`flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide ${m.spamReportCount > 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                  <AlertTriangle size={12} /> Spam reports
+                </div>
+                <p className={`mt-1 text-2xl font-semibold tabular-nums ${m.spamReportCount > 0 ? 'text-red-700' : 'text-gray-900'}`}>{m.spamReportCount}</p>
+                {spamRate != null && (
+                  <p className={`mt-0.5 text-xs ${m.spamReportCount > 0 ? 'text-red-600' : 'text-gray-500'}`}>{spamRate}% of sent</p>
+                )}
+                <p className="mt-1 text-[11px] text-gray-400">Keep under 0.1% to protect deliverability</p>
+              </div>
+
+              {/* Total suppressions */}
+              <div className="rounded-lg border border-gray-100 bg-gray-50/80 px-4 py-3">
+                <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                  <UserMinus size={12} /> Total suppressions
+                </div>
+                <p className="mt-1 text-2xl font-semibold tabular-nums text-gray-900">{m.suppressionCount}</p>
+                <p className="mt-1 text-[11px] text-gray-400">Emails never sent to these contacts</p>
               </div>
             </div>
             <p className="mt-3 text-xs text-gray-500">
-              Opens are recorded when a recipient loads the tracking pixel in a campaign email.
+              Opens tracked via pixel. Bounces = failed delivery. Unsubscribes and spam reports are suppressed automatically.
             </p>
           </section>
 
