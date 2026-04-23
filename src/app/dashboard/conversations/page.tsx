@@ -84,6 +84,8 @@ interface Msg {
   is_pinned?: boolean;
   email_cc?: string | null;
   email_bcc?: string | null;
+  contact_from_name?: string | null;
+  contact_from_email?: string | null;
   trigger_link?: { short_code: string; name: string | null } | null;
   trigger_link_id?: string | null;
 }
@@ -1001,10 +1003,65 @@ export default function ConversationsPage() {
                                 cc={m.email_cc || null}
                                 bcc={m.email_bcc || null}
                                 timestamp={timestamp}
+                                fullTimestamp={new Date(m.created_at).toLocaleString(undefined, {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                  hour: 'numeric',
+                                  minute: '2-digit',
+                                })}
                                 authorLabel={m.author_label}
+                                fromName={
+                                  fromUs
+                                    ? m.author_label || 'You'
+                                    : m.contact_from_name ||
+                                      [
+                                        threadDetail?.venue_customers?.first_name,
+                                        threadDetail?.venue_customers?.last_name,
+                                      ]
+                                        .filter(Boolean)
+                                        .join(' ') ||
+                                      'Contact'
+                                }
+                                fromEmail={
+                                  fromUs
+                                    ? null
+                                    : m.contact_from_email ||
+                                      threadDetail?.venue_customers?.customer_email ||
+                                      null
+                                }
+                                toName={
+                                  fromUs
+                                    ? [
+                                        threadDetail?.venue_customers?.first_name,
+                                        threadDetail?.venue_customers?.last_name,
+                                      ]
+                                        .filter(Boolean)
+                                        .join(' ') || null
+                                    : 'You'
+                                }
+                                toEmail={
+                                  fromUs
+                                    ? threadDetail?.venue_customers?.customer_email || null
+                                    : null
+                                }
                                 direction={fromUs ? 'outgoing' : 'incoming'}
                                 expanded={emailExpanded}
                                 onToggle={toggleEmail}
+                                onReply={() => {
+                                  setComposerTab('email');
+                                  setComposerExpanded(true);
+                                  setEmailSubject((s) => {
+                                    if (s.trim()) return s;
+                                    const sub = (m.email_subject || '').trim();
+                                    if (!sub) return '';
+                                    return /^re:/i.test(sub) ? sub : `Re: ${sub}`;
+                                  });
+                                  setTimeout(
+                                    () => composerTextareaRef.current?.focus(),
+                                    60,
+                                  );
+                                }}
                                 triggerHref={triggerHref}
                                 triggerShort={m.trigger_link?.short_code ?? null}
                                 triggerName={m.trigger_link?.name ?? null}
@@ -1531,10 +1588,15 @@ function EmailCard({
   cc,
   bcc,
   timestamp,
+  fullTimestamp,
   authorLabel,
-  direction,
+  fromName,
+  fromEmail,
+  toName,
+  toEmail,
   expanded,
   onToggle,
+  onReply,
   triggerHref,
   triggerShort,
   triggerName,
@@ -1545,43 +1607,94 @@ function EmailCard({
   cc: string | null;
   bcc: string | null;
   timestamp: string;
+  fullTimestamp: string;
   authorLabel?: string;
+  fromName: string;
+  fromEmail: string | null;
+  toName: string | null;
+  toEmail: string | null;
   direction: 'incoming' | 'outgoing';
   expanded: boolean;
   onToggle: () => void;
+  onReply: () => void;
   triggerHref: string | null;
   triggerShort: string | null;
   triggerName: string | null;
   host: string;
 }) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const detailsRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
   // Strip heavy whitespace for the collapsed preview so we don't stretch the
   // one-line summary with stray newlines/indents copy-pasted from the email.
   const preview = body.replace(/\s+/g, ' ').trim();
-  const accent = direction === 'outgoing' ? 'bg-gray-50' : 'bg-white';
+  const initials = (fromName || authorLabel || '?')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((p) => p[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
+  // Close the caret / kebab popovers on outside click so they behave like a
+  // normal email client's "details" flyout.
+  useEffect(() => {
+    if (!detailsOpen && !menuOpen) return;
+    function onDoc(e: MouseEvent) {
+      const t = e.target as Node;
+      if (detailsRef.current && !detailsRef.current.contains(t)) setDetailsOpen(false);
+      if (menuRef.current && !menuRef.current.contains(t)) setMenuOpen(false);
+    }
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [detailsOpen, menuOpen]);
+
+  const details = (
+    <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[12px] text-gray-700 [overflow-wrap:anywhere]">
+      <span className="text-gray-500">From:</span>
+      <span className="min-w-0 break-words">
+        <span className="font-medium text-gray-900">{fromName}</span>
+        {fromEmail ? <span className="text-gray-500"> &lt;{fromEmail}&gt;</span> : null}
+      </span>
+      <span className="text-gray-500">To:</span>
+      <span className="min-w-0 break-words">
+        {toName ? <span className="font-medium text-gray-900">{toName}</span> : null}
+        {toEmail ? <span className="text-gray-500"> &lt;{toEmail}&gt;</span> : null}
+        {!toName && !toEmail ? <span className="text-gray-400">—</span> : null}
+      </span>
+      {cc ? (
+        <>
+          <span className="text-gray-500">CC:</span>
+          <span className="min-w-0 break-words text-gray-700">{cc}</span>
+        </>
+      ) : null}
+      {bcc ? (
+        <>
+          <span className="text-gray-500">BCC:</span>
+          <span className="min-w-0 break-words text-gray-700">{bcc}</span>
+        </>
+      ) : null}
+      <span className="text-gray-500">Date:</span>
+      <span className="min-w-0">{fullTimestamp}</span>
+      <span className="text-gray-500">Subject:</span>
+      <span className="min-w-0 break-words font-medium text-gray-900">{subject}</span>
+    </div>
+  );
 
   return (
-    <div
-      className={classNames(
-        'w-full min-w-0 max-w-full overflow-hidden rounded-xl border border-gray-200 shadow-sm',
-        accent,
-      )}
-    >
+    <div className="w-full min-w-0 max-w-full overflow-hidden rounded-xl border border-gray-200 bg-white">
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full min-w-0 items-center justify-between gap-2 border-b border-gray-200 bg-gray-50/80 px-3 py-2 text-left"
+        className="flex w-full min-w-0 items-center justify-between gap-2 border-b border-gray-200 bg-gray-100 px-3 py-2 text-left"
         aria-expanded={expanded}
       >
-        <span className="flex min-w-0 flex-1 items-center gap-2">
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-gray-500 shadow-sm ring-1 ring-gray-200">
-            <Mail size={12} />
-          </span>
-          <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-gray-900">
-            {subject}
-          </span>
+        <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-gray-900">
+          {subject}
         </span>
-        <span className="flex shrink-0 items-center gap-2 text-[11px] text-gray-500">
-          <span className="hidden sm:inline">{timestamp}</span>
+        <span className="flex shrink-0 items-center gap-1 text-[11px] text-gray-500">
           {expanded ? (
             <ChevronUp size={14} className="text-gray-500" />
           ) : (
@@ -1591,31 +1704,110 @@ function EmailCard({
       </button>
 
       {expanded ? (
-        <div className="min-w-0 space-y-2 px-3 py-3 text-[13px] leading-relaxed text-gray-800 [overflow-wrap:anywhere]">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 border-b border-gray-100 pb-2 text-[11px] text-gray-500">
-            {authorLabel ? (
-              <span className="min-w-0 max-w-full truncate">
-                <span className="text-gray-400">From: </span>
-                <span className="font-medium text-gray-700">{authorLabel}</span>
+        <div className="min-w-0 px-3 pb-3 pt-3 text-[13px] leading-relaxed text-gray-800 [overflow-wrap:anywhere]">
+          {/* Gmail-style header: avatar, from, to w/ details caret, reply + kebab */}
+          <div className="mb-3 flex min-w-0 items-start gap-2">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[11px] font-semibold text-indigo-700">
+              {initials}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 items-baseline gap-2">
+                <span className="min-w-0 truncate text-[13px] font-semibold text-gray-900">
+                  {fromName}
+                </span>
+              </div>
+              <div ref={detailsRef} className="relative mt-0.5 flex min-w-0 items-center gap-1">
+                <span className="min-w-0 truncate text-[11.5px] text-gray-500">
+                  {toName || toEmail ? (
+                    <>
+                      To: {toName}
+                      {toEmail ? (
+                        <span className="text-gray-500"> &lt;{toEmail}&gt;</span>
+                      ) : null}
+                    </>
+                  ) : fromEmail ? (
+                    <>From: {fromEmail}</>
+                  ) : null}
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDetailsOpen((v) => !v);
+                    setMenuOpen(false);
+                  }}
+                  className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                  aria-label="Show message details"
+                  title="Show details"
+                >
+                  <ChevronDown size={12} />
+                </button>
+                {detailsOpen ? (
+                  <div className="absolute left-0 top-full z-20 mt-1 w-[min(22rem,calc(100vw-3rem))] rounded-lg border border-gray-200 bg-white p-3 shadow-lg">
+                    {details}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-0.5">
+              <span className="hidden pr-1 text-[11px] text-gray-500 sm:inline">
+                {timestamp}
               </span>
-            ) : null}
-            {cc ? (
-              <span className="min-w-0 max-w-full truncate">
-                <span className="text-gray-400">CC: </span>
-                <span className="text-gray-600">{cc}</span>
-              </span>
-            ) : null}
-            {bcc ? (
-              <span className="min-w-0 max-w-full truncate">
-                <span className="text-gray-400">BCC: </span>
-                <span className="text-gray-600">{bcc}</span>
-              </span>
-            ) : null}
-            <span className="sm:hidden">{timestamp}</span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onReply();
+                }}
+                className="flex h-7 w-7 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                aria-label="Reply"
+                title="Reply"
+              >
+                <ArrowLeft size={14} className="rotate-180" />
+              </button>
+              <div ref={menuRef} className="relative">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMenuOpen((v) => !v);
+                    setDetailsOpen(false);
+                  }}
+                  className="flex h-7 w-7 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                  aria-label="More"
+                  title="More"
+                >
+                  <KebabIcon />
+                </button>
+                {menuOpen ? (
+                  <div className="absolute right-0 top-full z-20 mt-1 w-[min(22rem,calc(100vw-3rem))] rounded-lg border border-gray-200 bg-white p-3 shadow-lg">
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                      Message details
+                    </p>
+                    {details}
+                    <div className="mt-2 flex justify-end border-t border-gray-100 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          onReply();
+                        }}
+                        className="rounded-md bg-[#1b1b1b] px-3 py-1 text-[12px] font-medium text-white hover:bg-black"
+                      >
+                        Reply
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
           </div>
+
           <EmailBody body={body} />
+
           {triggerHref && triggerShort ? (
-            <p className="border-t border-gray-100 pt-2 text-[12px] [overflow-wrap:anywhere]">
+            <p className="mt-3 border-t border-gray-100 pt-2 text-[12px] [overflow-wrap:anywhere]">
               <Link
                 href={triggerHref}
                 target="_blank"
@@ -1627,13 +1819,44 @@ function EmailCard({
               {triggerName ? <span className="text-gray-500"> — {triggerName}</span> : null}
             </p>
           ) : null}
+
+          <div className="mt-4 flex items-center gap-2 border-t border-gray-100 pt-3">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onReply();
+              }}
+              className="inline-flex items-center gap-1.5 rounded-md bg-[#1b1b1b] px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-black"
+            >
+              <ArrowLeft size={13} className="rotate-180" />
+              Reply
+            </button>
+            <span className="text-[11px] text-gray-400 sm:hidden">{timestamp}</span>
+          </div>
         </div>
       ) : (
-        <div className="px-3 py-2 text-[12px] text-gray-500">
-          <p className="truncate">{preview}</p>
+        <div className="px-3 py-2">
+          <p className="truncate text-[12px] text-gray-500">{preview}</p>
         </div>
       )}
     </div>
+  );
+}
+
+function KebabIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      width="14"
+      height="14"
+      fill="currentColor"
+    >
+      <circle cx="12" cy="5" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <circle cx="12" cy="19" r="1.6" />
+    </svg>
   );
 }
 
