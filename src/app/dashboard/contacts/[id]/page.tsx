@@ -314,6 +314,10 @@ export default function CustomerDetailPage() {
   }
 
   async function saveContact() {
+    if (!editForm.firstName.trim()) { setContactError('First name is required'); return; }
+    if (!editForm.lastName.trim())  { setContactError('Last name is required');  return; }
+    if (!editForm.email.trim())     { setContactError('Email is required');       return; }
+    if (!editForm.phone.trim())     { setContactError('Phone is required');       return; }
     setSavingContact(true);
     setContactError('');
     const res = await fetch(`/api/customers/${customerId}`, {
@@ -944,7 +948,7 @@ export default function CustomerDetailPage() {
             </div>
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
-                {[{k:'firstName',l:'First Name'},{k:'lastName',l:'Last Name'}].map(f => (
+                {[{k:'firstName',l:'First Name *'},{k:'lastName',l:'Last Name *'}].map(f => (
                   <div key={f.k}>
                     <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{f.l}</label>
                     <input value={editForm[f.k as keyof typeof editForm]} onChange={e => setEditForm(p => ({...p,[f.k]:e.target.value}))}
@@ -952,7 +956,7 @@ export default function CustomerDetailPage() {
                   </div>
                 ))}
               </div>
-              {[{k:'email',l:'Email',t:'email'},{k:'phone',l:'Phone',t:'tel'},{k:'address',l:'Address',t:'text'}].map(f => (
+              {[{k:'email',l:'Email *',t:'email'},{k:'phone',l:'Phone *',t:'tel'},{k:'address',l:'Address',t:'text'}].map(f => (
                 <div key={f.k}>
                   <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{f.l}</label>
                   <input type={f.t} value={editForm[f.k as keyof typeof editForm]} onChange={e => setEditForm(p => ({...p,[f.k]:e.target.value}))}

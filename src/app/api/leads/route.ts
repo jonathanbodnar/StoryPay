@@ -444,10 +444,14 @@ export async function POST(request: NextRequest) {
   const firstName = (body.firstName || '').trim();
   const lastName  = (body.lastName  || '').trim();
   const email     = (body.email     || '').trim();
+  const phone     = (body.phone     || '').trim();
   const fullName  = (body.name      || `${firstName} ${lastName}`.trim()).trim();
 
-  if (!fullName) return NextResponse.json({ error: 'Name is required' }, { status: 400 });
-  if (!email)    return NextResponse.json({ error: 'Email is required' }, { status: 400 });
+  if (!firstName)  return NextResponse.json({ error: 'First name is required' }, { status: 400 });
+  if (!lastName)   return NextResponse.json({ error: 'Last name is required' }, { status: 400 });
+  if (!fullName)   return NextResponse.json({ error: 'Name is required' }, { status: 400 });
+  if (!email)      return NextResponse.json({ error: 'Email is required' }, { status: 400 });
+  if (!phone)      return NextResponse.json({ error: 'Phone is required' }, { status: 400 });
 
   // Intentionally skip pipeline assignment when the caller asked for a
   // contact-only record ("None" stage in the Add lead / Add contact modal).

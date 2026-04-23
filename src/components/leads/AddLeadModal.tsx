@@ -205,8 +205,12 @@ export default function AddLeadModal({
   }
 
   async function submit() {
-    if (!draft.firstName.trim() && !draft.lastName.trim()) {
-      alert('Please provide at least a first or last name');
+    if (!draft.firstName.trim()) {
+      alert('First name is required');
+      return;
+    }
+    if (!draft.lastName.trim()) {
+      alert('Last name is required');
       return;
     }
     if (!draft.email.trim()) {
@@ -460,8 +464,8 @@ export default function AddLeadModal({
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <DraftField label="First name" value={draft.firstName} onChange={(v) => set('firstName', v)} />
-              <DraftField label="Last name" value={draft.lastName} onChange={(v) => set('lastName', v)} />
+              <DraftField label="First name *" value={draft.firstName} onChange={(v) => set('firstName', v)} />
+              <DraftField label="Last name *" value={draft.lastName} onChange={(v) => set('lastName', v)} />
             </div>
             <DraftField label="Email *" value={draft.email} type="email" onChange={(v) => set('email', v)} />
             <DraftField label="Phone *" value={draft.phone} type="tel" onChange={(v) => set('phone', v)} />

@@ -151,7 +151,19 @@ export async function PATCH(
   const venueId = cookieStore.get('venue_id')?.value;
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { firstName, lastName, email, phone, address, city, state, zip } = await request.json();
+  const body = await request.json();
+  const { firstName, lastName, email, phone, address, city, state, zip } = body;
+
+  // If these core fields are explicitly supplied, they must not be blank.
+  if (firstName !== undefined && !String(firstName ?? '').trim())
+    return NextResponse.json({ error: 'First name is required' }, { status: 400 });
+  if (lastName !== undefined && !String(lastName ?? '').trim())
+    return NextResponse.json({ error: 'Last name is required' }, { status: 400 });
+  if (email !== undefined && !String(email ?? '').trim())
+    return NextResponse.json({ error: 'Email is required' }, { status: 400 });
+  if (phone !== undefined && !String(phone ?? '').trim())
+    return NextResponse.json({ error: 'Phone is required' }, { status: 400 });
+
   const name = [firstName, lastName].filter(Boolean).join(' ');
 
   const { data: venue } = await supabaseAdmin
