@@ -69,7 +69,6 @@ const marketingItems: NavItem[] = [
   { label: 'Marketing analytics', href: '/dashboard/marketing/analytics', icon: BarChart3, navId: 'nav_marketing_analytics' },
   { label: 'Lead Capture Forms', href: '/dashboard/marketing/form-builder', icon: LayoutTemplate, navId: 'nav_marketing_form_builder' },
   { label: 'Email templates', href: '/dashboard/marketing/email/templates', icon: FileStack, navId: 'nav_marketing_email_templates' },
-  { label: 'Email opt-in / unsubscribes', href: '/dashboard/marketing/email/preferences', icon: Mail, navId: 'nav_marketing_email_preferences' },
   { label: 'Email campaigns', href: '/dashboard/marketing/email/campaigns', icon: Megaphone, navId: 'nav_marketing_email_campaigns' },
   { label: 'Workflows', href: '/dashboard/marketing/workflows', icon: Workflow, navId: 'nav_marketing_email_automations' },
   { label: 'Trigger links & tags', href: '/dashboard/marketing/trigger-links', icon: Link2, navId: 'nav_marketing_trigger_links' },
