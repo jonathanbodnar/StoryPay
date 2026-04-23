@@ -71,7 +71,9 @@ export default function VenueCouponsPage() {
       name: c.name,
       description: c.description || '',
       discount_type: c.discount_type,
-      discount_percent: c.discount_type === 'percent' ? String(c.discount_percent ?? '') : '',
+      discount_percent: c.discount_type === 'percent' && c.discount_percent != null
+        ? String(Math.round(Number(c.discount_percent) / 5) * 5)
+        : '',
       discount_dollars:
         c.discount_type === 'fixed_cents' && c.discount_amount_cents != null
           ? (c.discount_amount_cents / 100).toFixed(2)
@@ -101,9 +103,9 @@ export default function VenueCouponsPage() {
         active: true,
       };
       if (form.discount_type === 'percent') {
-        const p = parseFloat(form.discount_percent);
-        if (!Number.isFinite(p) || p <= 0 || p > 100) {
-          setError('Enter a percent between 0 and 100.');
+        const p = parseInt(form.discount_percent, 10);
+        if (!Number.isFinite(p) || p < 5 || p > 100 || p % 5 !== 0) {
+          setError('Select a percentage between 5% and 100%.');
           return;
         }
         body.discount_percent = p;
@@ -153,9 +155,9 @@ export default function VenueCouponsPage() {
         max_redemptions: form.unlimited ? null : Math.max(1, parseInt(form.max_redemptions || '1', 10)),
       };
       if (form.discount_type === 'percent') {
-        const p = parseFloat(form.discount_percent);
-        if (!Number.isFinite(p) || p <= 0 || p > 100) {
-          setError('Enter a percent between 0 and 100.');
+        const p = parseInt(form.discount_percent, 10);
+        if (!Number.isFinite(p) || p < 5 || p > 100 || p % 5 !== 0) {
+          setError('Select a percentage between 5% and 100%.');
           return;
         }
         body.discount_percent = p;
@@ -307,15 +309,16 @@ export default function VenueCouponsPage() {
           {form.discount_type === 'percent' ? (
             <div>
               <label className={LABEL}>Percent off</label>
-              <input
-                type="number"
-                min={0.01}
-                max={100}
-                step={0.25}
+              <select
                 className={INPUT}
                 value={form.discount_percent}
                 onChange={(e) => setForm((f) => ({ ...f, discount_percent: e.target.value }))}
-              />
+              >
+                <option value="">Select percentage…</option>
+                {Array.from({ length: 20 }, (_, i) => (i + 1) * 5).map((pct) => (
+                  <option key={pct} value={String(pct)}>{pct}%</option>
+                ))}
+              </select>
             </div>
           ) : (
             <div>
