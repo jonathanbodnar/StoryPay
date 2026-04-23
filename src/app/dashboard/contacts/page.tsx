@@ -5,7 +5,6 @@ import Link from 'next/link';
 import {
   Search,
   UserPlus,
-  X,
   Loader2,
   FileText,
   Receipt,
@@ -16,6 +15,12 @@ import {
   Upload,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
+import AddLeadModal, {
+  type LeadDraft,
+  type LeadPipeline,
+  type MarketingTag,
+  type VenueSpaceLite,
+} from '@/components/leads/AddLeadModal';
 
 const capitalizeName = (name: string) => name.replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -31,28 +36,6 @@ interface ContactRow {
 
 const PAGE_SIZE = 20;
 
-type ContactForm = {
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  address: string;
-  city: string;
-  state: string;
-  zip: string;
-};
-
-const emptyForm: ContactForm = {
-  firstName: '',
-  lastName: '',
-  email: '',
-  phone: '',
-  address: '',
-  city: '',
-  state: '',
-  zip: '',
-};
-
 export default function ContactsPage() {
   const [contacts, setContacts] = useState<ContactRow[]>([]);
   const [search, setSearch] = useState('');
@@ -63,6 +46,41 @@ export default function ContactsPage() {
   const [importBusy, setImportBusy] = useState(false);
   const [importMessage, setImportMessage] = useState('');
   const importInputRef = useRef<HTMLInputElement>(null);
+
+  // Shared state for the unified add modal (mirrors the Leads page).
+  const [pipelines, setPipelines] = useState<LeadPipeline[]>([]);
+  const [defaultPipelineId, setDefaultPipelineId] = useState<string>('');
+  const [spaces, setSpaces] = useState<VenueSpaceLite[]>([]);
+  const [tags, setTags] = useState<MarketingTag[]>([]);
+
+  const loadModalData = useCallback(async () => {
+    const [pipeRes, spaceRes, tagRes] = await Promise.all([
+      fetch('/api/pipelines', { cache: 'no-store' }).catch(() => null),
+      fetch('/api/spaces', { cache: 'no-store' }).catch(() => null),
+      fetch('/api/marketing/tags', { cache: 'no-store' }).catch(() => null),
+    ]);
+    if (pipeRes?.ok) {
+      const d = (await pipeRes.json().catch(() => ({}))) as {
+        pipelines?: LeadPipeline[];
+      };
+      const list = Array.isArray(d.pipelines) ? d.pipelines : [];
+      setPipelines(list);
+      const def = list.find((p) => p.is_default) || list[0];
+      if (def) setDefaultPipelineId(def.id);
+    }
+    if (spaceRes?.ok) {
+      const rows = (await spaceRes.json().catch(() => [])) as VenueSpaceLite[];
+      setSpaces(Array.isArray(rows) ? rows : []);
+    }
+    if (tagRes?.ok) {
+      const d = (await tagRes.json().catch(() => ({}))) as { tags?: MarketingTag[] };
+      setTags(Array.isArray(d.tags) ? d.tags : []);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadModalData();
+  }, [loadModalData]);
 
   const fetchContacts = useCallback(async (q: string, p: number) => {
     setLoading(true);
@@ -338,175 +356,55 @@ export default function ContactsPage() {
       )}
 
       {showModal && (
-        <AddContactModal
+        <AddLeadModal
+          title="New contact"
+          submitLabel="Create contact"
+          pipelines={pipelines}
+          allTags={tags}
+          spaces={spaces}
+          onSpacesChange={setSpaces}
+          defaultPipelineId={defaultPipelineId}
           onClose={() => setShowModal(false)}
-          onSaved={() => {
+          onSave={async (draft) => {
+            await createContactFromDraft(draft);
             setShowModal(false);
-            fetchContacts(search, page);
+            await Promise.all([fetchContacts(search, page), loadModalData()]);
           }}
+          onVenueTagCreated={(tag) =>
+            setTags((prev) => (prev.some((t) => t.id === tag.id) ? prev : [...prev, tag]))
+          }
         />
       )}
     </div>
   );
 }
 
-// ─── Add contact modal ───────────────────────────────────────────────────────
-// Mirrors the "New lead" modal on the Leads page: full-screen overlay, a
-// rounded-3xl card with a scrollable body, uppercase-tracked labels, and
-// the brand-color footer button. Required fields are name (first OR last),
-// email, and phone — matching the leads form.
-
-function AddContactModal({
-  onClose,
-  onSaved,
-}: {
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [form, setForm] = useState<ContactForm>(emptyForm);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  const set = <K extends keyof ContactForm>(key: K, value: ContactForm[K]) =>
-    setForm((prev) => ({ ...prev, [key]: value }));
-
-  async function submit() {
-    const hasName = form.firstName.trim() !== '' || form.lastName.trim() !== '';
-    if (!hasName) {
-      setError('Please provide at least a first or last name.');
-      return;
-    }
-    if (!form.email.trim()) {
-      setError('Email is required.');
-      return;
-    }
-    if (!form.phone.trim()) {
-      setError('Phone is required.');
-      return;
-    }
-
-    setSaving(true);
-    setError('');
-    try {
-      const res = await fetch('/api/customers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError((data && typeof data.error === 'string' && data.error) || 'Failed to create contact.');
-        return;
-      }
-      onSaved();
-    } catch {
-      setError('Network error — please try again.');
-    } finally {
-      setSaving(false);
-    }
+async function createContactFromDraft(draft: LeadDraft) {
+  const payload = {
+    firstName: draft.firstName,
+    lastName: draft.lastName,
+    email: draft.email,
+    phone: draft.phone,
+    venueName: draft.venueName,
+    venueWebsiteUrl: draft.venueWebsiteUrl,
+    opportunityValue: draft.opportunityValue ? Number(draft.opportunityValue) : null,
+    weddingDate: draft.weddingDate || null,
+    guestCount: draft.guestCount ? Number(draft.guestCount) : null,
+    bookingTimeline: draft.bookingTimeline.trim() || undefined,
+    message: draft.message,
+    pipelineId: draft.pipelineId || undefined,
+    stageId: draft.stageId || undefined,
+    spaceId: draft.spaceId || null,
+    tagIds: draft.tagIds,
+  };
+  const res = await fetch('/api/leads', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error((data && typeof data.error === 'string' && data.error) || 'Failed to create contact');
   }
-
-  return (
-    <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="absolute inset-0 flex items-center justify-center p-4">
-        <div className="relative w-full max-w-2xl max-h-[90vh] rounded-3xl border border-gray-200 bg-white overflow-hidden flex flex-col">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-            <h3 className="font-heading text-lg text-gray-900 flex items-center gap-2">
-              <UserPlus className="w-4.5 h-4.5" /> New contact
-            </h3>
-            <button
-              onClick={onClose}
-              className="rounded-xl p-1.5 text-gray-400 hover:bg-gray-100"
-              aria-label="Close"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-          <div className="p-6 overflow-y-auto space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <ContactField label="First name" value={form.firstName} onChange={(v) => set('firstName', v)} />
-              <ContactField label="Last name" value={form.lastName} onChange={(v) => set('lastName', v)} />
-            </div>
-            <ContactField
-              label="Email"
-              value={form.email}
-              type="email"
-              required
-              onChange={(v) => set('email', v)}
-            />
-            <ContactField
-              label="Phone"
-              value={form.phone}
-              type="tel"
-              required
-              placeholder="(555) 000-0000"
-              onChange={(v) => set('phone', v)}
-            />
-            <ContactField label="Address" value={form.address} onChange={(v) => set('address', v)} />
-            <div className="grid grid-cols-3 gap-3">
-              <ContactField label="City" value={form.city} onChange={(v) => set('city', v)} />
-              <ContactField label="State" value={form.state} onChange={(v) => set('state', v)} />
-              <ContactField label="Zip" value={form.zip} onChange={(v) => set('zip', v)} />
-            </div>
-
-            {error && (
-              <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
-                {error}
-              </div>
-            )}
-          </div>
-          <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-100">
-            <button
-              onClick={onClose}
-              className="rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={submit}
-              disabled={saving}
-              className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
-              style={{ backgroundColor: '#1b1b1b' }}
-            >
-              {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              Create contact
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }
 
-function ContactField({
-  label,
-  value,
-  onChange,
-  type = 'text',
-  required,
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  type?: string;
-  required?: boolean;
-  placeholder?: string;
-}) {
-  return (
-    <div>
-      <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">
-        {label}
-        {required ? ' *' : ''}
-      </label>
-      <input
-        type={type}
-        value={value}
-        placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl border border-gray-200 px-3 py-1.5 text-sm focus:border-gray-400 focus:outline-none"
-      />
-    </div>
-  );
-}
