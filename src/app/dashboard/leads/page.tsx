@@ -2951,10 +2951,24 @@ function HexColorField({
     };
   }, [open]);
 
+  const isTransparent = value === 'transparent';
   const canonical = normalizeHexColor(text);
   const displayColor = canonical ?? (normalizeHexColor(value) ?? '#d1d5db');
 
+  /** CSS for checkered transparent pattern */
+  const transparentBg: React.CSSProperties = {
+    backgroundImage:
+      'linear-gradient(45deg,#e5e7eb 25%,transparent 25%),' +
+      'linear-gradient(-45deg,#e5e7eb 25%,transparent 25%),' +
+      'linear-gradient(45deg,transparent 75%,#e5e7eb 75%),' +
+      'linear-gradient(-45deg,transparent 75%,#e5e7eb 75%)',
+    backgroundSize: '8px 8px',
+    backgroundPosition: '0 0,0 4px,4px -4px,-4px 0px',
+    backgroundColor: 'white',
+  };
+
   const commit = () => {
+    if (isTransparent) return;
     const next = normalizeHexColor(text);
     if (next && next !== value) onChange(next);
     else setText(value || '');
@@ -2975,6 +2989,12 @@ function HexColorField({
     onChange(next);
   };
 
+  const applyTransparent = () => {
+    setText('transparent');
+    onChange('transparent');
+    setOpen(false);
+  };
+
   return (
     <div ref={wrapRef} className="relative inline-block">
       <button
@@ -2984,11 +3004,11 @@ function HexColorField({
         aria-label={ariaLabel ?? 'Color'}
         aria-haspopup="dialog"
         aria-expanded={open}
-        title={canonical ?? value}
+        title={isTransparent ? 'Transparent' : (canonical ?? value)}
       >
         <span
           className="block h-full w-full rounded-[4px] border border-black/5"
-          style={{ backgroundColor: displayColor }}
+          style={isTransparent ? transparentBg : { backgroundColor: displayColor }}
         />
       </button>
 
@@ -2997,22 +3017,28 @@ function HexColorField({
           role="dialog"
           className="absolute left-0 top-[calc(100%+6px)] z-50 w-56 rounded-xl border border-gray-200 bg-white p-3 shadow-xl"
         >
-          <label className="relative block h-12 w-full cursor-pointer overflow-hidden rounded-lg border border-gray-200">
-            <span className="block h-full w-full" style={{ backgroundColor: displayColor }} />
-            <input
-              type="color"
-              value={displayColor}
-              onChange={(e) => {
-                const next = normalizeHexColor(e.target.value);
-                if (!next) return;
-                setText(next);
-                if (commitOn === 'change') onChange(next);
-              }}
-              onBlur={() => { if (commitOn === 'blur') commit(); }}
-              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-              aria-label={ariaLabel ?? 'Color'}
-            />
-          </label>
+          {!isTransparent ? (
+            <label className="relative block h-12 w-full cursor-pointer overflow-hidden rounded-lg border border-gray-200">
+              <span className="block h-full w-full" style={{ backgroundColor: displayColor }} />
+              <input
+                type="color"
+                value={displayColor}
+                onChange={(e) => {
+                  const next = normalizeHexColor(e.target.value);
+                  if (!next) return;
+                  setText(next);
+                  if (commitOn === 'change') onChange(next);
+                }}
+                onBlur={() => { if (commitOn === 'blur') commit(); }}
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                aria-label={ariaLabel ?? 'Color'}
+              />
+            </label>
+          ) : (
+            <div className="flex h-12 w-full items-center justify-center rounded-lg border border-gray-200" style={transparentBg}>
+              <span className="rounded bg-white/80 px-2 py-0.5 text-xs font-medium text-gray-600">Transparent</span>
+            </div>
+          )}
 
           <div className="mt-2.5">
             <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-gray-400">
@@ -3020,7 +3046,7 @@ function HexColorField({
             </label>
             <input
               type="text"
-              value={text}
+              value={isTransparent ? 'transparent' : text}
               onChange={(e) => applyHex(e.target.value)}
               onBlur={commit}
               onKeyDown={(e) => {
@@ -3032,8 +3058,11 @@ function HexColorField({
               }}
               placeholder="#3b82f6"
               spellCheck={false}
+              disabled={isTransparent}
               aria-label={ariaLabel ? `${ariaLabel} hex` : 'Hex color'}
-              className={`w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 font-mono text-xs uppercase tracking-wide focus:border-gray-400 focus:outline-none ${canonical ? 'text-gray-800' : 'text-red-500'}`}
+              className={`w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 font-mono text-xs uppercase tracking-wide focus:border-gray-400 focus:outline-none ${
+                isTransparent ? 'text-gray-400' : canonical ? 'text-gray-800' : 'text-red-500'
+              }`}
             />
           </div>
 
@@ -3042,8 +3071,19 @@ function HexColorField({
               Presets
             </div>
             <div className="grid grid-cols-5 gap-1.5">
+              {/* Transparent preset swatch */}
+              <button
+                type="button"
+                onClick={isTransparent ? () => applyPreset('#3b82f6') : applyTransparent}
+                className={`h-6 w-6 overflow-hidden rounded-md border transition-transform hover:scale-110 ${
+                  isTransparent ? 'border-gray-900 ring-2 ring-gray-900/20' : 'border-gray-200'
+                }`}
+                style={transparentBg}
+                aria-label="Transparent"
+                title="Transparent"
+              />
               {STAGE_COLOR_PRESETS.map((hex) => {
-                const isActive = normalizeHexColor(value)?.toLowerCase() === hex.toLowerCase();
+                const isActive = !isTransparent && normalizeHexColor(value)?.toLowerCase() === hex.toLowerCase();
                 return (
                   <button
                     key={hex}
@@ -3060,6 +3100,16 @@ function HexColorField({
               })}
             </div>
           </div>
+
+          {isTransparent && (
+            <button
+              type="button"
+              onClick={() => applyPreset('#3b82f6')}
+              className="mt-2 w-full rounded-lg border border-gray-200 py-1 text-[11px] font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700"
+            >
+              Restore color
+            </button>
+          )}
         </div>
       )}
     </div>

@@ -390,27 +390,63 @@ export default function BrandingPage() {
  { label: 'Primary / Button Color', key: 'primary' as const, db: 'brand_color' },
  { label: 'Background Color', key: 'bg' as const, db: 'brand_bg_color' },
  { label: 'Button Text Color', key: 'btnText' as const, db: 'brand_btn_text' },
- ].map(({ label, key, db }) => (
+ ].map(({ label, key, db }) => {
+ const isTransparent = brand[key] === 'transparent';
+ const checkerStyle: React.CSSProperties = {
+   backgroundImage:
+     'linear-gradient(45deg,#e5e7eb 25%,transparent 25%),' +
+     'linear-gradient(-45deg,#e5e7eb 25%,transparent 25%),' +
+     'linear-gradient(45deg,transparent 75%,#e5e7eb 75%),' +
+     'linear-gradient(-45deg,transparent 75%,#e5e7eb 75%)',
+   backgroundSize: '8px 8px',
+   backgroundPosition: '0 0,0 4px,4px -4px,-4px 0px',
+   backgroundColor: 'white',
+ };
+ const setBrandColor = (val: string) => {
+   setBrand(b => ({ ...b, [key]: val }));
+   if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+   autoSaveTimer.current = setTimeout(() => saveNow({ [db]: val }), 800);
+ };
+ return (
  <div key={key}>
  <label className={LABEL}>{label}</label>
  <div className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 focus-within:border-gray-400 focus-within:bg-white transition-colors">
- <input
- type="color"
- value={brand[key]}
- onChange={upd(key, db)}
- className="h-7 w-7 rounded-lg cursor-pointer border-0 p-0 bg-transparent flex-shrink-0"
- />
+ {/* Color swatch / native picker */}
+ <div className="relative h-7 w-7 shrink-0 overflow-hidden rounded-lg border border-gray-200">
+   <div className="absolute inset-0" style={isTransparent ? checkerStyle : { backgroundColor: brand[key] }} />
+   {!isTransparent && (
+     <input
+       type="color"
+       value={brand[key]}
+       onChange={upd(key, db)}
+       className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+     />
+   )}
+ </div>
  <input
  type="text"
- value={brand[key]}
+ value={isTransparent ? 'transparent' : brand[key]}
  onChange={upd(key, db)}
- maxLength={7}
+ maxLength={11}
  placeholder="#000000"
- className="flex-1 bg-transparent text-sm font-mono text-gray-900 focus:outline-none placeholder:text-gray-400"
+ disabled={isTransparent}
+ className="flex-1 bg-transparent text-sm font-mono text-gray-900 focus:outline-none placeholder:text-gray-400 disabled:text-gray-400"
+ />
+ {/* Transparent toggle */}
+ <button
+   type="button"
+   title={isTransparent ? 'Restore color' : 'Set transparent'}
+   onClick={() => setBrandColor(isTransparent ? '#ffffff' : 'transparent')}
+   className={`relative h-5 w-5 shrink-0 overflow-hidden rounded border transition ${
+     isTransparent ? 'border-gray-500 ring-1 ring-gray-400' : 'border-gray-300 hover:border-gray-500'
+   }`}
+   style={checkerStyle}
+   aria-label="Transparent"
  />
  </div>
  </div>
- ))}
+ );
+ })}
  </div>
  </div>
  </div>

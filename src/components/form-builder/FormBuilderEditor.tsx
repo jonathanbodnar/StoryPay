@@ -551,15 +551,36 @@ function BlockStyleFields({
         <div className="mb-2 flex items-center justify-between gap-3">
           <SettingsFieldLabel>Font color</SettingsFieldLabel>
           <div className="flex items-center gap-2">
-            <span className="font-mono text-[13px] uppercase text-gray-900">{hex}</span>
-            <label className="relative h-7 w-7 cursor-pointer overflow-hidden rounded-full border border-gray-200">
-              <input
-                type="color"
-                className="absolute inset-0 h-[200%] w-[200%] -translate-x-1/4 -translate-y-1/4 cursor-pointer p-0"
-                value={hex}
-                onChange={(e) => onChange({ ...s, color: e.target.value })}
-              />
-            </label>
+            {s.color === 'transparent' ? (
+              <span className="font-mono text-[13px] text-gray-500">transparent</span>
+            ) : (
+              <span className="font-mono text-[13px] uppercase text-gray-900">{hex}</span>
+            )}
+            {s.color !== 'transparent' && (
+              <label className="relative h-7 w-7 cursor-pointer overflow-hidden rounded-full border border-gray-200">
+                <input
+                  type="color"
+                  className="absolute inset-0 h-[200%] w-[200%] -translate-x-1/4 -translate-y-1/4 cursor-pointer p-0"
+                  value={hex}
+                  onChange={(e) => onChange({ ...s, color: e.target.value })}
+                />
+              </label>
+            )}
+            {/* Transparent swatch / toggle */}
+            <button
+              type="button"
+              title={s.color === 'transparent' ? 'Restore color' : 'Set transparent'}
+              onClick={() => onChange({ ...s, color: s.color === 'transparent' ? '#374151' : 'transparent' })}
+              className="relative h-7 w-7 overflow-hidden rounded-full border border-gray-200 hover:border-gray-400"
+              style={s.color === 'transparent' ? { outline: '2px solid #374151', outlineOffset: '1px' } : {}}
+            >
+              <span className="absolute inset-0" style={TRANSPARENT_BG} />
+              {s.color === 'transparent' && (
+                <span className="absolute inset-0 flex items-center justify-center">
+                  <span className="h-0.5 w-4 rotate-45 rounded bg-gray-400" />
+                </span>
+              )}
+            </button>
           </div>
         </div>
       </div>
@@ -1020,32 +1041,82 @@ function BlockInspector({
   );
 }
 
+/** CSS for a checkered transparent swatch (cross-browser). */
+const TRANSPARENT_BG: React.CSSProperties = {
+  backgroundImage:
+    'linear-gradient(45deg,#e5e7eb 25%,transparent 25%),' +
+    'linear-gradient(-45deg,#e5e7eb 25%,transparent 25%),' +
+    'linear-gradient(45deg,transparent 75%,#e5e7eb 75%),' +
+    'linear-gradient(-45deg,transparent 75%,#e5e7eb 75%)',
+  backgroundSize: '8px 8px',
+  backgroundPosition: '0 0,0 4px,4px -4px,-4px 0px',
+  backgroundColor: 'white',
+};
+
 function ColorField({
   value,
   onChange,
+  allowTransparent = true,
 }: {
   value: string;
   onChange: (v: string) => void;
+  allowTransparent?: boolean;
 }) {
-  const safeColor = /^#[0-9a-f]{3,8}$/i.test(value.trim()) ? value.trim() : '#000000';
+  const isTransparent = value === 'transparent';
+  const safeColor = !isTransparent && /^#[0-9a-f]{3,8}$/i.test(value.trim())
+    ? value.trim()
+    : '#000000';
+
   return (
-    <div className="flex items-center gap-2">
-      <div className="relative h-[34px] w-9 shrink-0 overflow-hidden rounded-md border border-gray-200">
-        <div className="absolute inset-0" style={{ background: value }} />
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2">
+        {/* Swatch / color picker trigger */}
+        <div className="relative h-[34px] w-9 shrink-0 overflow-hidden rounded-md border border-gray-200">
+          <div
+            className="absolute inset-0"
+            style={isTransparent ? TRANSPARENT_BG : { background: value }}
+          />
+          {!isTransparent && (
+            <input
+              type="color"
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+              value={safeColor}
+              onChange={(e) => onChange(e.target.value)}
+              title="Pick color"
+            />
+          )}
+        </div>
+        {/* Hex text input */}
         <input
-          type="color"
-          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-          value={safeColor}
-          onChange={(e) => onChange(e.target.value)}
-          title="Pick color"
+          className={`${SETTINGS_INPUT} font-mono text-[12px]`}
+          value={isTransparent ? 'transparent' : value}
+          onChange={(e) => {
+            const v = e.target.value.trim();
+            if (v.toLowerCase() === 'transparent') { onChange('transparent'); return; }
+            onChange(v);
+          }}
+          placeholder="#000000 or transparent"
+          disabled={isTransparent}
         />
       </div>
-      <input
-        className={`${SETTINGS_INPUT} font-mono text-[12px]`}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="#000000"
-      />
+      {allowTransparent && (
+        <button
+          type="button"
+          onClick={() => onChange(isTransparent ? '#ffffff' : 'transparent')}
+          className={`flex w-full items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium transition ${
+            isTransparent
+              ? 'border-gray-400 bg-gray-100 text-gray-800'
+              : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300 hover:text-gray-700'
+          }`}
+        >
+          {/* Mini checkered swatch */}
+          <span
+            className="inline-block h-3 w-3 shrink-0 rounded-sm border border-gray-300"
+            style={TRANSPARENT_BG}
+          />
+          {isTransparent ? 'Transparent (click to restore color)' : 'Set transparent'}
+        </button>
+      )}
     </div>
   );
 }
