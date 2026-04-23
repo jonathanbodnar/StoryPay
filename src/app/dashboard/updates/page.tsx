@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
  Sparkles, Zap, Wrench, ThumbsUp, Plus, X, Loader2, Trash2, Pencil,
- ChevronRight, Megaphone, Clock, CheckCircle2, AlertCircle, Lightbulb,
+ ChevronRight, ChevronUp, Megaphone, Clock, CheckCircle2, AlertCircle, Lightbulb,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
 
@@ -25,6 +25,7 @@ interface FeatureRequest {
  vote_count: number;
  status: 'open' | 'planned' | 'in_progress' | 'completed';
  created_at: string;
+ completed_at: string | null;
  has_voted: boolean;
  is_mine: boolean;
 }
@@ -176,7 +177,9 @@ function ChangelogTab() {
 
 function FeatureRequestsTab() {
  const [requests, setRequests] = useState<FeatureRequest[]>([]);
+ const [completedRequests, setCompletedRequests] = useState<FeatureRequest[]>([]);
  const [loading, setLoading] = useState(true);
+ const [completedOpen, setCompletedOpen] = useState(false);
  const [showForm, setShowForm] = useState(false);
  const [title, setTitle] = useState('');
  const [desc, setDesc] = useState('');
@@ -192,9 +195,14 @@ function FeatureRequestsTab() {
  const [formError, setFormError] = useState('');
 
  useEffect(() => {
- fetch('/api/feature-requests')
- .then(r => r.ok ? r.json() : [])
- .then(data => setRequests(Array.isArray(data) ? data : []))
+ Promise.all([
+   fetch('/api/feature-requests').then(r => r.ok ? r.json() : []),
+   fetch('/api/feature-requests/completed').then(r => r.ok ? r.json() : []),
+ ])
+ .then(([active, completed]) => {
+   setRequests(Array.isArray(active) ? active : []);
+   setCompletedRequests(Array.isArray(completed) ? completed : []);
+ })
  .catch(() => setError('Failed to load feature requests'))
  .finally(() => setLoading(false));
  }, []);
@@ -503,6 +511,70 @@ function FeatureRequestsTab() {
  <p className="mt-4 text-center text-xs text-gray-400">
  {requests.length} feature request{requests.length !== 1 ? 's' : ''} · Sorted by most votes
  </p>
+ )}
+
+ {/* ── Completed section ── */}
+ {!loading && completedRequests.length > 0 && (
+ <div className="mt-6">
+   <button
+     type="button"
+     onClick={() => setCompletedOpen(v => !v)}
+     className="flex w-full items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-left transition-colors hover:bg-gray-100"
+   >
+     <CheckCircle2 size={15} className="shrink-0 text-emerald-500" />
+     <span className="flex-1 text-sm font-semibold text-gray-700">
+       Completed requests
+     </span>
+     <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
+       {completedRequests.length}
+     </span>
+     {completedOpen
+       ? <ChevronUp size={15} className="shrink-0 text-gray-400" />
+       : <ChevronRight size={15} className="shrink-0 text-gray-400" />}
+   </button>
+
+   {completedOpen && (
+     <div className="mt-2 space-y-2">
+       {completedRequests.map(req => (
+         <div
+           key={req.id}
+           className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4"
+         >
+           <div className="flex items-start gap-3">
+             <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100">
+               <CheckCircle2 size={14} className="text-emerald-600" />
+             </div>
+             <div className="flex-1 min-w-0">
+               <div className="flex flex-wrap items-center gap-2">
+                 <h4 className="text-sm font-bold text-gray-900 leading-snug">{req.title}</h4>
+                 {req.is_mine && (
+                   <span className="inline-flex items-center gap-1 rounded-full bg-[#1b1b1b]/10 px-2 py-0.5 text-[10px] font-semibold text-[#1b1b1b]">
+                     Your request
+                   </span>
+                 )}
+                 {req.has_voted && !req.is_mine && (
+                   <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
+                     You voted
+                   </span>
+                 )}
+               </div>
+               {req.description && (
+                 <p className="mt-1 text-xs text-gray-500 leading-relaxed">{req.description}</p>
+               )}
+               <p className="mt-1 text-[11px] text-emerald-600 font-medium">
+                 ✓ Shipped{req.completed_at ? ` · ${formatDate(req.completed_at)}` : ''}
+               </p>
+             </div>
+             <div className="shrink-0 flex items-center gap-1 text-[11px] text-gray-400">
+               <ThumbsUp size={11} className="text-gray-400" />
+               <span>{req.vote_count}</span>
+             </div>
+           </div>
+         </div>
+       ))}
+     </div>
+   )}
+ </div>
  )}
  </div>
  );
