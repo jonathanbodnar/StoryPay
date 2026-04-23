@@ -362,19 +362,40 @@ export async function DELETE(
 
   const { id } = await context.params;
 
-  const { data, error } = await supabaseAdmin
+  // Fetch email first so we can clean up the matching venue_customer row.
+  const { data: lead, error: fetchErr } = await supabaseAdmin
+    .from('leads')
+    .select('id, email')
+    .eq('id', id)
+    .eq('venue_id', venueId)
+    .maybeSingle();
+
+  if (fetchErr) {
+    console.error('[DELETE /api/leads/[id]] fetch failed:', fetchErr);
+    return NextResponse.json({ error: `Delete failed: ${fetchErr.message}` }, { status: 500 });
+  }
+  if (!lead) return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
+
+  const { error } = await supabaseAdmin
     .from('leads')
     .delete()
     .eq('id', id)
-    .eq('venue_id', venueId)
-    .select('id')
-    .maybeSingle();
+    .eq('venue_id', venueId);
 
   if (error) {
     console.error('[DELETE /api/leads/[id]] failed:', error);
     return NextResponse.json({ error: `Delete failed: ${error.message}` }, { status: 500 });
   }
-  if (!data) return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
+
+  // Also remove the matching venue_customer row (same venue + same email).
+  const email = (lead as { email?: string | null }).email;
+  if (email) {
+    await supabaseAdmin
+      .from('venue_customers')
+      .delete()
+      .eq('venue_id', venueId)
+      .eq('customer_email', email);
+  }
 
   return NextResponse.json({ ok: true });
 }

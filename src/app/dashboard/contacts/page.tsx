@@ -13,6 +13,7 @@ import {
   User,
   Download,
   Upload,
+  Trash2,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
 import AddLeadModal, {
@@ -117,6 +118,16 @@ export default function ContactsPage() {
   function handlePageChange(newPage: number) {
     setPage(newPage);
     fetchContacts(search, newPage);
+  }
+
+  async function deleteContact(c: ContactRow) {
+    if (!confirm(`Delete ${c.name || c.email}? This cannot be undone.`)) return;
+    // Prefer deleting via venue-customer ID (also cleans up lead row).
+    const vcId = c.venueCustomerId ?? String(c.id);
+    const res = await fetch(`/api/venue-customers/${vcId}`, { method: 'DELETE' });
+    if (res.ok) {
+      setContacts((prev) => prev.filter((x) => String(x.id) !== String(c.id)));
+    }
   }
 
   async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -318,6 +329,15 @@ export default function ContactsPage() {
                         <Receipt size={13} />
                         <span className="hidden lg:inline">Create Invoice</span>
                       </Link>
+                      <button
+                        type="button"
+                        onClick={() => deleteContact(c)}
+                        className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-red-500 transition-colors hover:bg-red-50"
+                        title="Delete contact"
+                      >
+                        <Trash2 size={13} />
+                        <span className="hidden sm:inline">Delete</span>
+                      </button>
                     </div>
                   </td>
                 </tr>

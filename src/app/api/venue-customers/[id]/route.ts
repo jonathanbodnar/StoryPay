@@ -221,3 +221,48 @@ export async function PATCH(
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const venueId = await getVenueId();
+  if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { id } = await params;
+
+  // Fetch the customer's email so we can also remove the matching lead row.
+  const { data: vc, error: fetchErr } = await supabaseAdmin
+    .from('venue_customers')
+    .select('id, customer_email')
+    .eq('id', id)
+    .eq('venue_id', venueId)
+    .maybeSingle();
+
+  if (fetchErr) {
+    return NextResponse.json({ error: fetchErr.message }, { status: 500 });
+  }
+  if (!vc) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  const { error: delErr } = await supabaseAdmin
+    .from('venue_customers')
+    .delete()
+    .eq('id', id)
+    .eq('venue_id', venueId);
+
+  if (delErr) {
+    console.error('[DELETE /api/venue-customers/[id]]', delErr);
+    return NextResponse.json({ error: delErr.message }, { status: 500 });
+  }
+
+  // Also remove any matching lead rows (same venue + same email).
+  const email = (vc as { customer_email?: string | null }).customer_email;
+  if (email) {
+    await supabaseAdmin
+      .from('leads')
+      .delete()
+      .eq('venue_id', venueId)
+      .eq('email', email);
+  }
+
+  return NextResponse.json({ ok: true });
+}
