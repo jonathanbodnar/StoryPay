@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import {
   ChevronLeft, ChevronRight, Plus, X, Loader2, Calendar,
-  AlertTriangle, ExternalLink, Download, Info, Printer, Repeat,
+  AlertTriangle, ExternalLink, Info, Repeat,
   Search, Pencil, Trash2, Check, User,
 } from 'lucide-react';
 import { describeRule, type RecurrenceRule } from '@/lib/recurrence';
@@ -217,7 +217,6 @@ export default function CalendarPage() {
   const [editSpaceDraft, setEditSpaceDraft] = useState<{ name: string; color: string }>({ name: '', color: '#6366f1' });
   const [spaceBusy, setSpaceBusy]           = useState(false);
 
-  const [icalCopied, setIcalCopied] = useState(false);
 
   const tzResolved = resolveVenueTimezone(venueTz);
 
@@ -443,10 +442,19 @@ export default function CalendarPage() {
     setAnchorDate(new Date(y, m, d));
   }
 
-  // Keep month/year in sync with anchorDate when switching views
+  // Keep month/year in sync with anchorDate when switching views.
+  // For week/day, always anchor to today in the venue's timezone so the
+  // view opens on the current day rather than the 1st of the displayed month.
   function switchView(v: CalView) {
     if (v === 'week' || v === 'day') {
-      setAnchorDate(new Date(year, month, 1));
+      const tz = tzResolved;
+      const now = new Date();
+      const y = Number(formatInTimeZone(now, tz, 'yyyy'));
+      const m = Number(formatInTimeZone(now, tz, 'M')) - 1;
+      const d = Number(formatInTimeZone(now, tz, 'd'));
+      setYear(y);
+      setMonth(m);
+      setAnchorDate(new Date(y, m, d));
     }
     setView(v);
   }
@@ -675,23 +683,6 @@ export default function CalendarPage() {
     setShowModal(true);
   }
 
-  // ── Print ──────────────────────────────────────────────────────────────────
-  function handlePrint() {
-    window.print();
-  }
-
-  // ── iCal ──────────────────────────────────────────────────────────────────
-  async function copyIcal() {
-    try {
-      const res = await fetch('/api/venues/me');
-      if (res.ok) {
-        const venue = await res.json();
-        await navigator.clipboard.writeText(`${window.location.origin}/api/calendar/ical?token=${venue.id}`);
-      }
-    } catch { /* ignore */ }
-    setIcalCopied(true);
-    setTimeout(() => setIcalCopied(false), 2500);
-  }
 
   // ── Derived counts ────────────────────────────────────────────────────────
   const visibleCount  = events.filter(e => activeSpaceFilter === 'all' || e.space_id === activeSpaceFilter).length;
@@ -827,14 +818,6 @@ export default function CalendarPage() {
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <button onClick={copyIcal}
-              className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
-              <Download size={13} />{icalCopied ? 'Copied!' : 'iCal Link'}
-            </button>
-            <button onClick={handlePrint}
-              className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
-              <Printer size={13} /> Print
-            </button>
             <button onClick={() => openNewEvent()}
               className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition-colors"
               style={{ backgroundColor: '#1b1b1b' }}>
@@ -876,23 +859,6 @@ export default function CalendarPage() {
           </div>
         </div>
 
-        {/* Space filters */}
-        {spaces.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 mb-4" data-noprint="">
-            <button onClick={() => setActiveSpaceFilter('all')}
-              className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${activeSpaceFilter === 'all' ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
-              All Spaces
-            </button>
-            {spaces.map(s => (
-              <button key={s.id} onClick={() => setActiveSpaceFilter(activeSpaceFilter === s.id ? 'all' : s.id)}
-                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${activeSpaceFilter === s.id ? 'text-white border-transparent' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                style={activeSpaceFilter === s.id ? { backgroundColor: s.color, borderColor: s.color } : {}}>
-                <span className="inline-block w-2 h-2 rounded-full mr-1.5" style={{ backgroundColor: s.color }} />
-                {s.name}{s.capacity ? ` (${s.capacity})` : ''}
-              </button>
-            ))}
-          </div>
-        )}
 
         {/* ── MONTH VIEW ── */}
         {view === 'month' && (
