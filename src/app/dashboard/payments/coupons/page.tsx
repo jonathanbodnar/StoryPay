@@ -72,7 +72,7 @@ export default function VenueCouponsPage() {
       description: c.description || '',
       discount_type: c.discount_type,
       discount_percent: c.discount_type === 'percent' && c.discount_percent != null
-        ? String(Math.round(Number(c.discount_percent) / 5) * 5)
+        ? String(Math.round(Number(c.discount_percent)))
         : '',
       discount_dollars:
         c.discount_type === 'fixed_cents' && c.discount_amount_cents != null
@@ -104,8 +104,8 @@ export default function VenueCouponsPage() {
       };
       if (form.discount_type === 'percent') {
         const p = parseInt(form.discount_percent, 10);
-        if (!Number.isFinite(p) || p < 5 || p > 100 || p % 5 !== 0) {
-          setError('Select a percentage between 5% and 100%.');
+        if (!Number.isFinite(p) || p < 1 || p > 100) {
+          setError('Enter a whole number between 1 and 100.');
           return;
         }
         body.discount_percent = p;
@@ -156,8 +156,8 @@ export default function VenueCouponsPage() {
       };
       if (form.discount_type === 'percent') {
         const p = parseInt(form.discount_percent, 10);
-        if (!Number.isFinite(p) || p < 5 || p > 100 || p % 5 !== 0) {
-          setError('Select a percentage between 5% and 100%.');
+        if (!Number.isFinite(p) || p < 1 || p > 100) {
+          setError('Enter a whole number between 1 and 100.');
           return;
         }
         body.discount_percent = p;
@@ -309,16 +309,23 @@ export default function VenueCouponsPage() {
           {form.discount_type === 'percent' ? (
             <div>
               <label className={LABEL}>Percent off</label>
-              <select
-                className={INPUT}
-                value={form.discount_percent}
-                onChange={(e) => setForm((f) => ({ ...f, discount_percent: e.target.value }))}
-              >
-                <option value="">Select percentage…</option>
-                {Array.from({ length: 20 }, (_, i) => (i + 1) * 5).map((pct) => (
-                  <option key={pct} value={String(pct)}>{pct}%</option>
-                ))}
-              </select>
+              <div className="relative">
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  step={1}
+                  className={`${INPUT} pr-8`}
+                  value={form.discount_percent}
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/[^0-9]/g, '');
+                    const num = Math.min(100, Math.max(0, parseInt(raw || '0', 10)));
+                    setForm((f) => ({ ...f, discount_percent: raw === '' ? '' : String(num) }));
+                  }}
+                  placeholder="e.g. 10"
+                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">%</span>
+              </div>
             </div>
           ) : (
             <div>
