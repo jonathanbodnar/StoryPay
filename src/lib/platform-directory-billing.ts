@@ -6,7 +6,11 @@ import { getPlatformFortisMerchantId } from '@/lib/platform-billing';
 export const STORYPAY_PLATFORM_DIRECTORY_META_KEY = 'storypay_platform_directory';
 
 export function getPlatformLunarPaySecretKey(): string | null {
-  return process.env.STORYPAY_PLATFORM_LUNARPAY_SECRET_KEY?.trim() || null;
+  return (
+    process.env.STORYPAY_PLATFORM_LUNARPAY_SECRET_KEY?.trim() ||
+    process.env.LP_AGENCY_KEY?.trim() ||
+    null
+  );
 }
 
 export function isPlatformDirectoryBillingConfigured(): boolean {
