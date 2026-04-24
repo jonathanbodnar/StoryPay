@@ -87,14 +87,14 @@ export function defaultEmailDefinition(): MarketingEmailDefinition {
       },
     ],
     theme: {
-      pageBg: '#f4f4f5',
+      pageBg: '#ffffff',
       cardBg: '#ffffff',
       textColor: '#18181b',
-      mutedColor: '#71717a',
-      buttonBg: '#18181b',
-      buttonText: '#ffffff',
+      mutedColor: '#9ca3af',
+      buttonBg: '#ffffff',
+      buttonText: '#18181b',
       maxWidth: '600px',
-      fontFamily: "Georgia, 'Times New Roman', serif",
+      fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
     },
   };
 }
@@ -148,14 +148,14 @@ export function parseEmailDefinition(raw: unknown): MarketingEmailDefinition {
 
 export function mergeEmailTheme(theme?: EmailTheme): Required<EmailTheme> {
   const d: Required<EmailTheme> = {
-    pageBg: '#f4f4f5',
+    pageBg: '#ffffff',
     cardBg: '#ffffff',
     textColor: '#18181b',
-    mutedColor: '#71717a',
-    buttonBg: '#18181b',
-    buttonText: '#ffffff',
+    mutedColor: '#9ca3af',
+    buttonBg: '#ffffff',
+    buttonText: '#18181b',
     maxWidth: '600px',
-    fontFamily: "Georgia, 'Times New Roman', serif",
+    fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
   };
   return { ...d, ...theme };
 }
