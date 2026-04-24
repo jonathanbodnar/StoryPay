@@ -39,7 +39,7 @@ The main areas:
 - Contacts — CRM profiles with tabs (Overview, Notes, Activity, Payments, Tasks, Documents) and a pipeline + stage control in the header (same sales pipelines as Leads)
 - Conversations — unified inbox per contact: Team only notes vs Email contact messages
 - Calendar — tours, weddings, and events
-- Venue listing — Dashboard for how you appear on storyvenue.com (description, publish); Media library for shared images you reuse across listing, emails, forms, and branding; Photos for cover and gallery on the directory page; Analytics for GA4 measurement ID; Reviews for star ratings and testimonials (published reviews feed the public API/embed)
+- Venue listing — Dashboard for how you appear on storyvenue.com (description, publish); Media library for shared images you reuse across listing, emails, forms, and branding; Photos for cover and gallery on the directory page; Analytics for GA4 measurement ID and a real-time world map of live visitors to your listing; Reviews for StoryVenue testimonials (star ratings, published/pending/hidden statuses) and Google reviews (connect your Google Business Profile so your Google reviews appear on your storyvenue.com listing)
 - Leads — Kanban/list pipeline for inquiries; editable stages and pipelines
 - Reports — financial exports (owners and admins)
 - Payments flyout — new proposal/invoice, proposals list, templates, installments, subscriptions, transactions
@@ -585,23 +585,85 @@ Caution: changing the slug changes your public URL. Any links on your website, I
       },
       {
         id: 'listing-reviews',
-        title: 'Listing reviews and your public venue page',
-        tags: ['reviews', 'testimonials', 'stars', 'storyvenue', 'embed', 'public api', 'published'],
-        body: `Under Venue listing → Reviews you manage testimonials: star rating (1–5), optional title, review text, couple name, optional wedding date and email.
+        title: 'StoryVenue reviews — testimonials on your public listing',
+        tags: ['reviews', 'testimonials', 'stars', 'storyvenue', 'embed', 'public api', 'published', 'rating'],
+        body: `Under Venue listing → Reviews (StoryVenue tab) you manage testimonials that couples and clients leave for your venue.
+
+Each review has:
+- Star rating (1–5 stars)
+- Optional title
+- Review text
+- Couple name
+- Optional wedding date and email
 
 Statuses:
-- Published — included in the public JSON API and in the reviews embed (see below).
-- Pending — hold for moderation (useful when you later let couples submit reviews).
+- Published — included in the public JSON API and shown on storyvenue.com.
+- Pending — held for moderation (useful if you later allow couples to submit reviews directly).
 - Hidden — not shown publicly.
 
-Showing reviews on storyvenue.com:
-- The main directory site may use a custom page template. To display reviews, either:
-  1. Paste the iframe snippet from the Reviews page (it points to app.storyvenue.com/embed/listing-reviews/<your-slug>), or
-  2. Have your developer call the public JSON endpoint "GET https://app.storyvenue.com/api/public/venues/<slug>" and render the reviews array (only when your listing is published and reviews are published).
+On storyvenue.com, published reviews appear in a single-column list on your venue page. Up to 4 are shown with a "Show all" button to expand the rest.
 
-On the app domain you can preview the path /venue/<your-slug> — same data as the API.
+Showing reviews outside storyvenue.com:
+- Paste the iframe snippet from the Reviews page — it points to app.storyvenue.com/embed/listing-reviews/<your-slug>.
+- Or call the public JSON endpoint: GET https://app.storyvenue.com/api/public/venues/<slug> — returns published reviews only (your listing must be published).
 
 Database: reviews live in listing_reviews (migration 024). An optional read-only view listing_reviews_public (migration 025) exposes published rows safely to Supabase anon for external sites that query Postgres directly.`,
+      },
+      {
+        id: 'listing-google-reviews',
+        title: 'Connecting your Google Business Profile for Google reviews',
+        tags: ['google reviews', 'google business profile', 'place id', 'gbp', 'google maps', 'connect google', 'google rating', 'service area business'],
+        body: `The Google tab under Venue listing → Reviews lets you connect your Google Business Profile so your Google reviews display on your storyvenue.com listing page.
+
+How to connect:
+1. Go to Venue listing → Reviews → Google tab.
+2. The tab automatically searches Google for your business using your venue name and location. If your business appears, click "Yes, that's us." That's it — your Google reviews will start showing on your listing.
+3. If the auto-search doesn't find your business (common for service-area businesses with no physical address), expand "Can't find it? Paste a Google Maps link instead."
+4. In that section, paste any Google Maps URL for your business — a share link (maps.app.goo.gl/...), a full browser URL, or a link from your Google Business Profile. Click Resolve and the system extracts the Place ID automatically.
+
+Service-area businesses (no fixed storefront):
+Google's Places API cannot look up service-area businesses by name search. Use the Google Maps link method above. If that also fails, go to Google's Place ID Finder tool (the link appears in the fallback UI), search for your business there, and paste the Place ID directly.
+
+Once connected:
+- A green "Connected to Google Business" banner appears.
+- StoryPay fetches and caches your Google reviews.
+- Use the refresh icon to force a cache refresh at any time.
+- To switch to a different Google Business, click "Change business."
+
+On storyvenue.com:
+- Up to 5 Google reviews are shown in a single-column layout below your StoryVenue reviews.
+- A "See all Google reviews" button links directly to your full Google Business listing on Google Maps so couples can read all your reviews.
+- The footer shows "Showing X of Y Google reviews" so couples know more exist.
+
+Requires GOOGLE_PLACES_API_KEY to be configured on the server. If it's missing, a fallback message appears instead of the search.`,
+      },
+      {
+        id: 'listing-analytics-realtime',
+        title: 'Real-time visitor map — see who\'s on your listing right now',
+        tags: ['visitor map', 'real time', 'realtime', 'analytics', 'world map', 'live visitors', 'map', 'location', 'who is visiting', 'leaflet', 'geo'],
+        body: `The Venue listing → Analytics page includes an interactive world map that shows visitors currently on your storyvenue.com listing in real time.
+
+How to access:
+1. Go to Venue listing → Analytics (path: /dashboard/listing/analytics).
+2. Scroll down to the "Live visitor map" section.
+
+What you see on the map:
+- **Pulsing red dot**: visitors active in the last 90 seconds — they're on your listing right now.
+- **Solid indigo dot**: visitors seen in the last 30 minutes — recently active but may have moved on.
+- Hover any marker to see the visitor's city, region, country, and how many seconds or minutes ago they were last active.
+- The map always shows even with no recent visitors. An overlay message appears when no one has visited in the last 30 minutes.
+
+Navigation:
+- **Zoom in / out**: use the + and − buttons (top-left of the map), or scroll with your mouse/trackpad.
+- **Pan**: click and drag anywhere on the map.
+- City-level detail is visible when zoomed in.
+
+How it works:
+- Visitors are tracked anonymously via a heartbeat signal on the listing page.
+- Their city, region, country, latitude, and longitude are resolved from their IP address (no personal data is stored — only geographic location).
+- Data refreshes automatically in the background while you have the analytics page open.
+
+Privacy: only approximate location data (city-level) is captured. No names, emails, or device identifiers are linked to map markers.`,
       },
     ],
   },
@@ -1611,11 +1673,12 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   // Calendar
   '/dashboard/calendar': ['cal-overview', 'cal-add-event', 'cal-spaces', 'cal-conflicts', 'cal-multi-day', 'cal-recurring'],
 
-  // Venue listing (directory + reviews)
+  // Venue listing (directory + reviews + analytics)
   '/dashboard/listing/media': ['listing-media-library', 'listing-photos', 'listing-overview', 'brand-setup'],
   '/dashboard/listing/images': ['listing-photos', 'listing-media-library', 'listing-overview', 'listing-publish'],
-  '/dashboard/listing/reviews': ['listing-reviews', 'listing-overview', 'listing-publish'],
-  '/dashboard/listing':        ['listing-overview', 'listing-media-library', 'listing-reviews', 'listing-autosave', 'listing-photos', 'listing-publish', 'listing-slug'],
+  '/dashboard/listing/reviews': ['listing-reviews', 'listing-google-reviews', 'listing-overview', 'listing-publish'],
+  '/dashboard/listing/analytics': ['listing-analytics-realtime', 'listing-overview', 'listing-publish'],
+  '/dashboard/listing':        ['listing-overview', 'listing-media-library', 'listing-reviews', 'listing-google-reviews', 'listing-analytics-realtime', 'listing-autosave', 'listing-photos', 'listing-publish', 'listing-slug'],
 
   // Leads
   '/dashboard/leads': ['leads-overview', 'leads-space', 'leads-edit-pipelines', 'leads-crm-intelligence', 'leads-kanban', 'leads-filter-search', 'leads-notifications', 'leads-to-proposal'],
@@ -1657,7 +1720,7 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
 
   // AI
   '/dashboard/ai':   ['ai-overview', 'listing-media-library', 'ai-screenshot', 'ai-voice', 'ai-escalate'],
-  '/dashboard/help': ['gs-overview', 'gs-sidebar-chrome', 'listing-overview', 'listing-reviews', 'conversations-overview', 'leads-overview', 'leads-crm-intelligence', 'ai-overview', 'cust-pipeline'],
+  '/dashboard/help': ['gs-overview', 'gs-sidebar-chrome', 'listing-overview', 'listing-reviews', 'listing-google-reviews', 'listing-analytics-realtime', 'conversations-overview', 'leads-overview', 'leads-crm-intelligence', 'ai-overview', 'cust-pipeline'],
 
   // Signup / login (public pages — harmless if never hit via dashboard)
   '/signup': ['gs-signup', 'gs-login'],
