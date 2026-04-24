@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
+// Allow the listing page (served from a different domain, e.g. storyvenue.com)
+// to POST events to this API cross-origin.
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+}
+
 const VALID_EVENTS = new Set([
   'page_view',
   'listing_impression',
@@ -30,9 +42,11 @@ function getHeader(req: NextRequest, ...names: string[]): string | null {
 export async function POST(req: NextRequest) {
   let body: Record<string, unknown>;
   try {
-    body = (await req.json()) as Record<string, unknown>;
+    // sendBeacon may send text/plain; read raw text and parse manually to be safe
+    const text = await req.text();
+    body = JSON.parse(text) as Record<string, unknown>;
   } catch {
-    return NextResponse.json({ ok: false }, { status: 400 });
+    return NextResponse.json({ ok: false }, { status: 400, headers: CORS_HEADERS });
   }
 
   const { venue_id, session_id, event_type, event_data, referrer, utm_source, utm_medium, utm_campaign } = body as {
@@ -47,10 +61,10 @@ export async function POST(req: NextRequest) {
   };
 
   if (!venue_id || !session_id || !event_type) {
-    return NextResponse.json({ ok: false }, { status: 400 });
+    return NextResponse.json({ ok: false }, { status: 400, headers: CORS_HEADERS });
   }
   if (!VALID_EVENTS.has(event_type)) {
-    return NextResponse.json({ ok: false }, { status: 400 });
+    return NextResponse.json({ ok: false }, { status: 400, headers: CORS_HEADERS });
   }
 
   const ua = req.headers.get('user-agent') || '';
@@ -80,12 +94,11 @@ export async function POST(req: NextRequest) {
   });
 
   if (error) {
-    // Silently swallow schema-not-ready errors so missing migration doesn't break the listing page
     if (/listing_events/i.test(error.message)) {
-      return NextResponse.json({ ok: true, warning: 'migration_pending' });
+      return NextResponse.json({ ok: true, warning: 'migration_pending' }, { headers: CORS_HEADERS });
     }
-    return NextResponse.json({ ok: false }, { status: 500 });
+    return NextResponse.json({ ok: false }, { status: 500, headers: CORS_HEADERS });
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true }, { headers: CORS_HEADERS });
 }

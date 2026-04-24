@@ -7,6 +7,14 @@ interface Props {
   referrer?: string;
 }
 
+// The listing page may be served from a different domain (e.g. storyvenue.com)
+// than the API (e.g. app.storyvenue.com / storypay.io). We must use an absolute
+// URL so the event always reaches the right server.
+const TRACK_URL = (() => {
+  const base = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ?? '';
+  return base ? `${base}/api/listing-track` : '/api/listing-track';
+})();
+
 function getOrCreateSessionId(venueId: string): string {
   const key = `lsid_${venueId}`;
   const existing = sessionStorage.getItem(key);
@@ -49,11 +57,11 @@ export function ListingTracker({ venueId, referrer }: Props) {
     // (bare string sends text/plain which can break req.json() on the server)
     if (navigator.sendBeacon) {
       navigator.sendBeacon(
-        '/api/listing-track',
+        TRACK_URL,
         new Blob([JSON.stringify(payload)], { type: 'application/json' }),
       );
     } else {
-      void fetch('/api/listing-track', {
+      void fetch(TRACK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -120,13 +128,13 @@ export function useListingTrackForm(venueId: string) {
   }
   function trackFormOpen() {
     if (!sessionId.current) return;
-    sendBeaconJson('/api/listing-track', {
+    sendBeaconJson(TRACK_URL, {
       venue_id: venueId, session_id: sessionId.current, event_type: 'contact_form_open', event_data: {},
     });
   }
   function trackFormSubmit() {
     if (!sessionId.current) return;
-    sendBeaconJson('/api/listing-track', {
+    sendBeaconJson(TRACK_URL, {
       venue_id: venueId, session_id: sessionId.current, event_type: 'contact_form_submit', event_data: {},
     });
   }
