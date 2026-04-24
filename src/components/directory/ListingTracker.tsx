@@ -7,13 +7,17 @@ interface Props {
   referrer?: string;
 }
 
-// The listing page may be served from a different domain (e.g. storyvenue.com)
-// than the API (e.g. app.storyvenue.com / storypay.io). We must use an absolute
-// URL so the event always reaches the right server.
-const TRACK_URL = (() => {
-  const base = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ?? '';
-  return base ? `${base}/api/listing-track` : '/api/listing-track';
-})();
+// Build the track URL at call-time from window.location.origin so it always
+// hits the correct server regardless of NEXT_PUBLIC_APP_URL being set or not.
+// The listing page and the API are in the same Next.js app, so the origin is
+// always correct even when the site is accessed via multiple custom domains.
+function getTrackUrl(): string {
+  try {
+    return `${window.location.origin}/api/listing-track`;
+  } catch {
+    return '/api/listing-track';
+  }
+}
 
 function getOrCreateSessionId(venueId: string): string {
   const key = `lsid_${venueId}`;
@@ -54,21 +58,19 @@ export function ListingTracker({ venueId, referrer }: Props) {
       referrer: referrer || document.referrer || null,
       ...utms,
     };
-    // sendBeacon must use a Blob so the browser sends Content-Type: application/json
-    // (bare string sends text/plain which can break req.json() on the server)
-    if (navigator.sendBeacon) {
-      navigator.sendBeacon(
-        TRACK_URL,
-        new Blob([JSON.stringify(payload)], { type: 'application/json' }),
-      );
-    } else {
-      void fetch(TRACK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        keepalive: true,
-      });
-    }
+    const url = getTrackUrl();
+    // Use fetch with keepalive:true — equivalent to sendBeacon but actually
+    // surfaces errors to the console so we can diagnose failures.
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      keepalive: true,
+    }).then(res => {
+      if (!res.ok) console.error('[ListingTracker] track failed', event_type, res.status, url);
+    }).catch(err => {
+      console.error('[ListingTracker] track error', event_type, url, err);
+    });
   }
 
   useEffect(() => {
@@ -131,20 +133,17 @@ export function useListingTrackForm(venueId: string) {
     try { sessionId.current = sessionStorage.getItem(`lsid_${venueId}`); } catch { /* noop */ }
   }, [venueId]);
 
-  function sendBeaconJson(url: string, data: unknown) {
-    navigator.sendBeacon?.(url, new Blob([JSON.stringify(data)], { type: 'application/json' }));
-  }
-  function trackFormOpen() {
+  function postEvent(event_type: string) {
     if (!sessionId.current) return;
-    sendBeaconJson(TRACK_URL, {
-      venue_id: venueId, session_id: sessionId.current, event_type: 'contact_form_open', event_data: {},
-    });
+    const url = getTrackUrl();
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ venue_id: venueId, session_id: sessionId.current, event_type, event_data: {} }),
+      keepalive: true,
+    }).catch(err => console.error('[ListingTracker]', event_type, err));
   }
-  function trackFormSubmit() {
-    if (!sessionId.current) return;
-    sendBeaconJson(TRACK_URL, {
-      venue_id: venueId, session_id: sessionId.current, event_type: 'contact_form_submit', event_data: {},
-    });
-  }
+  function trackFormOpen() { postEvent('contact_form_open'); }
+  function trackFormSubmit() { postEvent('contact_form_submit'); }
   return { trackFormOpen, trackFormSubmit };
 }
