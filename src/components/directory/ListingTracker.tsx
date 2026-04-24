@@ -41,6 +41,7 @@ export function ListingTracker({ venueId, referrer }: Props) {
   const sessionId = useRef<string | null>(null);
   const scrollFired = useRef({ s25: false, s50: false, s75: false, s100: false });
   const hasFiredPageView = useRef(false);
+  const heartbeatInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   function track(event_type: string, event_data: Record<string, unknown> = {}) {
     if (!sessionId.current) return;
@@ -105,9 +106,16 @@ export function ListingTracker({ venueId, referrer }: Props) {
     }
     document.addEventListener('click', onClick);
 
+    // ── Heartbeat (every 30s) — powers the "Active right now" counter ────
+    // Fire immediately so the visitor appears in realtime within seconds,
+    // then repeat every 30s so they stay visible as long as the tab is open.
+    track('session_heartbeat');
+    heartbeatInterval.current = setInterval(() => track('session_heartbeat'), 30_000);
+
     return () => {
       window.removeEventListener('scroll', onScroll);
       document.removeEventListener('click', onClick);
+      if (heartbeatInterval.current) clearInterval(heartbeatInterval.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueId]);

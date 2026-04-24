@@ -31,6 +31,8 @@ export async function GET() {
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const now = Date.now();
+  // 90s window for "right now" — covers one missed 30s heartbeat ping
+  const since90s = new Date(now - 90  * 1000).toISOString();
   const since5m  = new Date(now - 5  * 60 * 1000).toISOString();
   const since30m = new Date(now - 30 * 60 * 1000).toISOString();
   const since24h = new Date(now - 24 * 60 * 60 * 1000).toISOString();
@@ -45,14 +47,24 @@ export async function GET() {
 
   if (error) {
     if (/listing_events/i.test(error.message)) {
-      return NextResponse.json({ active_5m: 0, active_30m: 0, today_views: 0, activity: [], geo_live: [], _migration_pending: true });
+      return NextResponse.json({ active_now: 0, active_5m: 0, active_30m: 0, today_views: 0, activity: [], geo_live: [], _migration_pending: true });
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   const rows = recent ?? [];
 
-  // Active unique sessions in last 5 min / 30 min
+  // "Right now" = sessions with a heartbeat in the last 90 seconds
+  const sessionsNow  = new Set(
+    rows.filter(r => r.created_at >= since90s && r.event_type === 'session_heartbeat').map(r => r.session_id)
+  );
+  // Fallback: if heartbeats aren't flowing yet, use any event in last 90s
+  const sessionsNowFallback = new Set(
+    rows.filter(r => r.created_at >= since90s).map(r => r.session_id)
+  );
+  const activeNow = sessionsNow.size || sessionsNowFallback.size;
+
+  // Active unique sessions in last 5 min / 30 min (any event type)
   const sessions5m  = new Set(rows.filter(r => r.created_at >= since5m).map(r => r.session_id));
   const sessions30m = new Set(rows.map(r => r.session_id));
 
@@ -104,6 +116,7 @@ export async function GET() {
     }));
 
   return NextResponse.json({
+    active_now:  activeNow,
     active_5m:   sessions5m.size,
     active_30m:  sessions30m.size,
     today_views: todayViews ?? 0,

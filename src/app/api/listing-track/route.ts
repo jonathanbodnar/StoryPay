@@ -16,6 +16,7 @@ export async function OPTIONS() {
 const VALID_EVENTS = new Set([
   'page_view',
   'listing_impression',
+  'session_heartbeat',
   'scroll_25', 'scroll_50', 'scroll_75', 'scroll_100',
   'photo_view',
   'faq_open',

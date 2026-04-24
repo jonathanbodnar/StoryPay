@@ -59,6 +59,7 @@ type AnalyticsPayload = {
 
 // ── Realtime + lead insight types ─────────────────────────────────────────────
 type RealtimePayload = {
+  active_now: number;
   active_5m: number;
   active_30m: number;
   today_views: number;
@@ -624,7 +625,7 @@ export default function ListingAnalyticsPage() {
         {/* Live stats */}
         <div className="grid grid-cols-3 divide-x divide-gray-100">
           {[
-            { label: 'Active now', value: rt?.active_5m ?? '—', sub: 'last 5 min' },
+            { label: 'On listing right now', value: rt?.active_now ?? '—', sub: 'live visitors' },
             { label: 'Active today', value: rt?.today_views ?? '—', sub: 'page views' },
             { label: 'Last 30 min', value: rt?.active_30m ?? '—', sub: 'unique sessions' },
           ].map(({ label, value, sub }) => (
