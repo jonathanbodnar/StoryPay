@@ -76,6 +76,9 @@ export function ListingTracker({ venueId, referrer }: Props) {
   useEffect(() => {
     sessionId.current = getOrCreateSessionId(venueId);
 
+    // Log the target URL so it's easy to verify in DevTools on the listing page
+    console.log(`[ListingTracker] venue=${venueId} url=${getTrackUrl()}`);
+
     // ── Page view ─────────────────────────────────────────────────────
     if (!hasFiredPageView.current) {
       hasFiredPageView.current = true;

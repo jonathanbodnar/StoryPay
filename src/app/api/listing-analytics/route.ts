@@ -85,7 +85,11 @@ function buildMetrics(rows: EventRow[], leads: { id: string; created_at: string 
   const pageViews = rows.filter(r => r.event_type === 'page_view');
   const impressions = rows.filter(r => r.event_type === 'listing_impression');
   const allSessions = new Set(rows.map(r => r.session_id));
-  const viewSessions = new Set(pageViews.map(r => r.session_id));
+  // A "view session" is one that has a page_view OR a heartbeat (heartbeats
+  // fire on mount so they effectively mark the same sessions as page views)
+  const viewSessions = new Set(
+    rows.filter(r => r.event_type === 'page_view' || r.event_type === 'session_heartbeat').map(r => r.session_id)
+  );
   const formOpenSessions = new Set(rows.filter(r => r.event_type === 'contact_form_open').map(r => r.session_id));
   const formSubmitSessions = new Set(rows.filter(r => r.event_type === 'contact_form_submit').map(r => r.session_id));
 
@@ -112,10 +116,11 @@ function buildMetrics(rows: EventRow[], leads: { id: string; created_at: string 
 
   // ── Daily breakdown ───────────────────────────────────────────────────────
   const dailyMap: Record<string, { views: number; sessions: Set<string>; impressions: number }> = {};
-  for (const row of [...pageViews, ...impressions]) {
+  const viewRows = rows.filter(r => r.event_type === 'page_view' || r.event_type === 'session_heartbeat' || r.event_type === 'listing_impression');
+  for (const row of viewRows) {
     const day = row.created_at.slice(0, 10);
     if (!dailyMap[day]) dailyMap[day] = { views: 0, sessions: new Set(), impressions: 0 };
-    if (row.event_type === 'page_view') { dailyMap[day].views++; dailyMap[day].sessions.add(row.session_id); }
+    if (row.event_type === 'page_view' || row.event_type === 'session_heartbeat') { dailyMap[day].sessions.add(row.session_id); if (row.event_type === 'page_view') dailyMap[day].views++; }
     if (row.event_type === 'listing_impression') dailyMap[day].impressions++;
   }
   const daily = Object.entries(dailyMap)
@@ -200,7 +205,7 @@ function buildMetrics(rows: EventRow[], leads: { id: string; created_at: string 
   ];
 
   return {
-    total_views:            pageViews.length,
+    total_views:            pageViews.length || viewSessions.size, // heartbeat sessions count as views when no page_view yet
     total_impressions:      impressions.length,
     unique_sessions:        viewSessions.size,
     total_interactions:     allSessions.size,
