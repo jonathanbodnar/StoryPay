@@ -12,6 +12,7 @@ type EventRow = {
   utm_source: string | null;
   device_type: string | null;
   country: string | null;
+  region: string | null;
   city: string | null;
   created_at: string;
 };
@@ -38,7 +39,7 @@ export async function GET(req: Request) {
   // Fetch current + prior period in one wide query then split
   const { data: allEvents, error } = await supabaseAdmin
     .from('listing_events')
-    .select('session_id, event_type, event_data, referrer, utm_source, device_type, country, city, created_at')
+    .select('session_id, event_type, event_data, referrer, utm_source, device_type, country, region, city, created_at')
     .eq('venue_id', venueId)
     .gte('created_at', priorFrom)
     .order('created_at', { ascending: true });
@@ -162,14 +163,28 @@ function buildMetrics(rows: EventRow[], leads: { id: string; created_at: string 
     .map(([source, count]) => ({ source, count }));
 
   // ── Geography ─────────────────────────────────────────────────────────────
+  // Countries aggregate directly. States/cities are keyed as "Region|Country"
+  // or "City|Region|Country" so that identical names in different countries
+  // don't collide (e.g. "Ontario, CA" vs "Ontario, US").
   const countryMap: Record<string, number> = {};
-  const cityMap: Record<string, number> = {};
+  const stateMap: Record<string, { country: string; region: string; count: number }> = {};
+  const cityMap: Record<string, { city: string; region: string | null; country: string | null; count: number }> = {};
   for (const row of pageViews) {
     if (row.country) countryMap[row.country] = (countryMap[row.country] ?? 0) + 1;
-    if (row.city) cityMap[row.city] = (cityMap[row.city] ?? 0) + 1;
+    if (row.region && row.country) {
+      const key = `${row.region}|${row.country}`;
+      if (!stateMap[key]) stateMap[key] = { country: row.country, region: row.region, count: 0 };
+      stateMap[key].count++;
+    }
+    if (row.city) {
+      const key = `${row.city}|${row.region ?? ''}|${row.country ?? ''}`;
+      if (!cityMap[key]) cityMap[key] = { city: row.city, region: row.region, country: row.country, count: 0 };
+      cityMap[key].count++;
+    }
   }
   const topCountries = Object.entries(countryMap).sort(([,a],[,b])=>b-a).slice(0,10).map(([country,count])=>({country,count}));
-  const topCities    = Object.entries(cityMap).sort(([,a],[,b])=>b-a).slice(0,10).map(([city,count])=>({city,count}));
+  const topStates    = Object.values(stateMap).sort((a,b)=>b.count-a.count).slice(0,10);
+  const topCities    = Object.values(cityMap).sort((a,b)=>b.count-a.count).slice(0,10);
 
   // ── DOW heatmap ───────────────────────────────────────────────────────────
   const dowCounts = Array(7).fill(0) as number[];
@@ -220,6 +235,7 @@ function buildMetrics(rows: EventRow[], leads: { id: string; created_at: string 
     devices:                deviceMap,
     referrers,
     top_countries:          topCountries,
+    top_states:             topStates,
     top_cities:             topCities,
     inquiry_dow:            dowCounts,
     photo_views:            photoViews,
@@ -266,7 +282,7 @@ function emptyPayload(days: number) {
     leads_created: 0, avg_session_duration: 0,
     daily: [], event_counts: {},
     scroll_depth: { pct_25: 0, pct_50: 0, pct_75: 0, pct_100: 0 },
-    devices: {}, referrers: [], top_countries: [], top_cities: [],
+    devices: {}, referrers: [], top_countries: [], top_states: [], top_cities: [],
     inquiry_dow: [0,0,0,0,0,0,0], photo_views: [], social_clicks: {},
     funnel: [],
     prior: { total_views: 0, unique_sessions: 0, contact_form_submits: 0, leads_created: 0, conversion_rate: 0 },

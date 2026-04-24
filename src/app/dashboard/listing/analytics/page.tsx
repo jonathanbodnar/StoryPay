@@ -48,7 +48,8 @@ type AnalyticsPayload = {
   devices: Record<string, number>;
   referrers: { source: string; count: number }[];
   top_countries: { country: string; count: number }[];
-  top_cities: { city: string; count: number }[];
+  top_states: { country: string; region: string; count: number }[];
+  top_cities: { city: string; region: string | null; country: string | null; count: number }[];
   inquiry_dow: number[];
   photo_views: { index: number; count: number }[];
   social_clicks: Record<string, number>;
@@ -794,12 +795,29 @@ export default function ListingAnalyticsPage() {
           )}
 
           {/* ── Geography ────────────────────────────────────────────────── */}
-          {(d.top_cities.length > 0 || d.top_countries.length > 0) && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {(d.top_cities.length > 0 || d.top_states.length > 0 || d.top_countries.length > 0) && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {d.top_cities.length > 0 && (
                 <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-3">
                   <div className="flex items-center gap-2"><MapPin size={13} className="text-gray-400" /><SectionTitle>Top cities</SectionTitle></div>
-                  {d.top_cities.map(c => <MiniBarRow key={c.city} label={c.city} value={c.count} max={d.top_cities[0]?.count ?? 1} />)}
+                  {d.top_cities.map((c, i) => {
+                    // "Columbus, Ohio" — or fall back to "Columbus, US" if no region was resolved.
+                    const label = [c.city, c.region || c.country].filter(Boolean).join(', ');
+                    return <MiniBarRow key={`${c.city}-${c.region ?? ''}-${i}`} label={label} value={c.count} max={d.top_cities[0]?.count ?? 1} />;
+                  })}
+                </div>
+              )}
+              {d.top_states.length > 0 && (
+                <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-3">
+                  <div className="flex items-center gap-2"><MapPin size={13} className="text-gray-400" /><SectionTitle>Top states / regions</SectionTitle></div>
+                  {d.top_states.map((s, i) => (
+                    <MiniBarRow
+                      key={`${s.region}-${s.country}-${i}`}
+                      label={`${s.region}${s.country ? ` · ${s.country}` : ''}`}
+                      value={s.count}
+                      max={d.top_states[0]?.count ?? 1}
+                    />
+                  ))}
                 </div>
               )}
               {d.top_countries.length > 0 && (
