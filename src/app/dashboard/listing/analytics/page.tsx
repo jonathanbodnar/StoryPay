@@ -544,15 +544,16 @@ export default function ListingAnalyticsPage() {
                 <span className="text-gray-300">· scroll or use + / − to zoom to city view</span>
               </div>
             </div>
-            {(rt.geo_points?.length ?? 0) > 0 ? (
+            <div className="relative">
               <VisitorMap points={rt.geo_points ?? []} />
-            ) : (
-              <div className="h-96 w-full rounded-2xl border border-dashed border-gray-200 bg-gray-50 flex items-center justify-center">
-                <p className="text-xs text-gray-400">
-                  No visitors on the listing in the last 30 minutes
-                </p>
-              </div>
-            )}
+              {(rt.geo_points?.length ?? 0) === 0 && (
+                <div className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-[500] rounded-full bg-white/95 border border-gray-200 px-4 py-1.5 shadow-sm">
+                  <p className="text-[11px] font-medium text-gray-500">
+                    No visitors in the last 30 minutes — markers will appear here in realtime
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
