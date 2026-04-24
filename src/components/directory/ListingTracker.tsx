@@ -45,9 +45,13 @@ export function ListingTracker({ venueId, referrer }: Props) {
       referrer: referrer || document.referrer || null,
       ...utms,
     };
-    // Use sendBeacon when available so events survive page unload
+    // sendBeacon must use a Blob so the browser sends Content-Type: application/json
+    // (bare string sends text/plain which can break req.json() on the server)
     if (navigator.sendBeacon) {
-      navigator.sendBeacon('/api/listing-track', JSON.stringify(payload));
+      navigator.sendBeacon(
+        '/api/listing-track',
+        new Blob([JSON.stringify(payload)], { type: 'application/json' }),
+      );
     } else {
       void fetch('/api/listing-track', {
         method: 'POST',
@@ -111,17 +115,20 @@ export function useListingTrackForm(venueId: string) {
     try { sessionId.current = sessionStorage.getItem(`lsid_${venueId}`); } catch { /* noop */ }
   }, [venueId]);
 
+  function sendBeaconJson(url: string, data: unknown) {
+    navigator.sendBeacon?.(url, new Blob([JSON.stringify(data)], { type: 'application/json' }));
+  }
   function trackFormOpen() {
     if (!sessionId.current) return;
-    navigator.sendBeacon?.('/api/listing-track', JSON.stringify({
+    sendBeaconJson('/api/listing-track', {
       venue_id: venueId, session_id: sessionId.current, event_type: 'contact_form_open', event_data: {},
-    }));
+    });
   }
   function trackFormSubmit() {
     if (!sessionId.current) return;
-    navigator.sendBeacon?.('/api/listing-track', JSON.stringify({
+    sendBeaconJson('/api/listing-track', {
       venue_id: venueId, session_id: sessionId.current, event_type: 'contact_form_submit', event_data: {},
-    }));
+    });
   }
   return { trackFormOpen, trackFormSubmit };
 }
