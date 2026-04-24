@@ -1,7 +1,7 @@
 /**
  * Debug endpoint: verify listing_events table exists and show recent rows.
- * GET /api/listing-analytics/debug
- * Only accessible when authenticated as a venue (venue_id cookie required).
+ * GET  /api/listing-analytics/debug  — diagnostics
+ * POST /api/listing-analytics/debug  — insert a test page_view event (returns full error if it fails)
  */
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
@@ -68,4 +68,40 @@ export async function GET() {
     fetch_error: recentErr?.message ?? null,
     server_time: new Date().toISOString(),
   });
+}
+
+/** POST — insert a synthetic test event so we can prove the pipeline works end-to-end */
+export async function POST() {
+  const c = await cookies();
+  const venueId = c.get('venue_id')?.value;
+  if (!venueId) return NextResponse.json({ ok: false, error: 'Not authenticated' }, { status: 401 });
+
+  const testSessionId = `debug-${Date.now()}`;
+
+  const { error } = await supabaseAdmin.from('listing_events').insert({
+    venue_id: venueId,
+    session_id: testSessionId,
+    event_type: 'page_view',
+    event_data: { debug: true },
+    device_type: 'desktop',
+    country: null,
+    region: null,
+    city: null,
+    referrer: null,
+    utm_source: 'debug',
+    utm_medium: null,
+    utm_campaign: null,
+  });
+
+  if (error) {
+    return NextResponse.json({
+      ok: false,
+      error: error.message,
+      hint: error.hint ?? null,
+      details: error.details ?? null,
+      code: error.code ?? null,
+    });
+  }
+
+  return NextResponse.json({ ok: true, session_id: testSessionId });
 }

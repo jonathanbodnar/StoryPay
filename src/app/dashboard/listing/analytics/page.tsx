@@ -274,6 +274,8 @@ export default function ListingAnalyticsPage() {
   const [showDebug, setShowDebug] = useState(false);
   type DebugPayload = { table_exists: boolean; total_events: number; last_5m: number; last_30m: number; error?: string; recent_events: Record<string, unknown>[]; server_time: string; venue_id?: string; fetch_error?: string | null };
   const [debugData, setDebugData] = useState<DebugPayload | null>(null);
+  const [testEventResult, setTestEventResult] = useState<{ ok: boolean; error?: string; hint?: string; details?: string; code?: string } | null>(null);
+  const [testEventLoading, setTestEventLoading] = useState(false);
   const [debugLoading, setDebugLoading] = useState(false);
 
   async function loadDebug() {
@@ -282,6 +284,22 @@ export default function ListingAnalyticsPage() {
       const res = await fetch('/api/listing-analytics/debug');
       setDebugData(await res.json() as DebugPayload);
     } catch { /* noop */ } finally { setDebugLoading(false); }
+  }
+
+  async function sendTestEvent() {
+    setTestEventLoading(true);
+    setTestEventResult(null);
+    try {
+      const res = await fetch('/api/listing-analytics/debug', { method: 'POST' });
+      const json = await res.json() as { ok: boolean; error?: string; hint?: string; details?: string; code?: string };
+      setTestEventResult(json);
+      if (json.ok) {
+        // Auto-refresh debug data to show the new row
+        setTimeout(() => void loadDebug(), 500);
+      }
+    } catch (e) {
+      setTestEventResult({ ok: false, error: String(e) });
+    } finally { setTestEventLoading(false); }
   }
 
   // ── Digest state ──────────────────────────────────────────────────────────
@@ -496,6 +514,29 @@ export default function ListingAnalyticsPage() {
               {/* Error from DB */}
               {debugData.error && (
                 <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-xs text-red-700 font-medium">{String(debugData.error)}</div>
+              )}
+
+              {/* Test event button */}
+              {debugData.table_exists && (
+                <div className="flex items-center gap-3 flex-wrap">
+                  <button
+                    onClick={() => void sendTestEvent()} disabled={testEventLoading}
+                    className="flex items-center gap-1.5 rounded-xl bg-gray-900 text-white px-3 py-1.5 text-xs font-semibold hover:bg-gray-700 disabled:opacity-40 transition-colors">
+                    {testEventLoading ? <RefreshCw size={11} className="animate-spin" /> : <Send size={11} />}
+                    {testEventLoading ? 'Inserting…' : 'Send test event → DB'}
+                  </button>
+                  <span className="text-[11px] text-gray-400">Inserts a synthetic page_view — if it appears below, the pipeline works end-to-end</span>
+                  {testEventResult && (
+                    testEventResult.ok
+                      ? <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1"><Check size={11} /> Inserted! Scroll down to see it.</span>
+                      : <div className="w-full rounded-xl bg-red-50 border border-red-100 px-3 py-2 text-xs text-red-700 space-y-0.5">
+                          <p className="font-semibold">Insert failed: {testEventResult.error}</p>
+                          {testEventResult.hint && <p>Hint: {testEventResult.hint}</p>}
+                          {testEventResult.details && <p>Details: {testEventResult.details}</p>}
+                          {testEventResult.code && <p className="font-mono">Code: {testEventResult.code}</p>}
+                        </div>
+                  )}
+                </div>
               )}
 
               {/* Recent events table */}
