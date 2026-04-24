@@ -131,7 +131,7 @@ export default function ListingReviewsPage() {
   const [googleSaveErr, setGoogleSaveErr] = useState('');
   const [googleSaving, setGoogleSaving] = useState(false);
 
-  // ── Auto-search state ────────────────────────────────────────────────────
+  // ── Google connection state ───────────────────────────────────────────────
   type GoogleCandidate = {
     place_id: string;
     name: string;
@@ -147,6 +147,11 @@ export default function ListingReviewsPage() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  // Maps link paste flow
+  const [mapsUrl, setMapsUrl] = useState('');
+  const [urlCandidate, setUrlCandidate] = useState<GoogleCandidate | null>(null);
+  const [urlLoading, setUrlLoading] = useState(false);
+  const [urlErr, setUrlErr] = useState('');
   // Track whether auto-search has already run for the current tab mount
   const autoSearchDoneRef = useRef(false);
 
@@ -401,6 +406,30 @@ export default function ListingReviewsPage() {
     void runSearch(searchQuery.trim());
   };
 
+  const resolveUrl = useCallback(async (url: string) => {
+    setUrlLoading(true);
+    setUrlErr('');
+    setUrlCandidate(null);
+    try {
+      const res = await fetch('/api/listing/google-reviews/resolve-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+        cache: 'no-store',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setUrlErr(typeof data.error === 'string' ? data.error : 'Could not find business from that link');
+        return;
+      }
+      setUrlCandidate(data as GoogleCandidate);
+    } catch {
+      setUrlErr('Something went wrong — check your connection and try again.');
+    } finally {
+      setUrlLoading(false);
+    }
+  }, []);
+
   const gAvg = googleCache?.rating ?? null;
   const gCnt = googleCache?.userRatingCount ?? 0;
 
@@ -600,7 +629,7 @@ export default function ListingReviewsPage() {
           <div className="mb-8 space-y-4">
 
             {/* ── Connected state ──────────────────────────────────────────── */}
-            {googlePlaceInput.trim() && !searchCandidates.length && (
+            {googlePlaceInput.trim() && !searchCandidates.length && !urlCandidate && (
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-center gap-3">
@@ -631,9 +660,12 @@ export default function ListingReviewsPage() {
                         setGooglePlaceInput('');
                         setGoogleCache(null);
                         setGoogleFetchedAt(null);
-                        autoSearchDoneRef.current = false;
+                        setUrlCandidate(null);
+                        setMapsUrl('');
+                        setUrlErr('');
                         setSearchCandidates([]);
-                        void runSearch();
+                        setShowSearchBox(false);
+                        autoSearchDoneRef.current = false;
                       }}
                       className="text-xs text-emerald-700 underline hover:text-emerald-900"
                     >
@@ -647,8 +679,109 @@ export default function ListingReviewsPage() {
               </div>
             )}
 
+            {/* ── Paste Google Maps link — primary setup path ──────────────── */}
+            {!googlePlaceInput.trim() && !urlCandidate && (
+              <div className="rounded-2xl border border-gray-200 bg-white p-5 space-y-4">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Connect your Google Business Profile</p>
+                  <p className="mt-1 text-xs text-gray-500 leading-relaxed">
+                    Open your business on Google Maps, then copy the URL from the address bar and paste it below.
+                  </p>
+                  {/* Step visual */}
+                  <div className="mt-3 flex items-start gap-6 text-xs text-gray-500">
+                    {[
+                      { n: '1', text: 'Search your business on Google Maps' },
+                      { n: '2', text: 'Click on your listing to open it' },
+                      { n: '3', text: 'Copy the URL and paste it below' },
+                    ].map(s => (
+                      <div key={s.n} className="flex items-start gap-2">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-900 text-[10px] font-bold text-white">{s.n}</span>
+                        <span className="leading-tight">{s.text}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    value={mapsUrl}
+                    onChange={(e) => { setMapsUrl(e.target.value); setUrlErr(''); setUrlCandidate(null); }}
+                    onPaste={(e) => {
+                      const pasted = e.clipboardData.getData('text').trim();
+                      if (pasted) setTimeout(() => void resolveUrl(pasted), 50);
+                    }}
+                    placeholder="https://maps.app.goo.gl/… or https://www.google.com/maps/place/…"
+                    className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => { if (mapsUrl.trim()) void resolveUrl(mapsUrl.trim()); }}
+                    disabled={urlLoading || !mapsUrl.trim()}
+                    className="shrink-0 rounded-xl bg-[#1b1b1b] px-4 py-2.5 text-sm font-semibold text-white hover:bg-neutral-800 disabled:opacity-50"
+                  >
+                    {urlLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Find'}
+                  </button>
+                </div>
+                {urlErr && (
+                  <p className="flex items-start gap-1.5 text-xs text-red-600">
+                    <AlertCircle size={13} className="mt-0.5 shrink-0" />{urlErr}
+                  </p>
+                )}
+                <div className="border-t border-gray-100 pt-3 flex items-center justify-between">
+                  <p className="text-[11px] text-gray-400">Can&apos;t find your listing? Try the name search instead.</p>
+                  <button
+                    type="button"
+                    onClick={() => { setShowSearchBox(true); setTimeout(() => searchInputRef.current?.focus(), 50); }}
+                    className="text-[11px] text-gray-600 underline hover:text-gray-900"
+                  >
+                    Search by name
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ── URL candidate confirm card ────────────────────────────────── */}
+            {urlCandidate && !googlePlaceInput.trim() && (
+              <div className="space-y-3">
+                <p className="text-sm font-semibold text-gray-700">Is this your business?</p>
+                <div className="flex items-start justify-between gap-4 rounded-2xl border border-gray-200 bg-white px-5 py-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-900">{urlCandidate.name}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{urlCandidate.formatted_address}</p>
+                    {urlCandidate.rating != null && (
+                      <div className="mt-1.5 flex items-center gap-1.5">
+                        <StarsDisplay value={Math.round(urlCandidate.rating)} size="sm" />
+                        <span className="text-xs text-gray-500">
+                          {urlCandidate.rating.toFixed(1)}
+                          {urlCandidate.user_ratings_total != null && <> · {urlCandidate.user_ratings_total.toLocaleString()} reviews</>}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void confirmCandidate(urlCandidate)}
+                      disabled={confirmingId === urlCandidate.place_id}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-[#1b1b1b] px-4 py-2 text-xs font-semibold text-white hover:bg-neutral-800 disabled:opacity-50 whitespace-nowrap"
+                    >
+                      {confirmingId === urlCandidate.place_id
+                        ? <><Loader2 className="h-3 w-3 animate-spin" />Connecting…</>
+                        : <>Yes, connect it</>}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setUrlCandidate(null); setMapsUrl(''); }}
+                      className="text-xs text-gray-500 underline text-center hover:text-gray-800"
+                    >
+                      Not right
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* ── Auto-search loading ───────────────────────────────────────── */}
-            {!googlePlaceInput.trim() && searchLoading && (
+            {!googlePlaceInput.trim() && !urlCandidate && searchLoading && (
               <div className="flex items-center gap-3 rounded-2xl border border-gray-100 bg-white px-5 py-5">
                 <Loader2 className="h-5 w-5 animate-spin text-gray-400 shrink-0" />
                 <div>
@@ -659,7 +792,7 @@ export default function ListingReviewsPage() {
             )}
 
             {/* ── Candidate cards ───────────────────────────────────────────── */}
-            {!googlePlaceInput.trim() && !searchLoading && searchCandidates.length > 0 && (
+            {!googlePlaceInput.trim() && !urlCandidate && !searchLoading && searchCandidates.length > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold text-gray-700">
@@ -710,7 +843,7 @@ export default function ListingReviewsPage() {
             )}
 
             {/* ── Error from auto-search ────────────────────────────────────── */}
-            {!googlePlaceInput.trim() && !searchLoading && searchErr && !searchCandidates.length && (
+            {!googlePlaceInput.trim() && !urlCandidate && !searchLoading && searchErr && !searchCandidates.length && (
               <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
                 <AlertCircle size={16} className="shrink-0 text-amber-600 mt-0.5" />
                 <div>
@@ -727,7 +860,7 @@ export default function ListingReviewsPage() {
             )}
 
             {/* ── Manual search box ─────────────────────────────────────────── */}
-            {(showSearchBox || (!googlePlaceInput.trim() && !searchLoading && searchCandidates.length === 0 && !searchErr)) && (
+            {!urlCandidate && (showSearchBox || (!googlePlaceInput.trim() && !searchLoading && searchCandidates.length === 0 && !searchErr)) && showSearchBox && (
               <form onSubmit={handleSearchSubmit} className="flex gap-2">
                 <div className="relative flex-1">
                   <Search size={14} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
