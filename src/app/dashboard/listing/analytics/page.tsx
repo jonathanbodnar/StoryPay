@@ -417,7 +417,12 @@ export default function ListingAnalyticsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Listing Analytics</h1>
           <p className="mt-0.5 text-sm text-gray-500">How visitors find and engage with your listing</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => { setShowDebug(v => !v); if (!showDebug) void loadDebug(); }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-colors ${showDebug ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
+            <Search size={12} /> {showDebug ? 'Hide debug' : 'Verify tracking'}
+          </button>
           <div className="flex rounded-xl border border-gray-200 bg-white overflow-hidden">
             {DAYS_OPTIONS.map(opt => (
               <button key={opt} onClick={() => setDays(opt)}
@@ -451,15 +456,8 @@ export default function ListingAnalyticsPage() {
         </div>
       )}
       {!d?._migration_pending && !loading && d && (
-        <div className="flex items-center justify-between gap-2 rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-2.5">
-          <span className="flex items-center gap-2 text-sm text-emerald-700">
-            <CheckCircle size={14} /> Tracking active — collecting data from your public listing
-          </span>
-          <button
-            onClick={() => { setShowDebug(v => !v); if (!showDebug) void loadDebug(); }}
-            className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-800 underline underline-offset-2">
-            {showDebug ? 'Hide debug' : 'Verify tracking'}
-          </button>
+        <div className="flex items-center gap-2 rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-2.5 text-sm text-emerald-700">
+          <CheckCircle size={14} /> Tracking active — collecting data from your public listing
         </div>
       )}
 
