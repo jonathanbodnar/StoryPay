@@ -78,15 +78,15 @@ export default function CampaignsListPage() {
       {/* Header */}
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Email Campaigns</h1>
-          <p className="mt-1 text-sm text-gray-500">One-off email blasts to your leads and contacts.</p>
+          <h1 className="text-2xl font-bold text-gray-900">Emails</h1>
+          <p className="mt-1 text-sm text-gray-500">Create an email, pick your audience, preview, and send.</p>
         </div>
         <button
           type="button"
           onClick={openModal}
           className="flex items-center gap-2 rounded-2xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-gray-700 transition-colors"
         >
-          <Plus size={16} /> New Campaign
+          <Plus size={16} /> New Email
         </button>
       </div>
 
@@ -98,14 +98,14 @@ export default function CampaignsListPage() {
       ) : campaigns.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-gray-200 py-16 text-center">
           <Megaphone size={32} className="mx-auto mb-3 text-gray-300" />
-          <p className="text-sm font-medium text-gray-500">No campaigns yet</p>
-          <p className="mt-1 text-xs text-gray-400">Create your first campaign to send an email to your leads</p>
+          <p className="text-sm font-medium text-gray-500">No emails yet</p>
+          <p className="mt-1 text-xs text-gray-400">Create your first email — design it, pick an audience, then send or schedule</p>
           <button
             type="button"
             onClick={openModal}
             className="mt-4 inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
           >
-            <Plus size={15} /> New Campaign
+            <Plus size={15} /> New Email
           </button>
         </div>
       ) : (
@@ -156,8 +156,8 @@ export default function CampaignsListPage() {
             className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="mb-1 text-lg font-bold text-gray-900">New Campaign</h2>
-            <p className="mb-5 text-sm text-gray-500">You&apos;ll design the email on the next screen.</p>
+            <h2 className="mb-1 text-lg font-bold text-gray-900">New Email</h2>
+            <p className="mb-5 text-sm text-gray-500">Give it a name and subject — you&apos;ll design it on the next screen.</p>
 
             <div className="space-y-4">
               <div>

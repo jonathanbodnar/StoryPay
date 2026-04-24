@@ -800,7 +800,7 @@ export function CampaignFlodeskBuilder({
           href="/dashboard/marketing/email/campaigns"
           className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors flex-shrink-0"
         >
-          <ArrowLeft size={16} /> Campaigns
+          <ArrowLeft size={16} /> Emails
         </Link>
 
         <div className="h-4 w-px bg-gray-200 flex-shrink-0" />

@@ -12,7 +12,7 @@ import {
   Bell, Receipt, Link2, RefreshCw, Plus, Calendar,
   Menu, X, ChevronDown, ChevronLeft, ChevronRight,
   HelpCircle, LogOut, BookOpen, Store, Inbox, Share2, LayoutTemplate, MessageCircle,
-  BarChart3, FileStack, Workflow, Star,
+  BarChart3, Workflow, Star,
   Images,
   BadgeCheck,
   Ticket,
@@ -67,12 +67,11 @@ const paymentsItems: NavItem[] = [
 ];
 
 const marketingItems: NavItem[] = [
-  { label: 'Marketing analytics', href: '/dashboard/marketing/analytics', icon: BarChart3, navId: 'nav_marketing_analytics' },
-  { label: 'Lead Capture Forms', href: '/dashboard/marketing/form-builder', icon: LayoutTemplate, navId: 'nav_marketing_form_builder' },
-  { label: 'Email templates', href: '/dashboard/marketing/email/templates', icon: FileStack, navId: 'nav_marketing_email_templates' },
-  { label: 'Email campaigns', href: '/dashboard/marketing/email/campaigns', icon: Megaphone, navId: 'nav_marketing_email_campaigns' },
-  { label: 'Workflows', href: '/dashboard/marketing/workflows', icon: Workflow, navId: 'nav_marketing_email_automations' },
-  { label: 'Trigger links & tags', href: '/dashboard/marketing/trigger-links', icon: Link2, navId: 'nav_marketing_trigger_links' },
+  { label: 'Analytics',          href: '/dashboard/marketing/analytics',       icon: BarChart3,     navId: 'nav_marketing_analytics' },
+  { label: 'Emails',             href: '/dashboard/marketing/email/campaigns', icon: Mail,          navId: 'nav_marketing_email_campaigns' },
+  { label: 'Forms',              href: '/dashboard/marketing/form-builder',    icon: LayoutTemplate, navId: 'nav_marketing_form_builder' },
+  { label: 'Workflows',          href: '/dashboard/marketing/workflows',        icon: Workflow,      navId: 'nav_marketing_email_automations' },
+  { label: 'Trigger links & tags', href: '/dashboard/marketing/trigger-links', icon: Link2,         navId: 'nav_marketing_trigger_links' },
 ];
 
 const settingsItems: NavItem[] = [
