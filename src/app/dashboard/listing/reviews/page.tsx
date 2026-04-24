@@ -339,7 +339,15 @@ export default function ListingReviewsPage() {
       }
       const candidates = Array.isArray(data.candidates) ? (data.candidates as GoogleCandidate[]) : [];
       setSearchCandidates(candidates);
-      if (candidates.length === 0) setSearchErr('No matches found — try a different search below.');
+      // Pre-fill the search box with what was actually searched so the owner
+      // can see it and tweak it if the results aren't right.
+      if (typeof data.query_used === 'string' && !customQuery) {
+        setSearchQuery(data.query_used);
+      }
+      if (candidates.length === 0) {
+        setShowSearchBox(true);
+        setSearchErr('No matches found — edit the search below and try again.');
+      }
     } catch {
       setSearchErr('Search failed — check your connection and try again.');
     } finally {

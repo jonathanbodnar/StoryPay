@@ -71,19 +71,27 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!searchQuery) {
     const { data: venue } = await supabaseAdmin
       .from('venues')
-      .select('name, location_city, location_state')
+      .select('name, location_city, location_state, location_full')
       .eq('id', venueId)
       .maybeSingle();
 
+    // Prefer explicit city/state fields; fall back to location_full which
+    // often contains a full address even when city/state columns are empty.
     const parts = [
       venue?.name,
-      venue?.location_city,
-      venue?.location_state,
+      venue?.location_city ?? null,
+      venue?.location_state ?? null,
     ].filter(Boolean);
+
+    // If we only have a name (no city/state), append location_full so Google
+    // has enough context to distinguish between same-named venues.
+    if (parts.length <= 1 && venue?.location_full) {
+      parts.push(venue.location_full);
+    }
 
     if (parts.length === 0) {
       return NextResponse.json(
-        { error: 'No venue name or location saved — add those first or type a search below.' },
+        { error: 'No venue name or location saved — type your business name and city in the search box below.' },
         { status: 422 },
       );
     }
