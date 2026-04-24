@@ -330,7 +330,11 @@ export default function ListingReviewsPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setSearchErr(typeof data.error === 'string' ? data.error : 'Search failed');
+        const msg = typeof data.error === 'string' ? data.error : 'Search failed';
+        setSearchErr(msg);
+        // Don't show spinner again for a key-not-configured error —
+        // nothing will change until an env var is added.
+        if (res.status === 503) setShowSearchBox(true);
         return;
       }
       const candidates = Array.isArray(data.candidates) ? (data.candidates as GoogleCandidate[]) : [];
