@@ -906,7 +906,21 @@ export function CampaignFlodeskBuilder({
                       {/* Block row */}
                       <div className="relative group" onClick={(e) => { e.stopPropagation(); setSelectedId(block.id); }}>
                         {/* Selection border */}
-                        <div className={`relative cursor-pointer transition-all ${isSelected ? 'ring-2 ring-blue-500 ring-inset' : 'hover:ring-1 hover:ring-gray-300 hover:ring-inset'}`}>
+                        <div
+                          className="relative cursor-pointer"
+                          style={{
+                            transition: 'box-shadow 0.3s ease, outline 0.15s ease',
+                            outline: isSelected ? '2px solid #3b82f6' : '2px solid transparent',
+                            outlineOffset: '-2px',
+                            boxShadow: isSelected ? 'none' : undefined,
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!isSelected) (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 22px rgba(0,0,0,0.11), 0 1px 6px rgba(0,0,0,0.07)';
+                          }}
+                          onMouseLeave={(e) => {
+                            (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
+                          }}
+                        >
                           <BlockCanvas block={block} theme={theme} venueAddress={venueAddress} />
                         </div>
 
