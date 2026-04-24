@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   AlignCenter, AlignLeft, AlignRight, ArrowLeft, Check,
-  ChevronDown, ChevronRight, Copy, GripVertical, Image as ImageIcon,
+  ChevronDown, ChevronRight, Copy, Image as ImageIcon,
   Loader2, Minus, Monitor, Plus, SeparatorHorizontal, Smartphone,
   Space, Trash2, Type, Eye, X as XIcon,
   MousePointer2, Palette, Video, Share2, MapPin,
@@ -372,37 +372,30 @@ function AddBlockBtn({ onClick }: { onClick: () => void }) {
   );
 }
 
-// ─── Sortable block wrapper (dnd-kit) ─────────────────────────────────────────
+// ─── Sortable block wrapper — whole block is draggable ───────────────────────
 function SortableBlock({
   id,
   children,
 }: {
   id: string;
-  children: (dragHandle: React.ReactNode, isDragging: boolean) => React.ReactNode;
+  children: (isDragging: boolean) => React.ReactNode;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-  const dragHandle = (
-    <div
-      {...attributes}
-      {...listeners}
-      className="flex h-7 w-7 cursor-grab items-center justify-center rounded-lg bg-white border border-gray-200 text-gray-400 shadow-sm hover:bg-gray-50 active:cursor-grabbing transition-all"
-      title="Drag to reorder"
-    >
-      <GripVertical size={13} />
-    </div>
-  );
   return (
     <div
       ref={setNodeRef}
+      {...attributes}
+      {...listeners}
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
-        opacity: isDragging ? 0.4 : 1,
+        opacity: isDragging ? 0.35 : 1,
         position: 'relative',
         zIndex: isDragging ? 50 : 'auto',
+        cursor: isDragging ? 'grabbing' : 'default',
       }}
     >
-      {children(dragHandle, isDragging)}
+      {children(isDragging)}
     </div>
   );
 }
@@ -901,92 +894,78 @@ export function CampaignFlodeskBuilder({
     <div className="-mx-6 sm:-mx-8 lg:-mx-10 -mt-6 lg:-mt-[68px] -mb-10 flex flex-col bg-white"
       style={{ minHeight: '100vh' }}
     >
-      {/* ── Top Bar ────────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-gray-200 bg-white px-5 py-3 shadow-sm">
-        <Link
-          href="/dashboard/marketing/email/campaigns"
-          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors flex-shrink-0"
-        >
-          <ArrowLeft size={16} /> Emails
-        </Link>
+      {/* ── Top Bar — Flodesk style: no hard border, soft shadow ───────────── */}
+      <header
+        className="sticky top-0 z-20 flex items-center bg-white px-6 py-3"
+        style={{ boxShadow: '0 1px 18px rgba(0,0,0,0.05)' }}
+      >
+        {/* Left: back link + editable name */}
+        <div className="flex items-center gap-3 flex-shrink-0 w-48">
+          <Link
+            href="/dashboard/marketing/email/campaigns"
+            className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-800 transition-colors"
+          >
+            <ArrowLeft size={14} />
+          </Link>
+          <input
+            className="min-w-0 flex-1 border-0 bg-transparent py-1 text-sm font-medium text-gray-800 placeholder:text-gray-300 focus:outline-none"
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value);
+              scheduleSave(e.target.value, subject, preheader, def);
+              void saveCampaignMeta(e.target.value, subject);
+            }}
+            placeholder="Untitled email"
+          />
+        </div>
 
-        <div className="h-4 w-px bg-gray-200 flex-shrink-0" />
+        {/* Center: step breadcrumbs like Flodesk */}
+        <div className="hidden sm:flex items-center gap-2 mx-auto text-[11px] tracking-widest font-medium uppercase">
+          <span className="text-gray-300">Choose Template</span>
+          <span className="text-gray-200">›</span>
+          <span className="text-gray-700 border-b border-gray-700 pb-0.5">Design Email</span>
+          <span className="text-gray-200">›</span>
+          <Link href={`/dashboard/marketing/email/campaigns/${campaignId}`} className="text-gray-300 hover:text-gray-600 transition-colors">Choose Audience</Link>
+          <span className="text-gray-200">›</span>
+          <Link href={`/dashboard/marketing/email/campaigns/${campaignId}`} className="text-gray-300 hover:text-gray-600 transition-colors">Send</Link>
+        </div>
 
-        {/* Campaign name */}
-        <input
-          className="min-w-[140px] max-w-[260px] flex-1 rounded-lg border border-transparent px-2.5 py-1.5 text-sm font-semibold text-gray-900 hover:border-gray-200 focus:border-gray-300 focus:bg-gray-50 focus:outline-none transition-colors"
-          value={name}
-          onChange={(e) => {
-            setName(e.target.value);
-            scheduleSave(e.target.value, subject, preheader, def);
-            void saveCampaignMeta(e.target.value, subject);
-          }}
-          placeholder="Campaign name"
-        />
+        {/* Right: view toggle, save status, preview, next */}
+        <div className="flex items-center gap-3 flex-shrink-0 w-48 justify-end">
+          {/* Desktop / Mobile toggle */}
+          <div className="hidden sm:flex items-center gap-0.5">
+            <button type="button" title="Desktop view" onClick={() => setViewMode('desktop')}
+              className={`flex h-7 w-7 items-center justify-center rounded transition-colors ${viewMode === 'desktop' ? 'text-gray-800' : 'text-gray-300 hover:text-gray-600'}`}>
+              <Monitor size={14} />
+            </button>
+            <button type="button" title="Mobile view" onClick={() => setViewMode('mobile')}
+              className={`flex h-7 w-7 items-center justify-center rounded transition-colors ${viewMode === 'mobile' ? 'text-gray-800' : 'text-gray-300 hover:text-gray-600'}`}>
+              <Smartphone size={14} />
+            </button>
+          </div>
 
-        {/* Step breadcrumbs */}
-        <div className="hidden sm:flex items-center gap-1 text-xs font-medium ml-auto">
-          <span className="rounded-full bg-gray-900 px-3 py-1 text-white">Design</span>
-          <ChevronRight size={14} className="text-gray-400" />
+          {/* Save indicator */}
+          <div className="flex items-center gap-1.5">
+            {saveStatus === 'saving' && <Loader2 size={12} className="animate-spin text-gray-300" />}
+            {saveStatus === 'saved'  && <span className="text-[11px] text-gray-300">Saved</span>}
+            {saveStatus === 'error'  && <span className="text-[11px] text-red-400">Error</span>}
+          </div>
+
+          {/* Preview */}
+          <button type="button" onClick={() => setPreviewOpen(true)}
+            className="flex items-center gap-1 text-sm text-gray-400 hover:text-gray-700 transition-colors">
+            <Eye size={14} />
+          </button>
+
+          {/* Next */}
           <Link
             href={`/dashboard/marketing/email/campaigns/${campaignId}`}
-            className="rounded-full px-3 py-1 text-gray-400 hover:text-gray-700 transition-colors"
+            onClick={() => void save(name, subject, preheader, def)}
+            className="flex items-center gap-0.5 text-sm text-gray-600 hover:text-gray-900 font-medium transition-colors"
           >
-            Audience
-          </Link>
-          <ChevronRight size={14} className="text-gray-400" />
-          <Link
-            href={`/dashboard/marketing/email/campaigns/${campaignId}`}
-            className="rounded-full px-3 py-1 text-gray-400 hover:text-gray-700 transition-colors"
-          >
-            Send
+            Next <ChevronRight size={14} />
           </Link>
         </div>
-
-        {/* Desktop / Mobile toggle */}
-        <div className="hidden sm:flex items-center gap-1 flex-shrink-0 rounded-lg border border-gray-200 p-0.5">
-          <button
-            type="button"
-            title="Desktop view"
-            onClick={() => setViewMode('desktop')}
-            className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${viewMode === 'desktop' ? 'bg-gray-900 text-white' : 'text-gray-400 hover:text-gray-700'}`}
-          >
-            <Monitor size={14} />
-          </button>
-          <button
-            type="button"
-            title="Mobile view"
-            onClick={() => setViewMode('mobile')}
-            className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${viewMode === 'mobile' ? 'bg-gray-900 text-white' : 'text-gray-400 hover:text-gray-700'}`}
-          >
-            <Smartphone size={14} />
-          </button>
-        </div>
-
-        {/* Save status */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {saveStatus === 'saving' && <Loader2 size={14} className="animate-spin text-gray-400" />}
-          {saveStatus === 'saved'  && <Check size={14} className="text-emerald-500" />}
-          {saveLabel && <span className={`text-xs ${saveStatus === 'error' ? 'text-red-500' : 'text-gray-400'}`}>{saveLabel}</span>}
-        </div>
-
-        {/* Preview button */}
-        <button
-          type="button"
-          onClick={() => setPreviewOpen(true)}
-          className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors flex-shrink-0"
-        >
-          <Eye size={14} /> Preview
-        </button>
-
-        {/* Next button */}
-        <Link
-          href={`/dashboard/marketing/email/campaigns/${campaignId}`}
-          onClick={() => void save(name, subject, preheader, def)}
-          className="flex items-center gap-1.5 rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700 transition-colors flex-shrink-0"
-        >
-          Next <ChevronRight size={15} />
-        </Link>
       </header>
 
       {/* ── Content ────────────────────────────────────────────────────────── */}
@@ -1040,7 +1019,7 @@ export function CampaignFlodeskBuilder({
                     const isSelected = block.id === selectedId;
                     return (
                       <SortableBlock key={block.id} id={block.id}>
-                        {(dragHandle, isDragging) => (
+                        {(isDragging) => (
                           <div>
                             <div
                               className="relative group/block"
@@ -1048,7 +1027,7 @@ export function CampaignFlodeskBuilder({
                             >
                               {/* Block content */}
                               <div
-                                className="relative cursor-pointer"
+                                className="relative"
                                 style={{
                                   transition: 'box-shadow 0.25s ease, outline 0.12s ease',
                                   outline: isSelected ? '2px solid #3b82f6' : '2px solid transparent',
@@ -1071,7 +1050,6 @@ export function CampaignFlodeskBuilder({
                                   className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 z-10"
                                   onClick={(e) => e.stopPropagation()}
                                 >
-                                  {dragHandle}
                                   <button type="button" title="Duplicate" onClick={() => duplicateBlock(block.id)}
                                     className="flex h-7 w-7 items-center justify-center rounded-lg bg-white border border-gray-200 text-gray-500 shadow-sm hover:bg-gray-50 transition-all">
                                     <Copy size={13} />

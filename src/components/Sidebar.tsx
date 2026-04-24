@@ -715,7 +715,7 @@ export default function Sidebar({
 
   return (
     <>
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 h-14" style={{ backgroundColor: '#fafaf9', borderBottom: '1px solid #e5e7eb' }}>
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 h-14" style={{ backgroundColor: '#fafaf9', boxShadow: '0 4px 16px -2px rgba(0,0,0,0.07)' }}>
         <Link href="/dashboard">
           <Image src="/storyvenue-dark-logo.png" alt="StoryPay" width={90} height={22} />
         </Link>
@@ -748,7 +748,7 @@ export default function Sidebar({
         className={`lg:hidden fixed top-0 left-0 bottom-0 z-50 w-[280px] transition-transform duration-300 ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
-        style={{ backgroundColor: '#fafaf9', borderRight: '1px solid #e5e7eb' }}
+        style={{ backgroundColor: '#fafaf9', boxShadow: '6px 0 24px -4px rgba(0,0,0,0.07)' }}
       >
         <NavContent rail={false} onCloseMobile={() => setMobileOpen(false)} />
       </aside>
@@ -757,7 +757,7 @@ export default function Sidebar({
         className={`hidden lg:block fixed left-0 top-0 bottom-0 z-30 transition-[width] duration-200 ease-out ${
           collapsed ? 'w-[60px]' : 'w-[216px]'
         }`}
-        style={{ backgroundColor: '#fafaf9', borderRight: '1px solid #e5e7eb' }}
+        style={{ backgroundColor: '#fafaf9', boxShadow: '6px 0 24px -4px rgba(0,0,0,0.07)' }}
       >
         <NavContent rail={collapsed} />
       </aside>
