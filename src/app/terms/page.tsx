@@ -8,8 +8,8 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
 export async function generateMetadata(): Promise<Metadata> {
   const seo = await getPageSeo('terms');
   return buildMetadata(seo, {
-    title: 'Terms of Use — StoryPay',
-    description: 'Terms governing your use of the StoryPay platform.',
+    title: 'Terms of Use — StoryVenue',
+    description: 'Terms governing your use of the StoryVenue platform.',
     url: `${APP_URL}/terms`,
   });
 }

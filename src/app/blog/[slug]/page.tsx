@@ -110,7 +110,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
     description: post.meta_description || post.excerpt || '',
     image: post.og_image || post.featured_image || `${APP_URL}/og-default.png`,
     author: { '@type': 'Person', name: post.author_name },
-    publisher: { '@type': 'Organization', name: 'StoryPay', logo: { '@type': 'ImageObject', url: `${APP_URL}/storypay-logo-dark.png` } },
+    publisher: { '@type': 'Organization', name: 'StoryVenue', logo: { '@type': 'ImageObject', url: `${APP_URL}/storyvenue-logo-dark.png` } },
     datePublished: post.published_at || post.updated_at,
     dateModified: post.updated_at,
     mainEntityOfPage: { '@type': 'WebPage', '@id': url },
@@ -134,7 +134,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
       {/* Nav */}
       <nav className="border-b border-gray-100 px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <Link href="/"><Image src="/storypay-logo-dark.png" alt="StoryPay" width={110} height={26} /></Link>
+          <Link href="/"><Image src="/storyvenue-logo-dark.png" alt="StoryVenue" width={110} height={26} /></Link>
           <div className="flex items-center gap-4 text-sm">
             <Link href="/blog" className="text-gray-500 hover:text-gray-800 transition-colors">← Blog</Link>
             <Link href="/login" className="rounded-lg border border-gray-200 px-4 py-2 font-medium text-gray-700 hover:bg-gray-50 transition-colors">Log In</Link>
@@ -261,16 +261,16 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
         {/* CTA */}
         <div className="mt-16 rounded-2xl bg-[#1b1b1b] text-white p-10 text-center">
           <h2 className="text-2xl font-bold mb-3">Ready to streamline your venue business?</h2>
-          <p className="text-white/70 mb-6 max-w-lg mx-auto">StoryPay handles proposals, contracts, e-signatures, and payments — so you can focus on your clients.</p>
+          <p className="text-white/70 mb-6 max-w-lg mx-auto">StoryVenue handles proposals, contracts, e-signatures, and payments — so you can focus on your clients.</p>
           <Link href="/" className="inline-block rounded-xl bg-white text-gray-900 px-6 py-3 text-sm font-bold hover:bg-gray-100 transition-colors">
-            Get Started with StoryPay <ArrowRight size={14} className="inline ml-1" />
+            Get Started with StoryVenue <ArrowRight size={14} className="inline ml-1" />
           </Link>
         </div>
       </main>
 
       <footer className="border-t border-gray-100 py-8">
         <div className="max-w-5xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-400">
-          <span>© {new Date().getFullYear()} StoryPay™ by StoryVenue</span>
+          <span>© {new Date().getFullYear()} StoryVenue™</span>
           <div className="flex items-center gap-4">
             <Link href="/privacy" className="hover:text-gray-600">Privacy Policy</Link>
             <Link href="/terms" className="hover:text-gray-600">Terms of Use</Link>

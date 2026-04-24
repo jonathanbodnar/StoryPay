@@ -8,8 +8,8 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
 export async function generateMetadata(): Promise<Metadata> {
   const seo = await getPageSeo('privacy');
   return buildMetadata(seo, {
-    title: 'Privacy Policy — StoryPay',
-    description: 'How StoryPay collects, uses, and protects your information.',
+    title: 'Privacy Policy — StoryVenue',
+    description: 'How StoryVenue collects, uses, and protects your information.',
     url: `${APP_URL}/privacy`,
   });
 }

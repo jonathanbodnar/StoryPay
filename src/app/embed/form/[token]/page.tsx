@@ -46,7 +46,7 @@ export async function generateMetadata({
     .eq('published', true)
     .maybeSingle();
   return {
-    title: data?.name ? `${data.name} | StoryPay` : 'Form',
+    title: data?.name ? `${data.name} | StoryVenue` : 'Form',
     robots: { index: false, follow: false },
   };
 }
