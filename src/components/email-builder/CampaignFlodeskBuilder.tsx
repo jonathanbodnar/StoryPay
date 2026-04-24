@@ -144,9 +144,12 @@ function FloatingFormatBar() {
       const el: Element | null = anchor
         ? (anchor.nodeType === Node.TEXT_NODE ? anchor.parentElement : anchor as Element)
         : null;
-      if (!el?.closest?.('[data-email-editable]')) { setPos(null); return; }
-      const r = sel.getRangeAt(0).getBoundingClientRect();
-      setPos({ top: r.top - 50, left: r.left + r.width / 2 });
+      const editable = el?.closest?.('[data-email-editable]') as HTMLElement | null;
+      if (!editable) { setPos(null); return; }
+      // Center on the block element, position above it
+      const blockRect = editable.getBoundingClientRect();
+      const selRect = sel.getRangeAt(0).getBoundingClientRect();
+      setPos({ top: selRect.top - 58, left: blockRect.left + blockRect.width / 2 });
     }
     document.addEventListener('selectionchange', update);
     return () => document.removeEventListener('selectionchange', update);
@@ -168,30 +171,30 @@ function FloatingFormatBar() {
     if (tags[idx]) exec('insertText', tags[idx]);
   }
 
-  const BTN = 'flex h-7 w-7 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-800 transition-colors';
-  const SEP = 'w-px h-4 bg-gray-200 mx-0.5 flex-shrink-0';
+  const BTN = 'flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-800 transition-colors';
+  const SEP = 'w-px h-5 bg-gray-200 mx-1 flex-shrink-0';
 
   return createPortal(
     <div
       style={{ position: 'fixed', top: pos.top, left: pos.left, transform: 'translateX(-50%)', zIndex: 300 }}
       onMouseDown={(e) => e.preventDefault()}
     >
-      <div className="flex items-center rounded-xl bg-white border border-gray-100 shadow-2xl px-1.5 py-1 gap-0.5">
+      <div className="flex items-center rounded-2xl bg-white border border-gray-100 shadow-2xl px-2 py-1.5 gap-0.5">
         <button type="button" className={BTN} title="Format" onMouseDown={(e) => e.preventDefault()}>
-          <PenLine size={13} />
+          <PenLine size={16} />
         </button>
         <div className={SEP} />
-        <button type="button" className={BTN} title="Bold" onMouseDown={(e) => { e.preventDefault(); exec('bold'); }}><Bold size={13} /></button>
-        <button type="button" className={BTN} title="Italic" onMouseDown={(e) => { e.preventDefault(); exec('italic'); }}><Italic size={13} /></button>
-        <button type="button" className={BTN} title="Underline" onMouseDown={(e) => { e.preventDefault(); exec('underline'); }}><Underline size={13} /></button>
-        <button type="button" className={BTN} title="Strikethrough" onMouseDown={(e) => { e.preventDefault(); exec('strikeThrough'); }}><Strikethrough size={13} /></button>
+        <button type="button" className={BTN} title="Bold" onMouseDown={(e) => { e.preventDefault(); exec('bold'); }}><Bold size={16} /></button>
+        <button type="button" className={BTN} title="Italic" onMouseDown={(e) => { e.preventDefault(); exec('italic'); }}><Italic size={16} /></button>
+        <button type="button" className={BTN} title="Underline" onMouseDown={(e) => { e.preventDefault(); exec('underline'); }}><Underline size={16} /></button>
+        <button type="button" className={BTN} title="Strikethrough" onMouseDown={(e) => { e.preventDefault(); exec('strikeThrough'); }}><Strikethrough size={16} /></button>
         <div className={SEP} />
-        <button type="button" className={BTN} title="Numbered list" onMouseDown={(e) => { e.preventDefault(); exec('insertOrderedList'); }}><ListOrdered size={13} /></button>
-        <button type="button" className={BTN} title="Bullet list" onMouseDown={(e) => { e.preventDefault(); exec('insertUnorderedList'); }}><List size={13} /></button>
+        <button type="button" className={BTN} title="Numbered list" onMouseDown={(e) => { e.preventDefault(); exec('insertOrderedList'); }}><ListOrdered size={16} /></button>
+        <button type="button" className={BTN} title="Bullet list" onMouseDown={(e) => { e.preventDefault(); exec('insertUnorderedList'); }}><List size={16} /></button>
         <div className={SEP} />
-        <button type="button" className={BTN} title="Insert link" onMouseDown={(e) => { e.preventDefault(); insertLink(); }}><Link2 size={13} /></button>
-        <button type="button" className={BTN} title="Attachment" onMouseDown={(e) => e.preventDefault()}><Paperclip size={13} /></button>
-        <button type="button" className={BTN} title="Merge tag" onMouseDown={(e) => { e.preventDefault(); insertMerge(); }}><AtSign size={13} /></button>
+        <button type="button" className={BTN} title="Insert link" onMouseDown={(e) => { e.preventDefault(); insertLink(); }}><Link2 size={16} /></button>
+        <button type="button" className={BTN} title="Attachment" onMouseDown={(e) => e.preventDefault()}><Paperclip size={16} /></button>
+        <button type="button" className={BTN} title="Merge tag" onMouseDown={(e) => { e.preventDefault(); insertMerge(); }}><AtSign size={16} /></button>
       </div>
     </div>,
     document.body,
