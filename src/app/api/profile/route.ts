@@ -56,9 +56,16 @@ export async function GET() {
     ownerFullName = profile?.full_name ?? null;
   }
 
+  // Split full_name into first / last for the form
+  const nameParts = (ownerFullName ?? '').trim().split(/\s+/);
+  const firstName = nameParts[0] ?? '';
+  const lastName  = nameParts.slice(1).join(' ');
+
   return NextResponse.json({
     type:       'owner',
     id:         venue.id,
+    first_name: firstName,
+    last_name:  lastName,
     full_name:  ownerFullName ?? '',
     email:      venue.email   ?? '',
     phone:      venue.phone   ?? '',
@@ -112,18 +119,26 @@ export async function PATCH(request: NextRequest) {
 
   if (!venue) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
 
-  // Update personal name in profiles table
-  if (body.full_name !== undefined && venue.owner_id) {
+  // Validate required owner fields
+  const email = body.email?.trim().toLowerCase() ?? '';
+  const phone = body.phone?.trim() ?? '';
+  const firstName = body.first_name?.trim() ?? '';
+  const lastName  = body.last_name?.trim()  ?? '';
+  if (!firstName) return NextResponse.json({ error: 'First name is required.' }, { status: 400 });
+  if (!email)     return NextResponse.json({ error: 'Email is required.' },      { status: 400 });
+  if (!phone)     return NextResponse.json({ error: 'Phone is required.' },      { status: 400 });
+
+  // Build full_name from first + last and save to profiles
+  const fullName = [firstName, lastName].filter(Boolean).join(' ');
+  if (venue.owner_id) {
     await supabaseAdmin
       .from('profiles')
-      .update({ full_name: body.full_name.trim() })
+      .update({ full_name: fullName })
       .eq('id', venue.owner_id);
   }
 
   // Update contact fields on the venues row
-  const venuePatch: Record<string, string> = {};
-  if (body.email !== undefined) venuePatch.email = body.email.trim().toLowerCase();
-  if (body.phone !== undefined) venuePatch.phone = body.phone.trim();
+  const venuePatch: Record<string, string> = { email, phone };
 
   if (Object.keys(venuePatch).length > 0) {
     const { error } = await supabaseAdmin

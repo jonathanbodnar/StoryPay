@@ -19,6 +19,8 @@ const SECTION_HEAD = 'px-6 py-4 border-b border-gray-100 flex items-center gap-2
 type OwnerProfile = {
   type: 'owner';
   id: string;
+  first_name: string;
+  last_name: string;
   full_name: string;
   email: string;
   phone: string;
@@ -89,7 +91,7 @@ export default function ProfilePage() {
   const [error, setError]       = useState('');
 
   // Owner form state
-  const [ownerForm, setOwnerForm] = useState({ full_name: '', email: '', phone: '' });
+  const [ownerForm, setOwnerForm] = useState({ first_name: '', last_name: '', email: '', phone: '' });
   // Member form state
   const [memberForm, setMemberForm] = useState({ first_name: '', last_name: '', email: '' });
 
@@ -110,7 +112,7 @@ export default function ProfilePage() {
           const data = await profRes.json() as Profile;
           setProfile(data);
           if (data.type === 'owner') {
-            setOwnerForm({ full_name: data.full_name, email: data.email, phone: data.phone });
+            setOwnerForm({ first_name: data.first_name, last_name: data.last_name, email: data.email, phone: data.phone });
           } else {
             setMemberForm({ first_name: data.first_name, last_name: data.last_name, email: data.email });
           }
@@ -128,6 +130,9 @@ export default function ProfilePage() {
 
   async function saveOwner(e: React.FormEvent) {
     e.preventDefault();
+    if (!ownerForm.first_name.trim()) { setError('First name is required.'); return; }
+    if (!ownerForm.email.trim())      { setError('Email is required.'); return; }
+    if (!ownerForm.phone.trim())      { setError('Phone is required.'); return; }
     setSaving(true); setError('');
     try {
       const res = await fetch('/api/profile', {
@@ -193,11 +198,11 @@ export default function ProfilePage() {
   }
 
   const initials = profile.type === 'owner'
-    ? (profile.full_name || profile.venue_name || '?').charAt(0).toUpperCase()
+    ? (profile.first_name || profile.venue_name || '?').charAt(0).toUpperCase()
     : (profile.first_name || '?').charAt(0).toUpperCase();
 
   const displayName = profile.type === 'owner'
-    ? profile.full_name || profile.venue_name || 'Account Owner'
+    ? [profile.first_name, profile.last_name].filter(Boolean).join(' ') || profile.venue_name || 'Account Owner'
     : [profile.first_name, profile.last_name].filter(Boolean).join(' ') || 'Team Member';
 
   const roleLabel = profile.role === 'owner' ? 'Account Owner'
@@ -231,20 +236,33 @@ export default function ProfilePage() {
             <h2 className="text-sm font-semibold text-gray-900">Personal Information</h2>
           </div>
           <form onSubmit={saveOwner} className="px-6 py-5 space-y-4">
-            <div>
-              <label className={LABEL}>Full Name</label>
-              <input
-                type="text"
-                value={ownerForm.full_name}
-                onChange={e => setOwnerForm(p => ({ ...p, full_name: e.target.value }))}
-                placeholder="Your full name"
-                className={INPUT}
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={LABEL}>First Name <span className="text-red-400">*</span></label>
+                <input
+                  type="text"
+                  required
+                  value={ownerForm.first_name}
+                  onChange={e => setOwnerForm(p => ({ ...p, first_name: e.target.value }))}
+                  placeholder="First name"
+                  className={INPUT}
+                />
+              </div>
+              <div>
+                <label className={LABEL}>Last Name</label>
+                <input
+                  type="text"
+                  value={ownerForm.last_name}
+                  onChange={e => setOwnerForm(p => ({ ...p, last_name: e.target.value }))}
+                  placeholder="Last name"
+                  className={INPUT}
+                />
+              </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className={LABEL}>
-                  <span className="flex items-center gap-1"><Mail size={11} /> Login Email</span>
+                  <span className="flex items-center gap-1"><Mail size={11} /> Login Email <span className="text-red-400">*</span></span>
                 </label>
                 <input
                   type="email"
@@ -257,10 +275,11 @@ export default function ProfilePage() {
               </div>
               <div>
                 <label className={LABEL}>
-                  <span className="flex items-center gap-1"><Phone size={11} /> Phone</span>
+                  <span className="flex items-center gap-1"><Phone size={11} /> Phone <span className="text-red-400">*</span></span>
                 </label>
                 <input
                   type="tel"
+                  required
                   value={ownerForm.phone}
                   onChange={e => setOwnerForm(p => ({ ...p, phone: e.target.value }))}
                   placeholder="+1 (555) 000-0000"
@@ -283,7 +302,7 @@ export default function ProfilePage() {
               )}
               <button
                 type="submit"
-                disabled={saving}
+                disabled={saving || !ownerForm.first_name.trim() || !ownerForm.email.trim() || !ownerForm.phone.trim()}
                 className="ml-auto flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60 transition-all"
                 style={{ backgroundColor: '#1b1b1b' }}
               >
