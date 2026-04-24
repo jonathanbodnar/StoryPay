@@ -49,13 +49,30 @@ function extractPlaceIdFromUrl(url: string): string | null {
   return null;
 }
 
-/** Extract a CID (numeric business ID) from a Google Maps URL. */
+/** Extract a CID (numeric business ID) from a Google Maps URL.
+ *  Returns a decimal string suitable for the cid: query.
+ */
 function extractCidFromUrl(url: string): string | null {
+  // ?cid=1234567890  (already decimal)
   const cidMatch = url.match(/[?&]cid=(\d+)/);
   if (cidMatch) return cidMatch[1];
-  // Also in data blob: !4m..!...!8m..!...
+
+  // !2s1234567890 in data blob (decimal)
   const cidData = url.match(/[!&]2s(\d{15,20})/);
   if (cidData) return cidData[1];
+
+  // !1s0x<hex>:0x<hex>  — legacy compound ID where the second hex is the CID
+  // e.g. !1s0x0:0xbc60f67d34a286dd
+  const hexCidMatch = url.match(/!1s0x[0-9a-f]*:0x([0-9a-f]+)/i);
+  if (hexCidMatch) {
+    try {
+      // Convert hex CID to decimal using BigInt so we don't lose precision
+      return BigInt(`0x${hexCidMatch[1]}`).toString(10);
+    } catch {
+      // fall through
+    }
+  }
+
   return null;
 }
 
@@ -156,6 +173,20 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   // Step 3: try CID lookup
   const cid = extractCidFromUrl(resolvedUrl);
+
+  // Detect service-area businesses: URL contains !1s0x0:0x... which means
+  // no fixed coordinates — Places API cannot look these up at all.
+  const isServiceAreaBusiness = /!1s0x0:0x[0-9a-f]+/i.test(resolvedUrl);
+  if (isServiceAreaBusiness) {
+    const hexMatch = resolvedUrl.match(/!1s0x0:0x([0-9a-f]+)/i);
+    const cidDecimal = hexMatch ? (() => { try { return BigInt(`0x${hexMatch[1]}`).toString(10); } catch { return null; } })() : null;
+    return NextResponse.json({
+      error: 'service_area_business',
+      cid: cidDecimal,
+      message: "This appears to be a service-area business (no fixed address), which Google's Places API can't look up by URL. Use the Place ID Finder below to get your Place ID.",
+    }, { status: 422 });
+  }
+
   if (cid) {
     const result = await lookupByCid(cid, key);
     if (result) return NextResponse.json(result);
