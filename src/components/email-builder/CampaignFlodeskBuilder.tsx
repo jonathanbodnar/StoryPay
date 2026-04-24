@@ -462,15 +462,22 @@ function BlockPickerModal({ onSelect, onClose }: { onSelect: (type: EmailBlockTy
 // ─── Add Block Button (no lines — just the + circle on hover) ────────────────
 function AddBlockBtn({ onClick }: { onClick: () => void }) {
   return (
-    <div className="group/addbtn relative flex items-center justify-center h-7">
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); onClick(); }}
-        className="relative z-10 flex h-6 w-6 items-center justify-center rounded-full bg-white border border-gray-200 text-gray-400 shadow-sm opacity-0 group-hover/addbtn:opacity-100 hover:border-blue-400 hover:text-blue-500 transition-all duration-150"
-        title="Add block"
-      >
-        <Plus size={12} />
-      </button>
+    <div className="group/addbtn relative h-7 px-6">
+      <div className="flex items-center w-full h-full opacity-0 group-hover/addbtn:opacity-100 transition-opacity duration-150">
+        {/* left rule */}
+        <div className="flex-1 h-px" style={{ background: '#818cf8' }} />
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onClick(); }}
+          className="relative z-10 flex h-6 w-6 items-center justify-center rounded-full bg-white mx-1.5 transition-transform duration-150 hover:scale-110"
+          style={{ border: '1.5px solid #818cf8', color: '#818cf8' }}
+          title="Add block"
+        >
+          <Plus size={12} />
+        </button>
+        {/* right rule */}
+        <div className="flex-1 h-px" style={{ background: '#818cf8' }} />
+      </div>
     </div>
   );
 }
