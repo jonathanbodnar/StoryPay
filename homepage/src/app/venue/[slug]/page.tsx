@@ -9,6 +9,7 @@ import { SaveToWishlistButton } from '@/components/SaveToWishlistButton';
 import { VenueReviewsTabs } from '@/components/VenueReviewsTabs';
 import { VenueFaqSection, VenueMapEmbed, VenueSocialRow } from '@/components/VenuePublicExtras';
 import { DirectoryListingBadges } from '@/components/DirectoryListingBadges';
+import { ListingTracker } from '@/components/ListingTracker';
 
 const API_BASE = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'https://app.storyvenue.com';
 const DIRECTORY_SITE =
@@ -16,6 +17,7 @@ const DIRECTORY_SITE =
 
 type PublicVenuePayload = {
   venue: {
+    id: string;
     name: string;
     slug: string;
     description: string | null;
@@ -187,6 +189,7 @@ export default async function PublicVenuePage({ params }: { params: Promise<{ sl
   return (
     <>
       <Ga4Scripts measurementId={venue.ga4_measurement_id} />
+      {venue.id && <ListingTracker venueId={venue.id} />}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
       <div className="min-h-screen bg-[#fafaf9]">
