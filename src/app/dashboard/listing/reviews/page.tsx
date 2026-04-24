@@ -808,54 +808,76 @@ export default function ListingReviewsPage() {
         )}
 
         {sourceTab === 'google' && (
-          <div className="mb-10 space-y-4">
+          <div className="mb-10">
             {googleLoading && !googleCache && (
               <div className="flex justify-center py-8 text-gray-400">
                 <Loader2 className="h-8 w-8 animate-spin" />
               </div>
             )}
-            {!googleLoading &&
-              (googleCache?.reviews?.length ? (
-                <ul className="space-y-4">
-                  {googleCache.reviews.map((r, i) => (
-                    <li
-                      key={`${r.author_name}-${i}`}
-                      className="rounded-3xl border border-gray-200/90 bg-white p-6"
-                    >
-                      <div className="flex items-start gap-3">
-                        {r.profile_photo_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={r.profile_photo_url}
-                            alt={r.author_name}
-                            className="h-9 w-9 rounded-full object-cover shrink-0"
-                          />
-                        ) : (
-                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-bold text-gray-500">
-                            {r.author_name.charAt(0).toUpperCase()}
-                          </span>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm font-semibold text-gray-800">{r.author_name}</span>
-                            {r.published_at && (
-                              <span className="text-xs text-gray-400">
-                                {new Date(r.published_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                              </span>
-                            )}
+            {!googleLoading && googleCache?.reviews?.length ? (
+              (() => {
+                const PREVIEW = 5;
+                const reviews = googleCache.reviews;
+                const mapsLink = googlePlaceInput.trim()
+                  ? `https://www.google.com/maps/place/?q=place_id:${googlePlaceInput.trim()}`
+                  : null;
+                return (
+                  <>
+                    <ul className="divide-y divide-gray-100 rounded-2xl border border-gray-200 bg-white overflow-hidden">
+                      {reviews.slice(0, PREVIEW).map((r, i) => (
+                        <li key={`${r.author_name}-${i}`} className="flex items-start gap-3 px-5 py-4">
+                          {r.profile_photo_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={r.profile_photo_url} alt={r.author_name}
+                              className="h-8 w-8 rounded-full object-cover shrink-0 mt-0.5" />
+                          ) : (
+                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-bold text-gray-500 mt-0.5">
+                              {r.author_name.charAt(0).toUpperCase()}
+                            </span>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-semibold text-gray-800">{r.author_name}</span>
+                              <StarsDisplay value={r.rating} size="sm" />
+                              {r.published_at && (
+                                <span className="text-xs text-gray-400">
+                                  {new Date(r.published_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </span>
+                              )}
+                            </div>
+                            {r.text && <p className="mt-1 text-sm leading-relaxed text-gray-600">{r.text}</p>}
                           </div>
-                          <StarsDisplay value={r.rating} size="sm" />
-                          <p className="mt-2 text-[14px] leading-relaxed text-gray-700">{r.text}</p>
-                        </div>
+                        </li>
+                      ))}
+                    </ul>
+
+                    {/* See all button — shown when there are more than PREVIEW reviews */}
+                    {(reviews.length > PREVIEW || mapsLink) && (
+                      <div className="mt-3 flex items-center justify-between">
+                        <p className="text-xs text-gray-400">
+                          Showing {Math.min(PREVIEW, reviews.length)} of {gCnt > 0 ? gCnt.toLocaleString() : reviews.length} Google reviews
+                        </p>
+                        {mapsLink && (
+                          <a
+                            href={mapsLink}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                          >
+                            See all Google reviews
+                            <ExternalLink size={11} />
+                          </a>
+                        )}
                       </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : googlePlaceInput.trim() ? (
-                <p className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/80 px-4 py-10 text-center text-sm text-gray-500">
-                  No reviews returned yet — click &quot;Refresh now&quot; above to re-fetch from Google.
-                </p>
-              ) : null)}
+                    )}
+                  </>
+                );
+              })()
+            ) : googlePlaceInput.trim() && !googleLoading ? (
+              <p className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/80 px-4 py-10 text-center text-sm text-gray-500">
+                No reviews returned yet — click &quot;Refresh now&quot; above to re-fetch from Google.
+              </p>
+            ) : null}
           </div>
         )}
 
