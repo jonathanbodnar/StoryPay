@@ -33,10 +33,11 @@ export async function POST(request: NextRequest) {
   const maxAge = rememberMe ? 60 * 60 * 24 * 365 : 60 * 60 * 24 * 30;
 
   // ── Check venue owner ──────────────────────────────────────────────────────
+  // Use ilike so emails stored with mixed case (e.g. Jason@...) still match.
   const { data: venue } = await supabaseAdmin
     .from('venues')
     .select('id, name, email, setup_completed, onboarding_status, login_token')
-    .eq('email', normalized)
+    .ilike('email', normalized)
     .maybeSingle();
 
   if (venue) {
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest) {
     const { data: member } = await supabaseAdmin
       .from('venue_team_members')
       .select('id, venue_id, invite_token, status, email')
-      .eq('email', normalized)
+      .ilike('email', normalized)
       .maybeSingle();
 
     if (member) {

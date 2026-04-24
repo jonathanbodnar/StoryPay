@@ -12,12 +12,12 @@ export async function POST(request: NextRequest) {
   const normalized = email.trim().toLowerCase();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
 
-  // Check venue owner accounts
+  // Check venue owner accounts (ilike = case-insensitive so Jason@... matches jason@...)
   const { data: venue } = await supabaseAdmin
     .from('venues')
     .select('id, name, login_token, email')
-    .eq('email', normalized)
-    .single();
+    .ilike('email', normalized)
+    .maybeSingle();
 
   // Check team member accounts (table may not exist in production — handle gracefully)
   let member: { id: string; invite_token: string; first_name: string; venue_id: string } | null = null;
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     const memberRes = await supabaseAdmin
       .from('venue_team_members')
       .select('id, invite_token, first_name, venue_id')
-      .eq('email', normalized)
+      .ilike('email', normalized)
       .eq('status', 'active')
       .maybeSingle();
     member = memberRes.data ?? null;
