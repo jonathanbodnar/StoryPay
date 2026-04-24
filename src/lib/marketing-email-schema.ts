@@ -8,7 +8,10 @@ export type EmailBlockType =
   | 'divider'
   | 'spacer'
   | 'html'
-  | 'columns';
+  | 'columns'
+  | 'video'
+  | 'social'
+  | 'address';
 
 export interface EmailBlock {
   id: string;
@@ -24,6 +27,8 @@ export interface EmailBlock {
   /** For type `columns` — two stacks of inner blocks (email-client safe table layout). */
   left?: EmailBlock[];
   right?: EmailBlock[];
+  /** For type `social` — list of enabled platform links */
+  socialLinks?: { platform: string; url: string }[];
 }
 
 export interface EmailTheme {
@@ -103,6 +108,9 @@ const BLOCK_TYPES: EmailBlockType[] = [
   'spacer',
   'html',
   'columns',
+  'video',
+  'social',
+  'address',
 ];
 
 function isObject(v: unknown): v is Record<string, unknown> {
@@ -171,6 +179,12 @@ export function createEmailBlock(type: EmailBlockType): EmailBlock {
       return { id, type, content: '<p>Custom HTML</p>' };
     case 'columns':
       return { id, type, left: [], right: [] };
+    case 'video':
+      return { id, type, href: '', src: '', content: '' };
+    case 'social':
+      return { id, type, socialLinks: [] };
+    case 'address':
+      return { id, type };
     default:
       return { id, type: 'text', content: '' };
   }

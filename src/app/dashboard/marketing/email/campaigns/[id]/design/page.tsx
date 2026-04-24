@@ -37,6 +37,13 @@ export default async function CampaignDesignPage({
 
   if (tmplErr || !template) notFound();
 
+  // Load venue address for the Address block
+  const { data: venue } = await supabaseAdmin
+    .from('venues')
+    .select('name, location_full, location_city, location_state')
+    .eq('id', venueId)
+    .maybeSingle();
+
   return (
     <CampaignFlodeskBuilder
       campaignId={campaign.id}
@@ -45,6 +52,12 @@ export default async function CampaignDesignPage({
       initialSubject={template.subject ?? ''}
       initialPreheader={template.preheader ?? ''}
       initialDefinition={parseEmailDefinition(template.definition_json)}
+      venueAddress={venue ? {
+        name: venue.name ?? '',
+        location_full: venue.location_full,
+        location_city: venue.location_city,
+        location_state: venue.location_state,
+      } : undefined}
     />
   );
 }

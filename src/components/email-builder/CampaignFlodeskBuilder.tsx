@@ -6,7 +6,7 @@ import {
   AlignCenter, AlignLeft, AlignRight, ArrowLeft, Check,
   ChevronDown, ChevronRight, ChevronUp, Copy, Image as ImageIcon,
   Loader2, Minus, Plus, SeparatorHorizontal, Space, Trash2, Type,
-  MousePointer2, Palette,
+  MousePointer2, Palette, Video, Share2, MapPin,
 } from 'lucide-react';
 import { VenueMediaPickerModal } from '@/components/venue-media/VenueMediaPickerModal';
 import RichTextEditor from '@/components/RichTextEditor';
@@ -21,13 +21,35 @@ import {
 
 // ─── Block palette shown in the picker ───────────────────────────────────────
 const PALETTE: { type: EmailBlockType; label: string; desc: string; Icon: React.FC<{ size?: number; className?: string }> }[] = [
-  { type: 'heading', label: 'Heading',  desc: 'Title or section header', Icon: Type },
-  { type: 'text',    label: 'Text',     desc: 'Body copy or paragraphs',  Icon: AlignLeft },
-  { type: 'button',  label: 'Button',   desc: 'Call-to-action link',      Icon: MousePointer2 },
-  { type: 'image',   label: 'Image',    desc: 'Photo or graphic',         Icon: ImageIcon },
-  { type: 'divider', label: 'Divider',  desc: 'Horizontal rule',          Icon: SeparatorHorizontal },
-  { type: 'spacer',  label: 'Spacer',   desc: 'Vertical whitespace',      Icon: Space },
+  { type: 'heading', label: 'Heading',      desc: 'Title or section header',     Icon: Type },
+  { type: 'text',    label: 'Text',         desc: 'Body copy or paragraphs',     Icon: AlignLeft },
+  { type: 'button',  label: 'Button',       desc: 'Call-to-action link',         Icon: MousePointer2 },
+  { type: 'image',   label: 'Image',        desc: 'Photo or graphic',            Icon: ImageIcon },
+  { type: 'video',   label: 'Video',        desc: 'Video with outbound link',    Icon: Video },
+  { type: 'social',  label: 'Social Links', desc: 'Facebook, Instagram & more',  Icon: Share2 },
+  { type: 'address', label: 'Address',      desc: 'Your venue business address', Icon: MapPin },
+  { type: 'divider', label: 'Divider',      desc: 'Horizontal rule',             Icon: SeparatorHorizontal },
+  { type: 'spacer',  label: 'Spacer',       desc: 'Vertical whitespace',         Icon: Space },
 ];
+
+// ─── Social platform definitions ─────────────────────────────────────────────
+const SOCIAL_PLATFORMS = [
+  { id: 'facebook',  label: 'Facebook',    color: '#1877F2', abbr: 'f' },
+  { id: 'instagram', label: 'Instagram',   color: '#E1306C', abbr: 'ig' },
+  { id: 'youtube',   label: 'YouTube',     color: '#FF0000', abbr: 'yt' },
+  { id: 'tiktok',    label: 'TikTok',      color: '#010101', abbr: 'tt' },
+  { id: 'pinterest', label: 'Pinterest',   color: '#E60023', abbr: 'p' },
+  { id: 'linkedin',  label: 'LinkedIn',    color: '#0A66C2', abbr: 'in' },
+  { id: 'twitter',   label: 'X / Twitter', color: '#000000', abbr: 'X' },
+] as const;
+
+// ─── Venue address type (passed from server page) ─────────────────────────────
+type VenueAddress = {
+  name: string;
+  location_full?: string | null;
+  location_city?: string | null;
+  location_state?: string | null;
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
@@ -148,12 +170,99 @@ function SpacerCanvas({ block }: { block: EmailBlock }) {
   );
 }
 
-function BlockCanvas({ block, theme }: { block: EmailBlock; theme: ReturnType<typeof mergeEmailTheme> }) {
+function VideoCanvas({ block, theme }: { block: EmailBlock; theme: ReturnType<typeof mergeEmailTheme> }) {
+  const hasThumbnail = !!block.src?.trim();
+  return (
+    <div style={{ padding: '16px 24px' }}>
+      <div style={{ position: 'relative', borderRadius: '10px', overflow: 'hidden', background: '#18181b', cursor: 'default' }}>
+        {hasThumbnail ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={block.src} alt="Video thumbnail" style={{ width: '100%', display: 'block', maxHeight: '300px', objectFit: 'cover', opacity: 0.85 }} />
+        ) : (
+          <div style={{ height: '200px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+            <Video size={32} color="#6b7280" />
+            <span style={{ fontSize: '13px', color: '#6b7280' }}>Add thumbnail in panel →</span>
+          </div>
+        )}
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{
+            width: '58px', height: '58px', borderRadius: '50%',
+            background: 'rgba(255,255,255,0.92)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          }}>
+            <div style={{ width: 0, height: 0, borderTop: '11px solid transparent', borderBottom: '11px solid transparent', borderLeft: '20px solid #18181b', marginLeft: '5px' }} />
+          </div>
+        </div>
+      </div>
+      {block.content?.trim() && (
+        <p style={{ margin: '10px 0 0', fontSize: '13px', color: theme.mutedColor, textAlign: 'center', fontFamily: theme.fontFamily }}>
+          {block.content}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function SocialCanvas({ block }: { block: EmailBlock }) {
+  const links = (block.socialLinks ?? []).filter(l => l.url?.trim());
+  if (links.length === 0) {
+    return (
+      <div style={{ padding: '16px 24px', textAlign: 'center', color: '#9ca3af', fontSize: '13px' }}>
+        Add your social links in the panel →
+      </div>
+    );
+  }
+  return (
+    <div style={{ padding: '16px 24px', display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+      {links.map((link) => {
+        const p = SOCIAL_PLATFORMS.find(sp => sp.id === link.platform);
+        return (
+          <span
+            key={link.platform}
+            style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              width: '38px', height: '38px', borderRadius: '50%',
+              background: p?.color ?? '#6b7280',
+              color: '#fff', fontSize: '13px', fontWeight: 700, fontFamily: 'sans-serif',
+              flexShrink: 0,
+            }}
+          >
+            {p?.abbr ?? link.platform.charAt(0)}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function AddressCanvas({ venueAddress, theme }: { venueAddress?: VenueAddress; theme: ReturnType<typeof mergeEmailTheme> }) {
+  const name = venueAddress?.name ?? 'Your Venue';
+  const address = venueAddress?.location_full?.trim()
+    ?? (venueAddress?.location_city && venueAddress?.location_state
+      ? `${venueAddress.location_city}, ${venueAddress.location_state}`
+      : null);
+  return (
+    <div style={{ padding: '16px 24px', textAlign: 'center' }}>
+      <p style={{ margin: '0 0 3px', fontSize: '13px', fontWeight: 600, color: theme.textColor, fontFamily: theme.fontFamily }}>
+        {name}
+      </p>
+      <p style={{ margin: 0, fontSize: '12px', color: theme.mutedColor, fontFamily: theme.fontFamily }}>
+        {address ?? 'Address pulled from your venue settings'}
+      </p>
+    </div>
+  );
+}
+
+function BlockCanvas({ block, theme, venueAddress }: { block: EmailBlock; theme: ReturnType<typeof mergeEmailTheme>; venueAddress?: VenueAddress }) {
   switch (block.type) {
     case 'heading': return <HeadingCanvas block={block} theme={theme} />;
     case 'text':    return <TextCanvas block={block} theme={theme} />;
     case 'button':  return <ButtonCanvas block={block} theme={theme} />;
     case 'image':   return <ImageCanvas block={block} theme={theme} />;
+    case 'video':   return <VideoCanvas block={block} theme={theme} />;
+    case 'social':  return <SocialCanvas block={block} />;
+    case 'address': return <AddressCanvas venueAddress={venueAddress} theme={theme} />;
     case 'divider': return <DividerCanvas theme={theme} />;
     case 'spacer':  return <SpacerCanvas block={block} />;
     default:        return <div style={{ padding: '12px 24px', color: '#9ca3af', fontSize: '13px' }}>[{block.type}]</div>;
@@ -387,6 +496,112 @@ function BlockInspectorPanel({
     );
   }
 
+  if (block.type === 'video') {
+    return (
+      <div className="space-y-4">
+        <div>
+          <label className={LABEL}>Video URL (opens in new tab)</label>
+          <input
+            type="url"
+            className={INPUT}
+            value={block.href ?? ''}
+            onChange={(e) => onChange({ href: e.target.value })}
+            placeholder="https://youtube.com/watch?v=..."
+          />
+          <p className="mt-1 text-[11px] text-gray-400">Clicking the thumbnail opens this link</p>
+        </div>
+        <div>
+          <label className={LABEL}>Thumbnail Image</label>
+          <input
+            type="url"
+            className={INPUT}
+            value={block.src ?? ''}
+            onChange={(e) => onChange({ src: e.target.value })}
+            placeholder="https://..."
+          />
+          <button
+            type="button"
+            onClick={() => onMediaPick((url) => onChange({ src: url }))}
+            className="mt-1.5 w-full rounded-lg border border-gray-200 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            Choose from Media Library
+          </button>
+        </div>
+        <div>
+          <label className={LABEL}>Caption (optional)</label>
+          <input
+            type="text"
+            className={INPUT}
+            value={block.content ?? ''}
+            onChange={(e) => onChange({ content: e.target.value })}
+            placeholder="Watch our latest video"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (block.type === 'social') {
+    const links = block.socialLinks ?? [];
+    const isEnabled = (platform: string) => links.some(l => l.platform === platform);
+    const getUrl    = (platform: string) => links.find(l => l.platform === platform)?.url ?? '';
+    const toggle    = (platform: string) => {
+      if (isEnabled(platform)) {
+        onChange({ socialLinks: links.filter(l => l.platform !== platform) });
+      } else {
+        onChange({ socialLinks: [...links, { platform, url: '' }] });
+      }
+    };
+    const setUrl = (platform: string, url: string) => {
+      onChange({ socialLinks: links.map(l => l.platform === platform ? { ...l, url } : l) });
+    };
+    return (
+      <div className="space-y-3">
+        {SOCIAL_PLATFORMS.map(({ id, label, color }) => {
+          const enabled = isEnabled(id);
+          return (
+            <div key={id}>
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-2">
+                  <div className="h-3.5 w-3.5 rounded-full flex-shrink-0" style={{ background: color }} />
+                  <span className="text-xs font-semibold text-gray-700">{label}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => toggle(id)}
+                  className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors ${enabled ? 'bg-gray-900' : 'bg-gray-200'}`}
+                >
+                  <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform ${enabled ? 'translate-x-4' : 'translate-x-0'}`} />
+                </button>
+              </div>
+              {enabled && (
+                <input
+                  type="url"
+                  className={INPUT}
+                  value={getUrl(id)}
+                  onChange={(e) => setUrl(id, e.target.value)}
+                  placeholder={`https://${id}.com/yourpage`}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (block.type === 'address') {
+    return (
+      <div className="rounded-xl bg-gray-50 border border-gray-200 px-4 py-3">
+        <p className="text-xs font-semibold text-gray-700 mb-1">Auto-filled from venue settings</p>
+        <p className="text-xs text-gray-500 leading-relaxed">
+          Your business name and address are pulled automatically. To update them, go to{' '}
+          <strong>Listing → Directory</strong> and update your location fields.
+        </p>
+      </div>
+    );
+  }
+
   return null;
 }
 
@@ -456,6 +671,7 @@ export function CampaignFlodeskBuilder({
   initialSubject,
   initialPreheader,
   initialDefinition,
+  venueAddress,
 }: {
   campaignId: string;
   templateId: string;
@@ -463,6 +679,7 @@ export function CampaignFlodeskBuilder({
   initialSubject: string;
   initialPreheader: string;
   initialDefinition: MarketingEmailDefinition;
+  venueAddress?: VenueAddress;
 }) {
   const [name, setName]           = useState(initialName);
   const [subject, setSubject]     = useState(initialSubject);
@@ -690,7 +907,7 @@ export function CampaignFlodeskBuilder({
                       <div className="relative group" onClick={(e) => { e.stopPropagation(); setSelectedId(block.id); }}>
                         {/* Selection border */}
                         <div className={`relative cursor-pointer transition-all ${isSelected ? 'ring-2 ring-blue-500 ring-inset' : 'hover:ring-1 hover:ring-gray-300 hover:ring-inset'}`}>
-                          <BlockCanvas block={block} theme={theme} />
+                          <BlockCanvas block={block} theme={theme} venueAddress={venueAddress} />
                         </div>
 
                         {/* Floating toolbar — visible when selected */}
