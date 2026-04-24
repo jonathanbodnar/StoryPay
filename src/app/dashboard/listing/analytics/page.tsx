@@ -272,38 +272,6 @@ export default function ListingAnalyticsPage() {
 
   const [insights, setInsights] = useState<LeadInsightsPayload | null>(null);
 
-  // ── Debug state ───────────────────────────────────────────────────────────
-  const [showDebug, setShowDebug] = useState(false);
-  type DebugPayload = { table_exists: boolean; total_events: number; last_5m: number; last_30m: number; error?: string; recent_events: Record<string, unknown>[]; server_time: string; venue_id?: string; fetch_error?: string | null };
-  const [debugData, setDebugData] = useState<DebugPayload | null>(null);
-  const [testEventResult, setTestEventResult] = useState<{ ok: boolean; error?: string; hint?: string; details?: string; code?: string } | null>(null);
-  const [testEventLoading, setTestEventLoading] = useState(false);
-  const [debugLoading, setDebugLoading] = useState(false);
-
-  async function loadDebug() {
-    setDebugLoading(true);
-    try {
-      const res = await fetch('/api/listing-analytics/debug');
-      setDebugData(await res.json() as DebugPayload);
-    } catch { /* noop */ } finally { setDebugLoading(false); }
-  }
-
-  async function sendTestEvent() {
-    setTestEventLoading(true);
-    setTestEventResult(null);
-    try {
-      const res = await fetch('/api/listing-analytics/debug', { method: 'POST' });
-      const json = await res.json() as { ok: boolean; error?: string; hint?: string; details?: string; code?: string };
-      setTestEventResult(json);
-      if (json.ok) {
-        // Auto-refresh debug data to show the new row
-        setTimeout(() => void loadDebug(), 500);
-      }
-    } catch (e) {
-      setTestEventResult({ ok: false, error: String(e) });
-    } finally { setTestEventLoading(false); }
-  }
-
   // ── Digest state ──────────────────────────────────────────────────────────
   const [digestSending, setDigestSending] = useState(false);
   const [digestSent, setDigestSent] = useState(false);
@@ -438,11 +406,6 @@ export default function ListingAnalyticsPage() {
           <p className="mt-0.5 text-sm text-gray-500">How visitors find and engage with your listing</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={() => { setShowDebug(v => !v); if (!showDebug) void loadDebug(); }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-colors ${showDebug ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
-            <Search size={12} /> {showDebug ? 'Hide debug' : 'Verify tracking'}
-          </button>
           <div className="flex rounded-xl border border-gray-200 bg-white overflow-hidden">
             {DAYS_OPTIONS.map(opt => (
               <button key={opt} onClick={() => setDays(opt)}
@@ -478,107 +441,6 @@ export default function ListingAnalyticsPage() {
       {!d?._migration_pending && !loading && d && (
         <div className="flex items-center gap-2 rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-2.5 text-sm text-emerald-700">
           <CheckCircle size={14} /> Tracking active — collecting data from your public listing
-        </div>
-      )}
-
-      {/* ── Debug panel ────────────────────────────────────────────────── */}
-      {showDebug && (
-        <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 bg-gray-50">
-            <p className="text-xs font-semibold text-gray-700">Tracking diagnostics</p>
-            <div className="flex items-center gap-2">
-              <button onClick={() => void loadDebug()} disabled={debugLoading} className="text-[11px] text-gray-500 hover:text-gray-700 flex items-center gap-1 disabled:opacity-40">
-                <RefreshCw size={11} className={debugLoading ? 'animate-spin' : ''} /> Refresh
-              </button>
-              <button onClick={() => setShowDebug(false)} className="text-gray-400 hover:text-gray-600"><X size={13} /></button>
-            </div>
-          </div>
-          {debugLoading && !debugData && (
-            <div className="px-5 py-6 text-xs text-gray-400 text-center">Checking database…</div>
-          )}
-          {debugData && (
-            <div className="p-5 space-y-4">
-              {/* Status row */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {([
-                  { label: 'Table exists', value: debugData.table_exists ? '✅ Yes' : '❌ No — run migration 056', bad: !debugData.table_exists },
-                  { label: 'Total events', value: String(debugData.total_events), bad: false },
-                  { label: 'Last 5 min', value: String(debugData.last_5m), bad: false },
-                  { label: 'Last 30 min', value: String(debugData.last_30m), bad: false },
-                ] as { label: string; value: string; bad: boolean }[]).map(({ label, value, bad }) => (
-                  <div key={label} className={`rounded-xl border px-3 py-2.5 ${bad ? 'border-red-100 bg-red-50' : 'border-gray-100 bg-gray-50'}`}>
-                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">{label}</p>
-                    <p className={`text-sm font-bold ${bad ? 'text-red-700' : 'text-gray-900'}`}>{value}</p>
-                  </div>
-                ))}
-              </div>
-
-              {/* Error from DB */}
-              {debugData.error && (
-                <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-xs text-red-700 font-medium">{String(debugData.error)}</div>
-              )}
-
-              {/* Test event button */}
-              {debugData.table_exists && (
-                <div className="flex items-center gap-3 flex-wrap">
-                  <button
-                    onClick={() => void sendTestEvent()} disabled={testEventLoading}
-                    className="flex items-center gap-1.5 rounded-xl bg-gray-900 text-white px-3 py-1.5 text-xs font-semibold hover:bg-gray-700 disabled:opacity-40 transition-colors">
-                    {testEventLoading ? <RefreshCw size={11} className="animate-spin" /> : <Send size={11} />}
-                    {testEventLoading ? 'Inserting…' : 'Send test event → DB'}
-                  </button>
-                  <span className="text-[11px] text-gray-400">Inserts a synthetic page_view — if it appears below, the pipeline works end-to-end</span>
-                  {testEventResult && (
-                    testEventResult.ok
-                      ? <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1"><Check size={11} /> Inserted! Scroll down to see it.</span>
-                      : <div className="w-full rounded-xl bg-red-50 border border-red-100 px-3 py-2 text-xs text-red-700 space-y-0.5">
-                          <p className="font-semibold">Insert failed: {testEventResult.error}</p>
-                          {testEventResult.hint && <p>Hint: {testEventResult.hint}</p>}
-                          {testEventResult.details && <p>Details: {testEventResult.details}</p>}
-                          {testEventResult.code && <p className="font-mono">Code: {testEventResult.code}</p>}
-                        </div>
-                  )}
-                </div>
-              )}
-
-              {/* Recent events table */}
-              {Array.isArray(debugData.recent_events) && (debugData.recent_events as unknown[]).length > 0 ? (
-                <div>
-                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Recent events (newest first)</p>
-                  <div className="overflow-x-auto rounded-xl border border-gray-100">
-                    <table className="w-full text-xs">
-                      <thead className="bg-gray-50 border-b border-gray-100">
-                        <tr>
-                          {['Time', 'Event', 'Session', 'Device', 'Country', 'City'].map(h => (
-                            <th key={h} className="px-3 py-2 text-left font-semibold text-gray-500">{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50">
-                        {(debugData.recent_events as Record<string, unknown>[]).map((ev, i) => (
-                          <tr key={i} className="hover:bg-gray-50">
-                            <td className="px-3 py-2 text-gray-500 whitespace-nowrap font-mono">{new Date(String(ev.created_at)).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</td>
-                            <td className="px-3 py-2 font-medium text-gray-800">{String(ev.event_type)}</td>
-                            <td className="px-3 py-2 text-gray-400 font-mono truncate max-w-[80px]">{String(ev.session_id ?? '').slice(0, 12)}…</td>
-                            <td className="px-3 py-2 text-gray-500">{String(ev.device_type ?? '—')}</td>
-                            <td className="px-3 py-2 text-gray-500">{String(ev.country ?? '—')}</td>
-                            <td className="px-3 py-2 text-gray-500">{String(ev.city ?? '—')}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ) : debugData.table_exists ? (
-                <div className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-3 text-xs text-amber-800">
-                  <p className="font-semibold mb-1">No events recorded yet for this venue.</p>
-                  <p>Open your public listing in a new incognito tab, wait 3–5 seconds, then click Refresh above. If still empty, check the browser console on the listing page for errors on <code className="font-mono bg-amber-100 px-1 rounded">/api/listing-track</code>.</p>
-                </div>
-              ) : null}
-
-              <p className="text-[10px] text-gray-400">Server time: {String(debugData.server_time ?? '')}</p>
-            </div>
-          )}
         </div>
       )}
 
