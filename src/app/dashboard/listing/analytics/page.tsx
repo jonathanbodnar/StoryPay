@@ -2,6 +2,15 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Image from 'next/image';
+import dynamic from 'next/dynamic';
+
+// Leaflet touches `window` at import time, so defer to the browser only.
+const VisitorMap = dynamic(() => import('./VisitorMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-96 w-full rounded-2xl border border-gray-200 bg-gray-50 animate-pulse" />
+  ),
+});
 import {
   Eye, Users, MousePointerClick, TrendingUp,
   Smartphone, Monitor, Tablet, MapPin,
@@ -76,6 +85,18 @@ type RealtimePayload = {
     ago_seconds: number;
   }[];
   geo_live: { country: string; flag: string; count: number; cities: string[] }[];
+  geo_points?: {
+    session_id: string;
+    lat: number;
+    lng: number;
+    city: string | null;
+    region: string | null;
+    country: string | null;
+    flag: string;
+    label: string;
+    ago_seconds: number;
+    live: boolean;
+  }[];
   _migration_pending?: boolean;
 };
 
@@ -500,6 +521,40 @@ export default function ListingAnalyticsPage() {
             </div>
           ))}
         </div>
+
+        {/* Realtime world map */}
+        {rt && !rt._migration_pending && (
+          <div className="px-5 py-4 border-t border-gray-100">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Live visitor map
+              </p>
+              <div className="flex items-center gap-4 text-[10px] text-gray-400">
+                <span className="flex items-center gap-1.5">
+                  <span className="relative inline-flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75 animate-ping" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+                  </span>
+                  On the page now
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block h-2 w-2 rounded-full bg-indigo-500" />
+                  Last 30 min
+                </span>
+                <span className="text-gray-300">· scroll or use + / − to zoom to city view</span>
+              </div>
+            </div>
+            {(rt.geo_points?.length ?? 0) > 0 ? (
+              <VisitorMap points={rt.geo_points ?? []} />
+            ) : (
+              <div className="h-96 w-full rounded-2xl border border-dashed border-gray-200 bg-gray-50 flex items-center justify-center">
+                <p className="text-xs text-gray-400">
+                  No visitors on the listing in the last 30 minutes
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Activity feed + geo side by side */}
         {rt && !rt._migration_pending && (rt.activity.length > 0 || rt.geo_live.length > 0) && (

@@ -16,9 +16,16 @@ type GeoRecord = {
   country: string | null;
   region: string | null;
   city: string | null;
+  latitude: number | null;
+  longitude: number | null;
 };
 const geoCache = new Map<string, { value: GeoRecord; expires: number }>();
 const GEO_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+// Flips to false the first time an insert fails because lat/lng columns
+// don't exist (migration 057 hasn't been run yet). Prevents retrying every
+// insert when the server knows the columns are missing.
+let hasGeoCoords = true;
 
 function extractClientIp(req: NextRequest): string | null {
   // Railway / Fastly / Cloudflare / Vercel all forward the client IP in one
@@ -46,10 +53,10 @@ async function lookupGeoFromIp(ip: string): Promise<GeoRecord> {
   // slow lookup never blocks event ingestion for long.
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 800);
-  let result: GeoRecord = { country: null, region: null, city: null };
+  let result: GeoRecord = { country: null, region: null, city: null, latitude: null, longitude: null };
   try {
     const res = await fetch(
-      `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,country,countryCode,regionName,city`,
+      `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,country,countryCode,regionName,city,lat,lon`,
       { signal: controller.signal, cache: 'no-store' }
     );
     if (res.ok) {
@@ -59,12 +66,16 @@ async function lookupGeoFromIp(ip: string): Promise<GeoRecord> {
         countryCode?: string;
         regionName?: string;
         city?: string;
+        lat?: number;
+        lon?: number;
       };
       if (j.status === 'success') {
         result = {
           country: j.countryCode || j.country || null,
           region: j.regionName || null,
           city: j.city || null,
+          latitude: typeof j.lat === 'number' ? j.lat : null,
+          longitude: typeof j.lon === 'number' ? j.lon : null,
         };
       }
     }
@@ -148,17 +159,21 @@ export async function POST(req: NextRequest) {
   let region =
     getHeader(req, 'x-vercel-ip-country-region', 'cf-region-code') ?? null;
   let city = getHeader(req, 'x-vercel-ip-city', 'cf-ipcity') ?? null;
-  if (!country || !city) {
+  let latitude: number | null = null;
+  let longitude: number | null = null;
+  if (!country || !city || latitude === null) {
     const ip = extractClientIp(req);
     if (ip && !/^(127\.|10\.|192\.168\.|::1|fe80:)/i.test(ip)) {
       const geo = await lookupGeoFromIp(ip);
       country = country || geo.country;
       region = region || geo.region;
       city = city || geo.city;
+      latitude = geo.latitude;
+      longitude = geo.longitude;
     }
   }
 
-  const { error } = await supabaseAdmin.from('listing_events').insert({
+  const baseRow: Record<string, unknown> = {
     venue_id,
     session_id,
     event_type,
@@ -171,7 +186,22 @@ export async function POST(req: NextRequest) {
     country,
     region,
     city,
-  });
+  };
+  if (hasGeoCoords) {
+    baseRow.latitude = latitude;
+    baseRow.longitude = longitude;
+  }
+
+  let { error } = await supabaseAdmin.from('listing_events').insert(baseRow);
+
+  // If the lat/lng columns don't exist yet (migration 057 pending), retry
+  // without them and remember so we don't keep re-trying on every event.
+  if (error && /latitude|longitude/i.test(error.message)) {
+    hasGeoCoords = false;
+    delete baseRow.latitude;
+    delete baseRow.longitude;
+    ({ error } = await supabaseAdmin.from('listing_events').insert(baseRow));
+  }
 
   if (error) {
     if (/listing_events/i.test(error.message)) {
