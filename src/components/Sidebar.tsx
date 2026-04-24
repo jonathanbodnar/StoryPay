@@ -445,7 +445,7 @@ export default function Sidebar({
                 />
               </button>
               {listingOpen && (
-                <div className="mt-0.5 ml-3 pl-3 border-l border-gray-200 space-y-0.5 py-0.5">
+                <div className="mt-0.5 ml-2 pl-2 space-y-0.5 py-0.5">
                   {listingFiltered.map((sub) => {
                     const SubIcon = sub.icon;
                     const active = listingSubActive(sub.href);
@@ -495,7 +495,7 @@ export default function Sidebar({
                 />
               </button>
               {paymentsOpen && (
-                <div className="mt-0.5 ml-3 pl-3 border-l border-gray-200 space-y-0.5 py-0.5">
+                <div className="mt-0.5 ml-2 pl-2 space-y-0.5 py-0.5">
                   {paymentsFiltered.map((sub) => {
                     const SubIcon = sub.icon;
                     const active = isSubActive(sub.href);
@@ -545,7 +545,7 @@ export default function Sidebar({
                   />
                 </button>
                 {marketingOpen && (
-                  <div className="mt-0.5 ml-3 pl-3 border-l border-gray-200 space-y-0.5 py-0.5">
+                  <div className="mt-0.5 ml-2 pl-2 space-y-0.5 py-0.5">
                     {marketingFiltered.map((sub) => {
                       const SubIcon = sub.icon;
                       const active = isSubActive(sub.href);
@@ -595,7 +595,7 @@ export default function Sidebar({
                   />
                 </button>
                 {settingsOpen && (
-                  <div className="mt-0.5 ml-3 pl-3 border-l border-gray-200 space-y-0.5 py-0.5">
+                  <div className="mt-0.5 ml-2 pl-2 space-y-0.5 py-0.5">
                     {settingsFiltered.map((sub) => {
                         const SubIcon = sub.icon;
                         const active = pathname === sub.href;

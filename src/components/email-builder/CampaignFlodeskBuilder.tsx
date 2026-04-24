@@ -217,10 +217,10 @@ function ImageCanvas({ block, theme }: { block: EmailBlock; theme: ReturnType<ty
   );
 }
 
-function DividerCanvas({ theme }: { theme: ReturnType<typeof mergeEmailTheme> }) {
+function DividerCanvas() {
   return (
     <div style={{ padding: '12px 24px' }}>
-      <hr style={{ border: 'none', borderTop: `1px solid ${theme.mutedColor}`, margin: 0 }} />
+      <hr style={{ border: 'none', borderTop: '1px solid #e8e8e8', margin: 0 }} />
     </div>
   );
 }
@@ -315,7 +315,7 @@ function BlockCanvas({ block, theme, venueAddress }: { block: EmailBlock; theme:
     case 'video':   return <VideoCanvas block={block} theme={theme} />;
     case 'social':  return <SocialCanvas block={block} theme={theme} />;
     case 'address': return <AddressCanvas venueAddress={venueAddress} theme={theme} />;
-    case 'divider': return <DividerCanvas theme={theme} />;
+    case 'divider': return <DividerCanvas />;
     case 'spacer':  return <SpacerCanvas block={block} />;
     default:        return <div style={{ padding: '12px 24px', color: '#9ca3af', fontSize: '13px' }}>[{block.type}]</div>;
   }
@@ -1178,30 +1178,56 @@ export function CampaignFlodeskBuilder({
 
       {/* Preview modal */}
       {previewOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6" onClick={() => setPreviewOpen(false)}>
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-8 overflow-y-auto"
+          style={{ scrollbarWidth: 'none' }}
+          onClick={() => setPreviewOpen(false)}
+        >
+          <style>{`.preview-scroll::-webkit-scrollbar{display:none}`}</style>
           <div
-            className="relative flex flex-col bg-white rounded-2xl shadow-2xl overflow-hidden"
-            style={{ width: '90vw', maxWidth: '740px', maxHeight: '90vh' }}
+            className="relative w-full bg-white rounded-2xl shadow-2xl overflow-hidden my-auto"
+            style={{ maxWidth: '680px' }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Preview header */}
-            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
-              <div className="flex items-center gap-3">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-3.5">
+              <div className="flex items-center gap-2.5">
                 <span className="text-sm font-semibold text-gray-900">Preview</span>
-                <span className="text-xs text-gray-400 truncate max-w-[300px]">{subject || 'No subject'}</span>
+                <span className="text-xs text-gray-400 truncate max-w-[340px]">{subject || 'No subject'}</span>
               </div>
-              <button type="button" onClick={() => setPreviewOpen(false)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors">
+              <button
+                type="button"
+                onClick={() => setPreviewOpen(false)}
+                className="rounded-lg p-1.5 text-gray-400 hover:text-gray-700 transition-colors"
+              >
                 <XIcon size={18} />
               </button>
             </div>
-            {/* Preview body — rendered canvas blocks */}
-            <div className="flex-1 overflow-y-auto p-6" style={{ background: theme.pageBg === '#ffffff' ? '#f5f5f3' : theme.pageBg }}>
-              <div className="mx-auto overflow-hidden" style={{ maxWidth: '600px', background: theme.cardBg }}>
-                {def.blocks.map((block) => (
-                  <BlockCanvas key={block.id} block={block} theme={theme} venueAddress={venueAddress} />
-                ))}
-                {def.blocks.length === 0 && (
-                  <div className="py-16 text-center text-sm text-gray-300">Nothing to preview yet</div>
+
+            {/* Full email body — no clipping, scrolls via the backdrop */}
+            <div
+              style={{
+                background: theme.pageBg === '#ffffff' ? '#f7f7f5' : theme.pageBg,
+                padding: '28px 24px 36px',
+              }}
+            >
+              <div
+                style={{
+                  maxWidth: '600px',
+                  margin: '0 auto',
+                  background: theme.cardBg,
+                  fontFamily: theme.fontFamily,
+                  color: theme.textColor,
+                }}
+              >
+                {def.blocks.length === 0 ? (
+                  <div style={{ padding: '64px 24px', textAlign: 'center', color: theme.mutedColor, fontSize: '14px' }}>
+                    Nothing to preview yet — add blocks to your email
+                  </div>
+                ) : (
+                  def.blocks.map((block) => (
+                    <BlockCanvas key={block.id} block={block} theme={theme} venueAddress={venueAddress} />
+                  ))
                 )}
               </div>
             </div>
