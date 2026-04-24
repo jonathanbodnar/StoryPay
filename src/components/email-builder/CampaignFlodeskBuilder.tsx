@@ -284,7 +284,7 @@ function BlockInspectorPanel({
         <div>
           <label className={LABEL}>Content</label>
           <RichTextEditor
-            value={block.content ?? ''}
+            content={block.content ?? ''}
             onChange={(val) => onChange({ content: val })}
           />
         </div>
