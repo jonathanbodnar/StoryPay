@@ -1,12 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import {
-  AlignCenter, AlignLeft, AlignRight, ArrowLeft, Check,
-  ChevronDown, ChevronRight, Copy, Image as ImageIcon,
-  Loader2, Minus, Monitor, Plus, SeparatorHorizontal, Smartphone,
-  Space, Trash2, Type, Eye, X as XIcon,
+  AlignCenter, AlignLeft, AlignRight, ArrowLeft, AtSign, Bold,
+  Check, ChevronDown, ChevronRight, Copy, Eye, Image as ImageIcon,
+  Italic, Link2, List, ListOrdered, Loader2, Minus, Monitor,
+  Paperclip, PenLine, Plus, SeparatorHorizontal, Smartphone,
+  Space, Strikethrough, Trash2, Type, Underline, X as XIcon,
   MousePointer2, Palette, Video, Share2, MapPin,
 } from 'lucide-react';
 import {
@@ -128,39 +130,140 @@ function moveArr<T>(arr: T[], from: number, to: number): T[] {
 function stripTags(s: string) { return s.replace(/<[^>]+>/g, '').trim(); }
 
 // ─── Individual block canvas renderers ───────────────────────────────────────
-function HeadingCanvas({ block, theme }: { block: EmailBlock; theme: ReturnType<typeof mergeEmailTheme> }) {
-  const sizes: Record<number, string> = { 1: '28px', 2: '22px', 3: '18px' };
-  const size = sizes[block.level ?? 2] ?? '22px';
-  const text = stripTags(block.content || '') || 'Heading text';
-  return (
-    <div style={{
-      padding: '8px 24px',
-      textAlign: block.align ?? 'left',
-      fontFamily: theme.fontFamily,
-      fontSize: size,
-      fontWeight: 700,
-      color: theme.textColor,
-      lineHeight: 1.25,
-      wordBreak: 'break-word',
-    }}>
-      {text}
-    </div>
+// ─── Floating format toolbar (appears on text selection inside canvas) ────────
+function FloatingFormatBar() {
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
+  useEffect(() => {
+    function update() {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0 || !sel.toString().trim()) { setPos(null); return; }
+      const anchor = sel.anchorNode;
+      const el: Element | null = anchor
+        ? (anchor.nodeType === Node.TEXT_NODE ? anchor.parentElement : anchor as Element)
+        : null;
+      if (!el?.closest?.('[data-email-editable]')) { setPos(null); return; }
+      const r = sel.getRangeAt(0).getBoundingClientRect();
+      setPos({ top: r.top - 50, left: r.left + r.width / 2 });
+    }
+    document.addEventListener('selectionchange', update);
+    return () => document.removeEventListener('selectionchange', update);
+  }, []);
+
+  if (!pos || !mounted) return null;
+
+  function exec(cmd: string, val?: string) {
+    document.execCommand(cmd, false, val);
+  }
+  function insertLink() {
+    const url = prompt('Enter URL (include https://)');
+    if (url) exec('createLink', url);
+  }
+  function insertMerge() {
+    const tags = ['{{first_name}}', '{{venue_name}}', '{{unsubscribe_url}}'];
+    const chosen = prompt(`Pick a merge tag:\n${tags.map((t, i) => `${i + 1}. ${t}`).join('\n')}`);
+    const idx = parseInt(chosen ?? '0') - 1;
+    if (tags[idx]) exec('insertText', tags[idx]);
+  }
+
+  const BTN = 'flex h-7 w-7 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-800 transition-colors';
+  const SEP = 'w-px h-4 bg-gray-200 mx-0.5 flex-shrink-0';
+
+  return createPortal(
+    <div
+      style={{ position: 'fixed', top: pos.top, left: pos.left, transform: 'translateX(-50%)', zIndex: 300 }}
+      onMouseDown={(e) => e.preventDefault()}
+    >
+      <div className="flex items-center rounded-xl bg-white border border-gray-100 shadow-2xl px-1.5 py-1 gap-0.5">
+        <button type="button" className={BTN} title="Format" onMouseDown={(e) => e.preventDefault()}>
+          <PenLine size={13} />
+        </button>
+        <div className={SEP} />
+        <button type="button" className={BTN} title="Bold" onMouseDown={(e) => { e.preventDefault(); exec('bold'); }}><Bold size={13} /></button>
+        <button type="button" className={BTN} title="Italic" onMouseDown={(e) => { e.preventDefault(); exec('italic'); }}><Italic size={13} /></button>
+        <button type="button" className={BTN} title="Underline" onMouseDown={(e) => { e.preventDefault(); exec('underline'); }}><Underline size={13} /></button>
+        <button type="button" className={BTN} title="Strikethrough" onMouseDown={(e) => { e.preventDefault(); exec('strikeThrough'); }}><Strikethrough size={13} /></button>
+        <div className={SEP} />
+        <button type="button" className={BTN} title="Numbered list" onMouseDown={(e) => { e.preventDefault(); exec('insertOrderedList'); }}><ListOrdered size={13} /></button>
+        <button type="button" className={BTN} title="Bullet list" onMouseDown={(e) => { e.preventDefault(); exec('insertUnorderedList'); }}><List size={13} /></button>
+        <div className={SEP} />
+        <button type="button" className={BTN} title="Insert link" onMouseDown={(e) => { e.preventDefault(); insertLink(); }}><Link2 size={13} /></button>
+        <button type="button" className={BTN} title="Attachment" onMouseDown={(e) => e.preventDefault()}><Paperclip size={13} /></button>
+        <button type="button" className={BTN} title="Merge tag" onMouseDown={(e) => { e.preventDefault(); insertMerge(); }}><AtSign size={13} /></button>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
-function TextCanvas({ block, theme }: { block: EmailBlock; theme: ReturnType<typeof mergeEmailTheme> }) {
-  const html = block.content || '<p>Your message here.</p>';
+function HeadingCanvas({ block, theme, onPatch }: { block: EmailBlock; theme: ReturnType<typeof mergeEmailTheme>; onPatch?: (p: Partial<EmailBlock>) => void }) {
+  const sizes: Record<number, string> = { 1: '28px', 2: '22px', 3: '18px' };
+  const size = sizes[block.level ?? 2] ?? '22px';
+  const ref = useRef<HTMLDivElement>(null);
+  const mounted = useRef(false);
+
+  useEffect(() => {
+    if (!mounted.current && ref.current) {
+      ref.current.textContent = stripTags(block.content || '') || 'Heading text';
+      mounted.current = true;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
-    <div style={{
-      padding: '8px 24px',
-      textAlign: block.align ?? 'left',
-      fontFamily: theme.fontFamily,
-      fontSize: '16px',
-      lineHeight: 1.6,
-      color: theme.textColor,
-    }}
-      // biome-ignore lint/security/noDangerouslySetInnerHtml
-      dangerouslySetInnerHTML={{ __html: html }}
+    <div
+      ref={ref}
+      data-email-editable={onPatch ? 'true' : undefined}
+      contentEditable={!!onPatch}
+      suppressContentEditableWarning
+      onInput={() => { if (ref.current && onPatch) onPatch({ content: ref.current.textContent ?? '' }); }}
+      style={{
+        padding: '8px 24px',
+        textAlign: block.align ?? 'left',
+        fontFamily: theme.fontFamily,
+        fontSize: size,
+        fontWeight: 700,
+        color: theme.textColor,
+        lineHeight: 1.25,
+        wordBreak: 'break-word',
+        outline: 'none',
+        cursor: onPatch ? 'text' : 'default',
+      }}
+    />
+  );
+}
+
+function TextCanvas({ block, theme, onPatch }: { block: EmailBlock; theme: ReturnType<typeof mergeEmailTheme>; onPatch?: (p: Partial<EmailBlock>) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const mounted = useRef(false);
+
+  useEffect(() => {
+    if (!mounted.current && ref.current) {
+      ref.current.innerHTML = block.content || '<p>Your message here.</p>';
+      mounted.current = true;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      data-email-editable={onPatch ? 'true' : undefined}
+      contentEditable={!!onPatch}
+      suppressContentEditableWarning
+      onInput={() => { if (ref.current && onPatch) onPatch({ content: ref.current.innerHTML }); }}
+      style={{
+        padding: '8px 24px',
+        textAlign: block.align ?? 'left',
+        fontFamily: theme.fontFamily,
+        fontSize: '16px',
+        lineHeight: 1.6,
+        color: theme.textColor,
+        outline: 'none',
+        cursor: onPatch ? 'text' : 'default',
+      }}
     />
   );
 }
@@ -306,10 +409,10 @@ function AddressCanvas({ venueAddress, theme }: { venueAddress?: VenueAddress; t
   );
 }
 
-function BlockCanvas({ block, theme, venueAddress }: { block: EmailBlock; theme: ReturnType<typeof mergeEmailTheme>; venueAddress?: VenueAddress }) {
+function BlockCanvas({ block, theme, venueAddress, onPatch }: { block: EmailBlock; theme: ReturnType<typeof mergeEmailTheme>; venueAddress?: VenueAddress; onPatch?: (p: Partial<EmailBlock>) => void }) {
   switch (block.type) {
-    case 'heading': return <HeadingCanvas block={block} theme={theme} />;
-    case 'text':    return <TextCanvas block={block} theme={theme} />;
+    case 'heading': return <HeadingCanvas block={block} theme={theme} onPatch={onPatch} />;
+    case 'text':    return <TextCanvas block={block} theme={theme} onPatch={onPatch} />;
     case 'button':  return <ButtonCanvas block={block} theme={theme} />;
     case 'image':   return <ImageCanvas block={block} theme={theme} />;
     case 'video':   return <VideoCanvas block={block} theme={theme} />;
@@ -437,14 +540,9 @@ function BlockInspectorPanel({
   if (block.type === 'heading') {
     return (
       <div className="space-y-4">
-        <div>
-          <label className={LABEL}>Text</label>
-          <input
-            type="text"
-            className={INPUT}
-            value={stripTags(block.content || '')}
-            onChange={(e) => onChange({ content: e.target.value })}
-          />
+        <div className="rounded-xl bg-gray-50 border border-gray-100 px-3.5 py-3">
+          <p className="text-xs font-medium text-gray-600 mb-0.5">Click the block to edit</p>
+          <p className="text-[11px] text-gray-400">Type directly on the canvas</p>
         </div>
         <div>
           <label className={LABEL}>Size</label>
@@ -469,12 +567,9 @@ function BlockInspectorPanel({
   if (block.type === 'text') {
     return (
       <div className="space-y-4">
-        <div>
-          <label className={LABEL}>Content</label>
-          <RichTextEditor
-            content={block.content ?? ''}
-            onChange={(val) => onChange({ content: val })}
-          />
+        <div className="rounded-xl bg-gray-50 border border-gray-100 px-3.5 py-3">
+          <p className="text-xs font-medium text-gray-600 mb-0.5">Click the block to edit</p>
+          <p className="text-[11px] text-gray-400">Select text to see the formatting toolbar</p>
         </div>
         <AlignRow />
       </div>
@@ -1041,7 +1136,7 @@ export function CampaignFlodeskBuilder({
                                   (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
                                 }}
                               >
-                                <BlockCanvas block={block} theme={theme} venueAddress={venueAddress} />
+                                <BlockCanvas block={block} theme={theme} venueAddress={venueAddress} onPatch={(p) => patchBlock(block.id, p)} />
                               </div>
 
                               {/* Floating toolbar — visible when selected */}
@@ -1157,6 +1252,9 @@ export function CampaignFlodeskBuilder({
           )}
         </aside>
       </div>
+
+      {/* Floating format toolbar — appears on text selection */}
+      <FloatingFormatBar />
 
       {/* Block picker modal */}
       {pickerIdx !== null && (
