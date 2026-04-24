@@ -1164,7 +1164,7 @@ export function CampaignFlodeskBuilder({
 
                               {/* Floating side toolbar — pill, right edge, visible on select or hover */}
                               <div
-                                className={`absolute -right-12 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1 z-10 transition-opacity duration-150 ${isSelected ? 'opacity-100' : selectedId === null ? 'opacity-0 group-hover/block:opacity-100' : 'opacity-0'}`}
+                                className={`absolute -right-12 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1 z-10 transition-opacity duration-150 ${isSelected ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <div className="flex flex-col items-center gap-1 bg-white rounded-2xl shadow-lg border border-gray-100 px-1.5 py-2">
