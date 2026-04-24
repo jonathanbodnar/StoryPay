@@ -63,7 +63,10 @@ export default function DashboardShell({
   const rail = collapsed;
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#ffffff' }}>
+    <div
+      className="min-h-screen"
+      style={{ backgroundColor: '#ffffff', '--sidebar-w': rail ? '60px' : '216px' } as React.CSSProperties}
+    >
       <ImpersonationBanner />
       <Sidebar
         venue={venue}

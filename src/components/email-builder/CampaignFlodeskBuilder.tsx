@@ -985,14 +985,22 @@ export function CampaignFlodeskBuilder({
     : null;
 
   return (
-    // Break out of dashboard padding
-    <div className="-mx-6 sm:-mx-8 lg:-mx-10 -mt-6 lg:-mt-[68px] -mb-10 flex flex-col bg-white"
+    // Pull out of main's vertical padding; horizontal is handled by the fixed header
+    <div className="-mt-6 lg:-mt-[68px] -mb-10 flex flex-col bg-white"
       style={{ minHeight: '100vh' }}
     >
-      {/* ── Top Bar — Flodesk style: no hard border, soft shadow ───────────── */}
+      {/* ── Top Bar — fixed, spans from sidebar right edge to viewport right edge ── */}
       <header
-        className="sticky top-0 z-20 flex items-center bg-white px-6 py-3"
-        style={{ boxShadow: '0 1px 18px rgba(0,0,0,0.05)' }}
+        className="flex items-center bg-white px-6 py-3"
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 'var(--sidebar-w, 216px)',
+          right: 0,
+          zIndex: 20,
+          boxShadow: '0 1px 18px rgba(0,0,0,0.05)',
+          transition: 'left 200ms ease-out',
+        }}
       >
         {/* Left: back link + editable name */}
         <div className="flex items-center gap-3 flex-shrink-0 w-48">
@@ -1063,8 +1071,11 @@ export function CampaignFlodeskBuilder({
         </div>
       </header>
 
+      {/* Spacer so content isn't hidden behind the fixed header */}
+      <div className="h-[52px] flex-shrink-0" />
+
       {/* ── Content ────────────────────────────────────────────────────────── */}
-      <div className="flex flex-1 overflow-hidden" style={{ height: 'calc(100vh - 57px)' }}>
+      <div className="flex flex-1 overflow-hidden" style={{ height: 'calc(100vh - 52px)' }}>
 
         {/* ── Canvas ───────────────────────────────────────────────────────── */}
         <div
