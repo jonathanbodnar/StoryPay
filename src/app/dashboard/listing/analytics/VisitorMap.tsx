@@ -37,6 +37,8 @@ export default function VisitorMap({ points, heightClass = "h-96" }: Props) {
   // One-time map initialisation.
   useEffect(() => {
     let cancelled = false;
+    let resizeObserver: ResizeObserver | null = null;
+    let nudgeTimers: ReturnType<typeof setTimeout>[] = [];
     (async () => {
       if (!containerRef.current || mapRef.current) return;
       const L = (await import("leaflet")).default;
@@ -52,18 +54,42 @@ export default function VisitorMap({ points, heightClass = "h-96" }: Props) {
         attributionControl: true,
         scrollWheelZoom: true,
       });
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        maxZoom: 19,
-      }).addTo(map);
+
+      // CartoDB Positron — a clean, light gray basemap that matches the
+      // Google Analytics "Realtime overview" aesthetic (light blue water,
+      // muted gray land, subtle country borders) and is free under CC-BY.
+      L.tileLayer(
+        "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+        {
+          attribution:
+            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+          subdomains: "abcd",
+          maxZoom: 20,
+        }
+      ).addTo(map);
 
       mapRef.current = map;
       layerRef.current = L.layerGroup().addTo(map);
+
+      // Two reasons Leaflet can render white on one side:
+      //   1. The container got its final width AFTER L.map() ran (common
+      //      inside tabs, flex layouts, or conditionally rendered blocks).
+      //   2. The dashboard window was resized and the map wasn't told.
+      // Both are solved by calling invalidateSize() whenever the container
+      // changes size, plus a few post-mount nudges to catch the first paint.
+      resizeObserver = new ResizeObserver(() => {
+        if (mapRef.current) mapRef.current.invalidateSize();
+      });
+      resizeObserver.observe(containerRef.current);
+      nudgeTimers = [0, 60, 240, 600].map((ms) =>
+        setTimeout(() => mapRef.current?.invalidateSize(), ms)
+      );
     })();
 
     return () => {
       cancelled = true;
+      nudgeTimers.forEach((t) => clearTimeout(t));
+      if (resizeObserver) resizeObserver.disconnect();
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
@@ -169,12 +195,41 @@ export default function VisitorMap({ points, heightClass = "h-96" }: Props) {
     <>
       <div
         ref={containerRef}
-        className={`${heightClass} w-full rounded-2xl overflow-hidden border border-gray-200 bg-white`}
+        className={`${heightClass} w-full rounded-2xl overflow-hidden border border-gray-200 bg-[#e9edf1]`}
       />
       <style jsx global>{`
         .leaflet-container {
           font-family: inherit;
-          background: #f8fafc;
+          /* CartoDB Positron water tone — shown before tiles load so the
+             map doesn't flash white on first render. */
+          background: #d4dadc;
+        }
+        /* Google-ish zoom control: rounded square, subtle shadow, no hard border. */
+        .leaflet-control-zoom {
+          border: none !important;
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08) !important;
+          border-radius: 10px !important;
+          overflow: hidden;
+        }
+        .leaflet-control-zoom a {
+          background: #fff !important;
+          color: #374151 !important;
+          border: none !important;
+          width: 30px !important;
+          height: 30px !important;
+          line-height: 30px !important;
+          font-size: 16px !important;
+        }
+        .leaflet-control-zoom a:hover {
+          background: #f3f4f6 !important;
+        }
+        .leaflet-control-attribution {
+          background: rgba(255, 255, 255, 0.85) !important;
+          font-size: 9px !important;
+          color: #9ca3af !important;
+        }
+        .leaflet-control-attribution a {
+          color: #6b7280 !important;
         }
         .vm-icon {
           background: transparent;
