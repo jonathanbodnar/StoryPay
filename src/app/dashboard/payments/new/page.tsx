@@ -482,7 +482,8 @@ export default function NewProposalInvoicePage() {
      setAppliedCouponId(null);
    }
    setLineItems((prev) => {
-     const hasSurcharge = prev.some((i) => i.isSurcharge);
+     // If the user is deleting the surcharge row itself, drop the fee entirely.
+     const hasSurcharge = id === SURCHARGE_ID ? false : prev.some((i) => i.isSurcharge);
      const core = stripDerived(prev).filter((i) => i.id !== id);
      const nextApplied = id === COUPON_LINE_ID ? null : appliedCouponId;
      return withDerivedFromCore(core, hasSurcharge, nextApplied, venueCoupons);
