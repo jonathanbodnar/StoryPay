@@ -39,7 +39,7 @@ export async function GET() {
 
   const { data: recent, error } = await supabaseAdmin
     .from('listing_events')
-    .select('session_id, event_type, country, city, device_type, created_at')
+    .select('session_id, event_type, country, region, city, device_type, created_at')
     .eq('venue_id', venueId)
     .gte('created_at', since30m)
     .order('created_at', { ascending: false })
@@ -78,7 +78,7 @@ export async function GET() {
 
   // Recent activity feed — last event per session, most recent first
   const seenSessions = new Set<string>();
-  const activity: { session_id: string; event_type: string; label: string; country: string | null; city: string | null; flag: string; device_type: string | null; ago_seconds: number }[] = [];
+  const activity: { session_id: string; event_type: string; label: string; country: string | null; region: string | null; city: string | null; flag: string; device_type: string | null; ago_seconds: number }[] = [];
 
   for (const row of rows) {
     if (seenSessions.has(row.session_id)) continue;
@@ -89,6 +89,7 @@ export async function GET() {
       event_type: row.event_type,
       label: EVENT_LABELS[row.event_type] ?? row.event_type,
       country: row.country,
+      region: row.region,
       city: row.city,
       flag: flag(row.country),
       device_type: row.device_type,
@@ -97,13 +98,16 @@ export async function GET() {
     if (activity.length >= 20) break;
   }
 
-  // Geographic breakdown of live sessions (last 30 min)
-  const geoMap: Record<string, { count: number; flag: string; cities: Set<string> }> = {};
+  // Geographic breakdown of live sessions (last 30 min). Cities are captured
+  // as "City, Region" when a region is known so US states show up in the UI
+  // (e.g. "New Albany, Ohio") without requiring a schema change.
+  const geoMap: Record<string, { count: number; flag: string; places: Set<string> }> = {};
   for (const row of rows) {
     const key = row.country || 'Unknown';
-    if (!geoMap[key]) geoMap[key] = { count: 0, flag: flag(row.country), cities: new Set() };
+    if (!geoMap[key]) geoMap[key] = { count: 0, flag: flag(row.country), places: new Set() };
     geoMap[key].count++;
-    if (row.city) geoMap[key].cities.add(row.city);
+    const place = [row.city, row.region].filter(Boolean).join(', ');
+    if (place) geoMap[key].places.add(place);
   }
   const geoLive = Object.entries(geoMap)
     .sort(([, a], [, b]) => b.count - a.count)
@@ -112,7 +116,7 @@ export async function GET() {
       country,
       flag: v.flag,
       count: v.count,
-      cities: [...v.cities].slice(0, 3),
+      cities: [...v.places].slice(0, 3),
     }));
 
   return NextResponse.json({

@@ -9,6 +9,75 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
+// Per-instance in-memory cache for IP -> geo so we don't call the lookup
+// service on every heartbeat. A visitor pings every 30s, so caching per IP
+// for an hour reduces thousands of calls to one.
+type GeoRecord = {
+  country: string | null;
+  region: string | null;
+  city: string | null;
+};
+const geoCache = new Map<string, { value: GeoRecord; expires: number }>();
+const GEO_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+function extractClientIp(req: NextRequest): string | null {
+  // Railway / Fastly / Cloudflare / Vercel all forward the client IP in one
+  // of these headers. x-forwarded-for may contain a comma-separated chain
+  // (client, proxy, proxy, ...); the first entry is the real client.
+  const xff = req.headers.get('x-forwarded-for');
+  if (xff) {
+    const first = xff.split(',')[0]?.trim();
+    if (first) return first;
+  }
+  return (
+    req.headers.get('fastly-client-ip') ||
+    req.headers.get('cf-connecting-ip') ||
+    req.headers.get('x-real-ip') ||
+    null
+  );
+}
+
+async function lookupGeoFromIp(ip: string): Promise<GeoRecord> {
+  const cached = geoCache.get(ip);
+  if (cached && cached.expires > Date.now()) return cached.value;
+
+  // ip-api.com is free, no API key, 45 req/min per origin IP. We query only
+  // the fields we need to keep the payload tiny. Timeout after 800ms so a
+  // slow lookup never blocks event ingestion for long.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 800);
+  let result: GeoRecord = { country: null, region: null, city: null };
+  try {
+    const res = await fetch(
+      `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,country,countryCode,regionName,city`,
+      { signal: controller.signal, cache: 'no-store' }
+    );
+    if (res.ok) {
+      const j = (await res.json()) as {
+        status?: string;
+        country?: string;
+        countryCode?: string;
+        regionName?: string;
+        city?: string;
+      };
+      if (j.status === 'success') {
+        result = {
+          country: j.countryCode || j.country || null,
+          region: j.regionName || null,
+          city: j.city || null,
+        };
+      }
+    }
+  } catch {
+    // Network error or timeout — leave fields null.
+  } finally {
+    clearTimeout(timer);
+  }
+
+  geoCache.set(ip, { value: result, expires: Date.now() + GEO_TTL_MS });
+  return result;
+}
+
 export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
 }
@@ -71,13 +140,23 @@ export async function POST(req: NextRequest) {
   const ua = req.headers.get('user-agent') || '';
   const device_type = detectDevice(ua);
 
-  // Geo from Cloudflare or Vercel edge headers (zero cost, works on Railway behind CF)
-  const country =
-    getHeader(req, 'cf-ipcountry', 'x-vercel-ip-country') ?? null;
-  const region =
+  // Prefer geo headers set by the edge (Cloudflare, Vercel). When the API
+  // runs on Railway behind Fastly those headers aren't present, so we fall
+  // back to a cached IP -> geo lookup. Cache is per-instance so at most one
+  // external call per visitor per hour per instance.
+  let country = getHeader(req, 'cf-ipcountry', 'x-vercel-ip-country') ?? null;
+  let region =
     getHeader(req, 'x-vercel-ip-country-region', 'cf-region-code') ?? null;
-  const city =
-    getHeader(req, 'x-vercel-ip-city', 'cf-ipcity') ?? null;
+  let city = getHeader(req, 'x-vercel-ip-city', 'cf-ipcity') ?? null;
+  if (!country || !city) {
+    const ip = extractClientIp(req);
+    if (ip && !/^(127\.|10\.|192\.168\.|::1|fe80:)/i.test(ip)) {
+      const geo = await lookupGeoFromIp(ip);
+      country = country || geo.country;
+      region = region || geo.region;
+      city = city || geo.city;
+    }
+  }
 
   const { error } = await supabaseAdmin.from('listing_events').insert({
     venue_id,

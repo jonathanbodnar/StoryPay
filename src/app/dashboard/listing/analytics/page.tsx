@@ -68,6 +68,7 @@ type RealtimePayload = {
     event_type: string;
     label: string;
     country: string | null;
+    region: string | null;
     city: string | null;
     flag: string;
     device_type: string | null;
@@ -652,7 +653,7 @@ export default function ListingAnalyticsPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-gray-800 truncate">{a.label}</p>
                         <p className="text-[10px] text-gray-400 truncate">
-                          {[a.city, a.country].filter(Boolean).join(', ') || 'Unknown location'}
+                          {[a.city, a.region, a.country].filter(Boolean).join(', ') || 'Unknown location'}
                           {a.device_type ? ` · ${a.device_type}` : ''}
                         </p>
                       </div>
