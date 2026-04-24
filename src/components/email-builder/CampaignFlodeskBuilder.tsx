@@ -4,10 +4,26 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   AlignCenter, AlignLeft, AlignRight, ArrowLeft, Check,
-  ChevronDown, ChevronRight, ChevronUp, Copy, Image as ImageIcon,
-  Loader2, Minus, Plus, SeparatorHorizontal, Space, Trash2, Type,
+  ChevronDown, ChevronRight, Copy, GripVertical, Image as ImageIcon,
+  Loader2, Minus, Monitor, Plus, SeparatorHorizontal, Smartphone,
+  Space, Trash2, Type, Eye, X as XIcon,
   MousePointer2, Palette, Video, Share2, MapPin,
 } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { VenueMediaPickerModal } from '@/components/venue-media/VenueMediaPickerModal';
 import RichTextEditor from '@/components/RichTextEditor';
 import {
@@ -340,19 +356,53 @@ function BlockPickerModal({ onSelect, onClose }: { onSelect: (type: EmailBlockTy
   );
 }
 
-// ─── Add Block Button ─────────────────────────────────────────────────────────
+// ─── Add Block Button (no lines — just the + circle on hover) ────────────────
 function AddBlockBtn({ onClick }: { onClick: () => void }) {
   return (
-    <div className="relative flex items-center justify-center py-1 group">
-      <div className="absolute inset-x-6 top-1/2 h-px bg-gray-200 group-hover:bg-blue-300 transition-colors" />
+    <div className="group/addbtn relative flex items-center justify-center h-7">
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); onClick(); }}
-        className="relative z-10 flex h-6 w-6 items-center justify-center rounded-full bg-white border border-gray-300 text-gray-400 shadow-sm hover:border-blue-400 hover:text-blue-500 hover:shadow transition-all"
+        className="relative z-10 flex h-6 w-6 items-center justify-center rounded-full bg-white border border-gray-200 text-gray-400 shadow-sm opacity-0 group-hover/addbtn:opacity-100 hover:border-blue-400 hover:text-blue-500 transition-all duration-150"
         title="Add block"
       >
-        <Plus size={13} />
+        <Plus size={12} />
       </button>
+    </div>
+  );
+}
+
+// ─── Sortable block wrapper (dnd-kit) ─────────────────────────────────────────
+function SortableBlock({
+  id,
+  children,
+}: {
+  id: string;
+  children: (dragHandle: React.ReactNode, isDragging: boolean) => React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const dragHandle = (
+    <div
+      {...attributes}
+      {...listeners}
+      className="flex h-7 w-7 cursor-grab items-center justify-center rounded-lg bg-white border border-gray-200 text-gray-400 shadow-sm hover:bg-gray-50 active:cursor-grabbing transition-all"
+      title="Drag to reorder"
+    >
+      <GripVertical size={13} />
+    </div>
+  );
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.4 : 1,
+        position: 'relative',
+        zIndex: isDragging ? 50 : 'auto',
+      }}
+    >
+      {children(dragHandle, isDragging)}
     </div>
   );
 }
@@ -727,13 +777,29 @@ export function CampaignFlodeskBuilder({
   const [preheader, setPreheader] = useState(initialPreheader);
   const [def, setDef]             = useState<MarketingEmailDefinition>(initialDefinition);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [pickerIdx, setPickerIdx]   = useState<number | null>(null); // insert before index
+  const [pickerIdx, setPickerIdx]   = useState<number | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
+  const [viewMode, setViewMode]     = useState<'desktop' | 'mobile'>('desktop');
+  const [previewOpen, setPreviewOpen] = useState(false);
   const mediaApplyRef = useRef<(url: string) => void>(() => {});
   const saveTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const theme = mergeEmailTheme(def.theme);
+
+  // dnd-kit sensors — require 5px drag before activating (prevents mis-fires on click)
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIdx = def.blocks.findIndex((b) => b.id === active.id);
+      const newIdx = def.blocks.findIndex((b) => b.id === over.id);
+      if (oldIdx !== -1 && newIdx !== -1) {
+        updateDef({ ...def, blocks: arrayMove(def.blocks, oldIdx, newIdx) });
+      }
+    }
+  }
 
   // ── Auto-save ──────────────────────────────────────────────────────────────
   const save = useCallback(async (
@@ -877,12 +943,41 @@ export function CampaignFlodeskBuilder({
           </Link>
         </div>
 
+        {/* Desktop / Mobile toggle */}
+        <div className="hidden sm:flex items-center gap-1 flex-shrink-0 rounded-lg border border-gray-200 p-0.5">
+          <button
+            type="button"
+            title="Desktop view"
+            onClick={() => setViewMode('desktop')}
+            className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${viewMode === 'desktop' ? 'bg-gray-900 text-white' : 'text-gray-400 hover:text-gray-700'}`}
+          >
+            <Monitor size={14} />
+          </button>
+          <button
+            type="button"
+            title="Mobile view"
+            onClick={() => setViewMode('mobile')}
+            className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${viewMode === 'mobile' ? 'bg-gray-900 text-white' : 'text-gray-400 hover:text-gray-700'}`}
+          >
+            <Smartphone size={14} />
+          </button>
+        </div>
+
         {/* Save status */}
         <div className="flex items-center gap-2 flex-shrink-0">
           {saveStatus === 'saving' && <Loader2 size={14} className="animate-spin text-gray-400" />}
           {saveStatus === 'saved'  && <Check size={14} className="text-emerald-500" />}
           {saveLabel && <span className={`text-xs ${saveStatus === 'error' ? 'text-red-500' : 'text-gray-400'}`}>{saveLabel}</span>}
         </div>
+
+        {/* Preview button */}
+        <button
+          type="button"
+          onClick={() => setPreviewOpen(true)}
+          className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors flex-shrink-0"
+        >
+          <Eye size={14} /> Preview
+        </button>
 
         {/* Next button */}
         <Link
@@ -900,14 +995,14 @@ export function CampaignFlodeskBuilder({
         {/* ── Canvas ───────────────────────────────────────────────────────── */}
         <div
           className="flex-1 overflow-y-auto"
-          style={{ background: theme.pageBg === '#ffffff' ? '#f8f8f6' : theme.pageBg, paddingTop: '32px', paddingBottom: '40px', paddingLeft: '24px', paddingRight: '24px' }}
+          style={{ background: '#ffffff', paddingTop: '36px', paddingBottom: '60px', paddingLeft: '40px', paddingRight: '40px' }}
           onClick={() => setSelectedId(null)}
         >
-          {/* Subject bar above email card */}
-          <div className="mx-auto mb-4 flex items-center gap-2" style={{ maxWidth: theme.maxWidth }}>
-            <span className="text-xs text-gray-400 font-medium flex-shrink-0">Subject</span>
+          {/* Subject hint */}
+          <div className="mx-auto mb-5 flex items-center gap-2" style={{ maxWidth: viewMode === 'mobile' ? '375px' : theme.maxWidth }}>
+            <span className="text-[11px] text-gray-300 font-medium flex-shrink-0 uppercase tracking-wide">Subject</span>
             <input
-              className="flex-1 rounded-lg border-0 bg-transparent px-2 py-1 text-sm text-gray-600 focus:bg-white focus:border focus:border-gray-200 focus:outline-none transition-colors"
+              className="flex-1 bg-transparent px-2 py-1 text-sm text-gray-400 focus:text-gray-700 focus:outline-none transition-colors"
               value={subject}
               onClick={(e) => e.stopPropagation()}
               onChange={(e) => {
@@ -918,110 +1013,99 @@ export function CampaignFlodeskBuilder({
             />
           </div>
 
-          {/* Email card — flat, no shadow, white */}
-          <div
-            className="mx-auto overflow-hidden"
-            style={{ maxWidth: theme.maxWidth, background: theme.cardBg }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {def.blocks.length === 0 ? (
-              <div className="py-16 text-center">
-                <p className="mb-4 text-sm text-gray-400">Your email is empty</p>
-                <button
-                  type="button"
-                  onClick={() => setPickerIdx(0)}
-                  className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
-                >
-                  <Plus size={16} /> Add your first block
-                </button>
-              </div>
-            ) : (
-              <>
-                {/* Top add button */}
-                <AddBlockBtn onClick={() => setPickerIdx(0)} />
+          {/* Email card — completely flush, white on white */}
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <div
+              className="mx-auto"
+              style={{ maxWidth: viewMode === 'mobile' ? '375px' : theme.maxWidth, background: theme.cardBg, transition: 'max-width 0.3s ease' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {def.blocks.length === 0 ? (
+                <div className="py-24 text-center">
+                  <p className="mb-5 text-sm text-gray-300">Your email is empty — click below to add your first block</p>
+                  <button
+                    type="button"
+                    onClick={() => setPickerIdx(0)}
+                    className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-5 py-2.5 text-sm font-medium text-gray-500 hover:border-gray-400 hover:text-gray-800 transition-all"
+                  >
+                    <Plus size={15} /> Add block
+                  </button>
+                </div>
+              ) : (
+                <SortableContext items={def.blocks.map(b => b.id)} strategy={verticalListSortingStrategy}>
+                  {/* Top add button */}
+                  <AddBlockBtn onClick={() => setPickerIdx(0)} />
 
-                {def.blocks.map((block, idx) => {
-                  const isSelected = block.id === selectedId;
-                  return (
-                    <div key={block.id}>
-                      {/* Block row */}
-                      <div className="relative group" onClick={(e) => { e.stopPropagation(); setSelectedId(block.id); }}>
-                        {/* Selection border */}
-                        <div
-                          className="relative cursor-pointer"
-                          style={{
-                            transition: 'box-shadow 0.3s ease, outline 0.15s ease',
-                            outline: isSelected ? '2px solid #3b82f6' : '2px solid transparent',
-                            outlineOffset: '-2px',
-                            boxShadow: isSelected ? 'none' : undefined,
-                          }}
-                          onMouseEnter={(e) => {
-                            if (!isSelected) (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 22px rgba(0,0,0,0.11), 0 1px 6px rgba(0,0,0,0.07)';
-                          }}
-                          onMouseLeave={(e) => {
-                            (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
-                          }}
-                        >
-                          <BlockCanvas block={block} theme={theme} venueAddress={venueAddress} />
-                        </div>
+                  {def.blocks.map((block, idx) => {
+                    const isSelected = block.id === selectedId;
+                    return (
+                      <SortableBlock key={block.id} id={block.id}>
+                        {(dragHandle, isDragging) => (
+                          <div>
+                            <div
+                              className="relative group/block"
+                              onClick={(e) => { e.stopPropagation(); if (!isDragging) setSelectedId(block.id); }}
+                            >
+                              {/* Block content */}
+                              <div
+                                className="relative cursor-pointer"
+                                style={{
+                                  transition: 'box-shadow 0.25s ease, outline 0.12s ease',
+                                  outline: isSelected ? '2px solid #3b82f6' : '2px solid transparent',
+                                  outlineOffset: '-2px',
+                                  boxShadow: isSelected ? 'none' : undefined,
+                                }}
+                                onMouseEnter={(e) => {
+                                  if (!isSelected && !isDragging) (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 20px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.05)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
+                                }}
+                              >
+                                <BlockCanvas block={block} theme={theme} venueAddress={venueAddress} />
+                              </div>
 
-                        {/* Floating toolbar — visible when selected */}
-                        {isSelected && (
-                          <div
-                            className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 z-10"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <button
-                              type="button"
-                              title="Move up"
-                              disabled={idx === 0}
-                              onClick={() => moveBlock(block.id, 'up')}
-                              className="flex h-7 w-7 items-center justify-center rounded-lg bg-white border border-gray-200 text-gray-500 shadow-sm hover:bg-gray-50 disabled:opacity-30 transition-all"
-                            ><ChevronUp size={13} /></button>
-                            <button
-                              type="button"
-                              title="Move down"
-                              disabled={idx === def.blocks.length - 1}
-                              onClick={() => moveBlock(block.id, 'down')}
-                              className="flex h-7 w-7 items-center justify-center rounded-lg bg-white border border-gray-200 text-gray-500 shadow-sm hover:bg-gray-50 disabled:opacity-30 transition-all"
-                            ><ChevronDown size={13} /></button>
-                            <button
-                              type="button"
-                              title="Duplicate"
-                              onClick={() => duplicateBlock(block.id)}
-                              className="flex h-7 w-7 items-center justify-center rounded-lg bg-white border border-gray-200 text-gray-500 shadow-sm hover:bg-gray-50 transition-all"
-                            ><Copy size={13} /></button>
-                            <button
-                              type="button"
-                              title="Delete"
-                              onClick={() => removeBlock(block.id)}
-                              className="flex h-7 w-7 items-center justify-center rounded-lg bg-white border border-red-100 text-red-400 shadow-sm hover:bg-red-50 hover:text-red-600 transition-all"
-                            ><Trash2 size={13} /></button>
+                              {/* Floating toolbar — visible when selected */}
+                              {isSelected && (
+                                <div
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 z-10"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {dragHandle}
+                                  <button type="button" title="Duplicate" onClick={() => duplicateBlock(block.id)}
+                                    className="flex h-7 w-7 items-center justify-center rounded-lg bg-white border border-gray-200 text-gray-500 shadow-sm hover:bg-gray-50 transition-all">
+                                    <Copy size={13} />
+                                  </button>
+                                  <button type="button" title="Delete" onClick={() => removeBlock(block.id)}
+                                    className="flex h-7 w-7 items-center justify-center rounded-lg bg-white border border-red-100 text-red-400 shadow-sm hover:bg-red-50 hover:text-red-600 transition-all">
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Add button after this block */}
+                            <AddBlockBtn onClick={() => setPickerIdx(idx + 1)} />
                           </div>
                         )}
-                      </div>
-
-                      {/* Add button after this block */}
-                      <AddBlockBtn onClick={() => setPickerIdx(idx + 1)} />
-                    </div>
-                  );
-                })}
-              </>
-            )}
-          </div>
+                      </SortableBlock>
+                    );
+                  })}
+                </SortableContext>
+              )}
+            </div>
+          </DndContext>
 
           {/* Merge field hint */}
-          <p className="mx-auto mt-4 text-center text-[11px] text-gray-400" style={{ maxWidth: theme.maxWidth }}>
-            Use{' '}
-            <code className="font-mono">{'{{first_name}}'}</code>,{' '}
-            <code className="font-mono">{'{{venue_name}}'}</code>,{' '}
-            <code className="font-mono">{'{{unsubscribe_url}}'}</code> as merge fields
+          <p className="mx-auto mt-6 text-center text-[11px] text-gray-300" style={{ maxWidth: viewMode === 'mobile' ? '375px' : theme.maxWidth }}>
+            {'{{first_name}}'} · {'{{venue_name}}'} · {'{{unsubscribe_url}}'}
           </p>
         </div>
 
         {/* ── Right Panel ──────────────────────────────────────────────────── */}
         <aside
-          className="w-72 flex-shrink-0 overflow-y-auto border-l border-gray-200 bg-white"
+          className="w-72 flex-shrink-0 overflow-y-auto bg-white"
+          style={{ boxShadow: '-12px 0 32px -8px rgba(0,0,0,0.07)' }}
           onClick={(e) => e.stopPropagation()}
         >
           {selectedBlock ? (
@@ -1113,6 +1197,39 @@ export function CampaignFlodeskBuilder({
           setMediaPickerOpen(false);
         }}
       />
+
+      {/* Preview modal */}
+      {previewOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6" onClick={() => setPreviewOpen(false)}>
+          <div
+            className="relative flex flex-col bg-white rounded-2xl shadow-2xl overflow-hidden"
+            style={{ width: '90vw', maxWidth: '740px', maxHeight: '90vh' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Preview header */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-gray-900">Preview</span>
+                <span className="text-xs text-gray-400 truncate max-w-[300px]">{subject || 'No subject'}</span>
+              </div>
+              <button type="button" onClick={() => setPreviewOpen(false)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors">
+                <XIcon size={18} />
+              </button>
+            </div>
+            {/* Preview body — rendered canvas blocks */}
+            <div className="flex-1 overflow-y-auto p-6" style={{ background: theme.pageBg === '#ffffff' ? '#f5f5f3' : theme.pageBg }}>
+              <div className="mx-auto overflow-hidden" style={{ maxWidth: '600px', background: theme.cardBg }}>
+                {def.blocks.map((block) => (
+                  <BlockCanvas key={block.id} block={block} theme={theme} venueAddress={venueAddress} />
+                ))}
+                {def.blocks.length === 0 && (
+                  <div className="py-16 text-center text-sm text-gray-300">Nothing to preview yet</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
