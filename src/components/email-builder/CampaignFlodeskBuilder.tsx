@@ -4,8 +4,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import {
-  AlignCenter, AlignLeft, AlignRight, ArrowLeft, AtSign, Bold,
-  Check, ChevronDown, ChevronRight, Copy, Eye, Image as ImageIcon,
+  AlignCenter, AlignLeft, AlignRight, ArrowLeft, ArrowUp, ArrowDown,
+  AtSign, Bold,
+  Check, ChevronDown, ChevronRight, Copy, Eye, Heart,
+  Image as ImageIcon,
   Italic, Link2, List, ListOrdered, Loader2, Minus, Monitor,
   Paperclip, PenLine, Plus, SeparatorHorizontal, Smartphone,
   Space, Strikethrough, Trash2, Type, Underline, X as XIcon,
@@ -1090,7 +1092,7 @@ export function CampaignFlodeskBuilder({
         {/* ── Canvas ───────────────────────────────────────────────────────── */}
         <div
           className="flex-1 overflow-y-auto"
-          style={{ background: '#ffffff', paddingTop: '36px', paddingBottom: '60px', paddingLeft: '40px', paddingRight: '40px' }}
+          style={{ background: '#ffffff', paddingTop: '36px', paddingBottom: '60px', paddingLeft: '40px', paddingRight: '80px' }}
           onClick={() => setSelectedId(null)}
         >
           {/* Subject hint */}
@@ -1160,22 +1162,58 @@ export function CampaignFlodeskBuilder({
                                 <BlockCanvas block={block} theme={theme} venueAddress={venueAddress} onPatch={(p) => patchBlock(block.id, p)} />
                               </div>
 
-                              {/* Floating toolbar — visible when selected */}
-                              {isSelected && (
-                                <div
-                                  className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 z-10"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <button type="button" title="Duplicate" onClick={() => duplicateBlock(block.id)}
-                                    className="flex h-7 w-7 items-center justify-center rounded-lg bg-white border border-gray-200 text-gray-500 shadow-sm hover:bg-gray-50 transition-all">
-                                    <Copy size={13} />
+                              {/* Floating side toolbar — pill, right edge, visible on select or hover */}
+                              <div
+                                className={`absolute -right-12 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1 z-10 transition-opacity duration-150 ${isSelected ? 'opacity-100' : 'opacity-0 group-hover/block:opacity-100'}`}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <div className="flex flex-col items-center gap-1 bg-white rounded-2xl shadow-lg border border-gray-100 px-1.5 py-2">
+                                  <button
+                                    type="button" title="Move up"
+                                    disabled={idx === 0}
+                                    onClick={() => moveBlock(block.id, 'up')}
+                                    className="flex h-8 w-8 items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-all disabled:opacity-25 disabled:cursor-not-allowed"
+                                  >
+                                    <ArrowUp size={15} />
                                   </button>
-                                  <button type="button" title="Delete" onClick={() => removeBlock(block.id)}
-                                    className="flex h-7 w-7 items-center justify-center rounded-lg bg-white border border-red-100 text-red-400 shadow-sm hover:bg-red-50 hover:text-red-600 transition-all">
-                                    <Trash2 size={13} />
+                                  <button
+                                    type="button" title="Move down"
+                                    disabled={idx === def.blocks.length - 1}
+                                    onClick={() => moveBlock(block.id, 'down')}
+                                    className="flex h-8 w-8 items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-all disabled:opacity-25 disabled:cursor-not-allowed"
+                                  >
+                                    <ArrowDown size={15} />
+                                  </button>
+                                  <div className="w-5 h-px bg-gray-100 my-0.5" />
+                                  <button
+                                    type="button" title="Save as template block"
+                                    onClick={() => {
+                                      const saved = JSON.parse(localStorage.getItem('sp_saved_blocks') ?? '[]');
+                                      saved.push({ ...block, id: crypto.randomUUID(), savedAt: new Date().toISOString() });
+                                      localStorage.setItem('sp_saved_blocks', JSON.stringify(saved));
+                                      alert('Block saved as a template! You can reuse it from the block picker.');
+                                    }}
+                                    className="flex h-8 w-8 items-center justify-center rounded-xl text-gray-400 hover:bg-rose-50 hover:text-rose-500 transition-all"
+                                  >
+                                    <Heart size={15} />
+                                  </button>
+                                  <button
+                                    type="button" title="Duplicate"
+                                    onClick={() => duplicateBlock(block.id)}
+                                    className="flex h-8 w-8 items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-all"
+                                  >
+                                    <Copy size={15} />
+                                  </button>
+                                  <div className="w-5 h-px bg-gray-100 my-0.5" />
+                                  <button
+                                    type="button" title="Delete block"
+                                    onClick={() => removeBlock(block.id)}
+                                    className="flex h-8 w-8 items-center justify-center rounded-xl text-red-400 hover:bg-red-50 hover:text-red-600 transition-all"
+                                  >
+                                    <Trash2 size={15} />
                                   </button>
                                 </div>
-                              )}
+                              </div>
                             </div>
 
                             {/* Add button after this block */}
