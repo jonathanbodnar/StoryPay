@@ -23,23 +23,59 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  let body: { name?: string; templateId?: string; segment?: CampaignSegment };
+  let body: { name?: string; subject?: string; templateId?: string; segment?: CampaignSegment };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
   const name = typeof body.name === 'string' ? body.name.trim() : '';
-  const templateId = typeof body.templateId === 'string' ? body.templateId.trim() : '';
   if (!name) return NextResponse.json({ error: 'Name is required' }, { status: 400 });
-  if (!templateId) return NextResponse.json({ error: 'Template is required' }, { status: 400 });
-  const { data: tmpl } = await supabaseAdmin
-    .from('marketing_email_templates')
-    .select('id')
-    .eq('id', templateId)
-    .eq('venue_id', venueId)
-    .maybeSingle();
-  if (!tmpl) return NextResponse.json({ error: 'Template not found' }, { status: 400 });
+
+  // Resolve template: use provided templateId, or auto-create a campaign-specific template
+  let templateId = typeof body.templateId === 'string' ? body.templateId.trim() : '';
+
+  if (templateId) {
+    const { data: tmpl } = await supabaseAdmin
+      .from('marketing_email_templates')
+      .select('id')
+      .eq('id', templateId)
+      .eq('venue_id', venueId)
+      .maybeSingle();
+    if (!tmpl) return NextResponse.json({ error: 'Template not found' }, { status: 400 });
+  } else {
+    // Auto-create a private template for this one-off campaign
+    const subject = typeof body.subject === 'string' ? body.subject.trim() : name;
+    const { data: newTmpl, error: tmplErr } = await supabaseAdmin
+      .from('marketing_email_templates')
+      .insert({
+        venue_id: venueId,
+        name: `[Campaign] ${name}`,
+        subject,
+        preheader: '',
+        definition_json: {
+          version: 1,
+          blocks: [],
+          theme: {
+            pageBg: '#f4f4f5',
+            cardBg: '#ffffff',
+            textColor: '#18181b',
+            mutedColor: '#71717a',
+            buttonBg: '#18181b',
+            buttonText: '#ffffff',
+            maxWidth: '600px',
+            fontFamily: "Georgia, 'Times New Roman', serif",
+          },
+        },
+      })
+      .select('id')
+      .single();
+    if (tmplErr || !newTmpl) {
+      return NextResponse.json({ error: tmplErr?.message ?? 'Failed to create template' }, { status: 500 });
+    }
+    templateId = newTmpl.id;
+  }
+
   const segment = body.segment ?? { type: 'all_leads' as const };
   const { data, error } = await supabaseAdmin
     .from('marketing_campaigns')
