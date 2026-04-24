@@ -1,21 +1,26 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   Calendar,
+  ChevronDown,
   Loader2,
   MessageSquareQuote,
   MoreHorizontal,
   Plus,
   RefreshCw,
+  Search,
   Sparkles,
   Star,
   Trash2,
   Eye,
   EyeOff,
   Clock,
+  CheckCircle2,
+  AlertCircle,
+  ExternalLink,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
 
@@ -125,6 +130,25 @@ export default function ListingReviewsPage() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [googleSaveErr, setGoogleSaveErr] = useState('');
   const [googleSaving, setGoogleSaving] = useState(false);
+
+  // ── Auto-search state ────────────────────────────────────────────────────
+  type GoogleCandidate = {
+    place_id: string;
+    name: string;
+    formatted_address: string;
+    rating: number | null;
+    user_ratings_total: number | null;
+  };
+  const [searchCandidates, setSearchCandidates] = useState<GoogleCandidate[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchErr, setSearchErr] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearchBox, setShowSearchBox] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  // Track whether auto-search has already run for the current tab mount
+  const autoSearchDoneRef = useRef(false);
 
   useEffect(() => {
     setPublicOrigin(typeof window !== 'undefined' ? window.location.origin : '');
@@ -291,6 +315,79 @@ export default function ListingReviewsPage() {
       setGoogleSaving(false);
     }
   }
+
+  // Run a Text Search against the Places API (New) via our proxy endpoint.
+  const runSearch = useCallback(async (customQuery?: string) => {
+    setSearchLoading(true);
+    setSearchErr('');
+    setSearchCandidates([]);
+    try {
+      const res = await fetch('/api/listing/google-reviews/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(customQuery ? { query: customQuery } : {}),
+        cache: 'no-store',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSearchErr(typeof data.error === 'string' ? data.error : 'Search failed');
+        return;
+      }
+      const candidates = Array.isArray(data.candidates) ? (data.candidates as GoogleCandidate[]) : [];
+      setSearchCandidates(candidates);
+      if (candidates.length === 0) setSearchErr('No matches found — try a different search below.');
+    } catch {
+      setSearchErr('Search failed — check your connection and try again.');
+    } finally {
+      setSearchLoading(false);
+    }
+  }, []);
+
+  // Auto-search when the Google tab is selected and no Place ID is set yet.
+  useEffect(() => {
+    if (sourceTab !== 'google') return;
+    if (autoSearchDoneRef.current) return;
+    // If there's already a saved Place ID we don't need to search.
+    if (googlePlaceInput.trim()) return;
+    autoSearchDoneRef.current = true;
+    void runSearch();
+  }, [sourceTab, googlePlaceInput, runSearch]);
+
+  // Confirm a candidate — save the Place ID and sync reviews.
+  const confirmCandidate = useCallback(async (candidate: GoogleCandidate) => {
+    setConfirmingId(candidate.place_id);
+    setGoogleSaveErr('');
+    try {
+      const res = await fetch('/api/listing/google-reviews', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ google_place_id: candidate.place_id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setGoogleSaveErr(typeof data.error === 'string' ? data.error : 'Save failed');
+        return;
+      }
+      setGooglePlaceInput(candidate.place_id);
+      setGoogleFetchedAt(data.google_reviews_fetched_at ?? null);
+      if (data.cache && typeof data.cache === 'object') {
+        setGoogleCache(data.cache as GoogleReviewsCacheState);
+      }
+      // Clear search state now that we have a confirmed business.
+      setSearchCandidates([]);
+      setShowSearchBox(false);
+    } catch {
+      setGoogleSaveErr('Save failed — try again.');
+    } finally {
+      setConfirmingId(null);
+    }
+  }, []);
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+    void runSearch(searchQuery.trim());
+  };
 
   const gAvg = googleCache?.rating ?? null;
   const gCnt = googleCache?.userRatingCount ?? 0;
@@ -488,47 +585,208 @@ export default function ListingReviewsPage() {
         )}
 
         {sourceTab === 'google' && (
-          <div className="mb-8 rounded-3xl border border-gray-200 bg-white p-6">
-            <h2 className="font-heading text-lg text-gray-900">Google Business connection</h2>
-            <p className="mt-1 text-sm text-gray-600">
-              Paste your Google Maps Place ID for this venue. We fetch public reviews via Google Places API (server-side).
-              Requires <code className="rounded bg-gray-100 px-1 text-xs">GOOGLE_PLACES_API_KEY</code> or{' '}
-              <code className="rounded bg-gray-100 px-1 text-xs">GOOGLE_MAPS_API_KEY</code> on the server.
-            </p>
-            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-gray-500">
-              Place ID
-            </label>
-            <input
-              value={googlePlaceInput}
-              onChange={(e) => setGooglePlaceInput(e.target.value)}
-              placeholder="ChIJ…"
-              className="mt-1 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
-            />
-            {googleSaveErr && <p className="mt-2 text-sm text-red-600">{googleSaveErr}</p>}
-            <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mb-8 space-y-4">
+
+            {/* ── Connected state ──────────────────────────────────────────── */}
+            {googlePlaceInput.trim() && !searchCandidates.length && (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <CheckCircle2 size={18} className="shrink-0 text-emerald-600 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-semibold text-emerald-900">Connected to Google Business</p>
+                      <p className="text-xs text-emerald-700 mt-0.5">
+                        Reviews auto-sync from Google every 24 hours.
+                        {googleFetchedAt && (
+                          <> Last synced {new Date(googleFetchedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}.</>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => void loadGoogle(true)}
+                      disabled={googleLoading}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      {googleLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                      Refresh now
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGooglePlaceInput('');
+                        setGoogleCache(null);
+                        setGoogleFetchedAt(null);
+                        autoSearchDoneRef.current = false;
+                        setSearchCandidates([]);
+                        void runSearch();
+                      }}
+                      className="text-xs text-emerald-700 underline hover:text-emerald-900"
+                    >
+                      Change business
+                    </button>
+                  </div>
+                </div>
+                {googleSaveErr && (
+                  <p className="mt-2 text-xs text-red-600 flex items-center gap-1"><AlertCircle size={12} />{googleSaveErr}</p>
+                )}
+              </div>
+            )}
+
+            {/* ── Auto-search loading ───────────────────────────────────────── */}
+            {!googlePlaceInput.trim() && searchLoading && (
+              <div className="flex items-center gap-3 rounded-2xl border border-gray-100 bg-white px-5 py-5">
+                <Loader2 className="h-5 w-5 animate-spin text-gray-400 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Finding your Google Business Profile…</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Searching based on your venue name and location</p>
+                </div>
+              </div>
+            )}
+
+            {/* ── Candidate cards ───────────────────────────────────────────── */}
+            {!googlePlaceInput.trim() && !searchLoading && searchCandidates.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-gray-700">
+                    {searchCandidates.length === 1
+                      ? 'Is this your business on Google?'
+                      : 'Which one is your business on Google?'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => { setShowSearchBox(true); setTimeout(() => searchInputRef.current?.focus(), 50); }}
+                    className="text-xs text-gray-500 underline hover:text-gray-800"
+                  >
+                    Not here? Search manually
+                  </button>
+                </div>
+                {searchCandidates.map((c) => (
+                  <div
+                    key={c.place_id}
+                    className="flex items-start justify-between gap-4 rounded-2xl border border-gray-200 bg-white px-5 py-4 hover:border-gray-300 transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{c.name}</p>
+                      <p className="text-xs text-gray-500 mt-0.5 truncate">{c.formatted_address}</p>
+                      {c.rating != null && (
+                        <div className="mt-1.5 flex items-center gap-1.5">
+                          <StarsDisplay value={Math.round(c.rating)} size="sm" />
+                          <span className="text-xs text-gray-500">
+                            {c.rating.toFixed(1)}
+                            {c.user_ratings_total != null && <> · {c.user_ratings_total.toLocaleString()} reviews</>}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void confirmCandidate(c)}
+                      disabled={confirmingId === c.place_id}
+                      className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-[#1b1b1b] px-4 py-2 text-xs font-semibold text-white hover:bg-neutral-800 disabled:opacity-50 whitespace-nowrap"
+                    >
+                      {confirmingId === c.place_id
+                        ? <><Loader2 className="h-3 w-3 animate-spin" />Connecting…</>
+                        : <>Yes, that&apos;s us</>
+                      }
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* ── Error from auto-search ────────────────────────────────────── */}
+            {!googlePlaceInput.trim() && !searchLoading && searchErr && !searchCandidates.length && (
+              <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
+                <AlertCircle size={16} className="shrink-0 text-amber-600 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-amber-900">{searchErr}</p>
+                  <button
+                    type="button"
+                    onClick={() => { setShowSearchBox(true); setTimeout(() => searchInputRef.current?.focus(), 50); }}
+                    className="mt-1 text-xs text-amber-800 underline"
+                  >
+                    Search manually instead
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ── Manual search box ─────────────────────────────────────────── */}
+            {(showSearchBox || (!googlePlaceInput.trim() && !searchLoading && searchCandidates.length === 0 && !searchErr)) && (
+              <form onSubmit={handleSearchSubmit} className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search size={14} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    ref={searchInputRef}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search by business name, address, or city…"
+                    className="w-full rounded-2xl border border-gray-200 bg-gray-50 py-3 pl-9 pr-4 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={searchLoading || !searchQuery.trim()}
+                  className="shrink-0 rounded-2xl bg-[#1b1b1b] px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 disabled:opacity-50"
+                >
+                  {searchLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Search'}
+                </button>
+              </form>
+            )}
+
+            {/* ── Advanced: manual Place ID input ───────────────────────────── */}
+            <div className="rounded-2xl border border-gray-100 bg-gray-50">
               <button
                 type="button"
-                onClick={() => void saveGooglePlace()}
-                disabled={googleSaving}
-                className="rounded-2xl bg-[#1b1b1b] px-4 py-2.5 text-sm font-semibold text-white hover:bg-neutral-800 disabled:opacity-50"
+                onClick={() => setShowAdvanced((v) => !v)}
+                className="flex w-full items-center justify-between px-4 py-3 text-xs font-medium text-gray-500 hover:text-gray-700"
               >
-                {googleSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save & sync'}
+                <span>Advanced: enter Place ID manually</span>
+                <ChevronDown size={14} className={`transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
               </button>
-              <button
-                type="button"
-                onClick={() => void loadGoogle(true)}
-                disabled={googleLoading}
-                className="rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
-              >
-                Refresh
-              </button>
+              {showAdvanced && (
+                <div className="border-t border-gray-100 px-4 pb-4 pt-3 space-y-3">
+                  <p className="text-xs text-gray-500 leading-relaxed">
+                    Find your Place ID using{' '}
+                    <a
+                      href="https://developers.google.com/maps/documentation/javascript/examples/places-placeid-finder"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline text-gray-700 inline-flex items-center gap-0.5"
+                    >
+                      Google&apos;s Place ID finder<ExternalLink size={10} className="inline" />
+                    </a>
+                    {' '}(search for your business name, then copy the ID).
+                  </p>
+                  <input
+                    value={googlePlaceInput}
+                    onChange={(e) => setGooglePlaceInput(e.target.value)}
+                    placeholder="ChIJN1t_tDeuEmsRUsoyG83frY4"
+                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-gray-400 focus:outline-none"
+                  />
+                  {googleSaveErr && !googlePlaceInput.trim() && (
+                    <p className="text-xs text-red-600">{googleSaveErr}</p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void saveGooglePlace()}
+                    disabled={googleSaving || !googlePlaceInput.trim()}
+                    className="rounded-xl bg-[#1b1b1b] px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 disabled:opacity-50"
+                  >
+                    {googleSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save & sync'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
 
         {sourceTab === 'google' && (
           <div className="mb-10 space-y-4">
-            {googleLoading && (
+            {googleLoading && !googleCache && (
               <div className="flex justify-center py-8 text-gray-400">
                 <Loader2 className="h-8 w-8 animate-spin" />
               </div>
@@ -541,30 +799,40 @@ export default function ListingReviewsPage() {
                       key={`${r.author_name}-${i}`}
                       className="rounded-3xl border border-gray-200/90 bg-white p-6"
                     >
-                      <StarsDisplay value={r.rating} />
-                      <p className="mt-2 text-[15px] leading-relaxed text-gray-700">{r.text}</p>
-                      <div className="mt-3 flex flex-wrap gap-3 text-xs text-gray-500">
-                        <span className="font-semibold text-gray-800">{r.author_name}</span>
-                        {r.published_at && (
-                          <span>
-                            {new Date(r.published_at).toLocaleDateString(undefined, {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric',
-                            })}
+                      <div className="flex items-start gap-3">
+                        {r.profile_photo_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={r.profile_photo_url}
+                            alt={r.author_name}
+                            className="h-9 w-9 rounded-full object-cover shrink-0"
+                          />
+                        ) : (
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-bold text-gray-500">
+                            {r.author_name.charAt(0).toUpperCase()}
                           </span>
                         )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-semibold text-gray-800">{r.author_name}</span>
+                            {r.published_at && (
+                              <span className="text-xs text-gray-400">
+                                {new Date(r.published_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </span>
+                            )}
+                          </div>
+                          <StarsDisplay value={r.rating} size="sm" />
+                          <p className="mt-2 text-[14px] leading-relaxed text-gray-700">{r.text}</p>
+                        </div>
                       </div>
                     </li>
                   ))}
                 </ul>
-              ) : (
+              ) : googlePlaceInput.trim() ? (
                 <p className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/80 px-4 py-10 text-center text-sm text-gray-500">
-                  {googlePlaceInput.trim()
-                    ? 'No reviews returned yet. Check your Place ID and API key, then refresh.'
-                    : 'Enter a Place ID above to pull Google reviews.'}
+                  No reviews returned yet — click &quot;Refresh now&quot; above to re-fetch from Google.
                 </p>
-              ))}
+              ) : null)}
           </div>
         )}
 
