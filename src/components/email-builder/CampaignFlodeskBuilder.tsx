@@ -903,29 +903,78 @@ function SliderControl({
   display?: string;
   onChange: (v: number) => void;
 }) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+
   const pct = Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
-  const dec = (v: number) => onChange(Math.max(min, parseFloat((v - step).toFixed(4))));
-  const inc = (v: number) => onChange(Math.min(max, parseFloat((v + step).toFixed(4))));
+  const snap = (raw: number) => parseFloat((Math.round(raw / step) * step).toFixed(4));
+  const clamp = (v: number) => Math.max(min, Math.min(max, v));
+
+  function valueFromClientX(x: number) {
+    if (!trackRef.current) return value;
+    const rect = trackRef.current.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (x - rect.left) / rect.width));
+    return clamp(snap(min + ratio * (max - min)));
+  }
+
+  function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    dragging.current = true;
+    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+    onChange(valueFromClientX(e.clientX));
+  }
+  function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!dragging.current) return;
+    onChange(valueFromClientX(e.clientX));
+  }
+  function onPointerUp() { dragging.current = false; }
+
   return (
     <div>
-      <div className="flex items-baseline gap-2 mb-2.5">
-        <span className="text-sm font-semibold text-gray-700">{label}</span>
+      <div className="flex items-baseline gap-2 mb-3">
+        <span className="text-sm font-medium text-gray-700">{label}</span>
         <span className="text-sm text-gray-400">{display ?? value}</span>
       </div>
-      <div className="flex items-center gap-2">
-        <button type="button" onMouseDown={() => dec(value)} className="text-lg text-gray-400 hover:text-gray-700 leading-none w-4 flex-shrink-0 select-none">−</button>
-        <div className="flex-1">
-          <input
-            type="range" min={min} max={max} step={step} value={value}
-            onChange={e => onChange(Number(e.target.value))}
-            className="w-full h-1.5 appearance-none rounded-full cursor-pointer"
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => onChange(clamp(snap(value - step)))}
+          className="text-base text-gray-400 hover:text-gray-700 w-4 flex-shrink-0 select-none leading-none"
+        >−</button>
+
+        {/* Custom track */}
+        <div
+          ref={trackRef}
+          className="relative flex-1 h-6 flex items-center cursor-pointer select-none"
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerLeave={onPointerUp}
+        >
+          {/* Track rail */}
+          <div className="absolute inset-x-0 h-[3px] rounded-full bg-gray-200" />
+          {/* Filled portion */}
+          <div
+            className="absolute left-0 h-[3px] rounded-full"
+            style={{ width: `${pct}%`, background: '#1b1b1b' }}
+          />
+          {/* Thumb */}
+          <div
+            className="absolute w-[18px] h-[18px] rounded-full border-[2.5px] border-white shadow-md"
             style={{
-              background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${pct}%, #e5e7eb ${pct}%, #e5e7eb 100%)`,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            } as any}
+              left: `${pct}%`,
+              transform: 'translateX(-50%)',
+              background: '#1b1b1b',
+              boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
+              pointerEvents: 'none',
+            }}
           />
         </div>
-        <button type="button" onMouseDown={() => inc(value)} className="text-lg text-gray-400 hover:text-gray-700 leading-none w-4 flex-shrink-0 select-none">+</button>
+
+        <button
+          type="button"
+          onClick={() => onChange(clamp(snap(value + step)))}
+          className="text-base text-gray-400 hover:text-gray-700 w-4 flex-shrink-0 select-none leading-none"
+        >+</button>
       </div>
     </div>
   );
