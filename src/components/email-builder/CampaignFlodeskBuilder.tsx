@@ -904,29 +904,46 @@ function SliderControl({
   onChange: (v: number) => void;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
-  const dragging = useRef(false);
+  const isDragging = useRef(false);
+  // Keep latest props accessible inside document-level listeners without re-subscribing
+  const latestRef = useRef({ min, max, step, onChange });
+  useEffect(() => { latestRef.current = { min, max, step, onChange }; }, [min, max, step, onChange]);
 
   const pct = Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
-  const snap = (raw: number) => parseFloat((Math.round(raw / step) * step).toFixed(4));
   const clamp = (v: number) => Math.max(min, Math.min(max, v));
+  const snap  = (raw: number) => parseFloat((Math.round(raw / step) * step).toFixed(4));
 
-  function valueFromClientX(x: number) {
-    if (!trackRef.current) return value;
-    const rect = trackRef.current.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (x - rect.left) / rect.width));
-    return clamp(snap(min + ratio * (max - min)));
+  function computeFromClientX(clientX: number) {
+    if (!trackRef.current) return latestRef.current.min;
+    const { min: lo, max: hi, step: st } = latestRef.current;
+    const rect  = trackRef.current.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const raw   = lo + ratio * (hi - lo);
+    return Math.max(lo, Math.min(hi, parseFloat((Math.round(raw / st) * st).toFixed(4))));
   }
 
-  function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    dragging.current = true;
-    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
-    onChange(valueFromClientX(e.clientX));
+  // Use mouse events (not pointer events) — dnd-kit's PointerSensor won't intercept these
+  useEffect(() => {
+    function onMove(e: MouseEvent) {
+      if (!isDragging.current) return;
+      latestRef.current.onChange(computeFromClientX(e.clientX));
+    }
+    function onUp() { isDragging.current = false; }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    return () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function onMouseDown(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation(); // prevent dnd-kit from stealing the drag
+    isDragging.current = true;
+    latestRef.current.onChange(computeFromClientX(e.clientX));
   }
-  function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
-    if (!dragging.current) return;
-    onChange(valueFromClientX(e.clientX));
-  }
-  function onPointerUp() { dragging.current = false; }
 
   return (
     <div>
@@ -938,41 +955,34 @@ function SliderControl({
         <button
           type="button"
           onClick={() => onChange(clamp(snap(value - step)))}
-          className="text-sm text-gray-400 hover:text-gray-600 w-4 flex-shrink-0 select-none leading-none"
+          className="text-sm text-gray-400 hover:text-gray-700 w-4 flex-shrink-0 select-none leading-none"
         >−</button>
 
-        {/* Custom track — pointer capture keeps drag alive outside bounds */}
         <div
           ref={trackRef}
-          className="relative flex-1 flex items-center cursor-grab active:cursor-grabbing select-none"
-          style={{ height: 36 }}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
+          onMouseDown={onMouseDown}
+          style={{ position: 'relative', flex: 1, height: 36, display: 'flex', alignItems: 'center', cursor: 'grab', userSelect: 'none' }}
         >
           {/* Rail */}
-          <div className="absolute inset-x-0 rounded-full" style={{ height: 1, background: '#d1d5db', top: '50%', transform: 'translateY(-50%)' }} />
+          <div style={{ position: 'absolute', left: 0, right: 0, height: 1, background: '#d1d5db', borderRadius: 9999 }} />
           {/* Thumb */}
-          <div
-            style={{
-              position: 'absolute',
-              left: `${pct}%`,
-              transform: 'translateX(-50%)',
-              width: 28,
-              height: 28,
-              borderRadius: '50%',
-              background: '#ffffff',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.06)',
-              pointerEvents: 'none',
-            }}
-          />
+          <div style={{
+            position: 'absolute',
+            left: `${pct}%`,
+            transform: 'translateX(-50%)',
+            width: 26,
+            height: 26,
+            borderRadius: '50%',
+            background: '#ffffff',
+            boxShadow: '0 2px 10px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.07)',
+            pointerEvents: 'none',
+          }} />
         </div>
 
         <button
           type="button"
           onClick={() => onChange(clamp(snap(value + step)))}
-          className="text-sm text-gray-400 hover:text-gray-600 w-4 flex-shrink-0 select-none leading-none"
+          className="text-sm text-gray-400 hover:text-gray-700 w-4 flex-shrink-0 select-none leading-none"
         >+</button>
       </div>
     </div>
