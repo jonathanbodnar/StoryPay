@@ -4,9 +4,9 @@ export type VenueSocial = { platform: string; url: string };
 
 // Platforms supported by both the editor and the renderer. Kept in sync with
 // SOCIAL_PLATFORM_DEFS in src/lib/use-brand-socials.ts and the KNOWN set in
-// src/app/api/venues/me/route.ts. Anything else (e.g. legacy 'threads' rows
-// from before the platform was removed) is dropped at injection time so we
-// never ship an empty chip to a recipient.
+// src/app/api/venues/me/route.ts. Anything else — including legacy rows from
+// retired platforms — is dropped at injection time so we never ship an empty
+// chip to a recipient.
 export const SUPPORTED_SOCIAL_PLATFORMS = new Set([
   'facebook', 'instagram', 'youtube', 'tiktok', 'pinterest',
   'linkedin', 'twitter', 'website',

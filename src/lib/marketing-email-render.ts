@@ -15,10 +15,10 @@ function esc(s: string): string {
 }
 
 // Inline-SVG paths for social icons — Flodesk-style minimalist glyphs:
-// filled letterforms (f, in, P, d, X, threads-@) for letter glyphs, stroked
-// outlines (Instagram camera, Globe, YouTube) with small filled accents for
-// shape glyphs. Paths are kept in lockstep with the `SocialIcon` component
-// in `CampaignFlodeskBuilder.tsx` so editor / preview / inbox match 1:1.
+// filled letterforms (f, in, P, d, X) for letter glyphs, stroked outlines
+// (Instagram camera, Globe, YouTube) with small filled accents for shape
+// glyphs. Paths are kept in lockstep with the `SocialIcon` component in
+// `CampaignFlodeskBuilder.tsx` so editor / preview / inbox match 1:1.
 // SVG ships with `vertical-align:middle` so it lines up cleanly inside the
 // chip wrapper (which uses line-height = chip height to vertically center —
 // works in every email client we test).

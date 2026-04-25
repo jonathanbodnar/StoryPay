@@ -12,6 +12,32 @@ async function getVenueId() {
   return cookieStore.get('venue_id')?.value;
 }
 
+// Single source of truth for which social platforms are supported. Mirror of:
+//   - SOCIAL_PLATFORM_DEFS in src/lib/use-brand-socials.ts
+//   - SUPPORTED_SOCIAL_PLATFORMS in src/lib/marketing-email-injection.ts
+//   - the KNOWN set inside the PATCH handler below
+// Used on read AND on write so a row in venues.brand_socials for any platform
+// outside this set is silently scrubbed before it reaches the client.
+const SUPPORTED_SOCIAL_PLATFORMS = new Set([
+  'facebook', 'instagram', 'youtube', 'tiktok', 'pinterest',
+  'linkedin', 'twitter', 'website',
+]);
+
+function sanitizeBrandSocialsOnRead(raw: unknown): { platform: string; url: string }[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: { platform: string; url: string }[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const p = String((entry as { platform?: unknown }).platform ?? '').trim().toLowerCase();
+    const u = String((entry as { url?: unknown }).url ?? '').trim();
+    if (!SUPPORTED_SOCIAL_PLATFORMS.has(p) || !u || seen.has(p)) continue;
+    seen.add(p);
+    out.push({ platform: p, url: u });
+  }
+  return out;
+}
+
 export async function GET() {
   const venueId = await getVenueId();
   if (!venueId) {
@@ -36,7 +62,19 @@ export async function GET() {
     if (planRow) directory_plans = planRow;
   }
 
-  return NextResponse.json({ ...venue, directory_plans });
+  // Defense-in-depth: scrub legacy / unsupported social platforms (e.g. rows
+  // saved before a platform was retired) so the client never sees them even
+  // if the DB still holds them. The migration in migrations/060 does the same
+  // cleanup at rest; this guard handles any state in between.
+  const brand_socials = 'brand_socials' in venue
+    ? sanitizeBrandSocialsOnRead((venue as { brand_socials?: unknown }).brand_socials)
+    : undefined;
+
+  return NextResponse.json({
+    ...venue,
+    ...(brand_socials !== undefined ? { brand_socials } : {}),
+    directory_plans,
+  });
 }
 
 export async function PATCH(request: Request) {

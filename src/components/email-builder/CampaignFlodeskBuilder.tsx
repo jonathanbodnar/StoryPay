@@ -3586,8 +3586,8 @@ function BlockInspectorPanel({
     const align = block.align ?? 'center';
     // Inspector mirrors the renderer: only show platforms that the renderer
     // would actually ship — supported platform + has a URL. Legacy / retired
-    // platforms (e.g. 'threads' rows persisted from before we removed it)
-    // are dropped here, same as the renderer drops them.
+    // platforms (rows persisted from before a platform was removed) are
+    // dropped here, same as the renderer drops them.
     const linkedSocials = (venueSocials ?? []).filter(
       (s) => s.url?.trim() && SUPPORTED_SOCIAL_PLATFORMS.has(s.platform),
     );
