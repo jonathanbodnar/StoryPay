@@ -1971,10 +1971,12 @@ export function CampaignFlodeskBuilder({
           </Link>
         </div>
 
-        {/* Center: step breadcrumbs — absolutely centered so it doesn't shift with left/right content */}
+        {/* Center: step breadcrumbs — centered relative to the live canvas
+            (header spans sidebar→viewport-right; right panel = 288px (w-72), so
+            shift left by half its width to center on the canvas itself) */}
         <div
           className="hidden sm:flex items-center gap-2 text-[11px] tracking-widest font-medium uppercase"
-          style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}
+          style={{ position: 'absolute', left: 'calc(50% - 144px)', transform: 'translateX(-50%)' }}
         >
           <span className="text-gray-300">Choose Template</span>
           <span className="text-gray-200">›</span>
