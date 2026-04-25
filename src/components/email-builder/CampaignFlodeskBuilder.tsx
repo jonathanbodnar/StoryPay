@@ -1607,6 +1607,10 @@ export function CampaignFlodeskBuilder({
     <div className="-mt-6 lg:-mt-[68px] -mb-10 flex flex-col bg-white"
       style={{ minHeight: '100vh' }}
     >
+      {/* Hide webkit scrollbars globally for the two scrollable panes */}
+      <style>{`
+        .fb-scroll-pane::-webkit-scrollbar { display: none; }
+      `}</style>
       {/* ── Top Bar — fixed, spans from sidebar right edge to viewport right edge ── */}
       <header
         className="flex items-center bg-white px-6 py-3"
@@ -1685,8 +1689,14 @@ export function CampaignFlodeskBuilder({
 
         {/* ── Canvas ───────────────────────────────────────────────────────── */}
         <div
-          className="flex-1 overflow-y-auto"
-          style={{ background: '#ffffff', paddingTop: '36px', paddingBottom: '60px', paddingLeft: '40px', paddingRight: '80px' }}
+          className="fb-scroll-pane flex-1 overflow-y-auto"
+          style={{
+            background: '#ffffff',
+            paddingTop: '36px', paddingBottom: '60px', paddingLeft: '40px', paddingRight: '80px',
+            overscrollBehavior: 'contain',
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+          } as React.CSSProperties}
           onClick={() => setSelectedId(null)}
         >
           {/* Desktop / Mobile toggle — centered above email card */}
@@ -1852,7 +1862,14 @@ export function CampaignFlodeskBuilder({
           style={{ boxShadow: '-12px 0 32px -8px rgba(0,0,0,0.07)' }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex-1 overflow-y-auto">
+          <div
+            className="fb-scroll-pane flex-1 overflow-y-auto"
+            style={{
+              overscrollBehavior: 'contain',
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none',
+            } as React.CSSProperties}
+          >
           {selectedBlock ? (
             <div className="p-5">
               {/* Block type label */}
