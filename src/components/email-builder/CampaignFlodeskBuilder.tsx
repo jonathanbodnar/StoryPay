@@ -1396,7 +1396,7 @@ function BlockInspectorPanel({
           <p className="text-sm font-semibold text-gray-700 mb-1.5">Font</p>
           <FontSelector value={block.fontFamily ?? theme.fontFamily} onChange={(v) => onChange({ fontFamily: v })} />
         </div>
-        <WeightRow defaultWeight="700" />
+        {WeightRow({ defaultWeight: '700' })}
         <div>
           <p className="text-sm font-semibold text-gray-700 mb-1.5">Font color <span className="font-normal text-gray-400 text-xs">{block.color ?? theme.textColor}</span></p>
           <FlodeskColorPicker value={block.color ?? theme.textColor} onChange={(v) => onChange({ color: v })} />
@@ -1416,9 +1416,9 @@ function BlockInspectorPanel({
             ))}
           </div>
         </div>
-        <AlignRow />
-        <CaseRow />
-        <SpacingSection defaultFontSize={defaultSize} />
+        {AlignRow()}
+        {CaseRow()}
+        {SpacingSection({ defaultFontSize: defaultSize })}
       </div>
     );
   }
@@ -1430,14 +1430,14 @@ function BlockInspectorPanel({
           <p className="text-sm font-semibold text-gray-700 mb-1.5">Font</p>
           <FontSelector value={block.fontFamily ?? theme.fontFamily} onChange={(v) => onChange({ fontFamily: v })} />
         </div>
-        <WeightRow defaultWeight="400" />
+        {WeightRow({ defaultWeight: '400' })}
         <div>
           <p className="text-sm font-semibold text-gray-700 mb-1.5">Font color <span className="font-normal text-gray-400 text-xs">{block.color ?? theme.textColor}</span></p>
           <FlodeskColorPicker value={block.color ?? theme.textColor} onChange={(v) => onChange({ color: v })} />
         </div>
-        <AlignRow />
-        <CaseRow />
-        <SpacingSection defaultFontSize={16} />
+        {AlignRow()}
+        {CaseRow()}
+        {SpacingSection({ defaultFontSize: 16 })}
       </div>
     );
   }
@@ -1465,7 +1465,7 @@ function BlockInspectorPanel({
             placeholder="https://"
           />
         </div>
-        <AlignRow />
+        {AlignRow()}
       </div>
     );
   }
@@ -1510,7 +1510,7 @@ function BlockInspectorPanel({
             placeholder="https://"
           />
         </div>
-        <AlignRow />
+        {AlignRow()}
       </div>
     );
   }
