@@ -1733,11 +1733,18 @@ export function CampaignFlodeskBuilder({
         </div>
       </header>
 
-      {/* Spacer so content isn't hidden behind the fixed header */}
-      <div className="h-[52px] flex-shrink-0" />
-
-      {/* ── Content ────────────────────────────────────────────────────────── */}
-      <div className="flex flex-1 overflow-hidden" style={{ height: 'calc(100vh - 52px)' }}>
+      {/* ── Content — fixed below the header so both panes can scroll independently ── */}
+      <div
+        style={{
+          position: 'fixed',
+          top: 52,
+          left: 'var(--sidebar-w, 216px)',
+          right: 0,
+          bottom: 0,
+          display: 'flex',
+          overflow: 'hidden',
+        }}
+      >
 
         {/* ── Canvas ───────────────────────────────────────────────────────── */}
         <div
