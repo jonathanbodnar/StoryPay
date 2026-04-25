@@ -116,6 +116,16 @@ function buildMetrics(rows: EventRow[], leads: { id: string; created_at: string 
     : 0;
 
   // ── Daily breakdown ───────────────────────────────────────────────────────
+  // Bucket events into per-day counts. We then backfill EVERY day in the
+  // requested range (even days with zero traffic) so the chart renders a
+  // continuous line across the full window — otherwise sparse weeks look
+  // like missing data and users assume "view counts aren't saving."
+  //
+  // Historical retention: `listing_events` rows are kept indefinitely. There
+  // is no TTL, cron prune, or DELETE pipeline anywhere in the codebase that
+  // touches this table — the only delete pathway is venues.id ON DELETE
+  // CASCADE if a venue itself is removed. So a 30-day (or 365-day) lookback
+  // can always rely on every event ever recorded for the venue being present.
   const dailyMap: Record<string, { views: number; sessions: Set<string>; impressions: number }> = {};
   const viewRows = rows.filter(r => r.event_type === 'page_view' || r.event_type === 'session_heartbeat' || r.event_type === 'listing_impression');
   for (const row of viewRows) {
@@ -124,9 +134,25 @@ function buildMetrics(rows: EventRow[], leads: { id: string; created_at: string 
     if (row.event_type === 'page_view' || row.event_type === 'session_heartbeat') { dailyMap[day].sessions.add(row.session_id); if (row.event_type === 'page_view') dailyMap[day].views++; }
     if (row.event_type === 'listing_impression') dailyMap[day].impressions++;
   }
-  const daily = Object.entries(dailyMap)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, v]) => ({ date, views: v.views, unique_sessions: v.sessions.size, impressions: v.impressions }));
+
+  // Build the full date axis (today, today-1, ..., today-(days-1)) in UTC
+  // so the keys match `created_at.slice(0,10)` (which is also UTC). Render
+  // oldest → newest so the chart x-axis flows left-to-right naturally.
+  const daily: { date: string; views: number; unique_sessions: number; impressions: number }[] = [];
+  const todayUtc = new Date();
+  todayUtc.setUTCHours(0, 0, 0, 0);
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(todayUtc);
+    d.setUTCDate(todayUtc.getUTCDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    const bucket = dailyMap[key];
+    daily.push({
+      date: key,
+      views: bucket?.views ?? 0,
+      unique_sessions: bucket?.sessions.size ?? 0,
+      impressions: bucket?.impressions ?? 0,
+    });
+  }
 
   // ── Scroll depth ──────────────────────────────────────────────────────────
   const s25 = new Set(rows.filter(r => r.event_type === 'scroll_25').map(r => r.session_id)).size;

@@ -663,10 +663,16 @@ export default function ListingAnalyticsPage() {
           </div>
 
           {/* ── Views + Unique visitors chart ────────────────────────────── */}
+          {/* `d.daily` is backfilled server-side for the full window, so a
+              30-day request always returns 30 data points (zeros where there
+              was no traffic). The empty state only fires when the window has
+              ZERO views AND ZERO impressions across every day — otherwise we
+              show the continuous chart so the dashboard makes it obvious the
+              historical events are there. */}
           <div className="rounded-2xl border border-gray-200 bg-white p-6">
             <SectionTitle>Daily views — last {days} days</SectionTitle>
             <p className="text-xs text-gray-400 mt-0.5 mb-5">Total page views vs unique visitors each day</p>
-            {d.daily.length > 0 ? (
+            {d.daily.length > 0 && (d.total_views > 0 || d.total_impressions > 0 || d.unique_sessions > 0) ? (
               <ResponsiveContainer width="100%" height={220}>
                 <AreaChart data={d.daily.map(row => ({ ...row, date: formatDate(row.date) }))}
                   margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>

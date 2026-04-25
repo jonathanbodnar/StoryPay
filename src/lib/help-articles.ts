@@ -685,6 +685,38 @@ How it works:
 
 Privacy: only approximate location data (city-level) is captured. No names, emails, or device identifiers are linked to map markers.`,
       },
+      {
+        id: 'listing-analytics-retention',
+        title: 'Daily views & analytics retention — does StoryPay save historical traffic?',
+        tags: ['analytics', 'history', 'historical', 'retention', 'daily views', 'data retention', 'page views', 'unique visitors', '30 days', '90 days', '365 days', 'archive', 'old data', 'last 30 days'],
+        body: `Yes — every event on your storyvenue.com listing is saved permanently in the listing_events table. There is no auto-prune, no TTL, no cron job that deletes old rows. The Analytics dashboard's date-range picker (1 / 7 / 14 / 30 / 60 / 90 days) is purely a query window, not a retention boundary.
+
+What's tracked
+- Page views (every visit to your public listing)
+- Listing impressions (every time your listing appears in directory search results)
+- Unique sessions (per anonymous browser-tab session)
+- Scroll depth (25% / 50% / 75% / 100%)
+- Photo views, FAQ opens, social clicks
+- Contact form opens & submissions
+- Device type, referrer / UTM source, country / region / city / lat-lng (resolved from IP, never personal data)
+
+How long we keep it
+- Forever. There is no deletion policy. A 365-day lookback is supported today, and longer is technically possible — we just haven't added the UI for it yet.
+- The only way historical data is ever removed is if the venue itself is deleted (ON DELETE CASCADE on the listing_events table).
+
+Why the "Daily views" chart sometimes looks sparse
+- The chart shows the full requested window (e.g. all 30 days for a 30-day query) with zeros backfilled for days that had no traffic. So a quiet venue will see a flat line at zero with a couple of spikes — that's NOT missing data, it's a faithful picture of "no one visited that day."
+- If you see only one day of data on a 30-day chart, that just means your listing was visited on that one day in the last month. Switch to a longer window (60 / 90 days) to see more history.
+
+Test that tracking is working
+- Open your public listing in an incognito tab → wait ~5 seconds → return to the analytics page and refresh. You should see the unique-sessions counter go up and a new dot on today's column in the Daily views chart.
+- The "Live visitor map" updates within ~10 seconds and is the fastest way to confirm the tracker is recording your visit.
+
+If you're convinced data should be there but isn't
+- Verify your listing is published (Venue listing → Dashboard → Published toggle). Tracking still records events for unpublished listings, but no real visitors can reach them.
+- Make sure your tracker isn't blocked by an ad-blocker on your test browser (the tracker is first-party so most ad-blockers don't touch it, but some aggressive ones do).
+- Open Ask AI and paste your venue slug — the assistant can pull your raw event count for the last 30 days from the database.`,
+      },
     ],
   },
   {
@@ -2085,7 +2117,7 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/listing/media': ['listing-media-library', 'listing-photos', 'listing-overview', 'brand-setup'],
   '/dashboard/listing/images': ['listing-photos', 'listing-media-library', 'listing-overview', 'listing-publish'],
   '/dashboard/listing/reviews': ['listing-reviews', 'listing-google-reviews', 'listing-overview', 'listing-publish'],
-  '/dashboard/listing/analytics': ['listing-analytics-realtime', 'listing-overview', 'listing-publish'],
+  '/dashboard/listing/analytics': ['listing-analytics-realtime', 'listing-analytics-retention', 'listing-overview', 'listing-publish'],
   '/dashboard/listing':        ['listing-overview', 'listing-media-library', 'listing-reviews', 'listing-google-reviews', 'listing-analytics-realtime', 'listing-autosave', 'listing-photos', 'listing-publish', 'listing-slug'],
 
   // Leads

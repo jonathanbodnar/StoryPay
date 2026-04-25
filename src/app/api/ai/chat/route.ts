@@ -53,6 +53,13 @@ StoryPay is an all-in-one platform for wedding venues to manage proposals, invoi
 - Geographic data (latitude, longitude, city, region, country) is captured server-side via ip-api.com on every tracking event and stored in the listing_events table (migration 057).
 - The realtime API endpoint /api/listing-analytics/realtime returns geo_points: one entry per active session with lat, lng, city, region, country, flag, and live boolean.
 
+## Listing analytics — historical retention & "Daily views" chart
+- listing_events is a permanent log. There is **no auto-prune, no TTL, no cron job, and no DELETE pipeline** anywhere in the codebase that touches this table. The only delete pathway is venues.id ON DELETE CASCADE if a venue itself is removed.
+- The Analytics dashboard's date-range picker (1 / 7 / 14 / 30 / 60 / 90 days, plus 365 days for lead insights) is a query window, NOT a retention boundary. Switching to a longer window pulls more history out of the same permanent log.
+- The "Daily views — last N days" chart in /dashboard/listing/analytics is **server-side backfilled**: the API (/api/listing-analytics) walks every UTC day in the requested window from today-(days-1) to today and emits a row for each, filling in views/unique_sessions/impressions from the listing_events bucket if present, or zeros if the day had no traffic. So a 30-day request always returns exactly 30 rows. Sparse weeks render as a flat-zero line with spikes on the busy days — that's correct, not missing data.
+- The chart's empty-state message ("No view data yet — visit your public listing to test tracking") only fires when total_views, total_impressions, AND unique_sessions are all zero across the entire window — i.e. the venue has had literally zero traffic in the period.
+- If a venue owner says "my view counts aren't saving," 99% of the time the answer is "they ARE saving — your listing simply hasn't received traffic on the empty days. Switch to 60 / 90 days to see more history, and confirm by visiting your own public listing in incognito and watching the Live visitor map and total-views counter update within ~10 seconds."
+
 ## Media library (shared venue images)
 - Path: /dashboard/listing/media (sidebar → Venue listing → Media library). Central library for image files your venue reuses across the product.
 - Upload images here; each file gets a stable public URL you can copy. Supported types: JPEG, PNG, WebP, AVIF, GIF. Max 10MB per file. Video uploads are not supported.
