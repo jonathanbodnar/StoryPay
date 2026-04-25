@@ -48,9 +48,31 @@ function renderBlock(block: EmailBlock, theme: ReturnType<typeof mergeEmailTheme
     case 'button': {
       const href = esc(block.href?.trim() || '#');
       const lab = esc(block.buttonLabel?.trim() || 'Button');
-      const bg = theme.buttonBg;
-      const fg = theme.buttonText;
-      return `<tr><td style="padding:16px 24px;${align};"><a href="${href}" style="display:inline-block;background:${bg};color:${fg};padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;font-family:sans-serif;">${lab}</a></td></tr>`;
+      const presetRadius: Record<string, number> = {
+        'filled-rect':       0,  'filled-rounded':    4,  'filled-rounded-lg':    10,  'filled-pill':    999,
+        'outline-rect':      0,  'outline-rounded':   4,  'outline-rounded-lg':   10,  'outline-pill':   999,
+      };
+      const styleId = block.buttonStyle ?? 'outline-rect';
+      const isFilled = styleId.startsWith('filled');
+      const radius = presetRadius[styleId] ?? 4;
+      const bg = block.buttonBgColor ?? (isFilled ? '#000000' : 'transparent');
+      const fg = block.color ?? (isFilled ? '#ffffff' : '#000000');
+      const borderW = block.buttonBorderWidth ?? (isFilled ? 0 : 2);
+      const borderColor = block.buttonBorderColor ?? '#000000';
+      const padX = block.buttonWidth ?? 30;
+      const padY = block.buttonHeight ?? 15;
+      const ff = block.fontFamily ?? theme.fontFamily;
+      const fw = block.fontWeight ?? '400';
+      const fs = block.fontSize ?? '14px';
+      const ls = block.letterSpacing ?? 1.8;
+      const tt = (block.textTransform && block.textTransform !== 'none') ? `text-transform:${block.textTransform};` : '';
+      const blockBg = block.blockBgColor && block.blockBgColor !== 'transparent' ? `background:${block.blockBgColor};` : '';
+      const padTop = block.paddingTop ?? 16;
+      const padBot = block.paddingBottom ?? 16;
+      const padLeft = block.paddingLeft ?? 24;
+      const padRight = block.paddingRight ?? 24;
+
+      return `<tr><td style="padding:${padTop}px ${padRight}px ${padBot}px ${padLeft}px;${align};${blockBg}"><a href="${href}" style="display:inline-block;background:${bg};color:${fg};border:${borderW}px solid ${borderColor};padding:${padY}px ${padX}px;border-radius:${radius}px;text-decoration:none;font-weight:${fw};font-size:${fs};line-height:${block.lineHeight ?? 1};letter-spacing:${ls}px;${tt}font-family:${ff};">${lab}</a></td></tr>`;
     }
     case 'image': {
       if (!block.src?.trim()) {

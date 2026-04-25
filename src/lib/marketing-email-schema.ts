@@ -37,6 +37,21 @@ export interface EmailBlock {
   lineHeight?: number;
   letterSpacing?: number;
   textTransform?: 'none' | 'lowercase' | 'capitalize' | 'uppercase';
+  /** Button-specific styling */
+  buttonStyle?:
+    | 'filled-rect' | 'filled-rounded' | 'filled-rounded-lg' | 'filled-pill'
+    | 'outline-rect' | 'outline-rounded' | 'outline-rounded-lg' | 'outline-pill';
+  buttonBgColor?: string;
+  buttonBorderColor?: string;
+  buttonBorderWidth?: number;
+  buttonWidth?: number;        // horizontal padding in px
+  buttonHeight?: number;       // vertical padding in px
+  /** Block-level padding / background — used by buttons and any other block needing chrome */
+  blockBgColor?: string;
+  paddingTop?: number;
+  paddingBottom?: number;
+  paddingLeft?: number;
+  paddingRight?: number;
 }
 
 export interface EmailTheme {
@@ -176,7 +191,29 @@ export function createEmailBlock(type: EmailBlockType): EmailBlock {
     case 'text':
       return { id, type, align: 'left', content: '<p>Your message here.</p>' };
     case 'button':
-      return { id, type, align: 'center', buttonLabel: 'Click here', href: 'https://' };
+      return {
+        id, type, align: 'center',
+        buttonLabel: 'Click here',
+        href: 'https://',
+        buttonStyle: 'outline-rect',
+        buttonBgColor: 'transparent',
+        color: '#000000',
+        buttonBorderColor: '#000000',
+        buttonBorderWidth: 2,
+        buttonWidth: 30,
+        buttonHeight: 15,
+        fontFamily: 'Helvetica, Arial, sans-serif',
+        fontWeight: '400',
+        fontSize: '14px',
+        lineHeight: 1,
+        letterSpacing: 1.8,
+        textTransform: 'none',
+        paddingTop: 10,
+        paddingBottom: 10,
+        paddingLeft: 0,
+        paddingRight: 0,
+        blockBgColor: 'transparent',
+      };
     case 'image':
       return { id, type, align: 'center', src: '', alt: '' };
     case 'divider':

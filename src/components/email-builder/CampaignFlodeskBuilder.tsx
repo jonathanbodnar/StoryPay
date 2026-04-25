@@ -979,23 +979,45 @@ function TextCanvas({ block, theme, onPatch }: { block: EmailBlock; theme: Retur
 }
 
 function ButtonCanvas({ block, theme }: { block: EmailBlock; theme: ReturnType<typeof mergeEmailTheme> }) {
-  const label = (block.buttonLabel?.trim() || 'Click here').toUpperCase();
+  const rawLabel = block.buttonLabel?.trim() || 'Click here';
+  // Apply textTransform via CSS, not via .toUpperCase() — lets the case toggle in the inspector control the look
+  const presetRadius = BUTTON_PRESETS.find(p => p.id === block.buttonStyle)?.radius ?? 2;
+  const isFilled = (block.buttonStyle ?? 'outline-rect').startsWith('filled');
+  const bg = block.buttonBgColor ?? (isFilled ? '#000000' : 'transparent');
+  const fg = block.color ?? (isFilled ? '#ffffff' : '#000000');
+  const borderW = block.buttonBorderWidth ?? (isFilled ? 0 : 2);
+  const borderColor = block.buttonBorderColor ?? '#000000';
+
+  const padX = block.buttonWidth ?? 30;
+  const padY = block.buttonHeight ?? 15;
+
   return (
-    <div style={{ padding: '20px 24px', textAlign: block.align ?? 'center' }}>
+    <div
+      style={{
+        paddingTop: `${block.paddingTop ?? 10}px`,
+        paddingBottom: `${block.paddingBottom ?? 10}px`,
+        paddingLeft: `${block.paddingLeft ?? 24}px`,
+        paddingRight: `${block.paddingRight ?? 24}px`,
+        textAlign: block.align ?? 'center',
+        background: block.blockBgColor && block.blockBgColor !== 'transparent' ? block.blockBgColor : undefined,
+      }}
+    >
       <span style={{
         display: 'inline-block',
-        background: 'transparent',
-        color: theme.textColor,
-        border: `1.5px solid ${theme.textColor}`,
-        padding: '13px 36px',
-        borderRadius: '2px',
-        fontWeight: 400,
-        fontSize: '13px',
-        letterSpacing: '0.12em',
-        fontFamily: theme.fontFamily,
+        background: bg,
+        color: fg,
+        border: borderW > 0 ? `${borderW}px solid ${borderColor}` : 'none',
+        padding: `${padY}px ${padX}px`,
+        borderRadius: `${presetRadius}px`,
+        fontWeight: block.fontWeight ?? 400,
+        fontSize: block.fontSize ?? '14px',
+        letterSpacing: `${block.letterSpacing ?? 1.8}px`,
+        lineHeight: block.lineHeight ?? 1,
+        textTransform: (block.textTransform && block.textTransform !== 'none') ? block.textTransform : undefined,
+        fontFamily: block.fontFamily ?? theme.fontFamily,
         cursor: 'default',
       }}>
-        {label}
+        {rawLabel}
       </span>
     </div>
   );
@@ -1271,6 +1293,445 @@ function SliderControl({
   );
 }
 
+// ─── Flodesk-style Button Inspector ──────────────────────────────────────────
+const BUTTON_PRESETS: Array<{ id: NonNullable<EmailBlock['buttonStyle']>; filled: boolean; radius: number }> = [
+  { id: 'filled-rect',       filled: true,  radius: 0   },
+  { id: 'filled-rounded',    filled: true,  radius: 4   },
+  { id: 'filled-rounded-lg', filled: true,  radius: 10  },
+  { id: 'filled-pill',       filled: true,  radius: 999 },
+  { id: 'outline-rect',      filled: false, radius: 0   },
+  { id: 'outline-rounded',   filled: false, radius: 4   },
+  { id: 'outline-rounded-lg',filled: false, radius: 10  },
+  { id: 'outline-pill',      filled: false, radius: 999 },
+];
+
+interface SavedButtonStyle {
+  id: string;
+  preset: NonNullable<EmailBlock['buttonStyle']>;
+  bg: string;
+  fg: string;
+  borderColor: string;
+  borderWidth: number;
+}
+
+function ButtonInspector({
+  block,
+  theme: _theme,
+  onChange,
+}: {
+  block: EmailBlock;
+  theme: ReturnType<typeof mergeEmailTheme>;
+  onChange: (patch: Partial<EmailBlock>) => void;
+}) {
+  void _theme;
+  const [tab, setTab] = useState<'button' | 'font' | 'link' | 'block'>('button');
+  const [borderOpen, setBorderOpen] = useState(true);
+  const [spacingOpen, setSpacingOpen] = useState(true);
+  const [paddingOpen, setPaddingOpen] = useState(true);
+  const [linkType, setLinkType] = useState<'url' | 'file' | 'checkout'>('url');
+  const [savedStyles, setSavedStyles] = useState<SavedButtonStyle[]>([]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('sp_saved_button_styles');
+      if (raw) setSavedStyles(JSON.parse(raw) as SavedButtonStyle[]);
+    } catch { /* ignore */ }
+  }, []);
+
+  function saveCurrentStyle() {
+    const style: SavedButtonStyle = {
+      id: crypto.randomUUID(),
+      preset: block.buttonStyle ?? 'outline-rect',
+      bg: block.buttonBgColor ?? 'transparent',
+      fg: block.color ?? '#000000',
+      borderColor: block.buttonBorderColor ?? '#000000',
+      borderWidth: block.buttonBorderWidth ?? 2,
+    };
+    const next = [...savedStyles, style];
+    setSavedStyles(next);
+    try { localStorage.setItem('sp_saved_button_styles', JSON.stringify(next)); } catch { /* ignore */ }
+  }
+
+  function applyPreset(presetId: NonNullable<EmailBlock['buttonStyle']>) {
+    const preset = BUTTON_PRESETS.find(p => p.id === presetId);
+    if (!preset) return;
+    if (preset.filled) {
+      onChange({
+        buttonStyle: presetId,
+        buttonBgColor: '#000000',
+        color: '#ffffff',
+        buttonBorderColor: '#000000',
+        buttonBorderWidth: 0,
+      });
+    } else {
+      onChange({
+        buttonStyle: presetId,
+        buttonBgColor: 'transparent',
+        color: '#000000',
+        buttonBorderColor: '#000000',
+        buttonBorderWidth: 2,
+      });
+    }
+  }
+
+  const TAB_BTN = (id: typeof tab, label: string) => (
+    <button
+      key={id}
+      type="button"
+      onClick={() => setTab(id)}
+      className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${tab === id ? 'text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}
+    >
+      {label}
+      {tab === id && <span className="absolute left-1/2 -translate-x-1/2 bottom-0 h-[2px] w-12 bg-gray-900 rounded-full" />}
+    </button>
+  );
+
+  return (
+    <div>
+      {/* Tabs */}
+      <div className="flex border-b border-gray-100 -mx-5 mb-5 px-2 bg-gray-50/50">
+        {TAB_BTN('button', 'Button')}
+        {TAB_BTN('font', 'Font')}
+        {TAB_BTN('link', 'Link')}
+        {TAB_BTN('block', 'Block')}
+      </div>
+
+      {/* ─── BUTTON TAB ─── */}
+      {tab === 'button' && (
+        <div className="space-y-6">
+          {/* Saved styles */}
+          <div>
+            <p className="text-sm font-semibold text-gray-900 mb-1">Saved styles</p>
+            <p className="text-xs text-gray-400 mb-3 leading-snug">Save your button settings as a style you can easily reuse</p>
+            {savedStyles.length > 0 && (
+              <div className="flex gap-2 flex-wrap mb-3">
+                {savedStyles.map(s => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => onChange({
+                      buttonStyle: s.preset,
+                      buttonBgColor: s.bg,
+                      color: s.fg,
+                      buttonBorderColor: s.borderColor,
+                      buttonBorderWidth: s.borderWidth,
+                    })}
+                    className="h-8 px-3 rounded-md text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                    style={{
+                      background: s.bg === 'transparent' ? '#fff' : s.bg,
+                      color: s.fg,
+                      border: `${s.borderWidth || 1}px solid ${s.borderColor}`,
+                      borderRadius: BUTTON_PRESETS.find(p => p.id === s.preset)?.radius ?? 0,
+                    }}
+                  >
+                    Aa
+                  </button>
+                ))}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={saveCurrentStyle}
+              className="w-full py-3 text-sm font-semibold text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Save this button style
+            </button>
+          </div>
+
+          <div className="border-t border-gray-100 pt-5">
+            <p className="text-sm font-semibold text-gray-900 mb-3">Style</p>
+            <div className="grid grid-cols-4 gap-2 mb-2">
+              {BUTTON_PRESETS.slice(0, 4).map(p => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => applyPreset(p.id)}
+                  className={`h-9 transition-all ${block.buttonStyle === p.id ? 'ring-2 ring-blue-500' : 'hover:opacity-80'}`}
+                  style={{
+                    background: '#e5e7eb',
+                    borderRadius: p.radius,
+                  }}
+                />
+              ))}
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {BUTTON_PRESETS.slice(4).map(p => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => applyPreset(p.id)}
+                  className={`h-9 transition-all ${block.buttonStyle === p.id ? 'ring-2 ring-blue-500' : 'hover:bg-gray-50'}`}
+                  style={{
+                    background: 'transparent',
+                    border: '1.5px solid #d1d5db',
+                    borderRadius: p.radius,
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Border color */}
+          <div>
+            <p className="text-sm font-semibold text-gray-900 mb-2">
+              Border color <span className="text-xs font-normal text-gray-400 ml-1">{block.buttonBorderColor ?? '#000000'}</span>
+            </p>
+            <FlodeskColorPicker
+              value={block.buttonBorderColor ?? '#000000'}
+              onChange={(v) => onChange({ buttonBorderColor: v })}
+            />
+          </div>
+
+          {/* Position */}
+          <div>
+            <p className="text-sm font-semibold text-gray-900 mb-2">Position</p>
+            <div className="flex gap-1">
+              {(['left', 'center', 'right'] as const).map(p => {
+                const Icon = p === 'left' ? AlignLeft : p === 'center' ? AlignCenter : AlignRight;
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => onChange({ align: p })}
+                    className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${(block.align ?? 'center') === p ? 'bg-gray-100 text-gray-700' : 'text-gray-400 hover:text-gray-600'}`}
+                  >
+                    <Icon size={16} />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Border and sizing */}
+          <div className="border-t border-gray-100 pt-4">
+            <button
+              type="button"
+              onClick={() => setBorderOpen(o => !o)}
+              className="flex items-center justify-between w-full mb-3"
+            >
+              <span className="text-sm font-semibold text-gray-700">Border and sizing</span>
+              <ChevronDown size={14} className={`text-gray-400 transition-transform ${borderOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {borderOpen && (
+              <div className="space-y-5">
+                <SliderControl
+                  label="Border thickness"
+                  value={block.buttonBorderWidth ?? 2}
+                  min={0} max={10} step={1}
+                  display={`${block.buttonBorderWidth ?? 2}`}
+                  onChange={(v) => onChange({ buttonBorderWidth: v })}
+                />
+                <SliderControl
+                  label="Width"
+                  value={block.buttonWidth ?? 30}
+                  min={0} max={100} step={1}
+                  display={`${block.buttonWidth ?? 30}`}
+                  onChange={(v) => onChange({ buttonWidth: v })}
+                />
+                <SliderControl
+                  label="Height"
+                  value={block.buttonHeight ?? 15}
+                  min={0} max={60} step={1}
+                  display={`${block.buttonHeight ?? 15}`}
+                  onChange={(v) => onChange({ buttonHeight: v })}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── FONT TAB ─── */}
+      {tab === 'font' && (
+        <div className="space-y-5">
+          <div>
+            <p className="text-sm font-semibold text-gray-900 mb-2">Font</p>
+            <FontSelector value={block.fontFamily ?? 'Helvetica, Arial, sans-serif'} onChange={(v) => onChange({ fontFamily: v })} />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-gray-700 mb-1.5">Weight</p>
+            <div className="flex gap-1 flex-wrap">
+              {FONT_WEIGHTS.map(w => (
+                <button
+                  key={w.value}
+                  type="button"
+                  onClick={() => onChange({ fontWeight: w.value })}
+                  className={`flex h-8 items-center justify-center rounded-lg px-3 text-xs transition-colors ${(block.fontWeight ?? '400') === w.value ? 'bg-gray-100 text-gray-700 font-semibold' : 'text-gray-400 hover:text-gray-600'}`}
+                >
+                  {w.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <SliderControl
+            label="Size"
+            value={parseInt(block.fontSize ?? '14') || 14}
+            min={8} max={48} step={1}
+            display={`${parseInt(block.fontSize ?? '14') || 14}`}
+            onChange={(v) => onChange({ fontSize: `${v}px` })}
+          />
+          <div>
+            <p className="text-sm font-semibold text-gray-900 mb-2">
+              Font color <span className="text-xs font-normal text-gray-400 ml-1">{block.color ?? '#000000'}</span>
+            </p>
+            <FlodeskColorPicker value={block.color ?? '#000000'} onChange={(v) => onChange({ color: v })} />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-gray-700 mb-1.5">Case</p>
+            <div className="flex gap-1">
+              {([
+                { v: 'none' as const,       label: '-'  },
+                { v: 'lowercase' as const,  label: 'aa' },
+                { v: 'capitalize' as const, label: 'Aa' },
+                { v: 'uppercase' as const,  label: 'AA' },
+              ]).map(c => (
+                <button
+                  key={c.v}
+                  type="button"
+                  onClick={() => onChange({ textTransform: c.v })}
+                  className={`flex h-9 px-2.5 items-center justify-center rounded-lg text-sm transition-colors ${(block.textTransform ?? 'none') === c.v ? 'bg-gray-100 text-gray-700 font-semibold' : 'text-gray-400 hover:text-gray-600'}`}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="border-t border-gray-100 pt-4">
+            <button
+              type="button"
+              onClick={() => setSpacingOpen(o => !o)}
+              className="flex items-center justify-between w-full mb-3"
+            >
+              <span className="text-sm font-semibold text-gray-700">Spacing</span>
+              <ChevronDown size={14} className={`text-gray-400 transition-transform ${spacingOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {spacingOpen && (
+              <div className="space-y-5">
+                <SliderControl
+                  label="Line height"
+                  value={block.lineHeight ?? 1}
+                  min={0.8} max={3} step={0.1}
+                  display={(block.lineHeight ?? 1).toFixed(1)}
+                  onChange={(v) => onChange({ lineHeight: Math.round(v * 10) / 10 })}
+                />
+                <SliderControl
+                  label="Letter spacing"
+                  value={block.letterSpacing ?? 1.8}
+                  min={-2} max={10} step={0.1}
+                  display={(block.letterSpacing ?? 1.8).toFixed(1)}
+                  onChange={(v) => onChange({ letterSpacing: Math.round(v * 10) / 10 })}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── LINK TAB ─── */}
+      {tab === 'link' && (
+        <div className="space-y-4">
+          <div className="flex bg-gray-100 rounded-full p-1">
+            {(['url', 'file', 'checkout'] as const).map(t => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setLinkType(t)}
+                className={`flex-1 py-2 px-3 rounded-full text-sm font-semibold transition-colors capitalize ${linkType === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+              >
+                {t === 'url' ? 'URL' : t}
+              </button>
+            ))}
+          </div>
+          {linkType === 'url' && (
+            <textarea
+              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 placeholder:text-gray-300 focus:border-gray-400 focus:outline-none transition-colors resize-none"
+              rows={6}
+              value={block.href ?? ''}
+              onChange={(e) => onChange({ href: e.target.value })}
+              placeholder="https://"
+            />
+          )}
+          {linkType === 'file' && (
+            <p className="text-xs text-gray-400 leading-snug py-6 text-center">
+              File hosting integration coming soon. Use URL for now and paste a link to your hosted file.
+            </p>
+          )}
+          {linkType === 'checkout' && (
+            <p className="text-xs text-gray-400 leading-snug py-6 text-center">
+              Checkout link integration coming soon. Use URL with your payment link in the meantime.
+            </p>
+          )}
+          <div>
+            <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Button label</label>
+            <input
+              type="text"
+              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:bg-white focus:outline-none transition-colors"
+              value={block.buttonLabel ?? ''}
+              onChange={(e) => onChange({ buttonLabel: e.target.value })}
+              placeholder="Click here"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ─── BLOCK TAB ─── */}
+      {tab === 'block' && (
+        <div className="space-y-5">
+          <div>
+            <p className="text-sm font-semibold text-gray-900 mb-2">Background</p>
+            <FlodeskColorPicker
+              value={block.blockBgColor ?? 'transparent'}
+              onChange={(v) => onChange({ blockBgColor: v })}
+            />
+          </div>
+          <div className="border-t border-gray-100 pt-4">
+            <button
+              type="button"
+              onClick={() => setPaddingOpen(o => !o)}
+              className="flex items-center justify-between w-full mb-3"
+            >
+              <span className="text-sm font-semibold text-gray-700">Padding</span>
+              <ChevronDown size={14} className={`text-gray-400 transition-transform ${paddingOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {paddingOpen && (
+              <div className="space-y-5">
+                <SliderControl
+                  label="Padding top"
+                  value={block.paddingTop ?? 10}
+                  min={0} max={80} step={1}
+                  display={`${block.paddingTop ?? 10}`}
+                  onChange={(v) => onChange({ paddingTop: v })}
+                />
+                <SliderControl
+                  label="Padding bottom"
+                  value={block.paddingBottom ?? 10}
+                  min={0} max={80} step={1}
+                  display={`${block.paddingBottom ?? 10}`}
+                  onChange={(v) => onChange({ paddingBottom: v })}
+                />
+                <SliderControl
+                  label="Padding left"
+                  value={block.paddingLeft ?? 0}
+                  min={0} max={80} step={1}
+                  display={`${block.paddingLeft ?? 0}`}
+                  onChange={(v) => onChange({ paddingLeft: v })}
+                />
+                <SliderControl
+                  label="Padding right"
+                  value={block.paddingRight ?? 0}
+                  min={0} max={80} step={1}
+                  display={`${block.paddingRight ?? 0}`}
+                  onChange={(v) => onChange({ paddingRight: v })}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Right Panel — Block Inspector ───────────────────────────────────────────
 function BlockInspectorPanel({
   block,
@@ -1443,31 +1904,7 @@ function BlockInspectorPanel({
   }
 
   if (block.type === 'button') {
-    return (
-      <div className="space-y-4">
-        <div>
-          <label className={LABEL}>Button label</label>
-          <input
-            type="text"
-            className={INPUT}
-            value={block.buttonLabel ?? ''}
-            onChange={(e) => onChange({ buttonLabel: e.target.value })}
-            placeholder="Click here"
-          />
-        </div>
-        <div>
-          <label className={LABEL}>Link URL</label>
-          <input
-            type="url"
-            className={INPUT}
-            value={block.href ?? ''}
-            onChange={(e) => onChange({ href: e.target.value })}
-            placeholder="https://"
-          />
-        </div>
-        {AlignRow()}
-      </div>
-    );
+    return <ButtonInspector block={block} theme={theme} onChange={onChange} />;
   }
 
   if (block.type === 'image') {
