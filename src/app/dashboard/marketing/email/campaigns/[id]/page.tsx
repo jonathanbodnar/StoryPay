@@ -1,10 +1,17 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ArrowLeft, Loader2, Send } from 'lucide-react';
-import type { CampaignSegment } from '@/lib/marketing-email-schema';
+import { parseSegment, type CampaignSegment } from '@/lib/marketing-email-schema';
+import {
+  AudiencePicker,
+  type AudiencePickerSavedSegment,
+  type AudiencePickerStage,
+  type AudiencePickerTag,
+  type AudiencePickerTriggerLink,
+} from '@/components/marketing/AudiencePicker';
 
 interface Campaign {
   id: string;
@@ -21,27 +28,16 @@ interface TemplateOpt {
   name: string;
 }
 
-interface TagRow {
-  id: string;
-  name: string;
-}
-
-interface StageRow {
-  id: string;
-  name: string;
-  pipeline_id: string;
-  kind?: string;
-}
-
 interface PipelineRow {
   id: string;
   name: string;
-  stages: StageRow[];
+  stages: { id: string; name: string; pipeline_id: string; kind?: string }[];
 }
 
-interface TriggerLinkOpt {
+interface SavedSegmentRow {
   id: string;
   name: string;
+  description: string;
 }
 
 export default function CampaignDetailPage() {
@@ -51,41 +47,38 @@ export default function CampaignDetailPage() {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [stats, setStats] = useState({ sent: 0 });
   const [templates, setTemplates] = useState<TemplateOpt[]>([]);
-  const [tags, setTags] = useState<TagRow[]>([]);
+  const [tags, setTags] = useState<AudiencePickerTag[]>([]);
   const [pipelines, setPipelines] = useState<PipelineRow[]>([]);
+  const [triggerLinks, setTriggerLinks] = useState<AudiencePickerTriggerLink[]>([]);
+  const [savedSegments, setSavedSegments] = useState<AudiencePickerSavedSegment[]>([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   const [name, setName] = useState('');
   const [templateId, setTemplateId] = useState('');
-  const [segType, setSegType] = useState<CampaignSegment['type']>('all_leads');
-  const [tagIds, setTagIds] = useState<string[]>([]);
-  const [stageIds, setStageIds] = useState<string[]>([]);
+  const [segment, setSegment] = useState<CampaignSegment>({ type: 'all_leads' });
   const [scheduleLocal, setScheduleLocal] = useState('');
   const [testEmail, setTestEmail] = useState('');
   const [testLeadId, setTestLeadId] = useState('');
   const [testModal, setTestModal] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const [excludeStageIds, setExcludeStageIds] = useState<string[]>([]);
-  const [requireWeddingDate, setRequireWeddingDate] = useState(false);
-  const [clickedLinkIds, setClickedLinkIds] = useState<string[]>([]);
-  const [requireNotBooked, setRequireNotBooked] = useState(false);
-  const [bookedStageIds, setBookedStageIds] = useState<string[]>([]);
-  const [triggerLinks, setTriggerLinks] = useState<TriggerLinkOpt[]>([]);
-
-  const allStages = pipelines.flatMap((p) => (p.stages || []).map((s) => ({ ...s, pipelineName: p.name })));
+  const stages: AudiencePickerStage[] = useMemo(
+    () => pipelines.flatMap((p) => p.stages.map((s) => ({ ...s, pipelineName: p.name }))),
+    [pipelines],
+  );
 
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
-    const [cRes, tRes, tagRes, pipeRes, tlRes] = await Promise.all([
+    const [cRes, tRes, tagRes, pipeRes, tlRes, segRes] = await Promise.all([
       fetch(`/api/marketing/campaigns/${id}`, { cache: 'no-store' }),
       fetch('/api/marketing/email-templates', { cache: 'no-store' }),
       fetch('/api/marketing/tags', { cache: 'no-store' }),
       fetch('/api/pipelines', { cache: 'no-store' }),
       fetch('/api/marketing/trigger-links', { cache: 'no-store' }),
+      fetch('/api/marketing/segments', { cache: 'no-store' }),
     ]);
     if (cRes.ok) {
       const j = await cRes.json();
@@ -94,24 +87,7 @@ export default function CampaignDetailPage() {
       setStats(j.stats ?? { sent: 0 });
       setName(c.name);
       setTemplateId(c.template_id);
-      const raw = (c.segment_json || {}) as Record<string, unknown>;
-      const t = raw.type === 'tags_any' ? 'tags_any' : raw.type === 'stages' ? 'stages' : 'all_leads';
-      setSegType(t);
-      setTagIds(Array.isArray(raw.tag_ids) ? raw.tag_ids.filter((x): x is string => typeof x === 'string') : []);
-      setStageIds(Array.isArray(raw.stage_ids) ? raw.stage_ids.filter((x): x is string => typeof x === 'string') : []);
-      setExcludeStageIds(
-        Array.isArray(raw.exclude_stage_ids) ? raw.exclude_stage_ids.filter((x): x is string => typeof x === 'string') : [],
-      );
-      setRequireWeddingDate(raw.require_wedding_date === true);
-      setClickedLinkIds(
-        Array.isArray(raw.clicked_trigger_link_ids)
-          ? raw.clicked_trigger_link_ids.filter((x): x is string => typeof x === 'string')
-          : [],
-      );
-      setRequireNotBooked(raw.require_not_booked === true);
-      setBookedStageIds(
-        Array.isArray(raw.booked_stage_ids) ? raw.booked_stage_ids.filter((x): x is string => typeof x === 'string') : [],
-      );
+      setSegment(parseSegment(c.segment_json));
     } else {
       setCampaign(null);
     }
@@ -131,6 +107,12 @@ export default function CampaignDetailPage() {
       const d = (await tlRes.json()) as { links?: Array<{ id: string; name: string }> };
       setTriggerLinks((d.links ?? []).map((x) => ({ id: x.id, name: x.name })));
     }
+    if (segRes.ok) {
+      const d = (await segRes.json()) as { segments?: SavedSegmentRow[] };
+      setSavedSegments(
+        (d.segments ?? []).map((s) => ({ id: s.id, name: s.name, description: s.description })),
+      );
+    }
     setLoading(false);
   }, [id]);
 
@@ -138,28 +120,18 @@ export default function CampaignDetailPage() {
     queueMicrotask(() => void load());
   }, [load]);
 
-  function buildSegment(): CampaignSegment {
-    const extra: Partial<CampaignSegment> = {};
-    if (excludeStageIds.length) extra.exclude_stage_ids = excludeStageIds;
-    if (requireWeddingDate) extra.require_wedding_date = true;
-    if (clickedLinkIds.length) extra.clicked_trigger_link_ids = clickedLinkIds;
-    if (requireNotBooked) {
-      extra.require_not_booked = true;
-      if (bookedStageIds.length) extra.booked_stage_ids = bookedStageIds;
-    }
-    if (segType === 'tags_any') return { type: 'tags_any', tag_ids: tagIds, ...extra };
-    if (segType === 'stages') return { type: 'stages', stage_ids: stageIds, ...extra };
-    return { type: 'all_leads', ...extra };
-  }
-
   async function saveDraft() {
     if (!campaign) return;
+    if (segment.type === 'saved_segment' && !segment.saved_segment_id) {
+      setErr('Pick a saved segment or choose another audience type');
+      return;
+    }
     setBusy(true);
     setErr(null);
     const res = await fetch(`/api/marketing/campaigns/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, templateId, segment: buildSegment() }),
+      body: JSON.stringify({ name, templateId, segment }),
     });
     setBusy(false);
     const j = await res.json().catch(() => ({}));
@@ -257,26 +229,6 @@ export default function CampaignDetailPage() {
     setTimeout(() => setMsg(null), 2000);
   }
 
-  function toggleTag(tid: string) {
-    setTagIds((prev) => (prev.includes(tid) ? prev.filter((x) => x !== tid) : [...prev, tid]));
-  }
-
-  function toggleStage(sid: string) {
-    setStageIds((prev) => (prev.includes(sid) ? prev.filter((x) => x !== sid) : [...prev, sid]));
-  }
-
-  function toggleExcludeStage(sid: string) {
-    setExcludeStageIds((prev) => (prev.includes(sid) ? prev.filter((x) => x !== sid) : [...prev, sid]));
-  }
-
-  function toggleClickedLink(lid: string) {
-    setClickedLinkIds((prev) => (prev.includes(lid) ? prev.filter((x) => x !== lid) : [...prev, lid]));
-  }
-
-  function toggleBookedStage(sid: string) {
-    setBookedStageIds((prev) => (prev.includes(sid) ? prev.filter((x) => x !== sid) : [...prev, sid]));
-  }
-
   if (loading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center text-gray-500">
@@ -358,125 +310,24 @@ export default function CampaignDetailPage() {
         </div>
 
         <div>
-          <p className="text-xs font-medium text-gray-500">Audience</p>
-          <div className="mt-2 space-y-2 text-sm">
-            <label className="flex items-center gap-2">
-              <input type="radio" name="seg" checked={segType === 'all_leads'} disabled={!editable} onChange={() => setSegType('all_leads')} />
-              All leads (with email, excluding unsubscribes and marketing opt-outs)
-            </label>
-            <label className="flex items-center gap-2">
-              <input type="radio" name="seg" checked={segType === 'tags_any'} disabled={!editable} onChange={() => setSegType('tags_any')} />
-              Any of these tags
-            </label>
-            {segType === 'tags_any' ? (
-              <div className="ml-6 flex flex-wrap gap-2">
-                {tags.map((t) => (
-                  <label key={t.id} className="inline-flex items-center gap-1 rounded border border-gray-200 px-2 py-1 text-xs">
-                    <input type="checkbox" disabled={!editable} checked={tagIds.includes(t.id)} onChange={() => toggleTag(t.id)} />
-                    {t.name}
-                  </label>
-                ))}
-              </div>
-            ) : null}
-            <label className="flex items-center gap-2">
-              <input type="radio" name="seg" checked={segType === 'stages'} disabled={!editable} onChange={() => setSegType('stages')} />
-              In any of these pipeline stages
-            </label>
-            {segType === 'stages' ? (
-              <div className="ml-6 max-h-40 space-y-1 overflow-y-auto text-xs">
-                {allStages.map((s) => (
-                  <label key={s.id} className="flex items-center gap-2">
-                    <input type="checkbox" disabled={!editable} checked={stageIds.includes(s.id)} onChange={() => toggleStage(s.id)} />
-                    <span className="text-gray-600">{s.pipelineName}:</span> {s.name}
-                  </label>
-                ))}
-              </div>
-            ) : null}
-
-            <div className="mt-4 rounded-lg border border-dashed border-gray-200 bg-gray-50/80 p-3 space-y-3">
-              <p className="text-xs font-semibold text-gray-700">Behavior & filters</p>
-              <p className="text-[11px] text-gray-500">
-                Narrow any audience type: exclude stages, require a wedding date, require past trigger-link clicks, or
-                exclude “booked” stages.
-              </p>
-              <label className="flex items-start gap-2 text-xs">
-                <input
-                  type="checkbox"
-                  disabled={!editable}
-                  checked={requireWeddingDate}
-                  onChange={(e) => setRequireWeddingDate(e.target.checked)}
-                  className="mt-0.5"
-                />
-                <span>Only leads with a wedding date on file</span>
-              </label>
-              <label className="flex items-start gap-2 text-xs">
-                <input
-                  type="checkbox"
-                  disabled={!editable}
-                  checked={requireNotBooked}
-                  onChange={(e) => setRequireNotBooked(e.target.checked)}
-                  className="mt-0.5"
-                />
-                <span>Exclude leads in booked / won stages (pick which stages count as booked below)</span>
-              </label>
-              {requireNotBooked ? (
-                <div className="ml-1 max-h-32 space-y-1 overflow-y-auto border-l-2 border-gray-200 pl-2">
-                  <p className="text-[10px] font-medium uppercase text-gray-400">Booked stages</p>
-                  {allStages.filter((s) => s.kind === 'won').length === 0 ? (
-                    <p className="text-[11px] text-gray-500">No won stages in pipelines — select stages manually.</p>
-                  ) : null}
-                  {allStages.map((s) => (
-                    <label key={`booked-${s.id}`} className="flex items-center gap-2 text-[11px]">
-                      <input
-                        type="checkbox"
-                        disabled={!editable}
-                        checked={bookedStageIds.includes(s.id)}
-                        onChange={() => toggleBookedStage(s.id)}
-                      />
-                      <span className="text-gray-600">{s.pipelineName}:</span> {s.name}
-                      {s.kind ? <span className="text-gray-400">({s.kind})</span> : null}
-                    </label>
-                  ))}
-                </div>
-              ) : null}
-              <div>
-                <p className="text-[10px] font-medium uppercase text-gray-400 mb-1">Exclude stages</p>
-                <div className="max-h-28 space-y-1 overflow-y-auto text-[11px]">
-                  {allStages.map((s) => (
-                    <label key={`ex-${s.id}`} className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        disabled={!editable}
-                        checked={excludeStageIds.includes(s.id)}
-                        onChange={() => toggleExcludeStage(s.id)}
-                      />
-                      <span className="text-gray-600">{s.pipelineName}:</span> {s.name}
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <p className="text-[10px] font-medium uppercase text-gray-400 mb-1">Clicked any of these trigger links</p>
-                {triggerLinks.length === 0 ? (
-                  <p className="text-[11px] text-gray-500">No trigger links yet.</p>
-                ) : (
-                  <div className="max-h-28 space-y-1 overflow-y-auto text-[11px]">
-                    {triggerLinks.map((tl) => (
-                      <label key={tl.id} className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          disabled={!editable}
-                          checked={clickedLinkIds.includes(tl.id)}
-                          onChange={() => toggleClickedLink(tl.id)}
-                        />
-                        {tl.name}
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-medium text-gray-500">Audience</p>
+            <Link
+              href="/dashboard/marketing/email/segments"
+              className="text-xs font-medium text-gray-700 underline-offset-2 hover:underline"
+            >
+              Manage saved segments →
+            </Link>
           </div>
+          <AudiencePicker
+            value={segment}
+            onChange={setSegment}
+            disabled={!editable}
+            tags={tags}
+            stages={stages}
+            triggerLinks={triggerLinks}
+            savedSegments={savedSegments}
+          />
         </div>
 
         {editable ? (

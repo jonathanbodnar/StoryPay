@@ -303,13 +303,29 @@ export function createEmailBlock(type: EmailBlockType): EmailBlock {
   }
 }
 
-/** Campaign / builder segment JSON */
-export type SegmentType = 'all_leads' | 'tags_any' | 'stages';
+/** Campaign / builder segment JSON.
+ *
+ * - `all_leads` | `tags_any` | `stages` are the original "inline" audience
+ *   types — the campaign owns its own filter set.
+ * - `saved_segment` is a reference to a row in `marketing_segments`. At
+ *   resolve time the saved segment's own `definition_json` is loaded and
+ *   used as the audience. Inline behavior filters (exclude_stage_ids,
+ *   require_wedding_date, clicked_trigger_link_ids, require_not_booked,
+ *   booked_stage_ids) on a saved-segment campaign are merged on top of
+ *   the saved segment so a campaign can further narrow a shared segment
+ *   without forking it.
+ *
+ * Saved segments themselves can ONLY hold `all_leads`/`tags_any`/`stages`
+ * to prevent cycles — never another `saved_segment`.
+ */
+export type SegmentType = 'all_leads' | 'tags_any' | 'stages' | 'saved_segment';
 
 export interface CampaignSegment {
   type: SegmentType;
   tag_ids?: string[];
   stage_ids?: string[];
+  /** When type === 'saved_segment', the marketing_segments.id to resolve against */
+  saved_segment_id?: string;
   /** Exclude leads currently in any of these pipeline stages */
   exclude_stage_ids?: string[];
   /** Only leads with a wedding date set */
@@ -318,26 +334,33 @@ export interface CampaignSegment {
   clicked_trigger_link_ids?: string[];
   /** When true, exclude leads in booked_stage_ids (need booked_stage_ids set) */
   require_not_booked?: boolean;
-  /** Stage IDs that count as “booked” for require_not_booked */
+  /** Stage IDs that count as "booked" for require_not_booked */
   booked_stage_ids?: string[];
+}
+
+/** Stricter shape for what a saved segment can hold (no `saved_segment` recursion). */
+export type SavedSegmentDefinition = Omit<CampaignSegment, 'type' | 'saved_segment_id'> & {
+  type: 'all_leads' | 'tags_any' | 'stages';
+};
+
+function pickStringArray(raw: Record<string, unknown>, key: string): string[] | undefined {
+  const v = raw[key];
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : undefined;
 }
 
 export function parseSegment(raw: unknown): CampaignSegment {
   if (!isObject(raw)) return { type: 'all_leads' };
   const t = raw.type;
   const extra = {
-    exclude_stage_ids: Array.isArray(raw.exclude_stage_ids)
-      ? raw.exclude_stage_ids.filter((x): x is string => typeof x === 'string')
-      : undefined,
+    exclude_stage_ids: pickStringArray(raw, 'exclude_stage_ids'),
     require_wedding_date: raw.require_wedding_date === true,
-    clicked_trigger_link_ids: Array.isArray(raw.clicked_trigger_link_ids)
-      ? raw.clicked_trigger_link_ids.filter((x): x is string => typeof x === 'string')
-      : undefined,
+    clicked_trigger_link_ids: pickStringArray(raw, 'clicked_trigger_link_ids'),
     require_not_booked: raw.require_not_booked === true,
-    booked_stage_ids: Array.isArray(raw.booked_stage_ids)
-      ? raw.booked_stage_ids.filter((x): x is string => typeof x === 'string')
-      : undefined,
+    booked_stage_ids: pickStringArray(raw, 'booked_stage_ids'),
   };
+  if (t === 'saved_segment' && typeof raw.saved_segment_id === 'string' && raw.saved_segment_id.trim()) {
+    return { type: 'saved_segment', saved_segment_id: raw.saved_segment_id.trim(), ...extra };
+  }
   if (t === 'tags_any' && Array.isArray(raw.tag_ids)) {
     return {
       type: 'tags_any',
@@ -353,6 +376,17 @@ export function parseSegment(raw: unknown): CampaignSegment {
     };
   }
   return { type: 'all_leads', ...extra };
+}
+
+/** Parse a saved-segment definition from raw JSON. Coerces a stray
+ * `saved_segment` to `all_leads` so we can never recurse. */
+export function parseSavedSegmentDefinition(raw: unknown): SavedSegmentDefinition {
+  const seg = parseSegment(raw);
+  if (seg.type === 'saved_segment') {
+    return { type: 'all_leads' };
+  }
+  const { type, tag_ids, stage_ids, ...rest } = seg;
+  return { type, tag_ids, stage_ids, ...rest } as SavedSegmentDefinition;
 }
 
 export type AutomationTriggerType =
