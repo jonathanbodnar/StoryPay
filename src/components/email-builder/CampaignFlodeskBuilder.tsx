@@ -978,9 +978,25 @@ function TextCanvas({ block, theme, onPatch }: { block: EmailBlock; theme: Retur
   );
 }
 
-function ButtonCanvas({ block, theme }: { block: EmailBlock; theme: ReturnType<typeof mergeEmailTheme> }) {
-  const rawLabel = block.buttonLabel?.trim() || 'Click here';
-  // Apply textTransform via CSS, not via .toUpperCase() — lets the case toggle in the inspector control the look
+function ButtonCanvas({ block, theme, onPatch }: { block: EmailBlock; theme: ReturnType<typeof mergeEmailTheme>; onPatch?: (p: Partial<EmailBlock>) => void }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const mounted = useRef(false);
+  const fallback = 'Click here';
+
+  // Initialize/sync label text without obliterating the editor caret while typing
+  useEffect(() => {
+    if (!ref.current) return;
+    const desired = (block.buttonLabel ?? '') || fallback;
+    if (!mounted.current) {
+      ref.current.textContent = desired;
+      mounted.current = true;
+      return;
+    }
+    if (ref.current.textContent !== desired && document.activeElement !== ref.current) {
+      ref.current.textContent = desired;
+    }
+  }, [block.buttonLabel]);
+
   const presetRadius = BUTTON_PRESETS.find(p => p.id === block.buttonStyle)?.radius ?? 2;
   const isFilled = (block.buttonStyle ?? 'outline-rect').startsWith('filled');
   const bg = block.buttonBgColor ?? (isFilled ? '#000000' : 'transparent');
@@ -990,6 +1006,8 @@ function ButtonCanvas({ block, theme }: { block: EmailBlock; theme: ReturnType<t
 
   const padX = block.buttonWidth ?? 30;
   const padY = block.buttonHeight ?? 15;
+
+  const editable = !!onPatch;
 
   return (
     <div
@@ -1002,23 +1020,39 @@ function ButtonCanvas({ block, theme }: { block: EmailBlock; theme: ReturnType<t
         background: block.blockBgColor && block.blockBgColor !== 'transparent' ? block.blockBgColor : undefined,
       }}
     >
-      <span style={{
-        display: 'inline-block',
-        background: bg,
-        color: fg,
-        border: borderW > 0 ? `${borderW}px solid ${borderColor}` : 'none',
-        padding: `${padY}px ${padX}px`,
-        borderRadius: `${presetRadius}px`,
-        fontWeight: block.fontWeight ?? 400,
-        fontSize: block.fontSize ?? '14px',
-        letterSpacing: `${block.letterSpacing ?? 1.8}px`,
-        lineHeight: block.lineHeight ?? 1,
-        textTransform: (block.textTransform && block.textTransform !== 'none') ? block.textTransform : undefined,
-        fontFamily: block.fontFamily ?? theme.fontFamily,
-        cursor: 'default',
-      }}>
-        {rawLabel}
-      </span>
+      <span
+        ref={ref}
+        data-email-editable={editable ? 'true' : undefined}
+        contentEditable={editable}
+        suppressContentEditableWarning
+        onInput={() => { if (ref.current && onPatch) onPatch({ buttonLabel: ref.current.textContent ?? '' }); }}
+        onMouseDown={(e) => { if (editable) e.stopPropagation(); }}
+        onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
+        onPaste={(e) => {
+          if (!editable) return;
+          e.preventDefault();
+          const text = e.clipboardData.getData('text/plain');
+          document.execCommand('insertText', false, text);
+        }}
+        style={{
+          display: 'inline-block',
+          background: bg,
+          color: fg,
+          border: borderW > 0 ? `${borderW}px solid ${borderColor}` : 'none',
+          padding: `${padY}px ${padX}px`,
+          borderRadius: `${presetRadius}px`,
+          fontWeight: block.fontWeight ?? 400,
+          fontSize: block.fontSize ?? '14px',
+          letterSpacing: `${block.letterSpacing ?? 1.8}px`,
+          lineHeight: block.lineHeight ?? 1,
+          textTransform: (block.textTransform && block.textTransform !== 'none') ? block.textTransform : undefined,
+          fontFamily: block.fontFamily ?? theme.fontFamily,
+          outline: 'none',
+          cursor: editable ? 'text' : 'default',
+          minWidth: '4ch',
+          whiteSpace: 'nowrap',
+        }}
+      />
     </div>
   );
 }
@@ -1145,7 +1179,7 @@ function BlockCanvas({ block, theme, venueAddress, onPatch }: { block: EmailBloc
   switch (block.type) {
     case 'heading': return <HeadingCanvas block={block} theme={theme} onPatch={onPatch} />;
     case 'text':    return <TextCanvas block={block} theme={theme} onPatch={onPatch} />;
-    case 'button':  return <ButtonCanvas block={block} theme={theme} />;
+    case 'button':  return <ButtonCanvas block={block} theme={theme} onPatch={onPatch} />;
     case 'image':   return <ImageCanvas block={block} theme={theme} />;
     case 'video':   return <VideoCanvas block={block} theme={theme} />;
     case 'social':  return <SocialCanvas block={block} theme={theme} />;
@@ -1635,17 +1669,31 @@ function ButtonInspector({
       {/* ─── LINK TAB ─── */}
       {tab === 'link' && (
         <div className="space-y-4">
-          <div className="flex bg-gray-100 rounded-full p-1">
-            {(['url', 'file'] as const).map(t => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setLinkType(t)}
-                className={`flex-1 py-2 px-3 rounded-full text-sm font-semibold transition-colors ${linkType === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-              >
-                {t === 'url' ? 'URL' : 'File'}
-              </button>
-            ))}
+          {/* Pill toggle — Flodesk-style rounded rectangle with prominent active state */}
+          <div
+            className="flex bg-gray-100 p-1.5"
+            style={{ borderRadius: '14px' }}
+          >
+            {(['url', 'file'] as const).map(t => {
+              const active = linkType === t;
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setLinkType(t)}
+                  className="flex-1 px-4 py-2.5 text-[15px] transition-all"
+                  style={{
+                    borderRadius: '10px',
+                    background: active ? '#ffffff' : 'transparent',
+                    color: active ? '#111827' : '#9ca3af',
+                    fontWeight: active ? 700 : 600,
+                    boxShadow: active ? '0 1px 2px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.05)' : 'none',
+                  }}
+                >
+                  {t === 'url' ? 'URL' : 'File'}
+                </button>
+              );
+            })}
           </div>
           {linkType === 'url' && (
             <textarea
@@ -1685,16 +1733,9 @@ function ButtonInspector({
               </p>
             </div>
           )}
-          <div>
-            <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Button label</label>
-            <input
-              type="text"
-              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:bg-white focus:outline-none transition-colors"
-              value={block.buttonLabel ?? ''}
-              onChange={(e) => onChange({ buttonLabel: e.target.value })}
-              placeholder="Click here"
-            />
-          </div>
+          <p className="text-[11px] text-gray-400 leading-snug pt-1 border-t border-gray-100">
+            Tip: click the button on the canvas to edit its label inline.
+          </p>
         </div>
       )}
 
