@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import {
-  AlignCenter, AlignLeft, AlignRight, ArrowLeft, ArrowUp, ArrowDown,
+  AlignLeft, ArrowLeft, ArrowUp, ArrowDown,
   AtSign, Bold,
   Check, ChevronDown, ChevronRight, Copy, Eye, FileText,
   Image as ImageIcon,
@@ -168,6 +168,65 @@ function SocialIcon({ platform, size = 18, color = '#18181b' }: { platform: stri
     );
     default: return null;
   }
+}
+
+// ─── Shared alignment selector — Flodesk-style (used by every block) ─────────
+// Two horizontal lines per icon (one long, one short), positioned to match
+// the active alignment. Active state gets a soft gray rounded-square pill;
+// inactive state is just the icon. One source of truth so every module's
+// alignment buttons look identical.
+type Align3 = 'left' | 'center' | 'right';
+
+function AlignIcon({ align, active }: { align: Align3; active: boolean }) {
+  const stroke = active ? '#1f2937' : '#9ca3af';
+  const sw = active ? 2.2 : 1.8;
+  // viewBox 24×16 — two horizontal lines, top long (16 wide), bottom short (10 wide)
+  // The x positions slide based on `align` so the lines visually flush left/center/right.
+  const longW = 16;
+  const shortW = 10;
+  const longX = align === 'left' ? 4 : align === 'right' ? 24 - 4 - longW : (24 - longW) / 2;
+  const shortX = align === 'left' ? 4 : align === 'right' ? 24 - 4 - shortW : (24 - shortW) / 2;
+  return (
+    <svg width="22" height="14" viewBox="0 0 24 16" aria-hidden="true">
+      <line x1={longX} y1="5" x2={longX + longW} y2="5" stroke={stroke} strokeWidth={sw} strokeLinecap="round" />
+      <line x1={shortX} y1="11" x2={shortX + shortW} y2="11" stroke={stroke} strokeWidth={sw} strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function AlignSelector({
+  value,
+  onChange,
+  label = 'Align',
+}: {
+  value: Align3;
+  onChange: (a: Align3) => void;
+  label?: string;
+}) {
+  return (
+    <div>
+      {label ? <p className="text-sm font-semibold text-gray-900 mb-2">{label}</p> : null}
+      <div className="flex items-center gap-1.5">
+        {(['left', 'center', 'right'] as const).map((a) => {
+          const active = value === a;
+          return (
+            <button
+              key={a}
+              type="button"
+              onClick={() => onChange(a)}
+              aria-pressed={active}
+              aria-label={`Align ${a}`}
+              className={`flex h-12 w-12 items-center justify-center rounded-xl transition-colors ${
+                active ? 'bg-gray-100' : 'hover:bg-gray-50'
+              }`}
+            >
+              <AlignIcon align={a} active={active} />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 // ─── Venue address type (passed from server page) ─────────────────────────────
@@ -1915,24 +1974,11 @@ function ButtonInspector({
           </div>
 
           {/* Position */}
-          <div>
-            <p className="text-sm font-semibold text-gray-900 mb-2">Position</p>
-            <div className="flex gap-1">
-              {(['left', 'center', 'right'] as const).map(p => {
-                const Icon = p === 'left' ? AlignLeft : p === 'center' ? AlignCenter : AlignRight;
-                return (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => onChange({ align: p })}
-                    className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${(block.align ?? 'center') === p ? 'bg-gray-100 text-gray-700' : 'text-gray-400 hover:text-gray-600'}`}
-                  >
-                    <Icon size={16} />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          <AlignSelector
+            label="Position"
+            value={(block.align ?? 'center') as Align3}
+            onChange={(p) => onChange({ align: p })}
+          />
 
           {/* Border and sizing */}
           <div className="border-t border-gray-100 pt-4">
@@ -2655,25 +2701,11 @@ function DividerInspector({
         </div>
 
         {/* Position */}
-        <div>
-          <p className="text-sm font-semibold text-gray-900 mb-2">Position</p>
-          <div className="flex gap-1.5">
-            {(['left', 'center', 'right'] as const).map(a => {
-              const active = align === a;
-              const Icon = a === 'left' ? AlignLeft : a === 'right' ? AlignRight : AlignCenter;
-              return (
-                <button
-                  key={a}
-                  type="button"
-                  onClick={() => onChange({ align: a })}
-                  className={`w-12 h-12 rounded-lg border flex items-center justify-center transition-colors ${active ? 'bg-gray-100 border-gray-300' : 'bg-white border-gray-200 hover:border-gray-300'}`}
-                >
-                  <Icon size={16} className={active ? 'text-gray-900' : 'text-gray-400'} />
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        <AlignSelector
+          label="Position"
+          value={align as Align3}
+          onChange={(a) => onChange({ align: a })}
+        />
 
         {/* Thickness & width */}
         <div className="border-t border-gray-100 pt-4">
@@ -3100,24 +3132,11 @@ function ImageInspector({
               <ChevronDown size={14} className={`text-gray-400 transition-transform ${positionOpen ? 'rotate-180' : ''}`} />
             </button>
             {positionOpen && (
-              <div>
-                <div className="flex gap-1.5">
-                  {(['left', 'center', 'right'] as const).map(a => {
-                    const active = (block.align ?? 'center') === a;
-                    const Icon = a === 'left' ? AlignLeft : a === 'right' ? AlignRight : AlignCenter;
-                    return (
-                      <button
-                        key={a}
-                        type="button"
-                        onClick={() => onChange({ align: a })}
-                        className={`flex-1 h-12 rounded-lg border flex items-center justify-center transition-colors ${active ? 'bg-gray-100 border-gray-300' : 'bg-white border-gray-200 hover:border-gray-300'}`}
-                      >
-                        <Icon size={18} className={active ? 'text-gray-900' : 'text-gray-400'} />
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              <AlignSelector
+                label=""
+                value={(block.align ?? 'center') as Align3}
+                onChange={(a) => onChange({ align: a })}
+              />
             )}
           </div>
 
@@ -3279,24 +3298,10 @@ function BlockInspectorPanel({
   );
 
   const AlignRow = () => (
-    <div>
-      <p className="text-sm font-semibold text-gray-700 mb-1.5">Align</p>
-      <div className="flex gap-0.5">
-        {(['left', 'center', 'right'] as const).map((a) => {
-          const icons = { left: <AlignLeft size={16} />, center: <AlignCenter size={16} />, right: <AlignRight size={16} /> };
-          return (
-            <button
-              key={a}
-              type="button"
-              onClick={() => onChange({ align: a })}
-              className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${block.align === a ? 'bg-gray-100 text-gray-700' : 'text-gray-400 hover:text-gray-600'}`}
-            >
-              {icons[a]}
-            </button>
-          );
-        })}
-      </div>
-    </div>
+    <AlignSelector
+      value={(block.align ?? 'left') as Align3}
+      onChange={(a) => onChange({ align: a })}
+    />
   );
 
   const CaseRow = () => (
