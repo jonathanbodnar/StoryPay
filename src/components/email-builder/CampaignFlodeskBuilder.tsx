@@ -24,7 +24,36 @@ import {
   type DragEndEvent,
   type DragStartEvent,
   type DragOverEvent,
+  type PointerActivationConstraint,
 } from '@dnd-kit/core';
+
+// Custom sensor — never activates when the pointer goes down on an <input>,
+// <button>, <select>, or any element marked data-no-dnd. This lets native
+// range inputs drag freely without dnd-kit intercepting the pointer stream.
+class SmartPointerSensor extends PointerSensor {
+  static activators = [
+    {
+      eventName: 'onPointerDown' as const,
+      handler: (
+        { nativeEvent }: { nativeEvent: PointerEvent },
+        { activationConstraint }: { activationConstraint?: PointerActivationConstraint },
+      ) => {
+        const target = nativeEvent.target as HTMLElement | null;
+        if (!target) return true;
+        if (
+          target.tagName === 'INPUT'    ||
+          target.tagName === 'BUTTON'   ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT'   ||
+          target.tagName === 'A'        ||
+          target.closest?.('[data-no-dnd]')
+        ) return false;
+        void activationConstraint; // satisfy TS
+        return true;
+      },
+    },
+  ];
+}
 import {
   SortableContext,
   verticalListSortingStrategy,
@@ -974,15 +1003,13 @@ function SliderControl({
           className="text-sm text-gray-400 hover:text-gray-700 w-4 flex-shrink-0 select-none leading-none"
         >−</button>
 
-        {/* Native range — browser handles drag natively, dnd-kit cannot intercept */}
+        {/* Native range — SmartPointerSensor skips input elements so dnd-kit never interferes */}
         <input
           type="range"
           className="sp-slider flex-1"
           min={min} max={max} step={step}
           value={value}
           onChange={(e) => onChange(Number(e.target.value))}
-          onPointerDown={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
           style={{ display: 'block' }}
         />
 
@@ -1447,7 +1474,7 @@ export function CampaignFlodeskBuilder({
   const theme = mergeEmailTheme(def.theme);
 
   // dnd-kit sensors — require 5px drag before activating (prevents mis-fires on click)
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const sensors = useSensors(useSensor(SmartPointerSensor, { activationConstraint: { distance: 5 } }));
   const [activePaletteType, setActivePaletteType] = useState<EmailBlockType | null>(null);
   const [dropOverId, setDropOverId] = useState<string | null>(null);
 
