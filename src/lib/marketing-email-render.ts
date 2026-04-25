@@ -16,24 +16,29 @@ function esc(s: string): string {
 
 // Inline-SVG paths for social icons. Kept in lockstep with the SocialIcon
 // component in CampaignFlodeskBuilder so editor, preview, and sent emails
-// render identically. Each entry returns the inner SVG markup; the wrapper
-// applies size/color via the surrounding <svg>.
+// render identically. The SVG ships with `vertical-align:middle` so it
+// lines up cleanly inside the chip wrapper (which uses line-height = chip
+// height to vertically center its content — works in every email client).
 function socialIconSvg(platform: string, size: number, color: string): string {
   const c = esc(color);
   const wrap = (inner: string, opts?: { fill?: boolean }) => {
     const fillAttr = opts?.fill === false ? 'fill="none"' : `fill="${c}"`;
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" ${fillAttr}>${inner}</svg>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" ${fillAttr} style="display:inline-block;vertical-align:middle;">${inner}</svg>`;
   };
   switch (platform) {
     case 'facebook':
-      return wrap('<path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>');
+      // Solid Facebook "f" inside a square — fills the glyph cleanly so it
+      // reads at small sizes and contrasts well against filled chips.
+      return wrap('<path d="M22.675 0H1.325C.593 0 0 .593 0 1.325v21.351C0 23.407.593 24 1.325 24H12.82v-9.294H9.692v-3.622h3.128V8.413c0-3.1 1.893-4.788 4.659-4.788 1.325 0 2.464.099 2.795.143v3.24l-1.918.001c-1.504 0-1.795.715-1.795 1.764v2.313h3.587l-.467 3.622h-3.12V24h6.116c.73 0 1.323-.593 1.323-1.325V1.325C24 .593 23.407 0 22.675 0z"/>');
     case 'twitter':
       return wrap('<path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>');
     case 'instagram':
+      // Slightly thicker strokes so the camera body + lens stay visible at
+      // 14–20px sizes (thin 2-unit strokes get washed out below 16px).
       return wrap(
-        `<rect x="2" y="2" width="20" height="20" rx="5" ry="5" stroke="${c}" stroke-width="2" fill="none"/>` +
-        `<circle cx="12" cy="12" r="4" stroke="${c}" stroke-width="2" fill="none"/>` +
-        `<circle cx="17.5" cy="6.5" r="0.9" fill="${c}"/>`,
+        `<rect x="2" y="2" width="20" height="20" rx="5" ry="5" stroke="${c}" stroke-width="2.4" fill="none"/>` +
+        `<circle cx="12" cy="12" r="4.5" stroke="${c}" stroke-width="2.4" fill="none"/>` +
+        `<circle cx="17.5" cy="6.5" r="1.1" fill="${c}"/>`,
         { fill: false },
       );
     case 'tiktok':
@@ -41,16 +46,16 @@ function socialIconSvg(platform: string, size: number, color: string): string {
     case 'pinterest':
       return wrap('<path d="M12 0C5.373 0 0 5.373 0 12c0 5.084 3.163 9.426 7.627 11.174-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 0 1 .083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0z"/>');
     case 'linkedin':
-      return wrap('<path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6zM2 9h4v12H2z"/><circle cx="4" cy="4" r="2"/>');
+      return wrap('<path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.063 2.063 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>');
     case 'youtube':
-      return wrap('<path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 0 0-1.95 1.96A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58A2.78 2.78 0 0 0 3.41 19.6C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 0 0 1.95-1.95A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="#ffffff"/>');
+      return wrap('<path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>');
     case 'threads':
       return wrap('<path d="M17.65 11.13c-.07-.04-.16-.07-.24-.1-.13-2.43-1.46-3.83-3.69-3.84a3.9 3.9 0 0 0-3.27 1.66l1.21.82a2.45 2.45 0 0 1 2.05-1.05c.95 0 1.66.32 2.06.92.27.42.43.96.5 1.59-.6-.1-1.24-.13-1.92-.09-1.94.11-3.18 1.24-3.1 2.81.04.79.43 1.47 1.11 1.91a3.4 3.4 0 0 0 1.96.5c.91-.05 1.62-.4 2.13-1.03.38-.49.62-1.12.74-1.92.49.3.85.69 1.05 1.16.34.81.36 2.13-.72 3.21-.95.95-2.09 1.36-3.81 1.37-1.91-.02-3.36-.63-4.31-1.83-.89-1.13-1.36-2.75-1.37-4.83.02-2.07.48-3.7 1.37-4.83.95-1.2 2.4-1.81 4.31-1.83 1.93.01 3.39.63 4.34 1.83.47.6.82 1.34 1.04 2.21l1.41-.39a8.46 8.46 0 0 0-1.31-2.71C19.06 3.34 17.16 2.51 14.79 2.5h-.01c-2.36.02-4.22.85-5.55 2.5C8.04 6.46 7.43 8.5 7.4 11l0 .01 0 .01c.03 2.5.64 4.54 1.83 6 1.33 1.65 3.19 2.49 5.55 2.51h.01c2.1-.01 3.58-.57 4.81-1.79 1.6-1.6 1.55-3.6.74-4.83-.36-.55-.86-1.02-1.5-1.36zm-3.83 3.06c-.62.04-1.27-.24-1.31-.97-.03-.55.39-1.16 1.69-1.23.15-.01.3-.01.44-.01.46 0 .89.04 1.28.13-.15 1.81-1.01 2.04-2.1 2.08z"/>');
     case 'website':
       return wrap(
-        `<circle cx="12" cy="12" r="10" stroke="${c}" stroke-width="2" fill="none"/>` +
-        `<line x1="2" y1="12" x2="22" y2="12" stroke="${c}" stroke-width="2"/>` +
-        `<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" stroke="${c}" stroke-width="2" fill="none"/>`,
+        `<circle cx="12" cy="12" r="9.5" stroke="${c}" stroke-width="2.2" fill="none"/>` +
+        `<line x1="2.5" y1="12" x2="21.5" y2="12" stroke="${c}" stroke-width="2.2"/>` +
+        `<path d="M12 2.5a14 14 0 0 1 3.8 9.5 14 14 0 0 1-3.8 9.5 14 14 0 0 1-3.8-9.5 14 14 0 0 1 3.8-9.5z" stroke="${c}" stroke-width="2.2" fill="none"/>`,
         { fill: false },
       );
     default:
@@ -297,24 +302,33 @@ function renderBlock(block: EmailBlock, theme: ReturnType<typeof mergeEmailTheme
       const color = block.color ?? theme.textColor;
       const aAlign = block.align === 'left' ? 'left' : block.align === 'right' ? 'right' : 'center';
 
-      const sizeMap = { sm: { outer: 24, inner: 14 }, md: { outer: 32, inner: 18 }, lg: { outer: 44, inner: 26 } } as const;
-      const { outer, inner } = sizeMap[sizeKey];
+      // Inner glyph fills ~62–66% of the chip diameter. The "outline" style
+      // (no chip background) gets a slightly larger glyph since there's no
+      // chip border eating into the visible area.
+      const sizeMap = {
+        sm: { outer: 28, withChip: 18, noChip: 22 },
+        md: { outer: 36, withChip: 22, noChip: 28 },
+        lg: { outer: 48, withChip: 30, noChip: 38 },
+      } as const;
+      const dims = sizeMap[sizeKey];
+      const outer = dims.outer;
+      const inner = styleKind === 'outline' ? dims.noChip : dims.withChip;
 
-      // For email clients we use an inline-table approach (more reliable than
-      // flex). Each icon sits in its own <td> so spacing is delivered as
-      // padding on the cells.
       const halfGap = Math.round(spacing / 2);
+      // Each icon is a single <a> styled as a centered chip. Using
+      // line-height = chip height + vertical-align:middle on the SVG centers
+      // the glyph reliably across Gmail/Apple Mail/Outlook web/iOS.
       const cells = links.map((l) => {
-        let wrapperStyle = `width:${outer}px;height:${outer}px;line-height:0;text-align:center;vertical-align:middle;mso-line-height-rule:exactly;`;
+        let chipStyle = `display:inline-block;width:${outer}px;height:${outer}px;line-height:${outer}px;text-align:center;text-decoration:none;mso-line-height-rule:exactly;box-sizing:border-box;`;
         let glyphColor = color;
         if (styleKind === 'filled-circle') {
-          wrapperStyle += `background:${color};border-radius:${outer}px;`;
+          chipStyle += `background:${color};border-radius:${outer}px;`;
           glyphColor = isDarkColor(color) ? '#ffffff' : '#000000';
         } else if (styleKind === 'circle-outline') {
-          wrapperStyle += `border:1.5px solid ${color};border-radius:${outer}px;box-sizing:border-box;`;
+          chipStyle += `border:1.5px solid ${color};border-radius:${outer}px;`;
         }
         const svg = socialIconSvg(l.platform, inner, glyphColor);
-        return `<td style="padding:0 ${halfGap}px;"><a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;line-height:0;"><span style="${wrapperStyle}display:inline-block;">${svg}</span></a></td>`;
+        return `<td style="padding:0 ${halfGap}px;line-height:0;font-size:0;mso-line-height-rule:exactly;"><a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer" style="${chipStyle}">${svg}</a></td>`;
       }).join('');
 
       const inner2 = `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="${aAlign}" style="border-collapse:collapse;"><tr>${cells}</tr></table>`;
