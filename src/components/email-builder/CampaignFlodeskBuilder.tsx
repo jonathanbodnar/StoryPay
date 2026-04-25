@@ -19,7 +19,10 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  useDraggable,
+  DragOverlay,
   type DragEndEvent,
+  type DragStartEvent,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -51,6 +54,31 @@ const PALETTE: { type: EmailBlockType; label: string; desc: string; Icon: React.
   { type: 'divider', label: 'Divider',      desc: 'Horizontal rule',             Icon: SeparatorHorizontal },
   { type: 'spacer',  label: 'Spacer',       desc: 'Vertical whitespace',         Icon: Space },
 ];
+
+// ─── Palette card — draggable from the right panel onto the canvas ────────────
+function PaletteCard({ type, label, desc, Icon }: typeof PALETTE[number]) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `new:${type}`,
+    data: { source: 'palette', blockType: type },
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      style={{ opacity: isDragging ? 0.4 : 1, cursor: 'grab', touchAction: 'none' }}
+      className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white px-3.5 py-3 shadow-sm hover:border-gray-300 hover:shadow transition-all select-none"
+    >
+      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-gray-50">
+        <Icon size={15} className="text-gray-500" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-gray-800 leading-tight">{label}</p>
+        <p className="text-[11px] text-gray-400 truncate">{desc}</p>
+      </div>
+    </div>
+  );
+}
 
 // ─── Social platform definitions ─────────────────────────────────────────────
 const SOCIAL_PLATFORMS = [
@@ -1467,9 +1495,41 @@ export function CampaignFlodeskBuilder({
 
   // dnd-kit sensors — require 5px drag before activating (prevents mis-fires on click)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const [activePaletteType, setActivePaletteType] = useState<EmailBlockType | null>(null);
+
+  function handleDragStart(event: DragStartEvent) {
+    const id = String(event.active.id);
+    if (id.startsWith('new:')) setActivePaletteType(id.replace('new:', '') as EmailBlockType);
+    else setActivePaletteType(null);
+  }
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
+    setActivePaletteType(null);
+
+    const activeId = String(active.id);
+
+    // Drop from palette
+    if (activeId.startsWith('new:')) {
+      const blockType = activeId.replace('new:', '') as EmailBlockType;
+      const newBlock = createEmailBlock(blockType);
+      if (over) {
+        const overIdx = def.blocks.findIndex((b) => b.id === over.id);
+        if (overIdx >= 0) {
+          const next = [...def.blocks];
+          next.splice(overIdx, 0, newBlock);
+          updateDef({ ...def, blocks: next });
+        } else {
+          updateDef({ ...def, blocks: [...def.blocks, newBlock] });
+        }
+      } else {
+        updateDef({ ...def, blocks: [...def.blocks, newBlock] });
+      }
+      setSelectedId(newBlock.id);
+      return;
+    }
+
+    // Reorder existing blocks
     if (over && active.id !== over.id) {
       const oldIdx = def.blocks.findIndex((b) => b.id === active.id);
       const newIdx = def.blocks.findIndex((b) => b.id === over.id);
@@ -1711,7 +1771,7 @@ export function CampaignFlodeskBuilder({
           </div>
 
           {/* Email card — completely flush, white on white */}
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
             <div
               className="mx-auto"
               style={{ maxWidth: viewMode === 'mobile' ? '375px' : theme.maxWidth, background: theme.cardBg, transition: 'max-width 0.3s ease' }}
@@ -1826,6 +1886,21 @@ export function CampaignFlodeskBuilder({
                 </SortableContext>
               )}
             </div>
+            {/* Drag overlay — ghost shown while dragging from palette */}
+            <DragOverlay dropAnimation={null}>
+              {activePaletteType ? (() => {
+                const p = PALETTE.find(x => x.type === activePaletteType);
+                if (!p) return null;
+                return (
+                  <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-3.5 py-3 shadow-xl opacity-90 pointer-events-none" style={{ width: 220 }}>
+                    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-gray-50">
+                      <p.Icon size={15} className="text-gray-500" />
+                    </div>
+                    <p className="text-sm font-medium text-gray-800">{p.label}</p>
+                  </div>
+                );
+              })() : null}
+            </DragOverlay>
           </DndContext>
 
           {/* Merge field hint */}
@@ -1888,35 +1963,14 @@ export function CampaignFlodeskBuilder({
               </div>
             </div>
           ) : (
-            <div className="p-5">
-              <div className="mb-4 flex items-center gap-2">
-                <Palette size={15} className="text-gray-500" />
-                <h3 className="text-sm font-semibold text-gray-900">Global style</h3>
+            <div className="p-4">
+              <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Blocks</p>
+              <p className="mb-4 text-[11px] text-gray-400">Drag a block onto the canvas, or click a block on the canvas to edit it.</p>
+              <div className="flex flex-col gap-2">
+                {PALETTE.map((item) => (
+                  <PaletteCard key={item.type} {...item} />
+                ))}
               </div>
-
-              {/* Preheader */}
-              <div className="mb-5">
-                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">
-                  Preheader text
-                </label>
-                <input
-                  type="text"
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:bg-white focus:outline-none transition-colors"
-                  value={preheader}
-                  onChange={(e) => {
-                    setPreheader(e.target.value);
-                    scheduleSave(name, subject, e.target.value, def);
-                  }}
-                  placeholder="Preview text after subject line"
-                />
-                <p className="mt-1 text-[10px] text-gray-400">Shown in inbox preview after the subject</p>
-              </div>
-
-              <ThemePanel theme={theme} onChange={patchTheme} />
-
-              <p className="mt-5 text-[11px] text-gray-400 text-center">
-                Click any block on the canvas to edit it
-              </p>
             </div>
           )}
           </div>
