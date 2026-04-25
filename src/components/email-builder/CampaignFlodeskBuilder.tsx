@@ -3882,29 +3882,44 @@ export function CampaignFlodeskBuilder({
   // dnd-kit sensors — require 5px drag before activating (prevents mis-fires on click)
   const sensors = useSensors(useSensor(SmartPointerSensor, { activationConstraint: { distance: 5 } }));
   const [activePaletteType, setActivePaletteType] = useState<EmailBlockType | null>(null);
-  const [dropOverId, setDropOverId] = useState<string | null>(null);
+  // Drop target tracks both the hovered block AND which side ('before'/'after')
+  // so a palette block can land at any slot — including the very last position.
+  const [dropTarget, setDropTarget] = useState<{ id: string; pos: 'before' | 'after' } | null>(null);
+  const pointerYRef = useRef(0);
+
+  // Track real-time pointer Y so we can decide whether the cursor sits in the
+  // upper or lower half of the hovered block (drives before/after insertion).
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => { pointerYRef.current = e.clientY; };
+    window.addEventListener('pointermove', onMove, { passive: true });
+    return () => window.removeEventListener('pointermove', onMove);
+  }, []);
 
   function handleDragStart(event: DragStartEvent) {
     const id = String(event.active.id);
     if (id.startsWith('new:')) setActivePaletteType(id.replace('new:', '') as EmailBlockType);
     else setActivePaletteType(null);
-    setDropOverId(null);
+    setDropTarget(null);
   }
 
   function handleDragOver(event: DragOverEvent) {
-    // Only show indicator when dragging a palette item over a canvas block
     const activeId = String(event.active.id);
-    if (activeId.startsWith('new:') && event.over) {
-      setDropOverId(String(event.over.id));
-    } else {
-      setDropOverId(null);
+    if (!activeId.startsWith('new:') || !event.over) {
+      setDropTarget(null);
+      return;
     }
+    const overId = String(event.over.id);
+    const rect = event.over.rect; // ClientRect of the hovered block
+    const midY = rect.top + rect.height / 2;
+    const pos: 'before' | 'after' = pointerYRef.current >= midY ? 'after' : 'before';
+    setDropTarget((prev) => (prev?.id === overId && prev.pos === pos ? prev : { id: overId, pos }));
   }
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
+    const target = dropTarget;
     setActivePaletteType(null);
-    setDropOverId(null);
+    setDropTarget(null);
 
     const activeId = String(active.id);
 
@@ -3912,11 +3927,12 @@ export function CampaignFlodeskBuilder({
     if (activeId.startsWith('new:')) {
       const blockType = activeId.replace('new:', '') as EmailBlockType;
       const newBlock = createEmailBlock(blockType);
-      if (over) {
-        const overIdx = def.blocks.findIndex((b) => b.id === over.id);
+      if (over && target) {
+        const overIdx = def.blocks.findIndex((b) => b.id === target.id);
         if (overIdx >= 0) {
+          const insertIdx = target.pos === 'after' ? overIdx + 1 : overIdx;
           const next = [...def.blocks];
-          next.splice(overIdx, 0, newBlock);
+          next.splice(insertIdx, 0, newBlock);
           updateDef({ ...def, blocks: next });
         } else {
           updateDef({ ...def, blocks: [...def.blocks, newBlock] });
@@ -4179,7 +4195,7 @@ export function CampaignFlodeskBuilder({
 
       {/* ── Content — fixed below the header so both panes can scroll independently ── */}
       {/* DndContext wraps BOTH canvas and right panel so palette cards can drag onto canvas */}
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd} onDragCancel={() => { setActivePaletteType(null); setDropOverId(null); }}>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd} onDragCancel={() => { setActivePaletteType(null); setDropTarget(null); }}>
       <div
         style={{
           position: 'fixed',
@@ -4247,27 +4263,29 @@ export function CampaignFlodeskBuilder({
 
                   {def.blocks.map((block, idx) => {
                     const isSelected = block.id === selectedId;
-                    const showDropIndicator = dropOverId === block.id && activePaletteType !== null;
+                    const isDropTarget = dropTarget?.id === block.id && activePaletteType !== null;
+                    const showTopIndicator = isDropTarget && dropTarget?.pos === 'before';
+                    const showBottomIndicator = isDropTarget && dropTarget?.pos === 'after';
+                    const indicator = (
+                      <div className="pointer-events-none px-0 py-1">
+                        <div
+                          className="flex items-center gap-2"
+                          style={{ borderTop: '2px solid #1b1b1b', margin: '0 0' }}
+                        >
+                          <span
+                            className="text-[10px] font-semibold text-white rounded px-1.5 py-0.5"
+                            style={{ background: '#1b1b1b', lineHeight: 1.4, whiteSpace: 'nowrap' }}
+                          >
+                            {PALETTE.find(p => p.type === activePaletteType)?.label ?? activePaletteType}
+                          </span>
+                        </div>
+                      </div>
+                    );
                     return (
                       <SortableBlock key={block.id} id={block.id}>
                         {(isDragging) => (
                           <div>
-                            {/* Drop indicator — shown when a palette block is dragged over this position */}
-                            {showDropIndicator && (
-                              <div className="pointer-events-none px-0 py-1">
-                                <div
-                                  className="flex items-center gap-2"
-                                  style={{ borderTop: '2px solid #1b1b1b', margin: '0 0' }}
-                                >
-                                  <span
-                                    className="text-[10px] font-semibold text-white rounded px-1.5 py-0.5"
-                                    style={{ background: '#1b1b1b', lineHeight: 1.4, whiteSpace: 'nowrap' }}
-                                  >
-                                    {PALETTE.find(p => p.type === activePaletteType)?.label ?? activePaletteType}
-                                  </span>
-                                </div>
-                              </div>
-                            )}
+                            {showTopIndicator && indicator}
                             <div
                               className="relative group/block"
                               onClick={(e) => { e.stopPropagation(); if (!isDragging) setSelectedId(block.id); }}
@@ -4341,13 +4359,16 @@ export function CampaignFlodeskBuilder({
 
                             {/* Add button after this block */}
                             <AddBlockBtn onClick={() => setPickerIdx(idx + 1)} />
+                            {showBottomIndicator && indicator}
                           </div>
                         )}
                       </SortableBlock>
                     );
                   })}
-                  {/* Drop-at-end indicator — shown when dragging palette block below all existing blocks */}
-                  {activePaletteType !== null && dropOverId === null && def.blocks.length > 0 && (
+                  {/* Drop-at-end indicator — shown when dragging a palette block but no
+                      block is being hovered (e.g. cursor below the canvas). Hover-half
+                      detection on the last block already covers most "append" cases. */}
+                  {activePaletteType !== null && dropTarget === null && def.blocks.length > 0 && (
                     <div className="pointer-events-none py-1">
                       <div style={{ borderTop: '2px solid #1b1b1b' }}>
                         <span className="text-[10px] font-semibold text-white rounded px-1.5 py-0.5" style={{ background: '#1b1b1b', lineHeight: 1.4 }}>
