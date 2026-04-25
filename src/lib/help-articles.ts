@@ -1598,8 +1598,16 @@ What you get:
 
 Tips
 - Always send a test to yourself before scheduling a campaign.
-- Test on a phone too — open the preview modal and switch the canvas to Mobile (left sidebar toggle) to see how the email reflows on small screens.
-- Test renders use real branding (logo, colors, social, address) so what you see is what your contacts get.`,
+- Test on a phone too — switch the preview modal to Mobile (top toggle) or use the canvas Mobile toggle. Either matches the responsive layout your contacts will actually see on iPhone Mail, Gmail mobile, Outlook for iOS, etc.
+- Test renders use real branding (logo, colors, social, address) so what you see is what your contacts get.
+
+Mobile responsiveness — what changes automatically
+Every email we render is mobile-optimized at the HTML level (no work for you):
+- Block side padding shrinks from 24px to 16px on screens ≤480px wide so headings, addresses, and button labels have more room to breathe.
+- The email card goes edge-to-edge on phones (no rounded corners or side gutter) — matches how Apple Mail and Gmail render emails natively.
+- The Social Links row uses inline-block chips that wrap to a second line if a venue has many social links — so an 8-platform row on a 600px desktop becomes a clean 2-row stack on a 375px phone instead of getting clipped at the right edge.
+- Images use width:100% so they always scale down with the viewport.
+Desktop email clients (Outlook, full-screen Gmail web, etc.) get the full 600px-wide layout with the original padding and rounded card.`,
       },
       {
         id: 'me-compliance',

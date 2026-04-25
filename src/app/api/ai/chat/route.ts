@@ -201,7 +201,15 @@ Live preview & send-test:
 - Modal renders the email inside a real iframe so links open and embedded videos play.
 - Header and backdrop are #1b1b1b for a calm, neutral preview.
 - Send-test form inside the modal: type any email address → Send Test → fires through normal sending pipeline with real branding (logo, colors, social, address).
-- Toggle the canvas to Mobile (left sidebar) to verify reflow on small screens.
+- Toggle the canvas to Mobile (left sidebar) — or the Mobile button at the top of the preview modal — to verify reflow on small screens.
+
+Mobile responsiveness (renderMarketingEmailHtml):
+- Every rendered email ships with a single tight media query targeting screens ≤480px wide. Inside that breakpoint:
+  - Block side padding shrinks 24px → 16px on every block-level <td> (class eb-pad). Headings, addresses, button labels, and footer text all gain ~16px of horizontal room.
+  - The email card goes edge-to-edge: border-radius:0 + border:0 (class eb-card). The page wrapper drops its 12px gutter (class eb-page). Mirrors how iPhone Mail / Gmail mobile render emails natively.
+- Above 480px (Outlook desktop, full-width Gmail web, tablets) the full-fidelity 600px layout with the rounded card and 24px padding is preserved.
+- Social Links use display:inline-block <a> chips inside a font-size:0/line-height:0 wrapper (NOT a single-row table), so when there isn't enough horizontal room for the full row the chips wrap onto a second line instead of getting clipped — critical for venues with 6–8 social platforms registered. Inline-block on <a> is supported in Outlook 2007+, Apple Mail, iOS Mail, Gmail, Outlook 365, Yahoo.
+- Images already use width:100%;max-width:... so they always scale down with the viewport.
 
 Compliance footer + public preference center:
 - Every marketing email automatically includes a minimal footer with venue name, physical address (from Branding), an unsubscribe link, and a "manage your preferences" link.

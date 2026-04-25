@@ -129,7 +129,17 @@ const BLOCK_PADDING_DEFAULTS: Record<string, { top: number; bottom: number; left
   columns: { top: 8, bottom: 8, left: 16, right: 16 },
 };
 
-/** Returns "padding:Tpx Rpx Bpx Lpx;background:...;" for a block <td>. */
+/**
+ * Returns the FULL `<td>` opening attributes for a block: a `class="eb-pad"`
+ * (so the mobile media query in `renderMarketingEmailHtml` can shrink the
+ * horizontal padding on narrow screens) plus the open of `style="..."` with
+ * the block's resolved padding + background. Callsites then append their own
+ * style rules and close the attribute with `">${content}</td>`.
+ *
+ * Note: the returned string deliberately leaves the `style="..."` attribute
+ * un-closed; the existing callsite trailing `">${content}` provides the
+ * close. This keeps every callsite a uniform `<td ${box}...">` opener.
+ */
 function blockBoxStyle(block: EmailBlock): string {
   const d = BLOCK_PADDING_DEFAULTS[block.type] ?? { top: 8, bottom: 8, left: 24, right: 24 };
   const t = block.paddingTop ?? d.top;
@@ -137,7 +147,7 @@ function blockBoxStyle(block: EmailBlock): string {
   const l = block.paddingLeft ?? d.left;
   const r = block.paddingRight ?? d.right;
   const bg = block.blockBgColor && block.blockBgColor !== 'transparent' ? `background:${block.blockBgColor};` : '';
-  return `padding:${t}px ${r}px ${b}px ${l}px;${bg}`;
+  return `class="eb-pad" style="padding:${t}px ${r}px ${b}px ${l}px;${bg}`;
 }
 
 function renderBlock(block: EmailBlock, theme: ReturnType<typeof mergeEmailTheme>): string {
@@ -155,7 +165,7 @@ function renderBlock(block: EmailBlock, theme: ReturnType<typeof mergeEmailTheme
       const ls = block.letterSpacing != null ? `letter-spacing:${block.letterSpacing}px;` : '';
       const tt = (block.textTransform && block.textTransform !== 'none') ? `text-transform:${block.textTransform};` : '';
       const text = esc((block.content || '').replace(/<[^>]+>/g, '').trim() || ' ');
-      return `<tr><td style="${box}${align};font-family:${ff};font-size:${size};font-weight:${fw};color:${color};line-height:${lh};${ls}${tt}">${text}</td></tr>`;
+      return `<tr><td ${box}${align};font-family:${ff};font-size:${size};font-weight:${fw};color:${color};line-height:${lh};${ls}${tt}">${text}</td></tr>`;
     }
     case 'text': {
       const html = sanitizeFormHtml(block.content || '');
@@ -166,7 +176,7 @@ function renderBlock(block: EmailBlock, theme: ReturnType<typeof mergeEmailTheme
       const lh = block.lineHeight ?? 1.6;
       const ls = block.letterSpacing != null ? `letter-spacing:${block.letterSpacing}px;` : '';
       const tt = (block.textTransform && block.textTransform !== 'none') ? `text-transform:${block.textTransform};` : '';
-      return `<tr><td style="${box}${align};font-family:${ff};font-size:${fs};font-weight:${fw};line-height:${lh};color:${color};${ls}${tt}">${html || '<p></p>'}</td></tr>`;
+      return `<tr><td ${box}${align};font-family:${ff};font-size:${fs};font-weight:${fw};line-height:${lh};color:${color};${ls}${tt}">${html || '<p></p>'}</td></tr>`;
     }
     case 'button': {
       const href = esc(block.href?.trim() || '#');
@@ -190,7 +200,7 @@ function renderBlock(block: EmailBlock, theme: ReturnType<typeof mergeEmailTheme
       const ls = block.letterSpacing ?? 1.8;
       const tt = (block.textTransform && block.textTransform !== 'none') ? `text-transform:${block.textTransform};` : '';
 
-      return `<tr><td style="${box}${align};"><a href="${href}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:${bg};color:${fg};border:${borderW}px solid ${borderColor};padding:${padY}px ${padX}px;border-radius:${radius}px;text-decoration:none;font-weight:${fw};font-size:${fs};line-height:${block.lineHeight ?? 1};letter-spacing:${ls}px;${tt}font-family:${ff};">${lab}</a></td></tr>`;
+      return `<tr><td ${box}${align};"><a href="${href}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:${bg};color:${fg};border:${borderW}px solid ${borderColor};padding:${padY}px ${padX}px;border-radius:${radius}px;text-decoration:none;font-weight:${fw};font-size:${fs};line-height:${block.lineHeight ?? 1};letter-spacing:${ls}px;${tt}font-family:${ff};">${lab}</a></td></tr>`;
     }
     case 'image': {
       const cols = Math.max(1, Math.min(4, block.imageGridColumns ?? 1));
@@ -214,7 +224,7 @@ function renderBlock(block: EmailBlock, theme: ReturnType<typeof mergeEmailTheme
       // Single-image fast path keeps existing email-client compatibility.
       if (cols === 1 && slots.length === 1) {
         if (!slots[0].src) {
-          return `<tr><td style="${box}${align};color:${theme.mutedColor};font-size:13px;">[Image — add URL in editor]</td></tr>`;
+          return `<tr><td ${box}${align};color:${theme.mutedColor};font-size:13px;">[Image — add URL in editor]</td></tr>`;
         }
         const src = esc(slots[0].src);
         const alt = esc(slots[0].alt);
@@ -222,7 +232,7 @@ function renderBlock(block: EmailBlock, theme: ReturnType<typeof mergeEmailTheme
         const inner = linkHref
           ? `<a href="${linkHref}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;display:block;">${img}</a>`
           : img;
-        return `<tr><td style="${box}${align};"><table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;max-width:${totalWidth}px;width:100%;"><tr><td>${inner}</td></tr></table></td></tr>`;
+        return `<tr><td ${box}${align};"><table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;max-width:${totalWidth}px;width:100%;"><tr><td>${inner}</td></tr></table></td></tr>`;
       }
 
       // Grid path: build a real <table> with rows of `cols` cells.
@@ -253,7 +263,7 @@ function renderBlock(block: EmailBlock, theme: ReturnType<typeof mergeEmailTheme
         rows.push(`<tr>${cells.join('')}</tr>`);
       }
       const tableAlign = block.align === 'left' ? 'left' : block.align === 'right' ? 'right' : 'center';
-      return `<tr><td style="${box}${align};"><table role="presentation" cellpadding="0" cellspacing="0" border="0" align="${tableAlign}" style="border-collapse:separate;border-spacing:0;max-width:${totalWidth}px;width:100%;margin:0 auto;">${rows.join('')}</table></td></tr>`;
+      return `<tr><td ${box}${align};"><table role="presentation" cellpadding="0" cellspacing="0" border="0" align="${tableAlign}" style="border-collapse:separate;border-spacing:0;max-width:${totalWidth}px;width:100%;margin:0 auto;">${rows.join('')}</table></td></tr>`;
     }
     case 'video': {
       // Render as a 16:9 YouTube-style preview (clickable thumbnail) that
@@ -308,7 +318,7 @@ function renderBlock(block: EmailBlock, theme: ReturnType<typeof mergeEmailTheme
         ? `<p style="margin:14px 0 0;font-size:15px;color:${titleColor};text-align:center;font-family:${theme.fontFamily};line-height:1.4;">${esc(title)}</p>`
         : '';
 
-      return `<tr><td style="${box}${align};">${linked}${titleHtml}</td></tr>`;
+      return `<tr><td ${box}${align};">${linked}${titleHtml}</td></tr>`;
     }
     case 'social': {
       // The block's `socialLinks` are populated at render time from
@@ -337,12 +347,25 @@ function renderBlock(block: EmailBlock, theme: ReturnType<typeof mergeEmailTheme
       const outer = dims.outer;
       const inner = styleKind === 'outline' ? dims.noChip : dims.withChip;
 
-      const halfGap = Math.round(spacing / 2);
-      // Each icon is a single <a> styled as a centered chip. Using
-      // line-height = chip height + vertical-align:middle on the SVG centers
-      // the glyph reliably across Gmail/Apple Mail/Outlook web/iOS.
-      const cells = links.map((l) => {
-        let chipStyle = `display:inline-block;width:${outer}px;height:${outer}px;line-height:${outer}px;text-align:center;text-decoration:none;mso-line-height-rule:exactly;box-sizing:border-box;`;
+      const halfGap = Math.max(2, Math.round(spacing / 2));
+      // Each chip is an `<a>` rendered as `display:inline-block`. We use a
+      // plain `<div>` (not a `<table>`) so the chips wrap onto a second row
+      // automatically when the available width can't fit them all — which
+      // is exactly what we need on narrow phones (iPhone Mail at 375px,
+      // Gmail mobile, etc.) when a venue has 6–8 social links registered.
+      // Inline-block on `<a>` is supported in Outlook 2007+, Apple Mail,
+      // iOS Mail, Gmail (web + mobile), Outlook 365, and Yahoo.
+      //
+      // - `font-size:0;line-height:0` on the parent kills the inline-block
+      //   whitespace gap, so spacing is determined entirely by chip margin.
+      // - `mso-line-height-rule:exactly` keeps Outlook's line height behaved.
+      // - chip's own `line-height:${outer}px` overrides the parent zero so
+      //   the glyph still vertical-aligns correctly inside the chip.
+      // - `margin:0 ${halfGap}px ${halfGap*2}px` gives horizontal spacing
+      //   between chips and a small bottom margin so wrapped rows breathe.
+      const chipBottomMargin = halfGap * 2;
+      const chips = links.map((l) => {
+        let chipStyle = `display:inline-block;width:${outer}px;height:${outer}px;line-height:${outer}px;text-align:center;text-decoration:none;mso-line-height-rule:exactly;box-sizing:border-box;margin:0 ${halfGap}px ${chipBottomMargin}px;vertical-align:top;`;
         let glyphColor = color;
         if (styleKind === 'filled-circle') {
           chipStyle += `background:${color};border-radius:${outer}px;`;
@@ -351,11 +374,15 @@ function renderBlock(block: EmailBlock, theme: ReturnType<typeof mergeEmailTheme
           chipStyle += `border:1.5px solid ${color};border-radius:${outer}px;`;
         }
         const svg = socialIconSvg(l.platform, inner, glyphColor);
-        return `<td style="padding:0 ${halfGap}px;line-height:0;font-size:0;mso-line-height-rule:exactly;"><a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer" style="${chipStyle}">${svg}</a></td>`;
+        return `<a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer" style="${chipStyle}">${svg}</a>`;
       }).join('');
 
-      const inner2 = `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="${aAlign}" style="border-collapse:collapse;"><tr>${cells}</tr></table>`;
-      return `<tr><td style="${box}text-align:${aAlign};">${inner2}</td></tr>`;
+      // Negative bottom margin on the wrapper absorbs the bottom margin of
+      // the *last* (or only) row of chips, so when nothing wraps the social
+      // block's overall height matches the legacy table layout.
+      const wrapperStyle = `text-align:${aAlign};font-size:0;line-height:0;mso-line-height-rule:exactly;margin-bottom:-${chipBottomMargin}px;`;
+      const inner2 = `<div style="${wrapperStyle}">${chips}</div>`;
+      return `<tr><td ${box}text-align:${aAlign};">${inner2}</td></tr>`;
     }
     case 'address': {
       // Filled at runtime via mergeMarketingFields — vars contain venue_name, venue_full_address, etc.
@@ -367,7 +394,7 @@ function renderBlock(block: EmailBlock, theme: ReturnType<typeof mergeEmailTheme
       const ls = block.letterSpacing ?? 0;
       const tt = block.textTransform && block.textTransform !== 'none' ? `text-transform:${block.textTransform};` : '';
       const aAlign = block.align === 'left' ? 'left' : block.align === 'right' ? 'right' : 'center';
-      return `<tr><td style="${box}text-align:${aAlign};font-family:${ff};">
+      return `<tr><td ${box}text-align:${aAlign};font-family:${ff};">
   <p style="margin:0 0 3px;font-size:${fs};font-weight:600;color:${color};line-height:${lh};letter-spacing:${ls}px;${tt}">{{venue_name}}</p>
   <p style="margin:0;font-size:${fs};font-weight:${fw};color:${color};line-height:${lh};letter-spacing:${ls}px;${tt}">{{venue_full_address}}</p>
 </td></tr>`;
@@ -379,7 +406,7 @@ function renderBlock(block: EmailBlock, theme: ReturnType<typeof mergeEmailTheme
       const dWidth = Math.max(20, Math.min(600, block.dividerWidth ?? 300));
       const dAlign = block.align === 'left' ? 'left' : block.align === 'right' ? 'right' : 'center';
       const inner = `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="${dAlign}" style="border-collapse:collapse;width:${dWidth}px;max-width:100%;"><tr><td style="font-size:0;line-height:0;border-top:${dThick}px ${dStyle} ${dColor};">&nbsp;</td></tr></table>`;
-      return `<tr><td style="${box}text-align:${dAlign};">${inner}</td></tr>`;
+      return `<tr><td ${box}text-align:${dAlign};">${inner}</td></tr>`;
     }
     case 'spacer': {
       const h = Math.min(120, Math.max(4, block.spacerHeight ?? 16));
@@ -387,11 +414,11 @@ function renderBlock(block: EmailBlock, theme: ReturnType<typeof mergeEmailTheme
       return `<tr><td style="height:${h}px;font-size:0;line-height:0;${bgPart}">&nbsp;</td></tr>`;
     }
     case 'html':
-      return `<tr><td style="${box}${align};font-family:${theme.fontFamily};font-size:15px;color:${theme.textColor};">${sanitizeFormHtml(block.content || '')}</td></tr>`;
+      return `<tr><td ${box}${align};font-family:${theme.fontFamily};font-size:15px;color:${theme.textColor};">${sanitizeFormHtml(block.content || '')}</td></tr>`;
     case 'columns': {
       const left = (block.left ?? []).map((b) => renderBlock(b, theme)).join('');
       const right = (block.right ?? []).map((b) => renderBlock(b, theme)).join('');
-      return `<tr><td style="${box}"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+      return `<tr><td ${box}"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
         <td width="50%" valign="top" style="padding:8px;">${left || '<table width="100%"><tr><td>&nbsp;</td></tr></table>'}</td>
         <td width="50%" valign="top" style="padding:8px;">${right || '<table width="100%"><tr><td>&nbsp;</td></tr></table>'}</td>
       </tr></table></td></tr>`;
@@ -409,7 +436,10 @@ export function renderMarketingEmailHtml(
   const inner = definition.blocks.map((b) => renderBlock(b, theme)).join('');
   // Compliance footer — venue identity + one-click unsubscribe + preference center.
   // Always rendered. NOT user-editable, by design (CAN-SPAM / GDPR requirement).
-  const footer = `<tr><td style="padding:28px 24px;font-size:11px;color:${theme.mutedColor};text-align:center;font-family:sans-serif;line-height:1.6;">
+  // The footer's outer <td> carries the eb-pad class so the mobile media
+  // query trims its horizontal padding too — keeps the unsubscribe row from
+  // wrapping awkwardly on narrow phones.
+  const footer = `<tr><td class="eb-pad" style="padding:28px 24px;font-size:11px;color:${theme.mutedColor};text-align:center;font-family:sans-serif;line-height:1.6;">
     <p style="margin:0 0 6px;font-weight:600;color:${theme.textColor};">{{venue_name}}</p>
     <p style="margin:0;">
       <a href="{{unsubscribe_url}}" style="color:${theme.mutedColor};text-decoration:underline;">Unsubscribe</a>
@@ -417,11 +447,42 @@ export function renderMarketingEmailHtml(
       <a href="{{preferences_url}}" style="color:${theme.mutedColor};text-decoration:underline;">Manage preferences</a>
     </p>
   </td></tr>`;
-  const raw = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+  // Mobile-optimization styles. We only ship a single tight media query
+  // (max-width:480px) since we want desktop email clients (and Outlook,
+  // which generally sits well above 480px) to render the full-fidelity
+  // layout. Everything inside the query is `!important` because email
+  // clients aggressively rewrite `<style>` selectors.
+  //
+  // - `.eb-pad` reduces side padding 24px → 16px so block content has
+  //   ~16px more horizontal room — enough to keep long addresses, button
+  //   labels, and headings from wrapping awkwardly on a 375px iPhone.
+  // - `.eb-card` lets the email card breathe edge-to-edge on phones —
+  //   no rounded corners or gutter on narrow screens (matches how Gmail
+  //   and Apple Mail natively render emails).
+  const mobileStyles = `
+<style type="text/css">
+  body, table, td, a { -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; }
+  img { -ms-interpolation-mode:bicubic; }
+  @media screen and (max-width:480px) {
+    .eb-card {
+      border-radius:0 !important;
+      border:0 !important;
+    }
+    .eb-pad {
+      padding-left:16px !important;
+      padding-right:16px !important;
+    }
+    .eb-page {
+      padding-left:0 !important;
+      padding-right:0 !important;
+    }
+  }
+</style>`;
+  const raw = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${mobileStyles}</head>
 <body style="margin:0;padding:0;background:${theme.pageBg};">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${theme.pageBg};padding:24px 0;">
-    <tr><td align="center">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:${theme.maxWidth};background:${theme.cardBg};border-radius:12px;overflow:hidden;border:1px solid rgba(0,0,0,0.08);">
+    <tr><td class="eb-page" align="center" style="padding:0 12px;">
+      <table role="presentation" class="eb-card" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:${theme.maxWidth};background:${theme.cardBg};border-radius:12px;overflow:hidden;border:1px solid rgba(0,0,0,0.08);">
         ${inner}${footer}
       </table>
     </td></tr>
