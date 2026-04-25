@@ -62,7 +62,6 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { VenueMediaPickerModal } from '@/components/venue-media/VenueMediaPickerModal';
-import { useVenueMediaLibrary } from '@/components/venue-media/useVenueMediaLibrary';
 import RichTextEditor from '@/components/RichTextEditor';
 import {
   type EmailBlock,
@@ -2007,7 +2006,7 @@ function SavedStylesModal({
   );
 }
 
-// ─── Image Inspector — full Flodesk-style: Image / Link / Block tabs ─────────
+// ─── Image Inspector — Image / Link / Block tabs (uses the shared media modal) ─
 function ImageInspector({
   block,
   onChange,
@@ -2023,68 +2022,10 @@ function ImageInspector({
   );
 
   // Collapsible sections.
-  const [sourceOpen, setSourceOpen]   = useState(false);
-  const [accessOpen, setAccessOpen]   = useState(false);
-  const [gridOpen, setGridOpen]       = useState(true);
+  const [accessOpen, setAccessOpen]     = useState(false);
+  const [gridOpen, setGridOpen]         = useState(true);
   const [positionOpen, setPositionOpen] = useState(true);
-  const [paddingOpen, setPaddingOpen] = useState(true);
-
-  // Image source dropdown state ("My computer" or "Media library").
-  const [source, setSource] = useState<'computer' | 'library'>('computer');
-
-  // Inline file upload via the media library hook.
-  const { uploadFiles, uploading } = useVenueMediaLibrary();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [activeUploadSlot, setActiveUploadSlot] = useState<number>(0);
-
-  async function handleFiles(files: FileList | null) {
-    if (!files || files.length === 0) return;
-    setUploadError(null);
-    try {
-      const added = await uploadFiles(files);
-      if (added.length === 0) return;
-      const url = added[0].public_url;
-      // Slot 0 = block.src; other slots = imageGridImages[slot-1].
-      if (activeUploadSlot === 0) {
-        onChange({ src: url });
-      } else {
-        const next = [...(block.imageGridImages ?? [])];
-        const i = activeUploadSlot - 1;
-        next[i] = { ...(next[i] ?? {}), src: url };
-        onChange({ imageGridImages: next });
-      }
-    } catch (e) {
-      setUploadError(e instanceof Error ? e.message : 'Upload failed');
-    }
-  }
-
-  function openFilePicker(slot: number) {
-    setActiveUploadSlot(slot);
-    if (source === 'library') {
-      onMediaPick((url) => {
-        if (slot === 0) onChange({ src: url });
-        else {
-          const next = [...(block.imageGridImages ?? [])];
-          const i = slot - 1;
-          next[i] = { ...(next[i] ?? {}), src: url };
-          onChange({ imageGridImages: next });
-        }
-      }, 'image');
-    } else {
-      fileInputRef.current?.click();
-    }
-  }
-
-  // Drag-and-drop on the dropzone.
-  const [isDragging, setIsDragging] = useState(false);
-  function handleDrop(e: React.DragEvent<HTMLDivElement>, slot: number) {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    setActiveUploadSlot(slot);
-    void handleFiles(e.dataTransfer.files);
-  }
+  const [paddingOpen, setPaddingOpen]   = useState(true);
 
   // Grid + image count helpers.
   const cols = Math.max(1, Math.min(4, block.imageGridColumns ?? 1));
@@ -2093,7 +2034,6 @@ function ImageInspector({
   function setColumns(n: 1 | 2 | 3 | 4) {
     const currentTotal = totalImages;
     let nextExtras = block.imageGridImages ?? [];
-    // When switching layouts, ensure we have at least one row's worth of images.
     if (currentTotal < n) {
       nextExtras = [...nextExtras, ...Array.from({ length: n - currentTotal }, () => ({ src: '', alt: '' }))];
     }
@@ -2111,7 +2051,7 @@ function ImageInspector({
     }
   }
 
-  // Per-slot helpers for grids with > 1 image.
+  // Per-slot read/write helpers.
   function getSlot(i: number): { src: string; alt: string } {
     if (i === 0) return { src: block.src ?? '', alt: block.alt ?? '' };
     const e = (block.imageGridImages ?? [])[i - 1];
@@ -2129,6 +2069,11 @@ function ImageInspector({
       list[j] = { ...(list[j] ?? {}), ...patch };
       onChange({ imageGridImages: list });
     }
+  }
+
+  // Open the shared media library modal for a specific slot.
+  function pickForSlot(i: number) {
+    onMediaPick((url) => patchSlot(i, { src: url }), 'image');
   }
 
   // Tab button helper.
@@ -2155,103 +2100,54 @@ function ImageInspector({
         {TAB_BTN('block', 'Block')}
       </div>
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/png,image/jpeg,image/webp,image/gif"
-        className="hidden"
-        onChange={(e) => { void handleFiles(e.target.files); e.target.value = ''; }}
-      />
-
       {/* ─── IMAGE TAB ─── */}
       {tab === 'image' && (
         <div className="space-y-5">
-          {/* Source dropdown */}
-          <div>
-            <p className="text-sm font-semibold text-gray-900 mb-2">Add image from...</p>
-            <button
-              type="button"
-              onClick={() => setSourceOpen(o => !o)}
-              className="w-full flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-gray-900 hover:border-gray-400 transition-colors"
-            >
-              <span className="flex items-center gap-2">
-                {source === 'computer' ? <UploadIcon size={14} /> : <ImageIcon size={14} />}
-                {source === 'computer' ? 'My computer' : 'Media library'}
-              </span>
-              <ChevronDown size={14} className={`text-gray-400 transition-transform ${sourceOpen ? 'rotate-180' : ''}`} />
-            </button>
-            {sourceOpen && (
-              <div className="mt-1.5 rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
-                {([
-                  { id: 'computer' as const, label: 'My computer', icon: <UploadIcon size={14} /> },
-                  { id: 'library' as const,  label: 'Media library', icon: <ImageIcon size={14} /> },
-                ]).map(o => (
-                  <button
-                    key={o.id}
-                    type="button"
-                    onClick={() => { setSource(o.id); setSourceOpen(false); }}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors ${source === o.id ? 'bg-gray-100 font-semibold text-gray-900' : 'text-gray-700 hover:bg-gray-50'}`}
-                  >
-                    {o.icon}
-                    {o.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Drop zone(s) — one per slot when grid > 1 */}
+          {/* Per-slot media picker — same modal flow used everywhere else */}
           {Array.from({ length: totalImages }).map((_, i) => {
             const slot = getSlot(i);
-            const labelIdx = totalImages > 1 ? `Image ${i + 1}` : 'Upload image';
+            const labelIdx = totalImages > 1 ? `Image ${i + 1}` : 'Image';
             return (
               <div key={i}>
                 {totalImages > 1 && <p className="text-xs font-semibold text-gray-700 mb-1.5">{labelIdx}</p>}
                 {slot.src ? (
-                  <div className="relative rounded-lg border border-gray-200 overflow-hidden bg-gray-50">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={slot.src} alt={slot.alt} className="w-full h-32 object-cover" />
-                    <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/0 hover:bg-black/40 transition-colors group">
+                  <div className="space-y-2">
+                    <div className="relative rounded-lg border border-gray-200 overflow-hidden bg-gray-50">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={slot.src} alt={slot.alt} className="w-full h-32 object-cover" />
+                    </div>
+                    <div className="flex gap-2">
                       <button
                         type="button"
-                        onClick={() => openFilePicker(i)}
-                        className="opacity-0 group-hover:opacity-100 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-gray-900 shadow transition-opacity"
+                        onClick={() => pickForSlot(i)}
+                        className="flex-1 rounded-lg border border-gray-200 bg-white py-2 text-xs font-semibold text-gray-700 hover:border-gray-400 hover:bg-gray-50 transition-colors"
                       >
                         Replace
                       </button>
                       <button
                         type="button"
                         onClick={() => patchSlot(i, { src: '' })}
-                        className="opacity-0 group-hover:opacity-100 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-red-600 shadow transition-opacity"
+                        className="rounded-lg border border-gray-200 bg-white py-2 px-3 text-xs font-semibold text-red-600 hover:border-red-300 hover:bg-red-50 transition-colors"
+                        aria-label="Remove image"
                       >
-                        Remove
+                        <Trash2 size={12} />
                       </button>
                     </div>
                   </div>
                 ) : (
-                  <div
-                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                    onDragLeave={() => setIsDragging(false)}
-                    onDrop={(e) => handleDrop(e, i)}
-                    onClick={() => openFilePicker(i)}
-                    className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed py-8 px-4 cursor-pointer transition-colors ${isDragging ? 'border-gray-900 bg-gray-50' : 'border-gray-200 hover:border-gray-400'}`}
+                  <button
+                    type="button"
+                    onClick={() => pickForSlot(i)}
+                    className="w-full flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-200 py-8 px-4 hover:border-gray-400 hover:bg-gray-50 transition-colors"
                   >
-                    {uploading ? (
-                      <Loader2 size={20} className="text-gray-500 animate-spin" />
-                    ) : (
-                      <UploadIcon size={20} className="text-gray-500" />
-                    )}
-                    <p className="text-sm font-semibold text-gray-900">{labelIdx}</p>
-                    <p className="text-xs text-gray-400">Max image size 10MB</p>
-                  </div>
+                    <UploadIcon size={20} className="text-gray-500" />
+                    <p className="text-sm font-semibold text-gray-900">Choose an image</p>
+                    <p className="text-xs text-gray-400 text-center">Pick from your media library<br />or upload a new one</p>
+                  </button>
                 )}
               </div>
             );
           })}
-
-          {uploadError && (
-            <p className="text-xs text-red-600">{uploadError}</p>
-          )}
 
           {/* Width slider */}
           <div className="border-t border-gray-100 pt-4">
