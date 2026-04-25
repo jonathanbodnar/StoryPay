@@ -39,6 +39,7 @@ const PREVIEW_VARS = {
   venue_name: 'Your venue',
   unsubscribe_url: '#unsubscribe-preview',
   resubscribe_url: '#resubscribe-preview',
+  preferences_url: '#preferences-preview',
   wedding_date: '',
   wedding_date_nice: '',
   wedding_month: '',

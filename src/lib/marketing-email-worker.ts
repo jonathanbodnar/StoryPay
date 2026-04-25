@@ -214,6 +214,7 @@ export async function buildMergeVars(
   const base = appOrigin.replace(/\/$/, '');
   const unsub = `${base}/api/public/marketing/unsubscribe?token=${encodeURIComponent(token)}`;
   const resub = `${base}/api/public/marketing/resubscribe?token=${encodeURIComponent(token)}`;
+  const prefs = `${base}/u/${encodeURIComponent(token)}/manage`;
   const wd = lead.wedding_date as string | null;
   let wedding_date_nice = '';
   let wedding_month = '';
@@ -248,6 +249,7 @@ export async function buildMergeVars(
     venue_state: (venue?.location_state as string) || '',
     unsubscribe_url: unsub,
     resubscribe_url: resub,
+    preferences_url: prefs,
     wedding_date: wd || '',
     wedding_date_nice: wedding_date_nice || '',
     wedding_month: wedding_month || '',

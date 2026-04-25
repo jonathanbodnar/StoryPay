@@ -8,7 +8,7 @@ import {
   AtSign, Bold,
   Check, ChevronDown, ChevronRight, Copy, Eye, FileText,
   Image as ImageIcon,
-  Italic, Link2, List, ListOrdered, Loader2, Minus, Monitor,
+  Italic, Link2, List, ListOrdered, Loader2, Lock, Minus, Monitor,
   Paperclip, PenLine, Pipette, Plus, Send, SeparatorHorizontal, Smartphone,
   Space, Strikethrough, Trash2, Type, Underline, Upload as UploadIcon, X as XIcon,
   MousePointer2, Palette, Redo2, Undo2, Video, Share2, MapPin, Search, Zap,
@@ -3256,6 +3256,7 @@ function PreviewModal({
     venue_state: venueAddress?.location_state ?? '',
     unsubscribe_url: '#unsubscribe-preview',
     resubscribe_url: '#resubscribe-preview',
+    preferences_url: '#preferences-preview',
     wedding_date: '',
     wedding_date_nice: 'June 14, 2026',
     wedding_month: 'June',
@@ -3916,10 +3917,21 @@ export function CampaignFlodeskBuilder({
                 </SortableContext>
               )}
             </div>
-          {/* Merge field hint */}
-          <p className="mx-auto mt-6 text-center text-[11px] text-gray-300" style={{ maxWidth: viewMode === 'mobile' ? '375px' : theme.maxWidth }}>
-            {'{{first_name}}'} · {'{{venue_name}}'} · {'{{unsubscribe_url}}'}
-          </p>
+          {/* Required compliance footer — preview of what's appended to every email */}
+          <div className="mx-auto mt-6" style={{ maxWidth: viewMode === 'mobile' ? '375px' : theme.maxWidth }}>
+            <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50/40 px-6 py-5 text-center">
+              <p className="text-[12px] font-semibold text-gray-500 mb-1">{'{{venue_name}}'}</p>
+              <p className="text-[11px] text-gray-400">
+                <span className="underline">Unsubscribe</span>
+                <span className="mx-1.5">·</span>
+                <span className="underline">Manage preferences</span>
+              </p>
+            </div>
+            <p className="mt-2 flex items-center justify-center gap-1.5 text-[10px] text-gray-300">
+              <Lock size={10} className="flex-shrink-0" />
+              Required for legal compliance — this footer cannot be removed.
+            </p>
+          </div>
         </div>
 
         {/* ── Right Panel ──────────────────────────────────────────────────── */}

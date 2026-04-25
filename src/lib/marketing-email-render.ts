@@ -261,10 +261,15 @@ export function renderMarketingEmailHtml(
 ): string {
   const theme = mergeEmailTheme(definition.theme);
   const inner = definition.blocks.map((b) => renderBlock(b, theme)).join('');
-  const footer = `<tr><td style="padding:24px;font-size:11px;color:${theme.mutedColor};text-align:center;font-family:sans-serif;">
-    <p style="margin:0 0 8px;">You received this because you are in our contacts at {{venue_name}}.</p>
-    <p style="margin:0;"><a href="{{unsubscribe_url}}" style="color:${theme.mutedColor};">Unsubscribe</a>
-    · <a href="{{resubscribe_url}}" style="color:${theme.mutedColor};">Subscribe again</a></p>
+  // Compliance footer — venue identity + one-click unsubscribe + preference center.
+  // Always rendered. NOT user-editable, by design (CAN-SPAM / GDPR requirement).
+  const footer = `<tr><td style="padding:28px 24px;font-size:11px;color:${theme.mutedColor};text-align:center;font-family:sans-serif;line-height:1.6;">
+    <p style="margin:0 0 6px;font-weight:600;color:${theme.textColor};">{{venue_name}}</p>
+    <p style="margin:0;">
+      <a href="{{unsubscribe_url}}" style="color:${theme.mutedColor};text-decoration:underline;">Unsubscribe</a>
+      &nbsp;·&nbsp;
+      <a href="{{preferences_url}}" style="color:${theme.mutedColor};text-decoration:underline;">Manage preferences</a>
+    </p>
   </td></tr>`;
   const raw = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:${theme.pageBg};">
