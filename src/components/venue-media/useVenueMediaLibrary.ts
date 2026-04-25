@@ -47,7 +47,7 @@ export function useVenueMediaLibrary() {
       try {
         for (const file of list) {
           if (file.type.toLowerCase().startsWith('video/')) {
-            throw new Error('Video uploads are not supported. Use images only.');
+            throw new Error('Video uploads are not supported.');
           }
           const signedRes = await fetch('/api/venue-media/sign', {
             method: 'POST',

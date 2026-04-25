@@ -27,9 +27,11 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Everything uses Open Sans */
+/* Open Sans is set on body and cascades to all children naturally.
+   Avoid !important here so inline `font-family` styles can override per-element
+   (used by the email/forms builder for per-block typography). */
 *, *::before, *::after {
-  font-family: var(--font-body) !important;
+  font-family: var(--font-body);
 }
 
 .font-heading {

@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   AlignCenter, AlignLeft, AlignRight, ArrowLeft, ArrowUp, ArrowDown,
   AtSign, Bold,
-  Check, ChevronDown, ChevronRight, Copy, Eye,
+  Check, ChevronDown, ChevronRight, Copy, Eye, FileText,
   Image as ImageIcon,
   Italic, Link2, List, ListOrdered, Loader2, Minus, Monitor,
   Paperclip, PenLine, Pipette, Plus, SeparatorHorizontal, Smartphone,
@@ -1318,17 +1318,22 @@ function ButtonInspector({
   block,
   theme: _theme,
   onChange,
+  onMediaPick,
 }: {
   block: EmailBlock;
   theme: ReturnType<typeof mergeEmailTheme>;
   onChange: (patch: Partial<EmailBlock>) => void;
+  onMediaPick: (apply: (url: string) => void, mode?: 'image' | 'file' | 'all') => void;
 }) {
   void _theme;
   const [tab, setTab] = useState<'button' | 'font' | 'link' | 'block'>('button');
   const [borderOpen, setBorderOpen] = useState(true);
   const [spacingOpen, setSpacingOpen] = useState(true);
   const [paddingOpen, setPaddingOpen] = useState(true);
-  const [linkType, setLinkType] = useState<'url' | 'file' | 'checkout'>('url');
+  const [linkType, setLinkType] = useState<'url' | 'file'>(() => {
+    const href = (block.href ?? '').toLowerCase();
+    return /\.(pdf|docx?|xlsx?|pptx?|csv|txt)(\?|#|$)/i.test(href) ? 'file' : 'url';
+  });
   const [savedStyles, setSavedStyles] = useState<SavedButtonStyle[]>([]);
 
   useEffect(() => {
@@ -1631,14 +1636,14 @@ function ButtonInspector({
       {tab === 'link' && (
         <div className="space-y-4">
           <div className="flex bg-gray-100 rounded-full p-1">
-            {(['url', 'file', 'checkout'] as const).map(t => (
+            {(['url', 'file'] as const).map(t => (
               <button
                 key={t}
                 type="button"
                 onClick={() => setLinkType(t)}
-                className={`flex-1 py-2 px-3 rounded-full text-sm font-semibold transition-colors capitalize ${linkType === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                className={`flex-1 py-2 px-3 rounded-full text-sm font-semibold transition-colors ${linkType === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
               >
-                {t === 'url' ? 'URL' : t}
+                {t === 'url' ? 'URL' : 'File'}
               </button>
             ))}
           </div>
@@ -1652,14 +1657,33 @@ function ButtonInspector({
             />
           )}
           {linkType === 'file' && (
-            <p className="text-xs text-gray-400 leading-snug py-6 text-center">
-              File hosting integration coming soon. Use URL for now and paste a link to your hosted file.
-            </p>
-          )}
-          {linkType === 'checkout' && (
-            <p className="text-xs text-gray-400 leading-snug py-6 text-center">
-              Checkout link integration coming soon. Use URL with your payment link in the meantime.
-            </p>
+            <div className="space-y-2">
+              {block.href ? (
+                <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                  <FileText size={14} className="text-gray-500 flex-shrink-0" />
+                  <span className="flex-1 truncate text-xs text-gray-700">{block.href}</span>
+                  <button
+                    type="button"
+                    onClick={() => onChange({ href: '' })}
+                    className="text-[11px] font-semibold text-gray-400 hover:text-gray-700"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : null}
+              <button
+                type="button"
+                onClick={() =>
+                  onMediaPick((url) => onChange({ href: url }), 'file')
+                }
+                className="w-full rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-3 text-sm font-semibold text-gray-700 hover:border-gray-400 hover:bg-white transition-colors"
+              >
+                {block.href ? 'Choose a different file' : 'Choose a file from media library'}
+              </button>
+              <p className="text-[11px] text-gray-400 leading-snug">
+                Link to a PDF, Word doc, Excel sheet, PowerPoint, or any document in your media library.
+              </p>
+            </div>
           )}
           <div>
             <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Button label</label>
@@ -1742,7 +1766,7 @@ function BlockInspectorPanel({
   block: EmailBlock;
   theme: ReturnType<typeof mergeEmailTheme>;
   onChange: (patch: Partial<EmailBlock>) => void;
-  onMediaPick: (apply: (url: string) => void) => void;
+  onMediaPick: (apply: (url: string) => void, mode?: 'image' | 'file' | 'all') => void;
 }) {
   const LABEL = 'block text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1';
   const INPUT = 'w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:bg-white focus:outline-none transition-colors';
@@ -1904,7 +1928,7 @@ function BlockInspectorPanel({
   }
 
   if (block.type === 'button') {
-    return <ButtonInspector block={block} theme={theme} onChange={onChange} />;
+    return <ButtonInspector block={block} theme={theme} onChange={onChange} onMediaPick={onMediaPick} />;
   }
 
   if (block.type === 'image') {
@@ -2148,6 +2172,7 @@ export function CampaignFlodeskBuilder({
   const [pickerIdx, setPickerIdx]   = useState<number | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
+  const [mediaPickerMode, setMediaPickerMode] = useState<'image' | 'file' | 'all'>('image');
   const [viewMode, setViewMode]     = useState<'desktop' | 'mobile'>('desktop');
   const [previewOpen, setPreviewOpen] = useState(false);
   const mediaApplyRef = useRef<(url: string) => void>(() => {});
@@ -2676,8 +2701,9 @@ export function CampaignFlodeskBuilder({
                 block={selectedBlock}
                 theme={theme}
                 onChange={(patch) => patchBlock(selectedBlock.id, patch)}
-                onMediaPick={(apply) => {
+                onMediaPick={(apply, mode = 'image') => {
                   mediaApplyRef.current = apply;
+                  setMediaPickerMode(mode);
                   setMediaPickerOpen(true);
                 }}
               />
@@ -2762,6 +2788,14 @@ export function CampaignFlodeskBuilder({
       <VenueMediaPickerModal
         open={mediaPickerOpen}
         onOpenChange={setMediaPickerOpen}
+        mode={mediaPickerMode}
+        title={
+          mediaPickerMode === 'file'
+            ? 'Choose a file'
+            : mediaPickerMode === 'all'
+            ? 'Media library'
+            : 'Choose an image'
+        }
         onSelect={(url) => {
           mediaApplyRef.current(url);
           setMediaPickerOpen(false);

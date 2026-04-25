@@ -4,7 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import {
   ensureVenueImagesBucket,
   mediaLibraryObjectKey,
-  validateVenueImageUpload,
+  validateVenueMediaUpload,
   VENUE_IMAGES_BUCKET,
 } from '@/lib/venue-images-bucket';
 
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'fileName and contentType required' }, { status: 400 });
   }
 
-  const invalid = validateVenueImageUpload(contentType, size);
+  const invalid = validateVenueMediaUpload(contentType, size);
   if (invalid) {
     return NextResponse.json({ error: invalid }, { status: 400 });
   }

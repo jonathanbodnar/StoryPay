@@ -4,7 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import {
   ensureVenueImagesBucket,
   isMediaLibraryPath,
-  validateVenueImageUpload,
+  validateVenueMediaUpload,
   VENUE_IMAGES_BUCKET,
 } from '@/lib/venue-images-bucket';
 
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid storage path' }, { status: 400 });
   }
 
-  const invalid = validateVenueImageUpload(contentType, sizeBytes);
+  const invalid = validateVenueMediaUpload(contentType, sizeBytes);
   if (invalid) {
     return NextResponse.json({ error: invalid }, { status: 400 });
   }
