@@ -213,9 +213,17 @@ function renderBlock(block: EmailBlock, theme: ReturnType<typeof mergeEmailTheme
     }
     case 'address': {
       // Filled at runtime via mergeMarketingFields — vars contain venue_name, venue_full_address, etc.
-      return `<tr><td style="${box}text-align:center;font-family:${theme.fontFamily};">
-  <p style="margin:0 0 3px;font-size:13px;font-weight:600;color:${theme.textColor};">{{venue_name}}</p>
-  <p style="margin:0;font-size:12px;color:${theme.mutedColor};">{{venue_full_address}}</p>
+      const ff = block.fontFamily ?? theme.fontFamily;
+      const fw = block.fontWeight ?? '400';
+      const fs = block.fontSize ?? '12px';
+      const color = block.color ?? theme.mutedColor;
+      const lh = block.lineHeight ?? 1.6;
+      const ls = block.letterSpacing ?? 0;
+      const tt = block.textTransform && block.textTransform !== 'none' ? `text-transform:${block.textTransform};` : '';
+      const aAlign = block.align === 'left' ? 'left' : block.align === 'right' ? 'right' : 'center';
+      return `<tr><td style="${box}text-align:${aAlign};font-family:${ff};">
+  <p style="margin:0 0 3px;font-size:${fs};font-weight:600;color:${color};line-height:${lh};letter-spacing:${ls}px;${tt}">{{venue_name}}</p>
+  <p style="margin:0;font-size:${fs};font-weight:${fw};color:${color};line-height:${lh};letter-spacing:${ls}px;${tt}">{{venue_full_address}}</p>
 </td></tr>`;
     }
     case 'divider': {

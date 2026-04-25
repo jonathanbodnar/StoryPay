@@ -1282,13 +1282,39 @@ function AddressCanvas({ block, venueAddress, theme }: { block: EmailBlock; venu
     ?? (venueAddress?.location_city && venueAddress?.location_state
       ? `${venueAddress.location_city}, ${venueAddress.location_state}`
       : null);
+  const ff = block.fontFamily ?? theme.fontFamily;
+  const fw = block.fontWeight ?? '400';
+  const fs = block.fontSize ?? '12px';
+  const color = block.color ?? theme.mutedColor;
+  const align = block.align ?? 'center';
+  const lh = block.lineHeight ?? 1.6;
+  const ls = block.letterSpacing ?? 0;
+  const tt = block.textTransform && block.textTransform !== 'none' ? block.textTransform : undefined;
   return (
-    <div style={{ ...blockPaddingStyle(block), textAlign: 'center' }}>
-      <p style={{ margin: '0 0 3px', fontSize: '13px', fontWeight: 600, color: theme.textColor, fontFamily: theme.fontFamily }}>
+    <div style={{ ...blockPaddingStyle(block), textAlign: align }}>
+      <p style={{
+        margin: '0 0 3px',
+        fontSize: fs,
+        fontWeight: 600,
+        color,
+        fontFamily: ff,
+        lineHeight: lh,
+        letterSpacing: `${ls}px`,
+        textTransform: tt,
+      }}>
         {name}
       </p>
-      <p style={{ margin: 0, fontSize: '12px', color: theme.mutedColor, fontFamily: theme.fontFamily }}>
-        {address ?? 'Address pulled from your venue settings'}
+      <p style={{
+        margin: 0,
+        fontSize: fs,
+        fontWeight: fw,
+        color,
+        fontFamily: ff,
+        lineHeight: lh,
+        letterSpacing: `${ls}px`,
+        textTransform: tt,
+      }}>
+        {address ?? 'Address pulled from your branding settings'}
       </p>
     </div>
   );
@@ -2690,10 +2716,14 @@ function BlockInspectorPanel({
   // Reset to primary tab whenever a different block is selected (using prev-state pattern
   // to avoid calling setState inside an effect).
   const [subTab, setSubTab] = useState<'primary' | 'block'>('primary');
+  // Address block has 3 tabs (Font / Address / Block) — separate state so it isn't
+  // forced through the 2-tab `subTab` state shape.
+  const [addressTab, setAddressTab] = useState<'font' | 'address' | 'block'>('address');
   const [prevBlockId, setPrevBlockId] = useState(block.id);
   if (prevBlockId !== block.id) {
     setPrevBlockId(block.id);
     setSubTab('primary');
+    setAddressTab('address');
   }
 
   // Reusable Block-tab content (background + padding sliders).
@@ -3065,19 +3095,82 @@ function BlockInspectorPanel({
   }
 
   if (block.type === 'address') {
+    const ADDRESS_TAB = (id: typeof addressTab, label: string) => (
+      <button
+        key={id}
+        type="button"
+        onClick={() => setAddressTab(id)}
+        className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${addressTab === id ? 'text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}
+      >
+        {label}
+        {addressTab === id && <span className="absolute left-1/2 -translate-x-1/2 bottom-0 h-[2px] w-12 bg-gray-900 rounded-full" />}
+      </button>
+    );
+
     return (
       <div>
-        {renderSubTabBar('Address')}
-        {subTab === 'primary' && (
-          <div className="rounded-xl bg-gray-50 border border-gray-200 px-4 py-3">
-            <p className="text-xs font-semibold text-gray-700 mb-1">Auto-filled from venue settings</p>
-            <p className="text-xs text-gray-500 leading-relaxed">
-              Your business name and address are pulled automatically. To update them, go to{' '}
-              <strong>Listing → Directory</strong> and update your location fields.
+        {/* 3-tab bar */}
+        <div className="flex border-b border-gray-100 -mx-5 mb-5 px-2 bg-gray-50/50">
+          {ADDRESS_TAB('font', 'Font')}
+          {ADDRESS_TAB('address', 'Address')}
+          {ADDRESS_TAB('block', 'Block')}
+        </div>
+
+        {/* ─── FONT TAB ─── */}
+        {addressTab === 'font' && (
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm font-semibold text-gray-700 mb-1.5">Font</p>
+              <FontSelector value={block.fontFamily ?? theme.fontFamily} onChange={(v) => onChange({ fontFamily: v })} />
+            </div>
+            {WeightRow({ defaultWeight: '400' })}
+            <div>
+              <p className="text-sm font-semibold text-gray-700 mb-1.5">
+                Font color <span className="font-normal text-gray-400 text-xs font-mono uppercase">{block.color ?? theme.mutedColor}</span>
+              </p>
+              <FlodeskColorPicker value={block.color ?? theme.mutedColor} onChange={(v) => onChange({ color: v })} />
+            </div>
+            <div>
+              <SliderControl
+                label="Size"
+                value={parseInt(block.fontSize ?? '12px') || 12}
+                min={8} max={32} step={1}
+                display={`${parseInt(block.fontSize ?? '12px') || 12}`}
+                onChange={(v) => onChange({ fontSize: `${v}px` })}
+              />
+            </div>
+            {AlignRow()}
+            {CaseRow()}
+            {SpacingSection({ defaultFontSize: 12 })}
+          </div>
+        )}
+
+        {/* ─── ADDRESS TAB ─── */}
+        {addressTab === 'address' && (
+          <div className="flex flex-col items-center text-center px-4 pt-4">
+            <MapPin size={28} className="text-gray-700 mb-3" strokeWidth={1.5} />
+            <p className="text-base font-semibold text-gray-900 mb-2">
+              We&apos;ve got your address on file.
+            </p>
+            <p className="text-sm text-gray-500 leading-relaxed max-w-[280px] mb-5">
+              You are required by law to include your current address in the footer of all promotional emails.
+            </p>
+            <a
+              href="/dashboard/settings/branding"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-gray-800 transition-colors"
+            >
+              Manage my address
+            </a>
+            <p className="mt-5 text-[11px] text-gray-400 leading-snug max-w-[280px]">
+              The address shown is pulled from your branding settings — it can&apos;t be edited directly here.
             </p>
           </div>
         )}
-        {subTab === 'block' && renderBlockTab()}
+
+        {/* ─── BLOCK TAB ─── */}
+        {addressTab === 'block' && renderBlockTab()}
       </div>
     );
   }
