@@ -1846,14 +1846,14 @@ export function CampaignFlodeskBuilder({
                                 className="relative"
                                 style={{
                                   transition: 'outline 0.1s ease',
-                                  outline: isSelected ? '2px solid #3b82f6' : '2px solid transparent',
-                                  outlineOffset: '-2px',
+                                  outline: isSelected ? '1px solid #3b82f6' : '1px solid transparent',
+                                  outlineOffset: '-1px',
                                 }}
                                 onMouseEnter={(e) => {
-                                  if (!isSelected && !isDragging) (e.currentTarget as HTMLDivElement).style.outline = '2px solid #3b82f6';
+                                  if (!isSelected && !isDragging) (e.currentTarget as HTMLDivElement).style.outline = '1px solid #3b82f6';
                                 }}
                                 onMouseLeave={(e) => {
-                                  if (!isSelected) (e.currentTarget as HTMLDivElement).style.outline = '2px solid transparent';
+                                  if (!isSelected) (e.currentTarget as HTMLDivElement).style.outline = '1px solid transparent';
                                 }}
                               >
                                 <BlockCanvas block={block} theme={theme} venueAddress={venueAddress} onPatch={(p) => patchBlock(block.id, p)} />
