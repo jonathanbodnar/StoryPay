@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   AlignLeft, ArrowLeft, ArrowUp, ArrowDown,
   AtSign, Bold,
-  Check, ChevronDown, ChevronRight, Copy, Eye, FileText,
+  Check, ChevronDown, ChevronRight, Copy, Eye, EyeOff, FileText,
   Image as ImageIcon,
   Italic, Link2, List, ListOrdered, Loader2, Lock, Minus, Monitor,
   Paperclip, PenLine, Pipette, Plus, Send, SeparatorHorizontal, Smartphone,
@@ -72,7 +72,7 @@ import {
   mergeEmailTheme,
 } from '@/lib/marketing-email-schema';
 import { renderMarketingEmailHtml, type MergeFieldRecord } from '@/lib/marketing-email-render';
-import { injectVenueDataIntoDefinition } from '@/lib/marketing-email-injection';
+import { injectVenueDataIntoDefinition, SUPPORTED_SOCIAL_PLATFORMS } from '@/lib/marketing-email-injection';
 import { useBrandColors } from '@/lib/use-brand-colors';
 import { parseVideoUrl } from '@/lib/video-providers';
 
@@ -1606,7 +1606,13 @@ const SOCIAL_SIZES = {
 } as const;
 
 function SocialCanvas({ block, theme, venueSocials }: { block: EmailBlock; theme: ReturnType<typeof mergeEmailTheme>; venueSocials?: VenueSocial[] }) {
-  const links = (venueSocials ?? []).filter(l => l.url?.trim());
+  // Live canvas mirrors what we'll inject at render time: drop empty URLs,
+  // drop unsupported / legacy platforms, and drop anything the user hid via
+  // the inspector's per-block eye toggle.
+  const hidden = new Set(block.socialHiddenPlatforms ?? []);
+  const links = (venueSocials ?? []).filter(
+    (l) => l.url?.trim() && SUPPORTED_SOCIAL_PLATFORMS.has(l.platform) && !hidden.has(l.platform),
+  );
   const align = block.align ?? 'center';
   const style = block.socialIconStyle ?? 'outline';
   const sizeKey = block.socialIconSize ?? 'md';
@@ -3578,8 +3584,22 @@ function BlockInspectorPanel({
     const spacing = block.socialIconSpacing ?? 10;
     const color = block.color ?? '#000000';
     const align = block.align ?? 'center';
-    const linkedSocials = (venueSocials ?? []).filter(s => s.url?.trim());
-    const linkedCount = linkedSocials.length;
+    // Inspector mirrors the renderer: only show platforms that the renderer
+    // would actually ship — supported platform + has a URL. Legacy / retired
+    // platforms (e.g. 'threads' rows persisted from before we removed it)
+    // are dropped here, same as the renderer drops them.
+    const linkedSocials = (venueSocials ?? []).filter(
+      (s) => s.url?.trim() && SUPPORTED_SOCIAL_PLATFORMS.has(s.platform),
+    );
+    const hiddenSet = new Set(block.socialHiddenPlatforms ?? []);
+    const visibleCount = linkedSocials.filter((s) => !hiddenSet.has(s.platform)).length;
+    const totalCount = linkedSocials.length;
+    const togglePlatform = (platform: string) => {
+      const next = hiddenSet.has(platform)
+        ? (block.socialHiddenPlatforms ?? []).filter((p) => p !== platform)
+        : [...(block.socialHiddenPlatforms ?? []), platform];
+      onChange({ socialHiddenPlatforms: next });
+    };
 
     // ── Style swatch (icon-only; tooltip identifies the option) ──
     // All three swatches share identical chip + glyph dimensions so the user
@@ -3703,22 +3723,81 @@ function BlockInspectorPanel({
             </div>
 
             <div>
-              <p className={LABEL}>{linkedCount} link{linkedCount === 1 ? '' : 's'} active</p>
-              {linkedCount === 0 ? (
+              <div className="flex items-center justify-between mb-1.5">
+                <p className={LABEL}>
+                  {totalCount === 0
+                    ? '0 links active'
+                    : `${visibleCount} of ${totalCount} visible`}
+                </p>
+                {totalCount > 0 && hiddenSet.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => onChange({ socialHiddenPlatforms: [] })}
+                    className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 hover:text-gray-700 transition-colors"
+                  >
+                    Show all
+                  </button>
+                )}
+              </div>
+              {totalCount === 0 ? (
                 <div className="rounded-xl border border-gray-200 bg-white px-3 py-3 text-xs text-gray-500">
                   No social links configured yet. Add at least one in branding settings to make this block visible to recipients.
                 </div>
               ) : (
                 <div className="space-y-1.5">
-                  {linkedSocials.map((s) => (
-                    <div key={s.platform} className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2">
-                      <SocialIcon platform={s.platform} size={14} color="#374151" />
-                      <span className="text-xs font-semibold text-gray-700 capitalize w-20 flex-shrink-0">{s.platform}</span>
-                      <span className="text-xs text-gray-500 truncate flex-1" title={s.url}>{s.url}</span>
-                    </div>
-                  ))}
+                  {linkedSocials.map((s) => {
+                    const isHidden = hiddenSet.has(s.platform);
+                    return (
+                      <div
+                        key={s.platform}
+                        className={`flex items-center gap-2 rounded-xl border px-3 py-2 transition-colors ${
+                          isHidden
+                            ? 'border-gray-200 bg-gray-50'
+                            : 'border-gray-200 bg-white'
+                        }`}
+                      >
+                        <SocialIcon
+                          platform={s.platform}
+                          size={14}
+                          color={isHidden ? '#9ca3af' : '#374151'}
+                        />
+                        <span
+                          className={`text-xs font-semibold capitalize w-20 flex-shrink-0 ${
+                            isHidden ? 'text-gray-400 line-through' : 'text-gray-700'
+                          }`}
+                        >
+                          {s.platform}
+                        </span>
+                        <span
+                          className={`text-xs truncate flex-1 ${
+                            isHidden ? 'text-gray-300 line-through' : 'text-gray-500'
+                          }`}
+                          title={s.url}
+                        >
+                          {s.url}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => togglePlatform(s.platform)}
+                          title={isHidden ? `Show ${s.platform}` : `Hide ${s.platform}`}
+                          aria-label={isHidden ? `Show ${s.platform}` : `Hide ${s.platform}`}
+                          aria-pressed={!isHidden}
+                          className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg transition-colors ${
+                            isHidden
+                              ? 'text-gray-400 hover:bg-gray-200 hover:text-gray-700'
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                        >
+                          {isHidden ? <EyeOff size={13} /> : <Eye size={13} />}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
+              <p className="mt-2 text-[11px] text-gray-400 leading-snug">
+                Hide a platform with the eye icon to suppress it for this email only — your branding registry stays untouched.
+              </p>
             </div>
           </div>
         )}

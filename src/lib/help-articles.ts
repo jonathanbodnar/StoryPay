@@ -1318,7 +1318,8 @@ Limits
 - Up to 8 social links total per venue (one per supported platform — most venues use 3–5).
 
 Where it's used
-- Marketing email Social block — every campaign, template, and automation that includes a Social block automatically renders icons + links from this list. There is no per-email override; this is the single source of truth.
+- Marketing email Social block — every campaign, template, and automation that includes a Social block automatically renders icons + links from this list. This is the single source of truth for which platforms exist and what URLs they point to.
+- Per-block show / hide — inside the email builder, the Social block's Links tab has an eye toggle next to every platform. Hiding a platform there suppresses it for that one email only; the branding registry is unchanged. Use it when a particular campaign should only spotlight a subset of your social networks.
 - The email builder Social inspector links straight to this section for one-click management.
 
 Anchor / deep link
@@ -1408,7 +1409,7 @@ Available blocks:
 - Video — 16:9 YouTube-style player. Paste any YouTube, Vimeo, or Loom URL. The thumbnail + play button render on the canvas, and the actual video plays in preview and sent emails (see the Video block article).
 - Divider — horizontal rule. Flodesk-style settings: thickness, style (solid/dashed/dotted), color, width %, alignment, top/bottom padding, background color.
 - Spacer — vertical empty space. Two settings: Background color and Height (drag the slider).
-- Social — row of social network icons. Pulls links from your branding settings; styling controlled by a 3-tab inspector (Icons / Links / Block). See the Social block article.
+- Social — row of social network icons. Pulls links from your branding settings; styling controlled by a 3-tab inspector (Icons / Links / Block). The Links tab has an eye toggle next to every platform so you can show or hide a specific platform from this email without touching your branding registry. See the Social block article.
 - Address — your venue address block. 3-tab inspector (Font / Address / Block). Pulls address from your branding settings; the "Manage my address" button jumps to Settings → Branding.
 - Columns — split a row into 2 or 3 columns and drop other blocks inside.
 - HTML — raw HTML for power users.
@@ -1486,14 +1487,17 @@ Settings:
       {
         id: 'me-block-social',
         title: 'Social block — venue-managed social network links',
-        tags: ['social', 'social links', 'social block', 'icons', 'instagram', 'facebook', 'tiktok', 'linkedin', 'youtube', 'website', 'branding'],
+        tags: ['social', 'social links', 'social block', 'icons', 'instagram', 'facebook', 'tiktok', 'linkedin', 'youtube', 'website', 'branding', 'hide platform', 'show hide social'],
         body: `The Social block renders a row of social network icons in your email — pulled automatically from your venue Branding settings, so you set them once and every campaign stays in sync.
 
-Add or edit your social links — Settings → Branding → Social Networks. Or, from the Social inspector inside the builder, click "Manage in branding" on the Links tab. The Social block links list is read-only inside the builder by design: a single source of truth lives in branding so newsletters never go out with stale links.
+Where you register links — Settings → Branding → Social Networks. From the Social inspector inside the builder, click "Manage in branding" on the Links tab to deep-link straight there. The branding registry is the single source of truth for which platforms exist; the Social block can NOT add new platforms or change a URL — that's by design so newsletters never go out with stale URLs.
+
+Per-block show / hide
+The Links tab shows every platform you have registered, with an eye toggle next to each row. Click the eye to hide that platform from THIS email only — your branding registry stays untouched, and other emails / blocks continue to show it. Useful when one campaign should only highlight, say, Instagram and TikTok while a different newsletter shows everything. The header counter ("X of Y visible") reflects the current state at a glance, and a "Show all" link reappears any rows you've hidden. Hidden = greyed + struck-through in the inspector, dropped from the live canvas, dropped from the preview iframe, and dropped from the actual sent email.
 
 Inspector tabs
 - Icons — choose the look: outline (no chip), filled circle, or solid circle. Pick a color from the Flodesk color picker, a size (S / M / L), an alignment (Left / Center / Right / Full), and adjust spacing between icons. The size and style swatches are visual-only (no text labels) and are all rendered at the same dimensions for consistency.
-- Links — read-only list of your configured platforms (Instagram, Facebook, TikTok, LinkedIn, YouTube, Twitter/X, Pinterest, Website) with a "Manage in branding" CTA at the top.
+- Links — list of your configured platforms (Instagram, Facebook, TikTok, LinkedIn, YouTube, Twitter/X, Pinterest, Website) with a "Manage in branding" CTA at the top and per-row eye toggles to hide/unhide each platform from this block.
 - Block — shared block settings (background, padding).
 
 Visual style — minimalist Flodesk glyphs (by design)

@@ -30,6 +30,12 @@ export interface EmailBlock {
   /** For type `social` — list of enabled platform links. Populated from
    * venue.brand_socials at render time; not user-editable on the block itself. */
   socialLinks?: { platform: string; url: string }[];
+  /** Per-block list of platform IDs the venue chose to hide from THIS block.
+   * The platform stays registered in Branding → Social Networks so other
+   * blocks/emails can still use it; this just suppresses it for the current
+   * block. Default empty (= show every registered platform). Edited in the
+   * Social inspector → Links tab via per-row eye toggles. */
+  socialHiddenPlatforms?: string[];
   /** Visual style of the social icons. */
   socialIconStyle?: 'outline' | 'filled-circle' | 'circle-outline';
   /** Tap-target size: small / medium / large. */
@@ -279,6 +285,7 @@ export function createEmailBlock(type: EmailBlockType): EmailBlock {
       return {
         id, type,
         socialLinks: [],
+        socialHiddenPlatforms: [],
         socialIconStyle: 'outline',
         socialIconSize: 'md',
         socialIconSpacing: 10,
