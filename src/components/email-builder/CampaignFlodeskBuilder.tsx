@@ -1369,6 +1369,7 @@ function ButtonInspector({
     return /\.(pdf|docx?|xlsx?|pptx?|csv|txt)(\?|#|$)/i.test(href) ? 'file' : 'url';
   });
   const [savedStyles, setSavedStyles] = useState<SavedButtonStyle[]>([]);
+  const [savedStylesOpen, setSavedStylesOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -1376,6 +1377,11 @@ function ButtonInspector({
       if (raw) setSavedStyles(JSON.parse(raw) as SavedButtonStyle[]);
     } catch { /* ignore */ }
   }, []);
+
+  function persistSavedStyles(next: SavedButtonStyle[]) {
+    setSavedStyles(next);
+    try { localStorage.setItem('sp_saved_button_styles', JSON.stringify(next)); } catch { /* ignore */ }
+  }
 
   function saveCurrentStyle() {
     const style: SavedButtonStyle = {
@@ -1386,9 +1392,21 @@ function ButtonInspector({
       borderColor: block.buttonBorderColor ?? '#000000',
       borderWidth: block.buttonBorderWidth ?? 2,
     };
-    const next = [...savedStyles, style];
-    setSavedStyles(next);
-    try { localStorage.setItem('sp_saved_button_styles', JSON.stringify(next)); } catch { /* ignore */ }
+    persistSavedStyles([...savedStyles, style]);
+  }
+
+  function deleteSavedStyle(id: string) {
+    persistSavedStyles(savedStyles.filter(s => s.id !== id));
+  }
+
+  function applySavedStyle(s: SavedButtonStyle) {
+    onChange({
+      buttonStyle: s.preset,
+      buttonBgColor: s.bg,
+      color: s.fg,
+      buttonBorderColor: s.borderColor,
+      buttonBorderWidth: s.borderWidth,
+    });
   }
 
   function applyPreset(presetId: NonNullable<EmailBlock['buttonStyle']>) {
@@ -1438,42 +1456,23 @@ function ButtonInspector({
       {/* ─── BUTTON TAB ─── */}
       {tab === 'button' && (
         <div className="space-y-6">
-          {/* Saved styles */}
+          {/* Saved styles trigger */}
           <div>
-            <p className="text-sm font-semibold text-gray-900 mb-1">Saved styles</p>
-            <p className="text-xs text-gray-400 mb-3 leading-snug">Save your button settings as a style you can easily reuse</p>
-            {savedStyles.length > 0 && (
-              <div className="flex gap-2 flex-wrap mb-3">
-                {savedStyles.map(s => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => onChange({
-                      buttonStyle: s.preset,
-                      buttonBgColor: s.bg,
-                      color: s.fg,
-                      buttonBorderColor: s.borderColor,
-                      buttonBorderWidth: s.borderWidth,
-                    })}
-                    className="h-8 px-3 rounded-md text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                    style={{
-                      background: s.bg === 'transparent' ? '#fff' : s.bg,
-                      color: s.fg,
-                      border: `${s.borderWidth || 1}px solid ${s.borderColor}`,
-                      borderRadius: BUTTON_PRESETS.find(p => p.id === s.preset)?.radius ?? 0,
-                    }}
-                  >
-                    Aa
-                  </button>
-                ))}
-              </div>
-            )}
             <button
               type="button"
-              onClick={saveCurrentStyle}
-              className="w-full py-3 text-sm font-semibold text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              onClick={() => setSavedStylesOpen(true)}
+              className="w-full flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold text-gray-900 hover:border-gray-400 hover:bg-gray-50 transition-colors"
             >
-              Save this button style
+              <span className="flex items-center gap-2">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                </svg>
+                Saved styles
+              </span>
+              <span className="flex items-center gap-2 text-xs font-medium text-gray-400">
+                {savedStyles.length > 0 ? `${savedStyles.length} saved` : 'None yet'}
+                <ChevronRight size={14} className="text-gray-400" />
+              </span>
             </button>
           </div>
 
@@ -1793,6 +1792,121 @@ function ButtonInspector({
           </div>
         </div>
       )}
+
+      {savedStylesOpen && (
+        <SavedStylesModal
+          styles={savedStyles}
+          currentBlock={block}
+          onClose={() => setSavedStylesOpen(false)}
+          onApply={(s) => { applySavedStyle(s); setSavedStylesOpen(false); }}
+          onDelete={deleteSavedStyle}
+          onSaveCurrent={saveCurrentStyle}
+        />
+      )}
+    </div>
+  );
+}
+
+function SavedStylesModal({
+  styles,
+  currentBlock,
+  onClose,
+  onApply,
+  onDelete,
+  onSaveCurrent,
+}: {
+  styles: SavedButtonStyle[];
+  currentBlock: EmailBlock;
+  onClose: () => void;
+  onApply: (s: SavedButtonStyle) => void;
+  onDelete: (id: string) => void;
+  onSaveCurrent: () => void;
+}) {
+  // Quick visual test: is the current button's settings already saved?
+  const currentSig = `${currentBlock.buttonStyle ?? 'outline-rect'}|${currentBlock.buttonBgColor ?? ''}|${currentBlock.color ?? ''}|${currentBlock.buttonBorderColor ?? ''}|${currentBlock.buttonBorderWidth ?? 0}`;
+  const alreadySaved = styles.some(
+    (s) => `${s.preset}|${s.bg}|${s.fg}|${s.borderColor}|${s.borderWidth}` === currentSig,
+  );
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-4 top-4 rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+          aria-label="Close"
+        >
+          <XIcon size={16} />
+        </button>
+
+        <h2 className="text-xl font-bold text-gray-900 mb-1.5">Saved styles</h2>
+        <p className="text-sm text-gray-400 mb-5 leading-snug pr-8">
+          Save your button settings as a style you can easily reuse
+        </p>
+
+        {styles.length > 0 ? (
+          <div className="grid grid-cols-5 gap-2.5 mb-6">
+            {styles.map((s) => {
+              const radius = BUTTON_PRESETS.find((p) => p.id === s.preset)?.radius ?? 0;
+              const isFilled = s.preset.startsWith('filled') || (s.bg !== 'transparent' && s.bg !== '#ffffff' && s.bg !== '');
+              const tileBg = s.bg === 'transparent' ? '#ffffff' : s.bg;
+              return (
+                <div key={s.id} className="group relative">
+                  <button
+                    type="button"
+                    onClick={() => onApply(s)}
+                    className="flex h-14 w-full items-center justify-center text-base font-semibold transition-transform hover:scale-105"
+                    style={{
+                      background: tileBg,
+                      color: s.fg,
+                      border: isFilled
+                        ? (s.borderWidth ? `${s.borderWidth}px solid ${s.borderColor}` : 'none')
+                        : `${s.borderWidth || 2}px solid ${s.borderColor}`,
+                      borderRadius: `${radius}px`,
+                    }}
+                    aria-label="Apply saved style"
+                  >
+                    Aa
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onDelete(s.id); }}
+                    className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 shadow-sm opacity-0 group-hover:opacity-100 hover:border-red-300 hover:bg-red-50 hover:text-red-600 transition-opacity"
+                    aria-label="Delete saved style"
+                    title="Delete"
+                  >
+                    <XIcon size={11} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="mb-6 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center">
+            <p className="text-xs text-gray-400 leading-snug">
+              No saved styles yet. Click the button below to save the current button's look.
+            </p>
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={onSaveCurrent}
+          disabled={alreadySaved}
+          className="w-full rounded-2xl border border-gray-300 bg-white py-3.5 text-base font-bold text-gray-900 hover:border-gray-900 hover:bg-gray-50 transition-colors disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400 disabled:hover:bg-white"
+        >
+          {alreadySaved ? 'Already saved' : 'Save this button style'}
+        </button>
+      </div>
     </div>
   );
 }
