@@ -4,6 +4,7 @@ import {
   type MarketingEmailDefinition,
   mergeEmailTheme,
 } from '@/lib/marketing-email-schema';
+import { parseVideoUrl } from '@/lib/video-providers';
 
 function esc(s: string): string {
   return s
@@ -173,21 +174,59 @@ function renderBlock(block: EmailBlock, theme: ReturnType<typeof mergeEmailTheme
       return `<tr><td style="${box}${align};"><table role="presentation" cellpadding="0" cellspacing="0" border="0" align="${tableAlign}" style="border-collapse:separate;border-spacing:0;max-width:${totalWidth}px;width:100%;margin:0 auto;">${rows.join('')}</table></td></tr>`;
     }
     case 'video': {
-      const href = block.href?.trim() ? esc(block.href.trim()) : '';
-      const src = block.src?.trim() ? esc(block.src.trim()) : '';
-      const caption = (block.content || '').trim();
-      const thumbInner = src
-        ? `<img src="${src}" alt="Watch video" width="552" style="max-width:100%;height:auto;display:block;border:0;" />`
-        : `<div style="height:200px;background:#18181b;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-family:${theme.fontFamily};font-size:13px;">[Video — add URL and thumbnail]</div>`;
-      const playBtn = `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);"><tr><td style="width:58px;height:58px;border-radius:50%;background:rgba(255,255,255,0.92);box-shadow:0 4px 12px rgba(0,0,0,0.3);text-align:center;vertical-align:middle;font-size:24px;color:#18181b;line-height:58px;">▶</td></tr></table>`;
-      const wrapper = `<div style="position:relative;border-radius:10px;overflow:hidden;background:#18181b;">${thumbInner}${src ? playBtn : ''}</div>`;
-      const linked = href
-        ? `<a href="${href}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;display:block;">${wrapper}</a>`
+      // Render as a 16:9 YouTube-style preview (clickable thumbnail) that
+      // opens the original video URL in a new tab. We never embed an iframe
+      // — most email clients strip them — and we never accept video uploads.
+      const parsed = parseVideoUrl(block.href);
+      const watchUrl = parsed?.watchUrl ?? (block.href?.trim() ?? '');
+      const userThumb = block.src?.trim();
+      const thumbnail = userThumb || parsed?.thumbnail || '';
+      const title = (block.content || '').trim();
+      const showTitle = block.videoShowTitle !== false;
+
+      // 16:9 within a 600px max-width content column (552 inner accounts for
+      // default 24px padding). 552 * 9 / 16 = 310.5 → 310.
+      const VIDEO_W = 552;
+      const VIDEO_H = 310;
+
+      // Overlay opacity 0–100 — applied to the thumbnail itself for max
+      // email-client compatibility. Higher opacity = darker overlay → we
+      // dim the image proportionally. Opacity is widely supported across
+      // modern clients (Gmail, Apple Mail, Outlook 365, iOS, Android).
+      const overlayOp = Math.max(0, Math.min(100, block.videoOverlayOpacity ?? 0)) / 100;
+      const imgOpacity = 1 - overlayOp * 0.85;
+      const imgOpacityCss = imgOpacity < 1 ? `opacity:${imgOpacity.toFixed(2)};` : '';
+
+      // YouTube-style red play button using a rounded rectangle table cell.
+      const playBtn = `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="position:absolute;top:50%;left:50%;margin-top:-24px;margin-left:-34px;border-collapse:separate;"><tr><td style="width:68px;height:48px;border-radius:14px;background:rgba(33,33,33,0.85);text-align:center;vertical-align:middle;font-size:20px;color:#ffffff;line-height:48px;font-family:Arial,sans-serif;">&#9654;</td></tr></table>`;
+
+      const thumbInner = thumbnail
+        ? `<img src="${esc(thumbnail)}" alt="${esc(parsed?.label ? parsed.label + ' video' : 'Video')}" width="${VIDEO_W}" height="${VIDEO_H}" style="max-width:100%;width:100%;height:auto;display:block;border:0;${imgOpacityCss}" />`
+        : `<div style="width:100%;padding-top:56.25%;background:#0f0f0f;"></div>`;
+
+      // Wrapper with relative positioning so the play button can sit on top.
+      const wrapper = `<div style="position:relative;width:100%;max-width:${VIDEO_W}px;margin:0 auto;border-radius:10px;overflow:hidden;background:#0f0f0f;">${thumbInner}${playBtn}</div>`;
+
+      const linked = watchUrl
+        ? `<a href="${esc(watchUrl)}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;display:block;color:inherit;">${wrapper}</a>`
         : wrapper;
-      const cap = caption
-        ? `<p style="margin:10px 0 0;font-size:13px;color:${theme.mutedColor};text-align:center;font-family:${theme.fontFamily};">${esc(caption)}</p>`
+
+      // Title color follows the block bg (white over dark, theme color over light).
+      let titleColor = theme.textColor;
+      if (block.blockBgColor && block.blockBgColor !== 'transparent') {
+        const m = /^#?([0-9a-fA-F]{6})$/.exec(block.blockBgColor);
+        if (m) {
+          const v = parseInt(m[1], 16);
+          const lum = (0.299 * ((v >> 16) & 255) + 0.587 * ((v >> 8) & 255) + 0.114 * (v & 255)) / 255;
+          if (lum < 0.5) titleColor = '#ffffff';
+        }
+      }
+
+      const titleHtml = showTitle && title
+        ? `<p style="margin:14px 0 0;font-size:15px;color:${titleColor};text-align:center;font-family:${theme.fontFamily};line-height:1.4;">${esc(title)}</p>`
         : '';
-      return `<tr><td style="${box}${align};">${linked}${cap}</td></tr>`;
+
+      return `<tr><td style="${box}${align};">${linked}${titleHtml}</td></tr>`;
     }
     case 'social': {
       const links = (block.socialLinks ?? []).filter((l) => l.url?.trim());

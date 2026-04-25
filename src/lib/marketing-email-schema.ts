@@ -62,6 +62,10 @@ export interface EmailBlock {
   dividerColor?: string;          // hex color of the line
   dividerThickness?: number;      // px (default 1)
   dividerWidth?: number;          // max-width in px (default 600)
+  /** Video-block-specific settings */
+  videoShowTitle?: boolean;       // toggle for title under the video (default true)
+  videoOverlayColor?: string;     // hex (default #000000)
+  videoOverlayOpacity?: number;   // 0–100 (default 0)
 }
 
 export interface EmailTheme {
@@ -250,7 +254,20 @@ export function createEmailBlock(type: EmailBlockType): EmailBlock {
     case 'columns':
       return { id, type, left: [], right: [] };
     case 'video':
-      return { id, type, href: '', src: '', content: '' };
+      return {
+        id, type,
+        href: '',
+        src: '',
+        content: '',
+        videoShowTitle: true,
+        videoOverlayColor: '#000000',
+        videoOverlayOpacity: 0,
+        align: 'center',
+        paddingTop: 16,
+        paddingBottom: 16,
+        paddingLeft: 24,
+        paddingRight: 24,
+      };
     case 'social':
       return { id, type, socialLinks: [] };
     case 'address':

@@ -73,6 +73,7 @@ import {
 } from '@/lib/marketing-email-schema';
 import { renderMarketingEmailHtml, type MergeFieldRecord } from '@/lib/marketing-email-render';
 import { useBrandColors } from '@/lib/use-brand-colors';
+import { parseVideoUrl } from '@/lib/video-providers';
 
 // ─── Block palette shown in the picker ───────────────────────────────────────
 const PALETTE: { type: EmailBlockType; label: string; desc: string; Icon: React.FC<{ size?: number; className?: string }> }[] = [
@@ -1338,35 +1339,167 @@ function SpacerCanvas({ block }: { block: EmailBlock }) {
   );
 }
 
-function VideoCanvas({ block, theme }: { block: EmailBlock; theme: ReturnType<typeof mergeEmailTheme> }) {
-  const hasThumbnail = !!block.src?.trim();
+// Returns true if the given hex color is dark enough that white text reads
+// better on top of it. Used to flip the title color automatically when the
+// surrounding block background is dark (matching the screenshot's behavior).
+function isDarkColor(input?: string): boolean {
+  if (!input || input === 'transparent') return false;
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(input.trim());
+  if (!m) return false;
+  const v = parseInt(m[1], 16);
+  const r = (v >> 16) & 255;
+  const g = (v >> 8) & 255;
+  const b = v & 255;
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return lum < 0.5;
+}
+
+// YouTube-style 16:9 video preview. Auto-derives a thumbnail from the URL
+// when possible (YouTube/Loom). Click to "play" inside the canvas opens the
+// video link in a new tab — matches the production email behaviour.
+function VideoCanvas({ block, theme, onPatch }: { block: EmailBlock; theme: ReturnType<typeof mergeEmailTheme>; onPatch?: (p: Partial<EmailBlock>) => void }) {
+  const titleRef = useRef<HTMLDivElement>(null);
+  const titleMounted = useRef(false);
+
+  useEffect(() => {
+    if (!titleMounted.current && titleRef.current) {
+      titleRef.current.textContent = block.content?.trim() || '';
+      titleMounted.current = true;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const parsed = parseVideoUrl(block.href ?? '');
+  const userThumb = block.src?.trim();
+  const thumbnail = userThumb || parsed?.thumbnail;
+  const showTitle = block.videoShowTitle !== false;
+
+  const overlayColor = block.videoOverlayColor ?? '#000000';
+  const overlayOpacity = Math.max(0, Math.min(100, block.videoOverlayOpacity ?? 0)) / 100;
+
+  // Auto-contrast the title color to the surrounding block bg so the
+  // default "looks right" out of the box (white over dark, dark over light).
+  const titleColor = isDarkColor(block.blockBgColor) ? '#ffffff' : theme.textColor;
+
   return (
     <div style={blockPaddingStyle(block)}>
-      <div style={{ position: 'relative', borderRadius: '10px', overflow: 'hidden', background: '#18181b', cursor: 'default' }}>
-        {hasThumbnail ? (
+      <div
+        style={{
+          position: 'relative',
+          width: '100%',
+          aspectRatio: '16 / 9',
+          background: '#0f0f0f', // YouTube-style near-black backdrop
+          borderRadius: '10px',
+          overflow: 'hidden',
+          cursor: parsed ? 'pointer' : 'default',
+        }}
+        onClick={() => {
+          if (parsed?.watchUrl) window.open(parsed.watchUrl, '_blank', 'noopener,noreferrer');
+        }}
+      >
+        {thumbnail ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={block.src} alt="Video thumbnail" style={{ width: '100%', display: 'block', maxHeight: '300px', objectFit: 'cover', opacity: 0.85 }} />
-        ) : (
-          <div style={{ height: '200px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
-            <Video size={32} color="#6b7280" />
-            <span style={{ fontSize: '13px', color: '#6b7280' }}>Add thumbnail in panel →</span>
+          <img
+            src={thumbnail}
+            alt={parsed?.label ? `${parsed.label} video thumbnail` : 'Video thumbnail'}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              display: 'block',
+            }}
+          />
+        ) : null}
+
+        {/* Overlay tint */}
+        {overlayOpacity > 0 && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: overlayColor,
+              opacity: overlayOpacity,
+              pointerEvents: 'none',
+            }}
+          />
+        )}
+
+        {/* Empty-state hint sits behind the play button */}
+        {!thumbnail && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              color: '#6b7280',
+              fontFamily: theme.fontFamily,
+              fontSize: '13px',
+            }}
+          >
+            <span style={{ marginTop: '52px' }}>Add a YouTube, Vimeo or Loom URL →</span>
           </div>
         )}
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{
-            width: '58px', height: '58px', borderRadius: '50%',
-            background: 'rgba(255,255,255,0.92)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
+
+        {/* YouTube-style play button (white circle, dark triangle) */}
+        <div
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: '68px',
+            height: '48px',
+            borderRadius: '14px',
+            background: thumbnail ? 'rgba(33, 33, 33, 0.85)' : 'rgba(255,255,255,0.92)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-          }}>
-            <div style={{ width: 0, height: 0, borderTop: '11px solid transparent', borderBottom: '11px solid transparent', borderLeft: '20px solid #18181b', marginLeft: '5px' }} />
-          </div>
+          }}
+        >
+          <div
+            style={{
+              width: 0,
+              height: 0,
+              borderTop: '10px solid transparent',
+              borderBottom: '10px solid transparent',
+              borderLeft: thumbnail ? '16px solid #ffffff' : '16px solid #0f0f0f',
+              marginLeft: '4px',
+            }}
+          />
         </div>
       </div>
-      {block.content?.trim() && (
-        <p style={{ margin: '10px 0 0', fontSize: '13px', color: theme.mutedColor, textAlign: 'center', fontFamily: theme.fontFamily }}>
-          {block.content}
-        </p>
+
+      {showTitle && (
+        <div
+          ref={titleRef}
+          data-email-editable={onPatch ? 'true' : undefined}
+          contentEditable={!!onPatch}
+          suppressContentEditableWarning
+          onMouseDown={(e) => e.stopPropagation()}
+          onInput={() => { if (titleRef.current && onPatch) onPatch({ content: titleRef.current.textContent ?? '' }); }}
+          style={{
+            margin: '14px 0 0',
+            fontSize: '15px',
+            color: titleColor,
+            textAlign: 'center',
+            fontFamily: theme.fontFamily,
+            outline: 'none',
+            wordBreak: 'break-word',
+            minHeight: '1.4em',
+            cursor: onPatch ? 'text' : 'default',
+          }}
+          // YouTube-style placeholder when empty — rendered via :empty:before
+          // in CSS; we attach a data attribute the global stylesheet can hook.
+          data-placeholder="Write a title for your video here"
+          className="sp-video-title"
+        />
       )}
     </div>
   );
@@ -1442,7 +1575,7 @@ function BlockCanvas({ block, theme, venueAddress, onPatch }: { block: EmailBloc
     case 'text':    return <TextCanvas block={block} theme={theme} onPatch={onPatch} />;
     case 'button':  return <ButtonCanvas block={block} theme={theme} onPatch={onPatch} />;
     case 'image':   return <ImageCanvas block={block} theme={theme} />;
-    case 'video':   return <VideoCanvas block={block} theme={theme} />;
+    case 'video':   return <VideoCanvas block={block} theme={theme} onPatch={onPatch} />;
     case 'social':  return <SocialCanvas block={block} theme={theme} />;
     case 'address': return <AddressCanvas block={block} venueAddress={venueAddress} theme={theme} />;
     case 'divider': return <DividerCanvas block={block} />;
@@ -2168,6 +2301,231 @@ function SavedStylesModal({
           {alreadySaved ? 'Already saved' : 'Save this button style'}
         </button>
       </div>
+    </div>
+  );
+}
+
+// ─── Video Inspector — Flodesk-style: URL + Overlay + Block ──────────────────
+function VideoInspector({
+  block,
+  onChange,
+  onMediaPick,
+  subTab,
+  setSubTab,
+  renderSubTabBar,
+}: {
+  block: EmailBlock;
+  onChange: (patch: Partial<EmailBlock>) => void;
+  onMediaPick: (apply: (url: string) => void, mode?: 'image' | 'file' | 'all') => void;
+  subTab: 'primary' | 'block';
+  setSubTab: (v: 'primary' | 'block') => void;
+  renderSubTabBar: (primaryLabel: string) => React.ReactNode;
+}) {
+  void setSubTab; // tab state is owned by parent; we read but don't switch
+  const [overlayOpen, setOverlayOpen] = useState(true);
+  const [linkOpen, setLinkOpen] = useState(true);
+  const [paddingOpen, setPaddingOpen] = useState(true);
+
+  const parsed = parseVideoUrl(block.href ?? '');
+  const overlayColor = block.videoOverlayColor ?? '#000000';
+  const overlayOpacity = block.videoOverlayOpacity ?? 0;
+  const showTitle = block.videoShowTitle !== false;
+  const dPad = BLOCK_PADDING_DEFAULTS.video;
+
+  return (
+    <div>
+      {renderSubTabBar('Video')}
+
+      {/* ─── VIDEO TAB ─────────────────────────────────────────────────── */}
+      {subTab === 'primary' && (
+        <div className="space-y-5">
+          {/* Video URL */}
+          <div>
+            <p className="text-sm font-semibold text-gray-900 mb-1">Video URL</p>
+            <p className="text-xs text-gray-400 mb-2">Paste your YouTube, Vimeo or Loom URL</p>
+            <textarea
+              rows={3}
+              value={block.href ?? ''}
+              onChange={(e) => onChange({ href: e.target.value })}
+              placeholder="https://"
+              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none transition-colors resize-none"
+            />
+            {parsed && (
+              <p className="mt-1.5 text-[11px] text-emerald-600 flex items-center gap-1">
+                <Check size={11} />
+                {parsed.label} link detected{parsed.thumbnail ? ' — thumbnail auto-loaded' : ''}
+              </p>
+            )}
+          </div>
+
+          {/* Optional custom thumbnail (only for providers we can't auto-fetch) */}
+          {parsed && !parsed.thumbnail && (
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-sm font-semibold text-gray-900 mb-1">Thumbnail</p>
+              <p className="text-xs text-gray-400 mb-2">Vimeo and other custom hosts don&apos;t expose public thumbnails — pick one from your media library.</p>
+              {block.src ? (
+                <div className="space-y-2">
+                  <div className="rounded-xl overflow-hidden border border-gray-200">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={block.src} alt="Thumbnail" className="block w-full h-auto" style={{ aspectRatio: '16 / 9', objectFit: 'cover' }} />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onMediaPick((url) => onChange({ src: url }), 'image')}
+                      className="flex-1 rounded-lg border border-gray-200 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      Replace
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onChange({ src: '' })}
+                      className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-50 hover:border-red-200 transition-colors"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onMediaPick((url) => onChange({ src: url }), 'image')}
+                  className="w-full rounded-lg border border-dashed border-gray-300 py-3 text-xs font-medium text-gray-600 hover:border-gray-400 hover:bg-gray-50 transition-colors"
+                >
+                  Choose thumbnail from media library
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Overlay effects */}
+          <div className="border-t border-gray-100 pt-4">
+            <button
+              type="button"
+              onClick={() => setOverlayOpen((o) => !o)}
+              className="flex items-center justify-between w-full mb-3"
+            >
+              <span className="text-sm font-semibold text-gray-900">Overlay effects</span>
+              <ChevronDown size={14} className={`text-gray-400 transition-transform ${overlayOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {overlayOpen && (
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm font-semibold text-gray-700 mb-1.5">
+                    Color <span className="font-normal text-gray-400 text-xs font-mono uppercase">{overlayColor}</span>
+                  </p>
+                  <FlodeskColorPicker
+                    value={overlayColor}
+                    onChange={(v) => onChange({ videoOverlayColor: v })}
+                  />
+                </div>
+                <SliderControl
+                  label="Opacity"
+                  value={overlayOpacity}
+                  min={0} max={100} step={1}
+                  display={`${overlayOpacity}`}
+                  onChange={(v) => onChange({ videoOverlayOpacity: v })}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Link actions — informational, since we always open externally */}
+          <div className="border-t border-gray-100 pt-4">
+            <button
+              type="button"
+              onClick={() => setLinkOpen((o) => !o)}
+              className="flex items-center justify-between w-full mb-3"
+            >
+              <span className="text-sm font-semibold text-gray-900">Link actions</span>
+              <ChevronDown size={14} className={`text-gray-400 transition-transform ${linkOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {linkOpen && (
+              <div className="rounded-xl bg-gray-50 border border-gray-100 p-3">
+                <p className="text-xs text-gray-500 mb-1">When a subscriber clicks this video:</p>
+                <p className="text-sm text-gray-800 font-medium flex items-center gap-1.5">
+                  <Link2 size={13} className="text-gray-500" />
+                  Opens the video link in a new tab
+                </p>
+                <p className="mt-2 text-[11px] text-gray-400 leading-relaxed">
+                  Email clients can&apos;t embed playable video reliably, so we render a thumbnail with a play button. Clicking it opens the original {parsed?.label ?? 'video'} URL in the recipient&apos;s browser.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── BLOCK TAB ─────────────────────────────────────────────────── */}
+      {subTab === 'block' && (
+        <div className="space-y-5">
+          {/* Show title toggle */}
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold text-gray-900">Show title</span>
+            <button
+              type="button"
+              onClick={() => onChange({ videoShowTitle: !showTitle })}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors ${showTitle ? 'bg-blue-500' : 'bg-gray-200'}`}
+              aria-pressed={showTitle}
+            >
+              <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform ${showTitle ? 'translate-x-5' : 'translate-x-0'}`} />
+            </button>
+          </div>
+
+          <div>
+            <p className="text-sm font-semibold text-gray-900 mb-2">
+              Background <span className="font-normal text-gray-400 text-xs font-mono uppercase">{block.blockBgColor ?? 'transparent'}</span>
+            </p>
+            <FlodeskColorPicker
+              value={block.blockBgColor ?? 'transparent'}
+              onChange={(v) => onChange({ blockBgColor: v })}
+            />
+          </div>
+
+          <div className="border-t border-gray-100 pt-4">
+            <button
+              type="button"
+              onClick={() => setPaddingOpen((o) => !o)}
+              className="flex items-center justify-between w-full mb-3"
+            >
+              <span className="text-sm font-semibold text-gray-900">Padding</span>
+              <ChevronDown size={14} className={`text-gray-400 transition-transform ${paddingOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {paddingOpen && (
+              <div className="space-y-5">
+                <SliderControl
+                  label="Padding top"
+                  value={block.paddingTop ?? dPad.top}
+                  min={0} max={120} step={1}
+                  display={`${block.paddingTop ?? dPad.top}`}
+                  onChange={(v) => onChange({ paddingTop: v })}
+                />
+                <SliderControl
+                  label="Padding bottom"
+                  value={block.paddingBottom ?? dPad.bottom}
+                  min={0} max={120} step={1}
+                  display={`${block.paddingBottom ?? dPad.bottom}`}
+                  onChange={(v) => onChange({ paddingBottom: v })}
+                />
+                <SliderControl
+                  label="Padding left"
+                  value={block.paddingLeft ?? dPad.left}
+                  min={0} max={120} step={1}
+                  display={`${block.paddingLeft ?? dPad.left}`}
+                  onChange={(v) => onChange({ paddingLeft: v })}
+                />
+                <SliderControl
+                  label="Padding right"
+                  value={block.paddingRight ?? dPad.right}
+                  min={0} max={120} step={1}
+                  display={`${block.paddingRight ?? dPad.right}`}
+                  onChange={(v) => onChange({ paddingRight: v })}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -3105,54 +3463,7 @@ function BlockInspectorPanel({
   }
 
   if (block.type === 'video') {
-    return (
-      <div>
-        {renderSubTabBar('Video')}
-        {subTab === 'primary' && (
-          <div className="space-y-4">
-            <div>
-              <label className={LABEL}>Video URL (opens in new tab)</label>
-              <input
-                type="url"
-                className={INPUT}
-                value={block.href ?? ''}
-                onChange={(e) => onChange({ href: e.target.value })}
-                placeholder="https://youtube.com/watch?v=..."
-              />
-              <p className="mt-1 text-[11px] text-gray-400">Clicking the thumbnail opens this link</p>
-            </div>
-            <div>
-              <label className={LABEL}>Thumbnail Image</label>
-              <input
-                type="url"
-                className={INPUT}
-                value={block.src ?? ''}
-                onChange={(e) => onChange({ src: e.target.value })}
-                placeholder="https://..."
-              />
-              <button
-                type="button"
-                onClick={() => onMediaPick((url) => onChange({ src: url }))}
-                className="mt-1.5 w-full rounded-lg border border-gray-200 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
-              >
-                Choose from Media Library
-              </button>
-            </div>
-            <div>
-              <label className={LABEL}>Caption (optional)</label>
-              <input
-                type="text"
-                className={INPUT}
-                value={block.content ?? ''}
-                onChange={(e) => onChange({ content: e.target.value })}
-                placeholder="Watch our latest video"
-              />
-            </div>
-          </div>
-        )}
-        {subTab === 'block' && renderBlockTab()}
-      </div>
-    );
+    return <VideoInspector block={block} onChange={onChange} onMediaPick={onMediaPick} subTab={subTab} setSubTab={setSubTab} renderSubTabBar={renderSubTabBar} />;
   }
 
   if (block.type === 'social') {
@@ -3782,6 +4093,15 @@ export function CampaignFlodeskBuilder({
           background: #ffffff; border: none;
           box-shadow: 0 2px 8px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.07);
           cursor: grab;
+        }
+        /* Inline placeholder for the video title contentEditable.
+           Inherits the title's text color and softens it so it reads
+           correctly on both light and dark block backgrounds. */
+        .sp-video-title:empty:before {
+          content: attr(data-placeholder);
+          color: currentColor;
+          opacity: 0.55;
+          pointer-events: none;
         }
       `}</style>
       {/* ── Top Bar — fixed, spans from sidebar right edge to viewport right edge ── */}
