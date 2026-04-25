@@ -1826,11 +1826,11 @@ export function CampaignFlodeskBuilder({
                               <div className="pointer-events-none px-0 py-1">
                                 <div
                                   className="flex items-center gap-2"
-                                  style={{ borderTop: '2.5px solid #3b82f6', margin: '0 0' }}
+                                  style={{ borderTop: '2px solid #1b1b1b', margin: '0 0' }}
                                 >
                                   <span
                                     className="text-[10px] font-semibold text-white rounded px-1.5 py-0.5"
-                                    style={{ background: '#3b82f6', lineHeight: 1.4, whiteSpace: 'nowrap' }}
+                                    style={{ background: '#1b1b1b', lineHeight: 1.4, whiteSpace: 'nowrap' }}
                                   >
                                     {PALETTE.find(p => p.type === activePaletteType)?.label ?? activePaletteType}
                                   </span>
@@ -1930,8 +1930,8 @@ export function CampaignFlodeskBuilder({
                   {/* Drop-at-end indicator — shown when dragging palette block below all existing blocks */}
                   {activePaletteType !== null && dropOverId === null && def.blocks.length > 0 && (
                     <div className="pointer-events-none py-1">
-                      <div style={{ borderTop: '2.5px solid #3b82f6' }}>
-                        <span className="text-[10px] font-semibold text-white rounded px-1.5 py-0.5" style={{ background: '#3b82f6', lineHeight: 1.4 }}>
+                      <div style={{ borderTop: '2px solid #1b1b1b' }}>
+                        <span className="text-[10px] font-semibold text-white rounded px-1.5 py-0.5" style={{ background: '#1b1b1b', lineHeight: 1.4 }}>
                           {PALETTE.find(p => p.type === activePaletteType)?.label} — drop to add at end
                         </span>
                       </div>
