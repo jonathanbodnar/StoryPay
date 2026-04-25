@@ -9,7 +9,7 @@ import {
   Check, ChevronDown, ChevronRight, Copy, Eye, FileText,
   Image as ImageIcon,
   Italic, Link2, List, ListOrdered, Loader2, Minus, Monitor,
-  Paperclip, PenLine, Pipette, Plus, SeparatorHorizontal, Smartphone,
+  Paperclip, PenLine, Pipette, Plus, Send, SeparatorHorizontal, Smartphone,
   Space, Strikethrough, Trash2, Type, Underline, X as XIcon,
   MousePointer2, Palette, Redo2, Undo2, Video, Share2, MapPin, Search, Zap,
 } from 'lucide-react';
@@ -71,6 +71,7 @@ import {
   createEmailBlock,
   mergeEmailTheme,
 } from '@/lib/marketing-email-schema';
+import { renderMarketingEmailHtml, type MergeFieldRecord } from '@/lib/marketing-email-render';
 
 // ─── Block palette shown in the picker ───────────────────────────────────────
 const PALETTE: { type: EmailBlockType; label: string; desc: string; Icon: React.FC<{ size?: number; className?: string }> }[] = [
@@ -2301,6 +2302,192 @@ function ThemePanel({ theme, onChange }: {
   );
 }
 
+// ─── Live Preview Modal ──────────────────────────────────────────────────────
+function PreviewModal({
+  definition,
+  subject,
+  preheader,
+  venueAddress,
+  campaignId,
+  onClose,
+  onForceSave,
+}: {
+  definition: MarketingEmailDefinition;
+  subject: string;
+  preheader: string;
+  venueAddress?: VenueAddress;
+  campaignId: string;
+  onClose: () => void;
+  onForceSave: () => Promise<void>;
+}) {
+  const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
+  const [testEmail, setTestEmail] = useState('');
+  const [sending, setSending] = useState(false);
+  const [sendStatus, setSendStatus] = useState<{ kind: 'idle' | 'ok' | 'error'; msg?: string }>({ kind: 'idle' });
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  // Build merge vars from venue address — these substitute into {{venue_name}} etc.
+  const previewVars: MergeFieldRecord = {
+    first_name: 'Alex',
+    last_name: 'Preview',
+    email: 'preview@example.com',
+    venue_name: venueAddress?.name ?? 'Your venue',
+    venue_full_address:
+      venueAddress?.location_full?.trim()
+      || [venueAddress?.location_city, venueAddress?.location_state].filter(Boolean).join(', ')
+      || '',
+    venue_city: venueAddress?.location_city ?? '',
+    venue_state: venueAddress?.location_state ?? '',
+    unsubscribe_url: '#unsubscribe-preview',
+    resubscribe_url: '#resubscribe-preview',
+    wedding_date: '',
+    wedding_date_nice: 'June 14, 2026',
+    wedding_month: 'June',
+    guest_count: '120',
+  };
+
+  // Re-render iframe srcDoc whenever the definition changes
+  const srcDoc = (() => {
+    const html = renderMarketingEmailHtml(definition, previewVars);
+    // Inject base target so links open in a new tab from inside the iframe
+    return html.replace(
+      '<head>',
+      '<head><base target="_blank" />',
+    );
+  })();
+
+  async function handleSendTest() {
+    setSendStatus({ kind: 'idle' });
+    const trimmed = testEmail.trim();
+    if (!trimmed || !trimmed.includes('@')) {
+      setSendStatus({ kind: 'error', msg: 'Enter a valid email address' });
+      return;
+    }
+    setSending(true);
+    try {
+      // Persist the latest unsaved state so the test send reflects it
+      await onForceSave();
+      const res = await fetch(`/api/marketing/campaigns/${campaignId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: trimmed }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        setSendStatus({ kind: 'error', msg: j.error ?? 'Failed to send test' });
+      } else {
+        setSendStatus({ kind: 'ok', msg: `Test sent to ${trimmed}` });
+      }
+    } catch (e) {
+      setSendStatus({ kind: 'error', msg: e instanceof Error ? e.message : 'Failed to send test' });
+    } finally {
+      setSending(false);
+    }
+  }
+
+  const frameWidth = device === 'mobile' ? 380 : 720;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex flex-col bg-gray-900/70 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+    >
+      {/* Top bar */}
+      <div className="flex items-center justify-between gap-4 border-b border-white/10 bg-gray-900 px-5 py-3 text-white">
+        <div className="flex items-center gap-3 min-w-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-2 text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
+            aria-label="Close preview"
+          >
+            <XIcon size={18} />
+          </button>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold truncate">{subject || 'No subject'}</p>
+            {preheader ? (
+              <p className="text-[11px] text-gray-400 truncate">{preheader}</p>
+            ) : (
+              <p className="text-[11px] text-gray-400">Live preview · links and videos work</p>
+            )}
+          </div>
+        </div>
+
+        {/* Device toggle */}
+        <div className="flex items-center gap-1 rounded-full bg-white/10 p-1">
+          <button
+            type="button"
+            onClick={() => setDevice('desktop')}
+            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${device === 'desktop' ? 'bg-white text-gray-900' : 'text-gray-300 hover:text-white'}`}
+          >
+            <Monitor size={13} />
+            Desktop
+          </button>
+          <button
+            type="button"
+            onClick={() => setDevice('mobile')}
+            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${device === 'mobile' ? 'bg-white text-gray-900' : 'text-gray-300 hover:text-white'}`}
+          >
+            <Smartphone size={13} />
+            Mobile
+          </button>
+        </div>
+
+        {/* Test send */}
+        <form
+          onSubmit={(e) => { e.preventDefault(); void handleSendTest(); }}
+          className="flex items-center gap-2"
+        >
+          <div className="relative flex items-center">
+            <AtSign size={14} className="absolute left-2.5 text-gray-400" />
+            <input
+              type="email"
+              value={testEmail}
+              onChange={(e) => setTestEmail(e.target.value)}
+              placeholder="you@email.com"
+              className="rounded-lg bg-white/10 pl-7 pr-3 py-1.5 text-xs text-white placeholder:text-gray-400 focus:bg-white/20 focus:outline-none focus:ring-1 focus:ring-white/30 transition-colors w-52"
+              disabled={sending}
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={sending || !testEmail.trim()}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-gray-900 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {sending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+            {sending ? 'Sending…' : 'Send test'}
+          </button>
+        </form>
+      </div>
+
+      {/* Status line */}
+      {sendStatus.kind !== 'idle' && (
+        <div className={`px-5 py-1.5 text-xs ${sendStatus.kind === 'ok' ? 'bg-emerald-50 text-emerald-700 border-b border-emerald-100' : 'bg-red-50 text-red-700 border-b border-red-100'}`}>
+          {sendStatus.msg}
+        </div>
+      )}
+
+      {/* Iframe canvas */}
+      <div className="flex-1 overflow-auto p-6 flex items-start justify-center">
+        <div
+          className="bg-white rounded-2xl shadow-2xl overflow-hidden transition-all"
+          style={{ width: frameWidth, maxWidth: '100%' }}
+        >
+          <iframe
+            ref={iframeRef}
+            srcDoc={srcDoc}
+            title="Email preview"
+            className="block w-full"
+            style={{ height: '80vh', border: 'none' }}
+            sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-scripts"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function CampaignFlodeskBuilder({
   campaignId,
@@ -2957,63 +3144,23 @@ export function CampaignFlodeskBuilder({
         }}
       />
 
-      {/* Preview modal */}
+      {/* Live preview modal — renders the actual email HTML in an iframe */}
       {previewOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-8 overflow-y-auto"
-          style={{ scrollbarWidth: 'none' }}
-          onClick={() => setPreviewOpen(false)}
-        >
-          <style>{`.preview-scroll::-webkit-scrollbar{display:none}`}</style>
-          <div
-            className="relative w-full bg-white rounded-2xl shadow-2xl overflow-hidden my-auto"
-            style={{ maxWidth: '680px' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 py-3.5">
-              <div className="flex items-center gap-2.5">
-                <span className="text-sm font-semibold text-gray-900">Preview</span>
-                <span className="text-xs text-gray-400 truncate max-w-[340px]">{subject || 'No subject'}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPreviewOpen(false)}
-                className="rounded-lg p-1.5 text-gray-400 hover:text-gray-700 transition-colors"
-              >
-                <XIcon size={18} />
-              </button>
-            </div>
-
-            {/* Full email body — no clipping, scrolls via the backdrop */}
-            <div
-              style={{
-                background: theme.pageBg === '#ffffff' ? '#f7f7f5' : theme.pageBg,
-                padding: '28px 24px 36px',
-              }}
-            >
-              <div
-                style={{
-                  maxWidth: '600px',
-                  margin: '0 auto',
-                  background: theme.cardBg,
-                  fontFamily: theme.fontFamily,
-                  color: theme.textColor,
-                }}
-              >
-                {def.blocks.length === 0 ? (
-                  <div style={{ padding: '64px 24px', textAlign: 'center', color: theme.mutedColor, fontSize: '14px' }}>
-                    Nothing to preview yet — add blocks to your email
-                  </div>
-                ) : (
-                  def.blocks.map((block) => (
-                    <BlockCanvas key={block.id} block={block} theme={theme} venueAddress={venueAddress} />
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+        <PreviewModal
+          definition={def}
+          subject={subject}
+          preheader={preheader}
+          venueAddress={venueAddress}
+          campaignId={campaignId}
+          onClose={() => setPreviewOpen(false)}
+          onForceSave={async () => {
+            if (saveTimerRef.current) {
+              clearTimeout(saveTimerRef.current);
+              saveTimerRef.current = null;
+            }
+            await save(name, subject, preheader, def);
+          }}
+        />
       )}
     </div>
   );

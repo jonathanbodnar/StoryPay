@@ -72,7 +72,7 @@ function renderBlock(block: EmailBlock, theme: ReturnType<typeof mergeEmailTheme
       const padLeft = block.paddingLeft ?? 24;
       const padRight = block.paddingRight ?? 24;
 
-      return `<tr><td style="padding:${padTop}px ${padRight}px ${padBot}px ${padLeft}px;${align};${blockBg}"><a href="${href}" style="display:inline-block;background:${bg};color:${fg};border:${borderW}px solid ${borderColor};padding:${padY}px ${padX}px;border-radius:${radius}px;text-decoration:none;font-weight:${fw};font-size:${fs};line-height:${block.lineHeight ?? 1};letter-spacing:${ls}px;${tt}font-family:${ff};">${lab}</a></td></tr>`;
+      return `<tr><td style="padding:${padTop}px ${padRight}px ${padBot}px ${padLeft}px;${align};${blockBg}"><a href="${href}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:${bg};color:${fg};border:${borderW}px solid ${borderColor};padding:${padY}px ${padX}px;border-radius:${radius}px;text-decoration:none;font-weight:${fw};font-size:${fs};line-height:${block.lineHeight ?? 1};letter-spacing:${ls}px;${tt}font-family:${ff};">${lab}</a></td></tr>`;
     }
     case 'image': {
       if (!block.src?.trim()) {
@@ -80,7 +80,58 @@ function renderBlock(block: EmailBlock, theme: ReturnType<typeof mergeEmailTheme
       }
       const src = esc(block.src.trim());
       const alt = esc(block.alt || '');
-      return `<tr><td style="padding:8px 24px;${align};"><img src="${src}" alt="${alt}" width="552" style="max-width:100%;height:auto;border-radius:8px;display:inline-block;" /></td></tr>`;
+      const linkHref = block.href?.trim() ? esc(block.href.trim()) : '';
+      const img = `<img src="${src}" alt="${alt}" width="552" style="max-width:100%;height:auto;border-radius:8px;display:inline-block;border:0;" />`;
+      const inner = linkHref
+        ? `<a href="${linkHref}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;display:inline-block;">${img}</a>`
+        : img;
+      return `<tr><td style="padding:8px 24px;${align};">${inner}</td></tr>`;
+    }
+    case 'video': {
+      const href = block.href?.trim() ? esc(block.href.trim()) : '';
+      const src = block.src?.trim() ? esc(block.src.trim()) : '';
+      const caption = (block.content || '').trim();
+      const thumbInner = src
+        ? `<img src="${src}" alt="Watch video" width="552" style="max-width:100%;height:auto;display:block;border:0;" />`
+        : `<div style="height:200px;background:#18181b;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-family:${theme.fontFamily};font-size:13px;">[Video — add URL and thumbnail]</div>`;
+      const playBtn = `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);"><tr><td style="width:58px;height:58px;border-radius:50%;background:rgba(255,255,255,0.92);box-shadow:0 4px 12px rgba(0,0,0,0.3);text-align:center;vertical-align:middle;font-size:24px;color:#18181b;line-height:58px;">▶</td></tr></table>`;
+      const wrapper = `<div style="position:relative;border-radius:10px;overflow:hidden;background:#18181b;">${thumbInner}${src ? playBtn : ''}</div>`;
+      const linked = href
+        ? `<a href="${href}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;display:block;">${wrapper}</a>`
+        : wrapper;
+      const cap = caption
+        ? `<p style="margin:10px 0 0;font-size:13px;color:${theme.mutedColor};text-align:center;font-family:${theme.fontFamily};">${esc(caption)}</p>`
+        : '';
+      return `<tr><td style="padding:16px 24px;${align};">${linked}${cap}</td></tr>`;
+    }
+    case 'social': {
+      const links = (block.socialLinks ?? []).filter((l) => l.url?.trim());
+      if (links.length === 0) {
+        return `<tr><td style="padding:20px 24px;text-align:center;color:${theme.mutedColor};font-size:13px;font-family:${theme.fontFamily};">[Add social links in editor]</td></tr>`;
+      }
+      const labelFor = (p: string) => {
+        const k = p.toLowerCase();
+        if (k.includes('instagram')) return 'Instagram';
+        if (k.includes('facebook')) return 'Facebook';
+        if (k.includes('twitter') || k === 'x') return 'X';
+        if (k.includes('tiktok')) return 'TikTok';
+        if (k.includes('youtube')) return 'YouTube';
+        if (k.includes('linkedin')) return 'LinkedIn';
+        if (k.includes('pinterest')) return 'Pinterest';
+        if (k.includes('threads')) return 'Threads';
+        return p.charAt(0).toUpperCase() + p.slice(1);
+      };
+      const items = links
+        .map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:6px 12px;margin:0 4px;border-radius:999px;border:1px solid ${theme.mutedColor};color:${theme.textColor};font-size:12px;font-family:${theme.fontFamily};text-decoration:none;">${esc(labelFor(l.platform))}</a>`)
+        .join('');
+      return `<tr><td style="padding:20px 24px;text-align:center;">${items}</td></tr>`;
+    }
+    case 'address': {
+      // Filled at runtime via mergeMarketingFields — vars contain venue_name, venue_full_address, etc.
+      return `<tr><td style="padding:16px 24px;text-align:center;font-family:${theme.fontFamily};">
+  <p style="margin:0 0 3px;font-size:13px;font-weight:600;color:${theme.textColor};">{{venue_name}}</p>
+  <p style="margin:0;font-size:12px;color:${theme.mutedColor};">{{venue_full_address}}</p>
+</td></tr>`;
     }
     case 'divider':
       return `<tr><td style="padding:12px 24px;"><hr style="border:none;border-top:1px solid #e4e4e7;margin:0;" /></td></tr>`;

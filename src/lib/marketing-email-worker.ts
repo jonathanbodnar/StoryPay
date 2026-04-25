@@ -181,7 +181,11 @@ export async function buildMergeVars(
   opts?: { forSms?: boolean },
 ): Promise<MergeFieldRecord | null> {
   const forSms = opts?.forSms === true;
-  const { data: venue } = await supabaseAdmin.from('venues').select('name').eq('id', venueId).maybeSingle();
+  const { data: venue } = await supabaseAdmin
+    .from('venues')
+    .select('name, location_full, location_city, location_state')
+    .eq('id', venueId)
+    .maybeSingle();
   const { data: lead } = await supabaseAdmin
     .from('leads')
     .select('id, email, first_name, last_name, name, wedding_date, guest_count, marketing_email_opt_in, sms_dnd')
@@ -231,11 +235,17 @@ export async function buildMergeVars(
   const email =
     emailRaw ||
     `lead.${String(lead.id).replace(/-/g, '').slice(0, 12)}@sms-auto.storypay.placeholder`;
+  const fullAddr = (venue?.location_full as string)
+    || ([venue?.location_city, venue?.location_state].filter(Boolean).join(', '))
+    || '';
   return {
     first_name: fn,
     last_name: ln,
     email,
     venue_name: (venue?.name as string) || 'Your venue',
+    venue_full_address: fullAddr,
+    venue_city: (venue?.location_city as string) || '',
+    venue_state: (venue?.location_state as string) || '',
     unsubscribe_url: unsub,
     resubscribe_url: resub,
     wedding_date: wd || '',

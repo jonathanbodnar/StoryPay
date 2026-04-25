@@ -188,15 +188,25 @@ export async function POST(
     .single();
   if (!tmpl) return NextResponse.json({ error: 'Template missing' }, { status: 400 });
 
-  const { data: venue } = await supabaseAdmin.from('venues').select('name').eq('id', venueId).single();
+  const { data: venue } = await supabaseAdmin
+    .from('venues')
+    .select('name, location_full, location_city, location_state')
+    .eq('id', venueId)
+    .single();
   const appOrigin = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
   const previewUnsub = `${appOrigin.replace(/\/$/, '')}/api/public/marketing/unsubscribe?token=preview`;
   const previewResub = `${appOrigin.replace(/\/$/, '')}/api/public/marketing/resubscribe?token=preview`;
+  const fullAddr = (venue?.location_full as string)
+    || ([venue?.location_city, venue?.location_state].filter(Boolean).join(', '))
+    || '';
   let vars: MergeFieldRecord = {
     first_name: 'Alex',
     last_name: 'Preview',
     email: to,
     venue_name: (venue?.name as string) || 'Your venue',
+    venue_full_address: fullAddr,
+    venue_city: (venue?.location_city as string) || '',
+    venue_state: (venue?.location_state as string) || '',
     unsubscribe_url: previewUnsub,
     resubscribe_url: previewResub,
     wedding_date: '',
