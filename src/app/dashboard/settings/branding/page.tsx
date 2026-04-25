@@ -468,14 +468,68 @@ export default function BrandingPage() {
 
  <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-6 items-start">
 
- {/* ── Left: Brand Settings ── */}
- <div className="space-y-6">
+{/* ── Left: Brand Settings ── */}
+<div className="space-y-6">
 
- {/* Brand Settings card */}
- <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
- <div className="px-6 py-4 border-b border-gray-200">
- <h2 className="text-base font-semibold text-gray-900">Brand Settings</h2>
- </div>
+{/* Contact & Footer — first so venues fill in business info before styling */}
+<div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+<div className="px-6 py-4 border-b border-gray-200">
+<h2 className="text-base font-semibold text-gray-900">Contact Information</h2>
+<p className="text-xs text-gray-400 mt-0.5">Shown on invoices and proposals</p>
+</div>
+<div className="px-6 py-5 space-y-4">
+<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+<div className="sm:col-span-2">
+<label className={LABEL}>Business Name</label>
+<input type="text"value={brand.venueName} onChange={upd('venueName')} placeholder="Your Venue Name"className={INPUT} />
+</div>
+<div>
+<label className={LABEL}>Contact Email</label>
+<input type="email"value={brand.email} onChange={upd('email')} placeholder="hello@yourvenue.com"className={INPUT} />
+</div>
+<div>
+<label className={LABEL}>Contact Phone</label>
+<input type="tel"value={brand.phone} onChange={upd('phone')} placeholder="(555) 000-0000"className={INPUT} />
+</div>
+<div className="sm:col-span-2">
+<label className={LABEL}>Website</label>
+<input type="url"value={brand.website} onChange={upd('website')} placeholder="https://yourvenue.com"className={INPUT} />
+</div>
+<div className="sm:col-span-2">
+<label className={LABEL}>Street Address</label>
+<input type="text"value={brand.address} onChange={upd('address')} placeholder="123 Wedding Lane"className={INPUT} />
+</div>
+<div>
+<label className={LABEL}>City</label>
+<input type="text"value={brand.city} onChange={upd('city')} placeholder="Columbus"className={INPUT} />
+</div>
+<div className="grid grid-cols-2 gap-3">
+<div>
+<label className={LABEL}>State</label>
+<input type="text"value={brand.state} onChange={upd('state')} placeholder="OH"maxLength={2} className={INPUT} />
+</div>
+<div>
+<label className={LABEL}>ZIP</label>
+<input type="text"value={brand.zip} onChange={upd('zip')} placeholder="43215"className={INPUT} />
+</div>
+</div>
+</div>
+<div>
+<label className={LABEL}>Footer Note</label>
+<textarea value={brand.footer_note} onChange={upd('footer_note')}
+placeholder="Thank you for choosing our venue. All payments are non-refundable unless otherwise stated."
+rows={2}
+className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors resize-none"
+/>
+</div>
+</div>
+</div>
+
+{/* Brand Settings card */}
+<div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+<div className="px-6 py-4 border-b border-gray-200">
+<h2 className="text-base font-semibold text-gray-900">Brand Settings</h2>
+</div>
  <div className="px-6 py-5 space-y-5">
 
  {/* Logo */}
@@ -579,61 +633,7 @@ export default function BrandingPage() {
  </div>
  </div>
 
- {/* Contact & Footer */}
- <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
- <div className="px-6 py-4 border-b border-gray-200">
- <h2 className="text-base font-semibold text-gray-900">Contact Information</h2>
- <p className="text-xs text-gray-400 mt-0.5">Shown on invoices and proposals</p>
- </div>
- <div className="px-6 py-5 space-y-4">
- <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
- <div className="sm:col-span-2">
- <label className={LABEL}>Business Name</label>
- <input type="text"value={brand.venueName} onChange={upd('venueName')} placeholder="Your Venue Name"className={INPUT} />
- </div>
- <div>
- <label className={LABEL}>Contact Email</label>
- <input type="email"value={brand.email} onChange={upd('email')} placeholder="hello@yourvenue.com"className={INPUT} />
- </div>
- <div>
- <label className={LABEL}>Contact Phone</label>
- <input type="tel"value={brand.phone} onChange={upd('phone')} placeholder="(555) 000-0000"className={INPUT} />
- </div>
- <div className="sm:col-span-2">
- <label className={LABEL}>Website</label>
- <input type="url"value={brand.website} onChange={upd('website')} placeholder="https://yourvenue.com"className={INPUT} />
- </div>
- <div className="sm:col-span-2">
- <label className={LABEL}>Street Address</label>
- <input type="text"value={brand.address} onChange={upd('address')} placeholder="123 Wedding Lane"className={INPUT} />
- </div>
- <div>
- <label className={LABEL}>City</label>
- <input type="text"value={brand.city} onChange={upd('city')} placeholder="Columbus"className={INPUT} />
- </div>
- <div className="grid grid-cols-2 gap-3">
- <div>
- <label className={LABEL}>State</label>
- <input type="text"value={brand.state} onChange={upd('state')} placeholder="OH"maxLength={2} className={INPUT} />
- </div>
- <div>
- <label className={LABEL}>ZIP</label>
- <input type="text"value={brand.zip} onChange={upd('zip')} placeholder="43215"className={INPUT} />
- </div>
- </div>
- </div>
- <div>
- <label className={LABEL}>Footer Note</label>
- <textarea value={brand.footer_note} onChange={upd('footer_note')}
- placeholder="Thank you for choosing our venue. All payments are non-refundable unless otherwise stated."
- rows={2}
- className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors resize-none"
- />
- </div>
- </div>
- </div>
-
- {/* Applies to */}
+{/* Applies to */}
  <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="px-6 py-4 border-b border-gray-200">
  <h2 className="text-base font-semibold text-gray-900">Note</h2>
