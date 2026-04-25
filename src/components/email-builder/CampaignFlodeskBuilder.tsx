@@ -432,7 +432,9 @@ function FloatingFormatBar() {
   const [mergeOpen, setMergeOpen] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiVariation, setAiVariation] = useState(0);
+  const [insideLink, setInsideLink] = useState(false);
   const savedRange = useRef<Range | null>(null);
+  const editingAnchor = useRef<HTMLAnchorElement | null>(null);
   const linkInputRef = useRef<HTMLInputElement>(null);
   const linkModeRef = useRef(false);
 
@@ -443,16 +445,33 @@ function FloatingFormatBar() {
     function update() {
       if (linkModeRef.current) return;
       const sel = window.getSelection();
-      if (!sel || sel.rangeCount === 0 || !sel.toString().trim()) { setPos(null); setAiVariation(0); return; }
+      if (!sel || sel.rangeCount === 0) { setPos(null); setAiVariation(0); setInsideLink(false); return; }
+
       const anchor = sel.anchorNode;
       const el: Element | null = anchor
         ? (anchor.nodeType === Node.TEXT_NODE ? anchor.parentElement : anchor as Element)
         : null;
       const editable = el?.closest?.('[data-email-editable]') as HTMLElement | null;
-      if (!editable) { setPos(null); return; }
+      if (!editable) { setPos(null); setInsideLink(false); return; }
+
+      // Detect if cursor/selection is inside an existing <a>
+      const existingA = el?.closest('a') as HTMLAnchorElement | null;
+      setInsideLink(!!existingA);
+
+      const selText = sel.toString().trim();
+
+      // Show toolbar if text is selected OR cursor is inside a link
+      if (!selText && !existingA) { setPos(null); setAiVariation(0); return; }
+
       const blockRect = editable.getBoundingClientRect();
-      const selRect = sel.getRangeAt(0).getBoundingClientRect();
-      setPos({ top: selRect.top - 64, left: blockRect.left + blockRect.width / 2 });
+      if (selText) {
+        const selRect = sel.getRangeAt(0).getBoundingClientRect();
+        setPos({ top: selRect.top - 64, left: blockRect.left + blockRect.width / 2 });
+      } else if (existingA) {
+        // Cursor is inside a link but nothing selected — position toolbar above the link
+        const linkRect = existingA.getBoundingClientRect();
+        setPos({ top: linkRect.top - 64, left: linkRect.left + linkRect.width / 2 });
+      }
     }
     document.addEventListener('selectionchange', update);
     return () => document.removeEventListener('selectionchange', update);
@@ -484,34 +503,76 @@ function FloatingFormatBar() {
   function openLinkMode(e: React.MouseEvent) {
     e.preventDefault();
     const sel = window.getSelection();
+    editingAnchor.current = null;
+
     if (sel && sel.rangeCount > 0) {
       savedRange.current = sel.getRangeAt(0).cloneRange();
+
+      // Detect if the cursor/selection is inside an existing <a> — if so, edit it
+      const node = sel.anchorNode;
+      const el = node?.nodeType === Node.TEXT_NODE
+        ? (node as Text).parentElement
+        : node as Element | null;
+      const existingA = el?.closest('a') as HTMLAnchorElement | null;
+
+      if (existingA) {
+        editingAnchor.current = existingA;
+        setLinkUrl(existingA.getAttribute('href') ?? '');
+        setNewTab(existingA.target === '_blank');
+      } else {
+        setLinkUrl('');
+      }
     }
+
     setLinkMode(true);
-    setLinkUrl('');
-    setTimeout(() => linkInputRef.current?.focus(), 40);
+    setTimeout(() => {
+      linkInputRef.current?.focus();
+      linkInputRef.current?.select();
+    }, 40);
   }
 
   function applyLink() {
     const url = linkUrl.trim();
-    if (!url || !savedRange.current) { cancelLink(); return; }
+    if (!url) { cancelLink(); return; }
     const fullUrl = url.startsWith('http') || url.startsWith('mailto:') ? url : `https://${url}`;
 
-    // Find the contentEditable that owns the saved range
+    // ── Edit existing anchor ──────────────────────────────────────────────────
+    if (editingAnchor.current) {
+      const a = editingAnchor.current;
+      a.href = fullUrl;
+      if (newTab) {
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+      } else {
+        a.removeAttribute('target');
+        a.removeAttribute('rel');
+      }
+      const editable = a.closest('[data-email-editable]') as HTMLElement | null;
+      if (editable) editable.dispatchEvent(new Event('input', { bubbles: true }));
+      editingAnchor.current = null;
+      savedRange.current = null;
+      setLinkMode(false);
+      setLinkUrl('');
+      setPos(null);
+      return;
+    }
+
+    // ── Create new anchor from selection ──────────────────────────────────────
+    if (!savedRange.current) { cancelLink(); return; }
+
     const rangeNode = savedRange.current.commonAncestorContainer;
     const editable = (rangeNode.nodeType === Node.TEXT_NODE
       ? (rangeNode as Text).parentElement
       : rangeNode as HTMLElement)?.closest('[data-email-editable]') as HTMLElement | null;
 
     try {
-      // Build the anchor element directly — no execCommand, no focus juggling
       const a = document.createElement('a');
       a.href = fullUrl;
-      a.style.color = 'inherit';
+      a.style.color = '#3b82f6';
+      a.style.textDecoration = 'underline';
+      a.style.cursor = 'pointer';
       if (newTab) { a.target = '_blank'; a.rel = 'noopener noreferrer'; }
 
-      // surroundContents wraps inline selections; falls back to extract+insert
-      // for selections that span multiple elements
       try {
         savedRange.current.surroundContents(a);
       } catch {
@@ -520,7 +581,6 @@ function FloatingFormatBar() {
         savedRange.current.insertNode(a);
       }
 
-      // Sync to block state so the link is persisted
       if (editable) editable.dispatchEvent(new Event('input', { bubbles: true }));
     } catch {
       // silent — range may have been invalidated
@@ -534,8 +594,98 @@ function FloatingFormatBar() {
 
   function cancelLink() {
     savedRange.current = null;
+    editingAnchor.current = null;
     setLinkMode(false);
     setLinkUrl('');
+  }
+
+  function insertList(ordered: boolean) {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+
+    const range = sel.getRangeAt(0).cloneRange();
+
+    const anchorNode = range.commonAncestorContainer;
+    const editable = (anchorNode.nodeType === Node.TEXT_NODE
+      ? (anchorNode as Text).parentElement
+      : anchorNode as HTMLElement
+    )?.closest('[data-email-editable]') as HTMLElement | null;
+    if (!editable) return;
+
+    // Walk up from `node` to find the direct child of `editable` that contains it.
+    // If `node` is a loose text node directly under `editable`, return null.
+    function directBlockChild(node: Node): HTMLElement | null {
+      let cur: Node | null = node;
+      while (cur && cur.parentNode !== editable) cur = cur.parentNode;
+      if (!cur || cur === editable) return null;
+      return cur instanceof HTMLElement ? cur : null;
+    }
+
+    const startBlock = directBlockChild(range.startContainer);
+    const endBlock = directBlockChild(range.endContainer);
+
+    // Collect all paragraph-level blocks the selection touches
+    const blocksToReplace: HTMLElement[] = [];
+    if (startBlock) {
+      let cur: Node | null = startBlock;
+      while (cur) {
+        if (cur instanceof HTMLElement) blocksToReplace.push(cur);
+        if (cur === endBlock || !endBlock) break;
+        cur = cur.nextSibling;
+      }
+    }
+
+    // Inline styles bypass Tailwind preflight that would otherwise hide markers
+    const listTag = ordered ? 'ol' : 'ul';
+    const list = document.createElement(listTag);
+    list.style.cssText = `
+      padding-left: 1.5em;
+      margin: 0.5em 0;
+      list-style-type: ${ordered ? 'decimal' : 'disc'};
+      list-style-position: outside;
+    `.trim();
+
+    if (blocksToReplace.length > 0) {
+      // Convert each enclosing paragraph into its own <li>, preserving inner HTML
+      blocksToReplace.forEach(block => {
+        const li = document.createElement('li');
+        li.style.marginBottom = '0.25em';
+        const inner = block.innerHTML.trim();
+        li.innerHTML = inner || '<br>';
+        list.appendChild(li);
+      });
+
+      const insertionPoint = blocksToReplace[0];
+      editable.insertBefore(list, insertionPoint);
+      blocksToReplace.forEach(el => {
+        if (el.parentNode === editable) editable.removeChild(el);
+      });
+    } else {
+      // Loose text directly under editable, or weird structure — wrap selected text
+      const selectedText = range.toString();
+      const li = document.createElement('li');
+      li.style.marginBottom = '0.25em';
+      if (selectedText) {
+        range.deleteContents();
+        li.textContent = selectedText;
+      } else {
+        li.innerHTML = '<br>';
+      }
+      list.appendChild(li);
+      range.insertNode(list);
+    }
+
+    // Place cursor at the end of the last list item
+    const lastLi = list.lastElementChild as HTMLElement | null;
+    if (lastLi) {
+      const r = document.createRange();
+      r.selectNodeContents(lastLi);
+      r.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(r);
+    }
+
+    editable.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
   function insertMerge(tag: string) {
@@ -657,10 +807,17 @@ function FloatingFormatBar() {
           <button type="button" className={BTN} title="Underline"     onMouseDown={(e) => { e.preventDefault(); exec('underline'); }}><Underline size={16} /></button>
           <button type="button" className={BTN} title="Strikethrough" onMouseDown={(e) => { e.preventDefault(); exec('strikeThrough'); }}><Strikethrough size={16} /></button>
           <div className={SEP} />
-          <button type="button" className={BTN} title="Numbered list" onMouseDown={(e) => { e.preventDefault(); exec('insertOrderedList'); }}><ListOrdered size={16} /></button>
-          <button type="button" className={BTN} title="Bullet list"   onMouseDown={(e) => { e.preventDefault(); exec('insertUnorderedList'); }}><List size={16} /></button>
+          <button type="button" className={BTN} title="Numbered list" onMouseDown={(e) => { e.preventDefault(); insertList(true); }}><ListOrdered size={16} /></button>
+          <button type="button" className={BTN} title="Bullet list"   onMouseDown={(e) => { e.preventDefault(); insertList(false); }}><List size={16} /></button>
           <div className={SEP} />
-          <button type="button" className={BTN} title="Insert link" onMouseDown={openLinkMode}><Link2 size={16} /></button>
+          <button
+            type="button"
+            className={`${BTN} ${insideLink ? 'text-blue-500' : ''}`}
+            title={insideLink ? 'Edit link' : 'Insert link'}
+            onMouseDown={openLinkMode}
+          >
+            <Link2 size={16} />
+          </button>
         </div>
       )}
     </div>,
@@ -1672,6 +1829,25 @@ export function CampaignFlodeskBuilder({
       {/* Global styles for this builder */}
       <style>{`
         .fb-scroll-pane::-webkit-scrollbar { display: none; }
+        /* Links inside the canvas editor */
+        [data-email-editable] a {
+          color: #3b82f6;
+          text-decoration: underline;
+          cursor: pointer;
+        }
+        /* Override Tailwind preflight so list markers actually render */
+        [data-email-editable] ol,
+        [data-email-editable] ul {
+          padding-left: 1.5em !important;
+          margin: 0.5em 0 !important;
+          list-style-position: outside !important;
+        }
+        [data-email-editable] ol { list-style-type: decimal !important; }
+        [data-email-editable] ul { list-style-type: disc !important; }
+        [data-email-editable] li {
+          display: list-item !important;
+          margin-bottom: 0.25em !important;
+        }
         .sp-slider {
           -webkit-appearance: none; appearance: none;
           width: 100%; height: 2px;
