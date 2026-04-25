@@ -54,6 +54,7 @@ export async function PATCH(request: Request) {
     brand_bg_color:    true,  // background color
     brand_btn_text:    true,  // button text color
     brand_colors:      true,  // jsonb array of saved swatches
+    brand_socials:     true,  // jsonb array of {platform, url}
     brand_tagline:     true,
     brand_website:     true,
     brand_email:       true,
@@ -87,6 +88,44 @@ export async function PATCH(request: Request) {
     updates.payment_reminder_offsets = normalizePaymentReminderOffsets(body.payment_reminder_offsets);
   }
 
+  // Sanitize brand_socials: keep one entry per known platform with a valid http(s) URL.
+  if (body.brand_socials !== undefined) {
+    if (!Array.isArray(body.brand_socials)) {
+      return NextResponse.json({ error: 'brand_socials must be a JSON array of {platform,url}' }, { status: 400 });
+    }
+    const KNOWN = new Set([
+      'facebook', 'instagram', 'youtube', 'tiktok', 'pinterest',
+      'linkedin', 'twitter', 'threads', 'website',
+    ]);
+    const seen = new Set<string>();
+    const cleaned: { platform: string; url: string }[] = [];
+    for (const raw of body.brand_socials) {
+      if (!raw || typeof raw !== 'object') continue;
+      const p = String((raw as { platform?: unknown }).platform ?? '').trim().toLowerCase();
+      const u = String((raw as { url?: unknown }).url ?? '').trim();
+      if (!KNOWN.has(p) || seen.has(p)) continue;
+      if (!u) {
+        // Empty URL means "remove" — skip but record so a duplicate empty doesn't pile in
+        seen.add(p);
+        continue;
+      }
+      // Normalize: prepend https:// if user typed bare domain
+      let normalized = /^https?:\/\//i.test(u) ? u : `https://${u}`;
+      // Strip whitespace; cap to a sane length
+      normalized = normalized.replace(/\s+/g, '').slice(0, 500);
+      try {
+        const parsed = new URL(normalized);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') continue;
+      } catch {
+        continue;
+      }
+      seen.add(p);
+      cleaned.push({ platform: p, url: normalized });
+      if (cleaned.length >= 12) break;
+    }
+    updates.brand_socials = cleaned;
+  }
+
   // Sanitize brand_colors: keep only valid lowercase #rrggbb hex strings, dedupe.
   if (body.brand_colors !== undefined) {
     if (!Array.isArray(body.brand_colors)) {
@@ -112,7 +151,7 @@ export async function PATCH(request: Request) {
   // .update() needs the key present with a null value to write NULL to the DB.
   for (const key of Object.keys(body)) {
     if (key === 'appointment_reminder_offsets' || key === 'payment_reminder_offsets') continue;
-    if (key === 'brand_colors') continue; // already handled + sanitized above
+    if (key === 'brand_colors' || key === 'brand_socials') continue; // already handled + sanitized above
     if (allowedFields[key]) {
       updates[key] = body[key] ?? null;
     }
@@ -134,7 +173,7 @@ export async function PATCH(request: Request) {
     console.error('[venues/me] PATCH error (will retry without unknown columns):', error.message);
     const safeUpdates: Record<string, unknown> = {};
     const knownCols = ['name', 'service_fee_rate', 'brand_logo_url', 'brand_color',
-      'brand_bg_color', 'brand_btn_text', 'brand_colors',
+      'brand_bg_color', 'brand_btn_text', 'brand_colors', 'brand_socials',
       'brand_tagline', 'brand_website', 'brand_email', 'brand_phone',
       'brand_address', 'brand_city', 'brand_state', 'brand_zip', 'brand_footer_note', 'monthly_booking_goal',
       'listing_marketing_monthly_spend', 'timezone', 'appointment_reminders_enabled', 'appointment_reminder_offsets',

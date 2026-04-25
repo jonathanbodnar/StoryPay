@@ -14,6 +14,60 @@ function esc(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
+// Inline-SVG paths for social icons. Kept in lockstep with the SocialIcon
+// component in CampaignFlodeskBuilder so editor, preview, and sent emails
+// render identically. Each entry returns the inner SVG markup; the wrapper
+// applies size/color via the surrounding <svg>.
+function socialIconSvg(platform: string, size: number, color: string): string {
+  const c = esc(color);
+  const wrap = (inner: string, opts?: { fill?: boolean }) => {
+    const fillAttr = opts?.fill === false ? 'fill="none"' : `fill="${c}"`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" ${fillAttr}>${inner}</svg>`;
+  };
+  switch (platform) {
+    case 'facebook':
+      return wrap('<path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>');
+    case 'twitter':
+      return wrap('<path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>');
+    case 'instagram':
+      return wrap(
+        `<rect x="2" y="2" width="20" height="20" rx="5" ry="5" stroke="${c}" stroke-width="2" fill="none"/>` +
+        `<circle cx="12" cy="12" r="4" stroke="${c}" stroke-width="2" fill="none"/>` +
+        `<circle cx="17.5" cy="6.5" r="0.9" fill="${c}"/>`,
+        { fill: false },
+      );
+    case 'tiktok':
+      return wrap('<path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.83a8.18 8.18 0 0 0 4.77 1.53V6.92a4.85 4.85 0 0 1-1-.23z"/>');
+    case 'pinterest':
+      return wrap('<path d="M12 0C5.373 0 0 5.373 0 12c0 5.084 3.163 9.426 7.627 11.174-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 0 1 .083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0z"/>');
+    case 'linkedin':
+      return wrap('<path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6zM2 9h4v12H2z"/><circle cx="4" cy="4" r="2"/>');
+    case 'youtube':
+      return wrap('<path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 0 0-1.95 1.96A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58A2.78 2.78 0 0 0 3.41 19.6C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 0 0 1.95-1.95A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="#ffffff"/>');
+    case 'threads':
+      return wrap('<path d="M17.65 11.13c-.07-.04-.16-.07-.24-.1-.13-2.43-1.46-3.83-3.69-3.84a3.9 3.9 0 0 0-3.27 1.66l1.21.82a2.45 2.45 0 0 1 2.05-1.05c.95 0 1.66.32 2.06.92.27.42.43.96.5 1.59-.6-.1-1.24-.13-1.92-.09-1.94.11-3.18 1.24-3.1 2.81.04.79.43 1.47 1.11 1.91a3.4 3.4 0 0 0 1.96.5c.91-.05 1.62-.4 2.13-1.03.38-.49.62-1.12.74-1.92.49.3.85.69 1.05 1.16.34.81.36 2.13-.72 3.21-.95.95-2.09 1.36-3.81 1.37-1.91-.02-3.36-.63-4.31-1.83-.89-1.13-1.36-2.75-1.37-4.83.02-2.07.48-3.7 1.37-4.83.95-1.2 2.4-1.81 4.31-1.83 1.93.01 3.39.63 4.34 1.83.47.6.82 1.34 1.04 2.21l1.41-.39a8.46 8.46 0 0 0-1.31-2.71C19.06 3.34 17.16 2.51 14.79 2.5h-.01c-2.36.02-4.22.85-5.55 2.5C8.04 6.46 7.43 8.5 7.4 11l0 .01 0 .01c.03 2.5.64 4.54 1.83 6 1.33 1.65 3.19 2.49 5.55 2.51h.01c2.1-.01 3.58-.57 4.81-1.79 1.6-1.6 1.55-3.6.74-4.83-.36-.55-.86-1.02-1.5-1.36zm-3.83 3.06c-.62.04-1.27-.24-1.31-.97-.03-.55.39-1.16 1.69-1.23.15-.01.3-.01.44-.01.46 0 .89.04 1.28.13-.15 1.81-1.01 2.04-2.1 2.08z"/>');
+    case 'website':
+      return wrap(
+        `<circle cx="12" cy="12" r="10" stroke="${c}" stroke-width="2" fill="none"/>` +
+        `<line x1="2" y1="12" x2="22" y2="12" stroke="${c}" stroke-width="2"/>` +
+        `<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" stroke="${c}" stroke-width="2" fill="none"/>`,
+        { fill: false },
+      );
+    default:
+      return '';
+  }
+}
+
+function isDarkColor(hex: string): boolean {
+  const m = hex.replace('#', '');
+  if (m.length !== 6) return true;
+  const r = parseInt(m.slice(0, 2), 16);
+  const g = parseInt(m.slice(2, 4), 16);
+  const b = parseInt(m.slice(4, 6), 16);
+  const luma = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return luma < 0.55;
+}
+
 export type MergeFieldRecord = Record<string, string>;
 
 export function mergeMarketingFields(template: string, vars: MergeFieldRecord): string {
@@ -229,26 +283,42 @@ function renderBlock(block: EmailBlock, theme: ReturnType<typeof mergeEmailTheme
       return `<tr><td style="${box}${align};">${linked}${titleHtml}</td></tr>`;
     }
     case 'social': {
+      // The block's `socialLinks` are populated at render time from
+      // venues.brand_socials (see marketing-email-injection). If the venue
+      // hasn't configured any links, we hide the block entirely so recipients
+      // never see a placeholder.
       const links = (block.socialLinks ?? []).filter((l) => l.url?.trim());
       if (links.length === 0) {
-        return `<tr><td style="${box}text-align:center;color:${theme.mutedColor};font-size:13px;font-family:${theme.fontFamily};">[Add social links in editor]</td></tr>`;
+        return '';
       }
-      const labelFor = (p: string) => {
-        const k = p.toLowerCase();
-        if (k.includes('instagram')) return 'Instagram';
-        if (k.includes('facebook')) return 'Facebook';
-        if (k.includes('twitter') || k === 'x') return 'X';
-        if (k.includes('tiktok')) return 'TikTok';
-        if (k.includes('youtube')) return 'YouTube';
-        if (k.includes('linkedin')) return 'LinkedIn';
-        if (k.includes('pinterest')) return 'Pinterest';
-        if (k.includes('threads')) return 'Threads';
-        return p.charAt(0).toUpperCase() + p.slice(1);
-      };
-      const items = links
-        .map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:6px 12px;margin:0 4px;border-radius:999px;border:1px solid ${theme.mutedColor};color:${theme.textColor};font-size:12px;font-family:${theme.fontFamily};text-decoration:none;">${esc(labelFor(l.platform))}</a>`)
-        .join('');
-      return `<tr><td style="${box}text-align:center;">${items}</td></tr>`;
+      const styleKind = block.socialIconStyle ?? 'outline';
+      const sizeKey = block.socialIconSize ?? 'md';
+      const spacing = Math.max(0, Math.min(40, block.socialIconSpacing ?? 10));
+      const color = block.color ?? theme.textColor;
+      const aAlign = block.align === 'left' ? 'left' : block.align === 'right' ? 'right' : 'center';
+
+      const sizeMap = { sm: { outer: 24, inner: 14 }, md: { outer: 32, inner: 18 }, lg: { outer: 44, inner: 26 } } as const;
+      const { outer, inner } = sizeMap[sizeKey];
+
+      // For email clients we use an inline-table approach (more reliable than
+      // flex). Each icon sits in its own <td> so spacing is delivered as
+      // padding on the cells.
+      const halfGap = Math.round(spacing / 2);
+      const cells = links.map((l) => {
+        let wrapperStyle = `width:${outer}px;height:${outer}px;line-height:0;text-align:center;vertical-align:middle;mso-line-height-rule:exactly;`;
+        let glyphColor = color;
+        if (styleKind === 'filled-circle') {
+          wrapperStyle += `background:${color};border-radius:${outer}px;`;
+          glyphColor = isDarkColor(color) ? '#ffffff' : '#000000';
+        } else if (styleKind === 'circle-outline') {
+          wrapperStyle += `border:1.5px solid ${color};border-radius:${outer}px;box-sizing:border-box;`;
+        }
+        const svg = socialIconSvg(l.platform, inner, glyphColor);
+        return `<td style="padding:0 ${halfGap}px;"><a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;line-height:0;"><span style="${wrapperStyle}display:inline-block;">${svg}</span></a></td>`;
+      }).join('');
+
+      const inner2 = `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="${aAlign}" style="border-collapse:collapse;"><tr>${cells}</tr></table>`;
+      return `<tr><td style="${box}text-align:${aAlign};">${inner2}</td></tr>`;
     }
     case 'address': {
       // Filled at runtime via mergeMarketingFields — vars contain venue_name, venue_full_address, etc.

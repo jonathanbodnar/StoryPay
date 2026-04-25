@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Loader2, Save, Upload, ImageIcon, X, CheckCircle2, FileText, Link2, FileBadge, Mail, Globe, FolderOpen, Plus, Palette } from 'lucide-react';
+import { Loader2, Save, Upload, ImageIcon, X, CheckCircle2, FileText, Link2, FileBadge, Mail, Globe, FolderOpen, Plus, Palette, Share2, ExternalLink } from 'lucide-react';
 import { VenueMediaPickerModal } from '@/components/venue-media/VenueMediaPickerModal';
 import { TimezoneSelect } from '@/components/TimezoneSelect';
 import { DEFAULT_VENUE_TIMEZONE, resolveVenueTimezone } from '@/lib/venue-timezone';
 import { useBrandColors } from '@/lib/use-brand-colors';
+import { useBrandSocials, SOCIAL_PLATFORM_DEFS } from '@/lib/use-brand-socials';
 
 const COLOR_PRESETS = [
  { label: 'Default', primary: '#1b1b1b', bg: '#ffffff', btnText: '#ffffff' },
@@ -110,6 +111,94 @@ function BrandColorsCard() {
             {alreadySaved ? 'Saved' : 'Add'}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Social Networks Card ────────────────────────────────────────────────────
+// Lets the venue paste their social URLs once. The marketing email "Social
+// Links" block reads from this list — there is no per-block link list, by
+// design (mirrors the address block: edit once, reuse everywhere).
+function BrandSocialsCard() {
+  const { socials, setUrl } = useBrandSocials();
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const debouncers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  // Hydrate drafts from server-saved values whenever the cache updates
+  useEffect(() => {
+    const next: Record<string, string> = {};
+    for (const s of socials) next[s.platform] = s.url;
+    setDrafts(prev => ({ ...next, ...prev })); // keep in-flight edits on top
+    // Only re-run when the saved socials list identity changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socials.map(s => `${s.platform}:${s.url}`).join('|')]);
+
+  const onChange = (platform: string, raw: string) => {
+    setDrafts(d => ({ ...d, [platform]: raw }));
+    if (debouncers.current[platform]) clearTimeout(debouncers.current[platform]);
+    debouncers.current[platform] = setTimeout(() => {
+      void setUrl(platform, raw);
+    }, 600);
+  };
+
+  const filledCount = socials.filter(s => s.url.trim()).length;
+
+  return (
+    <div id="social-networks" className="scroll-mt-24 rounded-2xl border border-gray-200 bg-white overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+            <Share2 size={16} className="text-gray-500" />
+            Social Networks
+          </h2>
+          <p className="text-xs text-gray-400 mt-0.5">Paste your URLs once — every Social Links email block uses these.</p>
+        </div>
+        <span className="text-[11px] font-medium text-gray-400">{filledCount} linked</span>
+      </div>
+      <div className="px-6 py-5 space-y-3">
+        {SOCIAL_PLATFORM_DEFS.map(({ id, label, placeholder }) => {
+          const value = drafts[id] ?? '';
+          const isFilled = value.trim().length > 0;
+          return (
+            <div key={id} className="flex items-center gap-3">
+              <span className="w-24 flex-shrink-0 text-xs font-semibold text-gray-700">{label}</span>
+              <div className={`flex flex-1 items-center gap-2 rounded-2xl border px-3 py-2 transition-colors ${isFilled ? 'border-gray-200 bg-white' : 'border-gray-200 bg-gray-50'} focus-within:border-gray-400 focus-within:bg-white`}>
+                <input
+                  type="url"
+                  value={value}
+                  onChange={(e) => onChange(id, e.target.value)}
+                  placeholder={placeholder}
+                  className="flex-1 bg-transparent text-sm text-gray-900 focus:outline-none placeholder:text-gray-400"
+                />
+                {isFilled ? (
+                  <a
+                    href={value}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Open link"
+                    className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                  >
+                    <ExternalLink size={12} />
+                  </a>
+                ) : null}
+                {isFilled ? (
+                  <button
+                    type="button"
+                    onClick={() => onChange(id, '')}
+                    title="Remove"
+                    className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                  >
+                    <X size={12} />
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+        <p className="pt-1 text-[11px] text-gray-400">
+          We auto-prefix <span className="font-mono">https://</span> if you forget. Empty rows are removed automatically.
+        </p>
       </div>
     </div>
   );
@@ -535,6 +624,9 @@ export default function BrandingPage() {
 
 {/* Brand Colors — palette saved across every color picker */}
 <BrandColorsCard />
+
+{/* Social Networks — used by the marketing email Social Links block */}
+<BrandSocialsCard />
 
 {/* Time zone — scheduling & calendar */}
  <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">

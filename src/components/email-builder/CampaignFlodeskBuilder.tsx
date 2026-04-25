@@ -11,7 +11,7 @@ import {
   Italic, Link2, List, ListOrdered, Loader2, Lock, Minus, Monitor,
   Paperclip, PenLine, Pipette, Plus, Send, SeparatorHorizontal, Smartphone,
   Space, Strikethrough, Trash2, Type, Underline, Upload as UploadIcon, X as XIcon,
-  MousePointer2, Palette, Redo2, Undo2, Video, Share2, MapPin, Search, Zap,
+  MousePointer2, Palette, Redo2, Undo2, Video, Share2, MapPin, Search, Zap, ExternalLink,
 } from 'lucide-react';
 import {
   DndContext,
@@ -72,6 +72,7 @@ import {
   mergeEmailTheme,
 } from '@/lib/marketing-email-schema';
 import { renderMarketingEmailHtml, type MergeFieldRecord } from '@/lib/marketing-email-render';
+import { injectVenueDataIntoDefinition } from '@/lib/marketing-email-injection';
 import { useBrandColors } from '@/lib/use-brand-colors';
 import { parseVideoUrl } from '@/lib/video-providers';
 
@@ -113,17 +114,6 @@ function PaletteCard({ type, label, desc, Icon }: typeof PALETTE[number]) {
   );
 }
 
-// ─── Social platform definitions ─────────────────────────────────────────────
-const SOCIAL_PLATFORMS = [
-  { id: 'facebook',  label: 'Facebook',    color: '#1877F2' },
-  { id: 'instagram', label: 'Instagram',   color: '#E1306C' },
-  { id: 'youtube',   label: 'YouTube',     color: '#FF0000' },
-  { id: 'tiktok',    label: 'TikTok',      color: '#010101' },
-  { id: 'pinterest', label: 'Pinterest',   color: '#E60023' },
-  { id: 'linkedin',  label: 'LinkedIn',    color: '#0A66C2' },
-  { id: 'twitter',   label: 'X / Twitter', color: '#000000' },
-] as const;
-
 // ─── Social SVG icons (monochrome, matched to Flodesk style) ─────────────────
 function SocialIcon({ platform, size = 18, color = '#18181b' }: { platform: string; size?: number; color?: string }) {
   switch (platform) {
@@ -164,6 +154,18 @@ function SocialIcon({ platform, size = 18, color = '#18181b' }: { platform: stri
       <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
         <path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 0 0-1.95 1.96A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58A2.78 2.78 0 0 0 3.41 19.6C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 0 0 1.95-1.95A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z" />
         <polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="white" />
+      </svg>
+    );
+    case 'threads': return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+        <path d="M17.65 11.13c-.07-.04-.16-.07-.24-.1-.13-2.43-1.46-3.83-3.69-3.84a3.9 3.9 0 0 0-3.27 1.66l1.21.82a2.45 2.45 0 0 1 2.05-1.05c.95 0 1.66.32 2.06.92.27.42.43.96.5 1.59-.6-.1-1.24-.13-1.92-.09-1.94.11-3.18 1.24-3.1 2.81.04.79.43 1.47 1.11 1.91a3.4 3.4 0 0 0 1.96.5c.91-.05 1.62-.4 2.13-1.03.38-.49.62-1.12.74-1.92.49.3.85.69 1.05 1.16.34.81.36 2.13-.72 3.21-.95.95-2.09 1.36-3.81 1.37-1.91-.02-3.36-.63-4.31-1.83-.89-1.13-1.36-2.75-1.37-4.83.02-2.07.48-3.7 1.37-4.83.95-1.2 2.4-1.81 4.31-1.83 1.93.01 3.39.63 4.34 1.83.47.6.82 1.34 1.04 2.21l1.41-.39a8.46 8.46 0 0 0-1.31-2.71C19.06 3.34 17.16 2.51 14.79 2.5h-.01c-2.36.02-4.22.85-5.55 2.5C8.04 6.46 7.43 8.5 7.4 11l0 .01 0 .01c.03 2.5.64 4.54 1.83 6 1.33 1.65 3.19 2.49 5.55 2.51h.01c2.1-.01 3.58-.57 4.81-1.79 1.6-1.6 1.55-3.6.74-4.83-.36-.55-.86-1.02-1.5-1.36zm-3.83 3.06c-.62.04-1.27-.24-1.31-.97-.03-.55.39-1.16 1.69-1.23.15-.01.3-.01.44-.01.46 0 .89.04 1.28.13-.15 1.81-1.01 2.04-2.1 2.08z" />
+      </svg>
+    );
+    case 'website': return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <line x1="2" y1="12" x2="22" y2="12" />
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
       </svg>
     );
     default: return null;
@@ -236,6 +238,9 @@ type VenueAddress = {
   location_city?: string | null;
   location_state?: string | null;
 };
+
+// ─── Venue social-network links (managed in branding settings) ────────────────
+type VenueSocial = { platform: string; url: string };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
@@ -1564,24 +1569,75 @@ function VideoCanvas({ block, theme, onPatch }: { block: EmailBlock; theme: Retu
   );
 }
 
-function SocialCanvas({ block, theme }: { block: EmailBlock; theme: ReturnType<typeof mergeEmailTheme> }) {
-  const links = (block.socialLinks ?? []).filter(l => l.url?.trim());
+// Pixel sizes for the three social-icon size tokens. Outer dimension matches the
+// Flodesk reference: small ~24px, medium ~32px, large ~44px.
+const SOCIAL_SIZES = {
+  sm: { outer: 24, inner: 14 },
+  md: { outer: 32, inner: 18 },
+  lg: { outer: 44, inner: 26 },
+} as const;
+
+function SocialCanvas({ block, theme, venueSocials }: { block: EmailBlock; theme: ReturnType<typeof mergeEmailTheme>; venueSocials?: VenueSocial[] }) {
+  // The block's `socialLinks` are populated at render time from the venue's
+  // brand_socials. In the live editor we read directly from the prop instead
+  // (the block itself never persists URLs).
+  const links = (venueSocials ?? []).filter(l => l.url?.trim());
+  const align = block.align ?? 'center';
+  const style = block.socialIconStyle ?? 'outline';
+  const sizeKey = block.socialIconSize ?? 'md';
+  const spacing = block.socialIconSpacing ?? 10;
+  const color = block.color ?? theme.textColor;
+  const justify = align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center';
+
   if (links.length === 0) {
     return (
       <div style={{ ...blockPaddingStyle(block), textAlign: 'center', color: theme.mutedColor, fontSize: '13px', fontFamily: theme.fontFamily }}>
-        Add your social links in the panel →
+        Add social network links in your <span style={{ fontWeight: 600, color: theme.textColor }}>Branding settings</span> to populate this block.
       </div>
     );
   }
+
+  const { outer, inner } = SOCIAL_SIZES[sizeKey];
+
   return (
-    <div style={{ ...blockPaddingStyle(block), display: 'flex', gap: '18px', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
-      {links.map((link) => (
-        <span key={link.platform} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', opacity: 0.75 }}>
-          <SocialIcon platform={link.platform} size={20} color={theme.textColor} />
-        </span>
-      ))}
+    <div style={{ ...blockPaddingStyle(block), display: 'flex', gap: `${spacing}px`, justifyContent: justify, alignItems: 'center', flexWrap: 'wrap' }}>
+      {links.map((link) => {
+        const wrapperStyle: React.CSSProperties = {
+          width: outer,
+          height: outer,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderRadius: '50%',
+        };
+        if (style === 'filled-circle') {
+          wrapperStyle.backgroundColor = color;
+        } else if (style === 'circle-outline') {
+          wrapperStyle.border = `1.5px solid ${color}`;
+        }
+        const iconColor = style === 'filled-circle'
+          ? (isDark(color) ? '#ffffff' : '#000000')
+          : color;
+        return (
+          <span key={link.platform} style={wrapperStyle}>
+            <SocialIcon platform={link.platform} size={inner} color={iconColor} />
+          </span>
+        );
+      })}
     </div>
   );
+}
+
+// Decide whether the icon glyph inside a filled chip should render light or
+// dark based on the chip background — keeps icons visible on any color.
+function isDark(hex: string): boolean {
+  const m = hex.replace('#', '');
+  if (m.length !== 6) return true;
+  const r = parseInt(m.slice(0, 2), 16);
+  const g = parseInt(m.slice(2, 4), 16);
+  const b = parseInt(m.slice(4, 6), 16);
+  const luma = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return luma < 0.55;
 }
 
 function AddressCanvas({ block, venueAddress, theme }: { block: EmailBlock; venueAddress?: VenueAddress; theme: ReturnType<typeof mergeEmailTheme> }) {
@@ -1628,14 +1684,14 @@ function AddressCanvas({ block, venueAddress, theme }: { block: EmailBlock; venu
   );
 }
 
-function BlockCanvas({ block, theme, venueAddress, onPatch }: { block: EmailBlock; theme: ReturnType<typeof mergeEmailTheme>; venueAddress?: VenueAddress; onPatch?: (p: Partial<EmailBlock>) => void }) {
+function BlockCanvas({ block, theme, venueAddress, venueSocials, onPatch }: { block: EmailBlock; theme: ReturnType<typeof mergeEmailTheme>; venueAddress?: VenueAddress; venueSocials?: VenueSocial[]; onPatch?: (p: Partial<EmailBlock>) => void }) {
   switch (block.type) {
     case 'heading': return <HeadingCanvas block={block} theme={theme} onPatch={onPatch} />;
     case 'text':    return <TextCanvas block={block} theme={theme} onPatch={onPatch} />;
     case 'button':  return <ButtonCanvas block={block} theme={theme} onPatch={onPatch} />;
     case 'image':   return <ImageCanvas block={block} theme={theme} />;
     case 'video':   return <VideoCanvas block={block} theme={theme} onPatch={onPatch} />;
-    case 'social':  return <SocialCanvas block={block} theme={theme} />;
+    case 'social':  return <SocialCanvas block={block} theme={theme} venueSocials={venueSocials} />;
     case 'address': return <AddressCanvas block={block} venueAddress={venueAddress} theme={theme} />;
     case 'divider': return <DividerCanvas block={block} />;
     case 'spacer':  return <SpacerCanvas block={block} />;
@@ -3195,11 +3251,13 @@ function BlockInspectorPanel({
   theme,
   onChange,
   onMediaPick,
+  venueSocials,
 }: {
   block: EmailBlock;
   theme: ReturnType<typeof mergeEmailTheme>;
   onChange: (patch: Partial<EmailBlock>) => void;
   onMediaPick: (apply: (url: string) => void, mode?: 'image' | 'file' | 'all') => void;
+  venueSocials?: VenueSocial[];
 }) {
   const LABEL = 'block text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1';
   const INPUT = 'w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:bg-white focus:outline-none transition-colors';
@@ -3212,11 +3270,14 @@ function BlockInspectorPanel({
   // Address block has 3 tabs (Font / Address / Block) — separate state so it isn't
   // forced through the 2-tab `subTab` state shape.
   const [addressTab, setAddressTab] = useState<'font' | 'address' | 'block'>('address');
+  // Social block has 3 tabs (Icons / Links / Block). Same pattern as address.
+  const [socialTab, setSocialTab] = useState<'icons' | 'links' | 'block'>('icons');
   const [prevBlockId, setPrevBlockId] = useState(block.id);
   if (prevBlockId !== block.id) {
     setPrevBlockId(block.id);
     setSubTab('primary');
     setAddressTab('address');
+    setSocialTab('icons');
   }
 
   // Reusable Block-tab content (background + padding sliders).
@@ -3472,56 +3533,165 @@ function BlockInspectorPanel({
   }
 
   if (block.type === 'social') {
-    const links = block.socialLinks ?? [];
-    const isEnabled = (platform: string) => links.some(l => l.platform === platform);
-    const getUrl    = (platform: string) => links.find(l => l.platform === platform)?.url ?? '';
-    const toggle    = (platform: string) => {
-      if (isEnabled(platform)) {
-        onChange({ socialLinks: links.filter(l => l.platform !== platform) });
-      } else {
-        onChange({ socialLinks: [...links, { platform, url: '' }] });
-      }
+    const SOCIAL_TAB = (id: typeof socialTab, label: string) => (
+      <button
+        key={id}
+        type="button"
+        onClick={() => setSocialTab(id)}
+        className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${socialTab === id ? 'text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}
+      >
+        {label}
+        {socialTab === id && <span className="absolute left-1/2 -translate-x-1/2 bottom-0 h-[2px] w-12 bg-gray-900 rounded-full" />}
+      </button>
+    );
+
+    const iconStyle = block.socialIconStyle ?? 'outline';
+    const sizeKey = block.socialIconSize ?? 'md';
+    const spacing = block.socialIconSpacing ?? 10;
+    const color = block.color ?? '#000000';
+    const align = block.align ?? 'center';
+    const linkedSocials = (venueSocials ?? []).filter(s => s.url?.trim());
+    const linkedCount = linkedSocials.length;
+
+    // ── Style swatch (circle preview matching the chosen render style) ──
+    const StyleSwatch = ({ kind, label }: { kind: NonNullable<EmailBlock['socialIconStyle']>; label: string }) => {
+      const active = iconStyle === kind;
+      const swatch: React.CSSProperties = {
+        width: 28,
+        height: 28,
+        borderRadius: '50%',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      };
+      if (kind === 'filled-circle') swatch.backgroundColor = color;
+      else if (kind === 'circle-outline') swatch.border = `1.5px solid ${color}`;
+      const inner = kind === 'filled-circle' ? (isDark(color) ? '#ffffff' : '#000000') : color;
+      return (
+        <button
+          type="button"
+          onClick={() => onChange({ socialIconStyle: kind })}
+          className={`flex flex-col items-center gap-1.5 px-3 py-2 rounded-xl transition-colors ${active ? 'bg-gray-100' : 'hover:bg-gray-50'}`}
+        >
+          <span style={swatch}>
+            <SocialIcon platform="instagram" size={16} color={inner} />
+          </span>
+          <span className={`text-[11px] font-medium ${active ? 'text-gray-900' : 'text-gray-500'}`}>{label}</span>
+        </button>
+      );
     };
-    const setUrl = (platform: string, url: string) => {
-      onChange({ socialLinks: links.map(l => l.platform === platform ? { ...l, url } : l) });
+
+    const SizeChip = ({ k, label }: { k: NonNullable<EmailBlock['socialIconSize']>; label: string }) => {
+      const active = sizeKey === k;
+      return (
+        <button
+          type="button"
+          onClick={() => onChange({ socialIconSize: k })}
+          className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${active ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+        >
+          {label}
+        </button>
+      );
     };
+
     return (
       <div>
-        {renderSubTabBar('Social')}
-        {subTab === 'primary' && (
-          <div className="space-y-3">
-            {SOCIAL_PLATFORMS.map(({ id, label, color }) => {
-              const enabled = isEnabled(id);
-              return (
-                <div key={id}>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-2">
-                      <div className="h-3.5 w-3.5 rounded-full flex-shrink-0" style={{ background: color }} />
-                      <span className="text-xs font-semibold text-gray-700">{label}</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => toggle(id)}
-                      className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors ${enabled ? 'bg-gray-900' : 'bg-gray-200'}`}
-                    >
-                      <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform ${enabled ? 'translate-x-4' : 'translate-x-0'}`} />
-                    </button>
-                  </div>
-                  {enabled && (
-                    <input
-                      type="url"
-                      className={INPUT}
-                      value={getUrl(id)}
-                      onChange={(e) => setUrl(id, e.target.value)}
-                      placeholder={`https://${id}.com/yourpage`}
-                    />
-                  )}
-                </div>
-              );
-            })}
+        {/* 3-tab bar: Icons / Links / Block */}
+        <div className="flex border-b border-gray-100 -mx-5 mb-5 px-2 bg-gray-50/50">
+          {SOCIAL_TAB('icons', 'Icons')}
+          {SOCIAL_TAB('links', 'Links')}
+          {SOCIAL_TAB('block', 'Block')}
+        </div>
+
+        {/* ─── ICONS TAB ─── */}
+        {socialTab === 'icons' && (
+          <div className="space-y-5">
+            <div>
+              <p className={LABEL}>Style</p>
+              <div className="flex items-center gap-2">
+                <StyleSwatch kind="outline" label="Outline" />
+                <StyleSwatch kind="filled-circle" label="Filled" />
+                <StyleSwatch kind="circle-outline" label="Solid" />
+              </div>
+            </div>
+
+            <div>
+              <p className={LABEL}>Color</p>
+              <FlodeskColorPicker
+                value={color}
+                onChange={(v) => onChange({ color: v })}
+              />
+            </div>
+
+            <div>
+              <p className={LABEL}>Size</p>
+              <div className="flex items-center gap-2">
+                <SizeChip k="sm" label="S" />
+                <SizeChip k="md" label="M" />
+                <SizeChip k="lg" label="L" />
+              </div>
+            </div>
+
+            <AlignSelector value={align} onChange={(v) => onChange({ align: v })} label="Position" />
+
+            <div>
+              <SliderControl
+                label="Spacing"
+                value={spacing}
+                min={0} max={40} step={1}
+                display={`${spacing}`}
+                onChange={(v) => onChange({ socialIconSpacing: v })}
+              />
+            </div>
           </div>
         )}
-        {subTab === 'block' && renderBlockTab()}
+
+        {/* ─── LINKS TAB ─── */}
+        {socialTab === 'links' && (
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 pt-4 pb-3 text-center">
+              <Share2 size={22} className="mx-auto text-gray-500" />
+              <p className="mt-2 text-[15px] font-semibold text-gray-900 leading-snug">
+                Manage your social network links
+              </p>
+              <p className="mt-1 text-[12px] text-gray-500 leading-snug max-w-[260px] mx-auto">
+                Edit once in Branding — every Social Links block in every email reads from the same list.
+              </p>
+              <a
+                href="/dashboard/settings/branding#social-networks"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold text-white hover:opacity-90 transition-opacity"
+                style={{ backgroundColor: '#1b1b1b' }}
+              >
+                <ExternalLink size={12} />
+                Manage in branding
+              </a>
+            </div>
+
+            <div>
+              <p className={LABEL}>{linkedCount} link{linkedCount === 1 ? '' : 's'} active</p>
+              {linkedCount === 0 ? (
+                <div className="rounded-xl border border-gray-200 bg-white px-3 py-3 text-xs text-gray-500">
+                  No social links configured yet. Add at least one in branding settings to make this block visible to recipients.
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  {linkedSocials.map((s) => (
+                    <div key={s.platform} className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2">
+                      <SocialIcon platform={s.platform} size={14} color="#374151" />
+                      <span className="text-xs font-semibold text-gray-700 capitalize w-20 flex-shrink-0">{s.platform}</span>
+                      <span className="text-xs text-gray-500 truncate flex-1" title={s.url}>{s.url}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ─── BLOCK TAB (padding/bg) ─── */}
+        {socialTab === 'block' && renderBlockTab()}
       </div>
     );
   }
@@ -3657,6 +3827,7 @@ function PreviewModal({
   subject,
   preheader,
   venueAddress,
+  venueSocials,
   campaignId,
   onClose,
   onForceSave,
@@ -3665,6 +3836,7 @@ function PreviewModal({
   subject: string;
   preheader: string;
   venueAddress?: VenueAddress;
+  venueSocials?: VenueSocial[];
   campaignId: string;
   onClose: () => void;
   onForceSave: () => Promise<void>;
@@ -3696,10 +3868,12 @@ function PreviewModal({
     guest_count: '120',
   };
 
-  // Re-render iframe srcDoc whenever the definition changes
+  // Re-render iframe srcDoc whenever the definition changes. We inflate the
+  // definition with the venue's brand_socials first so the preview matches what
+  // the recipient will see.
   const srcDoc = (() => {
-    const html = renderMarketingEmailHtml(definition, previewVars);
-    // Inject base target so links open in a new tab from inside the iframe
+    const inflated = injectVenueDataIntoDefinition(definition, venueSocials ?? []);
+    const html = renderMarketingEmailHtml(inflated, previewVars);
     return html.replace(
       '<head>',
       '<head><base target="_blank" />',
@@ -3851,6 +4025,7 @@ export function CampaignFlodeskBuilder({
   initialPreheader,
   initialDefinition,
   venueAddress,
+  venueSocials,
 }: {
   campaignId: string;
   templateId: string;
@@ -3859,6 +4034,7 @@ export function CampaignFlodeskBuilder({
   initialPreheader: string;
   initialDefinition: MarketingEmailDefinition;
   venueAddress?: VenueAddress;
+  venueSocials?: VenueSocial[];
 }) {
   const [name, setName]           = useState(initialName);
   const [subject, setSubject]     = useState(initialSubject);
@@ -4316,7 +4492,7 @@ export function CampaignFlodeskBuilder({
                                   }
                                 }}
                               >
-                                <BlockCanvas block={block} theme={theme} venueAddress={venueAddress} onPatch={(p) => patchBlock(block.id, p)} />
+                                <BlockCanvas block={block} theme={theme} venueAddress={venueAddress} venueSocials={venueSocials} onPatch={(p) => patchBlock(block.id, p)} />
                               </div>
 
                               {/* Floating side toolbar — pill, right edge, visible on select or hover */}
@@ -4437,6 +4613,7 @@ export function CampaignFlodeskBuilder({
               <BlockInspectorPanel
                 block={selectedBlock}
                 theme={theme}
+                venueSocials={venueSocials}
                 onChange={(patch) => patchBlock(selectedBlock.id, patch)}
                 onMediaPick={(apply, mode = 'image') => {
                   mediaApplyRef.current = apply;
@@ -4546,6 +4723,7 @@ export function CampaignFlodeskBuilder({
           subject={subject}
           preheader={preheader}
           venueAddress={venueAddress}
+          venueSocials={venueSocials}
           campaignId={campaignId}
           onClose={() => setPreviewOpen(false)}
           onForceSave={async () => {

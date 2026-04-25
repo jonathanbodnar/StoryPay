@@ -27,8 +27,15 @@ export interface EmailBlock {
   /** For type `columns` — two stacks of inner blocks (email-client safe table layout). */
   left?: EmailBlock[];
   right?: EmailBlock[];
-  /** For type `social` — list of enabled platform links */
+  /** For type `social` — list of enabled platform links. Populated from
+   * venue.brand_socials at render time; not user-editable on the block itself. */
   socialLinks?: { platform: string; url: string }[];
+  /** Visual style of the social icons. */
+  socialIconStyle?: 'outline' | 'filled-circle' | 'circle-outline';
+  /** Tap-target size: small / medium / large. */
+  socialIconSize?: 'sm' | 'md' | 'lg';
+  /** Gap between icons in px (default 10). */
+  socialIconSpacing?: number;
   /** Per-block font overrides */
   fontFamily?: string;
   fontWeight?: string;
@@ -269,7 +276,19 @@ export function createEmailBlock(type: EmailBlockType): EmailBlock {
         paddingRight: 24,
       };
     case 'social':
-      return { id, type, socialLinks: [] };
+      return {
+        id, type,
+        socialLinks: [],
+        socialIconStyle: 'outline',
+        socialIconSize: 'md',
+        socialIconSpacing: 10,
+        align: 'center',
+        color: '#000000',
+        paddingTop: 20,
+        paddingBottom: 20,
+        paddingLeft: 24,
+        paddingRight: 24,
+      };
     case 'address':
       return { id, type };
     default:

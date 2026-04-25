@@ -7,6 +7,7 @@ import {
   type MarketingEmailDefinition,
 } from '@/lib/marketing-email-schema';
 import { mergeMarketingFields, renderMarketingEmailHtml, type MergeFieldRecord } from '@/lib/marketing-email-render';
+import { injectVenueDataIntoDefinition } from '@/lib/marketing-email-injection';
 import { resolveCampaignRecipients } from '@/lib/marketing-email-audience';
 import { signMarketingOpenToken, signMarketingUnsubscribeToken } from '@/lib/marketing-email-tokens';
 import { addCalendarDaysYmd, resolveVenueTimezone } from '@/lib/venue-timezone';
@@ -335,7 +336,27 @@ async function sendTemplateToLead(
     .eq('lead_id', leadId)
     .maybeSingle();
   if (sup) return { ok: false, error: 'suppressed' };
-  let html = renderMarketingEmailHtml(definition, vars);
+  // Pull venue's saved social network links and inject them into any social
+  // blocks in the definition. The block schema doesn't store URLs per-block —
+  // they live exclusively in `venues.brand_socials`.
+  const { data: venueSocialsRow } = await supabaseAdmin
+    .from('venues')
+    .select('brand_socials')
+    .eq('id', venueId)
+    .maybeSingle();
+  const rawSocials = (venueSocialsRow as { brand_socials?: unknown } | null)?.brand_socials;
+  const venueSocials = Array.isArray(rawSocials)
+    ? rawSocials
+        .map((s): { platform: string; url: string } | null => {
+          if (!s || typeof s !== 'object') return null;
+          const p = String((s as { platform?: unknown }).platform ?? '').trim().toLowerCase();
+          const u = String((s as { url?: unknown }).url ?? '').trim();
+          return p && u ? { platform: p, url: u } : null;
+        })
+        .filter((s): s is { platform: string; url: string } => s !== null)
+    : [];
+  const inflatedDef = injectVenueDataIntoDefinition(definition, venueSocials);
+  let html = renderMarketingEmailHtml(inflatedDef, vars);
   if (opts?.campaignRecipientId) {
     const t = signMarketingOpenToken(opts.campaignRecipientId);
     const pixel = `${appOrigin.replace(/\/$/, '')}/api/public/marketing/email-open?t=${encodeURIComponent(t)}`;

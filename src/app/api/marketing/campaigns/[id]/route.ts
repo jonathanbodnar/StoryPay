@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import type { CampaignSegment } from '@/lib/marketing-email-schema';
 import { parseEmailDefinition } from '@/lib/marketing-email-schema';
 import { mergeMarketingFields, renderMarketingEmailHtml, type MergeFieldRecord } from '@/lib/marketing-email-render';
+import { injectVenueDataIntoDefinition } from '@/lib/marketing-email-injection';
 import { sendEmail } from '@/lib/email';
 import { buildMergeVars } from '@/lib/marketing-email-worker';
 
@@ -190,7 +191,7 @@ export async function POST(
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('name, location_full, location_city, location_state')
+    .select('name, location_full, location_city, location_state, brand_socials')
     .eq('id', venueId)
     .single();
   const appOrigin = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
@@ -219,7 +220,19 @@ export async function POST(
     if (merged) vars = merged;
   }
 
-  const def = parseEmailDefinition(tmpl.definition_json);
+  const rawSocials = (venue as { brand_socials?: unknown } | null)?.brand_socials;
+  const venueSocials = Array.isArray(rawSocials)
+    ? rawSocials
+        .map((s): { platform: string; url: string } | null => {
+          if (!s || typeof s !== 'object') return null;
+          const p = String((s as { platform?: unknown }).platform ?? '').trim().toLowerCase();
+          const u = String((s as { url?: unknown }).url ?? '').trim();
+          return p && u ? { platform: p, url: u } : null;
+        })
+        .filter((s): s is { platform: string; url: string } => s !== null)
+    : [];
+
+  const def = injectVenueDataIntoDefinition(parseEmailDefinition(tmpl.definition_json), venueSocials);
   const html = renderMarketingEmailHtml(def, vars);
   const subject = mergeMarketingFields(tmpl.subject as string, vars);
   const pre = mergeMarketingFields((tmpl.preheader as string) || '', vars);
