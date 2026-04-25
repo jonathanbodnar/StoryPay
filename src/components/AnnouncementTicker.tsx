@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { X } from 'lucide-react';
 
 interface Announcement {
   id: string;
@@ -10,9 +9,21 @@ interface Announcement {
   link_url: string | null;
 }
 
+// The announcement ticker is intentionally NOT dismissible from the venue
+// side — operators (super admins) need to be able to broadcast platform-wide
+// messages (downtime, new features, billing changes, compliance updates)
+// with confidence that every venue actually sees them.
+//
+// Visibility is controlled exclusively from the super admin dashboard
+// (Admin → Announcements → Activate/Deactivate). The active flag drives the
+// `get_active_announcements` RPC that this component reads, so a super admin
+// toggle is the single source of truth for "show this on every dashboard."
+//
+// If we ever want a venue-side opt-out it has to be a per-announcement
+// "dismissable" boolean set on the super admin side — never a client-only
+// dismiss as we used to have here.
 export default function AnnouncementTicker() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [dismissed, setDismissed]         = useState(false);
   const tickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -22,7 +33,7 @@ export default function AnnouncementTicker() {
       .catch(() => {});
   }, []);
 
-  if (!announcements.length || dismissed) return null;
+  if (!announcements.length) return null;
 
   // Build the ticker text — repeat items so it scrolls continuously
   const items = [...announcements, ...announcements];
@@ -34,8 +45,10 @@ export default function AnnouncementTicker() {
         <span className="text-[11px] font-semibold uppercase tracking-widest text-white/70 whitespace-nowrap">News</span>
       </div>
 
-      {/* Scrolling ticker */}
-      <div ref={tickerRef} className="flex-1 overflow-hidden relative" style={{ maskImage: 'linear-gradient(90deg, transparent, black 40px, black calc(100% - 40px), transparent)' }}>
+      {/* Scrolling ticker — fills the remaining space now that there's no
+          dismiss button. Right-side fade keeps the visual treatment from
+          before so the text doesn't hard-stop at the edge. */}
+      <div ref={tickerRef} className="flex-1 overflow-hidden relative pr-3" style={{ maskImage: 'linear-gradient(90deg, transparent, black 40px, black calc(100% - 40px), transparent)' }}>
         <div className="flex items-center whitespace-nowrap animate-ticker gap-16 py-2 px-4">
           {items.map((ann, i) => (
             <span key={`${ann.id}-${i}`} className="inline-flex items-center gap-2 text-white/90 text-xs">
@@ -55,14 +68,6 @@ export default function AnnouncementTicker() {
           ))}
         </div>
       </div>
-
-      {/* Dismiss */}
-      <button
-        onClick={() => setDismissed(true)}
-        className="flex-shrink-0 flex items-center justify-center self-center mx-2 h-5 w-5 rounded-full text-white/50 hover:text-white hover:bg-white/10 transition-colors"
-      >
-        <X size={12} />
-      </button>
 
       <style>{`
         @keyframes ticker {

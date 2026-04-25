@@ -164,6 +164,26 @@ Beneath the chart you'll see a status breakdown showing how many proposals are i
 
 The two tables at the bottom show your 5 most recent proposals (with links to view or edit) and your 5 most recent charges (with customer names and amounts).`,
       },
+      {
+        id: 'dash-announcement-ticker',
+        title: 'Announcement ticker — what it is and why you can\'t close it',
+        tags: ['announcement', 'ticker', 'news', 'banner', 'top bar', 'broadcast', 'platform updates'],
+        body: `The thin dark scrolling bar at the very top of every page (labelled "News") is the announcement ticker. It surfaces platform-wide messages from the StoryPay team — things like:
+
+- Scheduled maintenance windows and downtime notices
+- New feature launches and big changes to existing tools
+- Compliance / billing / legal updates that need every venue's attention
+- Time-sensitive operational notices (deliverability issues, integrations being retired, etc.)
+
+Why there's no "X" to close it
+The ticker is intentionally non-dismissible from the venue side. When the StoryPay team broadcasts something it's because every venue genuinely needs to see it, and a per-venue dismiss would mean important messages get hidden in the moments they matter most. There's no per-user "snooze" cookie — if you see it, every other user on your venue sees it too.
+
+Who can turn it off
+Only the StoryPay team can hide an announcement. Each announcement has an Active / Inactive toggle on the super admin dashboard; the moment a message is deactivated it disappears from every venue ticker on the next page load. Announcements are also rotated and replaced regularly, so the bar will feel fresh rather than static.
+
+Clicking the link in an announcement
+If a message has a link, clicking it opens the destination in a new tab (or the same tab, for in-app routes). Hovering anywhere over the scrolling text pauses the animation so you can read or click without chasing the message.`,
+      },
     ],
   },
   {

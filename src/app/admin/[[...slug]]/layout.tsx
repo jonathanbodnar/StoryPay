@@ -1661,7 +1661,7 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
             <div className="flex items-center justify-between mb-5">
               <div>
                 <h2 className="font-heading text-xl text-gray-900">Announcements</h2>
-                <p className="text-sm text-gray-500 mt-0.5">Active announcements show as a scrolling ticker on all venue dashboards</p>
+                <p className="text-sm text-gray-500 mt-0.5">Active announcements show as a scrolling ticker on every venue dashboard. Venues cannot dismiss the ticker — toggle <span className="font-semibold text-gray-700">Deactivate</span> on a row to remove it for everyone.</p>
               </div>
               {!showAnnForm && !editingAnn && (
                 <button onClick={() => setShowAnnForm(true)}
