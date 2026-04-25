@@ -503,29 +503,29 @@ function FloatingFormatBar() {
       ? (rangeNode as Text).parentElement
       : rangeNode as HTMLElement)?.closest('[data-email-editable]') as HTMLElement | null;
 
-    // Focus the contentEditable FIRST — execCommand('createLink') requires it
-    if (editable) editable.focus();
+    try {
+      // Build the anchor element directly — no execCommand, no focus juggling
+      const a = document.createElement('a');
+      a.href = fullUrl;
+      a.style.color = 'inherit';
+      if (newTab) { a.target = '_blank'; a.rel = 'noopener noreferrer'; }
 
-    // Restore the text selection
-    const sel = window.getSelection();
-    if (sel) { sel.removeAllRanges(); sel.addRange(savedRange.current); }
-
-    document.execCommand('createLink', false, fullUrl);
-
-    if (newTab) {
-      const sel2 = window.getSelection();
-      if (sel2 && sel2.rangeCount > 0) {
-        let node: Node | null = sel2.getRangeAt(0).commonAncestorContainer;
-        while (node && node.nodeName !== 'A') node = node.parentNode;
-        if (node?.nodeName === 'A') {
-          (node as HTMLAnchorElement).target = '_blank';
-          (node as HTMLAnchorElement).rel = 'noopener noreferrer';
-        }
+      // surroundContents wraps inline selections; falls back to extract+insert
+      // for selections that span multiple elements
+      try {
+        savedRange.current.surroundContents(a);
+      } catch {
+        const fragment = savedRange.current.extractContents();
+        a.appendChild(fragment);
+        savedRange.current.insertNode(a);
       }
+
+      // Sync to block state so the link is persisted
+      if (editable) editable.dispatchEvent(new Event('input', { bubbles: true }));
+    } catch {
+      // silent — range may have been invalidated
     }
 
-    // Sync block state
-    if (editable) editable.dispatchEvent(new Event('input', { bubbles: true }));
     savedRange.current = null;
     setLinkMode(false);
     setLinkUrl('');
