@@ -1495,6 +1495,9 @@ Inspector tabs
 - Links — read-only list of your configured platforms (Instagram, Facebook, TikTok, LinkedIn, YouTube, Twitter/X, Threads, Pinterest, Website) with a "Manage in branding" CTA at the top.
 - Block — shared block settings (background, padding).
 
+Visual style — minimalist Flodesk glyphs (by design)
+The social icons are intentionally drawn in a clean Flodesk-style minimalist set rather than each platform's full brand mark. Letter glyphs render as solid letterforms — Facebook is a lowercase "f", LinkedIn is a lowercase "in", Pinterest is a stylized "P" with a see-through eye, TikTok is a "d" with a small flag, Twitter/X is a thick angular "X", Threads is the "@"-style mark. Shape glyphs use clean stroked outlines — Instagram is a camera silhouette, Globe (Website) is a circle with equator + meridian, YouTube is a rounded rectangle with a small filled play triangle. This gives every email a consistent editorial look that matches modern newsletter design conventions; if you wanted full multi-color brand logos they would clash with most email aesthetics and recipients still recognize the simplified marks.
+
 Rendering parity
 Editor canvas, preview iframe, and the actual delivered email all use the exact same SVG paths, chip dimensions, and stroke widths. Filled-circle icons use a glyph color that automatically flips between black and white based on the chip color so they always read clearly. Outline-only icons use a slightly thicker stroke at small sizes for better visibility.
 
