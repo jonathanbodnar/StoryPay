@@ -1117,6 +1117,8 @@ function ImageCanvas({ block, theme }: { block: EmailBlock; theme: ReturnType<ty
 
   const align = block.align ?? 'center';
   const justify = align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center';
+  const gridGap = Math.max(0, Math.min(64, block.imageGridGap ?? 16));
+  const isStack = cols === 1 && totalCount > 1;
 
   return (
     <div style={{ ...blockPaddingStyle(block), display: 'flex', justifyContent: justify }}>
@@ -1126,7 +1128,8 @@ function ImageCanvas({ block, theme }: { block: EmailBlock; theme: ReturnType<ty
           maxWidth: `${totalWidth}px`,
           display: 'grid',
           gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
-          gap: cols > 1 ? '8px' : '0',
+          rowGap: (cols > 1 || isStack) ? `${gridGap}px` : '0',
+          columnGap: cols > 1 ? `${gridGap}px` : '0',
         }}
       >
         {Array.from({ length: totalCount }).map((_, i) => {
@@ -2344,6 +2347,13 @@ function ImageInspector({
                   min={1} max={12} step={1}
                   display={`${totalImages}`}
                   onChange={(v) => setTotal(v)}
+                />
+                <SliderControl
+                  label="Spacing"
+                  value={block.imageGridGap ?? 16}
+                  min={0} max={48} step={2}
+                  display={`${block.imageGridGap ?? 16}`}
+                  onChange={(v) => onChange({ imageGridGap: v })}
                 />
               </div>
             )}

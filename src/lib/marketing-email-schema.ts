@@ -56,6 +56,7 @@ export interface EmailBlock {
   imageWidth?: number;            // max-width in px (default 600)
   imageGridColumns?: 1 | 2 | 3 | 4;
   imageGridImages?: { src?: string; alt?: string }[]; // additional images (slots 2..N)
+  imageGridGap?: number;          // px between rows AND columns (default 16)
 }
 
 export interface EmailTheme {
@@ -224,6 +225,7 @@ export function createEmailBlock(type: EmailBlockType): EmailBlock {
         imageWidth: 600,
         imageGridColumns: 1,
         imageGridImages: [],
+        imageGridGap: 16,
       };
     case 'divider':
       return { id, type };

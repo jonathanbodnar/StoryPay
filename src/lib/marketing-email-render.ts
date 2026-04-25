@@ -122,8 +122,11 @@ function renderBlock(block: EmailBlock, theme: ReturnType<typeof mergeEmailTheme
 
       const linkHref = block.href?.trim() ? esc(block.href.trim()) : '';
       const totalWidth = Math.max(50, Math.min(600, block.imageWidth ?? 600));
-      const gap = cols > 1 ? 8 : 0;
-      const colWidth = Math.floor((totalWidth - gap * (cols - 1)) / cols);
+      const gap = Math.max(0, Math.min(64, block.imageGridGap ?? 16));
+      const colWidth = cols > 1
+        ? Math.floor((totalWidth - gap * (cols - 1)) / cols)
+        : totalWidth;
+      const totalRows = Math.ceil(slots.length / cols);
 
       // Single-image fast path keeps existing email-client compatibility.
       if (cols === 1 && slots.length === 1) {
@@ -140,13 +143,18 @@ function renderBlock(block: EmailBlock, theme: ReturnType<typeof mergeEmailTheme
       }
 
       // Grid path: build a real <table> with rows of `cols` cells.
+      // Even gutters: padding-left between columns, padding-bottom between rows
+      // (skipped on the last row so total height stays tight).
       const rows: string[] = [];
       for (let r = 0; r < slots.length; r += cols) {
+        const rowIdx = r / cols;
+        const isLastRow = rowIdx === totalRows - 1;
         const cells: string[] = [];
         for (let c = 0; c < cols; c++) {
           const slot = slots[r + c] ?? { src: '', alt: '' };
           const left = c === 0 ? 0 : gap;
-          const cellStyle = `padding-left:${left}px;padding-bottom:${gap}px;width:${colWidth}px;vertical-align:top;`;
+          const bottom = isLastRow ? 0 : gap;
+          const cellStyle = `padding-left:${left}px;padding-bottom:${bottom}px;width:${colWidth}px;vertical-align:top;`;
           if (slot.src) {
             const src = esc(slot.src);
             const alt = esc(slot.alt);
