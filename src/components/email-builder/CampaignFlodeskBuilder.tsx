@@ -1015,6 +1015,7 @@ function SliderControl({
         <div
           ref={trackRef}
           onMouseDown={onMouseDown}
+          onPointerDown={(e) => { e.stopPropagation(); }} // block dnd-kit PointerSensor
           style={{ position: 'relative', flex: 1, height: 36, display: 'flex', alignItems: 'center', cursor: 'grab', userSelect: 'none' }}
         >
           {/* Rail */}
