@@ -57,6 +57,11 @@ export interface EmailBlock {
   imageGridColumns?: 1 | 2 | 3 | 4;
   imageGridImages?: { src?: string; alt?: string }[]; // additional images (slots 2..N)
   imageGridGap?: number;          // px between rows AND columns (default 16)
+  /** Divider-block-specific settings */
+  dividerStyle?: 'solid' | 'dashed' | 'dotted';
+  dividerColor?: string;          // hex color of the line
+  dividerThickness?: number;      // px (default 1)
+  dividerWidth?: number;          // max-width in px (default 600)
 }
 
 export interface EmailTheme {
@@ -228,7 +233,16 @@ export function createEmailBlock(type: EmailBlockType): EmailBlock {
         imageGridGap: 16,
       };
     case 'divider':
-      return { id, type };
+      return {
+        id, type,
+        align: 'center',
+        dividerStyle: 'solid',
+        dividerColor: '#D7D7D7',
+        dividerThickness: 1,
+        dividerWidth: 300,
+        paddingTop: 10,
+        paddingBottom: 10,
+      };
     case 'spacer':
       return { id, type, spacerHeight: 24 };
     case 'html':

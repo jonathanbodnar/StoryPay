@@ -218,8 +218,15 @@ function renderBlock(block: EmailBlock, theme: ReturnType<typeof mergeEmailTheme
   <p style="margin:0;font-size:12px;color:${theme.mutedColor};">{{venue_full_address}}</p>
 </td></tr>`;
     }
-    case 'divider':
-      return `<tr><td style="${box}"><hr style="border:none;border-top:1px solid #e4e4e7;margin:0;" /></td></tr>`;
+    case 'divider': {
+      const dStyle = (block.dividerStyle ?? 'solid') as 'solid' | 'dashed' | 'dotted';
+      const dColor = block.dividerColor ?? '#D7D7D7';
+      const dThick = Math.max(1, Math.min(20, block.dividerThickness ?? 1));
+      const dWidth = Math.max(20, Math.min(600, block.dividerWidth ?? 300));
+      const dAlign = block.align === 'left' ? 'left' : block.align === 'right' ? 'right' : 'center';
+      const inner = `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="${dAlign}" style="border-collapse:collapse;width:${dWidth}px;max-width:100%;"><tr><td style="font-size:0;line-height:0;border-top:${dThick}px ${dStyle} ${dColor};">&nbsp;</td></tr></table>`;
+      return `<tr><td style="${box}text-align:${dAlign};">${inner}</td></tr>`;
+    }
     case 'spacer': {
       const h = Math.min(120, Math.max(4, block.spacerHeight ?? 16));
       const bgPart = block.blockBgColor && block.blockBgColor !== 'transparent' ? `background:${block.blockBgColor};` : '';

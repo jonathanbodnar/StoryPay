@@ -1177,9 +1177,24 @@ function ImageCanvas({ block, theme }: { block: EmailBlock; theme: ReturnType<ty
 }
 
 function DividerCanvas({ block }: { block: EmailBlock }) {
+  const lineStyle  = (block.dividerStyle ?? 'solid') as 'solid' | 'dashed' | 'dotted';
+  const lineColor  = block.dividerColor ?? '#D7D7D7';
+  const thickness  = Math.max(1, Math.min(20, block.dividerThickness ?? 1));
+  const lineWidth  = Math.max(20, Math.min(600, block.dividerWidth ?? 300));
+  const align      = block.align ?? 'center';
+  const justify    = align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center';
+
   return (
-    <div style={blockPaddingStyle(block)}>
-      <hr style={{ border: 'none', borderTop: '1px solid #e8e8e8', margin: 0 }} />
+    <div style={{ ...blockPaddingStyle(block), display: 'flex', justifyContent: justify }}>
+      <hr
+        style={{
+          border: 'none',
+          borderTop: `${thickness}px ${lineStyle} ${lineColor}`,
+          width: `${lineWidth}px`,
+          maxWidth: '100%',
+          margin: 0,
+        }}
+      />
     </div>
   );
 }
@@ -2009,6 +2024,172 @@ function SavedStylesModal({
   );
 }
 
+// ─── Divider Inspector — Flodesk-style line settings ─────────────────────────
+function DividerInspector({
+  block,
+  onChange,
+}: {
+  block: EmailBlock;
+  onChange: (patch: Partial<EmailBlock>) => void;
+}) {
+  const [styleOpen, setStyleOpen]   = useState(false);
+  const [sizingOpen, setSizingOpen] = useState(true);
+  const [paddingOpen, setPaddingOpen] = useState(true);
+
+  const lineStyle  = (block.dividerStyle ?? 'solid') as 'solid' | 'dashed' | 'dotted';
+  const lineColor  = block.dividerColor ?? '#D7D7D7';
+  const thickness  = block.dividerThickness ?? 1;
+  const lineWidth  = block.dividerWidth ?? 300;
+  const align      = block.align ?? 'center';
+  const padTop     = block.paddingTop ?? 10;
+  const padBottom  = block.paddingBottom ?? 10;
+
+  const STYLE_OPTIONS: { id: 'solid' | 'dashed' | 'dotted'; render: React.ReactNode }[] = [
+    { id: 'solid',  render: <div style={{ width: '100%', borderTop: '2px solid #111827' }} /> },
+    { id: 'dashed', render: <div style={{ width: '100%', borderTop: '2px dashed #111827' }} /> },
+    { id: 'dotted', render: <div style={{ width: '100%', borderTop: '2px dotted #111827' }} /> },
+  ];
+
+  return (
+    <div>
+      {/* Single header tab indicator */}
+      <div className="flex border-b border-gray-100 -mx-5 mb-5 px-2 bg-gray-50/50 justify-center">
+        <button type="button" className="py-3 px-6 text-sm font-semibold text-gray-900 relative">
+          Block
+          <span className="absolute left-1/2 -translate-x-1/2 bottom-0 h-[2px] w-12 bg-gray-900 rounded-full" />
+        </button>
+      </div>
+
+      <div className="space-y-5">
+        {/* Line style dropdown */}
+        <div>
+          <p className="text-sm font-semibold text-gray-900 mb-2">Line style</p>
+          <button
+            type="button"
+            onClick={() => setStyleOpen(o => !o)}
+            className={`w-full flex items-center justify-between rounded-lg border px-4 py-3 bg-white hover:border-gray-400 transition-colors ${styleOpen ? 'border-blue-500 ring-1 ring-blue-200' : 'border-gray-200'}`}
+          >
+            <div className="flex-1 mr-3">
+              {STYLE_OPTIONS.find(s => s.id === lineStyle)?.render}
+            </div>
+            <ChevronDown size={14} className={`text-gray-400 transition-transform ${styleOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {styleOpen && (
+            <div className="mt-1.5 rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
+              {STYLE_OPTIONS.map(o => {
+                const active = o.id === lineStyle;
+                return (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() => { onChange({ dividerStyle: o.id }); setStyleOpen(false); }}
+                    className={`w-full flex items-center px-4 py-4 transition-colors ${active ? 'bg-gray-100' : 'hover:bg-gray-50'}`}
+                  >
+                    <div className="flex-1">{o.render}</div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Color */}
+        <div>
+          <div className="flex items-baseline gap-2 mb-2">
+            <p className="text-sm font-semibold text-gray-900">Color</p>
+            <span className="text-xs text-gray-400 font-mono uppercase">{lineColor.replace('#', '#')}</span>
+          </div>
+          <FlodeskColorPicker
+            value={lineColor}
+            onChange={(v) => onChange({ dividerColor: v })}
+          />
+        </div>
+
+        {/* Position */}
+        <div>
+          <p className="text-sm font-semibold text-gray-900 mb-2">Position</p>
+          <div className="flex gap-1.5">
+            {(['left', 'center', 'right'] as const).map(a => {
+              const active = align === a;
+              const Icon = a === 'left' ? AlignLeft : a === 'right' ? AlignRight : AlignCenter;
+              return (
+                <button
+                  key={a}
+                  type="button"
+                  onClick={() => onChange({ align: a })}
+                  className={`w-12 h-12 rounded-lg border flex items-center justify-center transition-colors ${active ? 'bg-gray-100 border-gray-300' : 'bg-white border-gray-200 hover:border-gray-300'}`}
+                >
+                  <Icon size={16} className={active ? 'text-gray-900' : 'text-gray-400'} />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Thickness & width */}
+        <div className="border-t border-gray-100 pt-4">
+          <button
+            type="button"
+            onClick={() => setSizingOpen(o => !o)}
+            className="flex items-center justify-between w-full mb-3"
+          >
+            <span className="text-sm font-semibold text-gray-700">Thickness &amp; width</span>
+            <ChevronDown size={14} className={`text-gray-400 transition-transform ${sizingOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {sizingOpen && (
+            <div className="space-y-4">
+              <SliderControl
+                label="Thickness"
+                value={thickness}
+                min={1} max={20} step={1}
+                display={`${thickness}`}
+                onChange={(v) => onChange({ dividerThickness: v })}
+              />
+              <SliderControl
+                label="Width"
+                value={lineWidth}
+                min={20} max={600} step={10}
+                display={`${lineWidth}`}
+                onChange={(v) => onChange({ dividerWidth: v })}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Padding */}
+        <div className="border-t border-gray-100 pt-4">
+          <button
+            type="button"
+            onClick={() => setPaddingOpen(o => !o)}
+            className="flex items-center justify-between w-full mb-3"
+          >
+            <span className="text-sm font-semibold text-gray-700">Padding</span>
+            <ChevronDown size={14} className={`text-gray-400 transition-transform ${paddingOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {paddingOpen && (
+            <div className="space-y-4">
+              <SliderControl
+                label="Padding top"
+                value={padTop}
+                min={0} max={120} step={2}
+                display={`${padTop}`}
+                onChange={(v) => onChange({ paddingTop: v })}
+              />
+              <SliderControl
+                label="Padding bottom"
+                value={padBottom}
+                min={0} max={120} step={2}
+                display={`${padBottom}`}
+                onChange={(v) => onChange({ paddingBottom: v })}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Image Inspector — Image / Link / Block tabs (uses the shared media modal) ─
 function ImageInspector({
   block,
@@ -2721,15 +2902,7 @@ function BlockInspectorPanel({
   }
 
   if (block.type === 'divider') {
-    return (
-      <div>
-        {renderSubTabBar('Divider')}
-        {subTab === 'primary' && (
-          <p className="text-xs text-gray-400">Horizontal rule — adjust margin/background in the Block tab.</p>
-        )}
-        {subTab === 'block' && renderBlockTab()}
-      </div>
-    );
+    return <DividerInspector block={block} onChange={onChange} />;
   }
 
   if (block.type === 'spacer') {
