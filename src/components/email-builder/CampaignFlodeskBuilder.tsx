@@ -1735,6 +1735,8 @@ export function CampaignFlodeskBuilder({
       </header>
 
       {/* ── Content — fixed below the header so both panes can scroll independently ── */}
+      {/* DndContext wraps BOTH canvas and right panel so palette cards can drag onto canvas */}
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div
         style={{
           position: 'fixed',
@@ -1779,7 +1781,6 @@ export function CampaignFlodeskBuilder({
           </div>
 
           {/* Email card — completely flush, white on white */}
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
             <div
               className="mx-auto"
               style={{ maxWidth: viewMode === 'mobile' ? '375px' : theme.maxWidth, background: theme.cardBg, transition: 'max-width 0.3s ease' }}
@@ -1894,23 +1895,6 @@ export function CampaignFlodeskBuilder({
                 </SortableContext>
               )}
             </div>
-            {/* Drag overlay — ghost shown while dragging from palette */}
-            <DragOverlay dropAnimation={null}>
-              {activePaletteType ? (() => {
-                const p = PALETTE.find(x => x.type === activePaletteType);
-                if (!p) return null;
-                return (
-                  <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-3.5 py-3 shadow-xl opacity-90 pointer-events-none" style={{ width: 220 }}>
-                    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-gray-50">
-                      <p.Icon size={15} className="text-gray-500" />
-                    </div>
-                    <p className="text-sm font-medium text-gray-800">{p.label}</p>
-                  </div>
-                );
-              })() : null}
-            </DragOverlay>
-          </DndContext>
-
           {/* Merge field hint */}
           <p className="mx-auto mt-6 text-center text-[11px] text-gray-300" style={{ maxWidth: viewMode === 'mobile' ? '375px' : theme.maxWidth }}>
             {'{{first_name}}'} · {'{{venue_name}}'} · {'{{unsubscribe_url}}'}
@@ -2006,7 +1990,24 @@ export function CampaignFlodeskBuilder({
             </span>
           </div>
         </aside>
+
+        {/* Drag overlay — ghost shown while dragging from palette */}
+        <DragOverlay dropAnimation={null}>
+          {activePaletteType ? (() => {
+            const p = PALETTE.find(x => x.type === activePaletteType);
+            if (!p) return null;
+            return (
+              <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-3.5 py-3 shadow-xl opacity-90 pointer-events-none" style={{ width: 220 }}>
+                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-gray-50">
+                  <p.Icon size={15} className="text-gray-500" />
+                </div>
+                <p className="text-sm font-medium text-gray-800">{p.label}</p>
+              </div>
+            );
+          })() : null}
+        </DragOverlay>
       </div>
+      </DndContext>
 
       {/* Floating format toolbar — appears on text selection */}
       <FloatingFormatBar />
