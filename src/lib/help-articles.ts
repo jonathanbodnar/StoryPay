@@ -1257,19 +1257,21 @@ Downloads happen instantly in your browser — no email required. For large date
         id: 'brand-setup',
         title: 'Setting up your brand',
         tags: ['branding', 'logo', 'colors', 'brand', 'customize', 'email colors'],
-        body: `Go to Settings → Branding.
+        body: `Go to Settings → Branding. The page is ordered top-to-bottom in the natural setup flow:
 
-Upload your logo by clicking "Upload Logo" and selecting a PNG, JPG, or SVG file (max 5MB). Or click Choose from media library to pick an image you already uploaded in Venue listing → Media library (shared images: JPEG, PNG, WebP, AVIF, GIF — no video). The logo appears in all outgoing emails — it shows in a white header with a colored strip underneath.
+1. Contact Information — business name, email, phone, website, address, and a footer note. These appear on every invoice, proposal, and email footer.
+2. Brand Settings — upload your logo (PNG, JPG, or SVG, max 5MB). You can also pick from your media library (Venue listing → Media library — JPEG, PNG, WebP, AVIF, GIF; no video). Your logo shows in a white header with a colored strip underneath in every email.
+3. Color Presets — click any preset (Default, Ivory & Gold, Sage & Stone, Blush & Cream, Coastal Blue, Black & Champagne, Warm Earth) to set the Primary/Button, Background, and Button Text colors all at once. Saves automatically when clicked.
+4. Social Networks — paste your social profile URLs once. Every marketing-email Social block reads from this list automatically.
+5. Time zone — used for scheduling, calendar, and appointment times.
 
-Choose brand colors:
-- Click a Color Preset (Default, Ivory & Gold, Sage & Stone, Blush & Cream, Coastal Blue, etc.) — saves automatically when clicked.
-- Or use Custom Colors to set the Primary/Button color, Background color, and Button Text color precisely.
+The live Preview panel on the right updates in real time as you change colors and contact info.
 
-The live Preview panel on the right updates in real time as you change colors, showing exactly how invoices and emails will look.
+Where did "Custom Colors" and the dedicated "Brand Colors" palette go?
+- Custom hex inputs for the three brand colors were removed — Color Presets cover the common combinations, and you can fine-tune individual colors anywhere a color picker appears (email blocks, forms, etc.).
+- The brand-color palette no longer has its own card on this page either. Save / remove brand colors directly from any color picker — they sync across every other picker in the app automatically.
 
-Fill in Contact Information — your email, phone, website, address, and a footer note. These appear on documents and in email footers.
-
-Changes save automatically when you click a color preset. For other fields, click "Save Branding Settings" at the top.
+Changes save automatically as you edit (presets, social URLs, timezone) or after a brief debounce (text fields). The "Save Branding Settings" button at the top forces an immediate save.
 
 Note: Branding settings are visible to owners and admins only.`,
       },
@@ -1277,22 +1279,21 @@ Note: Branding settings are visible to owners and admins only.`,
         id: 'brand-colors-saved',
         title: 'Saving brand colors — palette across the app',
         tags: ['brand colors', 'palette', 'saved colors', 'color picker', 'hex', 'venue colors', 'reusable colors'],
-        body: `Your venue keeps a saved palette of brand colors at Settings → Branding → Brand Colors. Once a color is in the palette it appears in every color picker across the app — email builder (text, buttons, backgrounds, dividers, social icons), branding presets, lead capture forms, and proposals.
+        body: `Your venue keeps a per-venue palette of saved brand colors. There is no dedicated "Brand Colors" page in settings — the palette lives inside every color picker, so you save and reuse colors right where you're working (email builder, form builder, etc.). Once a color is in the palette it appears in every other color picker across the app.
 
 Adding a color
-- Settings → Branding → Brand Colors. Type a hex code (#1b1b1b) and click Save.
-- From any color picker across the app, click the bookmark/save icon next to the color you just configured to add it to your palette instantly.
+- Open any color picker (email block inspector, form field, etc.).
+- Pick or type a hex code, then click the bookmark/save icon next to the swatch. The color is added to your palette instantly and shows up in every other picker right away.
 
 Removing a color
-- Hover any saved swatch and click the small × that appears. Removing a color does not change any email or proposal that already uses it; it just stops showing up in pickers.
+- Inside any color picker, hover any saved swatch in the palette row and click the small × that appears. Removing a color does not change any email, form, or proposal that already uses it; it just stops showing up in pickers.
 
 Limits
 - Up to 50 colors per venue.
 
 Where it shows up
 - Flodesk-style color picker inside every email block inspector — your saved colors appear at the bottom of the picker so you can apply them in one click.
-- Branding "Custom Colors" section.
-- Lead capture forms (every color setting).
+- Lead capture / form builder color pickers.
 - Anywhere the app shows a color picker.`,
       },
       {
@@ -1350,7 +1351,7 @@ All four use the same Flodesk-style block editor so the experience is identical 
 Marketing emails always pull your venue branding automatically — logo, brand colors, brand fonts, address, and social network links — so every send stays on-brand without touching settings.
 
 Where things live:
-- Brand colors saved palette → Settings → Branding → Brand Colors. Available in every color picker across the email builder.
+- Brand colors saved palette → save and reuse colors directly from any color picker (email block inspector, form builder, etc.); the palette is shared across every picker in the app.
 - Social network links → Settings → Branding → Social Networks. Power the Social block and footer.
 - Address used in the Address block → Settings → Branding (Contact Information) or the venue's primary location.
 - Compliance footer (unsubscribe + manage preferences) is appended automatically; recipients land on a public Preferences page hosted on app.storyvenue.com.`,
@@ -1547,18 +1548,20 @@ Both blocks live in the right-panel palette and drop in like any other block.`,
         id: 'me-brand-colors',
         title: 'Brand colors — saved palette across the app',
         tags: ['brand colors', 'palette', 'color picker', 'flodesk', 'saved colors', 'eyedropper', 'hex'],
-        body: `Brand colors are a per-venue palette saved at Settings → Branding → Brand Colors. Once a color is in your palette it appears in every color picker across the app: email builder (text, button, background, divider, social icons, etc.), proposals, branding presets, lead capture forms — anywhere a color is picked.
+        body: `Brand colors are a per-venue palette that lives inside every color picker. There's no dedicated palette-management page — you save and remove colors right where you're using them. Once a color is in your palette it appears in every color picker across the app: email builder (text, button, background, divider, social icons, etc.), form builder, anywhere a color is picked.
 
 Adding a color
-- Settings → Branding → Brand Colors. Type a hex code (#1b1b1b) and click Save, or click any saved swatch to remove it.
-- From any color picker across the app, click the bookmark/save icon next to the color you just configured. It's added to your palette instantly.
+- From any color picker, configure a color (hex / picker / eyedropper) and click the bookmark/save icon next to the swatch. It's added to your palette instantly and shows up in every other picker right away.
+
+Removing a color
+- Hover any saved swatch in a picker's palette row and click the small × that appears. Removing a color doesn't change any email, form, or proposal that already uses it.
 
 The Flodesk-style color picker
 - Anchored to the viewport so it never opens off-screen on small panels.
-- Includes a hex input, a HSL/RGB visualizer, an eyedropper (where the browser supports it), and a list of your saved brand colors at the bottom.
+- Includes a hex input, a HSL/RGB visualizer, an eyedropper (where the browser supports it), and a row of your saved brand colors at the bottom.
 - The "Default" preset always includes a sensible fallback (#1b1b1b near-black for text, #ffffff for backgrounds).
 
-Limits — you can save up to 50 brand colors. Removing a color from the palette doesn't change any email or proposal that already uses it.`,
+Limits — you can save up to 50 brand colors per venue.`,
       },
       {
         id: 'me-fonts',
