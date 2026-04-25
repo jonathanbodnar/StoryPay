@@ -23,6 +23,7 @@ const EVENT_LABELS: Record<string, string> = {
   contact_form_open:    'Opened contact form',
   contact_form_submit:  'Sent inquiry ✉️',
   listing_impression:   'Found in search',
+  session_heartbeat:    'Browsing listing',
 };
 
 export async function GET() {
