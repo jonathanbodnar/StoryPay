@@ -152,10 +152,12 @@ function SocialIcon({ platform, size = 18, color = '#18181b' }: { platform: stri
       </svg>
     );
 
-    // Pinterest "P" — bowl + descender, with see-through counter via even-odd.
+    // Pinterest "P" — circular bowl with see-through counter + short descender.
+    // Three subpaths in even-odd mode: outer circle, inner counter (becomes
+    // a hole), and a small wedge descender attached to the bottom-left.
     case 'pinterest': return (
       <svg {...common} fill={color}>
-        <path fillRule="evenodd" clipRule="evenodd" d="M12 3a6 6 0 0 0-2 11.7l-1.5 6.9c-.1.4.4.6.7.3l3.5-3.5c.4.1.9.1 1.3.1a6 6 0 1 0-2-15zm.4 8a2 2 0 1 1 0-4 2 2 0 0 1 0 4z" />
+        <path fillRule="evenodd" clipRule="evenodd" d="M17 9a5 5 0 1 1-10 0 5 5 0 0 1 10 0zM14 9a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM10.8 13.6l-2.6 7 1.9.6 2.7-7z" />
       </svg>
     );
 
@@ -173,13 +175,6 @@ function SocialIcon({ platform, size = 18, color = '#18181b' }: { platform: stri
       <svg {...common} fill="none">
         <rect x="2.5" y="5.5" width="19" height="13" rx="3.5" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         <path d="M10 9.4l5.5 2.6-5.5 2.6z" fill={color} />
-      </svg>
-    );
-
-    // Threads "@"-style mark — kept as the standard Threads silhouette.
-    case 'threads': return (
-      <svg {...common} fill={color}>
-        <path d="M17.65 11.13c-.07-.04-.16-.07-.24-.1-.13-2.43-1.46-3.83-3.69-3.84a3.9 3.9 0 0 0-3.27 1.66l1.21.82a2.45 2.45 0 0 1 2.05-1.05c.95 0 1.66.32 2.06.92.27.42.43.96.5 1.59-.6-.1-1.24-.13-1.92-.09-1.94.11-3.18 1.24-3.1 2.81.04.79.43 1.47 1.11 1.91a3.4 3.4 0 0 0 1.96.5c.91-.05 1.62-.4 2.13-1.03.38-.49.62-1.12.74-1.92.49.3.85.69 1.05 1.16.34.81.36 2.13-.72 3.21-.95.95-2.09 1.36-3.81 1.37-1.91-.02-3.36-.63-4.31-1.83-.89-1.13-1.36-2.75-1.37-4.83.02-2.07.48-3.7 1.37-4.83.95-1.2 2.4-1.81 4.31-1.83 1.93.01 3.39.63 4.34 1.83.47.6.82 1.34 1.04 2.21l1.41-.39a8.46 8.46 0 0 0-1.31-2.71C19.06 3.34 17.16 2.51 14.79 2.5h-.01c-2.36.02-4.22.85-5.55 2.5C8.04 6.46 7.43 8.5 7.4 11l0 .01 0 .01c.03 2.5.64 4.54 1.83 6 1.33 1.65 3.19 2.49 5.55 2.51h.01c2.1-.01 3.58-.57 4.81-1.79 1.6-1.6 1.55-3.6.74-4.83-.36-.55-.86-1.02-1.5-1.36zm-3.83 3.06c-.62.04-1.27-.24-1.31-.97-.03-.55.39-1.16 1.69-1.23.15-.01.3-.01.44-.01.46 0 .89.04 1.28.13-.15 1.81-1.01 2.04-2.1 2.08z" />
       </svg>
     );
 

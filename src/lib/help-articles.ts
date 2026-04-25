@@ -1298,11 +1298,11 @@ Where it shows up
       {
         id: 'brand-social-networks',
         title: 'Social network links — used by marketing emails',
-        tags: ['social networks', 'social links', 'instagram', 'facebook', 'tiktok', 'linkedin', 'youtube', 'threads', 'twitter', 'x', 'pinterest', 'website', 'branding', 'email social block'],
+        tags: ['social networks', 'social links', 'instagram', 'facebook', 'tiktok', 'linkedin', 'youtube', 'twitter', 'x', 'pinterest', 'website', 'branding', 'email social block'],
         body: `Settings → Branding → Social Networks is where you store your venue's social profile URLs once. Every marketing email Social block reads from this list automatically, so you never have to set them per email.
 
 Supported platforms
-Instagram, Facebook, TikTok, LinkedIn, YouTube, Twitter / X, Threads, Pinterest, Website.
+Instagram, Facebook, TikTok, LinkedIn, YouTube, Twitter / X, Pinterest, Website.
 
 Adding a link
 1. Settings → Branding → Social Networks.
@@ -1314,7 +1314,7 @@ Each row shows an "Open link" button (opens the URL in a new tab to verify) and 
 
 Limits
 - One URL per platform.
-- Up to 12 social links total per venue (more than enough — most venues use 3–5).
+- Up to 8 social links total per venue (one per supported platform — most venues use 3–5).
 
 Where it's used
 - Marketing email Social block — every campaign, template, and automation that includes a Social block automatically renders icons + links from this list. There is no per-email override; this is the single source of truth.
@@ -1485,18 +1485,18 @@ Settings:
       {
         id: 'me-block-social',
         title: 'Social block — venue-managed social network links',
-        tags: ['social', 'social links', 'social block', 'icons', 'instagram', 'facebook', 'tiktok', 'linkedin', 'youtube', 'threads', 'website', 'branding'],
+        tags: ['social', 'social links', 'social block', 'icons', 'instagram', 'facebook', 'tiktok', 'linkedin', 'youtube', 'website', 'branding'],
         body: `The Social block renders a row of social network icons in your email — pulled automatically from your venue Branding settings, so you set them once and every campaign stays in sync.
 
 Add or edit your social links — Settings → Branding → Social Networks. Or, from the Social inspector inside the builder, click "Manage in branding" on the Links tab. The Social block links list is read-only inside the builder by design: a single source of truth lives in branding so newsletters never go out with stale links.
 
 Inspector tabs
 - Icons — choose the look: outline (no chip), filled circle, or solid circle. Pick a color from the Flodesk color picker, a size (S / M / L), an alignment (Left / Center / Right / Full), and adjust spacing between icons. The size and style swatches are visual-only (no text labels) and are all rendered at the same dimensions for consistency.
-- Links — read-only list of your configured platforms (Instagram, Facebook, TikTok, LinkedIn, YouTube, Twitter/X, Threads, Pinterest, Website) with a "Manage in branding" CTA at the top.
+- Links — read-only list of your configured platforms (Instagram, Facebook, TikTok, LinkedIn, YouTube, Twitter/X, Pinterest, Website) with a "Manage in branding" CTA at the top.
 - Block — shared block settings (background, padding).
 
 Visual style — minimalist Flodesk glyphs (by design)
-The social icons are intentionally drawn in a clean Flodesk-style minimalist set rather than each platform's full brand mark. Letter glyphs render as solid letterforms — Facebook is a lowercase "f", LinkedIn is a lowercase "in", Pinterest is a stylized "P" with a see-through eye, TikTok is a "d" with a small flag, Twitter/X is a thick angular "X", Threads is the "@"-style mark. Shape glyphs use clean stroked outlines — Instagram is a camera silhouette, Globe (Website) is a circle with equator + meridian, YouTube is a rounded rectangle with a small filled play triangle. This gives every email a consistent editorial look that matches modern newsletter design conventions; if you wanted full multi-color brand logos they would clash with most email aesthetics and recipients still recognize the simplified marks.
+The social icons are intentionally drawn in a clean Flodesk-style minimalist set rather than each platform's full brand mark. Letter glyphs render as solid letterforms — Facebook is a lowercase "f", LinkedIn is a lowercase "in", Pinterest is a stylized "P" with a see-through eye, TikTok is a "d" with a small flag, Twitter/X is a thick angular "X". Shape glyphs use clean stroked outlines — Instagram is a camera silhouette, Globe (Website) is a circle with equator + meridian, YouTube is a rounded rectangle with a small filled play triangle. This gives every email a consistent editorial look that matches modern newsletter design conventions; if you wanted full multi-color brand logos they would clash with most email aesthetics and recipients still recognize the simplified marks.
 
 Rendering parity
 Editor canvas, preview iframe, and the actual delivered email all use the exact same SVG paths, chip dimensions, and stroke widths. Filled-circle icons use a glyph color that automatically flips between black and white based on the chip color so they always read clearly. Outline-only icons use a slightly thicker stroke at small sizes for better visibility.

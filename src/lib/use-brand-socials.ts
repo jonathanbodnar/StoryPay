@@ -20,7 +20,6 @@ export const SOCIAL_PLATFORM_DEFS = [
   { id: 'pinterest', label: 'Pinterest',    placeholder: 'https://pinterest.com/handle' },
   { id: 'linkedin',  label: 'LinkedIn',     placeholder: 'https://linkedin.com/company/handle' },
   { id: 'twitter',   label: 'X / Twitter',  placeholder: 'https://x.com/handle' },
-  { id: 'threads',   label: 'Threads',      placeholder: 'https://threads.net/@handle' },
   { id: 'website',   label: 'Website',      placeholder: 'https://yourvenue.com' },
 ] as const;
 

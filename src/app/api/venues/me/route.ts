@@ -95,7 +95,7 @@ export async function PATCH(request: Request) {
     }
     const KNOWN = new Set([
       'facebook', 'instagram', 'youtube', 'tiktok', 'pinterest',
-      'linkedin', 'twitter', 'threads', 'website',
+      'linkedin', 'twitter', 'website',
     ]);
     const seen = new Set<string>();
     const cleaned: { platform: string; url: string }[] = [];
@@ -121,7 +121,7 @@ export async function PATCH(request: Request) {
       }
       seen.add(p);
       cleaned.push({ platform: p, url: normalized });
-      if (cleaned.length >= 12) break;
+      if (cleaned.length >= 8) break;
     }
     updates.brand_socials = cleaned;
   }
