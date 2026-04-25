@@ -101,7 +101,7 @@ function PaletteCard({ type, label, desc, Icon }: typeof PALETTE[number]) {
       {...listeners}
       {...attributes}
       style={{ opacity: isDragging ? 0.4 : 1, cursor: 'grab', touchAction: 'none' }}
-      className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white px-3.5 py-3 shadow-sm hover:border-gray-300 hover:shadow transition-all select-none"
+      className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-3.5 py-3 hover:border-gray-300 transition-colors select-none"
     >
       <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-gray-50">
         <Icon size={15} className="text-gray-500" />
