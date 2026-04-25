@@ -1450,10 +1450,9 @@ function VideoCanvas({ block, theme, onPatch }: { block: EmailBlock; theme: Retu
           background: '#0f0f0f', // YouTube-style near-black backdrop
           borderRadius: '10px',
           overflow: 'hidden',
-          cursor: parsed ? 'pointer' : 'default',
-        }}
-        onClick={() => {
-          if (parsed?.watchUrl) window.open(parsed.watchUrl, '_blank', 'noopener,noreferrer');
+          // Editor canvas is for editing — never open the watch URL on click here.
+          // The clickable link is added only in the rendered email + live preview iframe.
+          cursor: 'default',
         }}
       >
         {thumbnail ? (
@@ -1485,23 +1484,24 @@ function VideoCanvas({ block, theme, onPatch }: { block: EmailBlock; theme: Retu
           />
         )}
 
-        {/* Empty-state hint sits behind the play button */}
+        {/* Empty-state hint anchored near the bottom of the frame so it sits
+             clearly BELOW the centered play button instead of behind it. */}
         {!thumbnail && (
           <div
             style={{
               position: 'absolute',
-              inset: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              color: '#6b7280',
+              left: 0,
+              right: 0,
+              bottom: '14%',
+              textAlign: 'center',
+              color: '#9ca3af',
               fontFamily: theme.fontFamily,
               fontSize: '13px',
+              padding: '0 16px',
+              pointerEvents: 'none',
             }}
           >
-            <span style={{ marginTop: '52px' }}>Add a YouTube, Vimeo or Loom URL →</span>
+            Add a YouTube, Vimeo or Loom URL →
           </div>
         )}
 
@@ -3739,12 +3739,16 @@ function PreviewModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col bg-gray-900/70 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex flex-col backdrop-blur-sm"
+      style={{ backgroundColor: 'rgba(27, 27, 27, 0.7)' }}
       role="dialog"
       aria-modal="true"
     >
       {/* Top bar */}
-      <div className="flex items-center justify-between gap-4 border-b border-white/10 bg-gray-900 px-5 py-3 text-white">
+      <div
+        className="flex items-center justify-between gap-4 border-b border-white/10 px-5 py-3 text-white"
+        style={{ backgroundColor: '#1b1b1b' }}
+      >
         <div className="flex items-center gap-3 min-w-0">
           <button
             type="button"
