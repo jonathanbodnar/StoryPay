@@ -240,8 +240,14 @@ function FlodeskColorPicker({ value, onChange }: { value: string; onChange: (v: 
         <div
           style={{
             position: 'fixed',
-            top: (ref.current?.getBoundingClientRect().bottom ?? 0) + 8,
-            left: Math.max(8, (ref.current?.getBoundingClientRect().left ?? 0) - 140),
+            top: Math.min(
+              (ref.current?.getBoundingClientRect().bottom ?? 0) + 8,
+              window.innerHeight - 360,
+            ),
+            left: Math.min(
+              Math.max(8, (ref.current?.getBoundingClientRect().left ?? 0) - 140),
+              window.innerWidth - 332,
+            ),
             zIndex: 500,
             width: 320,
           }}
@@ -397,16 +403,23 @@ function FloatingFormatBar() {
   if (!mounted) return null;
   if (!pos && !linkMode) return null;
 
-  // After execCommand, manually dispatch input so the block's onInput handler syncs innerHTML
+  // Focus the contentEditable, restore the saved selection, run execCommand, then sync state
   function exec(cmd: string, val?: string) {
-    document.execCommand(cmd, false, val);
     const sel = window.getSelection();
-    const node = sel?.anchorNode;
-    const editable: Element | null = node
+    // Save range before any focus change
+    const savedSel = sel && sel.rangeCount > 0 ? sel.getRangeAt(0).cloneRange() : null;
+    const node = savedSel?.commonAncestorContainer ?? sel?.anchorNode;
+    const editable: HTMLElement | null = node
       ? (node.nodeType === Node.TEXT_NODE
-          ? node.parentElement?.closest('[data-email-editable]') ?? null
-          : (node as Element).closest?.('[data-email-editable]') ?? null)
+          ? (node as Text).parentElement?.closest('[data-email-editable]') as HTMLElement ?? null
+          : (node as HTMLElement).closest?.('[data-email-editable]') as HTMLElement ?? null)
       : null;
+    // Ensure focus is on the contentEditable (required for execCommand to act on it)
+    if (editable && document.activeElement !== editable) {
+      editable.focus();
+      if (savedSel && sel) { sel.removeAllRanges(); sel.addRange(savedSel); }
+    }
+    document.execCommand(cmd, false, val);
     if (editable) editable.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
@@ -425,9 +438,22 @@ function FloatingFormatBar() {
     const url = linkUrl.trim();
     if (!url || !savedRange.current) { cancelLink(); return; }
     const fullUrl = url.startsWith('http') || url.startsWith('mailto:') ? url : `https://${url}`;
+
+    // Find the contentEditable that owns the saved range
+    const rangeNode = savedRange.current.commonAncestorContainer;
+    const editable = (rangeNode.nodeType === Node.TEXT_NODE
+      ? (rangeNode as Text).parentElement
+      : rangeNode as HTMLElement)?.closest('[data-email-editable]') as HTMLElement | null;
+
+    // Focus the contentEditable FIRST — execCommand('createLink') requires it
+    if (editable) editable.focus();
+
+    // Restore the text selection
     const sel = window.getSelection();
     if (sel) { sel.removeAllRanges(); sel.addRange(savedRange.current); }
+
     document.execCommand('createLink', false, fullUrl);
+
     if (newTab) {
       const sel2 = window.getSelection();
       if (sel2 && sel2.rangeCount > 0) {
@@ -439,8 +465,8 @@ function FloatingFormatBar() {
         }
       }
     }
-    // sync to block state
-    const editable = savedRange.current.commonAncestorContainer.parentElement?.closest('[data-email-editable]');
+
+    // Sync block state
     if (editable) editable.dispatchEvent(new Event('input', { bubbles: true }));
     savedRange.current = null;
     setLinkMode(false);
