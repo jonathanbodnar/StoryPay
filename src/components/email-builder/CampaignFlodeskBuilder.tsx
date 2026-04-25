@@ -531,8 +531,29 @@ function FloatingFormatBar() {
     }, 40);
   }
 
+  function removeLink() {
+    if (!editingAnchor.current) { cancelLink(); return; }
+    const a = editingAnchor.current;
+    const parent = a.parentNode;
+    if (parent) {
+      // Unwrap: move all child nodes out of the anchor, then remove it
+      while (a.firstChild) parent.insertBefore(a.firstChild, a);
+      parent.removeChild(a);
+      const editable = (parent instanceof Element ? parent : (parent as Node).parentElement)
+        ?.closest('[data-email-editable]') as HTMLElement | null;
+      editable?.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    editingAnchor.current = null;
+    savedRange.current = null;
+    setLinkMode(false);
+    setLinkUrl('');
+    setPos(null);
+  }
+
   function applyLink() {
     const url = linkUrl.trim();
+    // Empty URL while editing existing link → remove the link
+    if (!url && editingAnchor.current) { removeLink(); return; }
     if (!url) { cancelLink(); return; }
     const fullUrl = url.startsWith('http') || url.startsWith('mailto:') ? url : `https://${url}`;
 
@@ -612,8 +633,65 @@ function FloatingFormatBar() {
     )?.closest('[data-email-editable]') as HTMLElement | null;
     if (!editable) return;
 
-    // Walk up from `node` to find the direct child of `editable` that contains it.
-    // If `node` is a loose text node directly under `editable`, return null.
+    const desiredTag = ordered ? 'OL' : 'UL';
+
+    // ── If cursor is already inside a list, toggle / convert ─────────────────
+    const startEl = range.startContainer.nodeType === Node.TEXT_NODE
+      ? (range.startContainer as Text).parentElement
+      : range.startContainer as HTMLElement;
+    const existingList = startEl?.closest('ol, ul') as HTMLElement | null;
+
+    if (existingList && editable.contains(existingList)) {
+      const parent = existingList.parentNode;
+      if (!parent) return;
+
+      if (existingList.tagName === desiredTag) {
+        // SAME type — toggle OFF: unwrap each <li> back into a <p>
+        const items = Array.from(existingList.children).filter(
+          (c): c is HTMLElement => c.tagName === 'LI',
+        );
+        items.forEach(li => {
+          const p = document.createElement('p');
+          p.style.margin = '0 0 0.5em 0';
+          p.innerHTML = li.innerHTML.trim() || '<br>';
+          parent.insertBefore(p, existingList);
+        });
+        parent.removeChild(existingList);
+
+        // Place cursor in the first unwrapped paragraph
+        const firstP = parent.firstChild;
+        if (firstP instanceof HTMLElement) {
+          const r = document.createRange();
+          r.selectNodeContents(firstP);
+          r.collapse(false);
+          sel.removeAllRanges();
+          sel.addRange(r);
+        }
+        editable.dispatchEvent(new Event('input', { bubbles: true }));
+        return;
+      } else {
+        // OPPOSITE type — convert ol ↔ ul, keep same items
+        const newList = document.createElement(desiredTag.toLowerCase());
+        newList.style.cssText = `padding-left: 1.5em; margin: 0.5em 0; list-style-type: ${ordered ? 'decimal' : 'disc'}; list-style-position: outside;`;
+        newList.innerHTML = existingList.innerHTML;
+        parent.replaceChild(newList, existingList);
+
+        const lastLi = newList.lastElementChild as HTMLElement | null;
+        if (lastLi) {
+          const r = document.createRange();
+          r.selectNodeContents(lastLi);
+          r.collapse(false);
+          sel.removeAllRanges();
+          sel.addRange(r);
+        }
+        editable.dispatchEvent(new Event('input', { bubbles: true }));
+        return;
+      }
+    }
+
+    // ── Otherwise, create a new list from selected paragraph(s) ──────────────
+
+    // Walk up from `node` to find the direct child of `editable` that contains it
     function directBlockChild(node: Node): HTMLElement | null {
       let cur: Node | null = node;
       while (cur && cur.parentNode !== editable) cur = cur.parentNode;
@@ -624,7 +702,6 @@ function FloatingFormatBar() {
     const startBlock = directBlockChild(range.startContainer);
     const endBlock = directBlockChild(range.endContainer);
 
-    // Collect all paragraph-level blocks the selection touches
     const blocksToReplace: HTMLElement[] = [];
     if (startBlock) {
       let cur: Node | null = startBlock;
@@ -635,23 +712,14 @@ function FloatingFormatBar() {
       }
     }
 
-    // Inline styles bypass Tailwind preflight that would otherwise hide markers
-    const listTag = ordered ? 'ol' : 'ul';
-    const list = document.createElement(listTag);
-    list.style.cssText = `
-      padding-left: 1.5em;
-      margin: 0.5em 0;
-      list-style-type: ${ordered ? 'decimal' : 'disc'};
-      list-style-position: outside;
-    `.trim();
+    const list = document.createElement(desiredTag.toLowerCase());
+    list.style.cssText = `padding-left: 1.5em; margin: 0.5em 0; list-style-type: ${ordered ? 'decimal' : 'disc'}; list-style-position: outside;`;
 
     if (blocksToReplace.length > 0) {
-      // Convert each enclosing paragraph into its own <li>, preserving inner HTML
       blocksToReplace.forEach(block => {
         const li = document.createElement('li');
         li.style.marginBottom = '0.25em';
-        const inner = block.innerHTML.trim();
-        li.innerHTML = inner || '<br>';
+        li.innerHTML = block.innerHTML.trim() || '<br>';
         list.appendChild(li);
       });
 
@@ -661,7 +729,6 @@ function FloatingFormatBar() {
         if (el.parentNode === editable) editable.removeChild(el);
       });
     } else {
-      // Loose text directly under editable, or weird structure — wrap selected text
       const selectedText = range.toString();
       const li = document.createElement('li');
       li.style.marginBottom = '0.25em';
@@ -675,7 +742,6 @@ function FloatingFormatBar() {
       range.insertNode(list);
     }
 
-    // Place cursor at the end of the last list item
     const lastLi = list.lastElementChild as HTMLElement | null;
     if (lastLi) {
       const r = document.createRange();
@@ -777,17 +843,29 @@ function FloatingFormatBar() {
               <Zap size={15} />
             </button>
           </div>
-          <div className="flex items-center gap-2 px-4 py-2 bg-gray-50">
-            <input
-              type="checkbox"
-              id="ffb-newtab"
-              checked={newTab}
-              onChange={e => setNewTab(e.target.checked)}
-              className="rounded accent-blue-500 cursor-pointer"
-            />
-            <label htmlFor="ffb-newtab" className="text-xs text-gray-500 cursor-pointer select-none">
-              Open in new tab
-            </label>
+          <div className="flex items-center justify-between px-4 py-2 bg-gray-50">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="ffb-newtab"
+                checked={newTab}
+                onChange={e => setNewTab(e.target.checked)}
+                className="rounded accent-blue-500 cursor-pointer"
+              />
+              <label htmlFor="ffb-newtab" className="text-xs text-gray-500 cursor-pointer select-none">
+                Open in new tab
+              </label>
+            </div>
+            {insideLink && (
+              <button
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); removeLink(); }}
+                className="text-xs text-red-500 hover:text-red-600 font-medium transition-colors"
+                title="Remove link"
+              >
+                Remove link
+              </button>
+            )}
           </div>
         </div>
       ) : (
