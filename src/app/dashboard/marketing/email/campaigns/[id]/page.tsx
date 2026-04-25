@@ -113,6 +113,7 @@ export default function CampaignDetailPage() {
         (d.segments ?? []).map((s) => ({ id: s.id, name: s.name, description: s.description })),
       );
     }
+
     setLoading(false);
   }, [id]);
 
@@ -313,10 +314,10 @@ export default function CampaignDetailPage() {
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs font-medium text-gray-500">Audience</p>
             <Link
-              href="/dashboard/marketing/email/segments"
+              href="/dashboard/marketing/email/audiences"
               className="text-xs font-medium text-gray-700 underline-offset-2 hover:underline"
             >
-              Manage saved segments →
+              Manage audiences →
             </Link>
           </div>
           <AudiencePicker

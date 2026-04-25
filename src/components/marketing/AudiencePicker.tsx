@@ -231,9 +231,9 @@ export function AudiencePicker({
               onChange={() => setType('saved_segment')}
             />
             <span>
-              <span className="font-medium text-gray-900">Use a saved segment</span>
+              <span className="font-medium text-gray-900">Use a saved audience</span>
               <span className="ml-2 text-xs text-gray-500">
-                Reusable audience defined under Marketing → Segments. Editing a segment updates this campaign automatically.
+                Reusable audience defined under Marketing → Audiences. Editing an audience updates this campaign automatically.
               </span>
             </span>
           </label>
@@ -241,12 +241,12 @@ export function AudiencePicker({
             <div className="ml-6">
               {(savedSegments ?? []).length === 0 ? (
                 <p className="text-xs text-gray-500">
-                  No saved segments yet —{' '}
+                  No saved audiences yet —{' '}
                   <a
-                    href="/dashboard/marketing/email/segments"
+                    href="/dashboard/marketing/email/audiences"
                     className="font-medium text-gray-900 underline-offset-2 hover:underline"
                   >
-                    create your first segment
+                    create your first audience
                   </a>
                   .
                 </p>

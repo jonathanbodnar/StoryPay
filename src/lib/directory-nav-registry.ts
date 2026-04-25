@@ -65,7 +65,7 @@ export const DIRECTORY_NAV_REGISTRY: DirectoryNavRegistryEntry[] = [
   { id: 'nav_marketing_email_templates', label: 'Marketing — Email templates', pathPrefix: '/dashboard/marketing/email/templates', group: 'marketing' },
   { id: 'nav_marketing_email_preferences', label: 'Marketing — Email opt-in / unsubscribes', pathPrefix: '/dashboard/marketing/email/preferences', group: 'marketing' },
   { id: 'nav_marketing_email_campaigns', label: 'Marketing — Email campaigns', pathPrefix: '/dashboard/marketing/email/campaigns', group: 'marketing' },
-  { id: 'nav_marketing_email_segments', label: 'Marketing — Saved segments', pathPrefix: '/dashboard/marketing/email/segments', group: 'marketing' },
+  { id: 'nav_marketing_email_segments', label: 'Marketing — Audiences', pathPrefix: '/dashboard/marketing/email/audiences', group: 'marketing' },
   { id: 'nav_marketing_email_automations', label: 'Marketing — Workflows', pathPrefix: '/dashboard/marketing/workflows', group: 'marketing' },
   { id: 'nav_marketing_email_root', label: 'Marketing — Email (index)', pathPrefix: '/dashboard/marketing/email', group: 'marketing' },
   { id: 'nav_marketing_trigger_links', label: 'Marketing — Trigger links & tags', pathPrefix: '/dashboard/marketing/trigger-links', group: 'marketing' },

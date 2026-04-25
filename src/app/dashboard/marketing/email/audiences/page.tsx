@@ -37,8 +37,8 @@ interface TriggerLinkOpt {
 
 const EMPTY_DEF: SavedSegmentDefinition = { type: 'all_leads' };
 
-export default function SegmentsPage() {
-  const [segments, setSegments] = useState<SegmentRow[]>([]);
+export default function AudiencesPage() {
+  const [audiences, setAudiences] = useState<SegmentRow[]>([]);
   const [tags, setTags] = useState<AudiencePickerTag[]>([]);
   const [pipelines, setPipelines] = useState<PipelineRow[]>([]);
   const [triggerLinks, setTriggerLinks] = useState<TriggerLinkOpt[]>([]);
@@ -64,7 +64,7 @@ export default function SegmentsPage() {
     ]);
     if (sRes.ok) {
       const d = (await sRes.json()) as { segments?: SegmentRow[] };
-      setSegments(d.segments ?? []);
+      setAudiences(d.segments ?? []);
     }
     if (tagRes.ok) {
       const d = (await tagRes.json()) as { tags?: AudiencePickerTag[] };
@@ -85,13 +85,11 @@ export default function SegmentsPage() {
     queueMicrotask(() => void load());
   }, [load]);
 
-  // Per-row count fetch — best-effort, non-blocking. Refreshes whenever the
-  // segments list changes.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const next: Record<string, number | null> = {};
-      for (const s of segments) {
+      for (const s of audiences) {
         try {
           const segJson = JSON.stringify({
             type: 'saved_segment',
@@ -118,14 +116,14 @@ export default function SegmentsPage() {
     return () => {
       cancelled = true;
     };
-  }, [segments]);
+  }, [audiences]);
 
   async function handleDelete(id: string) {
-    if (!confirm('Delete this segment? Any campaigns using it will fall back to "All leads".')) return;
+    if (!confirm('Delete this audience? Any campaigns using it will fall back to "All leads".')) return;
     const res = await fetch(`/api/marketing/segments/${id}`, { method: 'DELETE' });
     if (!res.ok) {
       const j = (await res.json().catch(() => ({}))) as { error?: string };
-      setErr(j.error || 'Could not delete segment');
+      setErr(j.error || 'Could not delete audience');
       return;
     }
     setErr(null);
@@ -136,9 +134,9 @@ export default function SegmentsPage() {
     <div className="max-w-3xl">
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Segments</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Audiences</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Save reusable audiences and pick them when sending campaigns. Edits to a segment update every campaign that
+            Save reusable audiences and pick them when sending campaigns. Edits to an audience update every campaign that
             uses it on the next send.
           </p>
         </div>
@@ -150,7 +148,7 @@ export default function SegmentsPage() {
           }}
           className="flex items-center gap-2 rounded-2xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-gray-700"
         >
-          <Plus size={16} /> New segment
+          <Plus size={16} /> New audience
         </button>
       </div>
 
@@ -160,25 +158,25 @@ export default function SegmentsPage() {
         <div className="flex justify-center py-20">
           <Loader2 size={24} className="animate-spin text-gray-400" />
         </div>
-      ) : segments.length === 0 ? (
+      ) : audiences.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-gray-200 py-16 text-center">
           <Users size={32} className="mx-auto mb-3 text-gray-300" />
-          <p className="text-sm font-medium text-gray-500">No segments yet</p>
+          <p className="text-sm font-medium text-gray-500">No audiences yet</p>
           <p className="mx-auto mt-1 max-w-sm text-xs text-gray-400">
-            Create a segment to reuse the same audience across multiple campaigns — e.g. “Booked couples 2026”, “Tour
-            requested, no proposal”, or “Newsletter subscribers”.
+            Create an audience to reuse the same group across multiple campaigns — e.g. "Booked couples 2026", "Tour
+            requested, no proposal", or "Newsletter subscribers".
           </p>
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
             className="mt-4 inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
           >
-            <Plus size={15} /> New segment
+            <Plus size={15} /> New audience
           </button>
         </div>
       ) : (
         <div className="space-y-2">
-          {segments.map((s) => {
+          {audiences.map((s) => {
             const count = counts[s.id];
             return (
               <div
@@ -229,7 +227,7 @@ export default function SegmentsPage() {
       )}
 
       {createOpen ? (
-        <SegmentEditorModal
+        <AudienceEditorModal
           mode="create"
           tags={tags}
           stages={stages}
@@ -244,7 +242,7 @@ export default function SegmentsPage() {
       ) : null}
 
       {editing ? (
-        <SegmentEditorModal
+        <AudienceEditorModal
           mode="edit"
           id={editing.id}
           tags={tags}
@@ -264,20 +262,20 @@ export default function SegmentsPage() {
       ) : null}
 
       <div className="mt-10 rounded-2xl border border-dashed border-gray-200 bg-gray-50/60 p-5 text-xs text-gray-500">
-        <p className="font-semibold text-gray-700">Want to send to one of these segments?</p>
+        <p className="font-semibold text-gray-700">Want to send to one of these audiences?</p>
         <p className="mt-1">
           Open or create a campaign in{' '}
           <Link href="/dashboard/marketing/email/campaigns" className="font-medium text-gray-900 underline-offset-2 hover:underline">
             Marketing → Emails
           </Link>
-          , then choose <span className="font-medium text-gray-700">Use a saved segment</span> in the Audience step.
+          , then choose <span className="font-medium text-gray-700">Use a saved audience</span> in the Audience step.
         </p>
       </div>
     </div>
   );
 }
 
-function SegmentEditorModal({
+function AudienceEditorModal({
   mode,
   id,
   tags,
@@ -330,9 +328,6 @@ function SegmentEditorModal({
     onSaved();
   }
 
-  // The AudiencePicker is shaped around CampaignSegment, but a saved segment
-  // definition is the same shape minus the saved_segment recursion. Cast in/
-  // out so the picker stays the single source of truth.
   const value: CampaignSegment = definition;
 
   return (
@@ -344,7 +339,7 @@ function SegmentEditorModal({
         <div className="flex items-start justify-between gap-3 border-b border-gray-100 px-6 py-4">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">
-              {mode === 'create' ? 'New segment' : 'Edit segment'}
+              {mode === 'create' ? 'New audience' : 'Edit audience'}
             </h2>
             <p className="mt-0.5 text-xs text-gray-500">
               Define an audience once and reuse it across as many campaigns as you want.
@@ -363,7 +358,7 @@ function SegmentEditorModal({
         <div className="space-y-4 px-6 py-5">
           <div>
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">
-              Segment name <span className="text-red-400">*</span>
+              Audience name <span className="text-red-400">*</span>
             </label>
             <input
               ref={nameRef}
@@ -383,18 +378,16 @@ function SegmentEditorModal({
               className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 transition-colors placeholder:text-gray-400 focus:border-gray-400 focus:bg-white focus:outline-none"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="What this segment is for — helps your team pick the right one"
+              placeholder="What this audience is for — helps your team pick the right one"
               maxLength={500}
             />
           </div>
 
           <div className="rounded-xl border border-gray-200 bg-white p-4">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Audience</p>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Audience filters</p>
             <AudiencePicker
               value={value}
               onChange={(next) => {
-                // Strip any inadvertent saved_segment recursion; segments
-                // can't reference other segments.
                 if (next.type === 'saved_segment') {
                   setDefinition({ type: 'all_leads' });
                   return;
@@ -428,7 +421,7 @@ function SegmentEditorModal({
             className="flex items-center gap-2 rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-gray-700 disabled:opacity-60"
           >
             {saving ? <Loader2 size={14} className="animate-spin" /> : null}
-            {saving ? 'Saving…' : mode === 'create' ? 'Create segment' : 'Save changes'}
+            {saving ? 'Saving…' : mode === 'create' ? 'Create audience' : 'Save changes'}
           </button>
         </div>
       </div>

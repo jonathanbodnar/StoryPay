@@ -19,7 +19,7 @@ StoryPay is an all-in-one platform for wedding venues to manage proposals, invoi
 - Leads: Kanban and list views for inquiries — same configurable sales pipelines and stages as contact profiles. Includes pipeline intelligence (open pipeline vs weighted forecast, rough referral/directory revenue vs listing spend), per-lead opportunity value on cards, assignable owners, marketing tags, trigger links, an audit trail (stage/value/owner changes and logged calls), and mobile-friendly actions (drag cards, log call, quick note). **Every contact shows up in the pipeline**: the server reconciles leads and venue_customers on load so any contact with a real email has a lead snapped to its contact-profile pipeline/stage (contact stage is the source of truth), and broken references heal to the default pipeline's first stage instead of disappearing. The **+ Add Lead** modal includes a **Space** picker with inline add/edit/remove (same UX as the calendar event modal). Pipeline stage colors use a popover color picker with a **hex code** input, the native color wheel, and preset swatches.
 - Reports: 7 downloadable financial reports (CSV, Excel, PDF). Owners and admins only.
 - Payments (sidebar flyout): New, Proposals, Proposal Templates, Installments, Subscriptions, Transactions.
-- Marketing (sidebar flyout): Analytics, Lead Capture Forms, **Email Templates / Campaigns / Automations / Preferences** (Flodesk-style drag-and-drop builder — see "Marketing email builder" section below), trigger links & tags (availability depends on role).
+- Marketing (sidebar flyout): Analytics, Emails (campaigns), Audiences, Forms, Workflows, Trigger links & tags. All three email surfaces (Templates / Campaigns / Automations) use the Flodesk-style drag-and-drop builder — see "Marketing email builder" section below.
 - Help Center: Searchable categories and articles (including Venue listing, Reviews, Conversations, Ask AI, Leads); contextual suggestions by page; voice search; article ratings.
 - What's New: Changelog and Feature Requests board. The sidebar menu item shows a **red dot with unread count** whenever there are entries a user hasn't reviewed; visiting the page marks everything read for that user (per-user read state). Feature Requests submitted by venues can be **approved, edited, or removed** by super admins. When a super admin approves a request it's automatically converted into a **What's New** changelog entry with an outcome-based auto-generated headline + description, and the request is removed from the venue's own feature-request list.
 - Settings (sidebar flyout): General (venue info, service fee), Branding, Email Templates, Integrations (Calendly, Google Calendar, QuickBooks, FreshBooks), Team (roles, invites, **Hide $** for team members — owners only), Notifications. Venues may also store **listing marketing monthly spend** on the account for Leads ROI — when that value exists, insights use it.
@@ -177,7 +177,7 @@ StoryPay ships a Flodesk-style drag-and-drop email builder used in three places:
 - Marketing → Email Campaigns (/dashboard/marketing/email/campaigns) — one-off broadcasts with three steps (Design → Recipients → Review).
 - Marketing → Email Automations (/dashboard/marketing/email/automations) — multi-step drip sequences triggered by an event (new lead, tag, date, etc.). Each step is its own email with a delay.
 
-There is also a fourth surface: **Marketing → Segments** (/dashboard/marketing/email/segments). Segments are reusable named audiences that any campaign can point at — see the dedicated "Saved segments" section further down.
+There is also a fourth surface: **Marketing → Audiences** (/dashboard/marketing/email/audiences). Audiences are reusable named targeting groups that any campaign can point at — see the dedicated "Saved audiences" section further down.
 
 Editor layout:
 - Left: thin sidebar with Desktop / Mobile preview toggle + undo/redo bar.
@@ -235,10 +235,10 @@ Data flow / single source of truth:
 - At render time the helper injectVenueDataIntoDefinition (src/lib/marketing-email-injection.ts) copies venues.brand_socials onto every Social block's socialLinks field — preview, test sends, and bulk worker all go through this so social links are always live. Same helper drops any platform listed in the block's socialHiddenPlatforms array (the per-block eye toggle in the Links inspector tab) and any platform not in the current supported allow-list (legacy rows from retired platforms) so neither ever ships in a real send.
 - Render output is produced by renderMarketingEmailHtml (src/lib/marketing-email-render.ts) — an inline-table-based HTML pipeline tested for Gmail / Apple Mail / Outlook web. Social icons use inline SVGs with line-height = chip-height + vertical-align: middle (more reliable than flex in email clients).
 
-## Saved segments — reusable audiences for marketing campaigns
-Saved segments live at Marketing → Segments (/dashboard/marketing/email/segments). They let venue owners build an audience once and reuse it across as many campaigns as they want, instead of rebuilding the same filters every time.
+## Saved audiences — reusable targeting for marketing campaigns
+Saved audiences live at Marketing → Audiences (/dashboard/marketing/email/audiences). They let venue owners build an audience once and reuse it across as many campaigns as they want, instead of rebuilding the same filters every time.
 
-Audience types (same everywhere — campaigns, automations, and saved segments share one picker):
+Audience types (same everywhere — campaigns, automations, and saved audiences share one picker):
 - All leads — every contact with an email, excluding marketing unsubscribes and marketing_email_opt_in=false.
 - Any of these tags — lead has at least one of the selected marketing tags.
 - In any of these pipeline stages — lead is currently in one of the selected stages.
@@ -249,33 +249,33 @@ Behavior filters that compose on top of any audience type:
 - Exclude leads in booked / won stages (require_not_booked + booked_stage_ids).
 - Only leads who clicked at least one of the selected trigger links, ever (clicked_trigger_link_ids).
 
-Saved segment shape: a saved segment can ONLY hold an audience type of all_leads / tags_any / stages — never another saved_segment. This is a hard constraint enforced at parse time (src/lib/marketing-email-schema.ts → parseSavedSegmentDefinition coerces a stray saved_segment back to all_leads) so we can never build a recursion loop.
+Saved audience shape (internally stored as a "segment" in the DB/schema): a saved audience can ONLY hold an audience type of all_leads / tags_any / stages — never another saved audience. This is a hard constraint enforced at parse time (parseSavedSegmentDefinition coerces a stray saved_segment back to all_leads) so we can never build a recursion loop.
 
-Campaign segment shape: a campaign's segment_json adds one more option: type='saved_segment' with saved_segment_id pointing at a marketing_segments row. At resolve time, src/lib/marketing-email-audience.ts → resolveSavedSegment loads the segment and merges its filters with any inline behavior filters set on the campaign (de-duped union). The audience type (all_leads / tags_any / stages) always comes from the saved segment; the campaign can only add to or further narrow the saved segment, never replace its core type. If the saved segment is deleted or the wrong venue, recipients = 0 (campaign owner is shown a fallback path — see "Deleting a segment").
+Campaign audience shape: a campaign's segment_json adds one more option: type='saved_segment' with saved_segment_id pointing at a marketing_segments row. At resolve time, resolveSavedSegment loads the saved audience and merges its filters with any inline behavior filters set on the campaign (de-duped union). The audience type always comes from the saved audience; the campaign can only add to or further narrow it, never replace its core type. If the saved audience is deleted or the wrong venue, recipients = 0 (campaign falls back to "All leads").
 
 UI flows:
-- Create a segment: Marketing → Segments → "New segment" → name (required, unique per venue, max 200 chars) + optional description (max 500 chars) + audience picker. Live recipient-count chip updates with each tweak so you see exactly how many people would receive a campaign sent to this segment right now.
-- Use a segment in a campaign: open a campaign → Audience → "Use a saved segment" → pick from dropdown. Inline behavior filters can still be added to narrow further.
-- Edit a segment: changes propagate to every draft and scheduled campaign on the next send. Already-sent campaigns are unaffected (recipients are locked at send time).
-- Delete a segment: any campaigns currently using it are auto-detached and fall back to type='all_leads' so they remain valid and sendable. The campaign owner can then re-pick a different segment.
+- Create an audience: Marketing → Audiences → "New audience" → name (required, unique per venue, max 200 chars) + optional description (max 500 chars) + audience filters. Live recipient-count chip updates with each tweak.
+- Use a saved audience in a campaign: open a campaign → Audience → "Use a saved audience" → pick from dropdown. Inline behavior filters can still be added to narrow further.
+- Edit an audience: changes propagate to every draft and scheduled campaign on the next send. Already-sent campaigns are unaffected (recipients are locked at send time).
+- Delete an audience: any campaigns currently using it are auto-detached and fall back to type='all_leads' so they remain valid and sendable. The campaign owner can then re-pick.
 
-API surface:
-- GET /api/marketing/segments — list venue's saved segments.
+API surface (routes use "segments" internally):
+- GET /api/marketing/segments — list venue's saved audiences.
 - POST /api/marketing/segments — create (body: { name, description, definition }). Returns 409 on duplicate name.
-- GET /api/marketing/segments/[id] — single segment + usedByCampaigns count.
+- GET /api/marketing/segments/[id] — single audience + usedByCampaigns count.
 - PATCH /api/marketing/segments/[id] — update name / description / definition.
 - DELETE /api/marketing/segments/[id] — delete + auto-detach any campaigns referencing it.
-- POST /api/marketing/segments/preview — body: { segment: CampaignSegment } → returns { count }. Used by the live recipient-count chip in both the campaign audience picker and the segment editor.
+- POST /api/marketing/segments/preview — body: { segment: CampaignSegment } → returns { count }. Used by the live recipient-count chip in both the campaign picker and the audience editor.
 
-Database: marketing_segments table (migration 061). Columns: id, venue_id, name (unique per venue, case-insensitive via lower(name)), description, definition_json (jsonb of CampaignSegment shape constrained to non-saved_segment types), created_at, updated_at. Indexes: venue_id, (venue_id, updated_at desc), unique (venue_id, lower(name)). FK to venues with ON DELETE CASCADE. updated_at maintained by the same set_updated_at() trigger as marketing_email_templates.
+Database: marketing_segments table (migration 061). Columns: id, venue_id, name (unique per venue, case-insensitive via lower(name)), description, definition_json (jsonb CampaignSegment shape constrained to non-saved_segment types), created_at, updated_at. FK to venues with ON DELETE CASCADE. updated_at maintained by set_updated_at() trigger.
 
-Reusable component: src/components/marketing/AudiencePicker.tsx is the single audience-picker UI used by both the campaign detail page and the segment editor. The segment editor passes hideSavedSegmentOption=true so the saved_segment radio is suppressed (you can't reference a segment from inside a segment).
+Reusable component: src/components/marketing/AudiencePicker.tsx is the single picker UI used by both the campaign detail page and the audience editor. The audience editor passes hideSavedSegmentOption=true so the "Use a saved audience" radio is suppressed (no recursion).
 
-When to use a saved segment vs an inline campaign audience:
-- Saved segment: when the same audience will be sent to twice or more, or when multiple team members will run sends and consistent targeting matters.
+When to use a saved audience vs an inline campaign audience:
+- Saved audience: when the same group will be sent to twice or more, or when multiple team members will run sends and consistent targeting matters.
 - Inline picker (Tags / Stages / All leads with filters): one-off sends that won't be reused.
 
-Recommended evergreen segments for most venues: "Active leads, no proposal", "Booked couples upcoming", "Past clients", "Newsletter subscribers". Build narrower one-offs inline.
+Recommended evergreen audiences for most venues: "Active leads, no proposal", "Booked couples upcoming", "Past clients", "Newsletter subscribers". Build narrower one-offs inline.
 
 ## Email Templates
 - Go to Settings → Email Templates to customize every type of outgoing email.
@@ -378,13 +378,13 @@ Recommended evergreen segments for most venues: "Active leads, no proposal", "Bo
 - Why can't I see the social icons in the editor preview? Make sure (a) you've saved at least one social link in Settings → Branding → Social Networks and (b) the Social block's Icons tab has a non-transparent color set. Editor, preview iframe, and sent email use the exact same render path so what you see is what gets sent.
 - Why does my Facebook icon look like just a letter "f" instead of the full Facebook logo? (Same applies to LinkedIn "in", Pinterest "P", TikTok "d", X.) That's the intended Flodesk-style minimalist icon set — filled letterforms for letter-based platforms and stroked outlines for shape-based ones (Instagram camera, Globe, YouTube). It gives every email a clean editorial look that matches modern newsletter design. The simplified marks are still universally recognized. There is no setting to swap to full multi-color brand logos; if you want richer artwork, drop an Image block instead and link it manually.
 - Why does my Pinterest icon have a hole in the middle? That's a deliberate "see-through eye" — the bowl of the P uses fill-rule=evenodd so the counter shows the page (or chip) color through it, matching the reference design. It's not a rendering bug.
-- How do I create a saved audience / segment for marketing emails? Marketing → Segments → "New segment". Give it a name, optional description, and pick the same audience options you'd pick on a campaign (All leads / Tags / Pipeline stages, plus optional behavior filters: require wedding date, exclude stages, exclude booked stages, clicked trigger links). A live recipient-count chip shows how many people the segment matches right now. Save it, then pick it from any campaign's Audience step.
-- What's the difference between a saved segment and a campaign audience? A campaign audience is built once and lives only on that campaign. A saved segment is reusable — define it once and pick it from a dropdown in every future campaign. When you edit a saved segment, every draft and scheduled campaign using it picks up the new audience on the next send. Already-sent campaigns are unaffected (recipients are locked at send time).
-- Can I narrow a saved segment further inside a specific campaign? Yes. Pick "Use a saved segment" in the campaign's Audience step, then layer additional behavior filters on top (e.g. start with "Booked couples 2026" but require a wedding date on file, or exclude one stage). Those filters compose with — they don't replace — the segment's own filters.
-- Can a saved segment reference another saved segment? No. Saved segments can only hold an audience type of All leads, Tags, or Pipeline stages — never another segment. This prevents loops and keeps the recipient count honest. The "Use a saved segment" radio is hidden inside the segment editor.
-- What happens if I delete a saved segment that's being used by a campaign? Any draft or scheduled campaigns currently pointing at it auto-detach and fall back to "All leads" so they stay valid and sendable. The campaign owner can then re-pick a different segment. We never silently drop a recipient list.
-- Where do segments live in the database? marketing_segments table (migration 061): id, venue_id (FK to venues with ON DELETE CASCADE), name (unique per venue, case-insensitive), description, definition_json (CampaignSegment shape constrained to non-saved_segment types), created_at, updated_at. Recipients resolve through src/lib/marketing-email-audience.ts → resolveSavedSegment which loads the segment and merges its filters with any inline campaign filters.
-- Why is my segment recipient count zero? Common causes: (1) zero leads with email addresses match the audience type, (2) every match is on the marketing suppression list, (3) every match has marketing_email_opt_in=false, (4) you required a wedding date but no matching lead has one set, (5) the segment was deleted (campaign falls back to "All leads"; if you want a non-zero audience, re-pick a segment or build the audience inline). The live count chip in the Segments editor and the Audience step refresh whenever you change a filter.
+- How do I create a saved audience for marketing emails? Marketing → Audiences → "New audience". Give it a name, optional description, and pick the same audience options you'd pick on a campaign (All leads / Tags / Pipeline stages, plus optional behavior filters: require wedding date, exclude stages, exclude booked stages, clicked trigger links). A live recipient-count chip shows how many people match right now. Save it, then pick it from any campaign's Audience step.
+- What's the difference between a saved audience and a campaign audience? A campaign audience is built once and lives only on that campaign. A saved audience is reusable — define it once and pick it from a dropdown in every future campaign. When you edit a saved audience, every draft and scheduled campaign using it picks up the new audience on the next send. Already-sent campaigns are unaffected (recipients are locked at send time).
+- Can I narrow a saved audience further inside a specific campaign? Yes. Pick "Use a saved audience" in the campaign's Audience step, then layer additional behavior filters on top (e.g. start with "Booked couples 2026" but require a wedding date on file, or exclude one stage). Those filters compose with — they don't replace — the audience's own filters.
+- Can a saved audience reference another saved audience? No. Saved audiences can only hold an audience type of All leads, Tags, or Pipeline stages — never another audience. This prevents loops and keeps the recipient count honest. The "Use a saved audience" radio is hidden inside the audience editor.
+- What happens if I delete a saved audience that's being used by a campaign? Any draft or scheduled campaigns currently pointing at it auto-detach and fall back to "All leads" so they stay valid and sendable. The campaign owner can then re-pick a different audience. We never silently drop a recipient list.
+- Where do saved audiences live in the database? marketing_segments table (migration 061): id, venue_id (FK to venues with ON DELETE CASCADE), name (unique per venue, case-insensitive), description, definition_json (CampaignSegment shape constrained to non-saved_segment types), created_at, updated_at. Recipients resolve through src/lib/marketing-email-audience.ts → resolveSavedSegment which loads the audience and merges its filters with any inline campaign filters.
+- Why is my saved audience recipient count zero? Common causes: (1) zero leads with email addresses match the audience type, (2) every match is on the marketing suppression list, (3) every match has marketing_email_opt_in=false, (4) you required a wedding date but no matching lead has one set, (5) the audience was deleted (campaign falls back to "All leads"; if you want a non-zero audience, re-pick or build the audience inline). The live count chip in the Audiences editor and the Audience step refresh whenever you change a filter.
 `;
 
 export async function POST(request: NextRequest) {

@@ -1715,17 +1715,17 @@ Tip — keep a small stable of well-tested templates (Inquiry follow-up, Tour re
       },
       {
         id: 'me-segments',
-        title: 'Saved segments — build a reusable audience once, send to it forever',
-        tags: ['segment', 'segments', 'audience', 'saved segment', 'reusable', 'targeting', 'list', 'group', 'recipients'],
-        body: `Saved segments live at Marketing → Segments. They let you build an audience once and reuse it across as many campaigns as you want — instead of rebuilding the same filters every time you send a new email.
+        title: 'Audiences — build a reusable audience once, send to it forever',
+        tags: ['audience', 'audiences', 'segment', 'saved audience', 'reusable', 'targeting', 'list', 'group', 'recipients'],
+        body: `Saved audiences live at Marketing → Audiences. They let you build an audience once and reuse it across as many campaigns as you want — instead of rebuilding the same filters every time you send a new email.
 
-Why use segments
+Why use audiences
 - Stop rebuilding the same audience. Save "Booked couples 2026", "Tour requested no proposal", "Newsletter subscribers", "Past clients", etc. once and pick it from a dropdown when you create a campaign.
-- Edits propagate. When you tweak a saved segment, every draft and scheduled campaign using it picks up the new audience on the next send. Already-sent campaigns are unaffected (their recipients are locked at send time).
+- Edits propagate. When you tweak a saved audience, every draft and scheduled campaign using it picks up the new audience on the next send. Already-sent campaigns are unaffected (their recipients are locked at send time).
 - Stay consistent. Your team sends to the exact same audience every time without remembering which filters to combine.
 
-How to create a segment
-1. Go to Marketing → Segments → New segment.
+How to create an audience
+1. Go to Marketing → Audiences → New audience.
 2. Give it a name (required, must be unique per venue) and an optional description for your team.
 3. Pick the audience type — same options you already know:
    - All leads (every contact with email, excluding unsubscribes / opt-outs)
@@ -1736,34 +1736,34 @@ How to create a segment
    - Exclude leads currently in specific stages
    - Exclude leads in booked / won stages
    - Only leads who clicked one of selected trigger links (ever)
-5. Watch the live recipient-count chip update as you tweak the filters — that's exactly how many people would receive a campaign sent to this segment right now.
-6. Save. The segment is immediately available in every campaign's Audience step.
+5. Watch the live recipient-count chip update as you tweak the filters — that's exactly how many people would receive a campaign sent to this audience right now.
+6. Save. The audience is immediately available in every campaign's Audience step.
 
-Important — saved segments cannot reference other saved segments. The audience type inside a segment is always one of All leads / Tags / Stages, never another segment. (This prevents loops and keeps the audience preview honest.)
+Important — saved audiences cannot reference other saved audiences. The audience type inside a saved audience is always one of All leads / Tags / Stages, never another audience. (This prevents loops and keeps the count preview honest.)
 
-Using a saved segment in a campaign
+Using a saved audience in a campaign
 1. Open or create a campaign at Marketing → Emails.
-2. In the Audience section, pick "Use a saved segment" and choose your segment from the dropdown.
-3. You can still layer additional behavior filters on top of the segment (e.g. start with "Booked couples 2026" but require a wedding date on file). Those filters compose with — they don't replace — the segment's filters.
-4. Save the campaign. When it sends, StoryPay re-resolves the segment and delivers to whoever currently matches.
+2. In the Audience section, pick "Use a saved audience" and choose your audience from the dropdown.
+3. You can still layer additional behavior filters on top (e.g. start with "Booked couples 2026" but require a wedding date on file). Those filters compose with — they don't replace — the audience's filters.
+4. Save the campaign. When it sends, StoryPay re-resolves the audience and delivers to whoever currently matches.
 
-Editing a segment
-- Edits show up automatically on the next send for any draft or scheduled campaigns using the segment.
-- Recipient counts in the Segments list and inside the audience picker refresh whenever you reload the page.
+Editing an audience
+- Edits show up automatically on the next send for any draft or scheduled campaigns using the audience.
+- Recipient counts in the Audiences list and inside the campaign picker refresh whenever you reload the page.
 
-Deleting a segment
-- If any draft or scheduled campaigns are using the segment, deleting it detaches those campaigns and falls them back to "All leads" so they stay valid.
-- The campaign owner can re-pick a different segment afterwards. We never silently drop a recipient list — we always make the fallback explicit.
+Deleting an audience
+- If any draft or scheduled campaigns are using the audience, deleting it detaches those campaigns and falls them back to "All leads" so they stay valid.
+- The campaign owner can re-pick a different audience afterwards. We never silently drop a recipient list — we always make the fallback explicit.
 
-Where to find segments
-- Marketing → Segments (left sidebar) — manage them here.
+Where to find audiences
+- Marketing → Audiences (left sidebar) — manage them here.
 - Inside any campaign's Audience step — pick one from the dropdown.
 
-When to use a segment vs an inline campaign audience
-- Use a saved segment when the same audience is being sent to twice or more, or when multiple team members will run sends and you need consistent targeting.
+When to use a saved audience vs an inline campaign audience
+- Use a saved audience when the same group is being sent to twice or more, or when multiple team members will run sends and you need consistent targeting.
 - Use the inline picker (Tags / Stages / All leads with filters) when you're sending a one-off and won't reuse the audience.
 
-Tip — start with 3-4 evergreen segments ("Active leads, no proposal", "Booked couples upcoming", "Past clients", "Newsletter subscribers") and use them as the backbone of every recurring email. Build narrower one-offs inline.`,
+Tip — start with 3-4 evergreen audiences ("Active leads, no proposal", "Booked couples upcoming", "Past clients", "Newsletter subscribers") and use them as the backbone of every recurring email. Build narrower one-offs inline.`,
       },
     ],
   },
@@ -2178,7 +2178,7 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   // Marketing — native email
   '/dashboard/marketing/analytics': ['me-overview', 'me-compliance', 'leads-overview', 'gs-overview'],
   '/dashboard/marketing/email/campaigns':  ['me-builder', 'me-blocks', 'me-preview-test', 'me-segments', 'me-templates-vs-campaigns', 'me-compliance', 'brand-social-networks', 'brand-colors-saved'],
-  '/dashboard/marketing/email/segments':   ['me-segments', 'me-templates-vs-campaigns', 'me-overview', 'me-compliance'],
+  '/dashboard/marketing/email/audiences':  ['me-segments', 'me-templates-vs-campaigns', 'me-overview', 'me-compliance'],
   '/dashboard/marketing/email/templates':  ['me-builder', 'me-blocks', 'me-templates-vs-campaigns', 'me-block-button', 'me-block-image', 'me-block-video', 'me-block-social', 'me-block-address', 'me-brand-colors'],
   '/dashboard/marketing/email/automations':['me-templates-vs-campaigns', 'me-builder', 'me-blocks', 'me-compliance', 'me-preview-test'],
   '/dashboard/marketing/email/preferences':['me-compliance', 'me-overview'],
