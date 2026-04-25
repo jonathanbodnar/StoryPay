@@ -9,9 +9,9 @@ import {
   Check, ChevronDown, ChevronRight, Copy, Eye, Heart,
   Image as ImageIcon,
   Italic, Link2, List, ListOrdered, Loader2, Minus, Monitor,
-  Paperclip, PenLine, Plus, SeparatorHorizontal, Smartphone,
+  Paperclip, PenLine, Pipette, Plus, SeparatorHorizontal, Smartphone,
   Space, Strikethrough, Trash2, Type, Underline, X as XIcon,
-  MousePointer2, Palette, Video, Share2, MapPin,
+  MousePointer2, Palette, Video, Share2, MapPin, Search,
 } from 'lucide-react';
 import {
   DndContext,
@@ -131,6 +131,232 @@ function moveArr<T>(arr: T[], from: number, to: number): T[] {
 
 function stripTags(s: string) { return s.replace(/<[^>]+>/g, '').trim(); }
 
+// ─── Google Fonts ─────────────────────────────────────────────────────────────
+const GOOGLE_FONT_LIST = [
+  'Inter','Open Sans','Roboto','Lato','Montserrat','Poppins','Nunito','Raleway',
+  'Oswald','Work Sans','Source Sans 3','Quicksand','Josefin Sans',
+  'Playfair Display','Merriweather','Libre Baskerville','Crimson Text',
+  'DM Sans','Plus Jakarta Sans','Manrope','Figtree','Outfit',
+];
+const SYSTEM_FONT_LIST = [
+  { label:'Helvetica Neue', value:"'Helvetica Neue', Helvetica, Arial, sans-serif" },
+  { label:'Georgia',        value:"Georgia, 'Times New Roman', serif" },
+  { label:'Arial',          value:'Arial, Helvetica, sans-serif' },
+  { label:'Verdana',        value:'Verdana, Geneva, sans-serif' },
+  { label:'Courier New',    value:"'Courier New', Courier, monospace" },
+];
+const ALL_FONT_OPTIONS = [
+  ...SYSTEM_FONT_LIST,
+  ...GOOGLE_FONT_LIST.map(f => ({ label: f, value: f })),
+];
+const FONT_WEIGHTS = [
+  { label:'Light',    value:'300' },
+  { label:'Regular',  value:'400' },
+  { label:'Medium',   value:'500' },
+  { label:'Semibold', value:'600' },
+  { label:'Bold',     value:'700' },
+];
+
+function loadGoogleFonts() {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById('sp-google-fonts')) return;
+  const families = GOOGLE_FONT_LIST.map(f => `family=${f.replace(/ /g,'+')}:wght@300;400;500;600;700`).join('&');
+  const link = document.createElement('link');
+  link.id = 'sp-google-fonts';
+  link.rel = 'stylesheet';
+  link.href = `https://fonts.googleapis.com/css2?${families}&display=swap`;
+  document.head.appendChild(link);
+}
+
+// ─── Flodesk-style color picker ───────────────────────────────────────────────
+const COLOR_PALETTE: string[] = [
+  // pinks / nudes
+  '#fce8e0','#f8d9d0','#f4c8b8','#eda898','#e38474','#d86a58','#c45040','#a83428','#8a1e14','#6e0a02',
+  // warm earth
+  '#f7ebe1','#eedad0','#e3c4b0','#d4ac92','#c49474','#b07c5c','#9a6448','#824c34','#6a3820','#520800',
+  // reds / roses
+  '#ffe0e0','#ffb8b8','#ff8888','#ff5050','#f01818','#d40000','#b80000','#9a0000','#7c0000','#600000',
+  // oranges
+  '#fff3e0','#ffd8a0','#ffba60','#ff9c28','#f07c08','#d46000','#b84800','#9a3000','#7c1c00','#600800',
+  // yellows
+  '#fffde0','#fff4a0','#ffe860','#ffd820','#f4c000','#d8a400','#bc8800','#9e6e00','#805400','#623c00',
+  // greens
+  '#e8f8e8','#c0ecc0','#90dc90','#60cc60','#38b838','#20a020','#0e8a0e','#007200','#005a00','#004400',
+  // teals / cyans
+  '#e0f8f6','#b4ecea','#78dcda','#40ccca','#18b8b4','#00a09c','#008884','#00706c','#005858','#004040',
+  // blues
+  '#e0eeff','#b4d4ff','#7ab4ff','#3c94ff','#1074f0','#0058d4','#0040ba','#002c9a','#001c7e','#000c62',
+  // purples
+  '#f0e0ff','#dab8ff','#bc88ff','#9e58ff','#8030f0','#6810d4','#5000ba','#3c009a','#28007e','#160062',
+  // pinks / magentas
+  '#ffe0f4','#ffb0e0','#ff78c8','#ff40b0','#f01898','#d40080','#b80068','#9a0050','#7c003a','#600028',
+  // grays + black/white
+  '#000000','#1a1a1a','#333333','#4d4d4d','#666666','#808080','#999999','#b3b3b3','#cccccc','#ffffff',
+];
+
+function FlodeskColorPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [hex, setHex] = useState(value);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { setHex(value); }, [value]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  function applyHex(raw: string) {
+    const v = raw.startsWith('#') ? raw : `#${raw}`;
+    setHex(v);
+    if (/^#[0-9a-fA-F]{6}$/.test(v)) onChange(v);
+  }
+
+  async function eyeDrop() {
+    if (!('EyeDropper' in window)) return;
+    try {
+      // @ts-ignore
+      const { sRGBHex } = await new window.EyeDropper().open();
+      applyHex(sRGBHex);
+      setOpen(false);
+    } catch {}
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      {/* Swatch trigger */}
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-12 h-12 rounded-full border border-gray-200 transition-transform hover:scale-105 focus:outline-none"
+        style={{ background: value }}
+      />
+
+      {open && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            top: (ref.current?.getBoundingClientRect().bottom ?? 0) + 8,
+            left: Math.max(8, (ref.current?.getBoundingClientRect().left ?? 0) - 140),
+            zIndex: 500,
+            width: 320,
+          }}
+          onMouseDown={e => e.stopPropagation()}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl p-5">
+            {/* Color grid */}
+            <div className="grid grid-cols-10 gap-1.5 mb-4">
+              {COLOR_PALETTE.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  title={c}
+                  onMouseDown={() => { applyHex(c); onChange(c); }}
+                  className="w-6 h-6 rounded-full transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-400"
+                  style={{ background: c, border: c === '#ffffff' ? '1px solid #e5e5e5' : 'none' }}
+                />
+              ))}
+            </div>
+
+            {/* Brand colors */}
+            <p className="text-center text-[13px] text-gray-500 underline cursor-pointer mb-4 hover:text-gray-800">
+              Add your brand colors
+            </p>
+
+            {/* Hex input + eyedropper */}
+            <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2">
+              <div className="w-5 h-5 rounded-full flex-shrink-0 border border-gray-200" style={{ background: hex }} />
+              <input
+                className="flex-1 text-sm font-mono uppercase text-gray-800 focus:outline-none bg-transparent"
+                value={hex.replace('#','').toUpperCase()}
+                maxLength={6}
+                onChange={e => applyHex(e.target.value)}
+                onBlur={e => applyHex(e.target.value)}
+              />
+              <button type="button" onClick={eyeDrop} className="text-gray-400 hover:text-gray-700 transition-colors" title="Pick color from screen">
+                <Pipette size={15} />
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+}
+
+// ─── Searchable font selector ─────────────────────────────────────────────────
+function FontSelector({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  const filtered = ALL_FONT_OPTIONS.filter(f =>
+    f.label.toLowerCase().includes(query.toLowerCase()),
+  );
+  const current = ALL_FONT_OPTIONS.find(f => f.value === value) ?? { label: value, value };
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => { setOpen(o => !o); setQuery(''); }}
+        className="w-full flex items-center justify-between border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 bg-gray-50 hover:bg-white hover:border-gray-400 transition-colors focus:outline-none"
+        style={{ fontFamily: value }}
+      >
+        <span className="truncate">{current.label}</span>
+        <ChevronDown size={13} className="text-gray-400 flex-shrink-0 ml-1" />
+      </button>
+
+      {open && (
+        <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
+          <div className="p-2 border-b border-gray-100">
+            <div className="flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded-lg">
+              <Search size={12} className="text-gray-400" />
+              <input
+                autoFocus
+                className="flex-1 text-sm bg-transparent focus:outline-none text-gray-700 placeholder:text-gray-400"
+                placeholder="Search fonts…"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="max-h-52 overflow-y-auto py-1">
+            {filtered.map(f => (
+              <button
+                key={f.value}
+                type="button"
+                onMouseDown={() => { onChange(f.value); setOpen(false); }}
+                className={`w-full text-left px-4 py-2 text-sm transition-colors hover:bg-gray-50 ${value === f.value ? 'bg-gray-100 font-medium' : ''}`}
+                style={{ fontFamily: f.value }}
+              >
+                {f.label}
+              </button>
+            ))}
+            {filtered.length === 0 && (
+              <p className="px-4 py-3 text-sm text-gray-400">No fonts found</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Individual block canvas renderers ───────────────────────────────────────
 // ─── Floating format toolbar (appears on text selection inside canvas) ────────
 function FloatingFormatBar() {
@@ -227,10 +453,10 @@ function HeadingCanvas({ block, theme, onPatch }: { block: EmailBlock; theme: Re
       style={{
         padding: '8px 24px',
         textAlign: block.align ?? 'left',
-        fontFamily: theme.fontFamily,
+        fontFamily: block.fontFamily ?? theme.fontFamily,
         fontSize: size,
-        fontWeight: 700,
-        color: theme.textColor,
+        fontWeight: block.fontWeight ?? 700,
+        color: block.color ?? theme.textColor,
         lineHeight: 1.25,
         wordBreak: 'break-word',
         outline: 'none',
@@ -262,10 +488,11 @@ function TextCanvas({ block, theme, onPatch }: { block: EmailBlock; theme: Retur
       style={{
         padding: '8px 24px',
         textAlign: block.align ?? 'left',
-        fontFamily: theme.fontFamily,
-        fontSize: '16px',
+        fontFamily: block.fontFamily ?? theme.fontFamily,
+        fontSize: block.fontSize ?? '16px',
+        fontWeight: block.fontWeight ?? 400,
         lineHeight: 1.6,
-        color: theme.textColor,
+        color: block.color ?? theme.textColor,
         outline: 'none',
         cursor: onPatch ? 'text' : 'default',
       }}
@@ -518,10 +745,12 @@ function SortableBlock({
 // ─── Right Panel — Block Inspector ───────────────────────────────────────────
 function BlockInspectorPanel({
   block,
+  theme,
   onChange,
   onMediaPick,
 }: {
   block: EmailBlock;
+  theme: ReturnType<typeof mergeEmailTheme>;
   onChange: (patch: Partial<EmailBlock>) => void;
   onMediaPick: (apply: (url: string) => void) => void;
 }) {
@@ -557,6 +786,35 @@ function BlockInspectorPanel({
           <p className="text-[11px] text-gray-400">Type directly on the canvas</p>
         </div>
         <div>
+          <label className={LABEL}>Font family</label>
+          <FontSelector
+            value={block.fontFamily ?? theme.fontFamily}
+            onChange={(v) => onChange({ fontFamily: v })}
+          />
+        </div>
+        <div>
+          <label className={LABEL}>Weight</label>
+          <div className="flex gap-1.5 flex-wrap">
+            {FONT_WEIGHTS.map(w => (
+              <button
+                key={w.value}
+                type="button"
+                onClick={() => onChange({ fontWeight: w.value })}
+                className={`px-3 py-1 rounded-lg text-xs border transition-colors ${(block.fontWeight ?? '700') === w.value ? 'border-gray-800 bg-gray-800 text-white' : 'border-gray-200 text-gray-600 hover:border-gray-400'}`}
+              >
+                {w.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <label className={LABEL}>Color</label>
+          <FlodeskColorPicker
+            value={block.color ?? theme.textColor}
+            onChange={(v) => onChange({ color: v })}
+          />
+        </div>
+        <div>
           <label className={LABEL}>Size</label>
           <div className="flex gap-1">
             {([1, 2, 3] as const).map((l) => (
@@ -582,6 +840,35 @@ function BlockInspectorPanel({
         <div className="rounded-xl bg-gray-50 border border-gray-100 px-3.5 py-3">
           <p className="text-xs font-medium text-gray-600 mb-0.5">Click the block to edit</p>
           <p className="text-[11px] text-gray-400">Select text to see the formatting toolbar</p>
+        </div>
+        <div>
+          <label className={LABEL}>Font family</label>
+          <FontSelector
+            value={block.fontFamily ?? theme.fontFamily}
+            onChange={(v) => onChange({ fontFamily: v })}
+          />
+        </div>
+        <div>
+          <label className={LABEL}>Weight</label>
+          <div className="flex gap-1.5 flex-wrap">
+            {FONT_WEIGHTS.map(w => (
+              <button
+                key={w.value}
+                type="button"
+                onClick={() => onChange({ fontWeight: w.value })}
+                className={`px-3 py-1 rounded-lg text-xs border transition-colors ${(block.fontWeight ?? '400') === w.value ? 'border-gray-800 bg-gray-800 text-white' : 'border-gray-200 text-gray-600 hover:border-gray-400'}`}
+              >
+                {w.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <label className={LABEL}>Color</label>
+          <FlodeskColorPicker
+            value={block.color ?? theme.textColor}
+            onChange={(v) => onChange({ color: v })}
+          />
         </div>
         <AlignRow />
       </div>
@@ -799,56 +1086,33 @@ function ThemePanel({ theme, onChange }: {
   const LABEL = 'block text-[11px] text-gray-500 mb-2';
   const INPUT = 'w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:bg-white focus:outline-none transition-colors';
 
-  const Swatch = ({ value, field }: { value: string; field: keyof EmailTheme }) => (
-    <label className="cursor-pointer" title={`Change ${field}`}>
-      <div
-        className="w-10 h-10 rounded-full border border-gray-200 shadow-sm transition-transform hover:scale-105"
-        style={{ background: value }}
-      />
-      <input
-        type="color"
-        className="sr-only"
-        value={value}
-        onChange={(e) => onChange({ [field]: e.target.value })}
-      />
-    </label>
-  );
-
   return (
     <div className="space-y-5">
-      {/* Color swatches — 2×2 grid */}
+      {/* Color swatches — 2×2 grid, no shadows */}
       <div className="grid grid-cols-2 gap-x-4 gap-y-5">
         <div>
           <p className={LABEL}>Backdrop color</p>
-          <Swatch value={theme.pageBg} field="pageBg" />
+          <FlodeskColorPicker value={theme.pageBg} onChange={(v) => onChange({ pageBg: v })} />
         </div>
         <div>
           <p className={LABEL}>Canvas color</p>
-          <Swatch value={theme.cardBg} field="cardBg" />
+          <FlodeskColorPicker value={theme.cardBg} onChange={(v) => onChange({ cardBg: v })} />
         </div>
         <div>
           <p className={LABEL}>Font color</p>
-          <Swatch value={theme.textColor} field="textColor" />
+          <FlodeskColorPicker value={theme.textColor} onChange={(v) => onChange({ textColor: v })} />
         </div>
         <div>
           <p className={LABEL}>Link color</p>
-          <Swatch value={theme.buttonText} field="buttonText" />
+          <FlodeskColorPicker value={theme.buttonText} onChange={(v) => onChange({ buttonText: v })} />
         </div>
       </div>
 
-      <div className="border-t border-gray-100 pt-4">
-        <label className="block text-[11px] text-gray-500 mb-1.5">Font family</label>
-        <select
-          className={INPUT}
-          value={theme.fontFamily}
-          onChange={(e) => onChange({ fontFamily: e.target.value })}
-        >
-          <option value="'Helvetica Neue', Helvetica, Arial, sans-serif">Helvetica (Modern)</option>
-          <option value="Georgia, 'Times New Roman', serif">Georgia (Classic)</option>
-          <option value="'Open Sans', Arial, sans-serif">Open Sans</option>
-          <option value="Verdana, Geneva, sans-serif">Verdana</option>
-          <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
-        </select>
+      <div className="border-t border-gray-100 pt-4 space-y-3">
+        <div>
+          <label className="block text-[11px] text-gray-500 mb-1.5">Global font family</label>
+          <FontSelector value={theme.fontFamily} onChange={(v) => onChange({ fontFamily: v })} />
+        </div>
       </div>
     </div>
   );
@@ -884,6 +1148,9 @@ export function CampaignFlodeskBuilder({
   const [previewOpen, setPreviewOpen] = useState(false);
   const mediaApplyRef = useRef<(url: string) => void>(() => {});
   const saveTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load Google Fonts once on mount
+  useEffect(() => { loadGoogleFonts(); }, []);
 
   const theme = mergeEmailTheme(def.theme);
 
@@ -1045,20 +1312,8 @@ export function CampaignFlodeskBuilder({
           <Link href={`/dashboard/marketing/email/campaigns/${campaignId}`} className="text-gray-300 hover:text-gray-600 transition-colors">Send</Link>
         </div>
 
-        {/* Right: view toggle, save status, preview, next */}
+        {/* Right: save status, preview, next */}
         <div className="flex items-center gap-3 flex-shrink-0 w-48 justify-end">
-          {/* Desktop / Mobile toggle */}
-          <div className="hidden sm:flex items-center gap-0.5">
-            <button type="button" title="Desktop view" onClick={() => setViewMode('desktop')}
-              className={`flex h-7 w-7 items-center justify-center rounded transition-colors ${viewMode === 'desktop' ? 'text-gray-800' : 'text-gray-300 hover:text-gray-600'}`}>
-              <Monitor size={14} />
-            </button>
-            <button type="button" title="Mobile view" onClick={() => setViewMode('mobile')}
-              className={`flex h-7 w-7 items-center justify-center rounded transition-colors ${viewMode === 'mobile' ? 'text-gray-800' : 'text-gray-300 hover:text-gray-600'}`}>
-              <Smartphone size={14} />
-            </button>
-          </div>
-
           {/* Save indicator */}
           <div className="flex items-center gap-1.5">
             {saveStatus === 'saving' && <Loader2 size={12} className="animate-spin text-gray-300" />}
@@ -1095,6 +1350,24 @@ export function CampaignFlodeskBuilder({
           style={{ background: '#ffffff', paddingTop: '36px', paddingBottom: '60px', paddingLeft: '40px', paddingRight: '80px' }}
           onClick={() => setSelectedId(null)}
         >
+          {/* Desktop / Mobile toggle — centered above email card */}
+          <div className="flex items-center justify-center gap-1 mb-4">
+            <button
+              type="button" title="Desktop view"
+              onClick={() => setViewMode('desktop')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${viewMode === 'desktop' ? 'bg-gray-100 text-gray-800' : 'text-gray-400 hover:text-gray-600'}`}
+            >
+              <Monitor size={14} /> Desktop
+            </button>
+            <button
+              type="button" title="Mobile view"
+              onClick={() => setViewMode('mobile')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${viewMode === 'mobile' ? 'bg-gray-100 text-gray-800' : 'text-gray-400 hover:text-gray-600'}`}
+            >
+              <Smartphone size={14} /> Mobile
+            </button>
+          </div>
+
           {/* Subject hint */}
           <div className="mx-auto mb-5 flex items-center gap-2" style={{ maxWidth: viewMode === 'mobile' ? '375px' : theme.maxWidth }}>
             <span className="text-[11px] text-gray-300 font-medium flex-shrink-0 uppercase tracking-wide">Subject</span>
@@ -1260,6 +1533,7 @@ export function CampaignFlodeskBuilder({
 
               <BlockInspectorPanel
                 block={selectedBlock}
+                theme={theme}
                 onChange={(patch) => patchBlock(selectedBlock.id, patch)}
                 onMediaPick={(apply) => {
                   mediaApplyRef.current = apply;

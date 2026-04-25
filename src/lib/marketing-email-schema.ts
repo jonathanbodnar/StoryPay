@@ -29,6 +29,11 @@ export interface EmailBlock {
   right?: EmailBlock[];
   /** For type `social` — list of enabled platform links */
   socialLinks?: { platform: string; url: string }[];
+  /** Per-block font overrides */
+  fontFamily?: string;
+  fontWeight?: string;
+  fontSize?: string;
+  color?: string;
 }
 
 export interface EmailTheme {
