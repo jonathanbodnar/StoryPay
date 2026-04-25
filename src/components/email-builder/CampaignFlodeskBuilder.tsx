@@ -3579,23 +3579,24 @@ function BlockInspectorPanel({
 
         {/* ─── ADDRESS TAB ─── */}
         {addressTab === 'address' && (
-          <div className="flex flex-col items-center text-center px-4 pt-4">
-            <MapPin size={28} className="text-gray-700 mb-3" strokeWidth={1.5} />
-            <p className="text-base font-semibold text-gray-900 mb-2">
+          <div className="flex flex-col items-center text-center px-3 pt-3">
+            <MapPin size={24} className="text-gray-700 mb-2" strokeWidth={1.5} />
+            <p className="text-[15px] font-semibold text-gray-900 mb-1.5 leading-snug">
               We&apos;ve got your address on file.
             </p>
-            <p className="text-sm text-gray-500 leading-relaxed max-w-[280px] mb-5">
+            <p className="text-[12px] text-gray-500 leading-snug max-w-[320px] mb-4">
               You are required by law to include your current address in the footer of all promotional emails.
             </p>
             <a
               href="/dashboard/settings/branding"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-gray-800 transition-colors"
+              style={{ backgroundColor: '#1b1b1b' }}
+              className="inline-flex items-center justify-center rounded-lg px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 transition-opacity"
             >
               Manage my address
             </a>
-            <p className="mt-5 text-[11px] text-gray-400 leading-snug max-w-[280px]">
+            <p className="mt-4 text-[11px] text-gray-400 leading-snug max-w-[320px]">
               The address shown is pulled from your branding settings — it can&apos;t be edited directly here.
             </p>
           </div>
