@@ -52,6 +52,10 @@ export interface EmailBlock {
   paddingBottom?: number;
   paddingLeft?: number;
   paddingRight?: number;
+  /** Image-block-specific settings */
+  imageWidth?: number;            // max-width in px (default 600)
+  imageGridColumns?: 1 | 2 | 3 | 4;
+  imageGridImages?: { src?: string; alt?: string }[]; // additional images (slots 2..N)
 }
 
 export interface EmailTheme {
@@ -215,7 +219,12 @@ export function createEmailBlock(type: EmailBlockType): EmailBlock {
         blockBgColor: 'transparent',
       };
     case 'image':
-      return { id, type, align: 'center', src: '', alt: '' };
+      return {
+        id, type, align: 'center', src: '', alt: '',
+        imageWidth: 600,
+        imageGridColumns: 1,
+        imageGridImages: [],
+      };
     case 'divider':
       return { id, type };
     case 'spacer':

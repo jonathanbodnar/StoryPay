@@ -10,7 +10,7 @@ import {
   Image as ImageIcon,
   Italic, Link2, List, ListOrdered, Loader2, Minus, Monitor,
   Paperclip, PenLine, Pipette, Plus, Send, SeparatorHorizontal, Smartphone,
-  Space, Strikethrough, Trash2, Type, Underline, X as XIcon,
+  Space, Strikethrough, Trash2, Type, Underline, Upload as UploadIcon, X as XIcon,
   MousePointer2, Palette, Redo2, Undo2, Video, Share2, MapPin, Search, Zap,
 } from 'lucide-react';
 import {
@@ -62,6 +62,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { VenueMediaPickerModal } from '@/components/venue-media/VenueMediaPickerModal';
+import { useVenueMediaLibrary } from '@/components/venue-media/useVenueMediaLibrary';
 import RichTextEditor from '@/components/RichTextEditor';
 import {
   type EmailBlock,
@@ -904,6 +905,34 @@ function FloatingFormatBar() {
   );
 }
 
+// ─── Per-block default padding ───────────────────────────────────────────────
+// Each block falls back to these values when block-level padding isn't set.
+const BLOCK_PADDING_DEFAULTS: Record<string, { top: number; bottom: number; left: number; right: number }> = {
+  heading: { top: 8, bottom: 8, left: 24, right: 24 },
+  text:    { top: 8, bottom: 8, left: 24, right: 24 },
+  button:  { top: 10, bottom: 10, left: 0, right: 0 },
+  image:   { top: 8, bottom: 8, left: 24, right: 24 },
+  video:   { top: 16, bottom: 16, left: 24, right: 24 },
+  social:  { top: 20, bottom: 20, left: 24, right: 24 },
+  address: { top: 16, bottom: 16, left: 24, right: 24 },
+  divider: { top: 12, bottom: 12, left: 24, right: 24 },
+  spacer:  { top: 0,  bottom: 0,  left: 0,  right: 0  },
+  html:    { top: 8, bottom: 8, left: 24, right: 24 },
+  columns: { top: 8, bottom: 8, left: 16, right: 16 },
+};
+
+function blockPaddingStyle(block: EmailBlock): React.CSSProperties {
+  const d = BLOCK_PADDING_DEFAULTS[block.type] ?? { top: 8, bottom: 8, left: 24, right: 24 };
+  return {
+    paddingTop: `${block.paddingTop ?? d.top}px`,
+    paddingBottom: `${block.paddingBottom ?? d.bottom}px`,
+    paddingLeft: `${block.paddingLeft ?? d.left}px`,
+    paddingRight: `${block.paddingRight ?? d.right}px`,
+    background:
+      block.blockBgColor && block.blockBgColor !== 'transparent' ? block.blockBgColor : undefined,
+  };
+}
+
 function HeadingCanvas({ block, theme, onPatch }: { block: EmailBlock; theme: ReturnType<typeof mergeEmailTheme>; onPatch?: (p: Partial<EmailBlock>) => void }) {
   const sizes: Record<number, string> = { 1: '28px', 2: '22px', 3: '18px' };
   const size = sizes[block.level ?? 2] ?? '22px';
@@ -926,7 +955,7 @@ function HeadingCanvas({ block, theme, onPatch }: { block: EmailBlock; theme: Re
       suppressContentEditableWarning
       onInput={() => { if (ref.current && onPatch) onPatch({ content: ref.current.textContent ?? '' }); }}
       style={{
-        padding: '8px 24px',
+        ...blockPaddingStyle(block),
         textAlign: block.align ?? 'left',
         fontFamily: block.fontFamily ?? theme.fontFamily,
         fontSize: block.fontSize ?? size,
@@ -963,7 +992,7 @@ function TextCanvas({ block, theme, onPatch }: { block: EmailBlock; theme: Retur
       suppressContentEditableWarning
       onInput={() => { if (ref.current && onPatch) onPatch({ content: ref.current.innerHTML }); }}
       style={{
-        padding: '8px 24px',
+        ...blockPaddingStyle(block),
         textAlign: block.align ?? 'left',
         fontFamily: block.fontFamily ?? theme.fontFamily,
         fontSize: block.fontSize ?? '16px',
@@ -1013,12 +1042,8 @@ function ButtonCanvas({ block, theme, onPatch }: { block: EmailBlock; theme: Ret
   return (
     <div
       style={{
-        paddingTop: `${block.paddingTop ?? 10}px`,
-        paddingBottom: `${block.paddingBottom ?? 10}px`,
-        paddingLeft: `${block.paddingLeft ?? 24}px`,
-        paddingRight: `${block.paddingRight ?? 24}px`,
+        ...blockPaddingStyle(block),
         textAlign: block.align ?? 'center',
-        background: block.blockBgColor && block.blockBgColor !== 'transparent' ? block.blockBgColor : undefined,
       }}
     >
       <span
@@ -1059,9 +1084,20 @@ function ButtonCanvas({ block, theme, onPatch }: { block: EmailBlock; theme: Ret
 }
 
 function ImageCanvas({ block, theme }: { block: EmailBlock; theme: ReturnType<typeof mergeEmailTheme> }) {
-  if (!block.src?.trim()) {
+  const cols = Math.max(1, Math.min(4, block.imageGridColumns ?? 1));
+  // Slot 0 = block.src; remaining slots = imageGridImages entries.
+  const slots: { src: string; alt: string }[] = [
+    { src: block.src ?? '', alt: block.alt ?? '' },
+    ...((block.imageGridImages ?? []).map(g => ({ src: g.src ?? '', alt: g.alt ?? '' }))),
+  ];
+  const totalCount = Math.max(slots.length, cols); // ensure at least one row
+  const totalWidth = block.imageWidth ?? 600;
+
+  // No images at all → empty state.
+  const noImages = slots.every((s) => !s.src.trim());
+  if (noImages && cols === 1) {
     return (
-      <div style={{ padding: '16px 24px', textAlign: 'center' }}>
+      <div style={{ ...blockPaddingStyle(block), textAlign: 'center' }}>
         <div style={{
           border: `2px dashed ${theme.mutedColor}`,
           borderRadius: '8px',
@@ -1079,17 +1115,68 @@ function ImageCanvas({ block, theme }: { block: EmailBlock; theme: ReturnType<ty
       </div>
     );
   }
+
+  const align = block.align ?? 'center';
+  const justify = align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center';
+
   return (
-    <div style={{ padding: '8px 24px', textAlign: block.align ?? 'center' }}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={block.src} alt={block.alt ?? ''} style={{ maxWidth: '100%', height: 'auto', display: 'inline-block', borderRadius: '4px' }} />
+    <div style={{ ...blockPaddingStyle(block), display: 'flex', justifyContent: justify }}>
+      <div
+        style={{
+          width: '100%',
+          maxWidth: `${totalWidth}px`,
+          display: 'grid',
+          gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+          gap: cols > 1 ? '8px' : '0',
+        }}
+      >
+        {Array.from({ length: totalCount }).map((_, i) => {
+          const slot = slots[i] ?? { src: '', alt: '' };
+          if (slot.src) {
+            return (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={i}
+                src={slot.src}
+                alt={slot.alt}
+                style={{
+                  width: '100%',
+                  height: 'auto',
+                  display: 'block',
+                  borderRadius: '4px',
+                  aspectRatio: cols > 1 ? '1 / 1' : undefined,
+                  objectFit: cols > 1 ? 'cover' : undefined,
+                }}
+              />
+            );
+          }
+          return (
+            <div
+              key={i}
+              style={{
+                border: `2px dashed ${theme.mutedColor}`,
+                borderRadius: '8px',
+                aspectRatio: cols > 1 ? '1 / 1' : '4 / 3',
+                color: theme.mutedColor,
+                fontSize: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: '#f9fafb',
+              }}
+            >
+              <ImageIcon size={20} />
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-function DividerCanvas() {
+function DividerCanvas({ block }: { block: EmailBlock }) {
   return (
-    <div style={{ padding: '12px 24px' }}>
+    <div style={blockPaddingStyle(block)}>
       <hr style={{ border: 'none', borderTop: '1px solid #e8e8e8', margin: 0 }} />
     </div>
   );
@@ -1098,7 +1185,15 @@ function DividerCanvas() {
 function SpacerCanvas({ block }: { block: EmailBlock }) {
   const h = block.spacerHeight ?? 24;
   return (
-    <div style={{ height: `${h}px`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div
+      style={{
+        ...blockPaddingStyle(block),
+        height: `${h}px`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
       <span style={{ fontSize: '11px', color: '#d1d5db', userSelect: 'none' }}>{h}px</span>
     </div>
   );
@@ -1107,7 +1202,7 @@ function SpacerCanvas({ block }: { block: EmailBlock }) {
 function VideoCanvas({ block, theme }: { block: EmailBlock; theme: ReturnType<typeof mergeEmailTheme> }) {
   const hasThumbnail = !!block.src?.trim();
   return (
-    <div style={{ padding: '16px 24px' }}>
+    <div style={blockPaddingStyle(block)}>
       <div style={{ position: 'relative', borderRadius: '10px', overflow: 'hidden', background: '#18181b', cursor: 'default' }}>
         {hasThumbnail ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -1142,13 +1237,13 @@ function SocialCanvas({ block, theme }: { block: EmailBlock; theme: ReturnType<t
   const links = (block.socialLinks ?? []).filter(l => l.url?.trim());
   if (links.length === 0) {
     return (
-      <div style={{ padding: '20px 24px', textAlign: 'center', color: theme.mutedColor, fontSize: '13px', fontFamily: theme.fontFamily }}>
+      <div style={{ ...blockPaddingStyle(block), textAlign: 'center', color: theme.mutedColor, fontSize: '13px', fontFamily: theme.fontFamily }}>
         Add your social links in the panel →
       </div>
     );
   }
   return (
-    <div style={{ padding: '20px 24px', display: 'flex', gap: '18px', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
+    <div style={{ ...blockPaddingStyle(block), display: 'flex', gap: '18px', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
       {links.map((link) => (
         <span key={link.platform} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', opacity: 0.75 }}>
           <SocialIcon platform={link.platform} size={20} color={theme.textColor} />
@@ -1158,14 +1253,14 @@ function SocialCanvas({ block, theme }: { block: EmailBlock; theme: ReturnType<t
   );
 }
 
-function AddressCanvas({ venueAddress, theme }: { venueAddress?: VenueAddress; theme: ReturnType<typeof mergeEmailTheme> }) {
+function AddressCanvas({ block, venueAddress, theme }: { block: EmailBlock; venueAddress?: VenueAddress; theme: ReturnType<typeof mergeEmailTheme> }) {
   const name = venueAddress?.name ?? 'Your Venue';
   const address = venueAddress?.location_full?.trim()
     ?? (venueAddress?.location_city && venueAddress?.location_state
       ? `${venueAddress.location_city}, ${venueAddress.location_state}`
       : null);
   return (
-    <div style={{ padding: '16px 24px', textAlign: 'center' }}>
+    <div style={{ ...blockPaddingStyle(block), textAlign: 'center' }}>
       <p style={{ margin: '0 0 3px', fontSize: '13px', fontWeight: 600, color: theme.textColor, fontFamily: theme.fontFamily }}>
         {name}
       </p>
@@ -1184,8 +1279,8 @@ function BlockCanvas({ block, theme, venueAddress, onPatch }: { block: EmailBloc
     case 'image':   return <ImageCanvas block={block} theme={theme} />;
     case 'video':   return <VideoCanvas block={block} theme={theme} />;
     case 'social':  return <SocialCanvas block={block} theme={theme} />;
-    case 'address': return <AddressCanvas venueAddress={venueAddress} theme={theme} />;
-    case 'divider': return <DividerCanvas />;
+    case 'address': return <AddressCanvas block={block} venueAddress={venueAddress} theme={theme} />;
+    case 'divider': return <DividerCanvas block={block} />;
     case 'spacer':  return <SpacerCanvas block={block} />;
     default:        return <div style={{ padding: '12px 24px', color: '#9ca3af', fontSize: '13px' }}>[{block.type}]</div>;
   }
@@ -1912,6 +2007,533 @@ function SavedStylesModal({
   );
 }
 
+// ─── Image Inspector — full Flodesk-style: Image / Link / Block tabs ─────────
+function ImageInspector({
+  block,
+  onChange,
+  onMediaPick,
+}: {
+  block: EmailBlock;
+  onChange: (patch: Partial<EmailBlock>) => void;
+  onMediaPick: (apply: (url: string) => void, mode?: 'image' | 'file' | 'all') => void;
+}) {
+  const [tab, setTab] = useState<'image' | 'link' | 'block'>('image');
+  const [linkType, setLinkType] = useState<'url' | 'file'>(
+    block.href?.match(/\.(pdf|docx?|xlsx?|pptx?|csv|txt|zip)(\?|$)/i) ? 'file' : 'url'
+  );
+
+  // Collapsible sections.
+  const [sourceOpen, setSourceOpen]   = useState(false);
+  const [accessOpen, setAccessOpen]   = useState(false);
+  const [gridOpen, setGridOpen]       = useState(true);
+  const [positionOpen, setPositionOpen] = useState(true);
+  const [paddingOpen, setPaddingOpen] = useState(true);
+
+  // Image source dropdown state ("My computer" or "Media library").
+  const [source, setSource] = useState<'computer' | 'library'>('computer');
+
+  // Inline file upload via the media library hook.
+  const { uploadFiles, uploading } = useVenueMediaLibrary();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [activeUploadSlot, setActiveUploadSlot] = useState<number>(0);
+
+  async function handleFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setUploadError(null);
+    try {
+      const added = await uploadFiles(files);
+      if (added.length === 0) return;
+      const url = added[0].public_url;
+      // Slot 0 = block.src; other slots = imageGridImages[slot-1].
+      if (activeUploadSlot === 0) {
+        onChange({ src: url });
+      } else {
+        const next = [...(block.imageGridImages ?? [])];
+        const i = activeUploadSlot - 1;
+        next[i] = { ...(next[i] ?? {}), src: url };
+        onChange({ imageGridImages: next });
+      }
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : 'Upload failed');
+    }
+  }
+
+  function openFilePicker(slot: number) {
+    setActiveUploadSlot(slot);
+    if (source === 'library') {
+      onMediaPick((url) => {
+        if (slot === 0) onChange({ src: url });
+        else {
+          const next = [...(block.imageGridImages ?? [])];
+          const i = slot - 1;
+          next[i] = { ...(next[i] ?? {}), src: url };
+          onChange({ imageGridImages: next });
+        }
+      }, 'image');
+    } else {
+      fileInputRef.current?.click();
+    }
+  }
+
+  // Drag-and-drop on the dropzone.
+  const [isDragging, setIsDragging] = useState(false);
+  function handleDrop(e: React.DragEvent<HTMLDivElement>, slot: number) {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    setActiveUploadSlot(slot);
+    void handleFiles(e.dataTransfer.files);
+  }
+
+  // Grid + image count helpers.
+  const cols = Math.max(1, Math.min(4, block.imageGridColumns ?? 1));
+  const totalImages = 1 + (block.imageGridImages?.length ?? 0);
+
+  function setColumns(n: 1 | 2 | 3 | 4) {
+    const currentTotal = totalImages;
+    let nextExtras = block.imageGridImages ?? [];
+    // When switching layouts, ensure we have at least one row's worth of images.
+    if (currentTotal < n) {
+      nextExtras = [...nextExtras, ...Array.from({ length: n - currentTotal }, () => ({ src: '', alt: '' }))];
+    }
+    onChange({ imageGridColumns: n, imageGridImages: nextExtras });
+  }
+
+  function setTotal(n: number) {
+    const target = Math.max(1, Math.min(12, n));
+    const extras = block.imageGridImages ?? [];
+    if (target - 1 < extras.length) {
+      onChange({ imageGridImages: extras.slice(0, target - 1) });
+    } else if (target - 1 > extras.length) {
+      const add = target - 1 - extras.length;
+      onChange({ imageGridImages: [...extras, ...Array.from({ length: add }, () => ({ src: '', alt: '' }))] });
+    }
+  }
+
+  // Per-slot helpers for grids with > 1 image.
+  function getSlot(i: number): { src: string; alt: string } {
+    if (i === 0) return { src: block.src ?? '', alt: block.alt ?? '' };
+    const e = (block.imageGridImages ?? [])[i - 1];
+    return { src: e?.src ?? '', alt: e?.alt ?? '' };
+  }
+  function patchSlot(i: number, patch: Partial<{ src: string; alt: string }>) {
+    if (i === 0) {
+      const next: Partial<EmailBlock> = {};
+      if ('src' in patch) next.src = patch.src;
+      if ('alt' in patch) next.alt = patch.alt;
+      onChange(next);
+    } else {
+      const list = [...(block.imageGridImages ?? [])];
+      const j = i - 1;
+      list[j] = { ...(list[j] ?? {}), ...patch };
+      onChange({ imageGridImages: list });
+    }
+  }
+
+  // Tab button helper.
+  const TAB_BTN = (id: typeof tab, label: string) => (
+    <button
+      key={id}
+      type="button"
+      onClick={() => setTab(id)}
+      className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${tab === id ? 'text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}
+    >
+      {label}
+      {tab === id && <span className="absolute left-1/2 -translate-x-1/2 bottom-0 h-[2px] w-12 bg-gray-900 rounded-full" />}
+    </button>
+  );
+
+  const totalWidth = block.imageWidth ?? 600;
+
+  return (
+    <div>
+      {/* Tabs */}
+      <div className="flex border-b border-gray-100 -mx-5 mb-5 px-2 bg-gray-50/50">
+        {TAB_BTN('image', 'Image')}
+        {TAB_BTN('link',  'Link')}
+        {TAB_BTN('block', 'Block')}
+      </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        className="hidden"
+        onChange={(e) => { void handleFiles(e.target.files); e.target.value = ''; }}
+      />
+
+      {/* ─── IMAGE TAB ─── */}
+      {tab === 'image' && (
+        <div className="space-y-5">
+          {/* Source dropdown */}
+          <div>
+            <p className="text-sm font-semibold text-gray-900 mb-2">Add image from...</p>
+            <button
+              type="button"
+              onClick={() => setSourceOpen(o => !o)}
+              className="w-full flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-gray-900 hover:border-gray-400 transition-colors"
+            >
+              <span className="flex items-center gap-2">
+                {source === 'computer' ? <UploadIcon size={14} /> : <ImageIcon size={14} />}
+                {source === 'computer' ? 'My computer' : 'Media library'}
+              </span>
+              <ChevronDown size={14} className={`text-gray-400 transition-transform ${sourceOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {sourceOpen && (
+              <div className="mt-1.5 rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
+                {([
+                  { id: 'computer' as const, label: 'My computer', icon: <UploadIcon size={14} /> },
+                  { id: 'library' as const,  label: 'Media library', icon: <ImageIcon size={14} /> },
+                ]).map(o => (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() => { setSource(o.id); setSourceOpen(false); }}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors ${source === o.id ? 'bg-gray-100 font-semibold text-gray-900' : 'text-gray-700 hover:bg-gray-50'}`}
+                  >
+                    {o.icon}
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Drop zone(s) — one per slot when grid > 1 */}
+          {Array.from({ length: totalImages }).map((_, i) => {
+            const slot = getSlot(i);
+            const labelIdx = totalImages > 1 ? `Image ${i + 1}` : 'Upload image';
+            return (
+              <div key={i}>
+                {totalImages > 1 && <p className="text-xs font-semibold text-gray-700 mb-1.5">{labelIdx}</p>}
+                {slot.src ? (
+                  <div className="relative rounded-lg border border-gray-200 overflow-hidden bg-gray-50">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={slot.src} alt={slot.alt} className="w-full h-32 object-cover" />
+                    <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/0 hover:bg-black/40 transition-colors group">
+                      <button
+                        type="button"
+                        onClick={() => openFilePicker(i)}
+                        className="opacity-0 group-hover:opacity-100 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-gray-900 shadow transition-opacity"
+                      >
+                        Replace
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => patchSlot(i, { src: '' })}
+                        className="opacity-0 group-hover:opacity-100 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-red-600 shadow transition-opacity"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={(e) => handleDrop(e, i)}
+                    onClick={() => openFilePicker(i)}
+                    className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed py-8 px-4 cursor-pointer transition-colors ${isDragging ? 'border-gray-900 bg-gray-50' : 'border-gray-200 hover:border-gray-400'}`}
+                  >
+                    {uploading ? (
+                      <Loader2 size={20} className="text-gray-500 animate-spin" />
+                    ) : (
+                      <UploadIcon size={20} className="text-gray-500" />
+                    )}
+                    <p className="text-sm font-semibold text-gray-900">{labelIdx}</p>
+                    <p className="text-xs text-gray-400">Max image size 10MB</p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {uploadError && (
+            <p className="text-xs text-red-600">{uploadError}</p>
+          )}
+
+          {/* Width slider */}
+          <div className="border-t border-gray-100 pt-4">
+            <SliderControl
+              label="Width"
+              value={totalWidth}
+              min={100}
+              max={600}
+              step={10}
+              display={`${totalWidth}`}
+              onChange={(v) => onChange({ imageWidth: v })}
+            />
+          </div>
+
+          {/* Accessibility */}
+          <div className="border-t border-gray-100 pt-4">
+            <button
+              type="button"
+              onClick={() => setAccessOpen(o => !o)}
+              className="flex items-center justify-between w-full mb-3"
+            >
+              <span className="text-sm font-semibold text-gray-700">Accessibility</span>
+              <ChevronDown size={14} className={`text-gray-400 transition-transform ${accessOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {accessOpen && (
+              <div className="space-y-3">
+                {Array.from({ length: totalImages }).map((_, i) => {
+                  const slot = getSlot(i);
+                  return (
+                    <div key={i}>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Alt text {totalImages > 1 ? `(image ${i + 1})` : ''}
+                      </label>
+                      <input
+                        type="text"
+                        value={slot.alt}
+                        onChange={(e) => patchSlot(i, { alt: e.target.value })}
+                        placeholder="Describe this image"
+                        className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:bg-white focus:outline-none transition-colors"
+                      />
+                    </div>
+                  );
+                })}
+                <p className="text-[11px] text-gray-400 leading-snug">
+                  Alt text is read by screen readers and shown if the image fails to load.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── LINK TAB ─── */}
+      {tab === 'link' && (
+        <div className="space-y-4">
+          {/* URL / File pill — same style as button */}
+          <div
+            className="flex bg-gray-100 p-1.5"
+            style={{ borderRadius: '14px' }}
+          >
+            {(['url', 'file'] as const).map(t => {
+              const active = linkType === t;
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setLinkType(t)}
+                  className="flex-1 px-4 py-2.5 text-[15px] transition-all"
+                  style={{
+                    borderRadius: '10px',
+                    background: active ? '#ffffff' : 'transparent',
+                    color: active ? '#111827' : '#9ca3af',
+                    fontWeight: active ? 700 : 600,
+                    boxShadow: active ? '0 1px 2px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.05)' : 'none',
+                  }}
+                >
+                  {t === 'url' ? 'URL' : 'File'}
+                </button>
+              );
+            })}
+          </div>
+
+          {linkType === 'url' && (
+            <textarea
+              rows={4}
+              value={block.href ?? ''}
+              onChange={(e) => onChange({ href: e.target.value })}
+              placeholder="https://"
+              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none transition-colors resize-none"
+            />
+          )}
+
+          {linkType === 'file' && (
+            <div>
+              {block.href?.trim() ? (
+                <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5 flex items-center gap-2">
+                  <FileText size={16} className="text-gray-400 flex-shrink-0" />
+                  <a
+                    href={block.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 truncate text-sm font-medium text-gray-900 hover:text-blue-600"
+                  >
+                    {block.href.split('/').pop() || block.href}
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => onChange({ href: '' })}
+                    className="text-gray-400 hover:text-red-600 transition-colors"
+                    aria-label="Remove file link"
+                  >
+                    <XIcon size={14} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onMediaPick((url) => onChange({ href: url }), 'file')}
+                  className="w-full flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-200 py-8 px-4 hover:border-gray-400 transition-colors"
+                >
+                  <UploadIcon size={20} className="text-gray-500" />
+                  <p className="text-sm font-semibold text-gray-900">Choose a file</p>
+                  <p className="text-xs text-gray-400 text-center">PDF, Word, Excel, or other file<br />from your media library</p>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Open behavior */}
+          <div className="border-t border-gray-100 pt-4">
+            <p className="text-sm font-semibold text-gray-900 mb-1">Link actions</p>
+            <p className="text-xs text-gray-500 mb-2">When a subscriber clicks this link:</p>
+            <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700">
+              Opens in a new tab
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── BLOCK TAB ─── */}
+      {tab === 'block' && (
+        <div className="space-y-5">
+          <div>
+            <p className="text-sm font-semibold text-gray-900 mb-2">Background</p>
+            <FlodeskColorPicker
+              value={block.blockBgColor ?? 'transparent'}
+              onChange={(v) => onChange({ blockBgColor: v })}
+            />
+          </div>
+
+          {/* Grid & aspect ratio */}
+          <div className="border-t border-gray-100 pt-4">
+            <button
+              type="button"
+              onClick={() => setGridOpen(o => !o)}
+              className="flex items-center justify-between w-full mb-3"
+            >
+              <span className="text-sm font-semibold text-gray-700">Grid &amp; aspect ratio</span>
+              <ChevronDown size={14} className={`text-gray-400 transition-transform ${gridOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {gridOpen && (
+              <div className="space-y-4">
+                <div>
+                  <p className="text-xs font-semibold text-gray-700 mb-2">
+                    Grid layout <span className="font-normal text-gray-400 ml-1 uppercase text-[10px] tracking-wider">{cols} COLUMN{cols > 1 ? 'S' : ''}</span>
+                  </p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {([1, 2, 3, 4] as const).map(n => {
+                      const active = cols === n;
+                      return (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => setColumns(n)}
+                          className={`aspect-square rounded-lg border-2 flex items-center justify-center transition-colors ${active ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-400 bg-white'}`}
+                        >
+                          <div className="flex gap-0.5">
+                            {Array.from({ length: n }).map((_, i) => (
+                              <div
+                                key={i}
+                                className={`rounded-sm border ${active ? 'border-blue-500' : 'border-gray-400'}`}
+                                style={{ width: '6px', height: '14px' }}
+                              />
+                            ))}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <SliderControl
+                  label="Number of images"
+                  value={totalImages}
+                  min={1} max={12} step={1}
+                  display={`${totalImages}`}
+                  onChange={(v) => setTotal(v)}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Position */}
+          <div className="border-t border-gray-100 pt-4">
+            <button
+              type="button"
+              onClick={() => setPositionOpen(o => !o)}
+              className="flex items-center justify-between w-full mb-3"
+            >
+              <span className="text-sm font-semibold text-gray-700">Position</span>
+              <ChevronDown size={14} className={`text-gray-400 transition-transform ${positionOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {positionOpen && (
+              <div>
+                <div className="flex gap-1.5">
+                  {(['left', 'center', 'right'] as const).map(a => {
+                    const active = (block.align ?? 'center') === a;
+                    const Icon = a === 'left' ? AlignLeft : a === 'right' ? AlignRight : AlignCenter;
+                    return (
+                      <button
+                        key={a}
+                        type="button"
+                        onClick={() => onChange({ align: a })}
+                        className={`flex-1 h-12 rounded-lg border flex items-center justify-center transition-colors ${active ? 'bg-gray-100 border-gray-300' : 'bg-white border-gray-200 hover:border-gray-300'}`}
+                      >
+                        <Icon size={18} className={active ? 'text-gray-900' : 'text-gray-400'} />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Padding */}
+          <div className="border-t border-gray-100 pt-4">
+            <button
+              type="button"
+              onClick={() => setPaddingOpen(o => !o)}
+              className="flex items-center justify-between w-full mb-3"
+            >
+              <span className="text-sm font-semibold text-gray-700">Padding</span>
+              <ChevronDown size={14} className={`text-gray-400 transition-transform ${paddingOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {paddingOpen && (
+              <div className="space-y-5">
+                <SliderControl
+                  label="Padding top"
+                  value={block.paddingTop ?? 8}
+                  min={0} max={120} step={1}
+                  display={`${block.paddingTop ?? 8}`}
+                  onChange={(v) => onChange({ paddingTop: v })}
+                />
+                <SliderControl
+                  label="Padding bottom"
+                  value={block.paddingBottom ?? 8}
+                  min={0} max={120} step={1}
+                  display={`${block.paddingBottom ?? 8}`}
+                  onChange={(v) => onChange({ paddingBottom: v })}
+                />
+                <SliderControl
+                  label="Padding left"
+                  value={block.paddingLeft ?? 24}
+                  min={0} max={120} step={1}
+                  display={`${block.paddingLeft ?? 24}`}
+                  onChange={(v) => onChange({ paddingLeft: v })}
+                />
+                <SliderControl
+                  label="Padding right"
+                  value={block.paddingRight ?? 24}
+                  min={0} max={120} step={1}
+                  display={`${block.paddingRight ?? 24}`}
+                  onChange={(v) => onChange({ paddingRight: v })}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Right Panel — Block Inspector ───────────────────────────────────────────
 function BlockInspectorPanel({
   block,
@@ -1927,6 +2549,94 @@ function BlockInspectorPanel({
   const LABEL = 'block text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1';
   const INPUT = 'w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:bg-white focus:outline-none transition-colors';
   const [spacingOpen, setSpacingOpen] = useState(true);
+  const [paddingOpen, setPaddingOpen] = useState(true);
+  // Sub-tab for non-button block types: primary settings vs Block (padding/bg).
+  // Reset to primary tab whenever a different block is selected (using prev-state pattern
+  // to avoid calling setState inside an effect).
+  const [subTab, setSubTab] = useState<'primary' | 'block'>('primary');
+  const [prevBlockId, setPrevBlockId] = useState(block.id);
+  if (prevBlockId !== block.id) {
+    setPrevBlockId(block.id);
+    setSubTab('primary');
+  }
+
+  // Reusable Block-tab content (background + padding sliders).
+  const renderBlockTab = () => {
+    const d = BLOCK_PADDING_DEFAULTS[block.type] ?? { top: 8, bottom: 8, left: 24, right: 24 };
+    return (
+      <div className="space-y-5">
+        <div>
+          <p className="text-sm font-semibold text-gray-900 mb-2">Background</p>
+          <FlodeskColorPicker
+            value={block.blockBgColor ?? 'transparent'}
+            onChange={(v) => onChange({ blockBgColor: v })}
+          />
+        </div>
+        <div className="border-t border-gray-100 pt-4">
+          <button
+            type="button"
+            onClick={() => setPaddingOpen(o => !o)}
+            className="flex items-center justify-between w-full mb-3"
+          >
+            <span className="text-sm font-semibold text-gray-700">Padding</span>
+            <ChevronDown size={14} className={`text-gray-400 transition-transform ${paddingOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {paddingOpen && (
+            <div className="space-y-5">
+              <SliderControl
+                label="Padding top"
+                value={block.paddingTop ?? d.top}
+                min={0} max={120} step={1}
+                display={`${block.paddingTop ?? d.top}`}
+                onChange={(v) => onChange({ paddingTop: v })}
+              />
+              <SliderControl
+                label="Padding bottom"
+                value={block.paddingBottom ?? d.bottom}
+                min={0} max={120} step={1}
+                display={`${block.paddingBottom ?? d.bottom}`}
+                onChange={(v) => onChange({ paddingBottom: v })}
+              />
+              <SliderControl
+                label="Padding left"
+                value={block.paddingLeft ?? d.left}
+                min={0} max={120} step={1}
+                display={`${block.paddingLeft ?? d.left}`}
+                onChange={(v) => onChange({ paddingLeft: v })}
+              />
+              <SliderControl
+                label="Padding right"
+                value={block.paddingRight ?? d.right}
+                min={0} max={120} step={1}
+                display={`${block.paddingRight ?? d.right}`}
+                onChange={(v) => onChange({ paddingRight: v })}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // Reusable tab bar — primary tab label varies per block type.
+  const renderSubTabBar = (primaryLabel: string) => (
+    <div className="flex border-b border-gray-100 -mx-5 mb-5 px-2 bg-gray-50/50">
+      {([
+        { id: 'primary' as const, label: primaryLabel },
+        { id: 'block' as const,   label: 'Block' },
+      ]).map(t => (
+        <button
+          key={t.id}
+          type="button"
+          onClick={() => setSubTab(t.id)}
+          className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${subTab === t.id ? 'text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}
+        >
+          {t.label}
+          {subTab === t.id && <span className="absolute left-1/2 -translate-x-1/2 bottom-0 h-[2px] w-12 bg-gray-900 rounded-full" />}
+        </button>
+      ))}
+    </div>
+  );
 
   const AlignRow = () => (
     <div>
@@ -2028,172 +2738,164 @@ function BlockInspectorPanel({
     </div>
   );
 
+  // The button has its own multi-tab inspector — no wrapper needed.
+  if (block.type === 'button') {
+    return <ButtonInspector block={block} theme={theme} onChange={onChange} onMediaPick={onMediaPick} />;
+  }
+
   if (block.type === 'heading') {
     const sizes: Record<number, string> = { 1: '28px', 2: '22px', 3: '18px' };
     const defaultSize = parseInt(sizes[block.level ?? 2] ?? '22px');
     return (
-      <div className="space-y-4">
-        <div>
-          <p className="text-sm font-semibold text-gray-700 mb-1.5">Font</p>
-          <FontSelector value={block.fontFamily ?? theme.fontFamily} onChange={(v) => onChange({ fontFamily: v })} />
-        </div>
-        {WeightRow({ defaultWeight: '700' })}
-        <div>
-          <p className="text-sm font-semibold text-gray-700 mb-1.5">Font color <span className="font-normal text-gray-400 text-xs">{block.color ?? theme.textColor}</span></p>
-          <FlodeskColorPicker value={block.color ?? theme.textColor} onChange={(v) => onChange({ color: v })} />
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-gray-700 mb-1.5">Size</p>
-          <div className="flex gap-1">
-            {([1, 2, 3] as const).map((l) => (
-              <button
-                key={l}
-                type="button"
-                onClick={() => onChange({ level: l, fontSize: sizes[l] })}
-                className={`flex h-8 items-center justify-center rounded-lg px-3 text-sm font-semibold transition-colors ${(block.level ?? 2) === l ? 'bg-gray-100 text-gray-700' : 'text-gray-400 hover:text-gray-600'}`}
-              >
-                H{l}
-              </button>
-            ))}
+      <div>
+        {renderSubTabBar('Font')}
+        {subTab === 'primary' && (
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm font-semibold text-gray-700 mb-1.5">Font</p>
+              <FontSelector value={block.fontFamily ?? theme.fontFamily} onChange={(v) => onChange({ fontFamily: v })} />
+            </div>
+            {WeightRow({ defaultWeight: '700' })}
+            <div>
+              <p className="text-sm font-semibold text-gray-700 mb-1.5">Font color <span className="font-normal text-gray-400 text-xs">{block.color ?? theme.textColor}</span></p>
+              <FlodeskColorPicker value={block.color ?? theme.textColor} onChange={(v) => onChange({ color: v })} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-700 mb-1.5">Size</p>
+              <div className="flex gap-1">
+                {([1, 2, 3] as const).map((l) => (
+                  <button
+                    key={l}
+                    type="button"
+                    onClick={() => onChange({ level: l, fontSize: sizes[l] })}
+                    className={`flex h-8 items-center justify-center rounded-lg px-3 text-sm font-semibold transition-colors ${(block.level ?? 2) === l ? 'bg-gray-100 text-gray-700' : 'text-gray-400 hover:text-gray-600'}`}
+                  >
+                    H{l}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {AlignRow()}
+            {CaseRow()}
+            {SpacingSection({ defaultFontSize: defaultSize })}
           </div>
-        </div>
-        {AlignRow()}
-        {CaseRow()}
-        {SpacingSection({ defaultFontSize: defaultSize })}
+        )}
+        {subTab === 'block' && renderBlockTab()}
       </div>
     );
   }
 
   if (block.type === 'text') {
     return (
-      <div className="space-y-4">
-        <div>
-          <p className="text-sm font-semibold text-gray-700 mb-1.5">Font</p>
-          <FontSelector value={block.fontFamily ?? theme.fontFamily} onChange={(v) => onChange({ fontFamily: v })} />
-        </div>
-        {WeightRow({ defaultWeight: '400' })}
-        <div>
-          <p className="text-sm font-semibold text-gray-700 mb-1.5">Font color <span className="font-normal text-gray-400 text-xs">{block.color ?? theme.textColor}</span></p>
-          <FlodeskColorPicker value={block.color ?? theme.textColor} onChange={(v) => onChange({ color: v })} />
-        </div>
-        {AlignRow()}
-        {CaseRow()}
-        {SpacingSection({ defaultFontSize: 16 })}
+      <div>
+        {renderSubTabBar('Font')}
+        {subTab === 'primary' && (
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm font-semibold text-gray-700 mb-1.5">Font</p>
+              <FontSelector value={block.fontFamily ?? theme.fontFamily} onChange={(v) => onChange({ fontFamily: v })} />
+            </div>
+            {WeightRow({ defaultWeight: '400' })}
+            <div>
+              <p className="text-sm font-semibold text-gray-700 mb-1.5">Font color <span className="font-normal text-gray-400 text-xs">{block.color ?? theme.textColor}</span></p>
+              <FlodeskColorPicker value={block.color ?? theme.textColor} onChange={(v) => onChange({ color: v })} />
+            </div>
+            {AlignRow()}
+            {CaseRow()}
+            {SpacingSection({ defaultFontSize: 16 })}
+          </div>
+        )}
+        {subTab === 'block' && renderBlockTab()}
       </div>
     );
-  }
-
-  if (block.type === 'button') {
-    return <ButtonInspector block={block} theme={theme} onChange={onChange} onMediaPick={onMediaPick} />;
   }
 
   if (block.type === 'image') {
-    return (
-      <div className="space-y-4">
-        <div>
-          <label className={LABEL}>Image URL</label>
-          <input
-            type="url"
-            className={INPUT}
-            value={block.src ?? ''}
-            onChange={(e) => onChange({ src: e.target.value })}
-            placeholder="https://..."
-          />
-          <button
-            type="button"
-            onClick={() => onMediaPick((url) => onChange({ src: url }))}
-            className="mt-1.5 w-full rounded-lg border border-gray-200 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
-          >
-            Choose from Media Library
-          </button>
-        </div>
-        <div>
-          <label className={LABEL}>Alt text</label>
-          <input
-            type="text"
-            className={INPUT}
-            value={block.alt ?? ''}
-            onChange={(e) => onChange({ alt: e.target.value })}
-            placeholder="Describe the image"
-          />
-        </div>
-        <div>
-          <label className={LABEL}>Link URL (optional)</label>
-          <input
-            type="url"
-            className={INPUT}
-            value={block.href ?? ''}
-            onChange={(e) => onChange({ href: e.target.value })}
-            placeholder="https://"
-          />
-        </div>
-        {AlignRow()}
-      </div>
-    );
+    return <ImageInspector block={block} onChange={onChange} onMediaPick={onMediaPick} />;
   }
 
   if (block.type === 'divider') {
-    return <p className="text-xs text-gray-400">Horizontal rule — no extra settings needed.</p>;
+    return (
+      <div>
+        {renderSubTabBar('Divider')}
+        {subTab === 'primary' && (
+          <p className="text-xs text-gray-400">Horizontal rule — adjust margin/background in the Block tab.</p>
+        )}
+        {subTab === 'block' && renderBlockTab()}
+      </div>
+    );
   }
 
   if (block.type === 'spacer') {
     return (
       <div>
-        <label className={LABEL}>Height (px)</label>
-        <input
-          type="range"
-          min={8}
-          max={120}
-          className="w-full accent-gray-900"
-          value={block.spacerHeight ?? 24}
-          onChange={(e) => onChange({ spacerHeight: Number(e.target.value) })}
-        />
-        <p className="mt-1 text-center text-xs text-gray-500">{block.spacerHeight ?? 24} px</p>
+        {renderSubTabBar('Spacer')}
+        {subTab === 'primary' && (
+          <div>
+            <label className={LABEL}>Height (px)</label>
+            <input
+              type="range"
+              min={8}
+              max={120}
+              className="w-full accent-gray-900"
+              value={block.spacerHeight ?? 24}
+              onChange={(e) => onChange({ spacerHeight: Number(e.target.value) })}
+            />
+            <p className="mt-1 text-center text-xs text-gray-500">{block.spacerHeight ?? 24} px</p>
+          </div>
+        )}
+        {subTab === 'block' && renderBlockTab()}
       </div>
     );
   }
 
   if (block.type === 'video') {
     return (
-      <div className="space-y-4">
-        <div>
-          <label className={LABEL}>Video URL (opens in new tab)</label>
-          <input
-            type="url"
-            className={INPUT}
-            value={block.href ?? ''}
-            onChange={(e) => onChange({ href: e.target.value })}
-            placeholder="https://youtube.com/watch?v=..."
-          />
-          <p className="mt-1 text-[11px] text-gray-400">Clicking the thumbnail opens this link</p>
-        </div>
-        <div>
-          <label className={LABEL}>Thumbnail Image</label>
-          <input
-            type="url"
-            className={INPUT}
-            value={block.src ?? ''}
-            onChange={(e) => onChange({ src: e.target.value })}
-            placeholder="https://..."
-          />
-          <button
-            type="button"
-            onClick={() => onMediaPick((url) => onChange({ src: url }))}
-            className="mt-1.5 w-full rounded-lg border border-gray-200 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
-          >
-            Choose from Media Library
-          </button>
-        </div>
-        <div>
-          <label className={LABEL}>Caption (optional)</label>
-          <input
-            type="text"
-            className={INPUT}
-            value={block.content ?? ''}
-            onChange={(e) => onChange({ content: e.target.value })}
-            placeholder="Watch our latest video"
-          />
-        </div>
+      <div>
+        {renderSubTabBar('Video')}
+        {subTab === 'primary' && (
+          <div className="space-y-4">
+            <div>
+              <label className={LABEL}>Video URL (opens in new tab)</label>
+              <input
+                type="url"
+                className={INPUT}
+                value={block.href ?? ''}
+                onChange={(e) => onChange({ href: e.target.value })}
+                placeholder="https://youtube.com/watch?v=..."
+              />
+              <p className="mt-1 text-[11px] text-gray-400">Clicking the thumbnail opens this link</p>
+            </div>
+            <div>
+              <label className={LABEL}>Thumbnail Image</label>
+              <input
+                type="url"
+                className={INPUT}
+                value={block.src ?? ''}
+                onChange={(e) => onChange({ src: e.target.value })}
+                placeholder="https://..."
+              />
+              <button
+                type="button"
+                onClick={() => onMediaPick((url) => onChange({ src: url }))}
+                className="mt-1.5 w-full rounded-lg border border-gray-200 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                Choose from Media Library
+              </button>
+            </div>
+            <div>
+              <label className={LABEL}>Caption (optional)</label>
+              <input
+                type="text"
+                className={INPUT}
+                value={block.content ?? ''}
+                onChange={(e) => onChange({ content: e.target.value })}
+                placeholder="Watch our latest video"
+              />
+            </div>
+          </div>
+        )}
+        {subTab === 'block' && renderBlockTab()}
       </div>
     );
   }
@@ -2213,48 +2915,60 @@ function BlockInspectorPanel({
       onChange({ socialLinks: links.map(l => l.platform === platform ? { ...l, url } : l) });
     };
     return (
-      <div className="space-y-3">
-        {SOCIAL_PLATFORMS.map(({ id, label, color }) => {
-          const enabled = isEnabled(id);
-          return (
-            <div key={id}>
-              <div className="flex items-center justify-between mb-1.5">
-                <div className="flex items-center gap-2">
-                  <div className="h-3.5 w-3.5 rounded-full flex-shrink-0" style={{ background: color }} />
-                  <span className="text-xs font-semibold text-gray-700">{label}</span>
+      <div>
+        {renderSubTabBar('Social')}
+        {subTab === 'primary' && (
+          <div className="space-y-3">
+            {SOCIAL_PLATFORMS.map(({ id, label, color }) => {
+              const enabled = isEnabled(id);
+              return (
+                <div key={id}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <div className="h-3.5 w-3.5 rounded-full flex-shrink-0" style={{ background: color }} />
+                      <span className="text-xs font-semibold text-gray-700">{label}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => toggle(id)}
+                      className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors ${enabled ? 'bg-gray-900' : 'bg-gray-200'}`}
+                    >
+                      <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform ${enabled ? 'translate-x-4' : 'translate-x-0'}`} />
+                    </button>
+                  </div>
+                  {enabled && (
+                    <input
+                      type="url"
+                      className={INPUT}
+                      value={getUrl(id)}
+                      onChange={(e) => setUrl(id, e.target.value)}
+                      placeholder={`https://${id}.com/yourpage`}
+                    />
+                  )}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => toggle(id)}
-                  className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors ${enabled ? 'bg-gray-900' : 'bg-gray-200'}`}
-                >
-                  <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform ${enabled ? 'translate-x-4' : 'translate-x-0'}`} />
-                </button>
-              </div>
-              {enabled && (
-                <input
-                  type="url"
-                  className={INPUT}
-                  value={getUrl(id)}
-                  onChange={(e) => setUrl(id, e.target.value)}
-                  placeholder={`https://${id}.com/yourpage`}
-                />
-              )}
-            </div>
-          );
-        })}
+              );
+            })}
+          </div>
+        )}
+        {subTab === 'block' && renderBlockTab()}
       </div>
     );
   }
 
   if (block.type === 'address') {
     return (
-      <div className="rounded-xl bg-gray-50 border border-gray-200 px-4 py-3">
-        <p className="text-xs font-semibold text-gray-700 mb-1">Auto-filled from venue settings</p>
-        <p className="text-xs text-gray-500 leading-relaxed">
-          Your business name and address are pulled automatically. To update them, go to{' '}
-          <strong>Listing → Directory</strong> and update your location fields.
-        </p>
+      <div>
+        {renderSubTabBar('Address')}
+        {subTab === 'primary' && (
+          <div className="rounded-xl bg-gray-50 border border-gray-200 px-4 py-3">
+            <p className="text-xs font-semibold text-gray-700 mb-1">Auto-filled from venue settings</p>
+            <p className="text-xs text-gray-500 leading-relaxed">
+              Your business name and address are pulled automatically. To update them, go to{' '}
+              <strong>Listing → Directory</strong> and update your location fields.
+            </p>
+          </div>
+        )}
+        {subTab === 'block' && renderBlockTab()}
       </div>
     );
   }
