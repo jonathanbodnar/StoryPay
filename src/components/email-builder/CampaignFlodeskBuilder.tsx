@@ -1986,7 +1986,7 @@ export function CampaignFlodeskBuilder({
         </div>
 
         {/* Right: save status, preview, next */}
-        <div className="flex items-center gap-3 flex-shrink-0 w-48 justify-end">
+        <div className="flex items-center gap-3 flex-shrink-0 w-48 justify-end ml-auto">
           {/* Save indicator */}
           <div className="flex items-center gap-1.5">
             {saveStatus === 'saving' && <Loader2 size={12} className="animate-spin text-gray-300" />}
@@ -1996,8 +1996,9 @@ export function CampaignFlodeskBuilder({
 
           {/* Preview */}
           <button type="button" onClick={() => setPreviewOpen(true)}
-            className="flex items-center gap-1 text-sm text-gray-400 hover:text-gray-700 transition-colors">
+            className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-700 transition-colors">
             <Eye size={14} />
+            <span>Preview</span>
           </button>
 
           {/* Next */}
