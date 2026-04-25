@@ -114,62 +114,84 @@ function PaletteCard({ type, label, desc, Icon }: typeof PALETTE[number]) {
   );
 }
 
-// ─── Social SVG icons (monochrome, matched to Flodesk style) ─────────────────
-// IMPORTANT: keep these paths in lockstep with `socialIconSvg()` in
-// `marketing-email-render.ts` so the editor preview matches the rendered
-// email exactly.
+// ─── Social SVG icons — Flodesk-style minimalist glyphs ──────────────────────
+// Filled letterforms (f, in, P, d, X, @) for letter glyphs; stroked outlines
+// (Instagram camera, Globe, YouTube) for shape glyphs. ALL paths are kept in
+// lockstep with `socialIconSvg()` in `marketing-email-render.ts` so the editor
+// canvas, preview iframe, and recipient inbox render pixel-for-pixel match.
 function SocialIcon({ platform, size = 18, color = '#18181b' }: { platform: string; size?: number; color?: string }) {
   const common = { width: size, height: size, viewBox: '0 0 24 24' as const };
   switch (platform) {
+    // Lowercase "f" letterform with hooked top + crossbar (Lucide-derived).
     case 'facebook': return (
       <svg {...common} fill={color}>
-        <path d="M22.675 0H1.325C.593 0 0 .593 0 1.325v21.351C0 23.407.593 24 1.325 24H12.82v-9.294H9.692v-3.622h3.128V8.413c0-3.1 1.893-4.788 4.659-4.788 1.325 0 2.464.099 2.795.143v3.24l-1.918.001c-1.504 0-1.795.715-1.795 1.764v2.313h3.587l-.467 3.622h-3.12V24h6.116c.73 0 1.323-.593 1.323-1.325V1.325C24 .593 23.407 0 22.675 0z" />
+        <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
       </svg>
     );
+
+    // Modern "X" (Twitter rebrand) — angular thick X.
     case 'twitter': return (
       <svg {...common} fill={color}>
         <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
       </svg>
     );
+
+    // Camera silhouette: rounded square + lens circle + viewfinder dot.
     case 'instagram': return (
       <svg {...common} fill="none">
-        <rect x="2" y="2" width="20" height="20" rx="5" ry="5" stroke={color} strokeWidth="2.4" />
-        <circle cx="12" cy="12" r="4.5" stroke={color} strokeWidth="2.4" />
+        <rect x="3" y="3" width="18" height="18" rx="5" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="12" cy="12" r="4" stroke={color} strokeWidth="2" />
         <circle cx="17.5" cy="6.5" r="1.1" fill={color} />
       </svg>
     );
+
+    // "d" with a small flag — TikTok mark, simplified to a single solid silhouette.
     case 'tiktok': return (
       <svg {...common} fill={color}>
-        <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.83a8.18 8.18 0 0 0 4.77 1.53V6.92a4.85 4.85 0 0 1-1-.23z" />
+        <path d="M14 2h2.6c.2 1.2.8 2.3 1.7 3.1.9.8 2 1.3 3.2 1.4v3a8 8 0 0 1-4.5-1.5v6.4c0 3.3-2.7 6-6 6s-6-2.7-6-6 2.7-6 6-6c.4 0 .7 0 1 .1v3.1c-.3-.1-.6-.1-1-.1a2.9 2.9 0 1 0 2.9 2.9V2z" />
       </svg>
     );
+
+    // Pinterest "P" — bowl + descender, with see-through counter via even-odd.
     case 'pinterest': return (
       <svg {...common} fill={color}>
-        <path d="M12 0C5.373 0 0 5.373 0 12c0 5.084 3.163 9.426 7.627 11.174-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 0 1 .083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0z" />
+        <path fillRule="evenodd" clipRule="evenodd" d="M12 3a6 6 0 0 0-2 11.7l-1.5 6.9c-.1.4.4.6.7.3l3.5-3.5c.4.1.9.1 1.3.1a6 6 0 1 0-2-15zm.4 8a2 2 0 1 1 0-4 2 2 0 0 1 0 4z" />
       </svg>
     );
+
+    // Lowercase "in" — solid filled, no chip. (Lucide-derived; rendered with fill.)
     case 'linkedin': return (
       <svg {...common} fill={color}>
-        <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.063 2.063 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+        <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z" />
+        <rect x="2" y="9" width="4" height="12" />
+        <circle cx="4" cy="4" r="2" />
       </svg>
     );
+
+    // Stroked rounded rectangle with a filled play triangle inside.
     case 'youtube': return (
-      <svg {...common} fill={color}>
-        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+      <svg {...common} fill="none">
+        <rect x="2.5" y="5.5" width="19" height="13" rx="3.5" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M10 9.4l5.5 2.6-5.5 2.6z" fill={color} />
       </svg>
     );
+
+    // Threads "@"-style mark — kept as the standard Threads silhouette.
     case 'threads': return (
       <svg {...common} fill={color}>
         <path d="M17.65 11.13c-.07-.04-.16-.07-.24-.1-.13-2.43-1.46-3.83-3.69-3.84a3.9 3.9 0 0 0-3.27 1.66l1.21.82a2.45 2.45 0 0 1 2.05-1.05c.95 0 1.66.32 2.06.92.27.42.43.96.5 1.59-.6-.1-1.24-.13-1.92-.09-1.94.11-3.18 1.24-3.1 2.81.04.79.43 1.47 1.11 1.91a3.4 3.4 0 0 0 1.96.5c.91-.05 1.62-.4 2.13-1.03.38-.49.62-1.12.74-1.92.49.3.85.69 1.05 1.16.34.81.36 2.13-.72 3.21-.95.95-2.09 1.36-3.81 1.37-1.91-.02-3.36-.63-4.31-1.83-.89-1.13-1.36-2.75-1.37-4.83.02-2.07.48-3.7 1.37-4.83.95-1.2 2.4-1.81 4.31-1.83 1.93.01 3.39.63 4.34 1.83.47.6.82 1.34 1.04 2.21l1.41-.39a8.46 8.46 0 0 0-1.31-2.71C19.06 3.34 17.16 2.51 14.79 2.5h-.01c-2.36.02-4.22.85-5.55 2.5C8.04 6.46 7.43 8.5 7.4 11l0 .01 0 .01c.03 2.5.64 4.54 1.83 6 1.33 1.65 3.19 2.49 5.55 2.51h.01c2.1-.01 3.58-.57 4.81-1.79 1.6-1.6 1.55-3.6.74-4.83-.36-.55-.86-1.02-1.5-1.36zm-3.83 3.06c-.62.04-1.27-.24-1.31-.97-.03-.55.39-1.16 1.69-1.23.15-.01.3-.01.44-.01.46 0 .89.04 1.28.13-.15 1.81-1.01 2.04-2.1 2.08z" />
       </svg>
     );
+
+    // Globe — circle + horizontal equator + curved meridian.
     case 'website': return (
       <svg {...common} fill="none">
-        <circle cx="12" cy="12" r="9.5" stroke={color} strokeWidth="2.2" />
-        <line x1="2.5" y1="12" x2="21.5" y2="12" stroke={color} strokeWidth="2.2" strokeLinecap="round" />
-        <path d="M12 2.5a14 14 0 0 1 3.8 9.5 14 14 0 0 1-3.8 9.5 14 14 0 0 1-3.8-9.5 14 14 0 0 1 3.8-9.5z" stroke={color} strokeWidth="2.2" strokeLinejoin="round" />
+        <circle cx="12" cy="12" r="9" stroke={color} strokeWidth="2" />
+        <line x1="3" y1="12" x2="21" y2="12" stroke={color} strokeWidth="2" strokeLinecap="round" />
+        <path d="M12 3a14 14 0 0 1 4 9 14 14 0 0 1-4 9 14 14 0 0 1-4-9 14 14 0 0 1 4-9z" stroke={color} strokeWidth="2" strokeLinejoin="round" />
       </svg>
     );
+
     default: return null;
   }
 }
