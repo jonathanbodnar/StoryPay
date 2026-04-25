@@ -1273,6 +1273,376 @@ Changes save automatically when you click a color preset. For other fields, clic
 
 Note: Branding settings are visible to owners and admins only.`,
       },
+      {
+        id: 'brand-colors-saved',
+        title: 'Saving brand colors — palette across the app',
+        tags: ['brand colors', 'palette', 'saved colors', 'color picker', 'hex', 'venue colors', 'reusable colors'],
+        body: `Your venue keeps a saved palette of brand colors at Settings → Branding → Brand Colors. Once a color is in the palette it appears in every color picker across the app — email builder (text, buttons, backgrounds, dividers, social icons), branding presets, lead capture forms, and proposals.
+
+Adding a color
+- Settings → Branding → Brand Colors. Type a hex code (#1b1b1b) and click Save.
+- From any color picker across the app, click the bookmark/save icon next to the color you just configured to add it to your palette instantly.
+
+Removing a color
+- Hover any saved swatch and click the small × that appears. Removing a color does not change any email or proposal that already uses it; it just stops showing up in pickers.
+
+Limits
+- Up to 50 colors per venue.
+
+Where it shows up
+- Flodesk-style color picker inside every email block inspector — your saved colors appear at the bottom of the picker so you can apply them in one click.
+- Branding "Custom Colors" section.
+- Lead capture forms (every color setting).
+- Anywhere the app shows a color picker.`,
+      },
+      {
+        id: 'brand-social-networks',
+        title: 'Social network links — used by marketing emails',
+        tags: ['social networks', 'social links', 'instagram', 'facebook', 'tiktok', 'linkedin', 'youtube', 'threads', 'twitter', 'x', 'pinterest', 'website', 'branding', 'email social block'],
+        body: `Settings → Branding → Social Networks is where you store your venue's social profile URLs once. Every marketing email Social block reads from this list automatically, so you never have to set them per email.
+
+Supported platforms
+Instagram, Facebook, TikTok, LinkedIn, YouTube, Twitter / X, Threads, Pinterest, Website.
+
+Adding a link
+1. Settings → Branding → Social Networks.
+2. Pick a platform.
+3. Paste the URL. If you forget the https:// prefix, the system adds it automatically.
+4. The save is debounced — your changes auto-save after a brief pause.
+
+Each row shows an "Open link" button (opens the URL in a new tab to verify) and a "Remove" button.
+
+Limits
+- One URL per platform.
+- Up to 12 social links total per venue (more than enough — most venues use 3–5).
+
+Where it's used
+- Marketing email Social block — every campaign, template, and automation that includes a Social block automatically renders icons + links from this list. There is no per-email override; this is the single source of truth.
+- The email builder Social inspector links straight to this section for one-click management.
+
+Anchor / deep link
+Settings → Branding → Social Networks is anchored at #social-networks, so the email builder's "Manage in branding" CTA jumps you directly to that card on the Branding page.
+
+Empty state
+If you don't have any social links saved yet, the Social block in your email shows a hint in the editor pointing you back to Branding. In the actual sent email the Social block renders nothing — it does not ship a placeholder to your recipients.`,
+      },
+    ],
+  },
+  {
+    id: 'marketing-email',
+    label: 'Marketing Emails',
+    iconName: 'Send',
+    color: '#0ea5e9',
+    articles: [
+      {
+        id: 'me-overview',
+        title: 'Marketing email overview — Templates, Campaigns, Automations',
+        tags: ['marketing email', 'campaigns', 'broadcast', 'newsletter', 'flodesk', 'templates', 'automations', 'preferences', 'overview'],
+        body: `The Marketing flyout in the sidebar groups every email-marketing tool into four pages:
+
+1. Templates (Marketing → Email Templates) — your reusable design library. Build a template once with the drag-and-drop builder, then reuse it for any campaign.
+2. Campaigns (Marketing → Email Campaigns) — one-off broadcasts you send to a segment of your contacts/leads.
+3. Automations (Marketing → Email Automations) — multi-step drip sequences triggered by an event (new lead, tag added, date hit, etc.).
+4. Preferences — recipients can self-manage their subscription via a public preference center linked from every email footer.
+
+All four use the same Flodesk-style block editor so the experience is identical no matter where you are. Templates open at /dashboard/marketing/email/templates, campaigns at /dashboard/marketing/email/campaigns, automations at /dashboard/marketing/email/automations.
+
+Marketing emails always pull your venue branding automatically — logo, brand colors, brand fonts, address, and social network links — so every send stays on-brand without touching settings.
+
+Where things live:
+- Brand colors saved palette → Settings → Branding → Brand Colors. Available in every color picker across the email builder.
+- Social network links → Settings → Branding → Social Networks. Power the Social block and footer.
+- Address used in the Address block → Settings → Branding (Contact Information) or the venue's primary location.
+- Compliance footer (unsubscribe + manage preferences) is appended automatically; recipients land on a public Preferences page hosted on app.storyvenue.com.`,
+      },
+      {
+        id: 'me-builder',
+        title: 'Using the email builder (Flodesk-style)',
+        tags: ['email builder', 'editor', 'drag and drop', 'canvas', 'blocks', 'palette', 'inspector', 'preview', 'undo', 'redo'],
+        body: `Open any template, campaign, or automation step and you land in the email builder — a three-pane Flodesk-style editor:
+
+Left: a thin sidebar with view toggles (Desktop / Mobile preview) and undo/redo.
+Center: the live canvas showing exactly how the email will render. Click any block to select it and edit inline (text blocks let you type directly on the canvas; buttons let you edit the label live).
+Right panel: the inspector. When nothing is selected, the right panel shows the Block Palette — a grid of every block type you can add. When a block IS selected, the right panel switches to that block's inspector with tabs (Primary, Block, and any block-specific tabs like Icons / Links / Block for the social block).
+
+Adding blocks
+- Drag any block tile from the right-panel palette and drop it onto the canvas. A blue drop indicator line shows exactly where the block will land — you can drop at any position (including the very last slot).
+- Or click the small "+" button between any two blocks to insert directly there.
+
+Editing blocks
+- Single-click a block to select it; the right panel becomes that block's inspector.
+- Hover any block to see a side toolbar with Move up / Move down / Duplicate / Delete buttons. The "save as template" heart was removed — saving the entire email is what you want, not individual blocks.
+- Drag a selected block to a new position by its drag handle.
+- The drop indicator and selection border use a #1b1b1b / blue accent so it's clear what's about to move.
+
+Right-panel inspector tabs
+Every block has a Block tab with shared settings — background color, top/bottom padding, side gutters. Block-specific tabs (Font, Icons, Links, Address, etc.) appear before the Block tab.
+
+Header bar
+- Back arrow returns you to the Templates / Campaigns / Automations list (the label says "Back" rather than the form name to keep it tidy).
+- The step nav (Design / Recipients / Review) is centered over the canvas, offset for the right panel so it stays visually balanced.
+- The preview button (eye icon, labelled "Preview") and Send pin to the far right.
+
+Live preview & send-test
+Click the eye icon to open the preview modal. It renders inside an iframe so links and embedded videos actually work — exactly what your recipient will see in their inbox. There's a Send-test form right inside the modal: enter any email address and click Send Test to fire a real email through your normal pipeline. The preview header and backdrop use #1b1b1b for a neutral, distraction-free preview.
+
+Undo / Redo
+The left sidebar has an undo/redo bar. Every edit (block add, delete, move, style change, text edit) is captured.
+
+Saving
+Templates and campaigns autosave as you edit. The header shows the save state.`,
+      },
+      {
+        id: 'me-blocks',
+        title: 'Block types in the email builder',
+        tags: ['blocks', 'block types', 'heading', 'text', 'button', 'image', 'video', 'divider', 'spacer', 'social', 'address', 'columns', 'html'],
+        body: `The block palette in the right panel offers every supported block. Drag any tile onto the canvas to add it.
+
+Available blocks:
+- Heading (H1 / H2 / H3) — large headline text. Buttons in the format toolbar set both the level and the matching font size so it always takes visual effect.
+- Text — paragraph copy with full rich-text formatting (bold, italic, underline, lists, links, alignment, font, color). The format toolbar includes an AI refine button (pencil icon) that rewrites your selection.
+- Button — call-to-action button. Full Flodesk-style tabbed inspector with presets, saved styles, fonts, colors, padding, border radius, and a link pill that supports either a URL or a file from your media library (see the Button block article).
+- Image — single image with media-library picker. Supports alignment, padding, link wrapping, and alt text.
+- Image grid (multi-image) — 2-, 3-, or 4-column image rows with even gutters between rows and columns.
+- Video — 16:9 YouTube-style player. Paste any YouTube, Vimeo, or Loom URL. The thumbnail + play button render on the canvas, and the actual video plays in preview and sent emails (see the Video block article).
+- Divider — horizontal rule. Flodesk-style settings: thickness, style (solid/dashed/dotted), color, width %, alignment, top/bottom padding, background color.
+- Spacer — vertical empty space. Two settings: Background color and Height (drag the slider).
+- Social — row of social network icons. Pulls links from your branding settings; styling controlled by a 3-tab inspector (Icons / Links / Block). See the Social block article.
+- Address — your venue address block. 3-tab inspector (Font / Address / Block). Pulls address from your branding settings; the "Manage my address" button jumps to Settings → Branding.
+- Columns — split a row into 2 or 3 columns and drop other blocks inside.
+- HTML — raw HTML for power users.
+
+Per-block settings — every block's right-panel inspector ends with a "Block" tab containing the shared settings: top padding, bottom padding, side gutters, and background color. This keeps spacing consistent across blocks and blocks the canvas from drifting visually.
+
+Aligning content — every block that supports alignment (heading, text, button, image, video, social, address) uses the same Flodesk-style alignment selector: four icon buttons (Left, Center, Right, and Full) with a rounded pill highlight on the active option.`,
+      },
+      {
+        id: 'me-block-button',
+        title: 'Button block — presets, saved styles, link pill',
+        tags: ['button', 'cta', 'call to action', 'preset', 'saved styles', 'link', 'file link', 'media library'],
+        body: `The Button block uses a tabbed inspector with three sections:
+
+Style — Presets, Saved styles, and full custom controls.
+- Presets are pre-designed button looks (Solid, Outline, Pill, Underlined link, etc.). Click a preset to apply it instantly.
+- Saved styles let you keep your venue's preferred buttons. After tweaking a button, click the "Save current style" pill to add it to a modal popup of saved styles. From the same modal you can apply or delete any saved style.
+- Custom controls: font family (any Google Font), weight, size, letter spacing, text color, background color, border color, border width, border radius, vertical padding, horizontal padding.
+
+Link — the link pill supports two link types:
+- URL — paste any URL. Toggle "Open in new tab" if you want target=_blank.
+- File — pick a file (PDF, image, etc.) from your venue Media library. The button then links straight to that file's public URL.
+The link pill is compact and matches the Flodesk reference.
+
+Block — shared block settings (alignment, top/bottom padding, side gutters, background color).
+
+Live editing
+Click the button on the canvas and you can edit the label inline — no need to open a separate dialog. The font, color, and other style changes update in real time as you adjust the inspector.`,
+      },
+      {
+        id: 'me-block-image',
+        title: 'Image block — media library + multi-image grid',
+        tags: ['image', 'photo', 'media library', 'image grid', 'multi-image', 'columns', 'gutters', 'alignment'],
+        body: `The Image block is unified across the entire builder around the shared VenueMediaPickerModal — the same picker used in branding, listing photos, and lead capture forms. Click "Choose from media library" to pick an image you already uploaded, or upload a new one in-place.
+
+Single image
+- Replace image — opens the media picker.
+- Alignment — Left / Center / Right (matches the standard alignment selector).
+- Width — slider for max width within the canvas.
+- Padding — top, bottom, side gutters in the Block tab.
+- Link — wrap the image in a link (URL).
+- Alt text — for accessibility.
+
+Multi-image grid
+The Image block can also display a grid of images:
+- 2, 3, or 4 columns.
+- Multiple rows.
+- Even gutters between every row AND every column so the spacing stays balanced.
+- Each cell uses the media picker just like a single image.
+
+Supported formats: JPEG, PNG, WebP, AVIF, GIF (no video). Max 10MB per image. Files live in the shared Media library so you can reuse them across emails, listing photos, branding logo, and lead capture forms.`,
+      },
+      {
+        id: 'me-block-video',
+        title: 'Video block — YouTube, Vimeo, Loom',
+        tags: ['video', 'youtube', 'vimeo', 'loom', 'embed', 'player', '16:9', 'thumbnail'],
+        body: `The Video block renders a 16:9 YouTube-style player with a play-button overlay. Paste any video URL into the inspector and the builder auto-detects the provider:
+- YouTube — short links, watch links, and embed links all work.
+- Vimeo — standard vimeo.com URLs.
+- Loom — share links from loom.com.
+
+What renders where:
+- Live canvas — the thumbnail with a play button overlay. Clicking the block on the live canvas SELECTS it for editing; it does NOT open the video. This stops accidental navigation while you're laying out the email.
+- Preview modal — the video plays inline because the preview is a real iframe.
+- Sent emails — the thumbnail links out to the original video URL, so recipients click through and watch in their browser.
+
+Empty state — when no URL is set, the canvas shows a small hint reading "Add a YouTube, Vimeo or Loom URL". The hint is positioned so the play button overlay never obscures it.
+
+Settings:
+- Video URL.
+- Thumbnail override (paste a custom thumbnail URL or pick from media library).
+- Alignment (Left / Center / Right / Full).
+- Width and Block-tab padding.`,
+      },
+      {
+        id: 'me-block-social',
+        title: 'Social block — venue-managed social network links',
+        tags: ['social', 'social links', 'social block', 'icons', 'instagram', 'facebook', 'tiktok', 'linkedin', 'youtube', 'threads', 'website', 'branding'],
+        body: `The Social block renders a row of social network icons in your email — pulled automatically from your venue Branding settings, so you set them once and every campaign stays in sync.
+
+Add or edit your social links — Settings → Branding → Social Networks. Or, from the Social inspector inside the builder, click "Manage in branding" on the Links tab. The Social block links list is read-only inside the builder by design: a single source of truth lives in branding so newsletters never go out with stale links.
+
+Inspector tabs
+- Icons — choose the look: outline (no chip), filled circle, or solid circle. Pick a color from the Flodesk color picker, a size (S / M / L), an alignment (Left / Center / Right / Full), and adjust spacing between icons. The size and style swatches are visual-only (no text labels) and are all rendered at the same dimensions for consistency.
+- Links — read-only list of your configured platforms (Instagram, Facebook, TikTok, LinkedIn, YouTube, Twitter/X, Threads, Pinterest, Website) with a "Manage in branding" CTA at the top.
+- Block — shared block settings (background, padding).
+
+Rendering parity
+Editor canvas, preview iframe, and the actual delivered email all use the exact same SVG paths, chip dimensions, and stroke widths. Filled-circle icons use a glyph color that automatically flips between black and white based on the chip color so they always read clearly. Outline-only icons use a slightly thicker stroke at small sizes for better visibility.
+
+Empty state
+- In the editor canvas, when no social links are configured the block shows a hint pointing the user to Branding so they know what to do.
+- In the actual sent email, if Branding has no social links the entire Social block renders nothing — no placeholder text ever ships to a recipient.`,
+      },
+      {
+        id: 'me-block-address',
+        title: 'Address block — pulled from branding',
+        tags: ['address', 'physical address', 'location', 'mailing address', 'compliance', 'branding'],
+        body: `The Address block displays your venue's physical address inside an email — useful for compliance with anti-spam laws (CAN-SPAM, CASL) which require a physical mailing address in every commercial email.
+
+Source of truth
+The address is pulled from your venue Branding settings (Settings → Branding → Contact Information). The Address block is read-only inside the builder; click "Manage my address" on the Address inspector tab to jump straight to the Branding page and update it once for every campaign.
+
+3-tab inspector
+- Font — typography for the address text: font family, size, weight, color, letter spacing.
+- Address — the address preview with a single "Manage my address" button (background #1b1b1b for a clean neutral look). Copy renders compactly — typically two short lines instead of four.
+- Block — shared block settings (alignment, top/bottom padding, side gutters, background color).
+
+Compliance
+You should keep an Address block in every marketing email. The same applies to the unsubscribe footer added automatically by StoryPay (see the email compliance article).`,
+      },
+      {
+        id: 'me-block-divider-spacer',
+        title: 'Divider and Spacer blocks',
+        tags: ['divider', 'spacer', 'separator', 'horizontal rule', 'whitespace', 'gap'],
+        body: `Two utility blocks for breaking up content in your email.
+
+Divider — a horizontal rule. Flodesk-style settings:
+- Style — Solid, Dashed, or Dotted.
+- Thickness — slider in pixels.
+- Color — full color picker.
+- Width — percentage of the email width (10–100%).
+- Alignment — Left / Center / Right.
+- Top + bottom padding.
+- Background color (the surrounding strip, not the line itself).
+
+Spacer — pure vertical whitespace.
+- Height — slider for the empty gap (in pixels). Drag the slider to set the gap size visually.
+- Background color — color the strip if you want a colored gap (e.g. matching a hero block above).
+
+Both blocks live in the right-panel palette and drop in like any other block.`,
+      },
+      {
+        id: 'me-brand-colors',
+        title: 'Brand colors — saved palette across the app',
+        tags: ['brand colors', 'palette', 'color picker', 'flodesk', 'saved colors', 'eyedropper', 'hex'],
+        body: `Brand colors are a per-venue palette saved at Settings → Branding → Brand Colors. Once a color is in your palette it appears in every color picker across the app: email builder (text, button, background, divider, social icons, etc.), proposals, branding presets, lead capture forms — anywhere a color is picked.
+
+Adding a color
+- Settings → Branding → Brand Colors. Type a hex code (#1b1b1b) and click Save, or click any saved swatch to remove it.
+- From any color picker across the app, click the bookmark/save icon next to the color you just configured. It's added to your palette instantly.
+
+The Flodesk-style color picker
+- Anchored to the viewport so it never opens off-screen on small panels.
+- Includes a hex input, a HSL/RGB visualizer, an eyedropper (where the browser supports it), and a list of your saved brand colors at the bottom.
+- The "Default" preset always includes a sensible fallback (#1b1b1b near-black for text, #ffffff for backgrounds).
+
+Limits — you can save up to 50 brand colors. Removing a color from the palette doesn't change any email or proposal that already uses it.`,
+      },
+      {
+        id: 'me-fonts',
+        title: 'Fonts in the email builder',
+        tags: ['fonts', 'google fonts', 'typography', 'font family', 'weight', 'font selector'],
+        body: `Every text-bearing block (heading, text, button, address) exposes a Google Fonts selector in its inspector. Pick from a curated list of email-safe Google fonts; the chosen font loads automatically in both the editor and the rendered email.
+
+For inline emphasis (bold / italic / underline / strikethrough) use the format toolbar that appears when you select text inside a Heading or Text block.
+
+Per-block overrides
+- Font family — affects only that block.
+- Font weight — Light, Regular, Medium, Semibold, Bold (depending on which weights the font ships).
+- Font color — uses the brand-colors palette.
+- Letter spacing — fine-tune tracking.
+- Line height — set per text/heading block.
+
+H1 / H2 / H3 buttons in the format toolbar set both the heading level and the matching font size, so the visual change is always immediate (no half-applied changes).`,
+      },
+      {
+        id: 'me-preview-test',
+        title: 'Live preview, send-test emails, and the preview modal',
+        tags: ['preview', 'send test', 'test email', 'iframe', 'preview modal'],
+        body: `Click the eye icon (top-right of the editor, labelled "Preview") to open the preview modal.
+
+What you get:
+- A real iframe rendering the email exactly as it will arrive — links work, embedded videos play, images load.
+- A Send-test form: enter any email address, click Send Test, and a real email is fired through your normal sending pipeline (so you also test deliverability, footer rendering, and your branding/social pulls).
+- Header and backdrop are #1b1b1b for a calm, neutral preview.
+- Close the modal to drop straight back into the editor with everything where you left it.
+
+Tips
+- Always send a test to yourself before scheduling a campaign.
+- Test on a phone too — open the preview modal and switch the canvas to Mobile (left sidebar toggle) to see how the email reflows on small screens.
+- Test renders use real branding (logo, colors, social, address) so what you see is what your contacts get.`,
+      },
+      {
+        id: 'me-compliance',
+        title: 'Email compliance — minimal footer and preference center',
+        tags: ['compliance', 'unsubscribe', 'opt out', 'preferences', 'preference center', 'can-spam', 'casl', 'gdpr', 'footer'],
+        body: `Every marketing email sent through StoryPay automatically includes a minimal compliance footer with:
+- Your venue name (from Branding → venue name).
+- Your physical address (from Branding → Contact Information).
+- An unsubscribe link.
+- A "manage your preferences" link.
+
+The unsubscribe and manage links use a signed token unique to each recipient and venue, so each link is single-purpose and can't be guessed or reused.
+
+Public preference center
+Both links lead to a public preference page hosted on app.storyvenue.com (no login required) where the recipient can:
+- Unsubscribe from all marketing emails (adds them to the marketing_email_suppressions list — they will never receive marketing emails from your venue again unless they opt back in).
+- Manage their preferences (opt back in if they've previously unsubscribed).
+
+Suppression
+Recipients on the suppression list are skipped automatically by every campaign and automation. They still receive transactional emails (proposals, invoices, payment confirmations) — those are exempt from CAN-SPAM and never use marketing-email infrastructure.
+
+Why this matters
+- CAN-SPAM (US) and CASL (Canada) require a physical address and a one-click unsubscribe in every commercial email. StoryPay's automatic footer covers both.
+- GDPR-style consent is up to you — collect opt-ins via your lead capture forms (Marketing → Lead Capture Forms include a marketing-opt-in checkbox).
+
+What you can edit
+You can change the visual styling of the footer (font, padding, background) inside the email builder, but the unsubscribe link, manage link, venue name, and physical address are mandatory and always render.`,
+      },
+      {
+        id: 'me-templates-vs-campaigns',
+        title: 'Templates vs Campaigns vs Automations',
+        tags: ['template', 'campaign', 'automation', 'difference', 'broadcast', 'drip', 'sequence', 'workflow'],
+        body: `Three places in the Marketing flyout use the same builder but serve different purposes.
+
+Templates — Marketing → Email Templates
+- A reusable design library. Build once, use many times.
+- Templates are not sent — they're starting points.
+- When you create a campaign or automation step, you can start from a template and tweak it for that specific send.
+- Edit at any time; existing campaigns/automations that copied a template are not affected by template edits (each copy is independent).
+
+Campaigns — Marketing → Email Campaigns
+- One-off broadcasts to a segment of your contacts/leads (e.g. "Spring tour open house").
+- A campaign has three steps: Design (the email itself), Recipients (who gets it — filtered by stage, tag, marketing opt-in, etc.), Review (final check + schedule or send now).
+- Once sent, a campaign reports opens, clicks, unsubscribes, and bounces in Marketing → Analytics.
+
+Automations — Marketing → Email Automations
+- Multi-step drip sequences triggered by an event (new lead via lead capture form, tag added, contact added, anniversary date hit, etc.).
+- Each step is its own email with its own delay (immediate, 1 day later, 7 days later, etc.).
+- Edit each step in the same builder you'd use for a campaign.
+- Pause / resume an automation at any time without deleting it.
+
+Tip — keep a small stable of well-tested templates (Inquiry follow-up, Tour reminder, Post-tour thank-you, Booking anniversary) and use them as the spine of every campaign and automation. Edits to a template don't propagate, so you control rollout.`,
+      },
     ],
   },
   {
@@ -1684,9 +2054,13 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/leads': ['leads-overview', 'leads-space', 'leads-edit-pipelines', 'leads-crm-intelligence', 'leads-kanban', 'leads-filter-search', 'leads-notifications', 'leads-to-proposal'],
 
   // Marketing — native email
-  '/dashboard/marketing/analytics': ['leads-overview', 'email-types', 'gs-overview'],
-  '/dashboard/marketing/email': ['leads-overview', 'email-types', 'listing-media-library', 'gs-overview'],
-  '/dashboard/marketing/form-builder': ['listing-media-library', 'leads-overview', 'gs-overview'],
+  '/dashboard/marketing/analytics': ['me-overview', 'me-compliance', 'leads-overview', 'gs-overview'],
+  '/dashboard/marketing/email/campaigns':  ['me-builder', 'me-blocks', 'me-preview-test', 'me-templates-vs-campaigns', 'me-compliance', 'brand-social-networks', 'brand-colors-saved'],
+  '/dashboard/marketing/email/templates':  ['me-builder', 'me-blocks', 'me-templates-vs-campaigns', 'me-block-button', 'me-block-image', 'me-block-video', 'me-block-social', 'me-block-address', 'me-brand-colors'],
+  '/dashboard/marketing/email/automations':['me-templates-vs-campaigns', 'me-builder', 'me-blocks', 'me-compliance', 'me-preview-test'],
+  '/dashboard/marketing/email/preferences':['me-compliance', 'me-overview'],
+  '/dashboard/marketing/email':            ['me-overview', 'me-builder', 'me-blocks', 'me-templates-vs-campaigns', 'me-compliance'],
+  '/dashboard/marketing/form-builder':     ['listing-media-library', 'leads-overview', 'gs-overview'],
 
   // Payments — new proposal / invoice
   '/dashboard/payments/new':        ['pay-new', 'pay-templates', 'pay-installments'],
@@ -1708,8 +2082,8 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/reports': ['rep-overview', 'rep-download'],
 
   // Settings
-  '/dashboard/settings/branding':        ['brand-setup', 'listing-media-library'],
-  '/dashboard/settings/email-templates': ['email-types', 'email-variables'],
+  '/dashboard/settings/branding':        ['brand-setup', 'brand-colors-saved', 'brand-social-networks', 'listing-media-library', 'me-block-social', 'me-block-address'],
+  '/dashboard/settings/email-templates': ['email-types', 'email-variables', 'me-overview'],
   '/dashboard/settings/integrations':    ['int-calendly', 'int-google-cal', 'int-quickbooks', 'int-freshbooks'],
   '/dashboard/settings/team':            ['team-invite', 'team-roles'],
   '/dashboard/settings/notifications':   ['notif-settings', 'sms-notifications'],
