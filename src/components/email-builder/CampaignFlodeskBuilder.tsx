@@ -23,6 +23,7 @@ import {
   DragOverlay,
   type DragEndEvent,
   type DragStartEvent,
+  type DragOverEvent,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -1448,16 +1449,29 @@ export function CampaignFlodeskBuilder({
   // dnd-kit sensors — require 5px drag before activating (prevents mis-fires on click)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const [activePaletteType, setActivePaletteType] = useState<EmailBlockType | null>(null);
+  const [dropOverId, setDropOverId] = useState<string | null>(null);
 
   function handleDragStart(event: DragStartEvent) {
     const id = String(event.active.id);
     if (id.startsWith('new:')) setActivePaletteType(id.replace('new:', '') as EmailBlockType);
     else setActivePaletteType(null);
+    setDropOverId(null);
+  }
+
+  function handleDragOver(event: DragOverEvent) {
+    // Only show indicator when dragging a palette item over a canvas block
+    const activeId = String(event.active.id);
+    if (activeId.startsWith('new:') && event.over) {
+      setDropOverId(String(event.over.id));
+    } else {
+      setDropOverId(null);
+    }
   }
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     setActivePaletteType(null);
+    setDropOverId(null);
 
     const activeId = String(active.id);
 
@@ -1707,7 +1721,7 @@ export function CampaignFlodeskBuilder({
 
       {/* ── Content — fixed below the header so both panes can scroll independently ── */}
       {/* DndContext wraps BOTH canvas and right panel so palette cards can drag onto canvas */}
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd} onDragCancel={() => { setActivePaletteType(null); setDropOverId(null); }}>
       <div
         style={{
           position: 'fixed',
@@ -1775,10 +1789,27 @@ export function CampaignFlodeskBuilder({
 
                   {def.blocks.map((block, idx) => {
                     const isSelected = block.id === selectedId;
+                    const showDropIndicator = dropOverId === block.id && activePaletteType !== null;
                     return (
                       <SortableBlock key={block.id} id={block.id}>
                         {(isDragging) => (
                           <div>
+                            {/* Drop indicator — shown when a palette block is dragged over this position */}
+                            {showDropIndicator && (
+                              <div className="pointer-events-none px-0 py-1">
+                                <div
+                                  className="flex items-center gap-2"
+                                  style={{ borderTop: '2.5px solid #3b82f6', margin: '0 0' }}
+                                >
+                                  <span
+                                    className="text-[10px] font-semibold text-white rounded px-1.5 py-0.5"
+                                    style={{ background: '#3b82f6', lineHeight: 1.4, whiteSpace: 'nowrap' }}
+                                  >
+                                    {PALETTE.find(p => p.type === activePaletteType)?.label ?? activePaletteType}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
                             <div
                               className="relative group/block"
                               onClick={(e) => { e.stopPropagation(); if (!isDragging) setSelectedId(block.id); }}
@@ -1863,6 +1894,16 @@ export function CampaignFlodeskBuilder({
                       </SortableBlock>
                     );
                   })}
+                  {/* Drop-at-end indicator — shown when dragging palette block below all existing blocks */}
+                  {activePaletteType !== null && dropOverId === null && def.blocks.length > 0 && (
+                    <div className="pointer-events-none py-1">
+                      <div style={{ borderTop: '2.5px solid #3b82f6' }}>
+                        <span className="text-[10px] font-semibold text-white rounded px-1.5 py-0.5" style={{ background: '#3b82f6', lineHeight: 1.4 }}>
+                          {PALETTE.find(p => p.type === activePaletteType)?.label} — drop to add at end
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </SortableContext>
               )}
             </div>
