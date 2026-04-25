@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Loader2, Save, Upload, ImageIcon, X, CheckCircle2, FileText, Link2, FileBadge, Mail, Globe, FolderOpen } from 'lucide-react';
+import { Loader2, Save, Upload, ImageIcon, X, CheckCircle2, FileText, Link2, FileBadge, Mail, Globe, FolderOpen, Plus, Palette } from 'lucide-react';
 import { VenueMediaPickerModal } from '@/components/venue-media/VenueMediaPickerModal';
 import { TimezoneSelect } from '@/components/TimezoneSelect';
 import { DEFAULT_VENUE_TIMEZONE, resolveVenueTimezone } from '@/lib/venue-timezone';
+import { useBrandColors } from '@/lib/use-brand-colors';
 
 const COLOR_PRESETS = [
  { label: 'Default', primary: '#1b1b1b', bg: '#ffffff', btnText: '#ffffff' },
@@ -31,6 +32,87 @@ interface BrandState {
  zip: string;
  footer_note: string;
  timezone: string;
+}
+
+function BrandColorsCard() {
+  const { colors, addColor, removeColor } = useBrandColors();
+  const [draft, setDraft] = useState('#1b1b1b');
+
+  const valid = /^#[0-9a-fA-F]{6}$/.test(draft);
+  const alreadySaved = valid && colors.includes(draft.toLowerCase());
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+            <Palette size={16} className="text-gray-500" />
+            Brand Colors
+          </h2>
+          <p className="text-xs text-gray-400 mt-0.5">Saved here · available in every color picker across the app</p>
+        </div>
+        <span className="text-[11px] font-medium text-gray-400">{colors.length} / 50</span>
+      </div>
+      <div className="px-6 py-5 space-y-4">
+        {colors.length === 0 ? (
+          <p className="text-sm text-gray-400 italic">No brand colors saved yet. Add one below — or save colors directly from any color picker.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {colors.map(c => (
+              <div key={c} className="group relative">
+                <div
+                  className="h-9 w-9 rounded-full border border-gray-200 shadow-sm"
+                  style={{ backgroundColor: c }}
+                  title={c}
+                />
+                <button
+                  type="button"
+                  onClick={() => removeColor(c)}
+                  title="Remove"
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white border border-gray-200 shadow flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50 hover:border-red-200"
+                >
+                  <X size={11} className="text-gray-500 group-hover:text-red-600" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Add a new brand color */}
+        <div className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 focus-within:border-gray-400 focus-within:bg-white transition-colors">
+          <div className="relative h-7 w-7 shrink-0 overflow-hidden rounded-lg border border-gray-200">
+            <div className="absolute inset-0" style={{ backgroundColor: valid ? draft : '#ffffff' }} />
+            <input
+              type="color"
+              value={valid ? draft : '#1b1b1b'}
+              onChange={(e) => setDraft(e.target.value)}
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            />
+          </div>
+          <input
+            type="text"
+            value={draft}
+            onChange={(e) => {
+              const v = e.target.value;
+              setDraft(v.startsWith('#') ? v : `#${v}`);
+            }}
+            maxLength={7}
+            placeholder="#000000"
+            className="flex-1 bg-transparent text-sm font-mono text-gray-900 focus:outline-none placeholder:text-gray-400"
+          />
+          <button
+            type="button"
+            disabled={!valid || alreadySaved}
+            onClick={() => { void addColor(draft); setDraft('#1b1b1b'); }}
+            className="flex items-center gap-1 rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-40 transition-opacity"
+          >
+            <Plus size={12} />
+            {alreadySaved ? 'Saved' : 'Add'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function ColorSwatch({ color, label, selected, onClick }: { color: string; label: string; selected: boolean; onClick: () => void }) {
@@ -446,12 +528,15 @@ export default function BrandingPage() {
  </div>
  </div>
  );
- })}
- </div>
- </div>
- </div>
+})}
+</div>
+</div>
+</div>
 
- {/* Time zone — scheduling & calendar */}
+{/* Brand Colors — palette saved across every color picker */}
+<BrandColorsCard />
+
+{/* Time zone — scheduling & calendar */}
  <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="px-6 py-4 border-b border-gray-200">
  <h2 className="text-base font-semibold text-gray-900">Time zone</h2>

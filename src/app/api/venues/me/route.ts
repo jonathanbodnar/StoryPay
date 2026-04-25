@@ -53,6 +53,7 @@ export async function PATCH(request: Request) {
     brand_color:       true,  // primary / button color
     brand_bg_color:    true,  // background color
     brand_btn_text:    true,  // button text color
+    brand_colors:      true,  // jsonb array of saved swatches
     brand_tagline:     true,
     brand_website:     true,
     brand_email:       true,
@@ -86,11 +87,32 @@ export async function PATCH(request: Request) {
     updates.payment_reminder_offsets = normalizePaymentReminderOffsets(body.payment_reminder_offsets);
   }
 
+  // Sanitize brand_colors: keep only valid lowercase #rrggbb hex strings, dedupe.
+  if (body.brand_colors !== undefined) {
+    if (!Array.isArray(body.brand_colors)) {
+      return NextResponse.json({ error: 'brand_colors must be a JSON array of hex strings' }, { status: 400 });
+    }
+    const seen = new Set<string>();
+    const cleaned: string[] = [];
+    for (const raw of body.brand_colors) {
+      if (typeof raw !== 'string') continue;
+      const v = raw.trim().toLowerCase();
+      const hex = v.startsWith('#') ? v : `#${v}`;
+      if (!/^#[0-9a-f]{6}$/.test(hex)) continue;
+      if (seen.has(hex)) continue;
+      seen.add(hex);
+      cleaned.push(hex);
+      if (cleaned.length >= 50) break; // hard cap to avoid bloat
+    }
+    updates.brand_colors = cleaned;
+  }
+
   // Use Object.keys on the raw body so null values are explicitly included.
   // This is important for clearing fields like brand_logo_url — Supabase's
   // .update() needs the key present with a null value to write NULL to the DB.
   for (const key of Object.keys(body)) {
     if (key === 'appointment_reminder_offsets' || key === 'payment_reminder_offsets') continue;
+    if (key === 'brand_colors') continue; // already handled + sanitized above
     if (allowedFields[key]) {
       updates[key] = body[key] ?? null;
     }
@@ -112,6 +134,7 @@ export async function PATCH(request: Request) {
     console.error('[venues/me] PATCH error (will retry without unknown columns):', error.message);
     const safeUpdates: Record<string, unknown> = {};
     const knownCols = ['name', 'service_fee_rate', 'brand_logo_url', 'brand_color',
+      'brand_bg_color', 'brand_btn_text', 'brand_colors',
       'brand_tagline', 'brand_website', 'brand_email', 'brand_phone',
       'brand_address', 'brand_city', 'brand_state', 'brand_zip', 'brand_footer_note', 'monthly_booking_goal',
       'listing_marketing_monthly_spend', 'timezone', 'appointment_reminders_enabled', 'appointment_reminder_offsets',

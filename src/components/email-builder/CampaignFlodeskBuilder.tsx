@@ -72,6 +72,7 @@ import {
   mergeEmailTheme,
 } from '@/lib/marketing-email-schema';
 import { renderMarketingEmailHtml, type MergeFieldRecord } from '@/lib/marketing-email-render';
+import { useBrandColors } from '@/lib/use-brand-colors';
 
 // ─── Block palette shown in the picker ───────────────────────────────────────
 const PALETTE: { type: EmailBlockType; label: string; desc: string; Icon: React.FC<{ size?: number; className?: string }> }[] = [
@@ -257,16 +258,72 @@ function FlodeskColorPicker({ value, onChange }: { value: string; onChange: (v: 
   const [open, setOpen] = useState(false);
   const [hex, setHex] = useState(value);
   const ref = useRef<HTMLDivElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  // Computed each frame so the popover follows the trigger as the page scrolls
+  // (any container, including the inspector sidebar) and clamps to viewport
+  // bounds — never gets cut off, no scrolling required to see it.
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const { colors: brandColors, addColor, removeColor } = useBrandColors();
 
   useEffect(() => { setHex(value); }, [value]);
 
+  // Close on outside click. Check both the trigger and the portaled popover
+  // because the popover lives outside `ref`'s subtree.
   useEffect(() => {
     if (!open) return;
     function onDown(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (ref.current?.contains(t)) return;
+      if (popRef.current?.contains(t)) return;
+      setOpen(false);
     }
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  // Track the trigger position every frame while open so the floating popover
+  // stays anchored as the user scrolls/resizes/moves anything around it.
+  useEffect(() => {
+    if (!open) return;
+    const PICKER_W = 320;
+    let raf = 0;
+
+    function update() {
+      const trigger = ref.current?.getBoundingClientRect();
+      if (!trigger) return;
+      const popH = popRef.current?.offsetHeight ?? 460;
+      const margin = 8;
+
+      // Prefer below the trigger; flip above if there's no room.
+      const spaceBelow = window.innerHeight - trigger.bottom - margin;
+      const spaceAbove = trigger.top - margin;
+      let top: number;
+      if (spaceBelow >= popH + margin || spaceBelow >= spaceAbove) {
+        top = trigger.bottom + margin;
+      } else {
+        top = trigger.top - popH - margin;
+      }
+      // Clamp into viewport (account for popover height too)
+      top = Math.max(margin, Math.min(top, window.innerHeight - popH - margin));
+
+      // Center on the trigger horizontally, then clamp to viewport
+      let left = trigger.left + trigger.width / 2 - PICKER_W / 2;
+      left = Math.max(margin, Math.min(left, window.innerWidth - PICKER_W - margin));
+
+      setPos({ top, left });
+    }
+
+    function tick() {
+      update();
+      raf = requestAnimationFrame(tick);
+    }
+    tick();
+
+    window.addEventListener('resize', update);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', update);
+    };
   }, [open]);
 
   function applyHex(raw: string) {
@@ -286,6 +343,8 @@ function FlodeskColorPicker({ value, onChange }: { value: string; onChange: (v: 
   }
 
   const isTransparent = !value || value === 'transparent';
+  const normalizedCurrent = hex.toLowerCase();
+  const currentSaved = brandColors.includes(normalizedCurrent);
 
   return (
     <div ref={ref} className="relative">
@@ -303,22 +362,18 @@ function FlodeskColorPicker({ value, onChange }: { value: string; onChange: (v: 
 
       {open && createPortal(
         <div
+          ref={popRef}
           style={{
             position: 'fixed',
-            top: Math.min(
-              (ref.current?.getBoundingClientRect().bottom ?? 0) + 8,
-              window.innerHeight - 360,
-            ),
-            left: Math.min(
-              Math.max(8, (ref.current?.getBoundingClientRect().left ?? 0) - 140),
-              window.innerWidth - 332,
-            ),
-            zIndex: 500,
+            top: pos?.top ?? -9999,
+            left: pos?.left ?? -9999,
+            zIndex: 9999,
             width: 320,
+            visibility: pos ? 'visible' : 'hidden',
           }}
           onMouseDown={e => e.stopPropagation()}
         >
-          <div className="bg-white rounded-2xl shadow-2xl p-5">
+          <div className="bg-white rounded-2xl shadow-2xl p-5 max-h-[80vh] overflow-y-auto">
             {/* Color grid */}
             <div className="grid grid-cols-10 gap-1.5 mb-4">
               {COLOR_PALETTE.map((c) => (
@@ -333,10 +388,41 @@ function FlodeskColorPicker({ value, onChange }: { value: string; onChange: (v: 
               ))}
             </div>
 
-            {/* Brand colors */}
-            <p className="text-center text-[13px] text-gray-500 underline cursor-pointer mb-4 hover:text-gray-800">
-              Add your brand colors
-            </p>
+            {/* Brand colors section */}
+            {brandColors.length > 0 ? (
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Brand colors</p>
+                  {!currentSaved && /^#[0-9a-fA-F]{6}$/.test(hex) && (
+                    <button
+                      type="button"
+                      onMouseDown={() => addColor(hex)}
+                      className="text-[11px] text-gray-500 hover:text-gray-800 underline"
+                    >
+                      Save current
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-10 gap-1.5">
+                  {brandColors.map(c => (
+                    <BrandSwatch
+                      key={c}
+                      color={c}
+                      onPick={() => { applyHex(c); onChange(c); }}
+                      onRemove={() => removeColor(c)}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onMouseDown={() => { if (/^#[0-9a-fA-F]{6}$/.test(hex)) addColor(hex); }}
+                className="block w-full text-center text-[13px] text-gray-500 underline mb-4 hover:text-gray-800"
+              >
+                Add your brand colors
+              </button>
+            )}
 
             {/* Hex input + eyedropper */}
             <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2">
@@ -355,6 +441,36 @@ function FlodeskColorPicker({ value, onChange }: { value: string; onChange: (v: 
           </div>
         </div>,
         document.body,
+      )}
+    </div>
+  );
+}
+
+// Single saved-brand-color swatch with a hover-revealed remove button.
+function BrandSwatch({ color, onPick, onRemove }: { color: string; onPick: () => void; onRemove: () => void }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <div
+      className="relative"
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      <button
+        type="button"
+        title={color}
+        onMouseDown={onPick}
+        className="w-6 h-6 rounded-full transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-400"
+        style={{ background: color, border: color === '#ffffff' ? '1px solid #e5e5e5' : 'none' }}
+      />
+      {hover && (
+        <button
+          type="button"
+          onMouseDown={(e) => { e.stopPropagation(); onRemove(); }}
+          title="Remove"
+          className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-white border border-gray-200 shadow flex items-center justify-center hover:bg-gray-50"
+        >
+          <XIcon size={9} className="text-gray-500" />
+        </button>
       )}
     </div>
   );
