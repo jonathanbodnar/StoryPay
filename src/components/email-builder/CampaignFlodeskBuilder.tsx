@@ -285,14 +285,20 @@ function FlodeskColorPicker({ value, onChange }: { value: string; onChange: (v: 
     } catch {}
   }
 
+  const isTransparent = !value || value === 'transparent';
+
   return (
     <div ref={ref} className="relative">
-      {/* Swatch trigger */}
+      {/* Swatch trigger — transparent shows as a diagonal red slash */}
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="w-12 h-12 rounded-full border border-gray-200 transition-transform hover:scale-105 focus:outline-none"
-        style={{ background: value }}
+        className="w-12 h-12 rounded-full border border-gray-200 transition-transform hover:scale-105 focus:outline-none overflow-hidden"
+        style={{
+          background: isTransparent
+            ? 'linear-gradient(to top right, transparent calc(50% - 1.2px), #ef4444 calc(50% - 1.2px), #ef4444 calc(50% + 1.2px), transparent calc(50% + 1.2px))'
+            : value,
+        }}
       />
 
       {open && createPortal(
@@ -2024,6 +2030,49 @@ function SavedStylesModal({
   );
 }
 
+// ─── Spacer Inspector — Flodesk-style: Background + Height ───────────────────
+function SpacerInspector({
+  block,
+  onChange,
+}: {
+  block: EmailBlock;
+  onChange: (patch: Partial<EmailBlock>) => void;
+}) {
+  const height = block.spacerHeight ?? 24;
+
+  return (
+    <div>
+      {/* Single header tab indicator */}
+      <div className="flex border-b border-gray-100 -mx-5 mb-5 px-2 bg-gray-50/50 justify-center">
+        <button type="button" className="py-3 px-6 text-sm font-semibold text-gray-900 relative">
+          Block
+          <span className="absolute left-1/2 -translate-x-1/2 bottom-0 h-[2px] w-12 bg-gray-900 rounded-full" />
+        </button>
+      </div>
+
+      <div className="space-y-5">
+        <div>
+          <p className="text-sm font-semibold text-gray-900 mb-2">Background</p>
+          <FlodeskColorPicker
+            value={block.blockBgColor ?? 'transparent'}
+            onChange={(v) => onChange({ blockBgColor: v })}
+          />
+        </div>
+
+        <div>
+          <SliderControl
+            label="Height"
+            value={height}
+            min={4} max={200} step={1}
+            display={`${height}`}
+            onChange={(v) => onChange({ spacerHeight: v })}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Divider Inspector — Flodesk-style line settings ─────────────────────────
 function DividerInspector({
   block,
@@ -2906,26 +2955,7 @@ function BlockInspectorPanel({
   }
 
   if (block.type === 'spacer') {
-    return (
-      <div>
-        {renderSubTabBar('Spacer')}
-        {subTab === 'primary' && (
-          <div>
-            <label className={LABEL}>Height (px)</label>
-            <input
-              type="range"
-              min={8}
-              max={120}
-              className="w-full accent-gray-900"
-              value={block.spacerHeight ?? 24}
-              onChange={(e) => onChange({ spacerHeight: Number(e.target.value) })}
-            />
-            <p className="mt-1 text-center text-xs text-gray-500">{block.spacerHeight ?? 24} px</p>
-          </div>
-        )}
-        {subTab === 'block' && renderBlockTab()}
-      </div>
-    );
+    return <SpacerInspector block={block} onChange={onChange} />;
   }
 
   if (block.type === 'video') {
