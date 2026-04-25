@@ -1848,12 +1848,12 @@ export function CampaignFlodeskBuilder({
                                   transition: 'outline 0.1s ease, box-shadow 0.2s ease',
                                   outline: isSelected ? '1px solid #3b82f6' : '1px solid transparent',
                                   outlineOffset: '-1px',
-                                  boxShadow: isSelected ? '0 4px 24px rgba(0,0,0,0.10), 0 1px 6px rgba(0,0,0,0.06)' : 'none',
+                                  boxShadow: isSelected ? '0 12px 40px rgba(0,0,0,0.13), 0 4px 12px rgba(0,0,0,0.08)' : 'none',
                                 }}
                                 onMouseEnter={(e) => {
                                   if (!isSelected && !isDragging) {
                                     (e.currentTarget as HTMLDivElement).style.outline = '1px solid #3b82f6';
-                                    (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 20px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.05)';
+                                    (e.currentTarget as HTMLDivElement).style.boxShadow = '0 12px 40px rgba(0,0,0,0.13), 0 4px 12px rgba(0,0,0,0.08)';
                                   }
                                 }}
                                 onMouseLeave={(e) => {
