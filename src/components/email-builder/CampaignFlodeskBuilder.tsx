@@ -938,33 +938,32 @@ function SliderControl({
         <button
           type="button"
           onClick={() => onChange(clamp(snap(value - step)))}
-          className="text-base text-gray-400 hover:text-gray-700 w-4 flex-shrink-0 select-none leading-none"
+          className="text-sm text-gray-400 hover:text-gray-600 w-4 flex-shrink-0 select-none leading-none"
         >−</button>
 
-        {/* Custom track */}
+        {/* Custom track — pointer capture keeps drag alive outside bounds */}
         <div
           ref={trackRef}
-          className="relative flex-1 h-6 flex items-center cursor-pointer select-none"
+          className="relative flex-1 flex items-center cursor-grab active:cursor-grabbing select-none"
+          style={{ height: 36 }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
-          onPointerLeave={onPointerUp}
+          onPointerCancel={onPointerUp}
         >
-          {/* Track rail */}
-          <div className="absolute inset-x-0 h-[3px] rounded-full bg-gray-200" />
-          {/* Filled portion */}
-          <div
-            className="absolute left-0 h-[3px] rounded-full"
-            style={{ width: `${pct}%`, background: '#1b1b1b' }}
-          />
+          {/* Rail */}
+          <div className="absolute inset-x-0 rounded-full" style={{ height: 1, background: '#d1d5db', top: '50%', transform: 'translateY(-50%)' }} />
           {/* Thumb */}
           <div
-            className="absolute w-[18px] h-[18px] rounded-full border-[2.5px] border-white shadow-md"
             style={{
+              position: 'absolute',
               left: `${pct}%`,
               transform: 'translateX(-50%)',
-              background: '#1b1b1b',
-              boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
+              width: 28,
+              height: 28,
+              borderRadius: '50%',
+              background: '#ffffff',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.06)',
               pointerEvents: 'none',
             }}
           />
@@ -973,7 +972,7 @@ function SliderControl({
         <button
           type="button"
           onClick={() => onChange(clamp(snap(value + step)))}
-          className="text-base text-gray-400 hover:text-gray-700 w-4 flex-shrink-0 select-none leading-none"
+          className="text-sm text-gray-400 hover:text-gray-600 w-4 flex-shrink-0 select-none leading-none"
         >+</button>
       </div>
     </div>
