@@ -11,7 +11,7 @@ import {
   Italic, Link2, List, ListOrdered, Loader2, Minus, Monitor,
   Paperclip, PenLine, Pipette, Plus, SeparatorHorizontal, Smartphone,
   Space, Strikethrough, Trash2, Type, Underline, X as XIcon,
-  MousePointer2, Palette, Video, Share2, MapPin, Search,
+  MousePointer2, Palette, Redo2, Undo2, Video, Share2, MapPin, Search,
 } from 'lucide-react';
 import {
   DndContext,
@@ -454,10 +454,12 @@ function HeadingCanvas({ block, theme, onPatch }: { block: EmailBlock; theme: Re
         padding: '8px 24px',
         textAlign: block.align ?? 'left',
         fontFamily: block.fontFamily ?? theme.fontFamily,
-        fontSize: size,
+        fontSize: block.fontSize ?? size,
         fontWeight: block.fontWeight ?? 700,
         color: block.color ?? theme.textColor,
-        lineHeight: 1.25,
+        lineHeight: block.lineHeight ?? 1.25,
+        letterSpacing: block.letterSpacing != null ? `${block.letterSpacing}px` : undefined,
+        textTransform: (block.textTransform && block.textTransform !== 'none') ? block.textTransform : undefined,
         wordBreak: 'break-word',
         outline: 'none',
         cursor: onPatch ? 'text' : 'default',
@@ -491,7 +493,9 @@ function TextCanvas({ block, theme, onPatch }: { block: EmailBlock; theme: Retur
         fontFamily: block.fontFamily ?? theme.fontFamily,
         fontSize: block.fontSize ?? '16px',
         fontWeight: block.fontWeight ?? 400,
-        lineHeight: 1.6,
+        lineHeight: block.lineHeight ?? 1.6,
+        letterSpacing: block.letterSpacing != null ? `${block.letterSpacing}px` : undefined,
+        textTransform: (block.textTransform && block.textTransform !== 'none') ? block.textTransform : undefined,
         color: block.color ?? theme.textColor,
         outline: 'none',
         cursor: onPatch ? 'text' : 'default',
@@ -736,6 +740,42 @@ function SortableBlock({
   );
 }
 
+// ─── Slider control (Flodesk style) ──────────────────────────────────────────
+function SliderControl({
+  label, value, min, max, step, display, onChange,
+}: {
+  label: string; value: number; min: number; max: number; step: number;
+  display?: string;
+  onChange: (v: number) => void;
+}) {
+  const pct = Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
+  const dec = (v: number) => onChange(Math.max(min, parseFloat((v - step).toFixed(4))));
+  const inc = (v: number) => onChange(Math.min(max, parseFloat((v + step).toFixed(4))));
+  return (
+    <div>
+      <div className="flex items-baseline gap-2 mb-2.5">
+        <span className="text-sm font-semibold text-gray-700">{label}</span>
+        <span className="text-sm text-gray-400">{display ?? value}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <button type="button" onMouseDown={() => dec(value)} className="text-lg text-gray-400 hover:text-gray-700 leading-none w-4 flex-shrink-0 select-none">−</button>
+        <div className="flex-1">
+          <input
+            type="range" min={min} max={max} step={step} value={value}
+            onChange={e => onChange(Number(e.target.value))}
+            className="w-full h-1.5 appearance-none rounded-full cursor-pointer"
+            style={{
+              background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${pct}%, #e5e7eb ${pct}%, #e5e7eb 100%)`,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            } as any}
+          />
+        </div>
+        <button type="button" onMouseDown={() => inc(value)} className="text-lg text-gray-400 hover:text-gray-700 leading-none w-4 flex-shrink-0 select-none">+</button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Right Panel — Block Inspector ───────────────────────────────────────────
 function BlockInspectorPanel({
   block,
@@ -750,19 +790,20 @@ function BlockInspectorPanel({
 }) {
   const LABEL = 'block text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1';
   const INPUT = 'w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:bg-white focus:outline-none transition-colors';
+  const [spacingOpen, setSpacingOpen] = useState(true);
 
   const AlignRow = () => (
     <div>
-      <label className={LABEL}>Alignment</label>
-      <div className="flex gap-1">
+      <p className="text-sm font-semibold text-gray-700 mb-1.5">Align</p>
+      <div className="flex gap-0.5">
         {(['left', 'center', 'right'] as const).map((a) => {
-          const icons = { left: <AlignLeft size={14} />, center: <AlignCenter size={14} />, right: <AlignRight size={14} /> };
+          const icons = { left: <AlignLeft size={16} />, center: <AlignCenter size={16} />, right: <AlignRight size={16} /> };
           return (
             <button
               key={a}
               type="button"
               onClick={() => onChange({ align: a })}
-              className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-colors ${block.align === a ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 text-gray-500 hover:border-gray-400'}`}
+              className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${block.align === a ? 'bg-gray-100 text-gray-700' : 'text-gray-400 hover:text-gray-600'}`}
             >
               {icons[a]}
             </button>
@@ -772,7 +813,88 @@ function BlockInspectorPanel({
     </div>
   );
 
+  const CaseRow = () => (
+    <div>
+      <p className="text-sm font-semibold text-gray-700 mb-1.5">Case</p>
+      <div className="flex gap-0.5">
+        {([
+          { v: 'none' as const,       label: '-'  },
+          { v: 'lowercase' as const,  label: 'aa' },
+          { v: 'capitalize' as const, label: 'Aa' },
+          { v: 'uppercase' as const,  label: 'AA' },
+        ]).map(c => (
+          <button
+            key={c.v}
+            type="button"
+            onClick={() => onChange({ textTransform: c.v })}
+            className={`flex h-9 px-2.5 items-center justify-center rounded-lg text-sm transition-colors ${(block.textTransform ?? 'none') === c.v ? 'bg-gray-100 text-gray-700 font-semibold' : 'text-gray-400 hover:text-gray-600'}`}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  const SpacingSection = ({ defaultFontSize }: { defaultFontSize: number }) => (
+    <div className="border-t border-gray-100 pt-4">
+      <button
+        type="button"
+        onClick={() => setSpacingOpen(o => !o)}
+        className="flex items-center justify-between w-full mb-3"
+      >
+        <span className="text-sm font-semibold text-gray-700">Spacing</span>
+        <ChevronDown size={14} className={`text-gray-400 transition-transform ${spacingOpen ? 'rotate-180' : ''}`} />
+      </button>
+      {spacingOpen && (
+        <div className="space-y-5">
+          <SliderControl
+            label="Font size"
+            value={parseInt(block.fontSize ?? `${defaultFontSize}px`) || defaultFontSize}
+            min={10} max={72} step={1}
+            display={`${parseInt(block.fontSize ?? `${defaultFontSize}px`) || defaultFontSize}`}
+            onChange={(v) => onChange({ fontSize: `${v}px` })}
+          />
+          <SliderControl
+            label="Line height"
+            value={block.lineHeight ?? 1.6}
+            min={1} max={3} step={0.1}
+            display={(block.lineHeight ?? 1.6).toFixed(1)}
+            onChange={(v) => onChange({ lineHeight: Math.round(v * 10) / 10 })}
+          />
+          <SliderControl
+            label="Letter spacing"
+            value={block.letterSpacing ?? 0}
+            min={-2} max={10} step={0.5}
+            display={String(block.letterSpacing ?? 0)}
+            onChange={(v) => onChange({ letterSpacing: v })}
+          />
+        </div>
+      )}
+    </div>
+  );
+
+  const WeightRow = ({ defaultWeight }: { defaultWeight: string }) => (
+    <div>
+      <p className="text-sm font-semibold text-gray-700 mb-1.5">Weight</p>
+      <div className="flex gap-1 flex-wrap">
+        {FONT_WEIGHTS.map(w => (
+          <button
+            key={w.value}
+            type="button"
+            onClick={() => onChange({ fontWeight: w.value })}
+            className={`px-2.5 py-1 rounded-lg text-xs transition-colors ${(block.fontWeight ?? defaultWeight) === w.value ? 'bg-gray-100 text-gray-700 font-semibold' : 'text-gray-400 hover:text-gray-600'}`}
+          >
+            {w.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
   if (block.type === 'heading') {
+    const sizes: Record<number, string> = { 1: '28px', 2: '22px', 3: '18px' };
+    const defaultSize = parseInt(sizes[block.level ?? 2] ?? '22px');
     return (
       <div className="space-y-4">
         <div className="rounded-xl bg-gray-50 border border-gray-100 px-3.5 py-3">
@@ -780,50 +902,28 @@ function BlockInspectorPanel({
           <p className="text-[11px] text-gray-400">Type directly on the canvas</p>
         </div>
         <div>
-          <label className={LABEL}>Font family</label>
-          <FontSelector
-            value={block.fontFamily ?? theme.fontFamily}
-            onChange={(v) => onChange({ fontFamily: v })}
-          />
+          <p className="text-sm font-semibold text-gray-700 mb-1.5">Font</p>
+          <FontSelector value={block.fontFamily ?? theme.fontFamily} onChange={(v) => onChange({ fontFamily: v })} />
+        </div>
+        <WeightRow defaultWeight="700" />
+        <div>
+          <p className="text-sm font-semibold text-gray-700 mb-1.5">Font color <span className="font-normal text-gray-400 text-xs">{block.color ?? theme.textColor}</span></p>
+          <FlodeskColorPicker value={block.color ?? theme.textColor} onChange={(v) => onChange({ color: v })} />
         </div>
         <div>
-          <label className={LABEL}>Weight</label>
-          <div className="flex gap-1.5 flex-wrap">
-            {FONT_WEIGHTS.map(w => (
-              <button
-                key={w.value}
-                type="button"
-                onClick={() => onChange({ fontWeight: w.value })}
-                className={`px-3 py-1 rounded-lg text-xs border transition-colors ${(block.fontWeight ?? '700') === w.value ? 'border-gray-800 bg-gray-800 text-white' : 'border-gray-200 text-gray-600 hover:border-gray-400'}`}
-              >
-                {w.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div>
-          <label className={LABEL}>Color</label>
-          <FlodeskColorPicker
-            value={block.color ?? theme.textColor}
-            onChange={(v) => onChange({ color: v })}
-          />
-        </div>
-        <div>
-          <label className={LABEL}>Size</label>
+          <p className="text-sm font-semibold text-gray-700 mb-1.5">Size</p>
           <div className="flex gap-1">
             {([1, 2, 3] as const).map((l) => (
-              <button
-                key={l}
-                type="button"
-                onClick={() => onChange({ level: l })}
-                className={`flex h-8 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition-colors ${block.level === l ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 text-gray-600 hover:border-gray-400'}`}
-              >
+              <button key={l} type="button" onClick={() => onChange({ level: l })}
+                className={`flex h-8 items-center justify-center rounded-lg px-3 text-sm font-semibold transition-colors ${block.level === l ? 'bg-gray-100 text-gray-700' : 'text-gray-400 hover:text-gray-600'}`}>
                 H{l}
               </button>
             ))}
           </div>
         </div>
         <AlignRow />
+        <CaseRow />
+        <SpacingSection defaultFontSize={defaultSize} />
       </div>
     );
   }
@@ -836,35 +936,17 @@ function BlockInspectorPanel({
           <p className="text-[11px] text-gray-400">Select text to see the formatting toolbar</p>
         </div>
         <div>
-          <label className={LABEL}>Font family</label>
-          <FontSelector
-            value={block.fontFamily ?? theme.fontFamily}
-            onChange={(v) => onChange({ fontFamily: v })}
-          />
+          <p className="text-sm font-semibold text-gray-700 mb-1.5">Font</p>
+          <FontSelector value={block.fontFamily ?? theme.fontFamily} onChange={(v) => onChange({ fontFamily: v })} />
         </div>
+        <WeightRow defaultWeight="400" />
         <div>
-          <label className={LABEL}>Weight</label>
-          <div className="flex gap-1.5 flex-wrap">
-            {FONT_WEIGHTS.map(w => (
-              <button
-                key={w.value}
-                type="button"
-                onClick={() => onChange({ fontWeight: w.value })}
-                className={`px-3 py-1 rounded-lg text-xs border transition-colors ${(block.fontWeight ?? '400') === w.value ? 'border-gray-800 bg-gray-800 text-white' : 'border-gray-200 text-gray-600 hover:border-gray-400'}`}
-              >
-                {w.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div>
-          <label className={LABEL}>Color</label>
-          <FlodeskColorPicker
-            value={block.color ?? theme.textColor}
-            onChange={(v) => onChange({ color: v })}
-          />
+          <p className="text-sm font-semibold text-gray-700 mb-1.5">Font color <span className="font-normal text-gray-400 text-xs">{block.color ?? theme.textColor}</span></p>
+          <FlodeskColorPicker value={block.color ?? theme.textColor} onChange={(v) => onChange({ color: v })} />
         </div>
         <AlignRow />
+        <CaseRow />
+        <SpacingSection defaultFontSize={16} />
       </div>
     );
   }
@@ -1146,6 +1228,10 @@ export function CampaignFlodeskBuilder({
   // Load Google Fonts once on mount
   useEffect(() => { loadGoogleFonts(); }, []);
 
+  // ── Undo / Redo history ──────────────────────────────────────────────────
+  const historyRef = useRef<MarketingEmailDefinition[]>([initialDefinition]);
+  const historyIdx = useRef(0);
+
   const theme = mergeEmailTheme(def.theme);
 
   // dnd-kit sensors — require 5px drag before activating (prevents mis-fires on click)
@@ -1202,6 +1288,26 @@ export function CampaignFlodeskBuilder({
 
   // ── Block mutations ────────────────────────────────────────────────────────
   function updateDef(next: MarketingEmailDefinition) {
+    // Push to history, discarding any forward entries
+    historyRef.current = historyRef.current.slice(0, historyIdx.current + 1);
+    historyRef.current.push(next);
+    historyIdx.current = historyRef.current.length - 1;
+    setDef(next);
+    scheduleSave(name, subject, preheader, next);
+  }
+
+  function undo() {
+    if (historyIdx.current <= 0) return;
+    historyIdx.current--;
+    const prev = historyRef.current[historyIdx.current];
+    setDef(prev);
+    scheduleSave(name, subject, preheader, prev);
+  }
+
+  function redo() {
+    if (historyIdx.current >= historyRef.current.length - 1) return;
+    historyIdx.current++;
+    const next = historyRef.current[historyIdx.current];
     setDef(next);
     scheduleSave(name, subject, preheader, next);
   }
@@ -1503,10 +1609,11 @@ export function CampaignFlodeskBuilder({
 
         {/* ── Right Panel ──────────────────────────────────────────────────── */}
         <aside
-          className="w-72 flex-shrink-0 overflow-y-auto bg-white"
+          className="w-72 flex-shrink-0 bg-white flex flex-col"
           style={{ boxShadow: '-12px 0 32px -8px rgba(0,0,0,0.07)' }}
           onClick={(e) => e.stopPropagation()}
         >
+          <div className="flex-1 overflow-y-auto">
           {selectedBlock ? (
             <div className="p-5">
               {/* Block type label */}
@@ -1577,6 +1684,30 @@ export function CampaignFlodeskBuilder({
               </p>
             </div>
           )}
+          </div>
+
+          {/* ── Undo / Redo / Save bar ──────────────────────────────────────── */}
+          <div className="flex-shrink-0 border-t border-gray-100 px-4 py-3 flex items-center gap-2 bg-white">
+            <button
+              type="button"
+              onClick={undo}
+              className="flex items-center gap-1.5 text-sm font-semibold text-gray-600 hover:text-gray-900 disabled:opacity-30 transition-colors"
+            >
+              <Undo2 size={14} /> Undo
+            </button>
+            <button
+              type="button"
+              onClick={redo}
+              className="flex items-center gap-1.5 text-sm font-semibold text-gray-600 hover:text-gray-900 disabled:opacity-30 transition-colors"
+            >
+              <Redo2 size={14} /> Redo
+            </button>
+            <span className="ml-auto text-sm text-gray-400">
+              {saveStatus === 'saving' && 'Saving…'}
+              {saveStatus === 'saved'  && 'Saved'}
+              {saveStatus === 'error'  && 'Error'}
+            </span>
+          </div>
         </aside>
       </div>
 

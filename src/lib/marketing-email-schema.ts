@@ -34,6 +34,9 @@ export interface EmailBlock {
   fontWeight?: string;
   fontSize?: string;
   color?: string;
+  lineHeight?: number;
+  letterSpacing?: number;
+  textTransform?: 'none' | 'lowercase' | 'capitalize' | 'uppercase';
 }
 
 export interface EmailTheme {
