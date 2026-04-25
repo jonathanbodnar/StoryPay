@@ -11,7 +11,7 @@ import {
   Italic, Link2, List, ListOrdered, Loader2, Minus, Monitor,
   Paperclip, PenLine, Pipette, Plus, SeparatorHorizontal, Smartphone,
   Space, Strikethrough, Trash2, Type, Underline, X as XIcon,
-  MousePointer2, Palette, Redo2, Undo2, Video, Share2, MapPin, Search,
+  MousePointer2, Palette, Redo2, Undo2, Video, Share2, MapPin, Search, Zap,
 } from 'lucide-react';
 import {
   DndContext,
@@ -362,10 +362,20 @@ function FontSelector({ value, onChange }: { value: string; onChange: (v: string
 function FloatingFormatBar() {
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [linkMode, setLinkMode] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [newTab, setNewTab] = useState(true);
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const savedRange = useRef<Range | null>(null);
+  const linkInputRef = useRef<HTMLInputElement>(null);
+  const linkModeRef = useRef(false);
+
   useEffect(() => { setMounted(true); }, []);
+  useEffect(() => { linkModeRef.current = linkMode; }, [linkMode]);
 
   useEffect(() => {
     function update() {
+      if (linkModeRef.current) return;
       const sel = window.getSelection();
       if (!sel || sel.rangeCount === 0 || !sel.toString().trim()) { setPos(null); return; }
       const anchor = sel.anchorNode;
@@ -374,29 +384,77 @@ function FloatingFormatBar() {
         : null;
       const editable = el?.closest?.('[data-email-editable]') as HTMLElement | null;
       if (!editable) { setPos(null); return; }
-      // Center on the block element, position above it
       const blockRect = editable.getBoundingClientRect();
       const selRect = sel.getRangeAt(0).getBoundingClientRect();
-      setPos({ top: selRect.top - 58, left: blockRect.left + blockRect.width / 2 });
+      setPos({ top: selRect.top - 64, left: blockRect.left + blockRect.width / 2 });
     }
     document.addEventListener('selectionchange', update);
     return () => document.removeEventListener('selectionchange', update);
   }, []);
 
-  if (!pos || !mounted) return null;
+  if (!mounted) return null;
+  if (!pos && !linkMode) return null;
 
+  // After execCommand, manually dispatch input so the block's onInput handler syncs innerHTML
   function exec(cmd: string, val?: string) {
     document.execCommand(cmd, false, val);
+    const sel = window.getSelection();
+    const node = sel?.anchorNode;
+    const editable: Element | null = node
+      ? (node.nodeType === Node.TEXT_NODE
+          ? node.parentElement?.closest('[data-email-editable]') ?? null
+          : (node as Element).closest?.('[data-email-editable]') ?? null)
+      : null;
+    if (editable) editable.dispatchEvent(new Event('input', { bubbles: true }));
   }
-  function insertLink() {
-    const url = prompt('Enter URL (include https://)');
-    if (url) exec('createLink', url);
+
+  function openLinkMode(e: React.MouseEvent) {
+    e.preventDefault();
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      savedRange.current = sel.getRangeAt(0).cloneRange();
+    }
+    setLinkMode(true);
+    setLinkUrl('');
+    setTimeout(() => linkInputRef.current?.focus(), 40);
   }
-  function insertMerge() {
-    const tags = ['{{first_name}}', '{{venue_name}}', '{{unsubscribe_url}}'];
-    const chosen = prompt(`Pick a merge tag:\n${tags.map((t, i) => `${i + 1}. ${t}`).join('\n')}`);
-    const idx = parseInt(chosen ?? '0') - 1;
-    if (tags[idx]) exec('insertText', tags[idx]);
+
+  function applyLink() {
+    const url = linkUrl.trim();
+    if (!url || !savedRange.current) { cancelLink(); return; }
+    const fullUrl = url.startsWith('http') || url.startsWith('mailto:') ? url : `https://${url}`;
+    const sel = window.getSelection();
+    if (sel) { sel.removeAllRanges(); sel.addRange(savedRange.current); }
+    document.execCommand('createLink', false, fullUrl);
+    if (newTab) {
+      const sel2 = window.getSelection();
+      if (sel2 && sel2.rangeCount > 0) {
+        let node: Node | null = sel2.getRangeAt(0).commonAncestorContainer;
+        while (node && node.nodeName !== 'A') node = node.parentNode;
+        if (node?.nodeName === 'A') {
+          (node as HTMLAnchorElement).target = '_blank';
+          (node as HTMLAnchorElement).rel = 'noopener noreferrer';
+        }
+      }
+    }
+    // sync to block state
+    const editable = savedRange.current.commonAncestorContainer.parentElement?.closest('[data-email-editable]');
+    if (editable) editable.dispatchEvent(new Event('input', { bubbles: true }));
+    savedRange.current = null;
+    setLinkMode(false);
+    setLinkUrl('');
+    setPos(null);
+  }
+
+  function cancelLink() {
+    savedRange.current = null;
+    setLinkMode(false);
+    setLinkUrl('');
+  }
+
+  function insertMerge(tag: string) {
+    exec('insertText', tag);
+    setMergeOpen(false);
   }
 
   const BTN = 'flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-800 transition-colors';
@@ -404,26 +462,108 @@ function FloatingFormatBar() {
 
   return createPortal(
     <div
-      style={{ position: 'fixed', top: pos.top, left: pos.left, transform: 'translateX(-50%)', zIndex: 300 }}
+      style={{
+        position: 'fixed',
+        top: pos?.top ?? 0,
+        left: pos?.left ?? 0,
+        transform: 'translateX(-50%)',
+        zIndex: 300,
+      }}
       onMouseDown={(e) => e.preventDefault()}
     >
-      <div className="flex items-center rounded-2xl bg-white border border-gray-100 shadow-2xl px-2 py-1.5 gap-0.5">
-        <button type="button" className={BTN} title="Format" onMouseDown={(e) => e.preventDefault()}>
-          <PenLine size={16} />
-        </button>
-        <div className={SEP} />
-        <button type="button" className={BTN} title="Bold" onMouseDown={(e) => { e.preventDefault(); exec('bold'); }}><Bold size={16} /></button>
-        <button type="button" className={BTN} title="Italic" onMouseDown={(e) => { e.preventDefault(); exec('italic'); }}><Italic size={16} /></button>
-        <button type="button" className={BTN} title="Underline" onMouseDown={(e) => { e.preventDefault(); exec('underline'); }}><Underline size={16} /></button>
-        <button type="button" className={BTN} title="Strikethrough" onMouseDown={(e) => { e.preventDefault(); exec('strikeThrough'); }}><Strikethrough size={16} /></button>
-        <div className={SEP} />
-        <button type="button" className={BTN} title="Numbered list" onMouseDown={(e) => { e.preventDefault(); exec('insertOrderedList'); }}><ListOrdered size={16} /></button>
-        <button type="button" className={BTN} title="Bullet list" onMouseDown={(e) => { e.preventDefault(); exec('insertUnorderedList'); }}><List size={16} /></button>
-        <div className={SEP} />
-        <button type="button" className={BTN} title="Insert link" onMouseDown={(e) => { e.preventDefault(); insertLink(); }}><Link2 size={16} /></button>
-        <button type="button" className={BTN} title="Attachment" onMouseDown={(e) => e.preventDefault()}><Paperclip size={16} /></button>
-        <button type="button" className={BTN} title="Merge tag" onMouseDown={(e) => { e.preventDefault(); insertMerge(); }}><AtSign size={16} /></button>
-      </div>
+      {linkMode ? (
+        /* ── Link URL input ── */
+        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden" style={{ minWidth: 340, border: '1.5px solid #d1d5db' }}>
+          <div className="flex items-center px-4 py-3" style={{ borderBottom: '2px solid #3b82f6' }}>
+            <Link2 size={14} className="text-blue-400 flex-shrink-0 mr-3" />
+            <input
+              ref={linkInputRef}
+              type="url"
+              className="flex-1 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none bg-transparent"
+              placeholder="Type or paste a link and hit ENTER"
+              value={linkUrl}
+              onChange={e => setLinkUrl(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') { e.preventDefault(); applyLink(); }
+                if (e.key === 'Escape') cancelLink();
+              }}
+            />
+            <button
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); cancelLink(); }}
+              className="ml-3 p-0.5 text-gray-400 hover:text-gray-700 flex-shrink-0 transition-colors"
+              title="Cancel"
+            >
+              <XIcon size={15} />
+            </button>
+            <div className="w-px h-4 bg-gray-200 mx-2 flex-shrink-0" />
+            <button
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); applyLink(); }}
+              className="text-gray-400 hover:text-blue-500 flex-shrink-0 transition-colors"
+              title="Apply link"
+            >
+              <Zap size={15} />
+            </button>
+          </div>
+          <div className="flex items-center gap-2 px-4 py-2 bg-gray-50">
+            <input
+              type="checkbox"
+              id="ffb-newtab"
+              checked={newTab}
+              onChange={e => setNewTab(e.target.checked)}
+              className="rounded accent-blue-500 cursor-pointer"
+            />
+            <label htmlFor="ffb-newtab" className="text-xs text-gray-500 cursor-pointer select-none">
+              Open in new tab
+            </label>
+          </div>
+        </div>
+      ) : (
+        /* ── Normal toolbar ── */
+        <div className="flex items-center rounded-2xl bg-white border border-gray-100 shadow-2xl px-2 py-1.5 gap-0.5">
+          <button type="button" className={BTN} title="Format" onMouseDown={(e) => e.preventDefault()}>
+            <PenLine size={16} />
+          </button>
+          <div className={SEP} />
+          <button type="button" className={BTN} title="Bold"          onMouseDown={(e) => { e.preventDefault(); exec('bold'); }}><Bold size={16} /></button>
+          <button type="button" className={BTN} title="Italic"        onMouseDown={(e) => { e.preventDefault(); exec('italic'); }}><Italic size={16} /></button>
+          <button type="button" className={BTN} title="Underline"     onMouseDown={(e) => { e.preventDefault(); exec('underline'); }}><Underline size={16} /></button>
+          <button type="button" className={BTN} title="Strikethrough" onMouseDown={(e) => { e.preventDefault(); exec('strikeThrough'); }}><Strikethrough size={16} /></button>
+          <div className={SEP} />
+          <button type="button" className={BTN} title="Numbered list" onMouseDown={(e) => { e.preventDefault(); exec('insertOrderedList'); }}><ListOrdered size={16} /></button>
+          <button type="button" className={BTN} title="Bullet list"   onMouseDown={(e) => { e.preventDefault(); exec('insertUnorderedList'); }}><List size={16} /></button>
+          <div className={SEP} />
+          <button type="button" className={BTN} title="Insert link" onMouseDown={openLinkMode}><Link2 size={16} /></button>
+          <div className={SEP} />
+          {/* Merge tag picker */}
+          <div className="relative">
+            <button
+              type="button"
+              className={BTN}
+              title="Merge tag"
+              onMouseDown={(e) => { e.preventDefault(); setMergeOpen(o => !o); }}
+            >
+              <AtSign size={16} />
+            </button>
+            {mergeOpen && (
+              <div className="absolute bottom-full right-0 mb-2 bg-white border border-gray-200 rounded-xl shadow-xl py-1 z-10" style={{ minWidth: 190 }}>
+                <p className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Merge tags</p>
+                {['{{first_name}}', '{{venue_name}}', '{{unsubscribe_url}}'].map(tag => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onMouseDown={(e) => { e.preventDefault(); insertMerge(tag); }}
+                    className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 font-mono transition-colors"
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>,
     document.body,
   );
