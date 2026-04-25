@@ -987,8 +987,16 @@ function SliderControl({
   display?: string;
   onChange: (v: number) => void;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
   const clamp = (v: number) => Math.max(min, Math.min(max, v));
   const snap  = (raw: number) => parseFloat((Math.round(raw / step) * step).toFixed(4));
+
+  // Sync the uncontrolled input when value changes from outside (e.g. +/- buttons)
+  useEffect(() => {
+    if (inputRef.current && Number(inputRef.current.value) !== value) {
+      inputRef.current.value = String(value);
+    }
+  }, [value]);
 
   return (
     <div>
@@ -1003,13 +1011,18 @@ function SliderControl({
           className="text-sm text-gray-400 hover:text-gray-700 w-4 flex-shrink-0 select-none leading-none"
         >−</button>
 
-        {/* Native range — SmartPointerSensor skips input elements so dnd-kit never interferes */}
+        {/*
+          Uncontrolled input — browser owns the drag position so re-renders
+          never interrupt mid-drag. onInput fires live; useEffect syncs when
+          value changes externally (e.g. from +/- buttons).
+        */}
         <input
+          ref={inputRef}
           type="range"
           className="sp-slider flex-1"
           min={min} max={max} step={step}
-          value={value}
-          onChange={(e) => onChange(Number(e.target.value))}
+          defaultValue={value}
+          onInput={(e) => onChange(Number((e.target as HTMLInputElement).value))}
           style={{ display: 'block' }}
         />
 
