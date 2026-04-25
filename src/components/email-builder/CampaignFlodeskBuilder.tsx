@@ -1136,10 +1136,6 @@ function BlockInspectorPanel({
     const defaultSize = parseInt(sizes[block.level ?? 2] ?? '22px');
     return (
       <div className="space-y-4">
-        <div className="rounded-xl bg-gray-50 border border-gray-100 px-3.5 py-3">
-          <p className="text-xs font-medium text-gray-600 mb-0.5">Click the block to edit</p>
-          <p className="text-[11px] text-gray-400">Type directly on the canvas</p>
-        </div>
         <div>
           <p className="text-sm font-semibold text-gray-700 mb-1.5">Font</p>
           <FontSelector value={block.fontFamily ?? theme.fontFamily} onChange={(v) => onChange({ fontFamily: v })} />
@@ -1170,10 +1166,6 @@ function BlockInspectorPanel({
   if (block.type === 'text') {
     return (
       <div className="space-y-4">
-        <div className="rounded-xl bg-gray-50 border border-gray-100 px-3.5 py-3">
-          <p className="text-xs font-medium text-gray-600 mb-0.5">Click the block to edit</p>
-          <p className="text-[11px] text-gray-400">Select text to see the formatting toolbar</p>
-        </div>
         <div>
           <p className="text-sm font-semibold text-gray-700 mb-1.5">Font</p>
           <FontSelector value={block.fontFamily ?? theme.fontFamily} onChange={(v) => onChange({ fontFamily: v })} />
@@ -1696,6 +1688,7 @@ export function CampaignFlodeskBuilder({
             overscrollBehavior: 'contain',
             scrollbarWidth: 'none',
             msOverflowStyle: 'none',
+            minHeight: 0,          // critical: flex children default min-height:auto which blocks scroll
           } as React.CSSProperties}
           onClick={() => setSelectedId(null)}
         >
@@ -1715,21 +1708,6 @@ export function CampaignFlodeskBuilder({
             >
               <Smartphone size={14} /> Mobile
             </button>
-          </div>
-
-          {/* Subject hint */}
-          <div className="mx-auto mb-5 flex items-center gap-2" style={{ maxWidth: viewMode === 'mobile' ? '375px' : theme.maxWidth }}>
-            <span className="text-[11px] text-gray-300 font-medium flex-shrink-0 uppercase tracking-wide">Subject</span>
-            <input
-              className="flex-1 bg-transparent px-2 py-1 text-sm text-gray-400 focus:text-gray-700 focus:outline-none transition-colors"
-              value={subject}
-              onClick={(e) => e.stopPropagation()}
-              onChange={(e) => {
-                setSubject(e.target.value);
-                scheduleSave(name, e.target.value, preheader, def);
-              }}
-              placeholder="Your email subject line"
-            />
           </div>
 
           {/* Email card — completely flush, white on white */}
@@ -1858,7 +1836,7 @@ export function CampaignFlodeskBuilder({
 
         {/* ── Right Panel ──────────────────────────────────────────────────── */}
         <aside
-          className="w-72 flex-shrink-0 bg-white flex flex-col"
+          className="w-72 flex-shrink-0 bg-white flex flex-col overflow-hidden"
           style={{ boxShadow: '-12px 0 32px -8px rgba(0,0,0,0.07)' }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -1868,6 +1846,7 @@ export function CampaignFlodeskBuilder({
               overscrollBehavior: 'contain',
               scrollbarWidth: 'none',
               msOverflowStyle: 'none',
+              minHeight: 0,
             } as React.CSSProperties}
           >
           {selectedBlock ? (
