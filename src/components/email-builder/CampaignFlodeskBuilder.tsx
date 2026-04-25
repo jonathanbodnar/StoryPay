@@ -1960,28 +1960,22 @@ export function CampaignFlodeskBuilder({
           transition: 'left 200ms ease-out',
         }}
       >
-        {/* Left: back link + editable name */}
-        <div className="flex items-center gap-3 flex-shrink-0 w-48">
+        {/* Left: back */}
+        <div className="flex items-center flex-shrink-0 w-48">
           <Link
             href="/dashboard/marketing/email/campaigns"
             className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-800 transition-colors"
           >
             <ArrowLeft size={14} />
+            <span>Back</span>
           </Link>
-          <input
-            className="min-w-0 flex-1 border-0 bg-transparent py-1 text-sm font-medium text-gray-800 placeholder:text-gray-300 focus:outline-none"
-            value={name}
-            onChange={(e) => {
-              setName(e.target.value);
-              scheduleSave(e.target.value, subject, preheader, def);
-              void saveCampaignMeta(e.target.value, subject);
-            }}
-            placeholder="Untitled email"
-          />
         </div>
 
-        {/* Center: step breadcrumbs like Flodesk */}
-        <div className="hidden sm:flex items-center gap-2 mx-auto text-[11px] tracking-widest font-medium uppercase">
+        {/* Center: step breadcrumbs — absolutely centered so it doesn't shift with left/right content */}
+        <div
+          className="hidden sm:flex items-center gap-2 text-[11px] tracking-widest font-medium uppercase"
+          style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}
+        >
           <span className="text-gray-300">Choose Template</span>
           <span className="text-gray-200">›</span>
           <span className="text-gray-700 border-b border-gray-700 pb-0.5">Design Email</span>
