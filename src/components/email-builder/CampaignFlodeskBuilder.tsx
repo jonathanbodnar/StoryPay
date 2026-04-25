@@ -957,47 +957,8 @@ function SliderControl({
   display?: string;
   onChange: (v: number) => void;
 }) {
-  const trackRef = useRef<HTMLDivElement>(null);
-  const isDragging = useRef(false);
-  // Keep latest props accessible inside document-level listeners without re-subscribing
-  const latestRef = useRef({ min, max, step, onChange });
-  useEffect(() => { latestRef.current = { min, max, step, onChange }; }, [min, max, step, onChange]);
-
-  const pct = Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
   const clamp = (v: number) => Math.max(min, Math.min(max, v));
   const snap  = (raw: number) => parseFloat((Math.round(raw / step) * step).toFixed(4));
-
-  function computeFromClientX(clientX: number) {
-    if (!trackRef.current) return latestRef.current.min;
-    const { min: lo, max: hi, step: st } = latestRef.current;
-    const rect  = trackRef.current.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    const raw   = lo + ratio * (hi - lo);
-    return Math.max(lo, Math.min(hi, parseFloat((Math.round(raw / st) * st).toFixed(4))));
-  }
-
-  // Use mouse events (not pointer events) — dnd-kit's PointerSensor won't intercept these
-  useEffect(() => {
-    function onMove(e: MouseEvent) {
-      if (!isDragging.current) return;
-      latestRef.current.onChange(computeFromClientX(e.clientX));
-    }
-    function onUp() { isDragging.current = false; }
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-    return () => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  function onMouseDown(e: React.MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation(); // prevent dnd-kit from stealing the drag
-    isDragging.current = true;
-    latestRef.current.onChange(computeFromClientX(e.clientX));
-  }
 
   return (
     <div>
@@ -1012,27 +973,17 @@ function SliderControl({
           className="text-sm text-gray-400 hover:text-gray-700 w-4 flex-shrink-0 select-none leading-none"
         >−</button>
 
-        <div
-          ref={trackRef}
-          onMouseDown={onMouseDown}
-          onPointerDown={(e) => { e.stopPropagation(); }} // block dnd-kit PointerSensor
-          style={{ position: 'relative', flex: 1, height: 36, display: 'flex', alignItems: 'center', cursor: 'grab', userSelect: 'none' }}
-        >
-          {/* Rail */}
-          <div style={{ position: 'absolute', left: 0, right: 0, height: 1, background: '#d1d5db', borderRadius: 9999 }} />
-          {/* Thumb */}
-          <div style={{
-            position: 'absolute',
-            left: `${pct}%`,
-            transform: 'translateX(-50%)',
-            width: 26,
-            height: 26,
-            borderRadius: '50%',
-            background: '#ffffff',
-            boxShadow: '0 2px 10px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.07)',
-            pointerEvents: 'none',
-          }} />
-        </div>
+        {/* Native range — browser handles drag natively, dnd-kit cannot intercept */}
+        <input
+          type="range"
+          className="sp-slider flex-1"
+          min={min} max={max} step={step}
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          style={{ display: 'block' }}
+        />
 
         <button
           type="button"
@@ -1660,9 +1611,29 @@ export function CampaignFlodeskBuilder({
     <div className="-mt-6 lg:-mt-[68px] -mb-10 flex flex-col bg-white"
       style={{ minHeight: '100vh' }}
     >
-      {/* Hide webkit scrollbars globally for the two scrollable panes */}
+      {/* Global styles for this builder */}
       <style>{`
         .fb-scroll-pane::-webkit-scrollbar { display: none; }
+        .sp-slider {
+          -webkit-appearance: none; appearance: none;
+          width: 100%; height: 2px;
+          background: #e5e7eb; border-radius: 2px;
+          outline: none; cursor: grab;
+        }
+        .sp-slider:active { cursor: grabbing; }
+        .sp-slider::-webkit-slider-thumb {
+          -webkit-appearance: none; appearance: none;
+          width: 26px; height: 26px; border-radius: 50%;
+          background: #ffffff;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.07);
+          cursor: grab;
+        }
+        .sp-slider::-moz-range-thumb {
+          width: 26px; height: 26px; border-radius: 50%;
+          background: #ffffff; border: none;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.07);
+          cursor: grab;
+        }
       `}</style>
       {/* ── Top Bar — fixed, spans from sidebar right edge to viewport right edge ── */}
       <header
