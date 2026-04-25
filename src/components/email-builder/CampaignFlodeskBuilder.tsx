@@ -366,6 +366,8 @@ function FloatingFormatBar() {
   const [linkUrl, setLinkUrl] = useState('');
   const [newTab, setNewTab] = useState(true);
   const [mergeOpen, setMergeOpen] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiVariation, setAiVariation] = useState(0);
   const savedRange = useRef<Range | null>(null);
   const linkInputRef = useRef<HTMLInputElement>(null);
   const linkModeRef = useRef(false);
@@ -377,7 +379,7 @@ function FloatingFormatBar() {
     function update() {
       if (linkModeRef.current) return;
       const sel = window.getSelection();
-      if (!sel || sel.rangeCount === 0 || !sel.toString().trim()) { setPos(null); return; }
+      if (!sel || sel.rangeCount === 0 || !sel.toString().trim()) { setPos(null); setAiVariation(0); return; }
       const anchor = sel.anchorNode;
       const el: Element | null = anchor
         ? (anchor.nodeType === Node.TEXT_NODE ? anchor.parentElement : anchor as Element)
@@ -457,6 +459,41 @@ function FloatingFormatBar() {
     setMergeOpen(false);
   }
 
+  async function refineWithAI(e: React.MouseEvent) {
+    e.preventDefault();
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+
+    // Save the current range so we can replace it after the API call
+    const range = sel.getRangeAt(0).cloneRange();
+    const selectedText = sel.toString().trim();
+    if (!selectedText) return;
+
+    setAiLoading(true);
+    try {
+      const res = await fetch('/api/ai/refine-text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: selectedText, variation: aiVariation }),
+      });
+      const data = await res.json();
+      if (data.refined) {
+        // Restore selection and replace with refined text
+        const sel2 = window.getSelection();
+        if (sel2) { sel2.removeAllRanges(); sel2.addRange(range); }
+        document.execCommand('insertText', false, data.refined);
+        // Sync to block state
+        const editable = range.commonAncestorContainer.parentElement?.closest('[data-email-editable]');
+        if (editable) editable.dispatchEvent(new Event('input', { bubbles: true }));
+        setAiVariation(v => v + 1);
+      }
+    } catch {
+      // silent fail
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
   const BTN = 'flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-800 transition-colors';
   const SEP = 'w-px h-5 bg-gray-200 mx-1 flex-shrink-0';
 
@@ -522,8 +559,13 @@ function FloatingFormatBar() {
       ) : (
         /* ── Normal toolbar ── */
         <div className="flex items-center rounded-2xl bg-white border border-gray-100 shadow-2xl px-2 py-1.5 gap-0.5">
-          <button type="button" className={BTN} title="Format" onMouseDown={(e) => e.preventDefault()}>
-            <PenLine size={16} />
+          <button
+            type="button"
+            className={`${BTN} ${aiLoading ? 'opacity-50 cursor-not-allowed' : 'hover:text-violet-600'}`}
+            title="AI refine — fix grammar, spelling &amp; style (click again for a new variation)"
+            onMouseDown={aiLoading ? (e) => e.preventDefault() : refineWithAI}
+          >
+            {aiLoading ? <Loader2 size={16} className="animate-spin" /> : <PenLine size={16} />}
           </button>
           <div className={SEP} />
           <button type="button" className={BTN} title="Bold"          onMouseDown={(e) => { e.preventDefault(); exec('bold'); }}><Bold size={16} /></button>
