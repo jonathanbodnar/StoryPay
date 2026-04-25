@@ -1818,16 +1818,15 @@ export function CampaignFlodeskBuilder({
                               <div
                                 className="relative"
                                 style={{
-                                  transition: 'box-shadow 0.25s ease, outline 0.12s ease',
+                                  transition: 'outline 0.1s ease',
                                   outline: isSelected ? '2px solid #3b82f6' : '2px solid transparent',
                                   outlineOffset: '-2px',
-                                  boxShadow: isSelected ? 'none' : undefined,
                                 }}
                                 onMouseEnter={(e) => {
-                                  if (!isSelected && !isDragging) (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 20px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.05)';
+                                  if (!isSelected && !isDragging) (e.currentTarget as HTMLDivElement).style.outline = '2px solid #3b82f6';
                                 }}
                                 onMouseLeave={(e) => {
-                                  (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
+                                  if (!isSelected) (e.currentTarget as HTMLDivElement).style.outline = '2px solid transparent';
                                 }}
                               >
                                 <BlockCanvas block={block} theme={theme} venueAddress={venueAddress} onPatch={(p) => patchBlock(block.id, p)} />
