@@ -535,33 +535,6 @@ function FloatingFormatBar() {
           <button type="button" className={BTN} title="Bullet list"   onMouseDown={(e) => { e.preventDefault(); exec('insertUnorderedList'); }}><List size={16} /></button>
           <div className={SEP} />
           <button type="button" className={BTN} title="Insert link" onMouseDown={openLinkMode}><Link2 size={16} /></button>
-          <div className={SEP} />
-          {/* Merge tag picker */}
-          <div className="relative">
-            <button
-              type="button"
-              className={BTN}
-              title="Merge tag"
-              onMouseDown={(e) => { e.preventDefault(); setMergeOpen(o => !o); }}
-            >
-              <AtSign size={16} />
-            </button>
-            {mergeOpen && (
-              <div className="absolute bottom-full right-0 mb-2 bg-white border border-gray-200 rounded-xl shadow-xl py-1 z-10" style={{ minWidth: 190 }}>
-                <p className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Merge tags</p>
-                {['{{first_name}}', '{{venue_name}}', '{{unsubscribe_url}}'].map(tag => (
-                  <button
-                    key={tag}
-                    type="button"
-                    onMouseDown={(e) => { e.preventDefault(); insertMerge(tag); }}
-                    className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 font-mono transition-colors"
-                  >
-                    {tag}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
       )}
     </div>,
