@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   AlignCenter, AlignLeft, AlignRight, ArrowLeft, ArrowUp, ArrowDown,
   AtSign, Bold,
-  Check, ChevronDown, ChevronRight, Copy, Eye, Heart,
+  Check, ChevronDown, ChevronRight, Copy, Eye,
   Image as ImageIcon,
   Italic, Link2, List, ListOrdered, Loader2, Minus, Monitor,
   Paperclip, PenLine, Pipette, Plus, SeparatorHorizontal, Smartphone,
@@ -2160,18 +2160,6 @@ export function CampaignFlodeskBuilder({
                                     <ArrowDown size={15} />
                                   </button>
                                   <div className="w-5 h-px bg-gray-100 my-0.5" />
-                                  <button
-                                    type="button" title="Save as template block"
-                                    onClick={() => {
-                                      const saved = JSON.parse(localStorage.getItem('sp_saved_blocks') ?? '[]');
-                                      saved.push({ ...block, id: crypto.randomUUID(), savedAt: new Date().toISOString() });
-                                      localStorage.setItem('sp_saved_blocks', JSON.stringify(saved));
-                                      alert('Block saved as a template! You can reuse it from the block picker.');
-                                    }}
-                                    className="flex h-8 w-8 items-center justify-center rounded-xl text-gray-400 hover:bg-rose-50 hover:text-rose-500 transition-all"
-                                  >
-                                    <Heart size={15} />
-                                  </button>
                                   <button
                                     type="button" title="Duplicate"
                                     onClick={() => duplicateBlock(block.id)}
