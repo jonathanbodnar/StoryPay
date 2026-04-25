@@ -30,36 +30,32 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
 } from 'react';
 import {
-  AlignCenter,
-  AlignLeft,
-  AlignRight,
+  ArrowDown,
   ArrowLeft,
+  ArrowUp,
   Building2,
   Calendar,
   ChevronDown,
+  ChevronRight,
   CircleDot,
   Code2,
   Copy,
   ExternalLink,
   Eye,
-  Files,
   FileText,
-  GripVertical,
   Hash,
-  Heading,
+  Heading as HeadingIcon,
   Image as ImageIcon,
-  LayoutTemplate,
   Link2,
   ListChecks,
   ListFilter,
   Loader2,
   Mail,
   MapPin,
-  Minus,
-  Monitor,
   MousePointerClick,
   Phone as PhoneIcon,
   Plus,
@@ -67,12 +63,15 @@ import {
   Save,
   Send,
   Settings,
-  Smartphone,
-  Sparkles,
+  Trash2,
+  Type,
   Undo2,
   Upload,
   User,
   UserRound,
+  X as XIcon,
+  Monitor,
+  Smartphone,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import RichTextEditor from '@/components/RichTextEditor';
@@ -98,6 +97,17 @@ import {
 } from '@/lib/marketing-form-schema';
 import { sanitizeFormHtml } from '@/lib/sanitize-form-html';
 import { VenueMediaPickerModal } from '@/components/venue-media/VenueMediaPickerModal';
+import {
+  AlignSelector,
+  ALL_FONT_OPTIONS,
+  BuilderStyles,
+  FlodeskColorPicker,
+  FontSelector,
+  FONT_WEIGHTS,
+  SliderControl,
+  loadGoogleFonts,
+  type Align3,
+} from '@/components/form-builder/builder-primitives';
 
 const APP_ORIGIN =
   typeof window !== 'undefined'
@@ -114,9 +124,11 @@ type EditorSnapshot = {
 
 type PaletteDrag = { kind: 'palette'; blockType: FormBlockType; label: string };
 
+type RightTab = 'block' | 'settings' | 'theme' | 'submissions';
+
 const BLOCK_TYPE_ICONS: Record<FormBlockType, LucideIcon> = {
-  heading: Heading,
-  rich_text: FileText,
+  heading: HeadingIcon,
+  rich_text: Type,
   first_name: User,
   last_name: UserRound,
   email: Mail,
@@ -130,58 +142,50 @@ const BLOCK_TYPE_ICONS: Record<FormBlockType, LucideIcon> = {
   radio: CircleDot,
   select: ListFilter,
   checkbox_group: ListChecks,
-  textarea: AlignLeft,
+  textarea: FileText,
   venue_contact: Building2,
   submit: Send,
   button: MousePointerClick,
   html: Code2,
 };
 
-const PALETTE: { type: FormBlockType; label: string }[] = [
-  { type: 'heading', label: 'Heading' },
-  { type: 'rich_text', label: 'Rich text' },
-  { type: 'first_name', label: 'First name' },
-  { type: 'last_name', label: 'Last name' },
-  { type: 'email', label: 'Email' },
-  { type: 'phone', label: 'Phone' },
-  { type: 'textarea', label: 'Comments / Questions' },
-  { type: 'url', label: 'Website URL' },
-  { type: 'number', label: 'Number' },
-  { type: 'date', label: 'Date' },
-  { type: 'address', label: 'Address' },
-  { type: 'image', label: 'Image' },
-  { type: 'file', label: 'File upload' },
-  { type: 'radio', label: 'Radio' },
-  { type: 'select', label: 'Dropdown' },
-  { type: 'checkbox_group', label: 'Checkboxes' },
-  { type: 'venue_contact', label: 'Venue contact' },
-  { type: 'submit', label: 'Submit' },
-  { type: 'button', label: 'Button' },
-  { type: 'html', label: 'HTML' },
+type PaletteItem = { type: FormBlockType; label: string; desc: string };
+
+const PALETTE: PaletteItem[] = [
+  { type: 'heading',         label: 'Heading',          desc: 'Title or section header' },
+  { type: 'rich_text',       label: 'Paragraph',        desc: 'Rich text block'          },
+  { type: 'first_name',      label: 'First name',       desc: 'Given-name field'         },
+  { type: 'last_name',       label: 'Last name',        desc: 'Family-name field'        },
+  { type: 'email',           label: 'Email',            desc: 'Email address field'      },
+  { type: 'phone',           label: 'Phone',            desc: 'Phone number field'       },
+  { type: 'textarea',        label: 'Long answer',      desc: 'Multi-line message'       },
+  { type: 'url',             label: 'Website URL',      desc: 'Website link field'       },
+  { type: 'number',          label: 'Number',           desc: 'Numeric input'            },
+  { type: 'date',            label: 'Date',             desc: 'Date picker field'        },
+  { type: 'address',         label: 'Address',          desc: 'Multi-line address'       },
+  { type: 'image',           label: 'Image',            desc: 'Photo or graphic'         },
+  { type: 'file',            label: 'File upload',      desc: 'Attachment field'         },
+  { type: 'radio',           label: 'Radio',            desc: 'Single choice'            },
+  { type: 'select',          label: 'Dropdown',         desc: 'Single-choice menu'       },
+  { type: 'checkbox_group',  label: 'Checkboxes',       desc: 'Multi-choice list'        },
+  { type: 'venue_contact',   label: 'Venue contact',    desc: 'Your business info'       },
+  { type: 'submit',          label: 'Submit button',    desc: 'Form submit button'       },
+  { type: 'button',          label: 'Custom button',    desc: 'Call-to-action link'      },
+  { type: 'html',            label: 'HTML',             desc: 'Custom HTML block'        },
 ];
 
-const SETTINGS_SELECT =
-  'w-full cursor-pointer appearance-none rounded border border-gray-200 bg-white py-2 pl-3 pr-9 text-[13px] text-gray-900 transition hover:border-gray-300 focus:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200';
-
-const SETTINGS_INPUT =
-  'w-full rounded border border-gray-200 bg-white px-3 py-2 text-[13px] text-gray-900 placeholder:text-gray-400 focus:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200';
-
-const segBtn = (active: boolean) =>
-  `flex h-9 flex-1 items-center justify-center rounded-md border text-gray-600 transition ${
-    active ? 'border-gray-200 bg-gray-100 text-gray-900' : 'border-transparent bg-transparent hover:bg-gray-50'
-  }`;
-
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 function formatSavedTime(d: Date): string {
   return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 
-function parseSizeToPx(fs: string | undefined): number {
-  if (!fs?.trim()) return 38;
+function parseSizeToPx(fs: string | undefined, fallback = 22): number {
+  if (!fs?.trim()) return fallback;
   const px = fs.match(/^(\d+(?:\.\d+)?)px$/i);
-  if (px) return Math.min(96, Math.max(12, Math.round(Number(px[1]))));
+  if (px) return Math.min(96, Math.max(10, Math.round(Number(px[1]))));
   const rem = fs.match(/^(\d+(?:\.\d+)?)rem$/i);
-  if (rem) return Math.min(96, Math.max(12, Math.round(Number(rem[1]) * 16)));
-  return 38;
+  if (rem) return Math.min(96, Math.max(10, Math.round(Number(rem[1]) * 16)));
+  return fallback;
 }
 
 function parseLineHeight(lh: string | undefined): number {
@@ -191,53 +195,198 @@ function parseLineHeight(lh: string | undefined): number {
   return 1.4;
 }
 
-function SettingsPanelTitle({
-  children,
-  className = '',
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={`mb-6 text-center ${className}`}>
-      <h3 className="text-[15px] font-medium tracking-tight text-gray-900">{children}</h3>
-      <div className="mx-auto mt-3 h-px w-full max-w-[220px] bg-gray-200/90" />
-    </div>
-  );
+function patchBlocks(blocks: FormBlock[], id: string, patch: Partial<FormBlock>): FormBlock[] {
+  return blocks.map((b) => (b.id === id ? { ...b, ...patch } : b));
 }
 
-function SettingsFieldLabel({ children }: { children: React.ReactNode }) {
-  return <span className="text-[12px] font-medium text-gray-500">{children}</span>;
+function humanizeBlockType(type: FormBlockType): string {
+  const item = PALETTE.find((p) => p.type === type);
+  return item?.label ?? type.replace(/_/g, ' ');
 }
 
-function SettingsRow({
-  label,
-  right,
-  children,
-}: {
-  label: string;
-  right?: React.ReactNode;
-  children?: React.ReactNode;
-}) {
+// ─── Palette card (right-panel draggable) ────────────────────────────────────
+function PaletteCard({ type, label, desc }: PaletteItem) {
+  const Icon = BLOCK_TYPE_ICONS[type];
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `palette:${type}`,
+    data: { kind: 'palette', blockType: type, label } satisfies PaletteDrag,
+  });
   return (
-    <div className="mb-5 last:mb-0">
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <SettingsFieldLabel>{label}</SettingsFieldLabel>
-        {right !== undefined && right !== null ? (
-          <span className="text-[13px] tabular-nums text-gray-900">{right}</span>
-        ) : null}
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      style={{ opacity: isDragging ? 0.4 : 1, cursor: 'grab', touchAction: 'none' }}
+      className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-3.5 py-3 hover:border-gray-300 transition-colors select-none"
+    >
+      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-gray-50">
+        <Icon size={15} className="text-gray-500" />
       </div>
-      {children}
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-gray-800 leading-tight">{label}</p>
+        <p className="text-[11px] text-gray-400 truncate">{desc}</p>
+      </div>
     </div>
   );
 }
 
-function SettingsSelectWrap({ children }: { children: React.ReactNode }) {
+// ─── Sortable canvas block (whole block draggable for reorder) ───────────────
+function SortableCanvasBlock({
+  id,
+  children,
+}: {
+  id: string;
+  children: (isDragging: boolean) => ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.35 : 1,
+        position: 'relative',
+        zIndex: isDragging ? 50 : 'auto',
+        cursor: isDragging ? 'grabbing' : 'default',
+      }}
+    >
+      {children(isDragging)}
+    </div>
+  );
+}
+
+// ─── + Add Block circle (between rows on hover) ──────────────────────────────
+function AddBlockBtn({ onClick }: { onClick: () => void }) {
+  return (
+    <div className="group/addbtn relative h-7 flex items-center justify-center">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick();
+        }}
+        className="relative z-10 flex h-6 w-6 items-center justify-center rounded-full bg-white opacity-0 group-hover/addbtn:opacity-100 transition-all duration-150 hover:scale-110"
+        style={{ border: '1.5px solid #1b1b1b', color: '#1b1b1b' }}
+        title="Add block"
+      >
+        <Plus size={12} />
+      </button>
+    </div>
+  );
+}
+
+// ─── Centered block-picker modal (replaces left flyout) ──────────────────────
+function BlockPickerModal({
+  onSelect,
+  onClose,
+}: {
+  onSelect: (type: FormBlockType) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl p-6 w-[640px] max-w-full mx-4 max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="text-base font-semibold text-gray-900">Add a block</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-700 transition-colors"
+            aria-label="Close picker"
+          >
+            <XIcon size={18} />
+          </button>
+        </div>
+        <div className="grid grid-cols-4 gap-3">
+          {PALETTE.map(({ type, label, desc }) => {
+            const Icon = BLOCK_TYPE_ICONS[type];
+            return (
+              <button
+                key={type}
+                type="button"
+                onClick={() => onSelect(type)}
+                className="flex flex-col items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-4 text-center hover:border-gray-400 hover:bg-white transition-all group"
+              >
+                <Icon size={22} className="text-gray-500 group-hover:text-gray-900 transition-colors" />
+                <div>
+                  <p className="text-xs font-semibold text-gray-900 leading-tight">{label}</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{desc}</p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Empty-canvas drop zone (only when blocks.length === 0) ──────────────────
+function CanvasEmptyDrop({ onAddClick }: { onAddClick: () => void }) {
+  const { setNodeRef, isOver } = useDroppable({ id: 'canvas-empty' });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed py-24 text-center transition-colors ${
+        isOver ? 'border-gray-900 bg-gray-50/80 text-gray-900' : 'border-gray-200 text-gray-300'
+      }`}
+    >
+      <p className="text-sm">Your form is empty — click below to add your first block</p>
+      <button
+        type="button"
+        onClick={onAddClick}
+        className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-5 py-2.5 text-sm font-medium text-gray-500 hover:border-gray-400 hover:text-gray-800 transition-all"
+      >
+        <Plus size={15} /> Add block
+      </button>
+    </div>
+  );
+}
+
+// ─── Reusable settings-row helpers ───────────────────────────────────────────
+const INSPECTOR_INPUT =
+  'w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:bg-white focus:outline-none transition-colors';
+
+function SectionLabel({ children }: { children: ReactNode }) {
+  return <p className="text-sm font-semibold text-gray-700 mb-1.5">{children}</p>;
+}
+
+function SmallLabel({ children }: { children: ReactNode }) {
+  return <p className="block text-[11px] text-gray-500 mb-2">{children}</p>;
+}
+
+function SettingsSelect({
+  value,
+  onChange,
+  children,
+  disabled,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  children: ReactNode;
+  disabled?: boolean;
+}) {
   return (
     <div className="relative">
-      {children}
+      <select
+        className={`${INSPECTOR_INPUT} appearance-none pr-9`}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {children}
+      </select>
       <ChevronDown
-        className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+        className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
         strokeWidth={2}
         aria-hidden
       />
@@ -245,497 +394,501 @@ function SettingsSelectWrap({ children }: { children: React.ReactNode }) {
   );
 }
 
-function patchBlock(blocks: FormBlock[], id: string, patch: Partial<FormBlock>): FormBlock[] {
-  return blocks.map((b) => (b.id === id ? { ...b, ...patch } : b));
-}
-
-function PaletteDraggable({
-  type,
-  label,
-  onQuickAdd,
+// ─── Floating side toolbar (move/duplicate/delete) ───────────────────────────
+function FloatingSideToolbar({
+  isFirst,
+  isLast,
+  onMoveUp,
+  onMoveDown,
+  onDuplicate,
+  onRemove,
 }: {
-  type: FormBlockType;
-  label: string;
-  onQuickAdd: (t: FormBlockType) => void;
+  isFirst: boolean;
+  isLast: boolean;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onDuplicate: () => void;
+  onRemove: () => void;
 }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `palette:${type}`,
-    data: { kind: 'palette', blockType: type, label } satisfies PaletteDrag,
-  });
-  const Icon = BLOCK_TYPE_ICONS[type];
   return (
     <div
-      ref={setNodeRef}
-      {...listeners}
-      {...attributes}
-      className={`group flex cursor-grab touch-none items-center gap-2 rounded-md border border-gray-200/80 bg-white px-2 py-2 text-[13px] text-gray-800 transition hover:border-gray-300 active:cursor-grabbing ${
-        isDragging ? 'opacity-50' : ''
-      }`}
+      className="absolute -right-12 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1 z-10"
+      onClick={(e) => e.stopPropagation()}
     >
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-gray-200 bg-[#fafafa] text-gray-600">
-        <Icon size={16} strokeWidth={1.75} aria-hidden />
-      </span>
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      <button
-        type="button"
-        title={`Add ${label}`}
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={() => onQuickAdd(type)}
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-gray-400 opacity-0 transition hover:bg-gray-100 hover:text-gray-800 group-hover:opacity-100"
-      >
-        <Plus size={15} strokeWidth={2} />
-      </button>
-    </div>
-  );
-}
-
-function SortableCanvasRow({ id, children }: { id: string; children: ReactNode }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id,
-  });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    zIndex: isDragging ? 20 : undefined,
-  };
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`flex gap-1 ${isDragging ? 'opacity-60' : ''}`}
-    >
-      <button
-        type="button"
-        className="mt-1 flex h-8 w-7 shrink-0 touch-none items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-        title="Drag to reorder"
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical size={16} />
-      </button>
-      <div className="min-w-0 flex-1">{children}</div>
-    </div>
-  );
-}
-
-function CanvasEmptyDrop() {
-  const { setNodeRef, isOver } = useDroppable({ id: 'canvas-empty' });
-  return (
-    <div
-      ref={setNodeRef}
-      className={`flex min-h-[160px] flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed px-6 py-10 text-center transition ${
-        isOver ? 'border-brand-500 bg-brand-50/80 text-brand-900' : 'border-gray-200 bg-gray-50/50 text-gray-500'
-      }`}
-    >
-      <Sparkles className="h-10 w-10 opacity-40" strokeWidth={1.25} aria-hidden />
-      <div>
-        <p className="text-[15px] font-semibold text-gray-800">Start your form</p>
-        <p className="mt-1.5 max-w-[260px] text-[13px] leading-snug text-gray-500">
-          Drag a module from Sections, click + on a row, or pick a block type to add your first field.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function CanvasTailDrop() {
-  const { setNodeRef, isOver } = useDroppable({ id: 'canvas-tail' });
-  return (
-    <div
-      ref={setNodeRef}
-      className={`mt-2 rounded-md border border-dashed px-2 py-2 text-center text-xs transition ${
-        isOver ? 'border-brand-400 bg-brand-50 text-brand-800' : 'border-transparent text-gray-400'
-      }`}
-    >
-      Drop to add at end
-    </div>
-  );
-}
-
-/** Horizontal insertion line shown while dragging over a drop target. */
-function DropInsertionMarker({ showLabel }: { showLabel?: boolean }) {
-  return (
-    <div className="pointer-events-none relative z-[5] -mx-1 mb-3" aria-hidden>
-      {showLabel ? (
-        <div className="mb-1.5 flex justify-center">
-          <span className="rounded-full border border-white/20 bg-brand-900 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
-            Drop here
-          </span>
-        </div>
-      ) : null}
-      <div className="h-[5px] rounded-full border border-brand-700/40 bg-brand-600 animate-pulse" />
-    </div>
-  );
-}
-
-function useFormBuilderScrollbar() {
-  const ref = useRef<HTMLDivElement>(null);
-  const [scrolling, setScrolling] = useState(false);
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const onScroll = () => {
-      setScrolling(true);
-      if (hideTimer.current) clearTimeout(hideTimer.current);
-      hideTimer.current = setTimeout(() => setScrolling(false), 750);
-    };
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => {
-      el.removeEventListener('scroll', onScroll);
-      if (hideTimer.current) clearTimeout(hideTimer.current);
-    };
-  }, []);
-  return {
-    ref,
-    className: `sp-form-scrollbar ${scrolling ? 'sp-form-scrollbar--scrolling' : ''}`,
-  };
-}
-
-function BlockStyleFields({
-  style,
-  onChange,
-  googleFontNames,
-}: {
-  style: FormBlockStyle | undefined;
-  onChange: (next: FormBlockStyle) => void;
-  googleFontNames: string[];
-}) {
-  const s = style ?? {};
-  const [spacingOpen, setSpacingOpen] = useState(false);
-
-  const fontFamily = s.fontFamily?.trim() ?? '';
-  const sizePx = parseSizeToPx(s.fontSize);
-  const weight = s.fontWeight ?? '';
-  const hex =
-    s.color?.startsWith('#') && (s.color.length === 4 || s.color.length === 7) ? s.color : '#000000';
-  const align = s.textAlign ?? 'left';
-  const isUpper = s.textTransform === 'uppercase';
-  const lh = parseLineHeight(s.lineHeight);
-
-  const inCatalog =
-    !fontFamily ||
-    googleFontNames.length === 0 ||
-    googleFontNames.includes(fontFamily);
-  const familySelectValue = fontFamily && !inCatalog ? '__custom' : fontFamily;
-
-  return (
-    <div>
-      <SettingsPanelTitle>Font</SettingsPanelTitle>
-
-      {googleFontNames.length === 0 ? (
-        <div className="mb-5 grid grid-cols-2 gap-2">
-          <div>
-            <SettingsFieldLabel>Family</SettingsFieldLabel>
-            <div className="mt-1.5">
-              <input
-                className={SETTINGS_INPUT}
-                placeholder="e.g. Montserrat"
-                value={fontFamily}
-                onChange={(e) => onChange({ ...s, fontFamily: e.target.value.trim() || undefined })}
-              />
-            </div>
-          </div>
-          <div>
-            <SettingsFieldLabel>Weight</SettingsFieldLabel>
-            <div className="mt-1.5">
-              <SettingsSelectWrap>
-                <select
-                  className={SETTINGS_SELECT}
-                  value={weight}
-                  onChange={(e) => onChange({ ...s, fontWeight: e.target.value || undefined })}
-                >
-                  <option value="">Default</option>
-                  <option value="400">Regular</option>
-                  <option value="500">Medium</option>
-                  <option value="600">Semibold</option>
-                  <option value="700">Bold</option>
-                </select>
-              </SettingsSelectWrap>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <>
-          <div className="mb-5 grid grid-cols-2 gap-2">
-            <div>
-              <SettingsFieldLabel>Family</SettingsFieldLabel>
-              <div className="mt-1.5">
-                <SettingsSelectWrap>
-                  <select
-                    className={SETTINGS_SELECT}
-                    value={familySelectValue}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      if (v === '') onChange({ ...s, fontFamily: undefined });
-                      else if (v === '__custom') onChange({ ...s, fontFamily: 'Montserrat' });
-                      else onChange({ ...s, fontFamily: v });
-                    }}
-                  >
-                    <option value="">Theme default</option>
-                    {googleFontNames.map((f) => (
-                      <option key={f} value={f}>
-                        {f}
-                      </option>
-                    ))}
-                    <option value="__custom">Custom…</option>
-                  </select>
-                </SettingsSelectWrap>
-              </div>
-            </div>
-            <div>
-              <SettingsFieldLabel>Weight</SettingsFieldLabel>
-              <div className="mt-1.5">
-                <SettingsSelectWrap>
-                  <select
-                    className={SETTINGS_SELECT}
-                    value={weight}
-                    onChange={(e) => onChange({ ...s, fontWeight: e.target.value || undefined })}
-                  >
-                    <option value="">Default</option>
-                    <option value="400">Regular</option>
-                    <option value="500">Medium</option>
-                    <option value="600">Semibold</option>
-                    <option value="700">Bold</option>
-                  </select>
-                </SettingsSelectWrap>
-              </div>
-            </div>
-          </div>
-
-          {!inCatalog && (
-            <SettingsRow label="Custom name">
-              <input
-                className={SETTINGS_INPUT}
-                placeholder="e.g. Montserrat"
-                value={fontFamily}
-                onChange={(e) => onChange({ ...s, fontFamily: e.target.value.trim() || undefined })}
-              />
-            </SettingsRow>
-          )}
-        </>
-      )}
-
-      <SettingsRow label="Size" right={String(sizePx)}>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-            onClick={() =>
-              onChange({ ...s, fontSize: `${Math.max(12, sizePx - 1)}px` })
-            }
-          >
-            <Minus className="h-4 w-4" strokeWidth={2} />
-          </button>
-          <input
-            type="range"
-            min={12}
-            max={96}
-            value={sizePx}
-            onChange={(e) => onChange({ ...s, fontSize: `${e.target.value}px` })}
-            className="h-2 flex-1 cursor-pointer appearance-none rounded-full bg-gray-200 accent-gray-900"
-          />
-          <button
-            type="button"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-            onClick={() =>
-              onChange({ ...s, fontSize: `${Math.min(96, sizePx + 1)}px` })
-            }
-          >
-            <Plus className="h-4 w-4" strokeWidth={2} />
-          </button>
-        </div>
-      </SettingsRow>
-
-      <div className="mb-5">
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <SettingsFieldLabel>Font color</SettingsFieldLabel>
-          <div className="flex items-center gap-2">
-            {s.color === 'transparent' ? (
-              <span className="font-mono text-[13px] text-gray-500">transparent</span>
-            ) : (
-              <span className="font-mono text-[13px] uppercase text-gray-900">{hex}</span>
-            )}
-            {s.color !== 'transparent' && (
-              <label className="relative h-7 w-7 cursor-pointer overflow-hidden rounded-full border border-gray-200">
-                <input
-                  type="color"
-                  className="absolute inset-0 h-[200%] w-[200%] -translate-x-1/4 -translate-y-1/4 cursor-pointer p-0"
-                  value={hex}
-                  onChange={(e) => onChange({ ...s, color: e.target.value })}
-                />
-              </label>
-            )}
-            {/* Transparent swatch / toggle */}
-            <button
-              type="button"
-              title={s.color === 'transparent' ? 'Restore color' : 'Set transparent'}
-              onClick={() => onChange({ ...s, color: s.color === 'transparent' ? '#374151' : 'transparent' })}
-              className="relative h-7 w-7 overflow-hidden rounded-full border border-gray-200 hover:border-gray-400"
-              style={s.color === 'transparent' ? { outline: '2px solid #374151', outlineOffset: '1px' } : {}}
-            >
-              <span className="absolute inset-0" style={TRANSPARENT_BG} />
-              {s.color === 'transparent' && (
-                <span className="absolute inset-0 flex items-center justify-center">
-                  <span className="h-0.5 w-4 rotate-45 rounded bg-gray-400" />
-                </span>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <SettingsRow label="Alignment">
-        <div className="flex gap-1 rounded-lg border border-gray-100 bg-gray-50/80 p-0.5">
-          {(
-            [
-              ['left', AlignLeft],
-              ['center', AlignCenter],
-              ['right', AlignRight],
-            ] as const
-          ).map(([key, Icon]) => (
-            <button
-              key={key}
-              type="button"
-              className={segBtn(align === key)}
-              onClick={() => onChange({ ...s, textAlign: key })}
-              title={key}
-            >
-              <Icon className="h-4 w-4" strokeWidth={1.75} />
-            </button>
-          ))}
-        </div>
-      </SettingsRow>
-
-      <SettingsRow label="Case">
-        <div className="flex gap-1 rounded-lg border border-gray-100 bg-gray-50/80 p-0.5">
-          <button
-            type="button"
-            className={segBtn(!isUpper)}
-            onClick={() => onChange({ ...s, textTransform: 'none' })}
-          >
-            <span className="text-[13px] font-medium">Aa</span>
-          </button>
-          <button
-            type="button"
-            className={segBtn(isUpper)}
-            onClick={() => onChange({ ...s, textTransform: 'uppercase' })}
-          >
-            <span className="text-[12px] font-semibold tracking-wide">AA</span>
-          </button>
-        </div>
-      </SettingsRow>
-
-      <div className="mb-2 mt-4 border-t border-gray-100 pt-4">
+      <div className="flex flex-col items-center gap-1 bg-white rounded-2xl shadow-lg border border-gray-100 px-1.5 py-2">
         <button
           type="button"
-          onClick={() => setSpacingOpen((o) => !o)}
-          className="flex w-full items-center justify-between py-1 text-left"
+          title="Move up"
+          disabled={isFirst}
+          onClick={onMoveUp}
+          className="flex h-8 w-8 items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-all disabled:opacity-25 disabled:cursor-not-allowed"
         >
-          <SettingsFieldLabel>Spacing</SettingsFieldLabel>
-          <ChevronDown
-            className={`h-4 w-4 text-gray-400 transition ${spacingOpen ? 'rotate-180' : ''}`}
-            strokeWidth={2}
-          />
+          <ArrowUp size={15} />
         </button>
-        {spacingOpen ? (
-          <div className="mt-3 pl-0">
-            <SettingsRow label="Line height" right={lh.toFixed(2)}>
-              <input
-                type="range"
-                min={100}
-                max={250}
-                value={Math.round(lh * 100)}
-                onChange={(e) =>
-                  onChange({
-                    ...s,
-                    lineHeight: String(Number(e.target.value) / 100),
-                  })
-                }
-                className="h-2 w-full cursor-pointer appearance-none rounded-full bg-gray-200 accent-gray-900"
-              />
-            </SettingsRow>
-          </div>
-        ) : null}
+        <button
+          type="button"
+          title="Move down"
+          disabled={isLast}
+          onClick={onMoveDown}
+          className="flex h-8 w-8 items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-all disabled:opacity-25 disabled:cursor-not-allowed"
+        >
+          <ArrowDown size={15} />
+        </button>
+        <div className="w-5 h-px bg-gray-100 my-0.5" />
+        <button
+          type="button"
+          title="Duplicate"
+          onClick={onDuplicate}
+          className="flex h-8 w-8 items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-all"
+        >
+          <Copy size={15} />
+        </button>
+        <div className="w-5 h-px bg-gray-100 my-0.5" />
+        <button
+          type="button"
+          title="Delete block"
+          onClick={onRemove}
+          className="flex h-8 w-8 items-center justify-center rounded-xl text-red-400 hover:bg-red-50 hover:text-red-600 transition-all"
+        >
+          <Trash2 size={15} />
+        </button>
       </div>
     </div>
   );
 }
 
-function humanizeBlockType(type: FormBlockType): string {
-  return type
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
+// ─── Block inspector ─────────────────────────────────────────────────────────
 function BlockInspector({
   block,
   onChange,
   onRemove,
   onDuplicate,
-  googleFontNames,
+  onDeselect,
   onRequestMediaPick,
 }: {
   block: FormBlock;
   onChange: (patch: Partial<FormBlock>) => void;
   onRemove: () => void;
   onDuplicate: () => void;
-  googleFontNames: string[];
-  onRequestMediaPick?: (applyUrl: (url: string) => void) => void;
+  onDeselect: () => void;
+  onRequestMediaPick: (apply: (url: string) => void) => void;
 }) {
   const optsText = (block.options || []).join('\n');
+  const [spacingOpen, setSpacingOpen] = useState(true);
+
+  // Convenience helpers ── per-block patch into block.style
+  const patchStyle = (patch: Partial<FormBlockStyle>) =>
+    onChange({ style: { ...block.style, ...patch } });
+
+  const labelFieldsBlock =
+    block.type === 'first_name' ||
+    block.type === 'last_name' ||
+    block.type === 'email' ||
+    block.type === 'phone' ||
+    block.type === 'url' ||
+    block.type === 'number' ||
+    block.type === 'date' ||
+    block.type === 'address' ||
+    block.type === 'file' ||
+    block.type === 'radio' ||
+    block.type === 'select' ||
+    block.type === 'checkbox_group' ||
+    block.type === 'textarea';
+
+  const hintFieldsBlock =
+    block.type === 'first_name' ||
+    block.type === 'last_name' ||
+    block.type === 'email' ||
+    block.type === 'phone' ||
+    block.type === 'url' ||
+    block.type === 'number' ||
+    block.type === 'date' ||
+    block.type === 'address' ||
+    block.type === 'file' ||
+    block.type === 'textarea';
+
+  const placeholderFieldsBlock =
+    block.type === 'first_name' ||
+    block.type === 'last_name' ||
+    block.type === 'email' ||
+    block.type === 'phone' ||
+    block.type === 'url' ||
+    block.type === 'number' ||
+    block.type === 'address' ||
+    block.type === 'textarea';
+
+  const widthFieldsBlock =
+    block.type === 'first_name' ||
+    block.type === 'last_name' ||
+    block.type === 'email' ||
+    block.type === 'phone' ||
+    block.type === 'url' ||
+    block.type === 'number' ||
+    block.type === 'date' ||
+    block.type === 'address' ||
+    block.type === 'file' ||
+    block.type === 'select' ||
+    block.type === 'textarea';
 
   return (
     <div className="text-[13px] text-gray-900">
-      {block.type !== 'heading' ? (
-        <SettingsPanelTitle className="mb-5">{humanizeBlockType(block.type)}</SettingsPanelTitle>
-      ) : null}
+      {/* Block-type pill + Done */}
+      <div className="mb-4 flex items-center justify-between">
+        <span className="rounded-lg bg-gray-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-gray-600">
+          {humanizeBlockType(block.type)}
+        </span>
+        <button
+          type="button"
+          onClick={onDeselect}
+          className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
+        >
+          Done
+        </button>
+      </div>
 
-      {block.type === 'venue_contact' ? (
-        <p className="mb-5 text-[12px] leading-relaxed text-gray-500">
-          Shows your venue name, email, phone, and address from{' '}
-          <Link href="/dashboard/settings/branding" className="text-gray-900 underline underline-offset-2 hover:text-gray-700">
-            Settings → Branding
-          </Link>
-          . Add this block again if you removed it.
-        </p>
-      ) : null}
+      {/* Heading-specific font controls */}
+      {block.type === 'heading' && (
+        <div className="space-y-5">
+          <div>
+            <SectionLabel>Heading level</SectionLabel>
+            <div className="flex gap-1">
+              {([1, 2, 3, 4, 5, 6] as const).map((l) => {
+                const active = (block.level ?? 2) === l;
+                return (
+                  <button
+                    key={l}
+                    type="button"
+                    onClick={() => onChange({ level: l })}
+                    className={`flex h-8 items-center justify-center rounded-lg px-2.5 text-sm font-semibold transition-colors ${
+                      active ? 'bg-gray-100 text-gray-700' : 'text-gray-400 hover:text-gray-600'
+                    }`}
+                  >
+                    H{l}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-      {(block.type === 'first_name' ||
-        block.type === 'last_name' ||
-        block.type === 'email' ||
-        block.type === 'phone' ||
-        block.type === 'url' ||
-        block.type === 'number' ||
-        block.type === 'date' ||
-        block.type === 'address' ||
-        block.type === 'file' ||
-        block.type === 'radio' ||
-        block.type === 'select' ||
-        block.type === 'checkbox_group' ||
-        block.type === 'textarea') && (
-        <>
-          <SettingsRow label="Label">
+          <div>
+            <SectionLabel>Text</SectionLabel>
             <input
-              className={SETTINGS_INPUT}
+              className={INSPECTOR_INPUT}
+              value={block.content ?? ''}
+              onChange={(e) => onChange({ content: e.target.value })}
+            />
+          </div>
+
+          <div>
+            <SectionLabel>Font</SectionLabel>
+            <FontSelector
+              value={block.style?.fontFamily ?? ALL_FONT_OPTIONS[0]?.value ?? ''}
+              onChange={(v) => patchStyle({ fontFamily: v })}
+            />
+          </div>
+
+          <div>
+            <SectionLabel>Weight</SectionLabel>
+            <div className="flex gap-1 flex-wrap">
+              {FONT_WEIGHTS.map((w) => {
+                const active = (block.style?.fontWeight ?? '600') === w.value;
+                return (
+                  <button
+                    key={w.value}
+                    type="button"
+                    onClick={() => patchStyle({ fontWeight: w.value })}
+                    className={`px-2.5 py-1 rounded-lg text-xs transition-colors ${
+                      active ? 'bg-gray-100 text-gray-700 font-semibold' : 'text-gray-400 hover:text-gray-600'
+                    }`}
+                  >
+                    {w.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <SectionLabel>
+              Font color <span className="font-normal text-gray-400 text-xs">{block.style?.color ?? '#111827'}</span>
+            </SectionLabel>
+            <FlodeskColorPicker
+              value={block.style?.color ?? '#111827'}
+              onChange={(v) => patchStyle({ color: v })}
+            />
+          </div>
+
+          <AlignSelector
+            value={(block.style?.textAlign ?? 'left') as Align3}
+            onChange={(a) => patchStyle({ textAlign: a })}
+          />
+
+          <div>
+            <SectionLabel>Case</SectionLabel>
+            <div className="flex gap-0.5">
+              {([
+                { v: 'none' as const, label: 'Aa' },
+                { v: 'uppercase' as const, label: 'AA' },
+              ]).map((c) => {
+                const active = (block.style?.textTransform ?? 'none') === c.v;
+                return (
+                  <button
+                    key={c.v}
+                    type="button"
+                    onClick={() => patchStyle({ textTransform: c.v })}
+                    className={`flex h-9 px-2.5 items-center justify-center rounded-lg text-sm transition-colors ${
+                      active ? 'bg-gray-100 text-gray-700 font-semibold' : 'text-gray-400 hover:text-gray-600'
+                    }`}
+                  >
+                    {c.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="border-t border-gray-100 pt-4">
+            <button
+              type="button"
+              onClick={() => setSpacingOpen((o) => !o)}
+              className="flex items-center justify-between w-full mb-3"
+            >
+              <span className="text-sm font-semibold text-gray-700">Spacing</span>
+              <ChevronDown
+                size={14}
+                className={`text-gray-400 transition-transform ${spacingOpen ? 'rotate-180' : ''}`}
+              />
+            </button>
+            {spacingOpen && (
+              <div className="space-y-5">
+                <SliderControl
+                  label="Font size"
+                  value={parseSizeToPx(block.style?.fontSize, 22)}
+                  min={10}
+                  max={72}
+                  step={1}
+                  display={`${parseSizeToPx(block.style?.fontSize, 22)}px`}
+                  onChange={(v) => patchStyle({ fontSize: `${v}px` })}
+                />
+                <SliderControl
+                  label="Line height"
+                  value={parseLineHeight(block.style?.lineHeight)}
+                  min={1}
+                  max={2.5}
+                  step={0.1}
+                  display={parseLineHeight(block.style?.lineHeight).toFixed(1)}
+                  onChange={(v) => patchStyle({ lineHeight: String(Math.round(v * 10) / 10) })}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Rich text */}
+      {block.type === 'rich_text' && (
+        <div className="space-y-5">
+          <div>
+            <SectionLabel>Content</SectionLabel>
+            <div className="rounded-lg border border-gray-200 bg-white p-1">
+              <RichTextEditor
+                content={block.content || '<p></p>'}
+                onChange={(html: string) => onChange({ content: html })}
+                minHeight={160}
+              />
+            </div>
+          </div>
+          <AlignSelector
+            value={(block.style?.textAlign ?? 'left') as Align3}
+            onChange={(a) => patchStyle({ textAlign: a })}
+          />
+        </div>
+      )}
+
+      {/* HTML block */}
+      {block.type === 'html' && (
+        <div className="space-y-5">
+          <div>
+            <SectionLabel>HTML</SectionLabel>
+            <textarea
+              className="min-h-[160px] w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 font-mono text-[12px] text-gray-900 focus:border-gray-400 focus:bg-white focus:outline-none transition-colors"
+              value={block.content ?? ''}
+              onChange={(e) => onChange({ content: e.target.value })}
+            />
+            <p className="mt-1.5 text-[11px] text-gray-400">Sanitized when shown.</p>
+          </div>
+          <AlignSelector
+            value={(block.style?.textAlign ?? 'left') as Align3}
+            onChange={(a) => patchStyle({ textAlign: a })}
+          />
+        </div>
+      )}
+
+      {/* Image */}
+      {block.type === 'image' && (
+        <div className="space-y-5">
+          <div>
+            <SectionLabel>Image URL</SectionLabel>
+            <input
+              className={INSPECTOR_INPUT}
+              value={block.src ?? ''}
+              onChange={(e) => onChange({ src: e.target.value })}
+              placeholder="https://"
+            />
+            <button
+              type="button"
+              onClick={() => onRequestMediaPick((url) => onChange({ src: url }))}
+              className="mt-2 text-[12px] font-medium text-gray-700 underline underline-offset-2 hover:text-gray-900"
+            >
+              Choose from media library
+            </button>
+          </div>
+          <div>
+            <SectionLabel>Alt text</SectionLabel>
+            <input
+              className={INSPECTOR_INPUT}
+              value={block.alt ?? ''}
+              onChange={(e) => onChange({ alt: e.target.value })}
+              placeholder="Describe this image for screen readers"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Venue contact */}
+      {block.type === 'venue_contact' && (
+        <div className="space-y-3">
+          <p className="text-[13px] leading-relaxed text-gray-500">
+            Shows your venue name, email, phone, and address from{' '}
+            <Link
+              href="/dashboard/settings/branding"
+              className="text-gray-900 underline underline-offset-2 hover:text-gray-700"
+            >
+              Settings → Branding
+            </Link>
+            .
+          </p>
+          <p className="text-[12px] text-gray-400">
+            This block has no per-form options — manage the values once in branding.
+          </p>
+        </div>
+      )}
+
+      {/* Submit & Button blocks */}
+      {(block.type === 'submit' || block.type === 'button') && (
+        <div className="space-y-5">
+          <div>
+            <SectionLabel>Label</SectionLabel>
+            <input
+              className={INSPECTOR_INPUT}
+              value={block.buttonLabel ?? ''}
+              onChange={(e) => onChange({ buttonLabel: e.target.value })}
+            />
+          </div>
+
+          <AlignSelector
+            value={(block.buttonAlign ?? (block.type === 'submit' ? 'center' : 'left')) as Align3}
+            onChange={(a) => onChange({ buttonAlign: a })}
+          />
+
+          {block.type === 'button' && (
+            <>
+              <div>
+                <SectionLabel>Link (https)</SectionLabel>
+                <input
+                  className={INSPECTOR_INPUT}
+                  value={block.href ?? ''}
+                  onChange={(e) => onChange({ href: e.target.value })}
+                  placeholder="https://"
+                />
+              </div>
+              <div>
+                <SectionLabel>Style</SectionLabel>
+                <SettingsSelect
+                  value={block.buttonVariant ?? 'secondary'}
+                  onChange={(v) => onChange({ buttonVariant: v as FormBlock['buttonVariant'] })}
+                >
+                  <option value="primary">Primary</option>
+                  <option value="secondary">Secondary</option>
+                  <option value="outline">Outline</option>
+                  <option value="link">Link</option>
+                </SettingsSelect>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Field-style blocks (inputs + multi-option) */}
+      {labelFieldsBlock && (
+        <div className="space-y-5">
+          <div>
+            <SectionLabel>Label</SectionLabel>
+            <input
+              className={INSPECTOR_INPUT}
               value={block.label ?? ''}
               onChange={(e) => onChange({ label: e.target.value })}
             />
-          </SettingsRow>
-          {block.type !== 'date' &&
-          block.type !== 'file' &&
-          block.type !== 'radio' &&
-          block.type !== 'checkbox_group' ? (
-            <SettingsRow label="Placeholder">
+          </div>
+
+          {placeholderFieldsBlock && (
+            <div>
+              <SectionLabel>Placeholder</SectionLabel>
               <input
-                className={SETTINGS_INPUT}
+                className={INSPECTOR_INPUT}
                 value={block.placeholder ?? ''}
                 onChange={(e) => onChange({ placeholder: e.target.value })}
               />
-            </SettingsRow>
-          ) : null}
+            </div>
+          )}
+
+          {(block.type === 'radio' || block.type === 'select' || block.type === 'checkbox_group') && (
+            <div>
+              <SectionLabel>Options (one per line)</SectionLabel>
+              <textarea
+                className="min-h-[120px] w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:bg-white focus:outline-none transition-colors"
+                value={optsText}
+                onChange={(e) =>
+                  onChange({
+                    options: e.target.value
+                      .split(/\r?\n/)
+                      .map((s) => s.trim())
+                      .filter(Boolean),
+                  })
+                }
+              />
+            </div>
+          )}
+
+          {block.type === 'checkbox_group' && (
+            <div>
+              <SectionLabel>Selection mode</SectionLabel>
+              <SettingsSelect
+                value={block.checkboxMode ?? 'multiple'}
+                onChange={(v) => onChange({ checkboxMode: v as 'single' | 'multiple' })}
+              >
+                <option value="multiple">Multiple (checkboxes)</option>
+                <option value="single">Single (radio style)</option>
+              </SettingsSelect>
+            </div>
+          )}
+
+          {block.type === 'textarea' && (
+            <div>
+              <SectionLabel>Box size</SectionLabel>
+              <SettingsSelect
+                value={block.textareaSize ?? 'medium'}
+                onChange={(v) => onChange({ textareaSize: v as 'small' | 'medium' | 'large' })}
+              >
+                <option value="small">Small (3 rows)</option>
+                <option value="medium">Medium (6 rows)</option>
+                <option value="large">Large (10 rows)</option>
+              </SettingsSelect>
+            </div>
+          )}
+
           {ALWAYS_REQUIRED_TYPES.includes(block.type) ? (
-            <div className="mb-5 flex items-center gap-2.5 text-[13px] text-gray-400">
+            <div className="flex items-center gap-2.5 text-[13px] text-gray-400">
               <input
                 type="checkbox"
                 className="h-4 w-4 rounded border-gray-300 text-gray-400"
@@ -746,7 +899,7 @@ function BlockInspector({
               <span>Required (always on)</span>
             </div>
           ) : (
-            <label className="mb-5 flex cursor-pointer items-center gap-2.5">
+            <label className="flex cursor-pointer items-center gap-2.5">
               <input
                 type="checkbox"
                 className="h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-400"
@@ -756,504 +909,154 @@ function BlockInspector({
               <span className="text-[13px] text-gray-700">Required</span>
             </label>
           )}
-          <SettingsRow label="Width">
-            <SettingsSelectWrap>
-              <select
-                className={SETTINGS_SELECT}
+
+          {widthFieldsBlock && (
+            <div>
+              <SectionLabel>Width</SectionLabel>
+              <SettingsSelect
                 value={String(block.colSpan ?? 2)}
-                onChange={(e) =>
-                  onChange({ colSpan: Number(e.target.value) as 1 | 2 })
-                }
+                onChange={(v) => onChange({ colSpan: Number(v) as 1 | 2 })}
               >
                 <option value="2">Full width</option>
                 <option value="1">Half width (2-col layout)</option>
-              </select>
-            </SettingsSelectWrap>
-          </SettingsRow>
-        </>
-      )}
-
-      {block.type === 'heading' && (
-        <>
-          <SettingsRow label="Heading level">
-            <SettingsSelectWrap>
-              <select
-                className={SETTINGS_SELECT}
-                value={block.level ?? 2}
-                onChange={(e) => onChange({ level: Number(e.target.value) as FormBlock['level'] })}
-              >
-                {[1, 2, 3, 4, 5, 6].map((n) => (
-                  <option key={n} value={n}>
-                    H{n}
-                  </option>
-                ))}
-              </select>
-            </SettingsSelectWrap>
-          </SettingsRow>
-          <SettingsRow label="Text">
-            <input
-              className={SETTINGS_INPUT}
-              value={block.content ?? ''}
-              onChange={(e) => onChange({ content: e.target.value })}
-            />
-          </SettingsRow>
-          <BlockStyleFields
-            style={block.style}
-            googleFontNames={googleFontNames}
-            onChange={(st) => onChange({ style: { ...block.style, ...st } })}
-          />
-        </>
-      )}
-
-      {block.type === 'rich_text' && (
-        <SettingsRow label="Content">
-          <div className="rounded-md border border-gray-200 bg-white p-1">
-            <RichTextEditor
-              content={block.content || '<p></p>'}
-              onChange={(html: string) => onChange({ content: html })}
-              minHeight={160}
-            />
-          </div>
-        </SettingsRow>
-      )}
-
-      {block.type === 'html' && (
-        <SettingsRow label="HTML (sanitized when shown)">
-          <textarea
-            className="min-h-[160px] w-full rounded border border-gray-200 bg-white px-3 py-2 font-mono text-[12px] text-gray-900 focus:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200"
-            value={block.content ?? ''}
-            onChange={(e) => onChange({ content: e.target.value })}
-          />
-        </SettingsRow>
-      )}
-
-      {(block.type === 'radio' || block.type === 'select' || block.type === 'checkbox_group') && (
-        <SettingsRow label="Options (one per line)">
-          <textarea
-            className="min-h-[120px] w-full rounded border border-gray-200 bg-white px-3 py-2 text-[13px] focus:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200"
-            value={optsText}
-            onChange={(e) =>
-              onChange({
-                options: e.target.value
-                  .split(/\r?\n/)
-                  .map((s) => s.trim())
-                  .filter(Boolean),
-              })
-            }
-          />
-        </SettingsRow>
-      )}
-
-      {block.type === 'checkbox_group' && (
-        <SettingsRow label="Selection mode">
-          <SettingsSelectWrap>
-            <select
-              className={SETTINGS_SELECT}
-              value={block.checkboxMode ?? 'multiple'}
-              onChange={(e) =>
-                onChange({ checkboxMode: e.target.value as 'single' | 'multiple' })
-              }
-            >
-              <option value="multiple">Multiple (checkboxes)</option>
-              <option value="single">Single (radio style)</option>
-            </select>
-          </SettingsSelectWrap>
-        </SettingsRow>
-      )}
-
-      {block.type === 'textarea' && (
-        <SettingsRow label="Box size">
-          <SettingsSelectWrap>
-            <select
-              className={SETTINGS_SELECT}
-              value={block.textareaSize ?? 'medium'}
-              onChange={(e) =>
-                onChange({ textareaSize: e.target.value as 'small' | 'medium' | 'large' })
-              }
-            >
-              <option value="small">Small (3 rows)</option>
-              <option value="medium">Medium (6 rows)</option>
-              <option value="large">Large (10 rows)</option>
-            </select>
-          </SettingsSelectWrap>
-        </SettingsRow>
-      )}
-
-      {(block.type === 'rich_text' || block.type === 'html') && (
-        <SettingsRow label="Alignment">
-          <div className="flex gap-1 rounded-lg border border-gray-100 bg-gray-50/80 p-0.5">
-            {(
-              [
-                ['left', AlignLeft],
-                ['center', AlignCenter],
-                ['right', AlignRight],
-              ] as const
-            ).map(([key, Icon]) => (
-              <button
-                key={key}
-                type="button"
-                className={segBtn((block.style?.textAlign ?? 'left') === key)}
-                onClick={() => onChange({ style: { ...block.style, textAlign: key } })}
-                title={key}
-              >
-                <Icon className="h-4 w-4" strokeWidth={1.75} />
-              </button>
-            ))}
-          </div>
-        </SettingsRow>
-      )}
-
-      {block.type === 'image' && (
-        <>
-          <SettingsRow label="Image URL">
-            <div className="space-y-2">
-              <input
-                className={SETTINGS_INPUT}
-                value={block.src ?? ''}
-                onChange={(e) => onChange({ src: e.target.value })}
-                placeholder="https://"
-              />
-              {onRequestMediaPick ? (
-                <button
-                  type="button"
-                  className="text-[12px] font-medium text-gray-700 underline underline-offset-2 hover:text-gray-900"
-                  onClick={() => onRequestMediaPick((url) => onChange({ src: url }))}
-                >
-                  Choose from media library
-                </button>
-              ) : null}
+              </SettingsSelect>
             </div>
-          </SettingsRow>
-          <SettingsRow label="Alt text">
-            <input
-              className={SETTINGS_INPUT}
-              value={block.alt ?? ''}
-              onChange={(e) => onChange({ alt: e.target.value })}
-            />
-          </SettingsRow>
-        </>
-      )}
-
-      {(block.type === 'submit' || block.type === 'button') && (
-        <>
-          <SettingsRow label="Label">
-            <input
-              className={SETTINGS_INPUT}
-              value={block.buttonLabel ?? ''}
-              onChange={(e) => onChange({ buttonLabel: e.target.value })}
-            />
-          </SettingsRow>
-          <SettingsRow label="Alignment">
-            <div className="flex gap-1 rounded-lg border border-gray-100 bg-gray-50/80 p-0.5">
-              {(
-                [
-                  ['left', AlignLeft],
-                  ['center', AlignCenter],
-                  ['right', AlignRight],
-                ] as const
-              ).map(([key, Icon]) => (
-                <button
-                  key={key}
-                  type="button"
-                  className={segBtn((block.buttonAlign ?? (block.type === 'submit' ? 'center' : 'left')) === key)}
-                  onClick={() => onChange({ buttonAlign: key })}
-                  title={key}
-                >
-                  <Icon className="h-4 w-4" strokeWidth={1.75} />
-                </button>
-              ))}
-            </div>
-          </SettingsRow>
-          {block.type === 'button' && (
-            <>
-              <SettingsRow label="Link (https)">
-                <input
-                  className={SETTINGS_INPUT}
-                  value={block.href ?? ''}
-                  onChange={(e) => onChange({ href: e.target.value })}
-                  placeholder="https://"
-                />
-              </SettingsRow>
-              <SettingsRow label="Style">
-                <SettingsSelectWrap>
-                  <select
-                    className={SETTINGS_SELECT}
-                    value={block.buttonVariant ?? 'secondary'}
-                    onChange={(e) =>
-                      onChange({
-                        buttonVariant: e.target.value as FormBlock['buttonVariant'],
-                      })
-                    }
-                  >
-                    <option value="primary">Primary</option>
-                    <option value="secondary">Secondary</option>
-                    <option value="outline">Outline</option>
-                    <option value="link">Link</option>
-                  </select>
-                </SettingsSelectWrap>
-              </SettingsRow>
-            </>
           )}
-        </>
+
+          {hintFieldsBlock && (
+            <div>
+              <SectionLabel>Hint (optional)</SectionLabel>
+              <input
+                className={INSPECTOR_INPUT}
+                value={block.hint ?? ''}
+                onChange={(e) => onChange({ hint: e.target.value })}
+              />
+            </div>
+          )}
+        </div>
       )}
 
-      {(block.type === 'first_name' ||
-        block.type === 'last_name' ||
-        block.type === 'email' ||
-        block.type === 'phone' ||
-        block.type === 'url' ||
-        block.type === 'number' ||
-        block.type === 'date' ||
-        block.type === 'address' ||
-        block.type === 'file' ||
-        block.type === 'textarea') && (
-        <SettingsRow label="Hint (optional)">
-          <input
-            className={SETTINGS_INPUT}
-            value={block.hint ?? ''}
-            onChange={(e) => onChange({ hint: e.target.value })}
-          />
-        </SettingsRow>
-      )}
-
-      <div className="mt-8 flex flex-wrap items-center gap-4 border-t border-gray-100 pt-5">
+      {/* Bottom action row: Duplicate + Remove */}
+      <div className="mt-6 border-t border-gray-100 pt-4 flex items-center gap-2">
         <button
           type="button"
-          className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 py-2 text-[13px] font-medium text-gray-800 transition hover:bg-gray-50"
           onClick={onDuplicate}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-200 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
         >
-          <Files size={14} strokeWidth={2} aria-hidden />
-          Duplicate
+          <Copy size={12} /> Duplicate
         </button>
         <button
           type="button"
-          className="text-[13px] font-medium text-red-600 underline-offset-2 transition hover:text-red-700 hover:underline"
           onClick={() => {
             if (typeof window !== 'undefined' && window.confirm('Remove this block from the form?')) {
               onRemove();
             }
           }}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-red-100 py-2 text-xs font-semibold text-red-500 hover:bg-red-50 transition-colors"
         >
-          Remove block
+          <Trash2 size={12} /> Remove
         </button>
       </div>
     </div>
   );
 }
 
-/** CSS for a checkered transparent swatch (cross-browser). */
-const TRANSPARENT_BG: React.CSSProperties = {
-  backgroundImage:
-    'linear-gradient(45deg,#e5e7eb 25%,transparent 25%),' +
-    'linear-gradient(-45deg,#e5e7eb 25%,transparent 25%),' +
-    'linear-gradient(45deg,transparent 75%,#e5e7eb 75%),' +
-    'linear-gradient(-45deg,transparent 75%,#e5e7eb 75%)',
-  backgroundSize: '8px 8px',
-  backgroundPosition: '0 0,0 4px,4px -4px,-4px 0px',
-  backgroundColor: 'white',
-};
-
-function ColorField({
-  value,
-  onChange,
-  allowTransparent = true,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  allowTransparent?: boolean;
-}) {
-  const isTransparent = value === 'transparent';
-  const safeColor = !isTransparent && /^#[0-9a-f]{3,8}$/i.test(value.trim())
-    ? value.trim()
-    : '#000000';
-
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center gap-2">
-        {/* Swatch / color picker trigger */}
-        <div className="relative h-[34px] w-9 shrink-0 overflow-hidden rounded-md border border-gray-200">
-          <div
-            className="absolute inset-0"
-            style={isTransparent ? TRANSPARENT_BG : { background: value }}
-          />
-          {!isTransparent && (
-            <input
-              type="color"
-              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-              value={safeColor}
-              onChange={(e) => onChange(e.target.value)}
-              title="Pick color"
-            />
-          )}
-        </div>
-        {/* Hex text input */}
-        <input
-          className={`${SETTINGS_INPUT} font-mono text-[12px]`}
-          value={isTransparent ? 'transparent' : value}
-          onChange={(e) => {
-            const v = e.target.value.trim();
-            if (v.toLowerCase() === 'transparent') { onChange('transparent'); return; }
-            onChange(v);
-          }}
-          placeholder="#000000 or transparent"
-          disabled={isTransparent}
-        />
-      </div>
-      {allowTransparent && (
-        <button
-          type="button"
-          onClick={() => onChange(isTransparent ? '#ffffff' : 'transparent')}
-          className={`flex w-full items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium transition ${
-            isTransparent
-              ? 'border-gray-400 bg-gray-100 text-gray-800'
-              : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300 hover:text-gray-700'
-          }`}
-        >
-          {/* Mini checkered swatch */}
-          <span
-            className="inline-block h-3 w-3 shrink-0 rounded-sm border border-gray-300"
-            style={TRANSPARENT_BG}
-          />
-          {isTransparent ? 'Transparent (click to restore color)' : 'Set transparent'}
-        </button>
-      )}
-    </div>
-  );
-}
-
+// ─── Theme inspector ─────────────────────────────────────────────────────────
 function ThemeInspector({
   theme,
   onChange,
-  fontDatalistId,
 }: {
   theme: ReturnType<typeof mergeTheme>;
   onChange: (t: MarketingFormDefinition['theme']) => void;
-  fontDatalistId: string;
 }) {
-  const T = theme;
-  const fontRow = (key: 'fontFamily' | 'headingFontFamily', label: string) => (
-    <SettingsRow key={key} label={label}>
-      <input
-        className={`${SETTINGS_INPUT} font-mono text-[12px]`}
-        value={T[key] ?? ''}
-        onChange={(e) => onChange({ [key]: e.target.value })}
-        list={fontDatalistId}
-        placeholder={key === 'headingFontFamily' ? 'Same as body' : 'Font name or stack'}
-      />
-    </SettingsRow>
-  );
-  const colorRow = (key: 'primaryColor' | 'background' | 'surface' | 'labelColor' | 'inputBorder' | 'mutedColor', label: string) => (
-    <SettingsRow key={key} label={label}>
-      <ColorField value={T[key]} onChange={(v) => onChange({ [key]: v })} />
-    </SettingsRow>
-  );
-
   return (
-    <div className="text-[13px] text-gray-900">
-      <SettingsPanelTitle>Colors</SettingsPanelTitle>
-      {colorRow('primaryColor', 'Primary / button')}
-      {colorRow('background', 'Page background')}
-      {colorRow('surface', 'Card background')}
-      {colorRow('labelColor', 'Label color')}
-      {colorRow('inputBorder', 'Field border')}
-      {colorRow('mutedColor', 'Muted text')}
-
-      <div className="my-5 h-px w-full bg-gray-200/90" />
-      <SettingsPanelTitle>Typography</SettingsPanelTitle>
-      {fontRow('fontFamily', 'Body font')}
-      {fontRow('headingFontFamily', 'Heading font')}
-
-      <div className="my-5 h-px w-full bg-gray-200/90" />
-      <SettingsPanelTitle>Layout</SettingsPanelTitle>
-      <SettingsRow label="Max width">
-        <input
-          className={SETTINGS_INPUT}
-          value={T.maxWidth}
-          onChange={(e) => onChange({ maxWidth: e.target.value })}
-          placeholder="520px"
-        />
-      </SettingsRow>
-      <SettingsRow label="Corner radius">
-        <input
-          className={SETTINGS_INPUT}
-          value={T.borderRadius}
-          onChange={(e) => onChange({ borderRadius: e.target.value })}
-          placeholder="10px"
-        />
-      </SettingsRow>
-    </div>
-  );
-}
-
-function PostSubmitInspector({
-  postSubmit,
-  onChange,
-  onPreviewThankYou,
-}: {
-  postSubmit: PostSubmitConfig | undefined;
-  onChange: (p: PostSubmitConfig) => void;
-  onPreviewThankYou?: () => void;
-}) {
-  const p = { ...defaultPostSubmit(), ...postSubmit };
-  const mode = p.mode ?? 'default';
-
-  return (
-    <div className="text-[13px] text-gray-900">
-      <div className="mb-5">
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="text-[15px] font-medium tracking-tight text-gray-900">After submit</h3>
-          {onPreviewThankYou ? (
-            <button
-              type="button"
-              onClick={onPreviewThankYou}
-              className="shrink-0 text-[12px] font-medium text-gray-500 underline decoration-gray-300 underline-offset-2 transition hover:text-gray-900"
-            >
-              Preview thanks
-            </button>
-          ) : null}
+    <div className="text-[13px] text-gray-900 space-y-5">
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-3">Colors</p>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-5">
+          <div>
+            <SmallLabel>Primary / button</SmallLabel>
+            <FlodeskColorPicker
+              value={theme.primaryColor}
+              onChange={(v) => onChange({ primaryColor: v })}
+            />
+          </div>
+          <div>
+            <SmallLabel>Page background</SmallLabel>
+            <FlodeskColorPicker
+              value={theme.background}
+              onChange={(v) => onChange({ background: v })}
+            />
+          </div>
+          <div>
+            <SmallLabel>Card background</SmallLabel>
+            <FlodeskColorPicker value={theme.surface} onChange={(v) => onChange({ surface: v })} />
+          </div>
+          <div>
+            <SmallLabel>Label color</SmallLabel>
+            <FlodeskColorPicker
+              value={theme.labelColor}
+              onChange={(v) => onChange({ labelColor: v })}
+            />
+          </div>
+          <div>
+            <SmallLabel>Field border</SmallLabel>
+            <FlodeskColorPicker
+              value={theme.inputBorder}
+              onChange={(v) => onChange({ inputBorder: v })}
+            />
+          </div>
+          <div>
+            <SmallLabel>Muted text</SmallLabel>
+            <FlodeskColorPicker
+              value={theme.mutedColor}
+              onChange={(v) => onChange({ mutedColor: v })}
+            />
+          </div>
         </div>
-        <div className="mt-3 h-px w-full bg-gray-200/90" />
       </div>
-      <SettingsRow label="After submit">
-        <SettingsSelectWrap>
-          <select
-            className={SETTINGS_SELECT}
-            value={mode}
-            onChange={(e) => {
-              const m = e.target.value as PostSubmitConfig['mode'];
-              onChange({ ...p, mode: m });
-            }}
-          >
-            <option value="default">Short thank-you message</option>
-            <option value="inline_message">Custom message (same page)</option>
-            <option value="redirect">Redirect to URL</option>
-          </select>
-        </SettingsSelectWrap>
-      </SettingsRow>
-      {mode === 'inline_message' ? (
-        <SettingsRow label="Message (HTML)">
-          <textarea
-            className="min-h-[140px] w-full rounded border border-gray-200 bg-white px-3 py-2 font-mono text-[12px] focus:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200"
-            value={p.messageHtml ?? ''}
-            onChange={(e) => onChange({ ...p, messageHtml: e.target.value })}
+
+      <div className="border-t border-gray-100 pt-5 space-y-4">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Typography</p>
+        <div>
+          <SmallLabel>Body font</SmallLabel>
+          <FontSelector value={theme.fontFamily} onChange={(v) => onChange({ fontFamily: v })} />
+        </div>
+        <div>
+          <SmallLabel>Heading font</SmallLabel>
+          <FontSelector
+            value={theme.headingFontFamily || theme.fontFamily}
+            onChange={(v) => onChange({ headingFontFamily: v })}
           />
-        </SettingsRow>
-      ) : null}
-      {mode === 'redirect' ? (
-        <SettingsRow label="Redirect URL">
+        </div>
+      </div>
+
+      <div className="border-t border-gray-100 pt-5 space-y-4">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Layout</p>
+        <div>
+          <SmallLabel>Max width</SmallLabel>
           <input
-            className={SETTINGS_INPUT}
-            value={p.redirectUrl ?? ''}
-            onChange={(e) => onChange({ ...p, redirectUrl: e.target.value })}
-            placeholder="https://…"
+            className={INSPECTOR_INPUT}
+            value={theme.maxWidth}
+            onChange={(e) => onChange({ maxWidth: e.target.value })}
+            placeholder="520px"
           />
-        </SettingsRow>
-      ) : null}
+        </div>
+        <div>
+          <SmallLabel>Corner radius</SmallLabel>
+          <input
+            className={INSPECTOR_INPUT}
+            value={theme.borderRadius}
+            onChange={(e) => onChange({ borderRadius: e.target.value })}
+            placeholder="10px"
+          />
+        </div>
+      </div>
     </div>
   );
 }
 
-// ── Pipeline stage option shape for the settings dropdown ──────────────────
+// ─── Submission settings (post-submit, notifications, pipeline routing) ─────
 interface StageOption {
   stageId: string;
   stageName: string;
@@ -1287,57 +1090,336 @@ function FormSettingsPanel({
         setStages(opts);
       })
       .catch(() => {})
-      .finally(() => { if (!cancelled) setStagesLoading(false); });
-    return () => { cancelled = true; };
+      .finally(() => {
+        if (!cancelled) setStagesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
-    <div className="text-[13px] text-gray-900">
-      <div className="mb-5">
-        <h3 className="text-[15px] font-medium tracking-tight text-gray-900">Submission settings</h3>
-        <div className="mt-3 h-px w-full bg-gray-200/90" />
-      </div>
+    <div className="text-[13px] text-gray-900 space-y-5">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Submissions</p>
 
-      {/* Notification emails */}
-      <SettingsRow label="Notify emails">
+      <div>
+        <SectionLabel>Notify emails</SectionLabel>
         <input
-          className={SETTINGS_INPUT}
+          className={INSPECTOR_INPUT}
           placeholder="you@example.com, team@example.com"
           value={s.notificationEmails ?? ''}
           onChange={(e) => onChange({ ...s, notificationEmails: e.target.value })}
         />
-        <p className="mt-1 text-[11px] leading-relaxed text-gray-400">
-          Comma-separated. We'll email these addresses on every new submission.
+        <p className="mt-1.5 text-[11px] leading-relaxed text-gray-400">
+          Comma-separated. We&apos;ll email these addresses on every new submission.
         </p>
-      </SettingsRow>
+      </div>
 
-      {/* Pipeline stage routing */}
-      <SettingsRow label="Send leads to">
-        <SettingsSelectWrap>
-          <select
-            className={SETTINGS_SELECT}
-            value={s.pipelineStageId ?? ''}
-            disabled={stagesLoading}
-            onChange={(e) =>
-              onChange({ ...s, pipelineStageId: e.target.value || null })
-            }
-          >
-            <option value="">Don't add to pipeline</option>
-            {stages.map((opt) => (
-              <option key={opt.stageId} value={opt.stageId}>
-                {opt.pipelineName} → {opt.stageName}
-              </option>
-            ))}
-          </select>
-        </SettingsSelectWrap>
-        <p className="mt-1 text-[11px] leading-relaxed text-gray-400">
-          Submissions with an email are saved as contacts automatically. Select a stage to also create a lead.
+      <div>
+        <SectionLabel>Send leads to</SectionLabel>
+        <SettingsSelect
+          value={s.pipelineStageId ?? ''}
+          onChange={(v) => onChange({ ...s, pipelineStageId: v || null })}
+          disabled={stagesLoading}
+        >
+          <option value="">Don&apos;t add to pipeline</option>
+          {stages.map((opt) => (
+            <option key={opt.stageId} value={opt.stageId}>
+              {opt.pipelineName} → {opt.stageName}
+            </option>
+          ))}
+        </SettingsSelect>
+        <p className="mt-1.5 text-[11px] leading-relaxed text-gray-400">
+          Submissions with an email are saved as contacts automatically. Select a stage to also create
+          a lead.
         </p>
-      </SettingsRow>
+      </div>
     </div>
   );
 }
 
+function PostSubmitInspector({
+  postSubmit,
+  onChange,
+  onPreviewThankYou,
+}: {
+  postSubmit: PostSubmitConfig | undefined;
+  onChange: (p: PostSubmitConfig) => void;
+  onPreviewThankYou?: () => void;
+}) {
+  const p = { ...defaultPostSubmit(), ...postSubmit };
+  const mode = p.mode ?? 'default';
+
+  return (
+    <div className="text-[13px] text-gray-900 space-y-5">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">After submit</p>
+        {onPreviewThankYou ? (
+          <button
+            type="button"
+            onClick={onPreviewThankYou}
+            className="text-[11px] font-medium text-gray-500 underline decoration-gray-300 underline-offset-2 hover:text-gray-900"
+          >
+            Preview
+          </button>
+        ) : null}
+      </div>
+
+      <div>
+        <SectionLabel>Action</SectionLabel>
+        <SettingsSelect
+          value={mode}
+          onChange={(v) => onChange({ ...p, mode: v as PostSubmitConfig['mode'] })}
+        >
+          <option value="default">Short thank-you message</option>
+          <option value="inline_message">Custom message (same page)</option>
+          <option value="redirect">Redirect to URL</option>
+        </SettingsSelect>
+      </div>
+
+      {mode === 'inline_message' && (
+        <div>
+          <SectionLabel>Message (HTML)</SectionLabel>
+          <textarea
+            className="min-h-[140px] w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 font-mono text-[12px] text-gray-900 focus:border-gray-400 focus:bg-white focus:outline-none transition-colors"
+            value={p.messageHtml ?? ''}
+            onChange={(e) => onChange({ ...p, messageHtml: e.target.value })}
+          />
+        </div>
+      )}
+      {mode === 'redirect' && (
+        <div>
+          <SectionLabel>Redirect URL</SectionLabel>
+          <input
+            className={INSPECTOR_INPUT}
+            value={p.redirectUrl ?? ''}
+            onChange={(e) => onChange({ ...p, redirectUrl: e.target.value })}
+            placeholder="https://…"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Submissions inbox panel ─────────────────────────────────────────────────
+function SubmissionsInbox({
+  submissions,
+  loading,
+  blocks,
+}: {
+  submissions: { id: string; payload: unknown; created_at: string }[];
+  loading: boolean;
+  blocks: FormBlock[];
+}) {
+  if (loading) {
+    return (
+      <div className="space-y-3" aria-hidden>
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            className="animate-pulse rounded-xl border border-gray-200/80 bg-white p-3"
+          >
+            <div className="h-3 w-36 rounded bg-gray-200" />
+            <div className="mt-1.5 h-3 w-28 rounded bg-gray-100" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (submissions.length === 0) {
+    return (
+      <div className="text-[13px] text-gray-900">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-3">Inbox</p>
+        <p className="text-[13px] text-gray-400">No submissions yet.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="text-[13px] text-gray-900">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-3">Inbox</p>
+      <ul className="space-y-2">
+        {submissions.map((s) => {
+          const p =
+            typeof s.payload === 'object' && s.payload !== null
+              ? (s.payload as Record<string, unknown>)
+              : {};
+          const firstNameBlock = blocks.find((b) => b.type === 'first_name');
+          const lastNameBlock = blocks.find((b) => b.type === 'last_name');
+          const emailBlock = blocks.find((b) => b.type === 'email');
+          const phoneBlock = blocks.find((b) => b.type === 'phone');
+          const firstName = firstNameBlock ? String(p[firstNameBlock.id] ?? '') : '';
+          const lastName = lastNameBlock ? String(p[lastNameBlock.id] ?? '') : '';
+          const email = emailBlock ? String(p[emailBlock.id] ?? '') : '';
+          const phone = phoneBlock ? String(p[phoneBlock.id] ?? '') : '';
+          const fullName = [firstName, lastName].filter(Boolean).join(' ');
+          const otherFields = blocks
+            .filter(
+              (b) =>
+                INPUT_BLOCK_TYPES.includes(b.type) &&
+                !['first_name', 'last_name', 'email', 'phone'].includes(b.type) &&
+                p[b.id] !== undefined,
+            )
+            .map((b) => ({
+              label: b.label || b.type,
+              value: Array.isArray(p[b.id])
+                ? (p[b.id] as string[]).join(', ')
+                : typeof p[b.id] === 'object'
+                  ? '[file]'
+                  : String(p[b.id] ?? ''),
+            }))
+            .filter((f) => f.value);
+
+          return (
+            <li key={s.id} className="overflow-hidden rounded-xl border border-gray-200/80 bg-white">
+              <div className="flex items-start justify-between gap-3 p-3">
+                <div className="min-w-0">
+                  <p className="truncate text-[13px] font-semibold text-gray-900">{fullName || '—'}</p>
+                  {email && <p className="mt-0.5 truncate text-[12px] text-gray-500">{email}</p>}
+                  {phone && <p className="mt-0.5 text-[12px] text-gray-400">{phone}</p>}
+                </div>
+                <p className="shrink-0 text-right text-[11px] text-gray-400">
+                  {new Date(s.created_at).toLocaleDateString()}
+                  <br />
+                  {new Date(s.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                </p>
+              </div>
+              {otherFields.length > 0 && (
+                <details className="border-t border-gray-100">
+                  <summary className="cursor-pointer px-3 py-1.5 text-[11px] font-medium text-gray-400 hover:text-gray-700">
+                    {otherFields.length} more field{otherFields.length !== 1 ? 's' : ''}
+                  </summary>
+                  <div className="space-y-1 px-3 pb-3">
+                    {otherFields.map((f, i) => (
+                      <div key={i} className="flex gap-1.5 text-[11px]">
+                        <span className="shrink-0 text-gray-400">{f.label}:</span>
+                        <span className="break-all text-gray-700">{f.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+// ─── Live preview modal (dark themed, device toggle, open in new tab) ────────
+function PreviewModal({
+  embedUrl,
+  formTitle,
+  published,
+  definition,
+  embedToken,
+  venueContact,
+  onClose,
+}: {
+  embedUrl: string;
+  formTitle: string;
+  published: boolean;
+  definition: MarketingFormDefinition;
+  embedToken: string;
+  venueContact: VenueContactInfo | null;
+  onClose: () => void;
+}) {
+  const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
+  const frameWidth = device === 'mobile' ? 380 : 720;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex flex-col backdrop-blur-sm"
+      style={{ backgroundColor: 'rgba(27, 27, 27, 0.7)' }}
+      role="dialog"
+      aria-modal="true"
+    >
+      {/* Top bar */}
+      <div
+        className="flex items-center justify-between gap-4 border-b border-white/10 px-5 py-3 text-white"
+        style={{ backgroundColor: '#1b1b1b' }}
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-2 text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
+            aria-label="Close preview"
+          >
+            <XIcon size={18} />
+          </button>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold truncate">{formTitle || 'Untitled form'}</p>
+            <p className="text-[11px] text-gray-400">
+              Live preview · this is what visitors see on your embed
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1 rounded-full bg-white/10 p-1">
+          <button
+            type="button"
+            onClick={() => setDevice('desktop')}
+            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+              device === 'desktop' ? 'bg-white text-gray-900' : 'text-gray-300 hover:text-white'
+            }`}
+          >
+            <Monitor size={13} /> Desktop
+          </button>
+          <button
+            type="button"
+            onClick={() => setDevice('mobile')}
+            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+              device === 'mobile' ? 'bg-white text-gray-900' : 'text-gray-300 hover:text-white'
+            }`}
+          >
+            <Smartphone size={13} /> Mobile
+          </button>
+        </div>
+
+        <a
+          href={embedUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-gray-900 hover:bg-gray-100 transition-colors ${
+            published ? '' : 'opacity-60'
+          }`}
+          title={published ? 'Open the live embed URL' : 'Publish the form first'}
+        >
+          <ExternalLink size={13} /> Open
+        </a>
+      </div>
+
+      {!published && (
+        <div className="px-5 py-1.5 text-xs bg-amber-50 text-amber-800 border-b border-amber-100">
+          Publish the form so the embed URL works for visitors.
+        </div>
+      )}
+
+      <div className="flex-1 overflow-auto p-6 flex items-start justify-center">
+        <div
+          className="bg-white rounded-2xl shadow-2xl overflow-hidden transition-all"
+          style={{ width: frameWidth, maxWidth: '100%' }}
+        >
+          {/* Render the form right here so the user can interact with it. */}
+          <div style={{ height: '80vh', overflowY: 'auto' }}>
+            <MarketingFormView
+              definition={definition}
+              embedToken={embedToken}
+              formTitle={formTitle}
+              venueContact={venueContact}
+              preview
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main editor component ───────────────────────────────────────────────────
 export function FormBuilderEditor({
   formId,
   initialName,
@@ -1357,15 +1439,14 @@ export function FormBuilderEditor({
       name: initialName,
       published: initialPublished,
     }),
-    [initialDefinition, initialName, initialPublished]
+    [initialDefinition, initialName, initialPublished],
   );
 
-  const { present, set, undo, redo, reset, canUndo, canRedo } = useFormHistory(initialSnapshot);
-
+  const { present, set, undo, redo, canUndo, canRedo } = useFormHistory(initialSnapshot);
   const { definition, name, published } = present;
 
   const [selectedId, setSelectedId] = useState<string | null>(
-    initialDefinition.blocks[0]?.id ?? null
+    initialDefinition.blocks[0]?.id ?? null,
   );
   const viewportStorageKey = `storypay.formBuilder.viewport.${formId}`;
   const [saving, setSaving] = useState(false);
@@ -1384,22 +1465,20 @@ export function FormBuilderEditor({
     }
     return 'desktop';
   });
-  const [paletteOpen, setPaletteOpen] = useState(false);
   const [embedOpen, setEmbedOpen] = useState(false);
   const [thankYouOpen, setThankYouOpen] = useState(false);
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
   const mediaApplyRef = useRef<(url: string) => void>(() => {});
-  const [rightTab, setRightTab] = useState<
-    'block' | 'settings' | 'theme' | 'submissions'
-  >('block');
+  const [rightTab, setRightTab] = useState<RightTab>('block');
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [activeDrag, setActiveDrag] = useState<PaletteDrag | null>(null);
-  const [dropOverId, setDropOverId] = useState<string | null>(null);
-  const [canvasDragId, setCanvasDragId] = useState<string | null>(null);
+  const [pickerInsertIdx, setPickerInsertIdx] = useState<number | null>(null);
+  const [activePaletteType, setActivePaletteType] = useState<FormBlockType | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ id: string; pos: 'before' | 'after' } | null>(null);
+  const pointerYRef = useRef(0);
+
   const [venueContact, setVenueContact] = useState<VenueContactInfo | null>(null);
-  const [googleFontNames, setGoogleFontNames] = useState<string[]>([]);
   const [submissions, setSubmissions] = useState<{ id: string; payload: unknown; created_at: string }[]>(
-    []
+    [],
   );
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
 
@@ -1408,26 +1487,21 @@ export function FormBuilderEditor({
   const lastPersistedJsonRef = useRef(JSON.stringify(present));
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const modulesScroll = useFormBuilderScrollbar();
-  const canvasScroll = useFormBuilderScrollbar();
-  const settingsScroll = useFormBuilderScrollbar();
-
+  // Lazy-load Google Fonts so the picker reflects them in the canvas
   useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetch('/api/fonts/google');
-        const j = (await res.json()) as { families?: string[] };
-        if (!cancelled && Array.isArray(j.families)) setGoogleFontNames(j.families);
-      } catch {
-        /* ignore */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    loadGoogleFonts();
   }, []);
 
+  // Track pointer Y for before/after drop-side detection
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      pointerYRef.current = e.clientY;
+    };
+    window.addEventListener('pointermove', onMove, { passive: true });
+    return () => window.removeEventListener('pointermove', onMove);
+  }, []);
+
+  // Venue contact (for the venue_contact block preview)
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -1440,9 +1514,10 @@ export function FormBuilderEditor({
         const state = typeof v.brand_state === 'string' ? v.brand_state : '';
         const zip = typeof v.brand_zip === 'string' ? v.brand_zip : '';
         const line2 = [city, state, zip].filter(Boolean).join(', ');
-        const addrParts = [typeof v.brand_address === 'string' ? v.brand_address : '', line2].filter(
-          Boolean
-        );
+        const addrParts = [
+          typeof v.brand_address === 'string' ? v.brand_address : '',
+          line2,
+        ].filter(Boolean);
         setVenueContact({
           venueName: typeof v.name === 'string' ? v.name : null,
           email: typeof v.brand_email === 'string' ? v.brand_email : null,
@@ -1458,6 +1533,7 @@ export function FormBuilderEditor({
     };
   }, []);
 
+  // Persist viewport choice
   useEffect(() => {
     try {
       sessionStorage.setItem(viewportStorageKey, viewport);
@@ -1466,12 +1542,14 @@ export function FormBuilderEditor({
     }
   }, [viewport, viewportStorageKey]);
 
+  // Auto-clear ephemeral canvas hint
   useEffect(() => {
     if (!canvasHint) return;
     const t = setTimeout(() => setCanvasHint(null), 3500);
     return () => clearTimeout(t);
   }, [canvasHint]);
 
+  // Submissions (lazy-load when Inbox tab is opened)
   useEffect(() => {
     if (rightTab !== 'submissions') return;
     let cancelled = false;
@@ -1492,7 +1570,7 @@ export function FormBuilderEditor({
     };
   }, [rightTab, formId]);
 
-
+  // Make sure selected id is still valid after edits
   useEffect(() => {
     if (!selectedId) return;
     if (!definition.blocks.some((b) => b.id === selectedId)) {
@@ -1500,6 +1578,7 @@ export function FormBuilderEditor({
     }
   }, [definition.blocks, selectedId]);
 
+  // ⌘Z / ⌘⇧Z
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
@@ -1527,8 +1606,6 @@ export function FormBuilderEditor({
       const payload = presentRef.current;
       const json = JSON.stringify(payload);
       if (json === lastPersistedJsonRef.current) {
-        // Nothing changed — show "Saved" feedback on manual saves so the button
-        // always gives a visible response rather than silently doing nothing.
         if (source === 'manual') {
           setPersistError(null);
           setLastSavedAt(new Date());
@@ -1565,9 +1642,10 @@ export function FormBuilderEditor({
         else setAutoSaving(false);
       }
     },
-    [formId, clearAutosaveTimer]
+    [formId, clearAutosaveTimer],
   );
 
+  // Autosave 3s after last edit
   useEffect(() => {
     const json = JSON.stringify(present);
     if (json === lastPersistedJsonRef.current) return;
@@ -1579,12 +1657,13 @@ export function FormBuilderEditor({
     return () => clearAutosaveTimer();
   }, [present, clearAutosaveTimer, persistForm]);
 
+  // Esc closes modals
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
-      if (paletteOpen) {
+      if (pickerInsertIdx !== null) {
         e.preventDefault();
-        setPaletteOpen(false);
+        setPickerInsertIdx(null);
         return;
       }
       if (previewOpen) {
@@ -1604,55 +1683,62 @@ export function FormBuilderEditor({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [paletteOpen, previewOpen, embedOpen, thankYouOpen]);
+  }, [pickerInsertIdx, previewOpen, embedOpen, thankYouOpen]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
   const selected = useMemo(
     () => definition.blocks.find((b) => b.id === selectedId) ?? null,
-    [definition.blocks, selectedId]
+    [definition.blocks, selectedId],
   );
 
   const mergedTheme = useMemo(() => mergeTheme(definition.theme), [definition.theme]);
+
+  // Ensure right panel auto-flips to Design when a block is clicked on the canvas
+  useEffect(() => {
+    if (selectedId && rightTab !== 'block') setRightTab('block');
+  }, [selectedId, rightTab]);
 
   const setSnapshot = useCallback(
     (fn: (s: EditorSnapshot) => EditorSnapshot) => {
       set(fn);
     },
-    [set]
+    [set],
   );
 
   const patchDefinition = useCallback(
     (fn: (d: MarketingFormDefinition) => MarketingFormDefinition) => {
       setSnapshot((s) => ({ ...s, definition: fn(s.definition) }));
     },
-    [setSnapshot]
+    [setSnapshot],
   );
 
   const patchPostSubmit = useCallback(
-    (next: PostSubmitConfig) => {
-      patchDefinition((d) => ({ ...d, postSubmit: next }));
-    },
-    [patchDefinition]
+    (next: PostSubmitConfig) => patchDefinition((d) => ({ ...d, postSubmit: next })),
+    [patchDefinition],
   );
-
   const patchSettings = useCallback(
-    (next: FormSettings) => {
-      patchDefinition((d) => ({ ...d, settings: next }));
-    },
-    [patchDefinition]
+    (next: FormSettings) => patchDefinition((d) => ({ ...d, settings: next })),
+    [patchDefinition],
   );
 
-  const addBlock = useCallback(
-    (type: FormBlockType) => {
+  const addBlockAt = useCallback(
+    (idx: number, type: FormBlockType) => {
       const nb = createBlock(type);
-      patchDefinition((d) => ({ ...d, blocks: [...d.blocks, nb] }));
+      patchDefinition((d) => {
+        const blocks = [...d.blocks];
+        const safeIdx = Math.max(0, Math.min(idx, blocks.length));
+        blocks.splice(safeIdx, 0, nb);
+        return { ...d, blocks };
+      });
       setSelectedId(nb.id);
+      setPickerInsertIdx(null);
+      setRightTab('block');
     },
-    [patchDefinition]
+    [patchDefinition],
   );
 
   const removeBlock = useCallback(
@@ -1660,124 +1746,167 @@ export function FormBuilderEditor({
       patchDefinition((d) => ({ ...d, blocks: d.blocks.filter((b) => b.id !== id) }));
       setSelectedId((cur) => (cur === id ? null : cur));
     },
-    [patchDefinition]
+    [patchDefinition],
   );
 
-  const duplicateSelected = useCallback(() => {
-    if (!selectedId) return;
-    const block = definition.blocks.find((b) => b.id === selectedId);
-    if (!block) return;
-    const clone = duplicateBlock(block);
-    patchDefinition((d) => {
-      const idx = d.blocks.findIndex((b) => b.id === selectedId);
-      if (idx < 0) return d;
-      const next = [...d.blocks];
-      next.splice(idx + 1, 0, clone);
-      return { ...d, blocks: next };
-    });
-    setSelectedId(clone.id);
-  }, [selectedId, definition.blocks, patchDefinition]);
+  const duplicateOne = useCallback(
+    (id: string) => {
+      const block = definition.blocks.find((b) => b.id === id);
+      if (!block) return;
+      const clone = duplicateBlock(block);
+      patchDefinition((d) => {
+        const idx = d.blocks.findIndex((b) => b.id === id);
+        if (idx < 0) return d;
+        const next = [...d.blocks];
+        next.splice(idx + 1, 0, clone);
+        return { ...d, blocks: next };
+      });
+      setSelectedId(clone.id);
+    },
+    [definition.blocks, patchDefinition],
+  );
 
-  const handleRequestMediaPick = useCallback((applyUrl: (url: string) => void) => {
-    mediaApplyRef.current = applyUrl;
+  const moveBlock = useCallback(
+    (id: string, dir: 'up' | 'down') => {
+      patchDefinition((d) => {
+        const idx = d.blocks.findIndex((b) => b.id === id);
+        if (idx < 0) return d;
+        const target = dir === 'up' ? idx - 1 : idx + 1;
+        if (target < 0 || target >= d.blocks.length) return d;
+        return { ...d, blocks: arrayMove(d.blocks, idx, target) };
+      });
+    },
+    [patchDefinition],
+  );
+
+  const handleRequestMediaPick = useCallback((apply: (url: string) => void) => {
+    mediaApplyRef.current = apply;
     setMediaPickerOpen(true);
   }, []);
 
   const patchSelected = useCallback(
     (patch: Partial<FormBlock>) => {
       if (!selectedId) return;
-      patchDefinition((d) => ({ ...d, blocks: patchBlock(d.blocks, selectedId, patch) }));
+      patchDefinition((d) => ({ ...d, blocks: patchBlocks(d.blocks, selectedId, patch) }));
     },
-    [selectedId, patchDefinition]
+    [selectedId, patchDefinition],
   );
 
   const patchTheme = useCallback(
     (t: MarketingFormDefinition['theme']) => {
       patchDefinition((d) => ({ ...d, theme: { ...d.theme, ...t } }));
     },
-    [patchDefinition]
+    [patchDefinition],
   );
 
+  // ─── Drag handlers ─────────────────────────────────────────────────────────
   const onDragStart = useCallback((event: DragStartEvent) => {
     const id = String(event.active.id);
-    setDropOverId(null);
+    setDropTarget(null);
     if (id.startsWith('palette:')) {
-      setCanvasDragId(null);
-      const type = event.active.data.current?.blockType as FormBlockType;
-      const label = (event.active.data.current?.label as string) ?? String(type);
-      setActiveDrag({ kind: 'palette', blockType: type, label });
-      // Close flyout once the user grabs an item so the canvas is fully visible
-      setPaletteOpen(false);
+      const type = event.active.data.current?.blockType as FormBlockType | undefined;
+      if (type) setActivePaletteType(type);
     } else {
-      setCanvasDragId(id);
-      setActiveDrag(null);
+      setActivePaletteType(null);
     }
   }, []);
 
   const onDragOver = useCallback((event: DragOverEvent) => {
-    setDropOverId(event.over?.id != null ? String(event.over.id) : null);
+    const activeId = String(event.active.id);
+    const isPalette = activeId.startsWith('palette:');
+    if (!event.over) {
+      setDropTarget(null);
+      return;
+    }
+    const overId = String(event.over.id);
+    // Empty-canvas placeholder gets a single, neutral target.
+    if (overId === 'canvas-empty') {
+      setDropTarget({ id: 'canvas-empty', pos: 'before' });
+      return;
+    }
+    // For palette drags, pick before/after by pointer half so blocks can land
+    // anywhere — including the very last position.
+    if (isPalette) {
+      const rect = event.over.rect;
+      const midY = rect.top + rect.height / 2;
+      const pos: 'before' | 'after' = pointerYRef.current >= midY ? 'after' : 'before';
+      setDropTarget((prev) => (prev?.id === overId && prev.pos === pos ? prev : { id: overId, pos }));
+    } else {
+      // Sortable reordering — just track which block is hovered.
+      setDropTarget((prev) => (prev?.id === overId && prev.pos === 'before' ? prev : { id: overId, pos: 'before' }));
+    }
   }, []);
 
   const onDragCancel = useCallback((_event: DragCancelEvent) => {
-    setActiveDrag(null);
-    setDropOverId(null);
-    setCanvasDragId(null);
+    setActivePaletteType(null);
+    setDropTarget(null);
   }, []);
 
   const onDragEnd = useCallback(
     (event: DragEndEvent) => {
       const { active, over } = event;
-      setActiveDrag(null);
-      setDropOverId(null);
-      setCanvasDragId(null);
+      const target = dropTarget;
+      const wasPalette = activePaletteType !== null;
+      setActivePaletteType(null);
+      setDropTarget(null);
       if (!over) return;
 
       const activeId = String(active.id);
-      const overId = String(over.id);
-      const isPalette = activeId.startsWith('palette:');
 
-      if (isPalette) {
+      // ── Palette drop ─────────────────────────────────────────────────────
+      if (activeId.startsWith('palette:')) {
         const type = active.data.current?.blockType as FormBlockType | undefined;
         if (!type) return;
-        const nb = createBlock(type);
-        patchDefinition((d) => {
-          const blocks = [...d.blocks];
-          if (overId === 'canvas-empty' || overId === 'canvas-tail') {
-            blocks.push(nb);
-          } else {
-            const idx = blocks.findIndex((b) => b.id === overId);
-            if (idx >= 0) blocks.splice(idx, 0, nb);
-            else blocks.push(nb);
-          }
-          return { ...d, blocks };
-        });
-        setSelectedId(nb.id);
+        if (target?.id === 'canvas-empty') {
+          addBlockAt(0, type);
+          return;
+        }
+        if (target) {
+          // Build the new block once so we can both insert it and select it
+          // immediately — matches the email builder's "click-on-the-block-you-just-dropped"
+          // selection feel.
+          const newBlock = createBlock(type);
+          patchDefinition((d) => {
+            const blocks = [...d.blocks];
+            const overIdx = blocks.findIndex((b) => b.id === target.id);
+            if (overIdx < 0) {
+              blocks.push(newBlock);
+            } else {
+              const insertIdx = target.pos === 'after' ? overIdx + 1 : overIdx;
+              blocks.splice(insertIdx, 0, newBlock);
+            }
+            return { ...d, blocks };
+          });
+          setSelectedId(newBlock.id);
+          setRightTab('block');
+          return;
+        }
+        // Fall through: append at end.
+        addBlockAt(definition.blocks.length, type);
         return;
       }
 
-      if (activeId === overId) return;
-
+      // ── Reorder existing block ───────────────────────────────────────────
+      if (wasPalette) return;
+      if (active.id === over.id) return;
       patchDefinition((d) => {
-        const blocks = [...d.blocks];
-        const oldIndex = blocks.findIndex((b) => b.id === activeId);
-        if (oldIndex < 0) return d;
-
-        if (overId === 'canvas-tail') {
-          const [moved] = blocks.splice(oldIndex, 1);
-          if (moved) blocks.push(moved);
-          return { ...d, blocks };
-        }
-
-        const newIndex = blocks.findIndex((b) => b.id === overId);
-        if (newIndex < 0) return d;
-        return { ...d, blocks: arrayMove(blocks, oldIndex, newIndex) };
+        const oldIdx = d.blocks.findIndex((b) => b.id === activeId);
+        const newIdx = d.blocks.findIndex((b) => b.id === String(over.id));
+        if (oldIdx < 0 || newIdx < 0) return d;
+        return { ...d, blocks: arrayMove(d.blocks, oldIdx, newIdx) };
       });
     },
-    [patchDefinition]
+    [dropTarget, activePaletteType, definition.blocks.length, addBlockAt, patchDefinition],
   );
 
-  const embedUrl = `${APP_ORIGIN || (typeof window !== 'undefined' ? window.location.origin : '')}/embed/form/${embedToken}`;
-  const iframeSnippet = `<iframe src="${embedUrl}" title="${name.replace(/"/g, '&quot;')}" style="width:100%;min-height:520px;border:0;border-radius:12px;" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>`;
+  // ─── Embed iframe snippet & copy ───────────────────────────────────────────
+  const embedUrl = `${
+    APP_ORIGIN || (typeof window !== 'undefined' ? window.location.origin : '')
+  }/embed/form/${embedToken}`;
+  const iframeSnippet = `<iframe src="${embedUrl}" title="${name.replace(
+    /"/g,
+    '&quot;',
+  )}" style="width:100%;min-height:520px;border:0;border-radius:12px;" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>`;
 
   const copyEmbed = async () => {
     try {
@@ -1789,265 +1918,371 @@ export function FormBuilderEditor({
     }
   };
 
+  // ─── Canvas helpers ────────────────────────────────────────────────────────
   const builderOpts = useMemo(
     () => ({
       selectedId,
       onSelectBlock: setSelectedId,
       onPatchBlock: (id: string, patch: Partial<FormBlock>) => {
-        patchDefinition((d) => ({ ...d, blocks: patchBlock(d.blocks, id, patch) }));
+        patchDefinition((d) => ({ ...d, blocks: patchBlocks(d.blocks, id, patch) }));
       },
     }),
-    [selectedId, patchDefinition]
+    [selectedId, patchDefinition],
+  );
+
+  const dropIndicator = (label: string) => (
+    <div className="pointer-events-none px-0 py-1" aria-hidden>
+      <div className="flex items-center gap-2" style={{ borderTop: '2px solid #1b1b1b' }}>
+        <span
+          className="text-[10px] font-semibold text-white rounded px-1.5 py-0.5"
+          style={{ background: '#1b1b1b', lineHeight: 1.4, whiteSpace: 'nowrap' }}
+        >
+          {label}
+        </span>
+      </div>
+    </div>
   );
 
   const wrapBlock = useCallback(
     (block: FormBlock, node: ReactNode) => {
-      const showLineBefore =
-        dropOverId === block.id && (canvasDragId == null || canvasDragId !== block.id);
+      const blocks = definition.blocks;
+      const idx = blocks.findIndex((b) => b.id === block.id);
+      const isSelected = block.id === selectedId;
+      const isDropTargetBlock = dropTarget?.id === block.id && activePaletteType !== null;
+      const showTopIndicator = isDropTargetBlock && dropTarget?.pos === 'before';
+      const showBottomIndicator = isDropTargetBlock && dropTarget?.pos === 'after';
+      const dragLabel =
+        PALETTE.find((p) => p.type === activePaletteType)?.label ?? activePaletteType ?? 'Block';
+
       return (
-        <>
-          {showLineBefore ? <DropInsertionMarker showLabel={activeDrag != null} /> : null}
-          <SortableCanvasRow id={block.id}>{node}</SortableCanvasRow>
-        </>
+        <SortableCanvasBlock id={block.id}>
+          {() => (
+            <div>
+              {showTopIndicator && dropIndicator(dragLabel)}
+              <div className="relative group/block">
+                {node}
+                {isSelected && (
+                  <FloatingSideToolbar
+                    isFirst={idx === 0}
+                    isLast={idx === blocks.length - 1}
+                    onMoveUp={() => moveBlock(block.id, 'up')}
+                    onMoveDown={() => moveBlock(block.id, 'down')}
+                    onDuplicate={() => duplicateOne(block.id)}
+                    onRemove={() => removeBlock(block.id)}
+                  />
+                )}
+              </div>
+              <AddBlockBtn onClick={() => setPickerInsertIdx(idx + 1)} />
+              {showBottomIndicator && dropIndicator(dragLabel)}
+            </div>
+          )}
+        </SortableCanvasBlock>
       );
     },
-    [dropOverId, canvasDragId, activeDrag]
+    [
+      definition.blocks,
+      selectedId,
+      dropTarget,
+      activePaletteType,
+      moveBlock,
+      duplicateOne,
+      removeBlock,
+    ],
   );
 
-  const emptySlot = useMemo(() => <CanvasEmptyDrop />, []);
-
-  const viewportMax = viewport === 'mobile' ? 390 : 1200;
-
-  const resolvedThankYou = useMemo(
-    () => resolvePostSubmit(definition),
-    [definition]
+  const emptySlot = useMemo(
+    () => <CanvasEmptyDrop onAddClick={() => setPickerInsertIdx(0)} />,
+    [],
   );
 
+  const viewportMax = viewport === 'mobile' ? 380 : 720;
+
+  const resolvedThankYou = useMemo(() => resolvePostSubmit(definition), [definition]);
+
+  const saveStatusLine = saving || autoSaving
+    ? 'Saving…'
+    : persistError
+      ? persistError
+      : canvasHint
+        ? canvasHint
+        : lastSavedAt
+          ? `Saved · ${formatSavedTime(lastSavedAt)}`
+          : '';
+
+  // ─── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="flex min-h-0 w-full min-w-0 max-w-none flex-1 flex-col overflow-x-hidden bg-white">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 sm:px-6">
-          <div className="flex min-w-0 flex-1 items-center gap-2 text-[12px] text-gray-500 sm:gap-3">
-            <Link
-              href="/dashboard/marketing/form-builder"
-              className="inline-flex shrink-0 items-center gap-1.5 font-medium transition hover:text-gray-900"
-            >
-              <ArrowLeft size={15} strokeWidth={2} />
-              <span className="hidden sm:inline">Lead Capture Forms</span>
-            </Link>
-            <span className="text-gray-300" aria-hidden>
-              ›
-            </span>
-            <div className="group relative flex min-w-0 items-center gap-1.5">
-              <input
-                className="min-w-0 max-w-[11rem] rounded-md border border-transparent bg-transparent px-2 py-1 text-[15px] font-bold text-gray-900 placeholder:text-gray-400 transition hover:border-gray-200 hover:bg-gray-50 focus:border-gray-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-gray-200 sm:max-w-xs md:max-w-md"
-                value={name}
-                placeholder="Untitled form"
-                onChange={(e) => setSnapshot((s) => ({ ...s, name: e.target.value }))}
-                aria-label="Form title — click to edit"
-                title="Click to edit form title"
-              />
-              <Sparkles size={12} className="shrink-0 text-gray-300 group-focus-within:text-gray-400 pointer-events-none" aria-hidden />
-            </div>
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2">
-            <button
-              type="button"
-              onClick={() => setPreviewOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-medium text-gray-800 transition hover:bg-gray-50"
-            >
-              <Eye size={15} strokeWidth={2} />
-              <span className="hidden sm:inline">Preview</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setRightTab('settings')}
-              className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-medium text-gray-800 transition hover:bg-gray-50"
-            >
-              <Settings size={15} strokeWidth={2} />
-              <span className="hidden sm:inline">Settings</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setEmbedOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-medium text-gray-800 transition hover:bg-gray-50"
-            >
-              <Code2 size={15} strokeWidth={2} />
-              <span className="hidden sm:inline">Embed</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => void persistForm('manual')}
-              disabled={saving}
-              className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-2 text-[13px] font-medium text-gray-900 transition hover:bg-gray-50 disabled:opacity-50"
-            >
-              {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} strokeWidth={2} />}
-              Save
-            </button>
-            <button
-              type="button"
-              onClick={() => setSnapshot((s) => ({ ...s, published: !s.published }))}
-              className={`rounded-md px-3 py-2 text-[13px] font-medium transition ${
-                published
-                  ? 'border border-gray-200 bg-white text-gray-800 hover:bg-gray-50'
-                  : 'border border-gray-900 bg-gray-900 text-white hover:bg-gray-800'
-              }`}
-            >
-              {published ? 'Published' : 'Publish'}
-            </button>
-          </div>
-        </header>
+    <div
+      className="-mt-6 lg:-mt-[68px] -mb-10 flex flex-col bg-white"
+      style={{ minHeight: '100vh' }}
+    >
+      <BuilderStyles />
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-x-hidden lg:h-[calc(100dvh-9rem)] lg:max-h-[calc(100dvh-9rem)] lg:flex-row lg:items-stretch">
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragStart={onDragStart}
-            onDragOver={onDragOver}
-            onDragCancel={onDragCancel}
-            onDragEnd={onDragEnd}
+      {/* ─── Top header — fixed across viewport ──────────────────────────── */}
+      <header
+        className="flex items-center bg-white px-6 py-3"
+        style={
+          {
+            position: 'fixed',
+            top: 0,
+            left: 'var(--sidebar-w, 216px)',
+            right: 0,
+            zIndex: 20,
+            boxShadow: '0 1px 18px rgba(0,0,0,0.05)',
+            transition: 'left 200ms ease-out',
+          } as CSSProperties
+        }
+      >
+        {/* Left: back + title */}
+        <div className="flex items-center gap-3 flex-shrink-0 w-72 min-w-0">
+          <Link
+            href="/dashboard/marketing/form-builder"
+            className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-800 transition-colors flex-shrink-0"
           >
-            {/* Collapsible palette flyout — hidden when closed, slides in when open */}
-            <aside
-              className={`flex flex-col bg-white transition-[width] duration-200 ease-out overflow-hidden shrink-0 border-gray-200
-                ${paletteOpen
-                  ? 'w-full border-b lg:w-[272px] lg:border-b-0 lg:border-r max-h-[min(44vh,22rem)] lg:max-h-none'
-                  : 'w-0 max-h-0 border-0 lg:max-h-none'}`}
+            <ArrowLeft size={14} />
+            <span className="hidden sm:inline">Back</span>
+          </Link>
+          <span className="text-gray-200" aria-hidden>
+            ›
+          </span>
+          <input
+            value={name}
+            placeholder="Untitled form"
+            onChange={(e) => setSnapshot((s) => ({ ...s, name: e.target.value }))}
+            aria-label="Form title"
+            title="Click to edit form title"
+            className="min-w-0 max-w-[14rem] rounded-md border border-transparent bg-transparent px-2 py-1 text-[14px] font-semibold text-gray-900 placeholder:text-gray-400 transition hover:border-gray-200 hover:bg-gray-50 focus:border-gray-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-gray-200"
+          />
+        </div>
+
+        {/* Center: breadcrumb steps (anchored to the canvas, not the entire bar) */}
+        <div
+          className="hidden sm:flex items-center gap-2 text-[11px] tracking-widest font-medium uppercase"
+          style={{ position: 'absolute', left: 'calc(50% - 144px)', transform: 'translateX(-50%)' }}
+        >
+          <span className="text-gray-700 border-b border-gray-700 pb-0.5">Design Form</span>
+          <span className="text-gray-200">›</span>
+          <button
+            type="button"
+            onClick={() => setRightTab('settings')}
+            className="text-gray-300 hover:text-gray-600 transition-colors"
+          >
+            Settings
+          </button>
+          <span className="text-gray-200">›</span>
+          <button
+            type="button"
+            onClick={() => setEmbedOpen(true)}
+            className="text-gray-300 hover:text-gray-600 transition-colors"
+          >
+            Embed
+          </button>
+        </div>
+
+        {/* Right: save + preview + save + publish */}
+        <div className="flex items-center gap-3 flex-shrink-0 ml-auto justify-end">
+          <div className="hidden md:flex items-center gap-1.5">
+            {(saving || autoSaving) && <Loader2 size={12} className="animate-spin text-gray-300" />}
+            {!saving && !autoSaving && lastSavedAt && (
+              <span className="text-[11px] text-gray-300">Saved</span>
+            )}
+            {persistError && <span className="text-[11px] text-red-400">Error</span>}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setPreviewOpen(true)}
+            className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-700 transition-colors"
+          >
+            <Eye size={14} />
+            <span className="hidden sm:inline">Preview</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setRightTab('settings')}
+            className="hidden lg:flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-700 transition-colors"
+          >
+            <Settings size={14} />
+            <span>Settings</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setEmbedOpen(true)}
+            className="hidden lg:flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-700 transition-colors"
+          >
+            <Code2 size={14} />
+            <span>Embed</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void persistForm('manual')}
+            disabled={saving}
+            className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-[13px] font-medium text-gray-900 transition hover:bg-gray-50 disabled:opacity-50"
+          >
+            {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} strokeWidth={2} />}
+            Save
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSnapshot((s) => ({ ...s, published: !s.published }))}
+            className={`rounded-md px-3 py-1.5 text-[13px] font-medium transition ${
+              published
+                ? 'border border-gray-200 bg-white text-gray-800 hover:bg-gray-50'
+                : 'border border-gray-900 bg-gray-900 text-white hover:bg-gray-800'
+            }`}
+          >
+            {published ? 'Published' : 'Publish'}
+          </button>
+        </div>
+      </header>
+
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={onDragStart}
+        onDragOver={onDragOver}
+        onDragCancel={onDragCancel}
+        onDragEnd={onDragEnd}
+      >
+        {/* ─── Body — fixed below header so canvas + panel scroll independently ── */}
+        <div
+          style={{
+            position: 'fixed',
+            top: 52,
+            left: 'var(--sidebar-w, 216px)',
+            right: 0,
+            bottom: 0,
+            display: 'flex',
+            overflow: 'hidden',
+          }}
+        >
+          {/* ── Canvas ─────────────────────────────────────────────────────── */}
+          <div
+            className="fb-scroll-pane flex-1 overflow-y-auto"
+            style={
+              {
+                background: '#ffffff',
+                paddingTop: 36,
+                paddingBottom: 60,
+                paddingLeft: 40,
+                paddingRight: 80,
+                overscrollBehavior: 'contain',
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none',
+                minHeight: 0,
+              } as CSSProperties
+            }
+            onClick={() => setSelectedId(null)}
+          >
+            {/* Desktop / Mobile toggle */}
+            <div className="flex items-center justify-center gap-1 mb-4">
+              <button
+                type="button"
+                title="Desktop view"
+                onClick={() => setViewport('desktop')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  viewport === 'desktop'
+                    ? 'bg-gray-100 text-gray-800'
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                <Monitor size={14} /> Desktop
+              </button>
+              <button
+                type="button"
+                title="Mobile view"
+                onClick={() => setViewport('mobile')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  viewport === 'mobile'
+                    ? 'bg-gray-100 text-gray-800'
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                <Smartphone size={14} /> Mobile
+              </button>
+            </div>
+
+            {/* Form card */}
+            <div
+              className="mx-auto"
+              style={{
+                maxWidth: viewportMax,
+                background: '#ffffff',
+                transition: 'max-width 0.3s ease',
+              }}
+              onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-gray-100 px-4">
-                <div className="flex items-center gap-2">
-                  <LayoutTemplate size={15} className="shrink-0 text-gray-400" strokeWidth={1.75} />
-                  <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-500">
-                    Add blocks
-                  </h2>
-                </div>
-                <button
-                  type="button"
-                  title="Close"
-                  onClick={() => setPaletteOpen(false)}
-                  className="flex h-7 w-7 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
-                >
-                  <Minus size={14} strokeWidth={2.5} />
-                </button>
-              </div>
-              <div
-                ref={modulesScroll.ref}
-                className={`min-h-0 grow overflow-y-auto overscroll-contain px-3 pb-4 pt-2 ${modulesScroll.className}`}
-              >
-                <p className="mb-2 px-1 text-[12px] leading-snug text-gray-400">
-                  Drag a block onto the canvas, or click + to add at the end.
-                </p>
-                <div className="flex flex-col gap-1.5">
-                  {PALETTE.map((p) => (
-                    <PaletteDraggable
-                      key={p.type}
-                      type={p.type}
-                      label={p.label}
-                      onQuickAdd={(t) => { addBlock(t); setPaletteOpen(false); }}
-                    />
-                  ))}
-                </div>
-              </div>
-            </aside>
-
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-white lg:min-h-0">
-              <div className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-gray-100 bg-white px-4">
-                {/* + Add Block trigger */}
-                <button
-                  type="button"
-                  onClick={() => setPaletteOpen((o) => !o)}
-                  title={paletteOpen ? 'Close blocks panel' : 'Add a block'}
-                  className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[13px] font-semibold transition ${
-                    paletteOpen
-                      ? 'border-gray-900 bg-gray-900 text-white'
-                      : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  <Plus size={15} strokeWidth={2.5} />
-                  <span className="hidden sm:inline">Add block</span>
-                </button>
-
-                {/* Viewport toggle — centered */}
-                <div className="inline-flex rounded-full border border-gray-200 bg-white p-0.5">
-                  {(
-                    [
-                      ['desktop', 'Desktop', Monitor] as const,
-                      ['mobile', 'Mobile', Smartphone] as const,
-                    ]
-                  ).map(([id, label, Icon]) => (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => setViewport(id)}
-                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition sm:px-4 ${
-                        viewport === id
-                          ? 'bg-gray-900 text-white'
-                          : 'text-gray-600 hover:bg-gray-100'
-                      }`}
-                    >
-                      <Icon size={14} strokeWidth={2} className="opacity-80" />
-                      <span className="hidden sm:inline">{label}</span>
-                    </button>
-                  ))}
-                </div>
-
-                {/* Spacer so viewport toggle stays roughly centered */}
-                <div className="hidden w-[100px] sm:block" aria-hidden />
-              </div>
-              <div
-                ref={canvasScroll.ref}
-                className={`min-h-0 grow overflow-y-auto overscroll-contain bg-white px-4 py-4 sm:px-6 ${canvasScroll.className}`}
-              >
+              {definition.blocks.length === 0 ? (
+                emptySlot
+              ) : (
                 <SortableContext
                   items={definition.blocks.map((b) => b.id)}
                   strategy={verticalListSortingStrategy}
                 >
-                  <div
-                    className="mx-auto w-full transition-[max-width] duration-300 ease-out"
-                    style={{ maxWidth: viewportMax }}
-                  >
-                    <div className="rounded-lg border border-gray-200 bg-white p-3 sm:p-4">
-                      <MarketingFormView
-                        definition={definition}
-                        embedToken={embedToken}
-                        preview
-                        flatCanvas
-                        formTitle={name}
-                        venueContact={venueContact}
-                        builder={builderOpts}
-                        wrapBlock={wrapBlock}
-                        emptyCanvasSlot={emptySlot}
-                        onPreviewSubmit={() => setCanvasHint('Preview only — not submitted')}
-                      />
-                      {definition.blocks.length > 0 ? (
-                        <>
-                          {dropOverId === 'canvas-tail' ? (
-                            <DropInsertionMarker showLabel={activeDrag != null} />
-                          ) : null}
-                          <CanvasTailDrop />
-                        </>
-                      ) : null}
+                  <AddBlockBtn onClick={() => setPickerInsertIdx(0)} />
+                  <MarketingFormView
+                    definition={definition}
+                    embedToken={embedToken}
+                    preview
+                    flatCanvas
+                    formTitle={name}
+                    venueContact={venueContact}
+                    builder={builderOpts}
+                    wrapBlock={wrapBlock}
+                    emptyCanvasSlot={null}
+                    onPreviewSubmit={() => setCanvasHint('Preview only — not submitted')}
+                  />
+                  {/* Tail "drop at end" indicator — appears when dragging palette
+                      but no block is hovered. */}
+                  {activePaletteType !== null && dropTarget === null && (
+                    <div className="pointer-events-none py-1">
+                      <div style={{ borderTop: '2px solid #1b1b1b' }}>
+                        <span
+                          className="text-[10px] font-semibold text-white rounded px-1.5 py-0.5"
+                          style={{ background: '#1b1b1b', lineHeight: 1.4 }}
+                        >
+                          {PALETTE.find((p) => p.type === activePaletteType)?.label} — drop to add at end
+                        </span>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </SortableContext>
-
-                <DragOverlay dropAnimation={null}>
-                  {activeDrag ? (
-                    <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[13px]">
-                      {(() => {
-                        const Ic = BLOCK_TYPE_ICONS[activeDrag.blockType];
-                        return <Ic size={16} strokeWidth={1.75} className="shrink-0 text-gray-600" aria-hidden />;
-                      })()}
-                      <span>{activeDrag.label}</span>
-                    </div>
-                  ) : null}
-                </DragOverlay>
-              </div>
+              )}
             </div>
 
-            <aside className="flex min-h-[min(50vh,28rem)] w-full shrink-0 flex-col border-t border-gray-200 bg-[#f9f9f9] lg:min-h-0 lg:w-[320px] lg:shrink-0 lg:overflow-hidden lg:border-l lg:border-t-0">
-          <div className="flex h-14 shrink-0 items-stretch border-b border-gray-100 bg-white px-1">
-            <div className="flex min-h-0 w-full items-stretch px-1">
+            <DragOverlay dropAnimation={null}>
+              {activePaletteType
+                ? (() => {
+                    const item = PALETTE.find((p) => p.type === activePaletteType);
+                    if (!item) return null;
+                    const Icon = BLOCK_TYPE_ICONS[item.type];
+                    return (
+                      <div
+                        className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-3.5 py-3 shadow-xl opacity-90 pointer-events-none"
+                        style={{ width: 220 }}
+                      >
+                        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-gray-50">
+                          <Icon size={15} className="text-gray-500" />
+                        </div>
+                        <p className="text-sm font-medium text-gray-800">{item.label}</p>
+                      </div>
+                    );
+                  })()
+                : null}
+            </DragOverlay>
+          </div>
+
+          {/* ── Right Panel ────────────────────────────────────────────────── */}
+          <aside
+            className="w-80 flex-shrink-0 bg-white flex flex-col overflow-hidden"
+            style={{ boxShadow: '-12px 0 32px -8px rgba(0,0,0,0.07)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Tab bar */}
+            <div className="flex h-12 shrink-0 items-stretch border-b border-gray-100 bg-white">
               {(
                 [
                   ['block', 'Design'],
@@ -2055,269 +2290,151 @@ export function FormBuilderEditor({
                   ['theme', 'Theme'],
                   ['submissions', 'Inbox'],
                 ] as const
-              ).map(([id, lab]) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setRightTab(id)}
-                  className={`relative min-w-0 flex-1 px-1.5 text-center text-[12px] font-medium transition sm:text-[13px] ${
-                    rightTab === id
-                      ? 'border-b-2 border-gray-900 text-gray-900'
-                      : 'border-b-2 border-transparent text-gray-400 hover:text-gray-600'
-                  }`}
-                >
-                  <span className="flex h-full items-center justify-center leading-tight">{lab}</span>
-                </button>
-              ))}
+              ).map(([id, label]) => {
+                const active = rightTab === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setRightTab(id)}
+                    className={`relative flex-1 px-1.5 text-center text-[12px] font-medium transition sm:text-[13px] ${
+                      active ? 'text-gray-900' : 'text-gray-400 hover:text-gray-600'
+                    }`}
+                  >
+                    <span className="flex h-full items-center justify-center leading-tight">
+                      {label}
+                    </span>
+                    {active && (
+                      <span className="absolute left-1/2 -translate-x-1/2 bottom-0 h-[2px] w-12 bg-gray-900 rounded-full" />
+                    )}
+                  </button>
+                );
+              })}
             </div>
-          </div>
 
-          <datalist id="storypay-form-gfonts">
-            {googleFontNames.map((f) => (
-              <option key={f} value={f} />
-            ))}
-            {googleFontNames.map((f) => (
-              <option key={`${f}-stack`} value={`${f}, system-ui, sans-serif`} />
-            ))}
-          </datalist>
-
-          <div
-            ref={settingsScroll.ref}
-            className={`min-h-0 grow overflow-y-auto overscroll-contain px-5 py-5 ${settingsScroll.className}`}
-          >
-            {rightTab === 'block' ? (
-              <div>
-                {selected ? (
-                  <BlockInspector
-                    block={selected}
-                    onChange={patchSelected}
-                    onRemove={() => selectedId && removeBlock(selectedId)}
-                    onDuplicate={duplicateSelected}
-                    googleFontNames={googleFontNames}
-                    onRequestMediaPick={handleRequestMediaPick}
-                  />
-                ) : (
-                  <div className="flex flex-col items-center gap-3 px-2 py-10 text-center">
-                    <MousePointerClick className="h-9 w-9 text-gray-300" strokeWidth={1.25} aria-hidden />
-                    <div>
-                      <p className="text-[14px] font-medium text-gray-700">Nothing selected</p>
-                      <p className="mt-2 max-w-[240px] text-[13px] leading-snug text-gray-400">
-                        Click a block on the canvas to edit labels, styling, and field options.
-                      </p>
+            {/* Tab content */}
+            <div
+              className="fb-scroll-pane flex-1 overflow-y-auto"
+              style={
+                {
+                  overscrollBehavior: 'contain',
+                  scrollbarWidth: 'none',
+                  msOverflowStyle: 'none',
+                  minHeight: 0,
+                } as CSSProperties
+              }
+            >
+              {rightTab === 'block' && (
+                <>
+                  {selected ? (
+                    <div className="p-5">
+                      <BlockInspector
+                        block={selected}
+                        onChange={patchSelected}
+                        onRemove={() => removeBlock(selected.id)}
+                        onDuplicate={() => duplicateOne(selected.id)}
+                        onDeselect={() => setSelectedId(null)}
+                        onRequestMediaPick={handleRequestMediaPick}
+                      />
                     </div>
-                  </div>
-                )}
-              </div>
-            ) : null}
-
-            {rightTab === 'settings' ? (
-              <div className="space-y-6">
-                <FormSettingsPanel
-                  settings={definition.settings}
-                  onChange={patchSettings}
-                />
-                <div className="h-px w-full bg-gray-100" />
-                <PostSubmitInspector
-                  postSubmit={definition.postSubmit}
-                  onChange={patchPostSubmit}
-                  onPreviewThankYou={() => setThankYouOpen(true)}
-                />
-              </div>
-            ) : null}
-
-            {rightTab === 'theme' ? (
-              <ThemeInspector theme={mergedTheme} onChange={patchTheme} fontDatalistId="storypay-form-gfonts" />
-            ) : null}
-
-            {rightTab === 'submissions' ? (
-              <div className="text-[13px] text-gray-900">
-                <SettingsPanelTitle>Inbox</SettingsPanelTitle>
-                {submissionsLoading ? (
-                  <div className="space-y-3" aria-hidden>
-                    {[0, 1, 2].map((i) => (
-                      <div
-                        key={i}
-                        className="animate-pulse rounded-lg border border-gray-200/80 bg-white p-3"
-                      >
-                        <div className="h-3 w-36 rounded bg-gray-200" />
-                        <div className="mt-1.5 h-3 w-28 rounded bg-gray-100" />
+                  ) : (
+                    <div className="p-4">
+                      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                        Blocks
+                      </p>
+                      <p className="mb-4 text-[11px] text-gray-400">
+                        Drag a block onto the canvas, or click a block on the canvas to edit it.
+                      </p>
+                      <div className="flex flex-col gap-2">
+                        {PALETTE.map((item) => (
+                          <PaletteCard key={item.type} {...item} />
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                ) : submissions.length === 0 ? (
-                  <p className="text-[13px] text-gray-400">No submissions yet.</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {submissions.map((s) => {
-                      const p = (typeof s.payload === 'object' && s.payload !== null
-                        ? s.payload
-                        : {}) as Record<string, unknown>;
-                      const firstNameBlock = definition.blocks.find((b) => b.type === 'first_name');
-                      const lastNameBlock = definition.blocks.find((b) => b.type === 'last_name');
-                      const emailBlock = definition.blocks.find((b) => b.type === 'email');
-                      const phoneBlock = definition.blocks.find((b) => b.type === 'phone');
-                      const firstName = firstNameBlock ? String(p[firstNameBlock.id] ?? '') : '';
-                      const lastName = lastNameBlock ? String(p[lastNameBlock.id] ?? '') : '';
-                      const email = emailBlock ? String(p[emailBlock.id] ?? '') : '';
-                      const phone = phoneBlock ? String(p[phoneBlock.id] ?? '') : '';
-                      const fullName = [firstName, lastName].filter(Boolean).join(' ');
-                      const otherFields = definition.blocks
-                        .filter(
-                          (b) =>
-                            INPUT_BLOCK_TYPES.includes(b.type) &&
-                            !['first_name', 'last_name', 'email', 'phone'].includes(b.type) &&
-                            p[b.id] !== undefined,
-                        )
-                        .map((b) => ({
-                          label: b.label || b.type,
-                          value: Array.isArray(p[b.id])
-                            ? (p[b.id] as string[]).join(', ')
-                            : typeof p[b.id] === 'object'
-                              ? '[file]'
-                              : String(p[b.id] ?? ''),
-                        }))
-                        .filter((f) => f.value);
+                    </div>
+                  )}
+                </>
+              )}
 
-                      return (
-                        <li
-                          key={s.id}
-                          className="overflow-hidden rounded-lg border border-gray-200/80 bg-white"
-                        >
-                          <div className="flex items-start justify-between gap-3 p-3">
-                            <div className="min-w-0">
-                              <p className="truncate text-[13px] font-semibold text-gray-900">
-                                {fullName || '—'}
-                              </p>
-                              {email && (
-                                <p className="mt-0.5 truncate text-[12px] text-gray-500">{email}</p>
-                              )}
-                              {phone && (
-                                <p className="mt-0.5 text-[12px] text-gray-400">{phone}</p>
-                              )}
-                            </div>
-                            <p className="shrink-0 text-right text-[11px] text-gray-400">
-                              {new Date(s.created_at).toLocaleDateString()}<br />
-                              {new Date(s.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                            </p>
-                          </div>
-                          {otherFields.length > 0 && (
-                            <details className="border-t border-gray-100">
-                              <summary className="cursor-pointer px-3 py-1.5 text-[11px] font-medium text-gray-400 hover:text-gray-700">
-                                {otherFields.length} more field{otherFields.length !== 1 ? 's' : ''}
-                              </summary>
-                              <div className="space-y-1 px-3 pb-3">
-                                {otherFields.map((f, i) => (
-                                  <div key={i} className="flex gap-1.5 text-[11px]">
-                                    <span className="shrink-0 text-gray-400">{f.label}:</span>
-                                    <span className="break-all text-gray-700">{f.value}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </details>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-            ) : null}
-          </div>
-
-          <div className="shrink-0 border-t border-gray-200/90 bg-white px-4 py-3">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-              <div>
-                <div className="flex items-center gap-5">
-                  <button
-                    type="button"
-                    onClick={undo}
-                    disabled={!canUndo}
-                    className="inline-flex items-center gap-1.5 text-[13px] font-medium text-gray-600 hover:text-gray-900 disabled:opacity-30"
-                  >
-                    <Undo2 size={15} strokeWidth={1.75} /> Undo
-                  </button>
-                  <button
-                    type="button"
-                    onClick={redo}
-                    disabled={!canRedo}
-                    className="inline-flex items-center gap-1.5 text-[13px] font-medium text-gray-600 hover:text-gray-900 disabled:opacity-30"
-                  >
-                    <Redo2 size={15} strokeWidth={1.75} /> Redo
-                  </button>
+              {rightTab === 'settings' && (
+                <div className="p-5 space-y-7">
+                  <FormSettingsPanel settings={definition.settings} onChange={patchSettings} />
+                  <div className="h-px w-full bg-gray-100" />
+                  <PostSubmitInspector
+                    postSubmit={definition.postSubmit}
+                    onChange={patchPostSubmit}
+                    onPreviewThankYou={() => setThankYouOpen(true)}
+                  />
                 </div>
-                <p className="mt-1.5 hidden text-[11px] text-gray-400 sm:block">
-                  ⌘Z undo · ⌘⇧Z redo
-                </p>
-              </div>
-              <span className="text-right text-[12px] text-gray-500 sm:max-w-[min(100%,14rem)] sm:shrink-0">
-                {saving || autoSaving
-                  ? 'Saving…'
-                  : persistError
-                    ? persistError
-                    : canvasHint
-                      ? canvasHint
-                      : lastSavedAt
-                        ? `Saved · ${formatSavedTime(lastSavedAt)}`
-                        : ''}
-              </span>
-            </div>
-          </div>
-        </aside>
-          </DndContext>
-        </div>
-      </div>
+              )}
 
-      {previewOpen ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="form-preview-title"
-          onClick={() => setPreviewOpen(false)}
-        >
-          <div
-            className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-gray-200 bg-white p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 id="form-preview-title" className="text-lg font-semibold text-gray-900">
-                  Live preview
-                </h2>
-                <p className="mt-1 text-sm text-gray-600">
-                  Fill out and submit to test your form. Real submissions are saved and notifications sent.
-                </p>
-                <a
-                  href={embedUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-brand-700 underline-offset-2 hover:underline"
-                >
-                  <ExternalLink size={14} strokeWidth={2} aria-hidden />
-                  Open in new tab
-                </a>
-              </div>
+              {rightTab === 'theme' && (
+                <div className="p-5">
+                  <ThemeInspector theme={mergedTheme} onChange={patchTheme} />
+                </div>
+              )}
+
+              {rightTab === 'submissions' && (
+                <div className="p-5">
+                  <SubmissionsInbox
+                    submissions={submissions}
+                    loading={submissionsLoading}
+                    blocks={definition.blocks}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Undo/Redo + saved status */}
+            <div className="flex-shrink-0 border-t border-gray-100 px-4 py-3 flex items-center gap-3 bg-white">
               <button
                 type="button"
-                onClick={() => setPreviewOpen(false)}
-                className="shrink-0 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+                onClick={undo}
+                disabled={!canUndo}
+                className="flex items-center gap-1.5 text-sm font-semibold text-gray-600 hover:text-gray-900 disabled:opacity-30 transition-colors"
               >
-                Close
+                <Undo2 size={14} /> Undo
               </button>
+              <button
+                type="button"
+                onClick={redo}
+                disabled={!canRedo}
+                className="flex items-center gap-1.5 text-sm font-semibold text-gray-600 hover:text-gray-900 disabled:opacity-30 transition-colors"
+              >
+                <Redo2 size={14} /> Redo
+              </button>
+              <span className="ml-auto text-[12px] text-gray-400 truncate max-w-[10rem]">
+                {saveStatusLine}
+              </span>
             </div>
-            <div className="mt-6 rounded-xl border border-gray-100 bg-[#f3f4f6] p-4 sm:p-6">
-              <MarketingFormView
-                definition={definition}
-                embedToken={embedToken}
-                formTitle={name}
-                venueContact={venueContact}
-              />
-            </div>
-          </div>
+          </aside>
         </div>
-      ) : null}
+      </DndContext>
 
-      {embedOpen ? (
+      {/* ─── Modals ─────────────────────────────────────────────────────── */}
+
+      {/* Block picker (centered grid) */}
+      {pickerInsertIdx !== null && (
+        <BlockPickerModal
+          onSelect={(type) => addBlockAt(pickerInsertIdx, type)}
+          onClose={() => setPickerInsertIdx(null)}
+        />
+      )}
+
+      {/* Live preview */}
+      {previewOpen && (
+        <PreviewModal
+          embedUrl={embedUrl}
+          formTitle={name}
+          published={published}
+          definition={definition}
+          embedToken={embedToken}
+          venueContact={venueContact}
+          onClose={() => setPreviewOpen(false)}
+        />
+      )}
+
+      {/* Embed snippet */}
+      {embedOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
           role="dialog"
@@ -2328,12 +2445,24 @@ export function FormBuilderEditor({
             className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-gray-200 bg-white p-6"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-semibold text-gray-900">Embed this form</h2>
-            <p className="mt-2 text-sm text-gray-600">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-base font-semibold text-gray-900">Embed this form</h2>
+              <button
+                type="button"
+                onClick={() => setEmbedOpen(false)}
+                className="text-gray-400 hover:text-gray-700 transition-colors"
+                aria-label="Close embed"
+              >
+                <XIcon size={18} />
+              </button>
+            </div>
+            <p className="text-sm text-gray-600">
               Paste this iframe on your site. Styling follows your theme below.
             </p>
             <p className="mt-4 text-xs font-medium text-gray-500">Public URL</p>
-            <code className="mt-1 block break-all rounded bg-gray-50 p-2 text-[11px] text-gray-800">{embedUrl}</code>
+            <code className="mt-1 block break-all rounded-lg bg-gray-50 p-2 text-[11px] text-gray-800 border border-gray-100">
+              {embedUrl}
+            </code>
             <button
               type="button"
               onClick={() => void copyEmbed()}
@@ -2344,12 +2473,14 @@ export function FormBuilderEditor({
             </button>
             <textarea
               readOnly
-              className="mt-3 h-28 w-full resize-none rounded border border-gray-200 bg-gray-50 p-2 font-mono text-[11px]"
+              className="mt-3 h-28 w-full resize-none rounded-lg border border-gray-200 bg-gray-50 p-2 font-mono text-[11px]"
               value={iframeSnippet}
             />
-            {!published ? (
-              <p className="mt-3 text-xs text-amber-700">Publish the form so the embed URL works for visitors.</p>
-            ) : null}
+            {!published && (
+              <p className="mt-3 text-xs text-amber-700">
+                Publish the form so the embed URL works for visitors.
+              </p>
+            )}
             <button
               type="button"
               className="mt-4 w-full rounded-lg border border-gray-200 py-2 text-sm text-gray-700 hover:bg-gray-50"
@@ -2359,18 +2490,10 @@ export function FormBuilderEditor({
             </button>
           </div>
         </div>
-      ) : null}
+      )}
 
-      <VenueMediaPickerModal
-        open={mediaPickerOpen}
-        onOpenChange={setMediaPickerOpen}
-        onSelect={(url) => {
-          mediaApplyRef.current(url);
-          setMediaPickerOpen(false);
-        }}
-      />
-
-      {thankYouOpen ? (
+      {/* Thank-you preview */}
+      {thankYouOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
           role="dialog"
@@ -2381,19 +2504,27 @@ export function FormBuilderEditor({
             className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-gray-200 bg-white p-6"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-semibold text-gray-900">Thank you preview</h2>
-            <p className="mt-2 text-sm text-gray-600">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-base font-semibold text-gray-900">Thank-you preview</h2>
+              <button
+                type="button"
+                onClick={() => setThankYouOpen(false)}
+                className="text-gray-400 hover:text-gray-700 transition-colors"
+                aria-label="Close preview"
+              >
+                <XIcon size={18} />
+              </button>
+            </div>
+            <p className="text-sm text-gray-600">
               This is what visitors see after a successful submit (unless you redirect).
             </p>
-            <div className="mt-4 rounded-lg border border-green-100 bg-green-50 p-4 text-sm text-green-900">
+            <div className="mt-4 rounded-xl border border-green-100 bg-green-50 p-4 text-sm text-green-900">
               {resolvedThankYou.mode === 'redirect' ? (
                 <p>Visitors leave to: {resolvedThankYou.redirectUrl || '(set a URL)'}</p>
               ) : (
                 <div
                   className="prose prose-sm max-w-none"
-                  dangerouslySetInnerHTML={{
-                    __html: sanitizeFormHtml(resolvedThankYou.messageHtml),
-                  }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeFormHtml(resolvedThankYou.messageHtml) }}
                 />
               )}
             </div>
@@ -2406,7 +2537,31 @@ export function FormBuilderEditor({
             </button>
           </div>
         </div>
-      ) : null}
+      )}
+
+      {/* Media picker */}
+      <VenueMediaPickerModal
+        open={mediaPickerOpen}
+        onOpenChange={setMediaPickerOpen}
+        onSelect={(url) => {
+          mediaApplyRef.current(url);
+          setMediaPickerOpen(false);
+        }}
+      />
+
+      {/* Hint chip — shows when interacting with preview submit while in preview mode */}
+      {canvasHint && (
+        <div
+          className="pointer-events-none fixed bottom-6 left-1/2 -translate-x-1/2 z-40 rounded-full bg-gray-900 px-4 py-1.5 text-xs font-semibold text-white shadow-lg"
+          role="status"
+        >
+          {canvasHint}
+        </div>
+      )}
+
+      {/* Hidden ChevronRight import keeps tree-shaker happy when breadcrumbs are
+          suppressed; safe to leave unused in some viewports. */}
+      <ChevronRight size={0} className="hidden" aria-hidden />
     </div>
   );
 }

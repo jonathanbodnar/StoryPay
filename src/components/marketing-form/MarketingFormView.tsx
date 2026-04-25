@@ -677,14 +677,32 @@ export function MarketingFormView({
                   if (!builder) {
                     node = inner;
                   } else {
+                    const selected = builder.selectedId === b.id;
                     node = (
                       <div
                         role="presentation"
-                        className={`relative rounded-md transition ${
-                          builder.selectedId === b.id
-                            ? 'ring-2 ring-brand-500 ring-offset-2'
-                            : 'hover:ring-1 hover:ring-gray-200'
-                        }`}
+                        className="relative rounded-md transition group/fbblock"
+                        style={{
+                          outline: selected ? '1px solid #3b82f6' : '1px solid transparent',
+                          outlineOffset: '-1px',
+                          boxShadow: selected
+                            ? '0 12px 40px rgba(0,0,0,0.13), 0 4px 12px rgba(0,0,0,0.08)'
+                            : 'none',
+                          transition: 'outline 0.1s ease, box-shadow 0.2s ease',
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!selected) {
+                            (e.currentTarget as HTMLDivElement).style.outline = '1px solid #3b82f6';
+                            (e.currentTarget as HTMLDivElement).style.boxShadow =
+                              '0 12px 40px rgba(0,0,0,0.13), 0 4px 12px rgba(0,0,0,0.08)';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!selected) {
+                            (e.currentTarget as HTMLDivElement).style.outline = '1px solid transparent';
+                            (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
+                          }
+                        }}
                         onClick={(e) => {
                           e.stopPropagation();
                           builder.onSelectBlock(b.id);
