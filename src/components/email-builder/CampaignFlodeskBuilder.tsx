@@ -1170,8 +1170,12 @@ function BlockInspectorPanel({
           <p className="text-sm font-semibold text-gray-700 mb-1.5">Size</p>
           <div className="flex gap-1">
             {([1, 2, 3] as const).map((l) => (
-              <button key={l} type="button" onClick={() => onChange({ level: l })}
-                className={`flex h-8 items-center justify-center rounded-lg px-3 text-sm font-semibold transition-colors ${block.level === l ? 'bg-gray-100 text-gray-700' : 'text-gray-400 hover:text-gray-600'}`}>
+              <button
+                key={l}
+                type="button"
+                onClick={() => onChange({ level: l, fontSize: sizes[l] })}
+                className={`flex h-8 items-center justify-center rounded-lg px-3 text-sm font-semibold transition-colors ${(block.level ?? 2) === l ? 'bg-gray-100 text-gray-700' : 'text-gray-400 hover:text-gray-600'}`}
+              >
                 H{l}
               </button>
             ))}
