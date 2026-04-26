@@ -1420,7 +1420,7 @@ If you don't have any social links saved yet, the Social block in your email sho
         body: `The Marketing flyout in the sidebar groups every email-marketing tool into four pages:
 
 1. Templates (Marketing → Email Templates) — your reusable design library. Build a template once with the drag-and-drop builder, then reuse it for any campaign.
-2. Campaigns (Marketing → Email Campaigns) — one-off broadcasts you send to a segment of your contacts/leads.
+2. Campaigns (Marketing → Email Campaigns) — one-off broadcasts you send to a segment of your contacts/leads. The campaigns list has a trash icon on every row so you can delete any campaign (with a confirm prompt) directly from the list.
 3. Automations (Marketing → Email Automations) — multi-step drip sequences triggered by an event (new lead, tag added, date hit, etc.).
 4. Preferences — recipients can self-manage their subscription via a public preference center linked from every email footer.
 
@@ -1729,6 +1729,7 @@ Campaigns — Marketing → Email Campaigns
 - One-off broadcasts to a segment of your contacts/leads (e.g. "Spring tour open house").
 - A campaign has three steps: Design (the email itself), Recipients (who gets it — filtered by stage, tag, marketing opt-in, etc.), Review (final check + schedule or send now).
 - Once sent, a campaign reports opens, clicks, unsubscribes, and bounces in Marketing → Analytics.
+- The campaigns list page uses the same brand-aligned layout as Forms and Audiences: centered content, consistent row style, and a trash icon on each row to delete any campaign (with a confirm prompt) without opening it.
 
 Automations — Marketing → Email Automations
 - Multi-step drip sequences triggered by an event (new lead via lead capture form, tag added, contact added, anniversary date hit, etc.).
