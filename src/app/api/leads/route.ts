@@ -91,91 +91,109 @@ export async function GET(request: NextRequest) {
     console.error('[GET /api/leads] reconcileLeadsForKanban failed:', err);
   }
 
-  // `space_id` is added by migration 049 and might be missing on older DBs;
-  // try with it first, fall back to the legacy column list on schema errors.
-  const SELECT_WITH_SPACE =
-    'id, venue_id, track_token, first_name, last_name, name, email, phone, wedding_date, guest_count, ' +
-    'booking_timeline, message, notes, status, source, created_at, updated_at, ' +
-    'venue_name, venue_website_url, opportunity_value, pipeline_id, stage_id, position, ' +
-    'lost_reason, referral_source, first_touch_utm, assigned_member_id, marketing_email_opt_in, space_id';
-  const SELECT_LEGACY =
-    'id, venue_id, track_token, first_name, last_name, name, email, phone, wedding_date, guest_count, ' +
-    'booking_timeline, message, notes, status, source, created_at, updated_at, ' +
-    'venue_name, venue_website_url, opportunity_value, pipeline_id, stage_id, position, ' +
-    'lost_reason, referral_source, first_touch_utm, assigned_member_id, marketing_email_opt_in';
+  // Columns we always need. Listed in two groups so we can drop the optional
+  // ones (which were added by later migrations) when the deployed DB is
+  // missing them, instead of returning a 500 to the client.
+  const REQUIRED_COLS = [
+    'id', 'venue_id', 'first_name', 'last_name', 'name', 'email', 'phone',
+    'status', 'source', 'created_at', 'updated_at', 'message', 'notes',
+    'wedding_date', 'guest_count', 'booking_timeline',
+  ];
+  // OPTIONAL_COLS may not exist on older databases. We try the full list
+  // first; if a `column ... does not exist` error comes back, we strip that
+  // column from the list and retry. Keeps the kanban working through any
+  // partially-migrated state.
+  const OPTIONAL_COLS = [
+    'track_token',
+    'venue_name', 'venue_website_url', 'opportunity_value',
+    'pipeline_id', 'stage_id', 'position',
+    'lost_reason', 'referral_source', 'first_touch_utm',
+    'assigned_member_id', 'marketing_email_opt_in',
+    'excluded_from_pipeline', 'space_id',
+  ];
 
-  let query = supabaseAdmin
-    .from('leads')
-    .select(SELECT_WITH_SPACE)
-    .eq('venue_id', venueId)
-    // Contact-only leads (stage = "None") should never appear in the pipeline
-    // list or kanban — they live only on the Contacts page.
-    .or('excluded_from_pipeline.is.null,excluded_from_pipeline.eq.false')
-    .order('position', { ascending: true })
-    .order('created_at', { ascending: false })
-    .limit(1000);
+  /**
+   * Run a leads SELECT, progressively dropping optional columns or filters
+   * that the deployed schema doesn't have.
+   * Returns { rows, error, hasExclude } where hasExclude tells the caller
+   * whether the excluded_from_pipeline filter could be applied.
+   */
+  async function runLeadsSelect(extraOpts: {
+    applyOrFilters?: boolean;
+    applySearch?: boolean;
+  } = { applyOrFilters: true, applySearch: true }) {
+    let optional = [...OPTIONAL_COLS];
+    let useExcludeFilter = optional.includes('excluded_from_pipeline');
+    // Bound the loop so a stuck schema can't infinite-loop us.
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const cols = [...REQUIRED_COLS, ...optional].join(', ');
+      let q1 = supabaseAdmin
+        .from('leads')
+        .select(cols)
+        .eq('venue_id', venueId)
+        .order('position', { ascending: true })
+        .order('created_at', { ascending: false })
+        .limit(1000);
 
-  if (status)     query = query.eq('status', status);
-  if (pipelineId) query = query.eq('pipeline_id', pipelineId);
-  if (stageId)    query = query.eq('stage_id', stageId);
-  if (createdAfter)  query = query.gte('created_at', createdAfter);
-  if (createdBefore) query = query.lte('created_at', `${createdBefore}T23:59:59Z`);
-  if (minValue)   query = query.gte('opportunity_value', Number(minValue));
-  if (maxValue)   query = query.lte('opportunity_value', Number(maxValue));
+      if (extraOpts.applyOrFilters && useExcludeFilter) {
+        q1 = q1.or('excluded_from_pipeline.is.null,excluded_from_pipeline.eq.false');
+      }
 
-  if (q) {
-    const pat = `%${q}%`;
-    query = query.or(
-      [
-        `first_name.ilike.${pat}`,
-        `last_name.ilike.${pat}`,
-        `name.ilike.${pat}`,
-        `email.ilike.${pat}`,
-        `phone.ilike.${pat}`,
-        `venue_name.ilike.${pat}`,
-        `venue_website_url.ilike.${pat}`,
-        `message.ilike.${pat}`,
-        `notes.ilike.${pat}`,
-      ].join(','),
-    );
+      if (status)        q1 = q1.eq('status', status);
+      if (pipelineId)    q1 = q1.eq('pipeline_id', pipelineId);
+      if (stageId)       q1 = q1.eq('stage_id', stageId);
+      if (createdAfter)  q1 = q1.gte('created_at', createdAfter);
+      if (createdBefore) q1 = q1.lte('created_at', `${createdBefore}T23:59:59Z`);
+      if (minValue)      q1 = q1.gte('opportunity_value', Number(minValue));
+      if (maxValue)      q1 = q1.lte('opportunity_value', Number(maxValue));
+
+      if (extraOpts.applySearch && q) {
+        const pat = `%${q}%`;
+        q1 = q1.or(
+          [
+            `first_name.ilike.${pat}`,
+            `last_name.ilike.${pat}`,
+            `name.ilike.${pat}`,
+            `email.ilike.${pat}`,
+            `phone.ilike.${pat}`,
+            `venue_name.ilike.${pat}`,
+            `venue_website_url.ilike.${pat}`,
+            `message.ilike.${pat}`,
+            `notes.ilike.${pat}`,
+          ].join(','),
+        );
+      }
+
+      const r = await q1;
+      if (!r.error) return { rows: r.data, error: null, hasExclude: useExcludeFilter };
+
+      // Identify which column the DB is complaining about and drop it.
+      const m = /column "?([a-z_]+)"? .*does not exist|column .*\.([a-z_]+) does not exist/i.exec(r.error.message);
+      const missing = (m?.[1] || m?.[2] || '').toLowerCase();
+      if (missing) {
+        if (missing === 'excluded_from_pipeline') {
+          useExcludeFilter = false;
+          optional = optional.filter((c) => c !== 'excluded_from_pipeline');
+          continue;
+        }
+        if (optional.includes(missing)) {
+          optional = optional.filter((c) => c !== missing);
+          continue;
+        }
+      }
+      // Unknown error or required column missing — give up.
+      return { rows: null, error: r.error, hasExclude: useExcludeFilter };
+    }
+    return { rows: null, error: new Error('Could not load leads after 12 schema-fallback attempts'), hasExclude: false };
   }
 
-  let { data: rows, error } = await query;
-  if (error && /column .*excluded_from_pipeline/i.test(error.message)) {
-    // Migration 051 not applied yet — drop the filter so the page still
-    // works. Contact-only leads will show up in the kanban until the
-    // migration runs, but nothing breaks.
-    let q2 = supabaseAdmin
-      .from('leads')
-      .select(SELECT_WITH_SPACE)
-      .eq('venue_id', venueId)
-      .order('position', { ascending: true })
-      .order('created_at', { ascending: false })
-      .limit(1000);
-    if (status)     q2 = q2.eq('status', status);
-    if (pipelineId) q2 = q2.eq('pipeline_id', pipelineId);
-    if (stageId)    q2 = q2.eq('stage_id', stageId);
-    const retry = await q2;
-    rows = retry.data;
-    error = retry.error;
+  const main = await runLeadsSelect();
+  if (main.error) {
+    console.error('[GET /api/leads] failed:', main.error);
+    return NextResponse.json({ error: `Failed to load leads: ${main.error.message}` }, { status: 500 });
   }
-  if (error && /column .*space_id/i.test(error.message)) {
-    // Migration 049 not applied yet — re-run with the legacy column list so
-    // the leads page still works on pre-migration databases.
-    const legacy = await supabaseAdmin
-      .from('leads')
-      .select(SELECT_LEGACY)
-      .eq('venue_id', venueId)
-      .order('position', { ascending: true })
-      .order('created_at', { ascending: false })
-      .limit(1000);
-    rows = legacy.data;
-    error = legacy.error;
-  }
-  if (error) {
-    console.error('[GET /api/leads] failed:', error);
-    return NextResponse.json({ error: `Failed to load leads: ${error.message}` }, { status: 500 });
-  }
+  const rows = main.rows;
+  const hasExcludeFilter = main.hasExclude;
 
   const leadRows = (rows ?? []) as unknown as LeadRow[];
 
@@ -199,35 +217,42 @@ export async function GET(request: NextRequest) {
     // leads with pipeline_id=NULL are intentionally "contact only" now (see
     // migration 051), so they must stay out of every kanban view.
     const orphanFilter = `pipeline_id.not.in.(${[...validPipelineIds].join(',') || '00000000-0000-0000-0000-000000000000'})`;
+
+    // Use the same progressive-fallback strategy as the main query so a
+    // partially-migrated DB can't make the orphan rescue blow up.
+    let orphanOptional = [...OPTIONAL_COLS];
+    let orphanUseExclude = orphanOptional.includes('excluded_from_pipeline') && hasExcludeFilter;
     let orphanRows: LeadRow[] | null = null;
-    const orphanFirst = await supabaseAdmin
-      .from('leads')
-      .select(SELECT_WITH_SPACE)
-      .eq('venue_id', venueId)
-      .or(`excluded_from_pipeline.is.null,excluded_from_pipeline.eq.false`)
-      .not('pipeline_id', 'is', null)
-      .or(orphanFilter)
-      .limit(500);
-    if (orphanFirst.error && /column .*excluded_from_pipeline/i.test(orphanFirst.error.message)) {
-      const retry = await supabaseAdmin
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const cols = [...REQUIRED_COLS, ...orphanOptional].join(', ');
+      let oq = supabaseAdmin
         .from('leads')
-        .select(SELECT_WITH_SPACE)
+        .select(cols)
         .eq('venue_id', venueId)
         .not('pipeline_id', 'is', null)
         .or(orphanFilter)
         .limit(500);
-      orphanRows = (retry.data ?? null) as unknown as LeadRow[] | null;
-    } else if (orphanFirst.error && /column .*space_id/i.test(orphanFirst.error.message)) {
-      const orphanLegacy = await supabaseAdmin
-        .from('leads')
-        .select(SELECT_LEGACY)
-        .eq('venue_id', venueId)
-        .not('pipeline_id', 'is', null)
-        .or(orphanFilter)
-        .limit(500);
-      orphanRows = (orphanLegacy.data ?? null) as unknown as LeadRow[] | null;
-    } else {
-      orphanRows = (orphanFirst.data ?? null) as unknown as LeadRow[] | null;
+      if (orphanUseExclude) {
+        oq = oq.or('excluded_from_pipeline.is.null,excluded_from_pipeline.eq.false');
+      }
+      const r = await oq;
+      if (!r.error) {
+        orphanRows = (r.data ?? null) as unknown as LeadRow[] | null;
+        break;
+      }
+      const m = /column "?([a-z_]+)"? .*does not exist|column .*\.([a-z_]+) does not exist/i.exec(r.error.message);
+      const missing = (m?.[1] || m?.[2] || '').toLowerCase();
+      if (missing === 'excluded_from_pipeline') {
+        orphanUseExclude = false;
+        orphanOptional = orphanOptional.filter((c) => c !== 'excluded_from_pipeline');
+        continue;
+      }
+      if (missing && orphanOptional.includes(missing)) {
+        orphanOptional = orphanOptional.filter((c) => c !== missing);
+        continue;
+      }
+      console.warn('[GET /api/leads] orphan rescue failed:', r.error.message);
+      break;
     }
     const seenIds = new Set(leadRows.map((l) => l.id));
     for (const o of (orphanRows ?? []) as LeadRow[]) {
@@ -279,19 +304,29 @@ export async function GET(request: NextRequest) {
       .filter((id) => !foundIds.has(id));
 
     if (missingNoteLeadIds.length > 0) {
-      let more = await supabaseAdmin
-        .from('leads')
-        .select(SELECT_WITH_SPACE)
-        .eq('venue_id', venueId)
-        .in('id', missingNoteLeadIds);
-      if (more.error && /column .*space_id/i.test(more.error.message)) {
-        more = await supabaseAdmin
+      // Same progressive-fallback strategy used for the main query so this
+      // can't blow up on partially-migrated databases either.
+      let extraOptional = [...OPTIONAL_COLS];
+      for (let attempt = 0; attempt < 12; attempt++) {
+        const cols = [...REQUIRED_COLS, ...extraOptional].join(', ');
+        const r = await supabaseAdmin
           .from('leads')
-          .select(SELECT_LEGACY)
+          .select(cols)
           .eq('venue_id', venueId)
           .in('id', missingNoteLeadIds);
+        if (!r.error) {
+          extraLeads = (r.data ?? []) as unknown as LeadRow[];
+          break;
+        }
+        const m = /column "?([a-z_]+)"? .*does not exist|column .*\.([a-z_]+) does not exist/i.exec(r.error.message);
+        const missing = (m?.[1] || m?.[2] || '').toLowerCase();
+        if (missing && extraOptional.includes(missing)) {
+          extraOptional = extraOptional.filter((c) => c !== missing);
+          continue;
+        }
+        console.warn('[GET /api/leads] note-search rescue failed:', r.error.message);
+        break;
       }
-      extraLeads = (more.data ?? []) as unknown as LeadRow[];
     }
   }
 
