@@ -26,6 +26,7 @@ const TRIGGER_LABELS: Record<string, string> = {
   trigger_link_click:    'Trigger link click',
   wedding_date_followup: 'After wedding date',
   proposal_paid:         'Proposal paid',
+  '':                    'No trigger',
 };
 
 export default function WorkflowsListPage() {
@@ -89,17 +90,12 @@ export default function WorkflowsListPage() {
     if (!n) { setErr('Name is required'); return; }
     setCreating(true);
     setErr(null);
-    // Default to form_submitted with no specific form selected; the user picks
-    // their actual triggers (and can add multiples) in the canvas inspector.
+    // No trigger pre-selected — the canvas starts completely blank.
+    // Users add triggers by clicking "Add New Trigger" on the canvas.
     const res = await fetch('/api/marketing/automations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: n,
-        triggerType: 'form_submitted',
-        triggerConfig: { form_ids: [] },
-        steps: [],
-      }),
+      body: JSON.stringify({ name: n, steps: [] }),
     });
     const j = (await res.json().catch(() => ({}))) as { automation?: { id: string }; error?: string };
     setCreating(false);
@@ -171,7 +167,9 @@ export default function WorkflowsListPage() {
                     <div className="min-w-0">
                       <p className="truncate font-medium text-gray-900">{r.name}</p>
                       <p className="truncate text-xs text-gray-500">
-                        {TRIGGER_LABELS[r.trigger_type] ?? r.trigger_type.replace(/_/g, ' ')}
+                        {r.trigger_type
+                          ? (TRIGGER_LABELS[r.trigger_type] ?? r.trigger_type.replace(/_/g, ' '))
+                          : 'No trigger'}
                         {' · updated '}
                         {new Date(r.updated_at).toLocaleDateString()}
                       </p>

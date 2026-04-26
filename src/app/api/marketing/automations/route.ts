@@ -20,16 +20,21 @@ export async function GET() {
 
 type StepIn = {
   step_order: number;
-  step_type: 'delay' | 'send_email' | 'send_sms';
+  step_type: 'delay' | 'send_email' | 'send_sms' | 'add_tag' | 'remove_tag' | 'change_stage';
   config: Record<string, unknown>;
 };
+
+const VALID_TRIGGER_TYPES: AutomationTriggerType[] = [
+  'tag_added', 'stage_changed', 'trigger_link_click',
+  'wedding_date_followup', 'proposal_paid', 'form_submitted',
+];
 
 export async function POST(request: NextRequest) {
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   let body: {
     name?: string;
-    triggerType?: AutomationTriggerType;
+    triggerType?: AutomationTriggerType | null;
     triggerConfig?: AutomationTriggerConfig;
     steps?: StepIn[];
   };
@@ -39,16 +44,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
   const name = typeof body.name === 'string' ? body.name.trim() : '';
-  const triggerType = body.triggerType;
   if (!name) return NextResponse.json({ error: 'Name is required' }, { status: 400 });
-  if (
-    triggerType !== 'tag_added' &&
-    triggerType !== 'stage_changed' &&
-    triggerType !== 'trigger_link_click' &&
-    triggerType !== 'wedding_date_followup' &&
-    triggerType !== 'proposal_paid' &&
-    triggerType !== 'form_submitted'
-  ) {
+
+  // triggerType is optional — workflows can start with no trigger configured.
+  const triggerType = body.triggerType ?? null;
+  if (triggerType !== null && !VALID_TRIGGER_TYPES.includes(triggerType)) {
     return NextResponse.json({ error: 'Invalid triggerType' }, { status: 400 });
   }
 
@@ -60,9 +60,7 @@ export async function POST(request: NextRequest) {
     }
     triggerConfig = { days_after_wedding: Math.floor(d) };
   }
-  if (triggerType === 'proposal_paid') {
-    triggerConfig = {};
-  }
+  if (triggerType === 'proposal_paid') triggerConfig = {};
   if (triggerType === 'form_submitted') {
     const raw = (triggerConfig as { form_ids?: unknown }).form_ids;
     const ids = Array.isArray(raw) ? raw.filter((v): v is string => typeof v === 'string') : [];

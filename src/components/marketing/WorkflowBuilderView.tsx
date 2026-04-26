@@ -49,7 +49,7 @@ class SmartPointerSensor extends PointerSensor {
 interface AutomationRow {
   id: string; name: string;
   status: 'draft' | 'active' | 'paused';
-  trigger_type: AutomationTriggerType;
+  trigger_type: AutomationTriggerType | null;
   trigger_config: Record<string, unknown>;
 }
 interface TagRow    { id: string; name: string }
@@ -343,10 +343,11 @@ function EnrollPill({ count, onClick }: { count: number; onClick: () => void }) 
 }
 
 // ─── Canvas step card body ────────────────────────────────────────────────────
-function triggerDesc(type: AutomationTriggerType, config: {
+function triggerDesc(type: AutomationTriggerType | null, config: {
   selForms: string[]; selTags: string[]; selStages: string[];
   selLinks: string[]; daysAfterWedding: number;
 }): string {
+  if (!type) return 'No trigger selected';
   if (type === 'form_submitted')        return config.selForms.length > 0   ? `${config.selForms.length} form(s) selected`       : 'Any form submission';
   if (type === 'tag_added')             return config.selTags.length > 0    ? `${config.selTags.length} tag(s) selected`          : 'Any tag added';
   if (type === 'stage_changed')         return config.selStages.length > 0  ? `${config.selStages.length} stage(s) selected`      : 'Any stage entered';
@@ -746,14 +747,27 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
     set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
   }
 
-  function changeTriggerType(newType: AutomationTriggerType) {
+  function changeTriggerType(newType: AutomationTriggerType | null) {
     if (!auto) return;
     setAuto({ ...auto, trigger_type: newType });
     setSelTags([]); setSelStages([]); setSelLinks([]); setSelForms([]); setDaysAfterWedding(3);
   }
 
+  function removePrimaryTrigger() {
+    if (!auto) return;
+    setAuto({ ...auto, trigger_type: null });
+    setSelTags([]); setSelStages([]); setSelLinks([]); setSelForms([]); setDaysAfterWedding(3);
+    setSelected(null);
+  }
+
   function buildTriggerConfig(): Record<string, unknown> {
     if (!auto) return {};
+    if (!auto.trigger_type) {
+      // No primary trigger — store only extra_triggers if any
+      const cfg: Record<string, unknown> = {};
+      if (extraTriggers.length > 0) cfg.extra_triggers = extraTriggers;
+      return cfg;
+    }
     let primary: Record<string, unknown>;
     if (auto.trigger_type === 'tag_added')                  primary = { tag_ids: selTags };
     else if (auto.trigger_type === 'stage_changed')         primary = { to_stage_ids: selStages };
@@ -775,8 +789,14 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
     return { type: 'form_submitted', form_ids: [] };
   }
   function addExtraTrigger(type: AutomationTriggerType) {
+    if (!auto) return;
+    // If there's no primary trigger yet, make this one the primary
+    if (!auto.trigger_type) {
+      changeTriggerType(type);
+      setSelected({ kind: 'trigger', triggerIdx: 0 });
+      return;
+    }
     setExtraTriggers((prev) => [...prev, defaultExtraSpec(type)]);
-    // Select the newly added extra trigger immediately
     setSelected({ kind: 'trigger', triggerIdx: extraTriggers.length + 1 });
   }
   function removeExtraTrigger(idx: number) {
@@ -807,7 +827,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
       body: JSON.stringify({
         name: auto.name,
         status: auto.status,
-        triggerType: auto.trigger_type,
+        triggerType: auto.trigger_type ?? null,
         triggerConfig: buildTriggerConfig(),
         steps: steps.map((s, i) => {
           if (s.step_type === 'delay')
@@ -984,7 +1004,9 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
     );
   }
 
-  const trig = TRIGGER_OPTIONS.find((t) => t.value === auto.trigger_type) ?? TRIGGER_OPTIONS[0]!;
+  const trig = auto.trigger_type
+    ? (TRIGGER_OPTIONS.find((t) => t.value === auto.trigger_type) ?? TRIGGER_OPTIONS[0]!)
+    : { label: 'No Trigger', Icon: Plus };
   const TriggerIcon = trig.Icon;
   const selectedStep = selected?.kind === 'step' ? steps.find((s) => s.localId === selected.localId) ?? null : null;
 
@@ -1191,16 +1213,19 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                     zIndex: 2,
                   }}
                 >
-                  {/* Primary trigger card (idx = 0) */}
-                  <TriggerCardCanvas
-                    idx={0}
-                    label={trig.label}
-                    Icon={TriggerIcon}
-                    subtitle={trigSubtitle}
-                    selected={selected?.kind === 'trigger' && selected.triggerIdx === 0}
-                    onClick={() => setSelected({ kind: 'trigger', triggerIdx: 0 })}
-                    showRemove={false}
-                  />
+                  {/* Primary trigger card — only shown when a trigger type is set */}
+                  {auto.trigger_type && (
+                    <TriggerCardCanvas
+                      idx={0}
+                      label={trig.label}
+                      Icon={TriggerIcon}
+                      subtitle={trigSubtitle}
+                      selected={selected?.kind === 'trigger' && selected.triggerIdx === 0}
+                      onClick={() => setSelected({ kind: 'trigger', triggerIdx: 0 })}
+                      showRemove
+                      onRemove={removePrimaryTrigger}
+                    />
+                  )}
 
                   {/* Extra triggers */}
                   {extraTriggers.map((t, i) => {
@@ -1397,9 +1422,10 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                     <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Trigger type</p>
                     <select
                       className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
-                      value={auto.trigger_type}
-                      onChange={(e) => changeTriggerType(e.target.value as AutomationTriggerType)}
+                      value={auto.trigger_type ?? ''}
+                      onChange={(e) => changeTriggerType(e.target.value ? e.target.value as AutomationTriggerType : null)}
                     >
+                      <option value="">— Select a trigger —</option>
                       {TRIGGER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
                   </div>

@@ -8,7 +8,7 @@ export const runtime = 'nodejs';
 
 type StepIn = {
   step_order: number;
-  step_type: 'delay' | 'send_email' | 'send_sms';
+  step_type: 'delay' | 'send_email' | 'send_sms' | 'add_tag' | 'remove_tag' | 'change_stage';
   config: Record<string, unknown>;
 };
 
@@ -45,7 +45,7 @@ export async function PATCH(
   let body: {
     name?: string;
     status?: 'draft' | 'active' | 'paused';
-    triggerType?: AutomationTriggerType;
+    triggerType?: AutomationTriggerType | null;
     triggerConfig?: AutomationTriggerConfig;
     steps?: StepIn[] | null;
   };
@@ -63,10 +63,14 @@ export async function PATCH(
     .maybeSingle();
   if (ex0 || !existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  const effectiveTrigger =
-    body.triggerType ?? (existing.trigger_type as AutomationTriggerType);
+  // body.triggerType may be null to explicitly clear the primary trigger.
+  const triggerTypeProvided = 'triggerType' in body;
+  const effectiveTrigger: AutomationTriggerType | null =
+    triggerTypeProvided
+      ? (body.triggerType ?? null)
+      : (existing.trigger_type as AutomationTriggerType | null);
 
-  if (body.triggerConfig !== undefined) {
+  if (body.triggerConfig !== undefined && effectiveTrigger) {
     if (effectiveTrigger === 'wedding_date_followup') {
       const d = Number((body.triggerConfig as { days_after_wedding?: unknown }).days_after_wedding ?? 0);
       if (!Number.isFinite(d) || d < 0 || d > 3650) {
@@ -93,7 +97,8 @@ export async function PATCH(
   if (body.status === 'draft' || body.status === 'active' || body.status === 'paused') {
     patch.status = body.status;
   }
-  if (body.triggerType) patch.trigger_type = body.triggerType;
+  // Allow setting trigger_type to null (clear the primary trigger)
+  if (triggerTypeProvided) patch.trigger_type = body.triggerType ?? null;
   if (body.triggerConfig !== undefined) patch.trigger_config = body.triggerConfig;
 
   const stepsProvided = body.steps !== undefined && body.steps !== null;
