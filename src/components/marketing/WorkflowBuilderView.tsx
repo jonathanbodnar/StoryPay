@@ -958,18 +958,17 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
           </Link>
         </div>
 
-        <div
-          className="hidden sm:flex items-center gap-2 text-[11px] tracking-widest font-medium uppercase"
-          style={{ position: 'absolute', left: 'calc(50% - 144px)', transform: 'translateX(-50%)' }}
-        >
-          <span className="text-gray-700 border-b border-gray-700 pb-0.5">Design Workflow</span>
-        </div>
-
         <div className="flex items-center gap-3 flex-shrink-0 ml-auto">
           <input
-            className="hidden md:block w-52 border-0 bg-transparent text-sm font-semibold text-gray-800 placeholder:text-gray-300 focus:outline-none text-right"
+            className="hidden md:block w-64 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm font-semibold text-gray-800 placeholder:text-gray-300 hover:border-gray-200 hover:bg-gray-50 focus:border-gray-300 focus:bg-white focus:outline-none transition-colors text-right"
             value={auto.name}
             onChange={(e) => setAuto({ ...auto, name: e.target.value })}
+            onBlur={() => { if (auto.name.trim()) void saveAll(); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
+            }}
+            placeholder="Untitled workflow"
+            title="Click to rename"
             aria-label="Workflow name"
           />
           <select
