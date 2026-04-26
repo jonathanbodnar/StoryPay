@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, LayoutTemplate, Loader2, Plus, Pencil } from 'lucide-react';
+import { ArrowLeft, LayoutTemplate, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 
 interface FormRow {
   id: string;
@@ -22,6 +22,7 @@ export default function FormBuilderListPage() {
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -38,6 +39,32 @@ export default function FormBuilderListPage() {
       void load();
     });
   }, [load]);
+
+  async function deleteForm(form: FormRow) {
+    if (deletingId) return;
+    if (typeof window === 'undefined') return;
+    const ok = window.confirm(
+      `Delete "${form.name}"? This permanently removes the form, its embed URL, and all submissions. This cannot be undone.`,
+    );
+    if (!ok) return;
+    setDeletingId(form.id);
+    try {
+      const res = await fetch(`/api/marketing/forms/${form.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        window.alert(j.error || 'Failed to delete form. Please try again.');
+        return;
+      }
+      // Optimistically drop the row, then refresh in the background to stay
+      // in sync if anything else changed server-side.
+      setForms((prev) => prev.filter((row) => row.id !== form.id));
+      void load();
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Failed to delete form.');
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   async function createForm() {
     const name = newName.trim();
@@ -115,23 +142,42 @@ export default function FormBuilderListPage() {
         </div>
       ) : (
         <ul className="space-y-2">
-          {forms.map((f) => (
-            <li key={f.id}>
-              <Link
-                href={`/dashboard/marketing/form-builder/${f.id}`}
-                className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 transition hover:border-brand-200 hover:bg-brand-50/40"
-              >
-                <div>
-                  <p className="font-medium text-gray-900">{f.name}</p>
-                  <p className="text-xs text-gray-500">
-                    {f.published ? 'Published' : 'Draft'} · updated{' '}
-                    {new Date(f.updated_at).toLocaleString()}
-                  </p>
+          {forms.map((f) => {
+            const isDeleting = deletingId === f.id;
+            return (
+              <li key={f.id}>
+                <div className="group flex items-stretch overflow-hidden rounded-xl border border-gray-200 bg-white transition hover:border-brand-200 hover:bg-brand-50/40">
+                  <Link
+                    href={`/dashboard/marketing/form-builder/${f.id}`}
+                    className="flex min-w-0 flex-1 items-center justify-between gap-4 px-4 py-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-gray-900">{f.name}</p>
+                      <p className="truncate text-xs text-gray-500">
+                        {f.published ? 'Published' : 'Draft'} · updated{' '}
+                        {new Date(f.updated_at).toLocaleString()}
+                      </p>
+                    </div>
+                    <Pencil size={18} className="flex-shrink-0 text-gray-400" />
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => void deleteForm(f)}
+                    disabled={isDeleting}
+                    title="Delete form"
+                    aria-label={`Delete ${f.name}`}
+                    className="flex flex-shrink-0 items-center justify-center border-l border-gray-100 px-4 text-gray-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                  >
+                    {isDeleting ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <Trash2 size={16} />
+                    )}
+                  </button>
                 </div>
-                <Pencil size={18} className="text-gray-400" />
-              </Link>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
 
