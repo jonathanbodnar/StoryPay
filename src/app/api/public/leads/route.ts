@@ -179,6 +179,28 @@ export async function POST(request: NextRequest) {
 
   void recordDuplicateCandidatesForNewLead(venue.id, lr.id, lr.email, lr.phone, lr.created_at);
 
+  // Upsert a venue_customers row so the lead is immediately visible on the
+  // Contacts page and the contact profile inquiry fields are auto-populated.
+  void (async () => {
+    try {
+      await supabaseAdmin
+        .from('venue_customers')
+        .upsert(
+          {
+            venue_id:       venue.id,
+            customer_email: lr.email.toLowerCase(),
+            first_name:     firstName || null,
+            last_name:      lastName  || null,
+            phone:          phone || null,
+            updated_at:     new Date().toISOString(),
+          },
+          { onConflict: 'venue_id,customer_email' },
+        );
+    } catch (e) {
+      console.warn('[public/leads] venue_customers upsert failed:', e);
+    }
+  })();
+
   // Place lead in "New Lead" stage of the default pipeline
   try {
     const defaultPipelineId = await ensureDefaultPipeline(venue.id);

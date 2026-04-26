@@ -10,18 +10,6 @@ const TOURING_OPTIONS = [
   'Just exploring — 6+ months out',
 ];
 
-const VENUE_MATTERS_OPTIONS = [
-  'Outdoor ceremony space',
-  'Inclusive pricing & all-in packages',
-  'Unique / non-traditional setting',
-  'On-site catering & bar',
-  'Guest capacity (large or intimate)',
-  'Location & accessibility',
-  'Photo-worthy aesthetics',
-  'Vendor flexibility',
-  'Bridal suite & getting-ready space',
-  'Experience & reputation',
-];
 
 interface Props {
   venueName: string;
@@ -226,17 +214,14 @@ export function ListingLeadModal({ venueName, venueId, apiBase }: Props) {
                     <label className="mb-1.5 block text-xs font-semibold text-gray-700">
                       What matters most when choosing a venue? <span className="text-red-400">*</span>
                     </label>
-                    <select
+                    <input
+                      type="text"
                       required
+                      placeholder="e.g. outdoor ceremony space, all-inclusive pricing…"
                       value={form.venue_matters}
                       onChange={(e) => set('venue_matters', e.target.value)}
                       className={inputCls}
-                    >
-                      <option value="" disabled>Select what matters most</option>
-                      {VENUE_MATTERS_OPTIONS.map((o) => (
-                        <option key={o} value={o}>{o}</option>
-                      ))}
-                    </select>
+                    />
                   </div>
 
                   {/* Optional message */}

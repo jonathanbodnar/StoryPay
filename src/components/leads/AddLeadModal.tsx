@@ -527,23 +527,13 @@ export default function AddLeadModal({
               <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">
                 What matters most when choosing a venue?
               </label>
-              <select
+              <input
+                type="text"
                 value={draft.venueMatters}
                 onChange={(e) => set('venueMatters', e.target.value)}
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-sm focus:border-gray-400 focus:outline-none"
-              >
-                <option value="">— not answered —</option>
-                <option value="Outdoor ceremony space">Outdoor ceremony space</option>
-                <option value="Inclusive pricing & all-in packages">Inclusive pricing &amp; all-in packages</option>
-                <option value="Unique / non-traditional setting">Unique / non-traditional setting</option>
-                <option value="On-site catering & bar">On-site catering &amp; bar</option>
-                <option value="Guest capacity (large or intimate)">Guest capacity (large or intimate)</option>
-                <option value="Location & accessibility">Location &amp; accessibility</option>
-                <option value="Photo-worthy aesthetics">Photo-worthy aesthetics</option>
-                <option value="Vendor flexibility">Vendor flexibility</option>
-                <option value="Bridal suite & getting-ready space">Bridal suite &amp; getting-ready space</option>
-                <option value="Experience & reputation">Experience &amp; reputation</option>
-              </select>
+                placeholder="e.g. outdoor ceremony space, all-inclusive pricing…"
+                className="w-full rounded-xl border border-gray-200 px-3 py-1.5 text-sm focus:border-gray-400 focus:outline-none"
+              />
             </div>
             <div>
               <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">

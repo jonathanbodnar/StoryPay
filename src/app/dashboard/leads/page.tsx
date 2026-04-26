@@ -2027,25 +2027,13 @@ function LeadDrawer({
               <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">
                 What matters most when choosing a venue?
               </label>
-              <select
+              <input
+                type="text"
                 value={lead.venue_matters ?? ''}
                 onChange={(e) => void saveField('venueMatters', e.target.value || null)}
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-800 focus:border-gray-400 focus:outline-none"
-              >
-                <option value="">— not answered —</option>
-                {[
-                  'Outdoor ceremony space',
-                  'Inclusive pricing & all-in packages',
-                  'Unique / non-traditional setting',
-                  'On-site catering & bar',
-                  'Guest capacity (large or intimate)',
-                  'Location & accessibility',
-                  'Photo-worthy aesthetics',
-                  'Vendor flexibility',
-                  'Bridal suite & getting-ready space',
-                  'Experience & reputation',
-                ].map((o) => <option key={o} value={o}>{o}</option>)}
-              </select>
+                placeholder="e.g. outdoor ceremony space, all-inclusive pricing…"
+                className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-800 focus:border-gray-400 focus:outline-none"
+              />
             </div>
 
             {/* Anything else — editable */}
