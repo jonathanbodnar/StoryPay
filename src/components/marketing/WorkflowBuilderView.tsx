@@ -1277,10 +1277,6 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                             {isDropTarget && dropTarget?.pos === 'after' && (
                               <DropIndicator label={PALETTE.find((p) => p.type === activePaletteType)?.label ?? ''} />
                             )}
-
-                            {idx === steps.length - 1 && (
-                              <AddStepBtn onClick={() => setPickerIdx(steps.length)} />
-                            )}
                           </div>
                         )}
                       </SortableStep>
@@ -1299,12 +1295,22 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                   </div>
                 )}
 
-                {/* End cap — pill-style just like the screenshot */}
+                {/* End cap — single + then END pill; line stops here */}
                 <AddStepBtn onClick={() => setPickerIdx(steps.length)} />
-                <div className="flex justify-center" style={{ zIndex: 2, position: 'relative' }}>
-                  <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-100 px-5 py-1.5 text-[11px] font-bold uppercase tracking-widest text-gray-400 select-none">
-                    End
-                  </span>
+                {/* This wrapper has a white bottom half that covers the connector
+                    line below the pill, so the line appears to terminate at END. */}
+                <div style={{ position: 'relative', zIndex: 2 }}>
+                  <div className="flex justify-center">
+                    <span className="inline-flex items-center rounded-full border border-gray-300 bg-gray-200 px-5 py-1.5 text-[11px] font-bold uppercase tracking-widest text-gray-500 select-none shadow-sm">
+                      End
+                    </span>
+                  </div>
+                  {/* White rectangle that sits below the pill and paints over
+                      the connector line, making it look like the line ends at END. */}
+                  <div style={{
+                    position: 'absolute', top: '50%', left: 0, right: 0, bottom: '-9999px',
+                    background: '#f4f4f5', zIndex: -1,
+                  }} />
                 </div>
 
               </div>
