@@ -128,26 +128,26 @@ export async function PATCH(request: NextRequest) {
   if (!email)     return NextResponse.json({ error: 'Email is required.' },      { status: 400 });
   if (!phone)     return NextResponse.json({ error: 'Phone is required.' },      { status: 400 });
 
-  // Build full_name from first + last and save to profiles
+  // Build full_name from first + last and upsert into profiles
+  // (update alone silently no-ops if the row doesn't exist yet)
   const fullName = [firstName, lastName].filter(Boolean).join(' ');
   if (venue.owner_id) {
-    await supabaseAdmin
+    const { error: profErr } = await supabaseAdmin
       .from('profiles')
-      .update({ full_name: fullName })
-      .eq('id', venue.owner_id);
+      .upsert({ id: venue.owner_id, full_name: fullName }, { onConflict: 'id' });
+    if (profErr) {
+      console.error('[PATCH /api/profile] profiles upsert failed:', profErr.message);
+      return NextResponse.json({ error: profErr.message }, { status: 500 });
+    }
   }
 
   // Update contact fields on the venues row
-  const venuePatch: Record<string, string> = { email, phone };
+  const { error: venueErr } = await supabaseAdmin
+    .from('venues')
+    .update({ email, phone })
+    .eq('id', venueId);
 
-  if (Object.keys(venuePatch).length > 0) {
-    const { error } = await supabaseAdmin
-      .from('venues')
-      .update(venuePatch)
-      .eq('id', venueId);
+  if (venueErr) return NextResponse.json({ error: venueErr.message }, { status: 500 });
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, first_name: firstName, last_name: lastName, full_name: fullName });
 }
