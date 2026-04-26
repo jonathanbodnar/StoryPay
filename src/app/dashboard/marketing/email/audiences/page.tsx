@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Loader2, Plus, Users, Pencil, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Loader2, Pencil, Plus, Trash2, Users, X } from 'lucide-react';
 import {
   AudiencePicker,
   type AudiencePickerStage,
@@ -131,13 +131,25 @@ export default function AudiencesPage() {
   }
 
   return (
-    <div className="max-w-3xl">
-      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+    <div className="mx-auto max-w-4xl px-4 py-8">
+      {/* Header — mirrors the Lead Capture Forms / Emails list pages so all
+          three Marketing sub-pages feel like siblings. */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Audiences</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Save reusable audiences and pick them when sending campaigns. Edits to an audience update every campaign that
-            uses it on the next send.
+          <Link
+            href="/dashboard/marketing/analytics"
+            className="mb-2 inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900"
+          >
+            <ArrowLeft size={16} />
+            Marketing
+          </Link>
+          <h1 className="flex items-center gap-2 text-2xl font-semibold text-gray-900">
+            <Users className="text-brand-600" size={28} />
+            Audiences
+          </h1>
+          <p className="mt-1 text-sm text-gray-600">
+            Save reusable audiences and pick them when sending campaigns. Edits to an audience
+            update every campaign that uses it on the next send.
           </p>
         </div>
         <button
@@ -163,8 +175,9 @@ export default function AudiencesPage() {
           <Users size={32} className="mx-auto mb-3 text-gray-300" />
           <p className="text-sm font-medium text-gray-500">No audiences yet</p>
           <p className="mx-auto mt-1 max-w-sm text-xs text-gray-400">
-            Create an audience to reuse the same group across multiple campaigns — e.g. "Booked couples 2026", "Tour
-            requested, no proposal", or "Newsletter subscribers".
+            Create an audience to reuse the same group across multiple campaigns — e.g. &ldquo;Booked
+            couples 2026&rdquo;, &ldquo;Tour requested, no proposal&rdquo;, or &ldquo;Newsletter
+            subscribers&rdquo;.
           </p>
           <button
             type="button"
