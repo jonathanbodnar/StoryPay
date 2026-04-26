@@ -56,11 +56,18 @@ export async function GET(
   const url = new URL(request.url);
   const inline = url.searchParams.get('inline') === '1';
 
-  // Strip characters that would corrupt the Content-Disposition header.
-  const safeName = (row.display_name?.trim() || row.file_name || 'file').replace(
+  // Build a clean download filename.
+  // Prefer display_name (user-visible label) but always preserve the extension
+  // from the original file_name so the OS can recognise the file type.
+  // e.g. display_name="Brand logo", file_name="logo-abc.png" → "Brand logo.png"
+  const extMatch = (row.file_name as string | null)?.match(/(\.[^.]+)$/);
+  const ext = extMatch ? extMatch[1].toLowerCase() : '';
+  const baseName = (row.display_name?.trim() || row.file_name || 'file').replace(
     /[\r\n"\\]/g,
     '',
   );
+  // Append the extension only when the chosen base name doesn't already end with it.
+  const safeName = baseName.toLowerCase().endsWith(ext) ? baseName : `${baseName}${ext}`;
   const disposition = `${inline ? 'inline' : 'attachment'}; filename="${safeName}"`;
 
   return new NextResponse(blob, {
