@@ -65,12 +65,15 @@ interface EnrollContact {
 const DEFAULT_SMS = 'Hi {{first_name}}, a quick note from {{venue_name}}. Reply STOP to opt out.';
 const CARD_W = 320; // canvas card width in pixels
 
-type StepKind = 'delay' | 'send_email' | 'send_sms';
+type StepKind = 'delay' | 'send_email' | 'send_sms' | 'add_tag' | 'remove_tag' | 'change_stage';
 type WaitUnit = 'minutes' | 'hours' | 'days';
 type LocalStep =
-  | { localId: string; step_type: 'delay';      delay_minutes: number }
-  | { localId: string; step_type: 'send_email'; template_id: string }
-  | { localId: string; step_type: 'send_sms';   body: string; media_urls?: string[] };
+  | { localId: string; step_type: 'delay';        delay_minutes: number }
+  | { localId: string; step_type: 'send_email';   template_id: string }
+  | { localId: string; step_type: 'send_sms';     body: string; media_urls?: string[] }
+  | { localId: string; step_type: 'add_tag';      tag_ids: string[] }
+  | { localId: string; step_type: 'remove_tag';   tag_ids: string[] }
+  | { localId: string; step_type: 'change_stage'; stage_id: string };
 
 // triggerIdx: 0 = primary trigger, 1+ = extra triggers (extraTriggers[idx-1])
 type SelectedItem = { kind: 'trigger'; triggerIdx: number } | { kind: 'step'; localId: string } | null;
@@ -88,10 +91,13 @@ function displayToMinutes(value: number, unit: WaitUnit): number {
 }
 
 // ─── Step palette ─────────────────────────────────────────────────────────────
-const PALETTE: { type: StepKind; label: string; desc: string; Icon: React.FC<{ size?: number; className?: string }> }[] = [
-  { type: 'delay',      label: 'Wait',       desc: 'Pause for a duration',     Icon: Clock },
-  { type: 'send_email', label: 'Send Email', desc: 'Choose a saved template',  Icon: Mail },
-  { type: 'send_sms',   label: 'Send SMS',   desc: 'Send a text message',      Icon: Smartphone },
+const PALETTE: { type: StepKind; label: string; desc: string; group: 'actions' | 'contact'; Icon: React.FC<{ size?: number; className?: string }> }[] = [
+  { type: 'delay',        label: 'Wait',          desc: 'Pause for a duration',        group: 'actions',  Icon: Clock },
+  { type: 'send_email',   label: 'Send Email',    desc: 'Choose a saved template',     group: 'actions',  Icon: Mail },
+  { type: 'send_sms',     label: 'Send SMS',      desc: 'Send a text message',         group: 'actions',  Icon: Smartphone },
+  { type: 'add_tag',      label: 'Add Tag',       desc: 'Apply tags to contact',       group: 'contact',  Icon: Tag },
+  { type: 'remove_tag',   label: 'Remove Tag',    desc: 'Remove tags from contact',    group: 'contact',  Icon: Tag },
+  { type: 'change_stage', label: 'Change Stage',  desc: 'Move contact to a stage',     group: 'contact',  Icon: GitBranch },
 ];
 
 const TRIGGER_OPTIONS: { value: AutomationTriggerType; label: string; Icon: React.FC<{ size?: number; className?: string }> }[] = [
@@ -250,19 +256,38 @@ function DropIndicator({ label }: { label: string }) {
 
 // ─── Step picker modal ────────────────────────────────────────────────────────
 function StepPickerModal({ onSelect, onClose }: { onSelect: (t: StepKind) => void; onClose: () => void }) {
+  const actionItems  = PALETTE.filter((p) => p.group === 'actions');
+  const contactItems = PALETTE.filter((p) => p.group === 'contact');
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl p-6 w-[420px] max-w-full mx-4" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl shadow-2xl p-6 w-[480px] max-w-full mx-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
           <h3 className="text-base font-semibold text-gray-900">Add a step</h3>
           <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700"><Minus size={18} /></button>
         </div>
-        <div className="grid grid-cols-3 gap-3">
-          {PALETTE.map(({ type, label, desc, Icon }) => (
+
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Actions</p>
+        <div className="grid grid-cols-3 gap-3 mb-5">
+          {actionItems.map(({ type, label, desc, Icon }) => (
             <button key={type} type="button" onClick={() => onSelect(type)}
               className="flex flex-col items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-4 text-center hover:border-gray-400 hover:bg-white transition-all group"
             >
               <Icon size={22} className="text-gray-500 group-hover:text-gray-900 transition-colors" />
+              <div>
+                <p className="text-xs font-semibold text-gray-900">{label}</p>
+                <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{desc}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Contact Actions</p>
+        <div className="grid grid-cols-3 gap-3">
+          {contactItems.map(({ type, label, desc, Icon }) => (
+            <button key={type} type="button" onClick={() => onSelect(type)}
+              className="flex flex-col items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-4 text-center hover:border-blue-300 hover:bg-blue-50 transition-all group"
+            >
+              <Icon size={22} className="text-gray-400 group-hover:text-blue-600 transition-colors" />
               <div>
                 <p className="text-xs font-semibold text-gray-900">{label}</p>
                 <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{desc}</p>
@@ -349,6 +374,15 @@ function stepMeta(s: LocalStep, templates: TemplateOpt[]): { title: string; subt
   if (s.step_type === 'send_sms') {
     const b = s.body.trim();
     return { title: 'Send SMS', subtitle: b.slice(0, 52) + (b.length > 52 ? '…' : ''), Icon: Smartphone };
+  }
+  if (s.step_type === 'add_tag') {
+    return { title: 'Add Tag', subtitle: s.tag_ids.length > 0 ? `${s.tag_ids.length} tag(s)` : 'Choose tags →', Icon: Tag };
+  }
+  if (s.step_type === 'remove_tag') {
+    return { title: 'Remove Tag', subtitle: s.tag_ids.length > 0 ? `${s.tag_ids.length} tag(s)` : 'Choose tags →', Icon: Tag };
+  }
+  if (s.step_type === 'change_stage') {
+    return { title: 'Change Stage', subtitle: s.stage_id ? 'Stage selected' : 'Choose stage →', Icon: GitBranch };
   }
   const tpl = templates.find((t) => t.id === s.template_id);
   return { title: 'Send Email', subtitle: tpl?.name ?? 'Choose a template →', Icon: Mail };
@@ -665,12 +699,24 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
       setSteps(rawSteps.map((s, i) => {
         const localId = `s-${i}-${Math.random().toString(36).slice(2)}`;
         if (s.step_type === 'delay')
-          return { localId, step_type: 'delay', delay_minutes: Number((s.config_json as { delay_minutes?: number }).delay_minutes ?? 60) };
+          return { localId, step_type: 'delay' as const, delay_minutes: Number((s.config_json as { delay_minutes?: number }).delay_minutes ?? 60) };
         if (s.step_type === 'send_sms') {
           const sc = s.config_json as { body?: string; media_urls?: string[] };
-          return { localId, step_type: 'send_sms', body: String(sc.body ?? DEFAULT_SMS), media_urls: sc.media_urls ?? [] };
+          return { localId, step_type: 'send_sms' as const, body: String(sc.body ?? DEFAULT_SMS), media_urls: sc.media_urls ?? [] };
         }
-        return { localId, step_type: 'send_email', template_id: String((s.config_json as { template_id?: string }).template_id ?? '') };
+        if (s.step_type === 'add_tag') {
+          const sc = s.config_json as { tag_ids?: string[] };
+          return { localId, step_type: 'add_tag' as const, tag_ids: sc.tag_ids ?? [] };
+        }
+        if (s.step_type === 'remove_tag') {
+          const sc = s.config_json as { tag_ids?: string[] };
+          return { localId, step_type: 'remove_tag' as const, tag_ids: sc.tag_ids ?? [] };
+        }
+        if (s.step_type === 'change_stage') {
+          const sc = s.config_json as { stage_id?: string };
+          return { localId, step_type: 'change_stage' as const, stage_id: String(sc.stage_id ?? '') };
+        }
+        return { localId, step_type: 'send_email' as const, template_id: String((s.config_json as { template_id?: string }).template_id ?? '') };
       }));
     }
     if (tagRes.ok)   { const d = await tagRes.json();  setTags(d.tags ?? []); }
@@ -768,6 +814,12 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
             return { step_order: i, step_type: 'delay' as const, config: { delay_minutes: Math.max(1, Math.min(10080, s.delay_minutes)) } };
           if (s.step_type === 'send_sms')
             return { step_order: i, step_type: 'send_sms' as const, config: { body: s.body.trim(), media_urls: s.media_urls ?? [] } };
+          if (s.step_type === 'add_tag')
+            return { step_order: i, step_type: 'add_tag' as const, config: { tag_ids: s.tag_ids } };
+          if (s.step_type === 'remove_tag')
+            return { step_order: i, step_type: 'remove_tag' as const, config: { tag_ids: s.tag_ids } };
+          if (s.step_type === 'change_stage')
+            return { step_order: i, step_type: 'change_stage' as const, config: { stage_id: s.stage_id } };
           return { step_order: i, step_type: 'send_email' as const, config: { template_id: s.template_id } };
         }),
       }),
@@ -790,9 +842,12 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
   function addStepAt(kind: StepKind, insertIdx: number) {
     const localId = `s-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const step: LocalStep =
-      kind === 'delay'      ? { localId, step_type: 'delay',      delay_minutes: 60 }
-      : kind === 'send_sms' ? { localId, step_type: 'send_sms',   body: DEFAULT_SMS }
-      :                       { localId, step_type: 'send_email', template_id: templates[0]?.id ?? '' };
+      kind === 'delay'        ? { localId, step_type: 'delay',        delay_minutes: 60 }
+      : kind === 'send_sms'   ? { localId, step_type: 'send_sms',     body: DEFAULT_SMS }
+      : kind === 'add_tag'    ? { localId, step_type: 'add_tag',      tag_ids: [] }
+      : kind === 'remove_tag' ? { localId, step_type: 'remove_tag',   tag_ids: [] }
+      : kind === 'change_stage' ? { localId, step_type: 'change_stage', stage_id: '' }
+      :                         { localId, step_type: 'send_email',   template_id: templates[0]?.id ?? '' };
     setSteps((prev) => { const c = [...prev]; c.splice(insertIdx, 0, step); return c; });
     setSelected({ kind: 'step', localId });
   }
@@ -1834,6 +1889,77 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                     );
                   })()}
 
+                  {/* ── Add Tag inspector ────────────────────────────── */}
+                  {(selectedStep.step_type === 'add_tag' || selectedStep.step_type === 'remove_tag') && (() => {
+                    const lid = selectedStep.localId;
+                    const selectedTagIds = selectedStep.tag_ids;
+                    const verb = selectedStep.step_type === 'add_tag' ? 'Apply' : 'Remove';
+                    return (
+                      <div>
+                        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">{verb} Tags</p>
+                        {tags.length === 0 ? (
+                          <p className="text-[11px] text-gray-500">No tags yet.</p>
+                        ) : (
+                          <div className="flex flex-wrap gap-1.5">
+                            {tags.map((t) => {
+                              const checked = selectedTagIds.includes(t.id);
+                              return (
+                                <button key={t.id} type="button"
+                                  onClick={() => {
+                                    const next = checked ? selectedTagIds.filter((x) => x !== t.id) : [...selectedTagIds, t.id];
+                                    setSteps((prev) => prev.map((x) =>
+                                      x.localId === lid && (x.step_type === 'add_tag' || x.step_type === 'remove_tag')
+                                        ? { ...x, tag_ids: next } : x
+                                    ));
+                                  }}
+                                  className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs transition-colors ${
+                                    checked
+                                      ? 'border-blue-300 bg-blue-50 text-blue-700'
+                                      : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300'
+                                  }`}
+                                >
+                                  <Tag size={11} />
+                                  {t.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                        <p className="mt-2 text-[11px] text-gray-400">
+                          {selectedStep.step_type === 'add_tag' ? 'Selected tags will be added to the contact when this step runs.' : 'Selected tags will be removed from the contact.'}
+                        </p>
+                      </div>
+                    );
+                  })()}
+
+                  {/* ── Change Stage inspector ────────────────────────── */}
+                  {selectedStep.step_type === 'change_stage' && (() => {
+                    const lid = selectedStep.localId;
+                    return (
+                      <div>
+                        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Move to stage</p>
+                        {stages.length === 0 ? (
+                          <p className="text-[11px] text-gray-500">No pipeline stages found.</p>
+                        ) : (
+                          <select
+                            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
+                            value={selectedStep.stage_id}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setSteps((prev) => prev.map((x) => x.localId === lid && x.step_type === 'change_stage' ? { ...x, stage_id: v } : x));
+                            }}
+                          >
+                            <option value="">Choose a stage…</option>
+                            {stages.map((s) => (
+                              <option key={s.id} value={s.id}>{s.pipelineName}: {s.name}</option>
+                            ))}
+                          </select>
+                        )}
+                        <p className="mt-2 text-[11px] text-gray-400">The contact will be moved to this stage when the step runs.</p>
+                      </div>
+                    );
+                  })()}
+
                   <div className="mt-6 border-t border-gray-100 pt-4">
                     <button type="button" onClick={() => removeStep(selectedStep.localId)}
                       className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-red-100 py-2 text-xs font-semibold text-red-500 hover:bg-red-50 transition-colors"
@@ -1849,23 +1975,29 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
 
                   {/* Action blocks */}
                   <div>
-                    <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Blocks</p>
-                    <p className="mb-3 text-[11px] text-gray-400 leading-relaxed">Drag a block onto the canvas, or click + to insert at a specific position.</p>
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Actions</p>
+                    <p className="mb-3 text-[11px] text-gray-400 leading-relaxed">Drag onto the canvas, or click + to insert.</p>
                     <div className="flex flex-col gap-2">
-                      {PALETTE.map((item) => <PaletteCard key={item.type} {...item} />)}
+                      {PALETTE.filter((p) => p.group === 'actions').map((item) => <PaletteCard key={item.type} {...item} />)}
                     </div>
                   </div>
 
-                  {/* Trigger blocks */}
+                  {/* Contact action blocks */}
                   <div>
-                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Triggers &amp; Conditions</p>
-                    <p className="mb-3 text-[11px] text-gray-400 leading-relaxed">Add a trigger or condition mid-workflow — use the + button on the canvas to insert after any step.</p>
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Contact Actions</p>
+                    <p className="mb-3 text-[11px] text-gray-400 leading-relaxed">Modify the contact mid-workflow.</p>
+                    <div className="flex flex-col gap-2">
+                      {PALETTE.filter((p) => p.group === 'contact').map((item) => <PaletteCard key={item.type} {...item} />)}
+                    </div>
+                  </div>
+
+                  {/* Trigger types for reference */}
+                  <div>
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Triggers &amp; Conditions</p>
+                    <p className="mb-3 text-[11px] text-gray-400 leading-relaxed">Add extra triggers via the trigger row at the top of the canvas.</p>
                     <div className="flex flex-col gap-2">
                       {TRIGGER_OPTIONS.map(({ value, label, Icon }) => (
-                        <div
-                          key={value}
-                          className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-3.5 py-3 cursor-default select-none"
-                        >
+                        <div key={value} className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-3.5 py-3 select-none">
                           <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-50">
                             <Icon size={15} className="text-emerald-700" />
                           </div>

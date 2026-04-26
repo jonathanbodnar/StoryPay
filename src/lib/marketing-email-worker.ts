@@ -625,6 +625,59 @@ async function processOneEnrollment(en: {
     }
     return true;
   }
+  // ── add_tag: apply one or more tags to the enrolled contact ─────────────
+  if (step.step_type === 'add_tag') {
+    const cfg = step.config_json as { tag_ids?: string[] };
+    const tagIds = (cfg.tag_ids ?? []).filter(Boolean);
+    if (tagIds.length > 0) {
+      const rows = tagIds.map((tagId) => ({ lead_id: en.lead_id, tag_id: tagId }));
+      await supabaseAdmin.from('lead_tag_assignments').upsert(rows, { onConflict: 'lead_id,tag_id', ignoreDuplicates: true });
+    }
+    const nextIdx = idx + 1;
+    await supabaseAdmin.from('marketing_automation_enrollments').update(
+      nextIdx >= sorted.length
+        ? { status: 'completed', current_step_index: nextIdx, completed_at: new Date().toISOString(), next_run_at: new Date().toISOString() }
+        : { current_step_index: nextIdx, next_run_at: new Date().toISOString() },
+    ).eq('id', en.id);
+    return true;
+  }
+
+  // ── remove_tag: detach one or more tags from the enrolled contact ────────
+  if (step.step_type === 'remove_tag') {
+    const cfg = step.config_json as { tag_ids?: string[] };
+    const tagIds = (cfg.tag_ids ?? []).filter(Boolean);
+    if (tagIds.length > 0) {
+      await supabaseAdmin
+        .from('lead_tag_assignments')
+        .delete()
+        .eq('lead_id', en.lead_id)
+        .in('tag_id', tagIds);
+    }
+    const nextIdx = idx + 1;
+    await supabaseAdmin.from('marketing_automation_enrollments').update(
+      nextIdx >= sorted.length
+        ? { status: 'completed', current_step_index: nextIdx, completed_at: new Date().toISOString(), next_run_at: new Date().toISOString() }
+        : { current_step_index: nextIdx, next_run_at: new Date().toISOString() },
+    ).eq('id', en.id);
+    return true;
+  }
+
+  // ── change_stage: move the lead to a different pipeline stage ───────────
+  if (step.step_type === 'change_stage') {
+    const cfg = step.config_json as { stage_id?: string };
+    const stageId = String(cfg.stage_id || '').trim();
+    if (stageId) {
+      await supabaseAdmin.from('leads').update({ stage_id: stageId }).eq('id', en.lead_id);
+    }
+    const nextIdx = idx + 1;
+    await supabaseAdmin.from('marketing_automation_enrollments').update(
+      nextIdx >= sorted.length
+        ? { status: 'completed', current_step_index: nextIdx, completed_at: new Date().toISOString(), next_run_at: new Date().toISOString() }
+        : { current_step_index: nextIdx, next_run_at: new Date().toISOString() },
+    ).eq('id', en.id);
+    return true;
+  }
+
   return false;
 }
 
