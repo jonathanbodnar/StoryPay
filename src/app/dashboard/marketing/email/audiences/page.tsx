@@ -47,6 +47,7 @@ export default function AudiencesPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [counts, setCounts] = useState<Record<string, number | null>>({});
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const stages: AudiencePickerStage[] = useMemo(
     () =>
@@ -118,16 +119,27 @@ export default function AudiencesPage() {
     };
   }, [audiences]);
 
-  async function handleDelete(id: string) {
-    if (!confirm('Delete this audience? Any campaigns using it will fall back to "All leads".')) return;
-    const res = await fetch(`/api/marketing/segments/${id}`, { method: 'DELETE' });
-    if (!res.ok) {
-      const j = (await res.json().catch(() => ({}))) as { error?: string };
-      setErr(j.error || 'Could not delete audience');
-      return;
+  async function handleDelete(audience: SegmentRow) {
+    if (deletingId) return;
+    if (typeof window === 'undefined') return;
+    const ok = window.confirm(
+      `Delete "${audience.name}"? Any campaigns using it will fall back to "All leads". This cannot be undone.`,
+    );
+    if (!ok) return;
+    setDeletingId(audience.id);
+    try {
+      const res = await fetch(`/api/marketing/segments/${audience.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        setErr(j.error || 'Could not delete audience');
+        return;
+      }
+      setErr(null);
+      setAudiences((prev) => prev.filter((row) => row.id !== audience.id));
+      void load();
+    } finally {
+      setDeletingId(null);
     }
-    setErr(null);
-    void load();
   }
 
   return (
@@ -188,55 +200,62 @@ export default function AudiencesPage() {
           </button>
         </div>
       ) : (
-        <div className="space-y-2">
+        <ul className="space-y-2">
           {audiences.map((s) => {
             const count = counts[s.id];
+            const isDeleting = deletingId === s.id;
+            const countLabel =
+              count === undefined
+                ? '…'
+                : count === null
+                  ? '—'
+                  : `${count.toLocaleString()} ${count === 1 ? 'recipient' : 'recipients'}`;
             return (
-              <div
-                key={s.id}
-                className="flex items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white px-5 py-4 transition-colors hover:border-gray-300"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold text-gray-900">{s.name}</p>
-                  {s.description ? (
-                    <p className="mt-0.5 line-clamp-1 text-xs text-gray-500">{s.description}</p>
-                  ) : null}
-                  <p className="mt-1 flex items-center gap-2 text-xs text-gray-400">
-                    Updated {new Date(s.updated_at).toLocaleDateString()}
-                    <span aria-hidden>·</span>
-                    <span className="inline-flex items-center gap-1 text-gray-500">
-                      <Users size={11} />
-                      {count === undefined
-                        ? '…'
-                        : count === null
-                          ? '—'
-                          : `${count.toLocaleString()} ${count === 1 ? 'recipient' : 'recipients'}`}
+              <li key={s.id}>
+                <div className="group flex items-stretch overflow-hidden rounded-xl border border-gray-200 bg-white transition hover:border-brand-200 hover:bg-brand-50/40">
+                  <div className="flex min-w-0 flex-1 items-center gap-4 px-4 py-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium text-gray-900">{s.name}</p>
+                      <p className="truncate text-xs text-gray-500">
+                        {s.description ? `${s.description} · ` : ''}
+                        Updated {new Date(s.updated_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <span className="flex-shrink-0 inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600">
+                      <Users size={11} /> {countLabel}
                     </span>
-                  </p>
-                </div>
-                <div className="flex flex-shrink-0 items-center gap-2">
+                    <div className="flex flex-shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditing(s);
+                          setErr(null);
+                        }}
+                        className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+                      >
+                        <Pencil size={12} /> Edit
+                      </button>
+                    </div>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      setEditing(s);
-                      setErr(null);
-                    }}
-                    className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+                    onClick={() => void handleDelete(s)}
+                    disabled={isDeleting}
+                    title="Delete audience"
+                    aria-label={`Delete ${s.name}`}
+                    className="flex flex-shrink-0 items-center justify-center border-l border-gray-100 px-4 text-gray-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
                   >
-                    <Pencil size={12} /> Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleDelete(s.id)}
-                    className="flex items-center gap-1.5 rounded-xl border border-red-100 px-3 py-1.5 text-xs font-semibold text-red-700 transition-colors hover:bg-red-50"
-                  >
-                    <Trash2 size={12} /> Delete
+                    {isDeleting ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <Trash2 size={16} />
+                    )}
                   </button>
                 </div>
-              </div>
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
 
       {createOpen ? (
