@@ -367,22 +367,24 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
   }, []);
 
   // ── Wheel: pinch = zoom; scroll = pan ────────────────────────────────────
-  // Mac trackpad pinch gesture fires wheel events with ctrlKey:true.
-  // Regular two-finger scroll fires with ctrlKey:false.
-  // Mouse wheel fires with ctrlKey only when user holds Ctrl key.
+  // Browsers handle pinch gestures very differently:
+  //   - Mac Chrome/Edge: pinch trackpad → wheel event with ctrlKey:true
+  //   - Mac Safari:      pinch trackpad → gesturestart/change/end events
+  //                      (NOT wheel events — that's why pinch was broken in Safari)
+  //   - Mouse + Ctrl:    wheel event with ctrlKey:true (treated as pinch)
+  //   - Two-finger scroll on trackpad: wheel event with ctrlKey:false → pan
   useEffect(() => {
     const el = canvasContainerRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       if (e.ctrlKey) {
-        // Pinch-to-zoom (Mac trackpad) or Ctrl+scroll (mouse).
-        // deltaY is negative when zooming out (spreading fingers) and positive
-        // when zooming in (pinching). We clamp delta to avoid huge jumps.
-        const delta = Math.max(-50, Math.min(50, e.deltaY));
-        const factor = delta < 0
-          ? 1 + Math.abs(delta) * 0.02   // spreading fingers → zoom in
-          : 1 / (1 + delta * 0.02);       // pinching fingers  → zoom out
+        // Pinch-to-zoom (Mac trackpad on Chrome/Edge) or Ctrl+scroll (mouse).
+        // Use exponential decay so the zoom feels smooth & symmetric across
+        // browsers, regardless of how big each individual deltaY is.
+        // negative deltaY = spread fingers = zoom in (factor > 1)
+        // positive deltaY = pinch fingers  = zoom out (factor < 1)
+        const factor = Math.exp(-e.deltaY * 0.01);
         zoomAt(e.clientX, e.clientY, factor);
       } else {
         // Two-finger scroll → pan. deltaX/deltaY are in CSS pixels on Mac.
@@ -393,6 +395,46 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
+  }, [zoomAt]);
+
+  // ── Safari pinch-to-zoom (gesture* events) ───────────────────────────────
+  // Safari uses non-standard gesture events for trackpad pinch.
+  // e.scale is the cumulative scale factor since gesturestart (1.0 = no change).
+  useEffect(() => {
+    const el = canvasContainerRef.current;
+    if (!el) return;
+    let lastScale = 1;
+    let gx = 0, gy = 0;
+
+    type GestureEvt = Event & { scale: number; clientX: number; clientY: number };
+    const onGestureStart = (e: Event) => {
+      const ge = e as GestureEvt;
+      e.preventDefault();
+      lastScale = 1;
+      gx = ge.clientX;
+      gy = ge.clientY;
+    };
+    const onGestureChange = (e: Event) => {
+      const ge = e as GestureEvt;
+      e.preventDefault();
+      const factor = ge.scale / lastScale;
+      lastScale = ge.scale;
+      // Use the latest pointer coords if Safari supplies them; otherwise reuse start point.
+      const x = Number.isFinite(ge.clientX) ? ge.clientX : gx;
+      const y = Number.isFinite(ge.clientY) ? ge.clientY : gy;
+      zoomAt(x, y, factor);
+    };
+    const onGestureEnd = (e: Event) => { e.preventDefault(); lastScale = 1; };
+
+    // These are non-standard events, but TS doesn't know about them
+    el.addEventListener('gesturestart',  onGestureStart  as EventListener, { passive: false });
+    el.addEventListener('gesturechange', onGestureChange as EventListener, { passive: false });
+    el.addEventListener('gestureend',    onGestureEnd    as EventListener, { passive: false });
+    return () => {
+      el.removeEventListener('gesturestart',  onGestureStart  as EventListener);
+      el.removeEventListener('gesturechange', onGestureChange as EventListener);
+      el.removeEventListener('gestureend',    onGestureEnd    as EventListener);
+    };
   }, [zoomAt]);
 
   // ── Global mousemove / mouseup for pan dragging ───────────────────────────
@@ -802,6 +844,10 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
               flex: 1, position: 'relative', overflow: 'hidden',
               cursor: isPanning ? 'grabbing' : 'grab',
               background: '#f4f4f5',
+              // Prevent the browser from doing its own page-zoom on pinch —
+              // we handle pinch ourselves via wheel/gesture events.
+              touchAction: 'none',
+              overscrollBehavior: 'contain',
             }}
             onMouseDown={onBgMouseDown}
             onDoubleClick={onBgDoubleClick}
