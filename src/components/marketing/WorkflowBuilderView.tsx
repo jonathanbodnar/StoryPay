@@ -883,7 +883,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
     if (!res.ok) { setErr((j as { error?: string }).error || 'Save failed'); setSaveStatus('error'); return; }
     setSaveStatus('saved');
     setTimeout(() => setSaveStatus('idle'), 2000);
-    void load(); void refreshCounts();
+    void refreshCounts();
   }
 
   // ── Auto-save: schedule a delayed save after any change ───────────────────
@@ -1059,6 +1059,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
     const end = ta.selectionEnd ?? ta.value.length;
     const newVal = ta.value.slice(0, start) + text + ta.value.slice(end);
     setSteps((prev) => prev.map((x) => x.localId === lid && x.step_type === 'send_sms' ? { ...x, body: newVal } : x));
+    scheduleAutoSave();
     requestAnimationFrame(() => {
       ta.focus();
       ta.setSelectionRange(start + text.length, start + text.length);
@@ -2045,6 +2046,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                       setSteps((prev) => prev.map((x) =>
                         x.localId === lid && x.step_type === 'delay' ? { ...x, delay_minutes: displayToMinutes(v, u) } : x
                       ));
+                      scheduleAutoSave();
                     };
                     return (
                       <div>
@@ -2108,6 +2110,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                             onChange={(e) => {
                               const v = e.target.value; const lid = selectedStep.localId;
                               setSteps((prev) => prev.map((x) => x.localId === lid && x.step_type === 'send_email' ? { ...x, template_id: v } : x));
+                              scheduleAutoSave();
                             }}
                           >
                             <option value="">Choose a template</option>
@@ -2222,6 +2225,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                           onChange={(e) => {
                             const v = e.target.value;
                             setSteps((prev) => prev.map((x) => x.localId === lid && x.step_type === 'send_sms' ? { ...x, body: v } : x));
+                            scheduleAutoSave();
                           }}
                         />
                         {/* Character / segment count */}
@@ -2243,7 +2247,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                                   <button
                                     type="button"
                                     className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
-                                    onClick={() => setSteps((prev) => prev.map((x) => x.localId === lid && x.step_type === 'send_sms' ? { ...x, media_urls: (x.media_urls ?? []).filter((u) => u !== url) } : x))}
+                                    onClick={() => { setSteps((prev) => prev.map((x) => x.localId === lid && x.step_type === 'send_sms' ? { ...x, media_urls: (x.media_urls ?? []).filter((u) => u !== url) } : x)); scheduleAutoSave(); }}
                                   >
                                     <X size={9} />
                                   </button>
@@ -2314,6 +2318,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                               if (existing.includes(url) || existing.length >= 3) return x;
                               return { ...x, media_urls: [...existing, url] };
                             }));
+                            scheduleAutoSave();
                             setSmsMediaPickerOpen(false);
                           }}
                         />
@@ -2350,6 +2355,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                                       x.localId === lid && (x.step_type === 'add_tag' || x.step_type === 'remove_tag')
                                         ? { ...x, tag_ids: next } : x
                                     ));
+                                    scheduleAutoSave();
                                   }}
                                   className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs transition-colors ${
                                     checked
@@ -2388,6 +2394,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                             onChange={(e) => {
                               const v = e.target.value;
                               setSteps((prev) => prev.map((x) => x.localId === lid && x.step_type === 'change_stage' ? { ...x, stage_id: v } : x));
+                              scheduleAutoSave();
                             }}
                           >
                             <option value="">Choose a stage…</option>
