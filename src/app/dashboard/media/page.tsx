@@ -81,6 +81,30 @@ function fileTypeLabel(contentType: string): string {
   return 'FILE';
 }
 
+type PreviewKind = 'image' | 'pdf' | 'office' | 'text' | 'unsupported';
+
+function previewKind(contentType: string): PreviewKind {
+  const ct = contentType.toLowerCase();
+  if (ct.startsWith('image/')) return 'image';
+  if (ct.includes('pdf')) return 'pdf';
+  if (
+    ct.includes('wordprocessing') ||
+    ct === 'application/msword' ||
+    ct.includes('spreadsheet') ||
+    ct === 'application/vnd.ms-excel' ||
+    ct.includes('presentation') ||
+    ct === 'application/vnd.ms-powerpoint'
+  ) {
+    return 'office';
+  }
+  if (ct === 'text/plain' || ct === 'text/csv' || ct.startsWith('text/')) return 'text';
+  return 'unsupported';
+}
+
+function downloadHref(asset: VenueMediaAssetRow, opts?: { inline?: boolean }): string {
+  return `/api/venue-media/${asset.id}/download${opts?.inline ? '?inline=1' : ''}`;
+}
+
 function FileTypeIcon({
   contentType,
   className = 'h-7 w-7',
@@ -154,7 +178,7 @@ export default function MediaLibraryPage() {
   const [savingRename, setSavingRename] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<VenueMediaAssetRow | null>(null);
-  const [lightboxAsset, setLightboxAsset] = useState<VenueMediaAssetRow | null>(null);
+  const [previewAsset, setPreviewAsset] = useState<VenueMediaAssetRow | null>(null);
   const [usage, setUsage] = useState<Record<string, UsageRef[]>>({});
   const [usageLoading, setUsageLoading] = useState(true);
   const [dragActive, setDragActive] = useState(false);
@@ -593,7 +617,7 @@ export default function MediaLibraryPage() {
               onDelete={() => requestDelete(a)}
               usage={usage[a.public_url] ?? []}
               usageLoading={usageLoading}
-              onPreview={() => isImageAsset(a) && setLightboxAsset(a)}
+              onPreview={() => setPreviewAsset(a)}
             />
           ))}
         </div>
@@ -617,7 +641,7 @@ export default function MediaLibraryPage() {
                 onRename={() => startRename(a)}
                 onDelete={() => requestDelete(a)}
                 usage={usage[a.public_url] ?? []}
-                onPreview={() => isImageAsset(a) && setLightboxAsset(a)}
+                onPreview={() => setPreviewAsset(a)}
               />
             ))}
           </ul>
@@ -698,9 +722,9 @@ export default function MediaLibraryPage() {
         />
       ) : null}
 
-      {/* ----- Lightbox ----- */}
-      {lightboxAsset ? (
-        <Lightbox asset={lightboxAsset} onClose={() => setLightboxAsset(null)} />
+      {/* ----- Preview modal (images, PDFs, Office docs, text) ----- */}
+      {previewAsset ? (
+        <PreviewModal asset={previewAsset} onClose={() => setPreviewAsset(null)} />
       ) : null}
     </div>
   );
@@ -962,10 +986,8 @@ function AssetMenu({
         {copied ? 'Copied' : 'Copy URL'}
       </button>
       <a
-        href={asset.public_url}
-        target="_blank"
-        rel="noreferrer"
-        download={asset.file_name}
+        href={downloadHref(asset)}
+        download={asset.display_name?.trim() || asset.file_name}
         className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
       >
         <Download className="h-3.5 w-3.5" />
@@ -1144,7 +1166,19 @@ function DeleteConfirmModal({
   );
 }
 
-function Lightbox({ asset, onClose }: { asset: VenueMediaAssetRow; onClose: () => void }) {
+/**
+ * Unified preview modal. Picks a viewer based on the asset's content_type:
+ *  - images → full-bleed <img>
+ *  - PDFs → in-browser PDF viewer via <iframe> on the public URL
+ *  - Office docs (doc / docx / xls / xlsx / ppt / pptx) → Microsoft Office
+ *    Online "embed" viewer pointed at the public URL
+ *  - text / csv → fetched and rendered in a styled <pre>
+ *  - everything else → a graceful "preview not available" with a Download CTA
+ *
+ * The download / open-in-new-tab actions on the toolbar always work — even for
+ * the unsupported case — so users can always get to the file.
+ */
+function PreviewModal({ asset, onClose }: { asset: VenueMediaAssetRow; onClose: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -1152,28 +1186,157 @@ function Lightbox({ asset, onClose }: { asset: VenueMediaAssetRow; onClose: () =
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  const kind = previewKind(asset.content_type);
+  const name = displayName(asset);
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+      className="fixed inset-0 z-50 flex flex-col items-stretch bg-black/80 p-4 sm:p-8"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
     >
-      <button
-        type="button"
-        onClick={onClose}
-        className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
-        aria-label="Close preview"
-      >
-        <X className="h-5 w-5" />
-      </button>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={asset.public_url}
-        alt={displayName(asset)}
-        className="max-h-[90vh] max-w-[92vw] rounded-lg object-contain shadow-2xl"
+      <div
+        className="mx-auto flex h-full w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-white shadow-2xl"
         onClick={(e) => e.stopPropagation()}
-      />
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-gray-100 bg-white px-4 py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <FileTypeIcon contentType={asset.content_type} className="h-5 w-5 text-gray-500" />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-gray-900">{name}</p>
+              <p className="truncate text-[11px] text-gray-500">
+                {fileTypeLabel(asset.content_type)} · {formatBytes(asset.size_bytes)}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-shrink-0 items-center gap-1.5">
+            <a
+              href={asset.public_url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+              title="Open in new tab"
+            >
+              <Link2 className="h-3.5 w-3.5" />
+              Open
+            </a>
+            <a
+              href={downloadHref(asset)}
+              download={name}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-brand-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-800"
+              title="Download"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Download
+            </a>
+            <button
+              type="button"
+              onClick={onClose}
+              className="ml-1 rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+              aria-label="Close preview"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="relative flex-1 overflow-hidden bg-gray-50">
+          {kind === 'image' ? (
+            <div className="flex h-full w-full items-center justify-center bg-black/5 p-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={asset.public_url}
+                alt={name}
+                className="max-h-full max-w-full rounded object-contain"
+              />
+            </div>
+          ) : kind === 'pdf' ? (
+            <iframe
+              title={name}
+              src={`${asset.public_url}#view=FitH`}
+              className="h-full w-full border-0 bg-white"
+            />
+          ) : kind === 'office' ? (
+            <OfficePreview asset={asset} />
+          ) : kind === 'text' ? (
+            <TextPreview asset={asset} />
+          ) : (
+            <UnsupportedPreview asset={asset} />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OfficePreview({ asset }: { asset: VenueMediaAssetRow }) {
+  // Microsoft's hosted "Office Online" embed viewer renders Word, Excel, and
+  // PowerPoint files as long as the source URL is publicly reachable, which
+  // every Supabase public bucket already is.
+  const src = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(asset.public_url)}`;
+  return (
+    <iframe
+      title={displayName(asset)}
+      src={src}
+      className="h-full w-full border-0 bg-white"
+      // The Office embed sets X-Frame-Options ALLOWALL; sandbox lightly so the
+      // viewer keeps its scripts but can't pop new windows out.
+      sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+    />
+  );
+}
+
+function TextPreview({ asset }: { asset: VenueMediaAssetRow }) {
+  const [text, setText] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    // Stream through our own /download endpoint so we never hit a CORS wall
+    // when fetching a text asset across origins.
+    void fetch(downloadHref(asset, { inline: true }), { cache: 'no-store' })
+      .then((r) => (r.ok ? r.text() : Promise.reject(new Error(`Failed (${r.status})`))))
+      .then((t) => {
+        if (cancelled) return;
+        // Cap visible content so opening a 25 MB CSV doesn't freeze the tab.
+        setText(t.length > 200_000 ? `${t.slice(0, 200_000)}\n\n… file truncated for preview.` : t);
+      })
+      .catch((e) => !cancelled && setErr(e instanceof Error ? e.message : 'Failed to load'));
+    return () => {
+      cancelled = true;
+    };
+  }, [asset]);
+  if (err) {
+    return (
+      <div className="flex h-full w-full items-center justify-center text-sm text-red-700">
+        {err}
+      </div>
+    );
+  }
+  if (text === null) {
+    return (
+      <div className="flex h-full w-full items-center justify-center text-gray-400">
+        <Loader2 className="h-5 w-5 animate-spin" />
+      </div>
+    );
+  }
+  return (
+    <pre className="h-full w-full overflow-auto bg-white p-4 font-mono text-xs leading-relaxed text-gray-800">
+      {text}
+    </pre>
+  );
+}
+
+function UnsupportedPreview({ asset }: { asset: VenueMediaAssetRow }) {
+  return (
+    <div className="flex h-full w-full flex-col items-center justify-center px-6 text-center text-gray-600">
+      <FileTypeIcon contentType={asset.content_type} className="mb-3 h-10 w-10 text-gray-400" />
+      <p className="text-sm font-medium text-gray-800">In-browser preview isn&apos;t available for this file type.</p>
+      <p className="mt-1 max-w-md text-xs text-gray-500">
+        Use the Download button above to save it to your computer, or Open to view it directly in a new
+        tab.
+      </p>
     </div>
   );
 }

@@ -566,9 +566,19 @@ Page features:
 - Drag and drop files anywhere on the page to upload — or click Upload.
 - Per-file progress bars during upload.
 - Search by filename, filter pills (All / Images / Documents), sort (newest, oldest, name, size), and a grid ↔ list toggle (your view preference saves per browser).
-- Click any image thumbnail to preview it full-screen with arrow-key paging through the rest of your library.
 - A trash icon on every card lets you delete in one click; the "..." menu adds Copy URL, Download, Open in new tab, and Rename. The menu renders as a portal so it never gets cut off by surrounding cards or by the page edge, and closes automatically when you scroll.
 - Rename is display-name only — the public URL doesn't change, so existing links keep working everywhere they're already pasted.
+
+Click any file to preview it
+- Images open full-bleed in the preview modal.
+- PDFs render in the browser's native PDF viewer.
+- Word, Excel, and PowerPoint files render through Microsoft's Office Online embedded viewer (no plugin or download required — it just works).
+- Plain text and CSV files render inline with monospaced formatting.
+- Anything outside those types shows a friendly "preview not available" with the Download / Open in new tab buttons still accessible.
+- The preview modal's toolbar always shows Open in new tab and Download, so you can grab the file regardless of the file type.
+
+Download
+- Click Download from the asset menu (or from the preview modal toolbar) and the file saves directly to your computer with its original name. The download streams through the StoryPay app domain so browsers always trigger a real save instead of opening the file in a new tab.
 
 Used in indicator:
 - Each file shows where its URL is referenced today: Brand logo (Settings → Branding), Listing cover/gallery (Venue listing → Photos), Email templates and campaigns, Lead capture forms.
