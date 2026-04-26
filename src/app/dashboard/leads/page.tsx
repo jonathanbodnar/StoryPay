@@ -1527,6 +1527,20 @@ function LeadDrawer({
   const [loggingCall, setLoggingCall] = useState(false);
   const [dupBusy, setDupBusy] = useState(false);
 
+  type EnrollmentRow = {
+    id: string; status: string; current_step_index: number; total_steps: number;
+    enrolled_at: string; completed_at: string | null; next_run_at: string | null;
+    last_error: string | null; automation_id: string; automation_name: string; automation_status: string;
+  };
+  const [enrollments, setEnrollments] = useState<EnrollmentRow[]>([]);
+
+  useEffect(() => {
+    fetch(`/api/leads/${lead.id}/enrollments`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d: { enrollments?: EnrollmentRow[] }) => setEnrollments(d.enrollments ?? []))
+      .catch(() => {});
+  }, [lead.id]);
+
   const loadActivity = useCallback(async () => {
     setLoadingActivity(true);
     const res = await fetch(`/api/leads/${lead.id}/activity`, { cache: 'no-store' });
@@ -2121,6 +2135,51 @@ function LeadDrawer({
               </button>
             )}
           </section>
+
+          {/* Workflow Enrollments */}
+          {enrollments.length > 0 && (
+            <section>
+              <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5 mb-3">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                Workflow Enrollments
+              </h3>
+              <div className="space-y-2">
+                {enrollments.map((en) => {
+                  const statusColor = en.status === 'active'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                    : en.status === 'completed'
+                    ? 'bg-gray-100 border-gray-200 text-gray-600'
+                    : en.status.includes('halted') || en.status === 'failed'
+                    ? 'bg-red-50 border-red-200 text-red-700'
+                    : 'bg-amber-50 border-amber-200 text-amber-700';
+                  const stepLabel = en.total_steps > 0
+                    ? `Step ${Math.min(en.current_step_index + 1, en.total_steps)} of ${en.total_steps}`
+                    : en.status === 'completed' ? 'Completed' : 'Step 1';
+                  return (
+                    <div key={en.id} className="flex items-center justify-between gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5">
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-gray-900 truncate">{en.automation_name}</p>
+                        {en.next_run_at && en.status === 'active' && (
+                          <p className="text-[10px] text-gray-400 mt-0.5">
+                            Next: {new Date(en.next_run_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                          </p>
+                        )}
+                        {en.last_error && en.status !== 'active' && (
+                          <p className="text-[10px] text-red-500 mt-0.5 truncate">{en.last_error}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <span className="text-[10px] font-medium text-gray-500">{stepLabel}</span>
+                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold capitalize ${statusColor}`}>
+                          {en.status.replace(/_/g, ' ')}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
 
           {/* Personalized trigger links (automatic attribution via ?t=) */}
           <section>

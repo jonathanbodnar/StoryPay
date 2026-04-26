@@ -12,7 +12,7 @@ export async function GET() {
 
   const { data, error } = await supabaseAdmin
     .from('marketing_forms')
-    .select('id, name, embed_token, published, created_at, updated_at')
+    .select('id, name, embed_token, published, is_listing_form, created_at, updated_at')
     .eq('venue_id', venueId)
     .order('updated_at', { ascending: false });
 

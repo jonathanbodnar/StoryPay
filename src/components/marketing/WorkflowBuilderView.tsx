@@ -1798,6 +1798,9 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                             <label key={f.id} className="flex items-center gap-2 cursor-pointer">
                               <input type="checkbox" checked={selForms.includes(f.id)} onChange={() => toggle(selForms, f.id, setSelForms)} />
                               <span className="truncate">{f.name}</span>
+                              {(f as { is_listing_form?: boolean }).is_listing_form && (
+                                <span className="flex-shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">Venue listing</span>
+                              )}
                               {!f.published && <span className="text-gray-400">(draft)</span>}
                             </label>
                           ))}
@@ -1932,6 +1935,9 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                                 <label key={f.id} className="flex items-center gap-2 cursor-pointer">
                                   <input type="checkbox" checked={(t.form_ids ?? []).includes(f.id)} onChange={() => toggleExtraField(extraIdx, 'form_ids', f.id)} />
                                   <span className="truncate">{f.name}</span>
+                                  {(f as { is_listing_form?: boolean }).is_listing_form && (
+                                    <span className="flex-shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">Venue listing</span>
+                                  )}
                                   {!f.published && <span className="text-gray-400">(draft)</span>}
                                 </label>
                               ))}

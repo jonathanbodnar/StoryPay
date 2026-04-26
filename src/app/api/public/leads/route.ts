@@ -5,6 +5,7 @@ import { sendEmail } from '@/lib/email';
 import { recordDuplicateCandidatesForNewLead } from '@/lib/lead-duplicates';
 import { ensureDefaultPipeline, legacyStatusForStageName } from '@/lib/pipelines';
 import { onMarketingFormSubmitted } from '@/lib/marketing-email-worker';
+import { syncVenueCustomerFromLeadRow } from '@/lib/venue-customer-pipeline-sync';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -231,6 +232,14 @@ export async function POST(request: NextRequest) {
         })
         .eq('id', lr.id)
         .eq('venue_id', venue.id);
+
+      // Sync the pipeline/stage onto the matching venue_customers row so
+      // the lead appears immediately in the kanban and contact profile.
+      void syncVenueCustomerFromLeadRow(venue.id, {
+        email:       lr.email,
+        pipeline_id: defaultPipelineId,
+        stage_id:    targetStage.id,
+      });
     }
   } catch (e) {
     console.error('[public/leads] attach default pipeline', e);
