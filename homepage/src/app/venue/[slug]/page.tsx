@@ -10,6 +10,7 @@ import { VenueReviewsTabs } from '@/components/VenueReviewsTabs';
 import { VenueFaqSection, VenueMapEmbed, VenueSocialRow } from '@/components/VenuePublicExtras';
 import { DirectoryListingBadges } from '@/components/DirectoryListingBadges';
 import { ListingTracker } from '@/components/ListingTracker';
+import { ListingLeadModal } from '@/components/ListingLeadModal';
 
 const API_BASE = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'https://app.storyvenue.com';
 const DIRECTORY_SITE =
@@ -360,6 +361,18 @@ export default async function PublicVenuePage({ params }: { params: Promise<{ sl
             </div>
 
             <aside className="space-y-6 lg:pt-2">
+              {/* Lead gen CTA — sticky on desktop */}
+              <div className="rounded-3xl border border-gray-200 bg-white p-6">
+                <p className="mb-4 text-sm text-gray-600 leading-relaxed">
+                  Get pricing, check availability, and download the full venue guide.
+                </p>
+                <ListingLeadModal
+                  venueName={venue.name}
+                  venueId={venue.id}
+                  apiBase={API_BASE}
+                />
+              </div>
+
               <div className="rounded-3xl border border-gray-200 bg-white p-6">
                 <h3 className="text-xs font-bold uppercase tracking-wide text-gray-400">Details</h3>
                 <dl className="mt-4 space-y-4 text-sm">

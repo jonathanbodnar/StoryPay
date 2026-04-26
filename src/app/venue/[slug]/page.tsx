@@ -9,6 +9,9 @@ import { DirectoryListingBadges } from '@/components/directory/DirectoryListingB
 import { Ga4Scripts } from '@/components/directory/Ga4Scripts';
 import { VenueFaqSection, VenueMapEmbed, VenueSocialRow } from '@/components/directory/VenuePublicBlocks';
 import { ListingTracker } from '@/components/directory/ListingTracker';
+import { ListingLeadModal } from '@/components/directory/ListingLeadModal';
+
+const APP_BASE = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'https://app.storyvenue.com';
 
 const DIRECTORY_SITE =
   process.env.NEXT_PUBLIC_DIRECTORY_URL || process.env.NEXT_PUBLIC_DIRECTORY_SITE_URL || 'https://storyvenue.com';
@@ -126,6 +129,13 @@ export default async function PublicVenuePage({ params }: { params: Promise<{ sl
       )}
 
       <div className="mx-auto max-w-3xl space-y-8 px-4 py-10 sm:px-6">
+        {/* Lead gen CTA */}
+        <ListingLeadModal
+          venueName={venue.name}
+          venueId={venue.id}
+          apiBase={APP_BASE}
+        />
+
         {venue.description && (
           <div className="prose prose-gray max-w-none text-[15px] leading-relaxed text-gray-700">
             {venue.description.split(/\n\n+/).map((p, i) => (

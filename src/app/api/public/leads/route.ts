@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 import { recordDuplicateCandidatesForNewLead } from '@/lib/lead-duplicates';
 import { ensureDefaultPipeline, legacyStatusForStageName } from '@/lib/pipelines';
+import { onMarketingFormSubmitted } from '@/lib/marketing-email-worker';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -11,10 +12,6 @@ export const runtime = 'nodejs';
 const LEAD_WEBHOOK_SECRET = process.env.LEAD_WEBHOOK_SECRET || '';
 const DIRECTORY_URL = process.env.NEXT_PUBLIC_DIRECTORY_URL || 'https://storyvenue.com';
 
-/**
- * Timing-safe HMAC comparison.
- * Returns false if the signature doesn't match or either input is malformed.
- */
 function verifySignature(rawBody: string, signature: string): boolean {
   if (!LEAD_WEBHOOK_SECRET || !signature) return false;
   const expected = crypto.createHmac('sha256', LEAD_WEBHOOK_SECRET).update(rawBody).digest('hex');
@@ -29,13 +26,14 @@ interface LeadPayload {
   venue_slug?: string;
   venue_id?: string;
   venue_listing_id?: string;
+  // Support both combined name and split first/last
   name?: string;
+  first_name?: string;
+  last_name?: string;
   email?: string;
   phone?: string;
-  event_date?: string;
-  wedding_date?: string;
-  guest_count?: number;
   booking_timeline?: string;
+  venue_matters?: string;
   message?: string;
   source?: string;
   utm_source?: string;
@@ -51,10 +49,43 @@ function isEmail(s: string): boolean {
 }
 
 /**
- * Public inbound lead webhook. The directory site signs the raw request body
- * with HMAC-SHA256 using LEAD_WEBHOOK_SECRET and sends it as
- * `x-storypay-signature`. We resolve the StoryPay venue, insert a lead row,
- * and (if enabled) email the owner.
+ * Ensure the venue has a "Listing Lead Form" in marketing_forms.
+ * Returns the form id (creates one if absent).
+ */
+async function ensureListingForm(venueId: string): Promise<string | null> {
+  try {
+    const { data: existing } = await supabaseAdmin
+      .from('marketing_forms')
+      .select('id')
+      .eq('venue_id', venueId)
+      .eq('is_listing_form', true)
+      .maybeSingle();
+
+    if (existing) return existing.id as string;
+
+    const { data: created } = await supabaseAdmin
+      .from('marketing_forms')
+      .insert({
+        venue_id: venueId,
+        name: 'Listing Lead Form',
+        is_listing_form: true,
+        published: true,
+      })
+      .select('id')
+      .single();
+
+    return created ? (created.id as string) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Public inbound lead from the venue listing page.
+ * Signed with HMAC-SHA256 using LEAD_WEBHOOK_SECRET.
+ * Collects first/last name, phone, email, booking_timeline,
+ * venue_matters, and an optional message.
+ * On success: inserts lead → "New Lead" stage → fires form workflow trigger.
  */
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
@@ -72,15 +103,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const name = (payload.name ?? '').trim();
+  // Resolve first / last name — accept split or combined
+  const firstName = (payload.first_name ?? '').trim();
+  const lastName  = (payload.last_name  ?? '').trim();
+  const name = (payload.name ?? `${firstName} ${lastName}`).trim() || `${firstName} ${lastName}`.trim();
+
   const email = (payload.email ?? '').trim().toLowerCase();
   const phone = (payload.phone ?? '').trim();
 
-  if (!name || !email || !isEmail(email)) {
-    return NextResponse.json({ error: 'name and valid email required' }, { status: 400 });
+  if (!firstName || !lastName || !email || !isEmail(email) || !phone) {
+    return NextResponse.json(
+      { error: 'first_name, last_name, phone, and valid email are required' },
+      { status: 400 },
+    );
   }
 
-  const slug = payload.listing_slug ?? payload.venue_slug;
+  const slug    = payload.listing_slug ?? payload.venue_slug;
   const venueId = payload.venue_id ?? payload.venue_listing_id;
 
   const venueQuery = supabaseAdmin
@@ -95,18 +133,12 @@ export async function POST(request: NextRequest) {
 
   if (venueErr) {
     console.error('[public/leads] venue lookup failed:', venueErr);
-    return NextResponse.json(
-      { error: `Lookup failed: ${venueErr.message}` },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: `Lookup failed: ${venueErr.message}` }, { status: 500 });
   }
-
   if (!venue) {
     console.warn('[public/leads] venue not found:', venueId ?? slug);
     return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
   }
-
-  const weddingDate = payload.wedding_date ?? payload.event_date ?? null;
 
   const utm: Record<string, string> = {};
   for (const k of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'] as const) {
@@ -117,17 +149,20 @@ export async function POST(request: NextRequest) {
   const { data: lead, error: insertErr } = await supabaseAdmin
     .from('leads')
     .insert({
-      venue_id: venue.id,
-      name,
+      venue_id:         venue.id,
+      first_name:       firstName,
+      last_name:        lastName,
+      name:             name || `${firstName} ${lastName}`.trim(),
       email,
-      phone: phone || null,
-      wedding_date: weddingDate,
-      guest_count: payload.guest_count ?? null,
+      phone:            phone || null,
       booking_timeline: payload.booking_timeline || null,
-      message: payload.message || null,
-      source: payload.source || 'directory',
-      first_touch_utm: Object.keys(utm).length ? utm : {},
-      referral_source: typeof payload.referral_source === 'string' ? payload.referral_source.trim() || null : null,
+      venue_matters:    payload.venue_matters   || null,
+      message:          payload.message         || null,
+      source:           payload.source          || 'directory',
+      first_touch_utm:  Object.keys(utm).length ? utm : {},
+      referral_source:  typeof payload.referral_source === 'string'
+                          ? payload.referral_source.trim() || null
+                          : null,
     })
     .select('id, track_token, created_at, email, phone')
     .single();
@@ -141,32 +176,33 @@ export async function POST(request: NextRequest) {
   }
 
   const lr = lead as { id: string; created_at: string; email: string; phone: string | null };
-  void recordDuplicateCandidatesForNewLead(
-    venue.id,
-    lr.id,
-    lr.email,
-    lr.phone,
-    lr.created_at,
-  );
 
+  void recordDuplicateCandidatesForNewLead(venue.id, lr.id, lr.email, lr.phone, lr.created_at);
+
+  // Place lead in "New Lead" stage of the default pipeline
   try {
     const defaultPipelineId = await ensureDefaultPipeline(venue.id);
-    const { data: firstSt } = await supabaseAdmin
+    const { data: stages } = await supabaseAdmin
       .from('lead_pipeline_stages')
       .select('id, name')
       .eq('venue_id', venue.id)
       .eq('pipeline_id', defaultPipelineId)
-      .order('position', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    if (firstSt) {
+      .order('position', { ascending: true });
+
+    // Prefer a stage named "New Lead"; fall back to the first stage
+    const targetStage =
+      (stages ?? []).find((s) => s.name.toLowerCase().replace(/\s+/g, '') === 'newlead') ??
+      (stages ?? [])[0] ??
+      null;
+
+    if (targetStage) {
       await supabaseAdmin
         .from('leads')
         .update({
           pipeline_id: defaultPipelineId,
-          stage_id: firstSt.id,
-          status: legacyStatusForStageName(firstSt.name),
-          updated_at: new Date().toISOString(),
+          stage_id:    targetStage.id,
+          status:      legacyStatusForStageName(targetStage.name),
+          updated_at:  new Date().toISOString(),
         })
         .eq('id', lr.id)
         .eq('venue_id', venue.id);
@@ -175,36 +211,43 @@ export async function POST(request: NextRequest) {
     console.error('[public/leads] attach default pipeline', e);
   }
 
+  // Fire form-submitted workflow trigger
+  try {
+    const formId = await ensureListingForm(venue.id);
+    if (formId) await onMarketingFormSubmitted(venue.id, lr.id, formId);
+  } catch (e) {
+    console.error('[public/leads] workflow trigger', e);
+  }
+
+  // Owner notification email
   const notifyEnabled = venue.email_notifications !== false;
   if (notifyEnabled) {
     const notifyTo = venue.notification_email || venue.email || undefined;
-
     if (notifyTo) {
-      const venueName = venue.name ?? 'your venue';
-      const listingLink = venue.slug ? `${DIRECTORY_URL}/venue/${venue.slug}` : DIRECTORY_URL;
+      const venueName    = venue.name ?? 'your venue';
+      const listingLink  = venue.slug ? `${DIRECTORY_URL}/venue/${venue.slug}` : DIRECTORY_URL;
       const html = `
-        <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 560px; margin: 0 auto; color: #1b1b1b;">
-          <h2 style="margin: 0 0 16px;">New lead for ${escapeHtml(venueName)}</h2>
-          <p style="margin: 0 0 16px;">You just received a new inquiry from the StoryVenue directory.</p>
-          <table style="width: 100%; border-collapse: collapse;">
-            ${row('Name', name)}
-            ${row('Email', email)}
-            ${phone ? row('Phone', phone) : ''}
-            ${weddingDate ? row('Wedding date', weddingDate) : ''}
-            ${payload.guest_count ? row('Guest count', String(payload.guest_count)) : ''}
-            ${payload.booking_timeline ? row('Timeline', payload.booking_timeline) : ''}
-            ${payload.message ? row('Message', payload.message) : ''}
+        <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:0 auto;color:#1b1b1b;">
+          <h2 style="margin:0 0 16px;">New lead for ${escapeHtml(venueName)}</h2>
+          <p style="margin:0 0 16px;">You received a new inquiry from the StoryVenue directory.</p>
+          <table style="width:100%;border-collapse:collapse;">
+            ${row('Name',      `${firstName} ${lastName}`)}
+            ${row('Email',     email)}
+            ${row('Phone',     phone)}
+            ${payload.booking_timeline ? row('Touring timeline', payload.booking_timeline) : ''}
+            ${payload.venue_matters    ? row('Matters most',      payload.venue_matters)    : ''}
+            ${payload.message          ? row('Message',           payload.message)           : ''}
           </table>
-          <p style="margin: 24px 0;">
-            <a href="${escapeHtml(listingLink)}" style="color: #1b1b1b;">View listing</a> •
+          <p style="margin:24px 0;">
+            <a href="${escapeHtml(listingLink)}" style="color:#1b1b1b;">View listing</a> ·
             Manage in your dashboard.
           </p>
         </div>
       `;
       await sendEmail({
-        to: notifyTo,
+        to:      notifyTo,
         replyTo: email,
-        subject: `New lead: ${name} — ${venueName}`,
+        subject: `New lead: ${firstName} ${lastName} — ${venueName}`,
         html,
       }).catch((e) => console.error('[public/leads] email error:', e));
     }
@@ -217,7 +260,7 @@ export async function POST(request: NextRequest) {
 }
 
 function row(label: string, value: string): string {
-  return `<tr><td style="padding: 4px 12px 4px 0; color: #666;">${escapeHtml(label)}</td><td style="padding: 4px 0;">${escapeHtml(value)}</td></tr>`;
+  return `<tr><td style="padding:4px 12px 4px 0;color:#666;">${escapeHtml(label)}</td><td style="padding:4px 0;">${escapeHtml(value)}</td></tr>`;
 }
 
 function escapeHtml(s: string): string {
