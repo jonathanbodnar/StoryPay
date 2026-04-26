@@ -1454,16 +1454,37 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
 
                   {auto.trigger_type === 'tag_added' && (
                     <div className="mb-4">
-                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Tags</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {tags.map((t) => (
-                          <label key={t.id} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-xs cursor-pointer hover:border-gray-300">
-                            <input type="checkbox" checked={selTags.includes(t.id)} onChange={() => toggle(selTags, t.id, setSelTags)} />
-                            {t.name}
-                          </label>
-                        ))}
+                      <div className="mb-2 flex items-center justify-between">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Tags</p>
+                        {selTags.length > 0 && (
+                          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                            {selTags.length} selected
+                          </span>
+                        )}
                       </div>
-                      <p className="mt-2 text-[11px] text-gray-400">Empty = fire on any tag added.</p>
+                      {tags.length === 0 ? (
+                        <p className="text-[11px] text-gray-500">No tags yet.</p>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                          {tags.map((t) => {
+                            const checked = selTags.includes(t.id);
+                            return (
+                              <button key={t.id} type="button"
+                                onClick={() => toggle(selTags, t.id, setSelTags)}
+                                className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs transition-colors ${
+                                  checked
+                                    ? 'border-blue-300 bg-blue-50 text-blue-700'
+                                    : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300'
+                                }`}
+                              >
+                                <Tag size={11} />
+                                {t.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <p className="mt-2 text-[11px] text-gray-400">Select one or more — fires when ANY selected tag is added. Empty = any tag.</p>
                     </div>
                   )}
 
@@ -1567,16 +1588,37 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
 
                       {t.type === 'tag_added' && (
                         <div className="mb-4">
-                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Tags</p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {tags.map((tg) => (
-                              <label key={tg.id} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-xs cursor-pointer hover:border-gray-300">
-                                <input type="checkbox" checked={(t.tag_ids ?? []).includes(tg.id)} onChange={() => toggleExtraField(extraIdx, 'tag_ids', tg.id)} />
-                                {tg.name}
-                              </label>
-                            ))}
+                          <div className="mb-2 flex items-center justify-between">
+                            <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Tags</p>
+                            {(t.tag_ids?.length ?? 0) > 0 && (
+                              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                                {t.tag_ids!.length} selected
+                              </span>
+                            )}
                           </div>
-                          <p className="mt-2 text-[11px] text-gray-400">Empty = fire on any tag added.</p>
+                          {tags.length === 0 ? (
+                            <p className="text-[11px] text-gray-500">No tags yet.</p>
+                          ) : (
+                            <div className="flex flex-wrap gap-1.5">
+                              {tags.map((tg) => {
+                                const checked = (t.tag_ids ?? []).includes(tg.id);
+                                return (
+                                  <button key={tg.id} type="button"
+                                    onClick={() => toggleExtraField(extraIdx, 'tag_ids', tg.id)}
+                                    className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs transition-colors ${
+                                      checked
+                                        ? 'border-blue-300 bg-blue-50 text-blue-700'
+                                        : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300'
+                                    }`}
+                                  >
+                                    <Tag size={11} />
+                                    {tg.name}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                          <p className="mt-2 text-[11px] text-gray-400">Select one or more — fires when ANY selected tag is added. Empty = any tag.</p>
                         </div>
                       )}
 
@@ -1938,7 +1980,14 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                     const verb = selectedStep.step_type === 'add_tag' ? 'Apply' : 'Remove';
                     return (
                       <div>
-                        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">{verb} Tags</p>
+                        <div className="mb-2 flex items-center justify-between">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{verb} Tags</p>
+                          {selectedTagIds.length > 0 && (
+                            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                              {selectedTagIds.length} selected
+                            </span>
+                          )}
+                        </div>
                         {tags.length === 0 ? (
                           <p className="text-[11px] text-gray-500">No tags yet.</p>
                         ) : (
@@ -1968,7 +2017,9 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                           </div>
                         )}
                         <p className="mt-2 text-[11px] text-gray-400">
-                          {selectedStep.step_type === 'add_tag' ? 'Selected tags will be added to the contact when this step runs.' : 'Selected tags will be removed from the contact.'}
+                          {selectedStep.step_type === 'add_tag'
+                            ? 'Click tags to select — all selected tags are applied at once when this step runs.'
+                            : 'Click tags to select — all selected tags are removed from the contact.'}
                         </p>
                       </div>
                     );
