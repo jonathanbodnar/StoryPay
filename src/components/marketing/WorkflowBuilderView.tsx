@@ -509,28 +509,29 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
     setPan(newPan);
   }, []);
 
-  // ── Wheel: pinch = zoom; scroll = pan ────────────────────────────────────
-  // Browsers handle pinch gestures very differently:
-  //   - Mac Chrome/Edge: pinch trackpad → wheel event with ctrlKey:true
-  //   - Mac Safari:      pinch trackpad → gesturestart/change/end events
-  //                      (NOT wheel events — that's why pinch was broken in Safari)
-  //   - Mouse + Ctrl:    wheel event with ctrlKey:true (treated as pinch)
-  //   - Two-finger scroll on trackpad: wheel event with ctrlKey:false → pan
+  // ── Wheel + gesture listeners — attached after canvas is mounted ─────────
+  //
+  // IMPORTANT: these effects use `[loading, zoomAt]` as deps so they run
+  // again once `loading` flips false and the canvas div is in the DOM.
+  // Previously they ran only at initial mount (while loading=true, ref=null)
+  // so the listeners were never attached — causing the browser to handle the
+  // pinch/scroll itself (= browser zoom / page scroll).
+  //
+  // We attach with { passive: false } so e.preventDefault() is allowed.
+  // React synthetic onWheel is passive by default in React 18, which is why
+  // we bypass React entirely and use addEventListener here.
   useEffect(() => {
+    if (loading) return; // canvas not in DOM yet
     const el = canvasContainerRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       if (e.ctrlKey) {
-        // Pinch-to-zoom (Mac trackpad on Chrome/Edge) or Ctrl+scroll (mouse).
-        // Use exponential decay so the zoom feels smooth & symmetric across
-        // browsers, regardless of how big each individual deltaY is.
-        // negative deltaY = spread fingers = zoom in (factor > 1)
-        // positive deltaY = pinch fingers  = zoom out (factor < 1)
+        // Pinch-to-zoom: Chrome/Edge send wheel+ctrlKey for trackpad pinch.
         const factor = Math.exp(-e.deltaY * 0.01);
         zoomAt(e.clientX, e.clientY, factor);
       } else {
-        // Two-finger scroll → pan. deltaX/deltaY are in CSS pixels on Mac.
+        // Two-finger scroll → pan.
         const newPan = { x: panRef.current.x - e.deltaX, y: panRef.current.y - e.deltaY };
         panRef.current = newPan;
         setPan(newPan);
@@ -538,12 +539,13 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-  }, [zoomAt]);
+  }, [loading, zoomAt]);
 
   // ── Safari pinch-to-zoom (gesture* events) ───────────────────────────────
-  // Safari uses non-standard gesture events for trackpad pinch.
-  // e.scale is the cumulative scale factor since gesturestart (1.0 = no change).
+  // Safari does NOT fire wheel+ctrlKey for trackpad pinch — it fires its own
+  // non-standard gesturestart / gesturechange / gestureend events instead.
   useEffect(() => {
+    if (loading) return; // canvas not in DOM yet
     const el = canvasContainerRef.current;
     if (!el) return;
     let lastScale = 1;
@@ -562,14 +564,12 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
       e.preventDefault();
       const factor = ge.scale / lastScale;
       lastScale = ge.scale;
-      // Use the latest pointer coords if Safari supplies them; otherwise reuse start point.
       const x = Number.isFinite(ge.clientX) ? ge.clientX : gx;
       const y = Number.isFinite(ge.clientY) ? ge.clientY : gy;
       zoomAt(x, y, factor);
     };
     const onGestureEnd = (e: Event) => { e.preventDefault(); lastScale = 1; };
 
-    // These are non-standard events, but TS doesn't know about them
     el.addEventListener('gesturestart',  onGestureStart  as EventListener, { passive: false });
     el.addEventListener('gesturechange', onGestureChange as EventListener, { passive: false });
     el.addEventListener('gestureend',    onGestureEnd    as EventListener, { passive: false });
@@ -578,7 +578,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
       el.removeEventListener('gesturechange', onGestureChange as EventListener);
       el.removeEventListener('gestureend',    onGestureEnd    as EventListener);
     };
-  }, [zoomAt]);
+  }, [loading, zoomAt]);
 
   // ── Global mousemove / mouseup for pan dragging ───────────────────────────
   useEffect(() => {
