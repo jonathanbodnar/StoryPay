@@ -818,10 +818,11 @@ export default function CalendarPage() {
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <button onClick={() => openNewEvent()}
-              className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition-colors"
-              style={{ backgroundColor: '#1b1b1b' }}>
-              <Plus size={15} /> Add Event
+            <button
+              onClick={() => openNewEvent()}
+              className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"
+            >
+              <Plus size={18} /> Add event
             </button>
           </div>
         </div>

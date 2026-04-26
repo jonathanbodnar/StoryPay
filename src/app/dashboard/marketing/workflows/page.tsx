@@ -101,7 +101,7 @@ export default function WorkflowsListPage() {
             setErr(null);
             setModalOpen(true);
           }}
-          className="inline-flex items-center gap-2 rounded-lg bg-[#155eef] px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-[#1249d1]"
+          className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"
         >
           <Plus size={18} />
           New workflow

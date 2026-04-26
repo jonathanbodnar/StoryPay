@@ -659,12 +659,9 @@ export default function LeadsPage() {
           </div>
           <button
             onClick={() => setAddingOpen(true)}
-            className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-colors"
-            style={{ backgroundColor: '#1b1b1b' }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#333333')}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1b1b1b')}
+            className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"
           >
-            <Plus className="w-4 h-4" /> Add Lead
+            <Plus size={18} /> Add lead
           </button>
         </div>
       </header>

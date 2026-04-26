@@ -71,11 +71,10 @@ export default function TemplatesPage() {
  </div>
  <Link
  href="/dashboard/proposals/templates/new"
- className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 transition-all"
- style={{ backgroundColor: '#1b1b1b' }}
+ className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"
  >
- <Plus size={15} />
- New Proposal
+ <Plus size={18} />
+ New template
  </Link>
  </div>
 
@@ -112,10 +111,11 @@ export default function TemplatesPage() {
  <FileText size={40} className="mx-auto mb-3 text-gray-200"/>
  <p className="text-sm font-medium text-gray-500">No templates yet</p>
  <p className="text-xs text-gray-400 mt-1">Create your first proposal template to get started</p>
- <Link href="/dashboard/proposals/templates/new"
- className="mt-4 inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 transition-all"
- style={{ backgroundColor: '#1b1b1b' }}>
- <Plus size={14} /> Create Template
+ <Link
+ href="/dashboard/proposals/templates/new"
+ className="mt-4 inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"
+ >
+ <Plus size={18} /> Create template
  </Link>
  </div>
  ) : (

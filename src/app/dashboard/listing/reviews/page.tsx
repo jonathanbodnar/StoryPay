@@ -480,7 +480,7 @@ export default function ListingReviewsPage() {
                   setShowComposer(true);
                   setFormError('');
                 }}
-                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-[#1b1b1b] px-5 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800"
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"
               >
                 <Plus size={18} />
                 Add review

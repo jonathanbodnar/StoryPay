@@ -146,9 +146,9 @@ export default function AudiencesPage() {
             setCreateOpen(true);
             setErr(null);
           }}
-          className="flex items-center gap-2 rounded-2xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-gray-700"
+          className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"
         >
-          <Plus size={16} /> New audience
+          <Plus size={18} /> New audience
         </button>
       </div>
 
@@ -169,9 +169,9 @@ export default function AudiencesPage() {
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
-            className="mt-4 inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+            className="mt-4 inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
           >
-            <Plus size={15} /> New audience
+            <Plus size={18} /> New audience
           </button>
         </div>
       ) : (

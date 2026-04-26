@@ -307,10 +307,9 @@ function FeatureRequestsTab() {
  <p className="text-sm text-gray-600 flex-1 min-w-0">Vote on features you want most. The most-requested features guide our roadmap.</p>
  <button
  onClick={() => setShowForm(v => !v)}
- className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-all hover:opacity-90 whitespace-nowrap flex-shrink-0"
- style={{ backgroundColor: '#1b1b1b' }}
+ className="inline-flex flex-shrink-0 items-center gap-2 whitespace-nowrap rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"
  >
- {showForm ? <><X size={14} /> Cancel</> : <><Plus size={14} /> Submit Request</>}
+ {showForm ? <><X size={18} /> Cancel</> : <><Plus size={18} /> Submit request</>}
  </button>
  </div>
 

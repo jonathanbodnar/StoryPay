@@ -90,10 +90,11 @@ export default function PaymentsProposalsPage() {
  <h1 className="text-2xl font-bold text-gray-900">Proposals</h1>
  <p className="mt-1 text-sm text-gray-500">Manage drafts and track sent proposals</p>
  </div>
- <Link href="/dashboard/payments/new"
- className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 transition-all"
- style={{ backgroundColor: '#1b1b1b' }}>
- <Plus size={14}/> New Proposal
+ <Link
+ href="/dashboard/payments/new"
+ className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"
+ >
+ <Plus size={18} /> New proposal
  </Link>
  </div>
 
@@ -200,7 +201,12 @@ export default function PaymentsProposalsPage() {
  <div className="py-16 text-center rounded-2xl border border-dashed border-gray-200 bg-white">
  <FileText size={36} className="mx-auto mb-3 text-gray-200"/>
  <p className="text-sm font-medium text-gray-500">{search ? 'No proposals match your search' : 'No proposals yet'}</p>
- <Link href="/dashboard/payments/new"className="mt-4 inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white hover:opacity-90"style={{ backgroundColor: '#1b1b1b' }}><Plus size={14}/>Create First Proposal</Link>
+ <Link
+ href="/dashboard/payments/new"
+ className="mt-4 inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"
+ >
+ <Plus size={18} /> Create first proposal
+ </Link>
  </div>
  ) : (
  <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">

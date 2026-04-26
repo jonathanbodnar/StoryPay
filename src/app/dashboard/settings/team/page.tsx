@@ -243,11 +243,10 @@ export default function TeamPage() {
  )}
  <button
  onClick={() => { setShowForm(v => !v); setError(''); }}
- className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 transition-all"
- style={{ backgroundColor: '#1b1b1b' }}
+ className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"
  >
- <Plus size={15} />
- Add Team Member
+ <Plus size={18} />
+ Add team member
  </button>
  </div>
  </div>

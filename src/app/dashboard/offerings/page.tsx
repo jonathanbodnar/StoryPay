@@ -187,17 +187,16 @@ export default function OfferingsPage() {
           <button
             type="button"
             onClick={() => openNew('item')}
-            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-50"
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-800 transition hover:bg-gray-50"
           >
-            <Plus size={15} /> New item
+            <Plus size={18} /> New item
           </button>
           <button
             type="button"
             onClick={() => openNew('bundle')}
-            className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90"
-            style={{ backgroundColor: BRAND }}
+            className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"
           >
-            <Plus size={15} /> New bundle
+            <Plus size={18} /> New bundle
           </button>
         </div>
       </header>
