@@ -252,6 +252,7 @@ type LeadDraft = {
   weddingDate: string;
   guestCount: string;
   bookingTimeline: string;
+  venueMatters: string;
   message: string;
   pipelineId: string;
   stageId: string;
