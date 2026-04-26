@@ -413,6 +413,7 @@ async function createContactFromDraft(draft: LeadDraft) {
     weddingDate: draft.weddingDate || null,
     guestCount: draft.guestCount ? Number(draft.guestCount) : null,
     bookingTimeline: draft.bookingTimeline.trim() || undefined,
+    venueMatters: draft.venueMatters.trim() || undefined,
     message: draft.message,
     pipelineId: excludeFromPipeline ? undefined : draft.pipelineId || undefined,
     stageId: excludeFromPipeline ? undefined : draft.stageId || undefined,

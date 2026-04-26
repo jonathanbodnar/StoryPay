@@ -153,6 +153,11 @@ export default function CustomerDetailPage() {
   const [savingPartner,  setSavingPartner]  = useState(false);
   const [partnerError,   setPartnerError]   = useState('');
 
+  // Inquiry details (linked lead booking_timeline + venue_matters)
+  const [inquiryForm, setInquiryForm] = useState({ booking_timeline: '', venue_matters: '' });
+  const [savingInquiry, setSavingInquiry] = useState(false);
+  const [inquiryError, setInquiryError] = useState('');
+
   // Wedding details edit — separate state
   const [editingWedding, setEditingWedding] = useState(false);
   const [weddingForm,    setWeddingForm]    = useState<{
@@ -276,6 +281,19 @@ export default function CustomerDetailPage() {
 
       setVenueCustomer(vc);
 
+      // Pre-load inquiry fields from the linked lead
+      const linkedLeadId = vc?.pipeline_context?.linkedLeadId;
+      if (linkedLeadId) {
+        const leadRes = await fetch(`/api/leads/${linkedLeadId}`, { cache: 'no-store' });
+        if (leadRes.ok) {
+          const ld = await leadRes.json() as { lead?: { booking_timeline?: string | null; venue_matters?: string | null } };
+          setInquiryForm({
+            booking_timeline: ld.lead?.booking_timeline ?? '',
+            venue_matters:    ld.lead?.venue_matters    ?? '',
+          });
+        }
+      }
+
       const spRes = await fetch('/api/spaces');
       if (spRes.ok) setSpaces(await spRes.json());
 
@@ -334,6 +352,26 @@ export default function CustomerDetailPage() {
       setContactError(d.error || 'Failed to save — please try again');
     }
     setSavingContact(false);
+  }
+
+  async function saveInquiry() {
+    const linkedLeadId = venueCustomer?.pipeline_context?.linkedLeadId;
+    if (!linkedLeadId) return;
+    setSavingInquiry(true);
+    setInquiryError('');
+    const res = await fetch(`/api/leads/${linkedLeadId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bookingTimeline: inquiryForm.booking_timeline || null,
+        venueMatters:    inquiryForm.venue_matters    || null,
+      }),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      setInquiryError((d as { error?: string }).error || 'Failed to save');
+    }
+    setSavingInquiry(false);
   }
 
   async function clearSmsDndPreference() {
@@ -1136,6 +1174,66 @@ export default function CustomerDetailPage() {
               </p>
             )}
           </div>
+
+          {/* Inquiry Details (from venue listing form or manually entered) */}
+          {venueCustomer?.pipeline_context?.linkedLeadId && (
+            <div className="rounded-2xl border border-gray-200 bg-white p-5 lg:col-span-2">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-heading text-base text-gray-900 flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+                  Inquiry Questions
+                </h2>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">When do you plan to start touring?</label>
+                  <select
+                    value={inquiryForm.booking_timeline}
+                    onChange={(e) => setInquiryForm((p) => ({ ...p, booking_timeline: e.target.value }))}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+                  >
+                    <option value="">— not answered —</option>
+                    <option value="Immediately — within the next month">Immediately — within the next month</option>
+                    <option value="Soon — 1 to 3 months">Soon — 1 to 3 months</option>
+                    <option value="Planning ahead — 3 to 6 months">Planning ahead — 3 to 6 months</option>
+                    <option value="Just exploring — 6+ months out">Just exploring — 6+ months out</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">What matters most when choosing a venue?</label>
+                  <select
+                    value={inquiryForm.venue_matters}
+                    onChange={(e) => setInquiryForm((p) => ({ ...p, venue_matters: e.target.value }))}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+                  >
+                    <option value="">— not answered —</option>
+                    <option value="Outdoor ceremony space">Outdoor ceremony space</option>
+                    <option value="Inclusive pricing & all-in packages">Inclusive pricing &amp; all-in packages</option>
+                    <option value="Unique / non-traditional setting">Unique / non-traditional setting</option>
+                    <option value="On-site catering & bar">On-site catering &amp; bar</option>
+                    <option value="Guest capacity (large or intimate)">Guest capacity (large or intimate)</option>
+                    <option value="Location & accessibility">Location &amp; accessibility</option>
+                    <option value="Photo-worthy aesthetics">Photo-worthy aesthetics</option>
+                    <option value="Vendor flexibility">Vendor flexibility</option>
+                    <option value="Bridal suite & getting-ready space">Bridal suite &amp; getting-ready space</option>
+                    <option value="Experience & reputation">Experience &amp; reputation</option>
+                  </select>
+                </div>
+              </div>
+              {inquiryError && <p className="mt-2 text-xs text-red-500">{inquiryError}</p>}
+              <div className="flex justify-end mt-4">
+                <button
+                  type="button"
+                  disabled={savingInquiry}
+                  onClick={() => void saveInquiry()}
+                  className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                  style={{ backgroundColor: '#1b1b1b' }}
+                >
+                  {savingInquiry ? 'Saving…' : 'Save Inquiry Details'}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Wedding details */}
           <div className="rounded-2xl border border-gray-200 bg-white p-5 lg:col-span-2">

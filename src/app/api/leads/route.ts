@@ -424,6 +424,7 @@ export async function POST(request: NextRequest) {
     guestCount?: number;
     message?: string;
     bookingTimeline?: string;
+    venueMatters?: string;
     pipelineId?: string;
     stageId?: string;
     spaceId?: string | null;
@@ -519,6 +520,7 @@ export async function POST(request: NextRequest) {
     wedding_date:       body.weddingDate || null,
     guest_count:        body.guestCount ?? null,
     booking_timeline:   body.bookingTimeline?.trim() || null,
+    venue_matters:      body.venueMatters?.trim()    || null,
     message:            body.message || null,
     source:             'manual',
     status:             initialStatus,

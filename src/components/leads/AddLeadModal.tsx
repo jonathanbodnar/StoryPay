@@ -61,6 +61,7 @@ export type LeadDraft = {
   weddingDate: string;
   guestCount: string;
   bookingTimeline: string;
+  venueMatters: string;
   message: string;
   pipelineId: string;
   /**
@@ -90,6 +91,7 @@ export const emptyLeadDraft = (pipelineId: string): LeadDraft => ({
   weddingDate: '',
   guestCount: '',
   bookingTimeline: '',
+  venueMatters: '',
   message: '',
   pipelineId,
   stageId: '',
@@ -504,11 +506,44 @@ export default function AddLeadModal({
                 type="number"
                 onChange={(v) => set('guestCount', v)}
               />
-              <DraftField
-                label="Booking timeline"
-                value={draft.bookingTimeline}
-                onChange={(v) => set('bookingTimeline', v)}
-              />
+              <div>
+                <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">
+                  Booking timeline
+                </label>
+                <select
+                  value={draft.bookingTimeline}
+                  onChange={(e) => set('bookingTimeline', e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-sm focus:border-gray-400 focus:outline-none"
+                >
+                  <option value="">— not answered —</option>
+                  <option value="Immediately — within the next month">Immediately — within the next month</option>
+                  <option value="Soon — 1 to 3 months">Soon — 1 to 3 months</option>
+                  <option value="Planning ahead — 3 to 6 months">Planning ahead — 3 to 6 months</option>
+                  <option value="Just exploring — 6+ months out">Just exploring — 6+ months out</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">
+                What matters most when choosing a venue?
+              </label>
+              <select
+                value={draft.venueMatters}
+                onChange={(e) => set('venueMatters', e.target.value)}
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-sm focus:border-gray-400 focus:outline-none"
+              >
+                <option value="">— not answered —</option>
+                <option value="Outdoor ceremony space">Outdoor ceremony space</option>
+                <option value="Inclusive pricing & all-in packages">Inclusive pricing &amp; all-in packages</option>
+                <option value="Unique / non-traditional setting">Unique / non-traditional setting</option>
+                <option value="On-site catering & bar">On-site catering &amp; bar</option>
+                <option value="Guest capacity (large or intimate)">Guest capacity (large or intimate)</option>
+                <option value="Location & accessibility">Location &amp; accessibility</option>
+                <option value="Photo-worthy aesthetics">Photo-worthy aesthetics</option>
+                <option value="Vendor flexibility">Vendor flexibility</option>
+                <option value="Bridal suite & getting-ready space">Bridal suite &amp; getting-ready space</option>
+                <option value="Experience & reputation">Experience &amp; reputation</option>
+              </select>
             </div>
             <div>
               <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">
