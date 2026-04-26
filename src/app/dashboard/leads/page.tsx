@@ -747,6 +747,7 @@ export default function LeadsPage() {
           onDropStage={onDropStage}
           onToggleLeadTag={setLeadTagSelection}
           onCreateTagForLead={createTagAndAssignToLead}
+          onDeleteLead={deleteLead}
         />
       )}
 
@@ -1120,7 +1121,7 @@ function KanbanBoard({
   dragLeadId, dragOverStage,
   allTags,
   onCardClick, onDragStartCard, onDragEndCard, onDragOverStage, onDropStage, onToggleLeadTag,
-  onCreateTagForLead,
+  onCreateTagForLead, onDeleteLead,
 }: {
   pipeline: Pipeline;
   leadsByStage: Map<string, Lead[]>;
@@ -1137,6 +1138,7 @@ function KanbanBoard({
   onDropStage: (e: React.DragEvent, stageId: string) => void;
   onToggleLeadTag: (leadId: string, tagId: string) => void;
   onCreateTagForLead: (leadId: string, name: string) => Promise<void>;
+  onDeleteLead: (id: string) => void;
 }) {
   return (
     <div
@@ -1202,6 +1204,7 @@ function KanbanBoard({
                       onDragEnd={onDragEndCard}
                       onToggleLeadTag={onToggleLeadTag}
                       onCreateTagForLead={onCreateTagForLead}
+                      onDelete={() => onDeleteLead(lead.id)}
                     />
                   ))
                 )}
@@ -1216,7 +1219,7 @@ function KanbanBoard({
 
 function KanbanCard({
   lead, allTags, bookingBadge, stageWinPct, hideRevenue, isDragging, onClick, onDragStart, onDragEnd, onToggleLeadTag,
-  onCreateTagForLead,
+  onCreateTagForLead, onDelete,
 }: {
   lead: Lead;
   allTags: MarketingTag[];
@@ -1229,6 +1232,7 @@ function KanbanCard({
   onDragEnd: () => void;
   onToggleLeadTag: (leadId: string, tagId: string) => void;
   onCreateTagForLead: (leadId: string, name: string) => Promise<void>;
+  onDelete: () => void;
 }) {
   const weighted =
     lead.opportunity_value != null ? lead.opportunity_value * (stageWinPct / 100) : null;
@@ -1273,6 +1277,16 @@ function KanbanCard({
             onCreateTagForLead={onCreateTagForLead}
             align="right"
           />
+          {!lead.is_protected && (
+            <button
+              type="button"
+              title="Delete lead"
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              className="opacity-0 group-hover:opacity-100 rounded p-0.5 text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
           <GripVertical className="w-3.5 h-3.5 text-gray-300 opacity-0 group-hover:opacity-100" />
         </div>
       </div>
