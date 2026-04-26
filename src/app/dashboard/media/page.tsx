@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Check,
   ChevronDown,
@@ -192,15 +193,20 @@ export default function MediaLibraryPage() {
     void refreshUsage();
   }, [refreshUsage]);
 
-  // Outside click for sort + menu popovers
+  // Outside click + scroll close for sort and asset menus.
   useEffect(() => {
     if (!menuId && !sortOpen) return;
-    const onClick = () => {
+    const closeAll = () => {
       setMenuId(null);
       setSortOpen(false);
     };
-    window.addEventListener('mousedown', onClick);
-    return () => window.removeEventListener('mousedown', onClick);
+    window.addEventListener('mousedown', closeAll);
+    // `capture: true` so we catch scrolls inside any nested scroll container.
+    window.addEventListener('scroll', closeAll, true);
+    return () => {
+      window.removeEventListener('mousedown', closeAll);
+      window.removeEventListener('scroll', closeAll, true);
+    };
   }, [menuId, sortOpen]);
 
   const handleFiles = useCallback(
@@ -593,11 +599,11 @@ export default function MediaLibraryPage() {
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-          <div className="grid grid-cols-[1fr,120px,180px,140px] gap-4 border-b border-gray-100 px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+          <div className="grid grid-cols-[1fr,120px,180px,160px] gap-4 border-b border-gray-100 px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
             <span>Name</span>
             <span>Type</span>
             <span>Used in</span>
-            <span className="text-right">Size · Date</span>
+            <span className="text-right">Size · Date · Actions</span>
           </div>
           <ul>
             {filtered.map((a) => (
@@ -724,12 +730,13 @@ function AssetCardGrid({
   onPreview: () => void;
 }) {
   const isImage = isImageAsset(asset);
+  const [triggerEl, setTriggerEl] = useState<HTMLButtonElement | null>(null);
   return (
-    <div className="group overflow-hidden rounded-xl border border-gray-200 bg-white transition hover:border-gray-300 hover:shadow-sm">
+    <div className="group relative overflow-visible rounded-xl border border-gray-200 bg-white transition hover:border-gray-300 hover:shadow-sm">
       <button
         type="button"
         onClick={onPreview}
-        className="relative block aspect-square w-full overflow-hidden bg-gray-50"
+        className="relative block aspect-square w-full overflow-hidden rounded-t-xl bg-gray-50"
       >
         {isImage ? (
           /* eslint-disable-next-line @next/next/no-img-element */
@@ -761,8 +768,21 @@ function AssetCardGrid({
           </p>
           <UsageChip usage={usage} loading={usageLoading} />
         </div>
-        <div className="relative flex-shrink-0">
+        <div className="flex flex-shrink-0 items-center gap-0.5">
           <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="rounded-md p-1 text-gray-400 transition hover:bg-red-50 hover:text-red-600"
+            aria-label="Delete"
+            title="Delete"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+          <button
+            ref={setTriggerEl}
             type="button"
             onClick={(e) => {
               e.stopPropagation();
@@ -780,6 +800,7 @@ function AssetCardGrid({
               onCopy={onCopy}
               onRename={onRename}
               onDelete={onDelete}
+              triggerEl={triggerEl}
             />
           ) : null}
         </div>
@@ -810,8 +831,9 @@ function AssetRowList({
   onPreview: () => void;
 }) {
   const isImage = isImageAsset(asset);
+  const [triggerEl, setTriggerEl] = useState<HTMLButtonElement | null>(null);
   return (
-    <li className="grid grid-cols-[1fr,120px,180px,140px] items-center gap-4 border-b border-gray-100 px-4 py-3 last:border-b-0 hover:bg-gray-50">
+    <li className="grid grid-cols-[1fr,120px,180px,160px] items-center gap-4 border-b border-gray-100 px-4 py-3 last:border-b-0 hover:bg-gray-50">
       <button type="button" onClick={onPreview} className="flex min-w-0 items-center gap-3 text-left">
         <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-md bg-gray-100">
           {isImage ? (
@@ -836,7 +858,7 @@ function AssetRowList({
       <span className="text-xs">
         <UsageChip usage={usage} loading={false} compact />
       </span>
-      <div className="flex items-center justify-end gap-2 text-xs text-gray-500">
+      <div className="flex items-center justify-end gap-1 text-xs text-gray-500">
         <span className="hidden text-right sm:block">
           {formatBytes(asset.size_bytes)}
           <br />
@@ -852,50 +874,84 @@ function AssetRowList({
         >
           {copied ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
         </button>
-        <div className="relative">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenMenu();
-            }}
-            title="More actions"
-            className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-          >
-            <MoreVertical className="h-3.5 w-3.5" />
-          </button>
-          {menuOpen ? (
-            <AssetMenu
-              asset={asset}
-              copied={copied}
-              onCopy={onCopy}
-              onRename={onRename}
-              onDelete={onDelete}
-            />
-          ) : null}
-        </div>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          title="Delete"
+          aria-label="Delete"
+          className="rounded-md p-1.5 text-gray-400 transition hover:bg-red-50 hover:text-red-600"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+        <button
+          ref={setTriggerEl}
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenMenu();
+          }}
+          title="More actions"
+          className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+        >
+          <MoreVertical className="h-3.5 w-3.5" />
+        </button>
+        {menuOpen ? (
+          <AssetMenu
+            asset={asset}
+            copied={copied}
+            onCopy={onCopy}
+            onRename={onRename}
+            onDelete={onDelete}
+            triggerEl={triggerEl}
+          />
+        ) : null}
       </div>
     </li>
   );
 }
 
+/**
+ * Portal-rendered, viewport-aware asset action menu. We portal it to <body>
+ * because the asset cards use `overflow-hidden` for the rounded image clip,
+ * which would otherwise hide the popover. Position is computed from the
+ * trigger button's bounding rect with a flip-up fallback if the menu would
+ * spill below the viewport.
+ */
 function AssetMenu({
   asset,
   copied,
   onCopy,
   onRename,
   onDelete,
+  triggerEl,
 }: {
   asset: VenueMediaAssetRow;
   copied: boolean;
   onCopy: () => void;
   onRename: () => void;
   onDelete: () => void;
+  triggerEl: HTMLElement | null;
 }) {
-  return (
+  // `triggerEl` is set via a callback ref, which only fires on the client,
+  // so its presence implies we've hydrated and `document` is safe to use.
+  if (!triggerEl || typeof document === 'undefined') return null;
+
+  const MENU_W = 192; // tailwind w-44 (176) + a little buffer
+  const MENU_H = 240; // ~6 items
+  const r = triggerEl.getBoundingClientRect();
+  const wantBelow = r.bottom + MENU_H + 8 < window.innerHeight;
+  const top = wantBelow ? r.bottom + 4 : Math.max(8, r.top - MENU_H - 4);
+  const left = Math.max(8, Math.min(window.innerWidth - MENU_W - 8, r.right - MENU_W));
+
+  return createPortal(
     <div
-      className="absolute right-0 top-full z-30 mt-1 w-44 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+      style={{ position: 'fixed', top, left, zIndex: 100 }}
+      className="w-44 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
       onMouseDown={(e) => e.stopPropagation()}
+      role="menu"
     >
       <button
         type="button"
@@ -936,12 +992,13 @@ function AssetMenu({
       <button
         type="button"
         onClick={onDelete}
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs font-medium text-red-600 hover:bg-red-50"
       >
         <Trash2 className="h-3.5 w-3.5" />
         Delete
       </button>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
