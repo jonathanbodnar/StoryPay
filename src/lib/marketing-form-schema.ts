@@ -77,6 +77,30 @@ export interface FormBlock {
   buttonAlign?: 'left' | 'center' | 'right';
   /** submit / button label */
   buttonLabel?: string;
+
+  // ─── Button styling (mirrors the email builder) ───────────────────────────
+  /** Preset combining fill/outline + corner radius. Overrides buttonVariant when set. */
+  buttonStyle?:
+    | 'filled-rect'
+    | 'filled-rounded'
+    | 'filled-rounded-lg'
+    | 'filled-pill'
+    | 'outline-rect'
+    | 'outline-rounded'
+    | 'outline-rounded-lg'
+    | 'outline-pill';
+  /** Custom button fill color (overrides preset / theme). */
+  buttonBgColor?: string;
+  /** Custom button text color. */
+  buttonTextColor?: string;
+  /** Custom button border color (used by outline presets). */
+  buttonBorderColor?: string;
+  /** Custom button border width in px. */
+  buttonBorderWidth?: number;
+  /** Custom vertical button padding in px (controls "height"). */
+  buttonHeight?: number;
+  /** Render the button at full container width. */
+  buttonFullWidth?: boolean;
   /** optional stable key for exports (defaults to block id in payloads) */
   fieldKey?: string;
   style?: FormBlockStyle;
@@ -217,7 +241,7 @@ export const INPUT_BLOCK_TYPES: FormBlockType[] = [
 
 const DEFAULT_THEME: Required<FormTheme> = {
   maxWidth: '520px',
-  primaryColor: '#111827',
+  primaryColor: '#1b1b1b',
   background: '#f3f4f6',
   surface: '#ffffff',
   fontFamily:
@@ -245,17 +269,6 @@ export function defaultDefinition(): MarketingFormDefinition {
   return {
     version: MARKETING_FORM_SCHEMA_VERSION,
     blocks: [
-      {
-        id: crypto.randomUUID(),
-        type: 'heading',
-        level: 2,
-        content: 'Contact us',
-      },
-      {
-        id: crypto.randomUUID(),
-        type: 'rich_text',
-        content: '<p>Tell us about your event.</p>',
-      },
       // First name + last name share the first row at half-width each.
       {
         id: crypto.randomUUID(),
@@ -291,6 +304,8 @@ export function defaultDefinition(): MarketingFormDefinition {
         id: crypto.randomUUID(),
         type: 'submit',
         buttonLabel: 'Submit',
+        buttonStyle: 'filled-rounded',
+        buttonFullWidth: true,
       },
     ],
     theme: { ...DEFAULT_THEME },
@@ -362,14 +377,20 @@ export function createBlock(type: FormBlockType): FormBlock {
         textareaSize: 'medium' as const,
       };
     case 'submit':
-      return { id, type, buttonLabel: 'Submit' };
+      return {
+        id,
+        type,
+        buttonLabel: 'Submit',
+        buttonStyle: 'filled-rounded',
+        buttonFullWidth: true,
+      };
     case 'button':
       return {
         id,
         type,
         buttonLabel: 'Learn more',
         href: 'https://',
-        buttonVariant: 'secondary',
+        buttonStyle: 'filled-rounded',
       };
     default:
       return { id, type: 'heading', level: 2, content: 'Block' };
@@ -529,6 +550,67 @@ export function serializeDefinition(def: MarketingFormDefinition): MarketingForm
     theme: def.theme ? mergeTheme(def.theme) : mergeTheme({}),
     ...(def.postSubmit ? { postSubmit: { ...def.postSubmit } } : {}),
     ...(def.settings ? { settings: { ...def.settings } } : {}),
+  };
+}
+
+// ─── Button preset table (same combos as the email builder) ─────────────────
+export type ButtonPresetId = NonNullable<FormBlock['buttonStyle']>;
+export const BUTTON_PRESETS: Array<{ id: ButtonPresetId; filled: boolean; radius: number }> = [
+  { id: 'filled-rect',         filled: true,  radius: 0   },
+  { id: 'filled-rounded',      filled: true,  radius: 4   },
+  { id: 'filled-rounded-lg',   filled: true,  radius: 10  },
+  { id: 'filled-pill',         filled: true,  radius: 999 },
+  { id: 'outline-rect',        filled: false, radius: 0   },
+  { id: 'outline-rounded',     filled: false, radius: 4   },
+  { id: 'outline-rounded-lg',  filled: false, radius: 10  },
+  { id: 'outline-pill',        filled: false, radius: 999 },
+];
+
+/** Resolved button rendering style after applying preset + per-block overrides. */
+export interface ResolvedButtonStyle {
+  filled: boolean;
+  radius: number;
+  bg: string;
+  fg: string;
+  borderColor: string;
+  borderWidth: number;
+  paddingY: number;
+  fullWidth: boolean;
+}
+
+/** Compute the final visual style for a submit/button block, falling back to
+ *  the theme's primary color and sensible defaults that match the email builder.
+ *  Honors the legacy `buttonVariant` field when no preset has been set yet. */
+export function resolveButtonStyle(
+  block: FormBlock,
+  theme: Required<FormTheme>,
+): ResolvedButtonStyle {
+  let presetId: ButtonPresetId | undefined = block.buttonStyle;
+  if (!presetId) {
+    switch (block.buttonVariant) {
+      case 'outline':   presetId = 'outline-rounded'; break;
+      case 'link':      presetId = 'outline-rect'; break;
+      case 'secondary':
+      case 'primary':
+      default:          presetId = 'filled-rounded'; break;
+    }
+  }
+  const preset = BUTTON_PRESETS.find((p) => p.id === presetId) ?? BUTTON_PRESETS[1];
+  const filled = preset.filled;
+  const bg = block.buttonBgColor ?? (filled ? theme.primaryColor : 'transparent');
+  const fg = block.buttonTextColor ?? (filled ? '#ffffff' : theme.primaryColor);
+  const borderColor = block.buttonBorderColor ?? theme.primaryColor;
+  const borderWidth =
+    block.buttonBorderWidth ?? (filled ? 0 : 2);
+  return {
+    filled,
+    radius: preset.radius,
+    bg,
+    fg,
+    borderColor,
+    borderWidth,
+    paddingY: block.buttonHeight ?? 12,
+    fullWidth: !!block.buttonFullWidth,
   };
 }
 

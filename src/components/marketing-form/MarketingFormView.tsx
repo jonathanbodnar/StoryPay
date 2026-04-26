@@ -21,6 +21,7 @@ import {
   formFieldName,
   mergeTheme,
   resolveBlockPadding,
+  resolveButtonStyle,
   resolvePostSubmit,
 } from '@/lib/marketing-form-schema';
 import { collectGoogleFontFamiliesFromDefinition } from '@/lib/google-fonts';
@@ -476,19 +477,32 @@ function renderBlock(
       );
     }
     case 'submit': {
-      const submitAlign = block.buttonAlign ?? 'center';
-      const submitWidth = submitAlign === 'center' ? 'w-full' : 'inline-flex';
-      const submitWrap = submitAlign === 'center' ? '' : submitAlign === 'right' ? 'flex justify-end' : 'flex justify-start';
+      const align = block.buttonAlign ?? 'center';
+      const wrapJustify =
+        align === 'center' ? 'justify-center' : align === 'right' ? 'justify-end' : 'justify-start';
+      const r = resolveButtonStyle(block, theme);
+      const btnStyle: CSSProperties = {
+        background: r.bg,
+        color: r.fg,
+        borderRadius: `${r.radius}px`,
+        border: `${r.borderWidth}px solid ${r.borderColor}`,
+        paddingTop: `${r.paddingY}px`,
+        paddingBottom: `${r.paddingY}px`,
+        paddingLeft: '24px',
+        paddingRight: '24px',
+        fontWeight: 600,
+        fontSize: 14,
+        lineHeight: 1,
+        cursor: 'pointer',
+        transition: 'opacity 120ms ease',
+        ...(r.fullWidth ? { width: '100%' } : {}),
+      };
       return (
-        <div key={block.id} className={`mb-2 mt-2 ${submitWrap}`}>
+        <div key={block.id} className={`mb-2 mt-2 flex ${wrapJustify}`}>
           <button
             type="submit"
-            disabled={inputsDisabled}
-            className={`${submitWidth} items-center justify-center px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-95 disabled:opacity-50`}
-            style={{
-              borderRadius: theme.borderRadius,
-              background: theme.primaryColor,
-            }}
+            className="hover:opacity-90"
+            style={btnStyle}
           >
             {block.buttonLabel?.trim() || 'Submit'}
           </button>
@@ -498,49 +512,42 @@ function renderBlock(
     case 'button': {
       const lab = block.buttonLabel?.trim() || 'Button';
       const href = block.href?.trim();
-      const v = block.buttonVariant ?? 'secondary';
       const align = block.buttonAlign ?? 'left';
-      const wrapAlign = align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left';
-      const base =
-        'inline-flex items-center justify-center px-4 py-2 text-sm font-medium transition rounded-lg';
-      const styles =
-        v === 'primary'
-          ? 'text-white'
-          : v === 'outline'
-            ? 'border-2 bg-transparent'
-            : v === 'link'
-              ? 'text-brand-700 underline-offset-2 hover:underline'
-              : 'border border-gray-200 bg-gray-50 text-gray-900 hover:bg-gray-100';
+      const wrapJustify =
+        align === 'center' ? 'justify-center' : align === 'right' ? 'justify-end' : 'justify-start';
+      const r = resolveButtonStyle(block, theme);
+      const btnStyle: CSSProperties = {
+        background: r.bg,
+        color: r.fg,
+        borderRadius: `${r.radius}px`,
+        border: `${r.borderWidth}px solid ${r.borderColor}`,
+        paddingTop: `${r.paddingY}px`,
+        paddingBottom: `${r.paddingY}px`,
+        paddingLeft: '24px',
+        paddingRight: '24px',
+        fontWeight: 600,
+        fontSize: 14,
+        lineHeight: 1,
+        cursor: 'pointer',
+        textDecoration: 'none',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        transition: 'opacity 120ms ease',
+        ...(r.fullWidth ? { width: '100%' } : {}),
+      };
       if (href && /^https?:\/\//i.test(href)) {
         return (
-          <div key={block.id} className={`mb-4 ${wrapAlign}`}>
-            <a
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`${base} ${styles}`}
-              style={
-                v === 'primary'
-                  ? { background: theme.primaryColor, borderRadius: theme.borderRadius }
-                  : { borderRadius: theme.borderRadius }
-              }
-            >
+          <div key={block.id} className={`mb-4 flex ${wrapJustify}`}>
+            <a href={href} target="_blank" rel="noopener noreferrer" className="hover:opacity-90" style={btnStyle}>
               {lab}
             </a>
           </div>
         );
       }
       return (
-        <div key={block.id} className={`mb-4 ${wrapAlign}`}>
-          <button
-            type="button"
-            className={`${base} ${styles}`}
-            style={
-              v === 'primary'
-                ? { background: theme.primaryColor, borderRadius: theme.borderRadius }
-                : { borderRadius: theme.borderRadius }
-            }
-          >
+        <div key={block.id} className={`mb-4 flex ${wrapJustify}`}>
+          <button type="button" className="hover:opacity-90" style={btnStyle}>
             {lab}
           </button>
         </div>

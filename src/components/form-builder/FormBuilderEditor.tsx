@@ -76,8 +76,10 @@ import { MarketingFormView } from '@/components/marketing-form/MarketingFormView
 import { useFormHistory } from '@/hooks/useFormHistory';
 import {
   ALWAYS_REQUIRED_TYPES,
+  BUTTON_PRESETS,
   FORM_BLOCK_PADDING_DEFAULTS,
   INPUT_BLOCK_TYPES,
+  type ButtonPresetId,
   type FormBlock,
   type FormBlockStyle,
   type FormBlockType,
@@ -795,24 +797,49 @@ function BlockInspector({
       )}
 
       {/* Submit & Button blocks */}
-      {(block.type === 'submit' || block.type === 'button') && (
-        <div className="space-y-5">
-          <div>
-            <SectionLabel>Label</SectionLabel>
-            <input
-              className={INSPECTOR_INPUT}
-              value={block.buttonLabel ?? ''}
-              onChange={(e) => onChange({ buttonLabel: e.target.value })}
-            />
-          </div>
+      {(block.type === 'submit' || block.type === 'button') && (() => {
+        const currentPreset: ButtonPresetId = block.buttonStyle ?? 'filled-rounded';
+        const presetMeta = BUTTON_PRESETS.find((p) => p.id === currentPreset) ?? BUTTON_PRESETS[1];
+        const isFilled = presetMeta.filled;
+        const fillColor = block.buttonBgColor ?? (isFilled ? '#1b1b1b' : 'transparent');
+        const textColor = block.buttonTextColor ?? (isFilled ? '#ffffff' : '#1b1b1b');
+        const borderColor = block.buttonBorderColor ?? '#1b1b1b';
+        const borderWidth = block.buttonBorderWidth ?? (isFilled ? 0 : 2);
 
-          <AlignSelector
-            value={(block.buttonAlign ?? (block.type === 'submit' ? 'center' : 'left')) as Align3}
-            onChange={(a) => onChange({ buttonAlign: a })}
-          />
+        function applyPreset(id: ButtonPresetId) {
+          const preset = BUTTON_PRESETS.find((p) => p.id === id);
+          if (!preset) return;
+          if (preset.filled) {
+            onChange({
+              buttonStyle: id,
+              buttonBgColor: '#1b1b1b',
+              buttonTextColor: '#ffffff',
+              buttonBorderColor: '#1b1b1b',
+              buttonBorderWidth: 0,
+            });
+          } else {
+            onChange({
+              buttonStyle: id,
+              buttonBgColor: 'transparent',
+              buttonTextColor: '#1b1b1b',
+              buttonBorderColor: '#1b1b1b',
+              buttonBorderWidth: 2,
+            });
+          }
+        }
 
-          {block.type === 'button' && (
-            <>
+        return (
+          <div className="space-y-5">
+            <div>
+              <SectionLabel>Label</SectionLabel>
+              <input
+                className={INSPECTOR_INPUT}
+                value={block.buttonLabel ?? ''}
+                onChange={(e) => onChange({ buttonLabel: e.target.value })}
+              />
+            </div>
+
+            {block.type === 'button' && (
               <div>
                 <SectionLabel>Link (https)</SectionLabel>
                 <input
@@ -822,22 +849,122 @@ function BlockInspector({
                   placeholder="https://"
                 />
               </div>
-              <div>
-                <SectionLabel>Style</SectionLabel>
-                <SettingsSelect
-                  value={block.buttonVariant ?? 'secondary'}
-                  onChange={(v) => onChange({ buttonVariant: v as FormBlock['buttonVariant'] })}
-                >
-                  <option value="primary">Primary</option>
-                  <option value="secondary">Secondary</option>
-                  <option value="outline">Outline</option>
-                  <option value="link">Link</option>
-                </SettingsSelect>
+            )}
+
+            {/* Style preset grid: 4 filled + 4 outline */}
+            <div className="border-t border-gray-100 pt-4">
+              <p className="mb-3 text-sm font-semibold text-gray-900">Style</p>
+              <div className="mb-2 grid grid-cols-4 gap-2">
+                {BUTTON_PRESETS.slice(0, 4).map((p) => {
+                  const active = currentPreset === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => applyPreset(p.id)}
+                      className={`h-9 transition-all ${active ? 'ring-2 ring-blue-500 ring-offset-2' : 'hover:opacity-80'}`}
+                      style={{ background: '#1b1b1b', borderRadius: p.radius }}
+                      aria-label={p.id}
+                    />
+                  );
+                })}
               </div>
-            </>
-          )}
-        </div>
-      )}
+              <div className="grid grid-cols-4 gap-2">
+                {BUTTON_PRESETS.slice(4).map((p) => {
+                  const active = currentPreset === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => applyPreset(p.id)}
+                      className={`h-9 transition-all ${active ? 'ring-2 ring-blue-500 ring-offset-2' : 'hover:bg-gray-50'}`}
+                      style={{ background: 'transparent', border: '1.5px solid #1b1b1b', borderRadius: p.radius }}
+                      aria-label={p.id}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Colors */}
+            <div className="border-t border-gray-100 pt-4">
+              <p className="mb-2 text-sm font-semibold text-gray-900">
+                Fill color <span className="ml-1 text-xs font-normal text-gray-400">{fillColor}</span>
+              </p>
+              <FlodeskColorPicker
+                value={fillColor}
+                onChange={(v) => onChange({ buttonBgColor: v })}
+              />
+            </div>
+
+            <div>
+              <p className="mb-2 text-sm font-semibold text-gray-900">
+                Text color <span className="ml-1 text-xs font-normal text-gray-400">{textColor}</span>
+              </p>
+              <FlodeskColorPicker
+                value={textColor}
+                onChange={(v) => onChange({ buttonTextColor: v })}
+              />
+            </div>
+
+            <div>
+              <p className="mb-2 text-sm font-semibold text-gray-900">
+                Border color <span className="ml-1 text-xs font-normal text-gray-400">{borderColor}</span>
+              </p>
+              <FlodeskColorPicker
+                value={borderColor}
+                onChange={(v) => onChange({ buttonBorderColor: v })}
+              />
+            </div>
+
+            <SliderControl
+              label="Border thickness"
+              value={borderWidth}
+              min={0}
+              max={10}
+              step={1}
+              display={`${borderWidth}`}
+              onChange={(v) => onChange({ buttonBorderWidth: v })}
+            />
+
+            {/* Sizing */}
+            <div className="border-t border-gray-100 pt-4 space-y-4">
+              <p className="text-sm font-semibold text-gray-700">Button sizing</p>
+              <label className="flex cursor-pointer items-center justify-between gap-3">
+                <span className="text-[13px] text-gray-700">Full width</span>
+                <span className="relative inline-flex">
+                  <input
+                    type="checkbox"
+                    className="peer sr-only"
+                    checked={!!block.buttonFullWidth}
+                    onChange={(e) => onChange({ buttonFullWidth: e.target.checked })}
+                  />
+                  <span className="block h-5 w-9 rounded-full bg-gray-300 transition-colors peer-checked:bg-gray-900" />
+                  <span className="pointer-events-none absolute left-0.5 top-0.5 block h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
+                </span>
+              </label>
+              <SliderControl
+                label="Height"
+                value={block.buttonHeight ?? 12}
+                min={4}
+                max={32}
+                step={1}
+                display={`${block.buttonHeight ?? 12}`}
+                onChange={(v) => onChange({ buttonHeight: v })}
+              />
+            </div>
+
+            {/* Position */}
+            <div className="border-t border-gray-100 pt-4">
+              <AlignSelector
+                label="Position"
+                value={(block.buttonAlign ?? (block.type === 'submit' ? 'center' : 'left')) as Align3}
+                onChange={(a) => onChange({ buttonAlign: a })}
+              />
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Field-style blocks (inputs + multi-option) */}
       {labelFieldsBlock && (
