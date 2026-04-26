@@ -3,11 +3,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 import {
+  ADDRESS_FIELD_KEYS,
   ALWAYS_REQUIRED_TYPES,
   INPUT_BLOCK_TYPES,
+  addressFieldName,
+  addressVisibleKeys,
+  formatAddressValue,
   formFieldName,
   parseDefinition,
   resolvePostSubmit,
+  type AddressFieldKey,
 } from '@/lib/marketing-form-schema';
 
 export const dynamic = 'force-dynamic';
@@ -22,8 +27,10 @@ async function ensureBucket() {
   await supabaseAdmin.storage.createBucket(BUCKET, { public: false });
 }
 
+// Top-level field key (`bf_<uuid>`) optionally followed by a `__<subkey>`
+// suffix that is currently used by the address block (line1, city, state, …).
 const NAME_RE =
-  /^bf_([\da-f]{8}-[\da-f]{4}-[1-5][\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12})$/i;
+  /^bf_([\da-f]{8}-[\da-f]{4}-[1-5][\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12})(?:__([a-z0-9]+))?$/i;
 
 function safeFileSegment(name: string): string {
   const base = name.replace(/^.*[/\\]/, '').replace(/[^\w.\-()+ ]/g, '_').slice(0, 120);
@@ -118,6 +125,31 @@ export async function POST(
       continue;
     }
 
+    if (block.type === 'address') {
+      const obj: Partial<Record<AddressFieldKey, string>> = {};
+      const visibleKeys = new Set<AddressFieldKey>(addressVisibleKeys(block));
+      for (const key of ADDRESS_FIELD_KEYS) {
+        const v = fd.get(addressFieldName(block, key));
+        if (typeof v === 'string') {
+          const t = v.trim();
+          if (t) obj[key] = t;
+        }
+      }
+      // line2 is always optional even when the parent block is required.
+      const requiredKeys = (Array.from(visibleKeys) as AddressFieldKey[]).filter((k) => k !== 'line2');
+      const missing = block.required
+        ? requiredKeys.filter((k) => !obj[k])
+        : [];
+      if (missing.length > 0) {
+        return NextResponse.json(
+          { error: `Field required: ${block.label || 'address'}` },
+          { status: 400 },
+        );
+      }
+      if (Object.keys(obj).length > 0) payload[block.id] = obj;
+      continue;
+    }
+
     const raw = fd.get(name);
     const str = typeof raw === 'string' ? raw.trim() : '';
     const effectivelyRequired = block.required || ALWAYS_REQUIRED_TYPES.includes(block.type);
@@ -140,9 +172,16 @@ export async function POST(
     const m = key.match(NAME_RE);
     if (!m) continue;
     const bid = m[1];
+    const sub = m[2];
     const bl = byId.get(bid);
     if (!bl || !INPUT_BLOCK_TYPES.includes(bl.type)) {
       return NextResponse.json({ error: 'Unexpected field' }, { status: 400 });
+    }
+    // Sub-keys are only valid on address blocks, and must match a known sub-field key.
+    if (sub) {
+      if (bl.type !== 'address' || !ADDRESS_FIELD_KEYS.includes(sub as AddressFieldKey)) {
+        return NextResponse.json({ error: 'Unexpected field' }, { status: 400 });
+      }
     }
   }
 
@@ -259,11 +298,19 @@ export async function POST(
         const fieldRows = definition.blocks
           .filter((b) => INPUT_BLOCK_TYPES.includes(b.type) && payload[b.id] !== undefined)
           .map((b) => {
-            const val = Array.isArray(payload[b.id])
-              ? (payload[b.id] as string[]).join(', ')
-              : typeof payload[b.id] === 'object'
-                ? '[file attachment]'
-                : String(payload[b.id] ?? '');
+            const v = payload[b.id];
+            let val: string;
+            if (Array.isArray(v)) {
+              val = v.join(', ');
+            } else if (b.type === 'address') {
+              val = formatAddressValue(v);
+            } else if (b.type === 'file') {
+              val = '[file attachment]';
+            } else if (typeof v === 'object' && v !== null) {
+              val = '[attachment]';
+            } else {
+              val = String(v ?? '');
+            }
             return `<tr><td style="padding:4px 12px 4px 0;color:#666;white-space:nowrap;">${escapeHtml(b.label || b.type)}</td><td style="padding:4px 0;">${escapeHtml(val)}</td></tr>`;
           })
           .join('');

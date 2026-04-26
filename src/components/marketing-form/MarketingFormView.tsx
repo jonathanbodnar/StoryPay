@@ -13,6 +13,11 @@ import {
   type FormBlock,
   type FormBlockStyle,
   type MarketingFormDefinition,
+  ADDRESS_FIELD_AUTOCOMPLETE,
+  ADDRESS_FIELD_LABELS,
+  ADDRESS_FIELD_PLACEHOLDERS,
+  addressFieldName,
+  addressVisibleKeys,
   formFieldName,
   mergeTheme,
   resolveBlockPadding,
@@ -158,14 +163,39 @@ function renderBlock(
           </div>
         );
       }
+      const w = Math.max(40, Math.min(2400, Math.round(block.imageWidth ?? 600)));
+      const wrapStyle: CSSProperties = { textAlign: block.style?.textAlign ?? 'center' };
+      const imgStyle: CSSProperties = {
+        maxWidth: `${w}px`,
+        width: '100%',
+        height: 'auto',
+        display: 'inline-block',
+      };
+      const imgEl = (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={block.src}
+          alt={block.alt || ''}
+          className="rounded-lg object-contain"
+          style={imgStyle}
+        />
+      );
+      const href = block.href?.trim();
+      const linked = href && /^https?:\/\//i.test(href);
       return (
-        <figure key={block.id} className="mb-4">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={block.src}
-            alt={block.alt || ''}
-            className="max-h-64 w-full rounded-lg object-contain"
-          />
+        <figure key={block.id} className="mb-4" style={wrapStyle}>
+          {linked ? (
+            <a
+              href={href}
+              target={block.linkOpenInNewTab === false ? '_self' : '_blank'}
+              rel={block.linkOpenInNewTab === false ? undefined : 'noopener noreferrer'}
+              className="inline-block"
+            >
+              {imgEl}
+            </a>
+          ) : (
+            imgEl
+          )}
           {block.alt ? (
             <figcaption className="mt-1 text-center text-xs text-gray-500">{block.alt}</figcaption>
           ) : null}
@@ -275,20 +305,63 @@ function renderBlock(
         />,
         name
       );
-    case 'address':
-      return inputShell(
-        <textarea
-          id={name}
-          name={name}
-          rows={4}
-          placeholder={ph}
-          required={!!block.required}
-          disabled={inputsDisabled}
-          className="w-full resize-y border px-3 py-2 text-sm outline-none ring-brand-500 focus:ring-2"
-          style={{ borderRadius: theme.borderRadius, borderColor: theme.inputBorder }}
-        />,
-        name
+    case 'address': {
+      const visible = addressVisibleKeys(block);
+      const fieldClass =
+        'w-full border px-3 py-2 text-sm outline-none ring-brand-500 focus:ring-2';
+      const fieldStyle: CSSProperties = {
+        borderRadius: theme.borderRadius,
+        borderColor: theme.inputBorder,
+      };
+      const subInputs: ReactNode[] = visible.map((key) => {
+        const inputId = addressFieldName(block, key);
+        const subLabel = ADDRESS_FIELD_LABELS[key];
+        const subPh = ADDRESS_FIELD_PLACEHOLDERS[key];
+        const ac = ADDRESS_FIELD_AUTOCOMPLETE[key];
+        // Street + line 2 + country span the full width; city / state / zip
+        // sit side-by-side in a 3-up grid for a tidy postal layout.
+        const wide = key === 'line1' || key === 'line2' || key === 'country';
+        return (
+          <div key={key} className={wide ? 'sm:col-span-3' : 'sm:col-span-1'}>
+            <label
+              htmlFor={inputId}
+              className="mb-1 block text-xs font-medium"
+              style={{ color: theme.mutedColor }}
+            >
+              {subLabel}
+            </label>
+            <input
+              id={inputId}
+              name={inputId}
+              type="text"
+              autoComplete={ac}
+              placeholder={subPh}
+              required={!!block.required && key !== 'line2'}
+              disabled={inputsDisabled}
+              className={fieldClass}
+              style={fieldStyle}
+            />
+          </div>
+        );
+      });
+      const firstId = addressFieldName(block, visible[0] ?? 'line1');
+      return (
+        <div key={block.id} className="mb-4">
+          {label ? (
+            <label
+              htmlFor={firstId}
+              className="mb-2 block text-sm font-medium"
+              style={{ color: theme.labelColor }}
+            >
+              {label}
+              {block.required ? <span className="text-red-500"> *</span> : null}
+            </label>
+          ) : null}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">{subInputs}</div>
+          {hintEl}
+        </div>
       );
+    }
     case 'file':
       return inputShell(
         <input

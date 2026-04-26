@@ -87,6 +87,18 @@ export interface FormBlock {
   /** checkbox_group: 'single' behaves like radio (one choice), 'multiple' allows many */
   checkboxMode?: 'single' | 'multiple';
 
+  // ─── Image-block extras (mirrors the email builder) ───────────────────────
+  /** Image render width in px (capped to the form max width). Defaults to 600. */
+  imageWidth?: number;
+  /** Image link target — used when `href` is set on an image block. */
+  linkOpenInNewTab?: boolean;
+
+  // ─── Address-block field visibility ────────────────────────────────────────
+  /** Show the optional second-line / apt / suite input. Default false. */
+  addressShowLine2?: boolean;
+  /** Show a country input as the last row. Default false. */
+  addressShowCountry?: boolean;
+
   // ─── Block-level formatting (mirrors the email builder) ────────────────────
   /** Per-block outer padding, in pixels. Falls back to FORM_BLOCK_PADDING_DEFAULTS. */
   paddingTop?: number;
@@ -284,9 +296,9 @@ export function createBlock(type: FormBlockType): FormBlock {
     case 'date':
       return { id, type, label: 'Date', required: false };
     case 'address':
-      return { id, type, label: 'Address', placeholder: 'Street, city, state, ZIP', required: false };
+      return { id, type, label: 'Address', required: false };
     case 'image':
-      return { id, type, src: '', alt: '' };
+      return { id, type, src: '', alt: '', imageWidth: 600 };
     case 'file':
       return { id, type, label: 'Attachment', required: false };
     case 'html':
@@ -350,6 +362,79 @@ export function duplicateBlock(block: FormBlock): FormBlock {
 /** Stable `name` / FormData key for this block (embed + submit API). */
 export function formFieldName(block: FormBlock): string {
   return `bf_${block.id}`;
+}
+
+// ─── Address block sub-field schema ──────────────────────────────────────────
+//
+// The address block is rendered as several individual inputs (street, city,
+// state, ZIP, plus optional line 2 + country) — each carries its own FormData
+// name, suffixed with the key below. All sub-fields are stored as a single
+// object on the submission payload under the parent block id.
+
+export const ADDRESS_FIELD_KEYS = [
+  'line1',
+  'line2',
+  'city',
+  'state',
+  'zip',
+  'country',
+] as const;
+export type AddressFieldKey = (typeof ADDRESS_FIELD_KEYS)[number];
+
+export const ADDRESS_FIELD_LABELS: Record<AddressFieldKey, string> = {
+  line1:   'Street address',
+  line2:   'Apt, suite, etc.',
+  city:    'City',
+  state:   'State',
+  zip:     'ZIP / Postal code',
+  country: 'Country',
+};
+
+export const ADDRESS_FIELD_PLACEHOLDERS: Record<AddressFieldKey, string> = {
+  line1:   '123 Main St',
+  line2:   'Apt 4B',
+  city:    'Brooklyn',
+  state:   'NY',
+  zip:     '11201',
+  country: 'United States',
+};
+
+/** Auto-completion hints for the address sub-fields. */
+export const ADDRESS_FIELD_AUTOCOMPLETE: Record<AddressFieldKey, string> = {
+  line1:   'address-line1',
+  line2:   'address-line2',
+  city:    'address-level2',
+  state:   'address-level1',
+  zip:     'postal-code',
+  country: 'country-name',
+};
+
+/** Visible sub-field keys for an address block, honoring the line2/country toggles. */
+export function addressVisibleKeys(block: FormBlock): AddressFieldKey[] {
+  const out: AddressFieldKey[] = ['line1'];
+  if (block.addressShowLine2) out.push('line2');
+  out.push('city', 'state', 'zip');
+  if (block.addressShowCountry) out.push('country');
+  return out;
+}
+
+/** FormData key for an individual address sub-field. */
+export function addressFieldName(block: FormBlock, key: AddressFieldKey): string {
+  return `${formFieldName(block)}__${key}`;
+}
+
+/** Format an address-payload object into a single, comma-joined human string
+ *  for emails / inbox previews. Returns "" if the object is empty. */
+export function formatAddressValue(value: unknown): string {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return '';
+  const v = value as Partial<Record<AddressFieldKey, string>>;
+  const cityStateZip = [v.city, [v.state, v.zip].filter(Boolean).join(' ').trim()]
+    .filter(Boolean)
+    .join(', ');
+  return [v.line1, v.line2, cityStateZip, v.country]
+    .map((s) => (typeof s === 'string' ? s.trim() : ''))
+    .filter(Boolean)
+    .join(', ');
 }
 
 function isObject(v: unknown): v is Record<string, unknown> {

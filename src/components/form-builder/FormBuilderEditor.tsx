@@ -87,6 +87,7 @@ import {
   createBlock,
   defaultPostSubmit,
   duplicateBlock,
+  formatAddressValue,
   mergeTheme,
   resolvePostSubmit,
 } from '@/lib/marketing-form-schema';
@@ -416,7 +417,7 @@ function BlockInspector({
   onRemove: () => void;
   onDuplicate: () => void;
   onDeselect: () => void;
-  onRequestMediaPick: (apply: (url: string) => void) => void;
+  onRequestMediaPick: (apply: (url: string) => void, mode?: 'image' | 'file' | 'all') => void;
 }) {
   const optsText = (block.options || []).join('\n');
   const [spacingOpen, setSpacingOpen] = useState(true);
@@ -427,7 +428,7 @@ function BlockInspector({
   // background + padding controls. Reset to 'primary' whenever the user
   // selects a different block — uses the prev-state pattern so we don't have
   // to drop into useEffect.
-  const [subTab, setSubTab] = useState<'primary' | 'block'>('primary');
+  const [subTab, setSubTab] = useState<'primary' | 'link' | 'block'>('primary');
   const [paddingOpen, setPaddingOpen] = useState(true);
   const [prevBlockId, setPrevBlockId] = useState(block.id);
   if (prevBlockId !== block.id) {
@@ -435,6 +436,14 @@ function BlockInspector({
     setSubTab('primary');
   }
   const primaryTabLabel = blockPrimaryTabLabel(block.type);
+  // Image block exposes an additional "Link" sub-tab between Image and Block.
+  const hasLinkTab = block.type === 'image';
+  // Link sub-tab: URL or File pill (state lives outside conditional render so
+  // it survives toggles between sub-tabs without being unmounted).
+  const [imageLinkType, setImageLinkType] = useState<'url' | 'file'>(() => {
+    const h = block.href ?? '';
+    return /\.(pdf|docx?|xlsx?|pptx?|csv|txt|zip)(\?|$)/i.test(h) ? 'file' : 'url';
+  });
 
   // Convenience helpers ── per-block patch into block.style
   const patchStyle = (patch: Partial<FormBlockStyle>) =>
@@ -474,7 +483,6 @@ function BlockInspector({
     block.type === 'phone' ||
     block.type === 'url' ||
     block.type === 'number' ||
-    block.type === 'address' ||
     block.type === 'textarea';
 
   const widthFieldsBlock =
@@ -506,11 +514,12 @@ function BlockInspector({
         </button>
       </div>
 
-      {/* Sub-tab bar — primary settings vs Block (padding / background) */}
+      {/* Sub-tab bar — primary settings vs (optional) Link vs Block padding/bg */}
       <div className="-mx-5 mb-5 flex border-b border-gray-100 bg-gray-50/50 px-2">
         {(
           [
             { id: 'primary' as const, label: primaryTabLabel },
+            ...(hasLinkTab ? [{ id: 'link' as const, label: 'Link' }] : []),
             { id: 'block' as const, label: 'Block' },
           ]
         ).map((t) => {
@@ -717,30 +726,70 @@ function BlockInspector({
       {/* Image */}
       {block.type === 'image' && (
         <div className="space-y-5">
-          <div>
-            <SectionLabel>Image URL</SectionLabel>
-            <input
-              className={INSPECTOR_INPUT}
-              value={block.src ?? ''}
-              onChange={(e) => onChange({ src: e.target.value })}
-              placeholder="https://"
-            />
+          {/* Media picker card */}
+          {block.src?.trim() ? (
+            <div className="space-y-2">
+              <div className="relative overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={block.src} alt={block.alt ?? ''} className="h-32 w-full object-cover" />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => onRequestMediaPick((url) => onChange({ src: url }), 'image')}
+                  className="flex-1 rounded-lg border border-gray-200 bg-white py-2 text-xs font-semibold text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50"
+                >
+                  Replace
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onChange({ src: '' })}
+                  className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-red-600 transition-colors hover:border-red-300 hover:bg-red-50"
+                  aria-label="Remove image"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            </div>
+          ) : (
             <button
               type="button"
-              onClick={() => onRequestMediaPick((url) => onChange({ src: url }))}
-              className="mt-2 text-[12px] font-medium text-gray-700 underline underline-offset-2 hover:text-gray-900"
+              onClick={() => onRequestMediaPick((url) => onChange({ src: url }), 'image')}
+              className="flex w-full flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-200 px-4 py-8 transition-colors hover:border-gray-400 hover:bg-gray-50"
             >
-              Choose from media library
+              <Upload size={20} className="text-gray-500" />
+              <p className="text-sm font-semibold text-gray-900">Choose an image</p>
+              <p className="text-center text-xs text-gray-400">
+                Pick from your media library<br />or upload a new one
+              </p>
             </button>
+          )}
+
+          {/* Width slider */}
+          <div className="border-t border-gray-100 pt-4">
+            <SliderControl
+              label="Width"
+              value={block.imageWidth ?? 600}
+              min={100}
+              max={1200}
+              step={10}
+              display={`${block.imageWidth ?? 600}`}
+              onChange={(v) => onChange({ imageWidth: v })}
+            />
           </div>
-          <div>
+
+          {/* Alt text */}
+          <div className="border-t border-gray-100 pt-4">
             <SectionLabel>Alt text</SectionLabel>
             <input
               className={INSPECTOR_INPUT}
               value={block.alt ?? ''}
               onChange={(e) => onChange({ alt: e.target.value })}
-              placeholder="Describe this image for screen readers"
+              placeholder="Describe this image"
             />
+            <p className="mt-1.5 text-[11px] text-gray-400">
+              Read by screen readers and shown if the image fails to load.
+            </p>
           </div>
         </div>
       )}
@@ -858,6 +907,33 @@ function BlockInspector({
             </div>
           )}
 
+          {block.type === 'address' && (
+            <div className="space-y-3">
+              <SectionLabel>Address fields</SectionLabel>
+              <p className="text-[11px] text-gray-400">
+                Street, City, State, and ZIP / Postal code are always shown. Toggle the optional fields below.
+              </p>
+              <label className="flex cursor-pointer items-center gap-2.5">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-400"
+                  checked={!!block.addressShowLine2}
+                  onChange={(e) => onChange({ addressShowLine2: e.target.checked })}
+                />
+                <span className="text-[13px] text-gray-700">Apt, suite, etc. (line 2)</span>
+              </label>
+              <label className="flex cursor-pointer items-center gap-2.5">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-400"
+                  checked={!!block.addressShowCountry}
+                  onChange={(e) => onChange({ addressShowCountry: e.target.checked })}
+                />
+                <span className="text-[13px] text-gray-700">Country</span>
+              </label>
+            </div>
+          )}
+
           {ALWAYS_REQUIRED_TYPES.includes(block.type) ? (
             <div className="flex items-center gap-2.5 text-[13px] text-gray-400">
               <input
@@ -908,6 +984,98 @@ function BlockInspector({
       )}
 
         </>
+      )}
+
+      {/* ── Link sub-tab (image only) ───────────────────────────────────── */}
+      {subTab === 'link' && hasLinkTab && block.type === 'image' && (
+        <div className="space-y-4">
+          {/* URL / File pill */}
+          <div className="flex bg-gray-100 p-1.5" style={{ borderRadius: 14 }}>
+            {(['url', 'file'] as const).map((t) => {
+              const active = imageLinkType === t;
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setImageLinkType(t)}
+                  className="flex-1 px-4 py-2.5 text-[15px] transition-all"
+                  style={{
+                    borderRadius: 10,
+                    background: active ? '#ffffff' : 'transparent',
+                    color: active ? '#111827' : '#9ca3af',
+                    fontWeight: active ? 700 : 600,
+                    boxShadow: active
+                      ? '0 1px 2px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.05)'
+                      : 'none',
+                  }}
+                >
+                  {t === 'url' ? 'URL' : 'File'}
+                </button>
+              );
+            })}
+          </div>
+
+          {imageLinkType === 'url' && (
+            <textarea
+              rows={4}
+              value={block.href ?? ''}
+              onChange={(e) => onChange({ href: e.target.value })}
+              placeholder="https://"
+              className="w-full resize-none rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 transition-colors focus:border-gray-400 focus:outline-none"
+            />
+          )}
+
+          {imageLinkType === 'file' && (
+            <div>
+              {block.href?.trim() ? (
+                <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2.5">
+                  <FileText size={16} className="flex-shrink-0 text-gray-400" />
+                  <a
+                    href={block.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 truncate text-sm font-medium text-gray-900 hover:text-blue-600"
+                  >
+                    {block.href.split('/').pop() || block.href}
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => onChange({ href: '' })}
+                    className="text-gray-400 transition-colors hover:text-red-600"
+                    aria-label="Remove file link"
+                  >
+                    <XIcon size={14} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onRequestMediaPick((url) => onChange({ href: url }), 'file')}
+                  className="flex w-full flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-200 px-4 py-8 transition-colors hover:border-gray-400"
+                >
+                  <Upload size={20} className="text-gray-500" />
+                  <p className="text-sm font-semibold text-gray-900">Choose a file</p>
+                  <p className="text-center text-xs text-gray-400">
+                    PDF, Word, Excel, or other file<br />from your media library
+                  </p>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Open behavior */}
+          <div className="border-t border-gray-100 pt-4">
+            <p className="mb-1 text-sm font-semibold text-gray-900">Link actions</p>
+            <p className="mb-2 text-xs text-gray-500">When someone clicks this image:</p>
+            <SettingsSelect
+              value={block.linkOpenInNewTab === false ? 'self' : 'blank'}
+              onChange={(v) => onChange({ linkOpenInNewTab: v === 'blank' })}
+            >
+              <option value="blank">Opens in a new tab</option>
+              <option value="self">Opens in the same tab</option>
+            </SettingsSelect>
+          </div>
+        </div>
       )}
 
       {/* ── Shared Block sub-tab (background + padding) ─────────────────── */}
@@ -1304,14 +1472,20 @@ function SubmissionsInbox({
                 !['first_name', 'last_name', 'email', 'phone'].includes(b.type) &&
                 p[b.id] !== undefined,
             )
-            .map((b) => ({
-              label: b.label || b.type,
-              value: Array.isArray(p[b.id])
-                ? (p[b.id] as string[]).join(', ')
-                : typeof p[b.id] === 'object'
-                  ? '[file]'
-                  : String(p[b.id] ?? ''),
-            }))
+            .map((b) => {
+              const v = p[b.id];
+              let value: string;
+              if (Array.isArray(v)) {
+                value = (v as string[]).join(', ');
+              } else if (b.type === 'address') {
+                value = formatAddressValue(v);
+              } else if (typeof v === 'object' && v !== null) {
+                value = '[file]';
+              } else {
+                value = String(v ?? '');
+              }
+              return { label: b.label || b.type, value };
+            })
             .filter((f) => f.value);
 
           return (
@@ -1650,6 +1824,7 @@ export function FormBuilderEditor({
   const [embedOpen, setEmbedOpen] = useState(false);
   const [thankYouOpen, setThankYouOpen] = useState(false);
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
+  const [mediaPickerMode, setMediaPickerMode] = useState<'image' | 'file' | 'all'>('image');
   const mediaApplyRef = useRef<(url: string) => void>(() => {});
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('settings');
@@ -1915,10 +2090,14 @@ export function FormBuilderEditor({
     [definition.blocks, patchDefinition],
   );
 
-  const handleRequestMediaPick = useCallback((apply: (url: string) => void) => {
-    mediaApplyRef.current = apply;
-    setMediaPickerOpen(true);
-  }, []);
+  const handleRequestMediaPick = useCallback(
+    (apply: (url: string) => void, mode: 'image' | 'file' | 'all' = 'image') => {
+      mediaApplyRef.current = apply;
+      setMediaPickerMode(mode);
+      setMediaPickerOpen(true);
+    },
+    [],
+  );
 
   const patchSelected = useCallback(
     (patch: Partial<FormBlock>) => {
@@ -2618,6 +2797,7 @@ export function FormBuilderEditor({
       <VenueMediaPickerModal
         open={mediaPickerOpen}
         onOpenChange={setMediaPickerOpen}
+        mode={mediaPickerMode}
         onSelect={(url) => {
           mediaApplyRef.current(url);
           setMediaPickerOpen(false);
