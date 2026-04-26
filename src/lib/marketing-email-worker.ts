@@ -493,6 +493,34 @@ export async function processAutomationEnrollmentsBatch(): Promise<{ processed: 
   return { processed: n };
 }
 
+/** Write one execution log row — fire and forget, never throws. */
+async function logStepExecution(opts: {
+  automation_id: string;
+  enrollment_id: string;
+  venue_id: string;
+  lead_id: string;
+  step_order: number;
+  step_type: string;
+  status: 'success' | 'failed' | 'skipped';
+  error_text?: string;
+}) {
+  try {
+    await supabaseAdmin.from('marketing_automation_execution_logs').insert({
+      automation_id: opts.automation_id,
+      enrollment_id: opts.enrollment_id,
+      venue_id:      opts.venue_id,
+      lead_id:       opts.lead_id,
+      step_order:    opts.step_order,
+      step_type:     opts.step_type,
+      status:        opts.status,
+      error_text:    opts.error_text ?? null,
+      executed_at:   new Date().toISOString(),
+    });
+  } catch (e) {
+    console.error('[worker] logStepExecution failed (non-fatal):', e);
+  }
+}
+
 async function processOneEnrollment(en: {
   id: string;
   automation_id: string;
@@ -530,6 +558,7 @@ async function processOneEnrollment(en: {
       .from('marketing_automation_enrollments')
       .update({ current_step_index: idx + 1, next_run_at: next })
       .eq('id', en.id);
+    void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'delay', status: 'success' });
     return true;
   }
   if (step.step_type === 'send_email') {
@@ -561,8 +590,10 @@ async function processOneEnrollment(en: {
         .from('marketing_automation_enrollments')
         .update({ status: 'failed', last_error: send.error ?? 'send failed' })
         .eq('id', en.id);
+      void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'send_email', status: 'failed', error_text: send.error ?? 'send failed' });
       return true;
     }
+    void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'send_email', status: send.error === 'suppressed' ? 'skipped' : 'success' });
     const nextIdx = idx + 1;
     if (nextIdx >= sorted.length) {
       await supabaseAdmin
@@ -601,8 +632,10 @@ async function processOneEnrollment(en: {
         .from('marketing_automation_enrollments')
         .update({ status: 'failed', last_error: send.error ?? 'sms failed' })
         .eq('id', en.id);
+      void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'send_sms', status: 'failed', error_text: send.error ?? 'sms failed' });
       return true;
     }
+    void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'send_sms', status: send.error === 'suppressed' ? 'skipped' : 'success' });
     const nextIdx = idx + 1;
     if (nextIdx >= sorted.length) {
       await supabaseAdmin
@@ -639,6 +672,7 @@ async function processOneEnrollment(en: {
         ? { status: 'completed', current_step_index: nextIdx, completed_at: new Date().toISOString(), next_run_at: new Date().toISOString() }
         : { current_step_index: nextIdx, next_run_at: new Date().toISOString() },
     ).eq('id', en.id);
+    void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'add_tag', status: 'success' });
     return true;
   }
 
@@ -659,6 +693,7 @@ async function processOneEnrollment(en: {
         ? { status: 'completed', current_step_index: nextIdx, completed_at: new Date().toISOString(), next_run_at: new Date().toISOString() }
         : { current_step_index: nextIdx, next_run_at: new Date().toISOString() },
     ).eq('id', en.id);
+    void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'remove_tag', status: 'success' });
     return true;
   }
 
@@ -675,6 +710,7 @@ async function processOneEnrollment(en: {
         ? { status: 'completed', current_step_index: nextIdx, completed_at: new Date().toISOString(), next_run_at: new Date().toISOString() }
         : { current_step_index: nextIdx, next_run_at: new Date().toISOString() },
     ).eq('id', en.id);
+    void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'change_stage', status: 'success' });
     return true;
   }
 

@@ -22,6 +22,23 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import type { AutomationTriggerType, ExtraTriggerSpec } from '@/lib/marketing-email-schema';
 
+// ─── History / Log row types ──────────────────────────────────────────────────
+interface HistoryRow {
+  id: string; lead_id: string | null;
+  first_name: string; last_name: string; email: string;
+  status: string; current_step_index: number;
+  started_at: string; completed_at: string | null;
+  next_run_at: string | null; last_error: string | null;
+}
+interface LogRow {
+  id: string; enrollment_id: string | null; lead_id: string | null;
+  first_name: string; last_name: string; email: string;
+  step_order: number | null; step_type: string | null;
+  status: string; error_text: string | null; executed_at: string;
+}
+
+type RightTab = 'blocks' | 'settings' | 'history' | 'logs';
+
 // ─── Sensor — never activates on inputs / buttons / links / data-no-dnd ──────
 class SmartPointerSensor extends PointerSensor {
   static activators = [
@@ -426,6 +443,17 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
   const canvasContainerRef      = useRef<HTMLDivElement>(null);
   const containerInitialized    = useRef(false);
   const triggerRowRef           = useRef<HTMLDivElement>(null);
+  const autoSaveTimerRef        = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipAutoSaveRef         = useRef(true); // becomes false after first load completes
+
+  // ── Right panel tab state ─────────────────────────────────────────────────
+  const [rightTab, setRightTab]           = useState<RightTab>('blocks');
+  const [historyRows, setHistoryRows]     = useState<HistoryRow[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyFilter, setHistoryFilter] = useState('all');
+  const [logRows, setLogRows]             = useState<LogRow[]>([]);
+  const [logLoading, setLogLoading]       = useState(false);
+  const [logFilter, setLogFilter]         = useState('all');
 
   // sync refs
   zoomRef.current = zoom;
@@ -732,6 +760,9 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
     if (formsRes.ok) { const d = await formsRes.json(); setForms(d.forms ?? []); }
     if (tmplRes.ok)  { const d = await tmplRes.json();  setTemplates(d.templates ?? []); }
     setLoading(false);
+    // Allow auto-save after the first load has settled (brief delay so all
+    // setState calls from this load complete before we start watching).
+    setTimeout(() => { skipAutoSaveRef.current = false; }, 500);
   }, [id]);
 
   useEffect(() => { queueMicrotask(() => void load()); }, [load]);
@@ -752,6 +783,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
     if (!auto) return;
     setAuto({ ...auto, trigger_type: newType });
     setSelTags([]); setSelStages([]); setSelLinks([]); setSelForms([]); setDaysAfterWedding(3);
+    scheduleAutoSave();
   }
 
   function removePrimaryTrigger() {
@@ -759,6 +791,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
     setAuto({ ...auto, trigger_type: null });
     setSelTags([]); setSelStages([]); setSelLinks([]); setSelForms([]); setDaysAfterWedding(3);
     setSelected(null);
+    scheduleAutoSave();
   }
 
   function buildTriggerConfig(): Record<string, unknown> {
@@ -853,6 +886,45 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
     void load(); void refreshCounts();
   }
 
+  // ── Auto-save: schedule a delayed save after any change ───────────────────
+  function scheduleAutoSave() {
+    if (skipAutoSaveRef.current || loading) return;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => void saveAll(), 2500);
+  }
+
+  // ── Status update — saves immediately ────────────────────────────────────
+  async function updateStatus(newStatus: 'draft' | 'active' | 'paused') {
+    if (!auto) return;
+    setAuto({ ...auto, status: newStatus });
+    setSaving(true); setSaveStatus('saving');
+    const res = await fetch(`/api/marketing/automations/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus }),
+    });
+    setSaving(false);
+    setSaveStatus(res.ok ? 'saved' : 'error');
+    setTimeout(() => setSaveStatus('idle'), 2000);
+  }
+
+  // ── History / Logs loaders ────────────────────────────────────────────────
+  async function loadHistory(filter = historyFilter) {
+    setHistoryLoading(true);
+    const qs = filter !== 'all' ? `?status=${filter}` : '';
+    const res = await fetch(`/api/marketing/automations/${id}/history${qs}`, { cache: 'no-store' });
+    if (res.ok) { const d = await res.json(); setHistoryRows(d.history ?? []); }
+    setHistoryLoading(false);
+  }
+
+  async function loadLogs(filter = logFilter) {
+    setLogLoading(true);
+    const qs = filter !== 'all' ? `?status=${filter}` : '';
+    const res = await fetch(`/api/marketing/automations/${id}/logs${qs}`, { cache: 'no-store' });
+    if (res.ok) { const d = await res.json(); setLogRows(d.logs ?? []); }
+    setLogLoading(false);
+  }
+
   async function removeAutomation() {
     if (!window.confirm('Delete this workflow? This cannot be undone.')) return;
     const res = await fetch(`/api/marketing/automations/${id}`, { method: 'DELETE' });
@@ -871,11 +943,13 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
       :                         { localId, step_type: 'send_email',   template_id: templates[0]?.id ?? '' };
     setSteps((prev) => { const c = [...prev]; c.splice(insertIdx, 0, step); return c; });
     setSelected({ kind: 'step', localId });
+    scheduleAutoSave();
   }
 
   function removeStep(localId: string) {
     setSteps((prev) => prev.filter((s) => s.localId !== localId));
     setSelected(null);
+    scheduleAutoSave();
   }
 
   function moveStep(index: number, dir: -1 | 1) {
@@ -886,6 +960,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
       [c[index], c[j]] = [c[j]!, c[index]!];
       return c;
     });
+    scheduleAutoSave();
   }
 
   // ── DnD handlers ──────────────────────────────────────────────────────────
@@ -1040,10 +1115,9 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
 
         <div className="flex items-center gap-3 flex-shrink-0 ml-auto">
           <input
-            className="hidden md:block w-64 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm font-semibold text-gray-800 placeholder:text-gray-300 hover:border-gray-200 hover:bg-gray-50 focus:border-gray-300 focus:bg-white focus:outline-none transition-colors text-right"
+            className="hidden md:block w-56 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm font-semibold text-gray-800 placeholder:text-gray-300 hover:border-gray-200 hover:bg-gray-50 focus:border-gray-300 focus:bg-white focus:outline-none transition-colors text-right"
             value={auto.name}
-            onChange={(e) => setAuto({ ...auto, name: e.target.value })}
-            onBlur={() => { if (auto.name.trim()) void saveAll(); }}
+            onChange={(e) => { setAuto({ ...auto, name: e.target.value }); scheduleAutoSave(); }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
             }}
@@ -1051,22 +1125,37 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
             title="Click to rename"
             aria-label="Workflow name"
           />
-          <select
-            className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 focus:border-gray-400 focus:outline-none"
-            value={auto.status}
-            onChange={(e) => setAuto({ ...auto, status: e.target.value as AutomationRow['status'] })}
-          >
-            <option value="draft">Draft</option>
-            <option value="active">Active</option>
-            <option value="paused">Paused</option>
-          </select>
-          <div className="flex items-center gap-1 min-w-[50px] justify-end">
-            {saveStatus === 'saving' && <Loader2 size={12} className="animate-spin text-gray-300" />}
-            {saveStatus === 'saved'  && <span className="text-[11px] text-gray-300">Saved</span>}
+
+          {/* Status pill buttons */}
+          <div className="flex items-center rounded-lg border border-gray-200 bg-gray-50 p-0.5 gap-0.5">
+            {(['draft', 'active', 'paused'] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                disabled={saving}
+                onClick={() => void updateStatus(s)}
+                className={`rounded-md px-2.5 py-1 text-xs font-semibold capitalize transition-colors ${
+                  auto.status === s
+                    ? s === 'active'
+                      ? 'bg-emerald-500 text-white shadow-sm'
+                      : s === 'paused'
+                      ? 'bg-amber-400 text-white shadow-sm'
+                      : 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-400 hover:text-gray-700'
+                }`}
+              >
+                {s === 'active' ? 'Live' : s}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-1 min-w-[48px] justify-end">
+            {saveStatus === 'saving' && <><Loader2 size={12} className="animate-spin text-gray-400" /><span className="text-[11px] text-gray-400">Saving…</span></>}
+            {saveStatus === 'saved'  && <span className="text-[11px] text-emerald-500">✓ Saved</span>}
             {saveStatus === 'error'  && <span className="text-[11px] text-red-400">Error</span>}
           </div>
           <button type="button" disabled={saving} onClick={() => void saveAll()}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-brand-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-brand-800 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-brand-900 px-3.5 py-1.5 text-sm font-medium text-white transition hover:bg-brand-800 disabled:opacity-50"
           >
             Save
           </button>
@@ -1413,10 +1502,200 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
             style={{ boxShadow: '-12px 0 32px -8px rgba(0,0,0,0.07)' }}
             onMouseDown={(e) => e.stopPropagation()}
           >
+            {/* ── Tab bar ───────────────────────────────────────────────── */}
+            <div className="flex flex-shrink-0 border-b border-gray-100">
+              {(['blocks', 'settings', 'history', 'logs'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => {
+                    setRightTab(tab);
+                    if (tab !== 'blocks') setSelected(null);
+                    if (tab === 'history') void loadHistory();
+                    if (tab === 'logs')    void loadLogs();
+                  }}
+                  className={`flex-1 py-2.5 text-[10px] font-semibold uppercase tracking-wider transition-colors border-b-2 ${
+                    rightTab === tab
+                      ? 'border-gray-900 text-gray-900'
+                      : 'border-transparent text-gray-400 hover:text-gray-700'
+                  }`}
+                >
+                  {tab === 'blocks' ? 'Blocks' : tab === 'settings' ? 'Settings' : tab === 'history' ? 'History' : 'Logs'}
+                </button>
+              ))}
+            </div>
+
             <div
               className="fb-scroll-pane flex-1 overflow-y-auto"
               style={{ overscrollBehavior: 'contain', scrollbarWidth: 'none', msOverflowStyle: 'none', minHeight: 0 } as React.CSSProperties}
             >
+
+              {/* ── Settings tab ───────────────────────────────────────── */}
+              {rightTab === 'settings' && (
+                <div className="p-5 space-y-6">
+                  <div>
+                    <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Workflow name</p>
+                    <input
+                      className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:bg-white focus:outline-none"
+                      value={auto.name}
+                      onChange={(e) => { setAuto({ ...auto, name: e.target.value }); scheduleAutoSave(); }}
+                      placeholder="Untitled workflow"
+                    />
+                  </div>
+                  <div>
+                    <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Status</p>
+                    <div className="flex flex-col gap-2">
+                      {([
+                        { value: 'draft',  label: 'Draft',  desc: 'Not running. Safe to edit.',       color: 'border-gray-300 bg-white text-gray-700' },
+                        { value: 'active', label: 'Live',   desc: 'Contacts are enrolling.',           color: 'border-emerald-400 bg-emerald-50 text-emerald-800' },
+                        { value: 'paused', label: 'Paused', desc: 'Paused — existing contacts wait.', color: 'border-amber-400 bg-amber-50 text-amber-800' },
+                      ] as const).map(({ value, label, desc, color }) => (
+                        <button key={value} type="button" onClick={() => void updateStatus(value)}
+                          className={`flex items-start gap-3 rounded-xl border-2 p-3 text-left transition-all ${
+                            auto.status === value ? color + ' shadow-sm' : 'border-gray-100 hover:border-gray-200'
+                          }`}
+                        >
+                          <div className={`mt-0.5 h-3.5 w-3.5 flex-shrink-0 rounded-full border-2 ${auto.status === value ? 'border-current bg-current' : 'border-gray-300'}`} />
+                          <div>
+                            <p className="text-xs font-semibold">{label}</p>
+                            <p className="text-[11px] text-gray-500">{desc}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Steps</p>
+                    <p className="text-sm text-gray-700">{steps.length} step{steps.length !== 1 ? 's' : ''}</p>
+                  </div>
+                  <div className="border-t border-gray-100 pt-4">
+                    <button type="button" onClick={() => void removeAutomation()}
+                      className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-red-100 py-2 text-xs font-semibold text-red-500 hover:bg-red-50 transition-colors"
+                    >
+                      <Trash2 size={12} /> Delete workflow
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ── History tab ────────────────────────────────────────── */}
+              {rightTab === 'history' && (
+                <div className="flex flex-col h-full">
+                  <div className="flex items-center gap-2 p-3 border-b border-gray-100 flex-shrink-0">
+                    <select
+                      className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-[11px] focus:outline-none"
+                      value={historyFilter}
+                      onChange={(e) => { setHistoryFilter(e.target.value); void loadHistory(e.target.value); }}
+                    >
+                      <option value="all">All statuses</option>
+                      <option value="active">Active</option>
+                      <option value="completed">Completed</option>
+                      <option value="failed">Failed</option>
+                      <option value="cancelled">Cancelled</option>
+                      <option value="halted_by_reply">Halted by reply</option>
+                    </select>
+                    <button type="button" onClick={() => void loadHistory()} className="text-gray-400 hover:text-gray-700 transition-colors">
+                      <Loader2 size={13} className={historyLoading ? 'animate-spin' : ''} />
+                    </button>
+                  </div>
+                  <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+                    {historyLoading && historyRows.length === 0 ? (
+                      <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-gray-300" size={22} /></div>
+                    ) : historyRows.length === 0 ? (
+                      <div className="py-12 text-center text-gray-400">
+                        <Users size={24} className="mx-auto mb-2 opacity-30" />
+                        <p className="text-xs">No enrollments yet</p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-gray-50">
+                        {historyRows.map((r) => (
+                          <div key={r.id} className="px-4 py-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="truncate text-xs font-semibold text-gray-900">{r.first_name} {r.last_name}</p>
+                                <p className="truncate text-[10px] text-gray-400">{r.email}</p>
+                              </div>
+                              <span className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize ${
+                                r.status === 'completed' ? 'bg-emerald-50 text-emerald-700'
+                                : r.status === 'active'    ? 'bg-blue-50 text-blue-700'
+                                : r.status === 'failed'    ? 'bg-red-50 text-red-600'
+                                : 'bg-gray-100 text-gray-600'
+                              }`}>{r.status.replace(/_/g, ' ')}</span>
+                            </div>
+                            <div className="mt-1 flex items-center gap-3 text-[10px] text-gray-400">
+                              <span>Step {r.current_step_index + 1}</span>
+                              <span>{new Date(r.started_at).toLocaleDateString()}</span>
+                            </div>
+                            {r.last_error && (
+                              <p className="mt-1 text-[10px] text-red-500 truncate" title={r.last_error}>⚠ {r.last_error}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Logs tab ───────────────────────────────────────────── */}
+              {rightTab === 'logs' && (
+                <div className="flex flex-col h-full">
+                  <div className="flex items-center gap-2 p-3 border-b border-gray-100 flex-shrink-0">
+                    <select
+                      className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-[11px] focus:outline-none"
+                      value={logFilter}
+                      onChange={(e) => { setLogFilter(e.target.value); void loadLogs(e.target.value); }}
+                    >
+                      <option value="all">All results</option>
+                      <option value="success">Success</option>
+                      <option value="failed">Failed</option>
+                      <option value="skipped">Skipped</option>
+                    </select>
+                    <button type="button" onClick={() => void loadLogs()} className="text-gray-400 hover:text-gray-700 transition-colors">
+                      <Loader2 size={13} className={logLoading ? 'animate-spin' : ''} />
+                    </button>
+                  </div>
+                  <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+                    {logLoading && logRows.length === 0 ? (
+                      <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-gray-300" size={22} /></div>
+                    ) : logRows.length === 0 ? (
+                      <div className="py-12 text-center text-gray-400">
+                        <Zap size={24} className="mx-auto mb-2 opacity-30" />
+                        <p className="text-xs">No execution logs yet</p>
+                        <p className="mt-1 text-[10px]">Logs appear when contacts run through steps</p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-gray-50">
+                        {logRows.map((r) => (
+                          <div key={r.id} className="px-4 py-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="truncate text-xs font-semibold text-gray-900">{r.first_name} {r.last_name}</p>
+                                <p className="truncate text-[10px] text-gray-400">
+                                  {r.step_type ? r.step_type.replace(/_/g, ' ') : '—'}
+                                  {r.step_order !== null ? ` · step ${r.step_order + 1}` : ''}
+                                </p>
+                              </div>
+                              <span className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                r.status === 'success' ? 'bg-emerald-50 text-emerald-700'
+                                : r.status === 'failed'  ? 'bg-red-50 text-red-600'
+                                : 'bg-gray-100 text-gray-500'
+                              }`}>{r.status}</span>
+                            </div>
+                            <p className="mt-1 text-[10px] text-gray-400">{new Date(r.executed_at).toLocaleString()}</p>
+                            {r.error_text && (
+                              <p className="mt-1 text-[10px] text-red-500 truncate" title={r.error_text}>⚠ {r.error_text}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Blocks tab (inspector + palette) ───────────────────── */}
+              {rightTab === 'blocks' && <>
 
               {/* ── Trigger inspector ──────────────────────────────────── */}
               {selected?.kind === 'trigger' && selected.triggerIdx === 0 ? (
@@ -2112,6 +2391,9 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
 
                 </div>
               )}
+
+              </> /* end blocks tab */}
+
             </div>
 
             {/* Footer */}
@@ -2119,10 +2401,10 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
               <span className="text-[11px] text-gray-400">
                 {steps.length === 0 ? 'No steps' : `${steps.length} step${steps.length === 1 ? '' : 's'}`}
               </span>
-              <span className="ml-auto text-sm text-gray-400">
-                {saveStatus === 'saving' && 'Saving…'}
-                {saveStatus === 'saved'  && 'Saved'}
-                {saveStatus === 'error'  && 'Error'}
+              <span className="ml-auto text-[11px]">
+                {saveStatus === 'saving' && <span className="text-gray-400">Auto-saving…</span>}
+                {saveStatus === 'saved'  && <span className="text-emerald-500">✓ Saved</span>}
+                {saveStatus === 'error'  && <span className="text-red-400">Save error</span>}
               </span>
             </div>
           </aside>
