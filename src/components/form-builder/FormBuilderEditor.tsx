@@ -34,10 +34,7 @@ import {
   type ReactNode,
 } from 'react';
 import {
-  ArrowDown,
   ArrowLeft,
-  ArrowUp,
-  Building2,
   Calendar,
   ChevronDown,
   ChevronRight,
@@ -75,10 +72,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import RichTextEditor from '@/components/RichTextEditor';
-import {
-  MarketingFormView,
-  type VenueContactInfo,
-} from '@/components/marketing-form/MarketingFormView';
+import { MarketingFormView } from '@/components/marketing-form/MarketingFormView';
 import { useFormHistory } from '@/hooks/useFormHistory';
 import {
   ALWAYS_REQUIRED_TYPES,
@@ -125,7 +119,8 @@ type EditorSnapshot = {
 
 type PaletteDrag = { kind: 'palette'; blockType: FormBlockType; label: string };
 
-type RightTab = 'block' | 'settings' | 'theme' | 'submissions';
+/** Tabs inside the form-level Settings modal (header → Settings button). */
+type SettingsTab = 'settings' | 'theme' | 'inbox';
 
 const BLOCK_TYPE_ICONS: Record<FormBlockType, LucideIcon> = {
   heading: HeadingIcon,
@@ -144,7 +139,6 @@ const BLOCK_TYPE_ICONS: Record<FormBlockType, LucideIcon> = {
   select: ListFilter,
   checkbox_group: ListChecks,
   textarea: FileText,
-  venue_contact: Building2,
   submit: Send,
   button: MousePointerClick,
   html: Code2,
@@ -169,7 +163,6 @@ const PALETTE: PaletteItem[] = [
   { type: 'radio',           label: 'Radio',            desc: 'Single choice'            },
   { type: 'select',          label: 'Dropdown',         desc: 'Single-choice menu'       },
   { type: 'checkbox_group',  label: 'Checkboxes',       desc: 'Multi-choice list'        },
-  { type: 'venue_contact',   label: 'Venue contact',    desc: 'Your business info'       },
   { type: 'submit',          label: 'Submit button',    desc: 'Form submit button'       },
   { type: 'button',          label: 'Custom button',    desc: 'Call-to-action link'      },
   { type: 'html',            label: 'HTML',             desc: 'Custom HTML block'        },
@@ -213,7 +206,6 @@ function blockPrimaryTabLabel(type: FormBlockType): string {
     case 'rich_text':     return 'Content';
     case 'html':          return 'HTML';
     case 'image':         return 'Image';
-    case 'venue_contact': return 'Contact';
     case 'submit':
     case 'button':        return 'Button';
     default:              return 'Field';
@@ -406,69 +398,6 @@ function SettingsSelect({
         strokeWidth={2}
         aria-hidden
       />
-    </div>
-  );
-}
-
-// ─── Floating side toolbar (move/duplicate/delete) ───────────────────────────
-function FloatingSideToolbar({
-  isFirst,
-  isLast,
-  onMoveUp,
-  onMoveDown,
-  onDuplicate,
-  onRemove,
-}: {
-  isFirst: boolean;
-  isLast: boolean;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
-  onDuplicate: () => void;
-  onRemove: () => void;
-}) {
-  return (
-    <div
-      className="absolute -right-12 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1 z-10"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="flex flex-col items-center gap-1 bg-white rounded-2xl shadow-lg border border-gray-100 px-1.5 py-2">
-        <button
-          type="button"
-          title="Move up"
-          disabled={isFirst}
-          onClick={onMoveUp}
-          className="flex h-8 w-8 items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-all disabled:opacity-25 disabled:cursor-not-allowed"
-        >
-          <ArrowUp size={15} />
-        </button>
-        <button
-          type="button"
-          title="Move down"
-          disabled={isLast}
-          onClick={onMoveDown}
-          className="flex h-8 w-8 items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-all disabled:opacity-25 disabled:cursor-not-allowed"
-        >
-          <ArrowDown size={15} />
-        </button>
-        <div className="w-5 h-px bg-gray-100 my-0.5" />
-        <button
-          type="button"
-          title="Duplicate"
-          onClick={onDuplicate}
-          className="flex h-8 w-8 items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-all"
-        >
-          <Copy size={15} />
-        </button>
-        <div className="w-5 h-px bg-gray-100 my-0.5" />
-        <button
-          type="button"
-          title="Delete block"
-          onClick={onRemove}
-          className="flex h-8 w-8 items-center justify-center rounded-xl text-red-400 hover:bg-red-50 hover:text-red-600 transition-all"
-        >
-          <Trash2 size={15} />
-        </button>
-      </div>
     </div>
   );
 }
@@ -813,25 +742,6 @@ function BlockInspector({
               placeholder="Describe this image for screen readers"
             />
           </div>
-        </div>
-      )}
-
-      {/* Venue contact */}
-      {block.type === 'venue_contact' && (
-        <div className="space-y-3">
-          <p className="text-[13px] leading-relaxed text-gray-500">
-            Shows your venue name, email, phone, and address from{' '}
-            <Link
-              href="/dashboard/settings/branding"
-              className="text-gray-900 underline underline-offset-2 hover:text-gray-700"
-            >
-              Settings → Branding
-            </Link>
-            .
-          </p>
-          <p className="text-[12px] text-gray-400">
-            This block has no per-form options — manage the values once in branding.
-          </p>
         </div>
       )}
 
@@ -1441,6 +1351,128 @@ function SubmissionsInbox({
   );
 }
 
+// ─── Form-level Settings modal (Settings / Theme / Inbox) ───────────────────
+// Triggered from the header's Settings button. Houses everything that's NOT
+// per-block — submission routing, post-submit behavior, theme, submissions.
+// The right rail is reserved for block palette / per-block inspector only.
+function FormSettingsModal({
+  initialTab,
+  settings,
+  postSubmit,
+  theme,
+  blocks,
+  submissions,
+  submissionsLoading,
+  onSettingsChange,
+  onPostSubmitChange,
+  onThemeChange,
+  onPreviewThankYou,
+  onClose,
+}: {
+  initialTab: SettingsTab;
+  settings: FormSettings | undefined;
+  postSubmit: PostSubmitConfig | undefined;
+  theme: ReturnType<typeof mergeTheme>;
+  blocks: FormBlock[];
+  submissions: { id: string; payload: unknown; created_at: string }[];
+  submissionsLoading: boolean;
+  onSettingsChange: (next: FormSettings) => void;
+  onPostSubmitChange: (next: PostSubmitConfig) => void;
+  onThemeChange: (next: MarketingFormDefinition['theme']) => void;
+  onPreviewThankYou: () => void;
+  onClose: () => void;
+}) {
+  const [tab, setTab] = useState<SettingsTab>(initialTab);
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
+          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-widest text-gray-400">
+            <Settings size={13} />
+            <span>Form settings</span>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+            aria-label="Close settings"
+          >
+            <XIcon size={16} />
+          </button>
+        </div>
+
+        <div className="flex h-12 shrink-0 items-stretch border-b border-gray-100 bg-white">
+          {(
+            [
+              ['settings', 'Settings'],
+              ['theme', 'Theme'],
+              ['inbox', 'Inbox'],
+            ] as const
+          ).map(([id, label]) => {
+            const active = tab === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTab(id)}
+                className={`relative flex-1 px-1.5 text-center text-[12px] font-medium transition sm:text-[13px] ${
+                  active ? 'text-gray-900' : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                <span className="flex h-full items-center justify-center leading-tight">
+                  {label}
+                </span>
+                {active && (
+                  <span className="absolute bottom-0 left-1/2 h-[2px] w-12 -translate-x-1/2 rounded-full bg-gray-900" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        <div
+          className="fb-scroll-pane flex-1 overflow-y-auto"
+          style={{ overscrollBehavior: 'contain', minHeight: 0 }}
+        >
+          {tab === 'settings' && (
+            <div className="space-y-7 p-5">
+              <FormSettingsPanel settings={settings} onChange={onSettingsChange} />
+              <div className="h-px w-full bg-gray-100" />
+              <PostSubmitInspector
+                postSubmit={postSubmit}
+                onChange={onPostSubmitChange}
+                onPreviewThankYou={onPreviewThankYou}
+              />
+            </div>
+          )}
+          {tab === 'theme' && (
+            <div className="p-5">
+              <ThemeInspector theme={theme} onChange={onThemeChange} />
+            </div>
+          )}
+          {tab === 'inbox' && (
+            <div className="p-5">
+              <SubmissionsInbox
+                submissions={submissions}
+                loading={submissionsLoading}
+                blocks={blocks}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Live preview modal (dark themed, device toggle, open in new tab) ────────
 function PreviewModal({
   embedUrl,
@@ -1448,7 +1480,6 @@ function PreviewModal({
   published,
   definition,
   embedToken,
-  venueContact,
   onClose,
 }: {
   embedUrl: string;
@@ -1456,7 +1487,6 @@ function PreviewModal({
   published: boolean;
   definition: MarketingFormDefinition;
   embedToken: string;
-  venueContact: VenueContactInfo | null;
   onClose: () => void;
 }) {
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
@@ -1561,7 +1591,6 @@ function PreviewModal({
               definition={definition}
               embedToken={embedToken}
               formTitle={formTitle}
-              venueContact={venueContact}
               preview
               livePreview
             />
@@ -1622,14 +1651,14 @@ export function FormBuilderEditor({
   const [thankYouOpen, setThankYouOpen] = useState(false);
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
   const mediaApplyRef = useRef<(url: string) => void>(() => {});
-  const [rightTab, setRightTab] = useState<RightTab>('block');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>('settings');
   const [previewOpen, setPreviewOpen] = useState(false);
   const [pickerInsertIdx, setPickerInsertIdx] = useState<number | null>(null);
   const [activePaletteType, setActivePaletteType] = useState<FormBlockType | null>(null);
   const [dropTarget, setDropTarget] = useState<{ id: string; pos: 'before' | 'after' } | null>(null);
   const pointerYRef = useRef(0);
 
-  const [venueContact, setVenueContact] = useState<VenueContactInfo | null>(null);
   const [submissions, setSubmissions] = useState<{ id: string; payload: unknown; created_at: string }[]>(
     [],
   );
@@ -1654,38 +1683,6 @@ export function FormBuilderEditor({
     return () => window.removeEventListener('pointermove', onMove);
   }, []);
 
-  // Venue contact (for the venue_contact block preview)
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetch('/api/venues/me');
-        if (!res.ok) return;
-        const v = (await res.json()) as Record<string, unknown>;
-        if (cancelled) return;
-        const city = typeof v.brand_city === 'string' ? v.brand_city : '';
-        const state = typeof v.brand_state === 'string' ? v.brand_state : '';
-        const zip = typeof v.brand_zip === 'string' ? v.brand_zip : '';
-        const line2 = [city, state, zip].filter(Boolean).join(', ');
-        const addrParts = [
-          typeof v.brand_address === 'string' ? v.brand_address : '',
-          line2,
-        ].filter(Boolean);
-        setVenueContact({
-          venueName: typeof v.name === 'string' ? v.name : null,
-          email: typeof v.brand_email === 'string' ? v.brand_email : null,
-          phone: typeof v.brand_phone === 'string' ? v.brand_phone : null,
-          addressLine: addrParts.length ? addrParts.join('\n') : null,
-        });
-      } catch {
-        /* ignore */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   // Persist viewport choice
   useEffect(() => {
     try {
@@ -1702,9 +1699,9 @@ export function FormBuilderEditor({
     return () => clearTimeout(t);
   }, [canvasHint]);
 
-  // Submissions (lazy-load when Inbox tab is opened)
+  // Submissions — lazy-loaded when the Settings modal's Inbox tab is opened.
   useEffect(() => {
-    if (rightTab !== 'submissions') return;
+    if (!settingsOpen || settingsTab !== 'inbox') return;
     let cancelled = false;
     setSubmissionsLoading(true);
     void (async () => {
@@ -1721,7 +1718,7 @@ export function FormBuilderEditor({
     return () => {
       cancelled = true;
     };
-  }, [rightTab, formId]);
+  }, [settingsOpen, settingsTab, formId]);
 
   // Make sure selected id is still valid after edits
   useEffect(() => {
@@ -1824,6 +1821,11 @@ export function FormBuilderEditor({
         setPreviewOpen(false);
         return;
       }
+      if (settingsOpen) {
+        e.preventDefault();
+        setSettingsOpen(false);
+        return;
+      }
       if (embedOpen) {
         e.preventDefault();
         setEmbedOpen(false);
@@ -1836,7 +1838,7 @@ export function FormBuilderEditor({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [pickerInsertIdx, previewOpen, embedOpen, thankYouOpen]);
+  }, [pickerInsertIdx, previewOpen, settingsOpen, embedOpen, thankYouOpen]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -1849,11 +1851,6 @@ export function FormBuilderEditor({
   );
 
   const mergedTheme = useMemo(() => mergeTheme(definition.theme), [definition.theme]);
-
-  // Ensure right panel auto-flips to Design when a block is clicked on the canvas
-  useEffect(() => {
-    if (selectedId && rightTab !== 'block') setRightTab('block');
-  }, [selectedId, rightTab]);
 
   const setSnapshot = useCallback(
     (fn: (s: EditorSnapshot) => EditorSnapshot) => {
@@ -1889,7 +1886,6 @@ export function FormBuilderEditor({
       });
       setSelectedId(nb.id);
       setPickerInsertIdx(null);
-      setRightTab('block');
     },
     [patchDefinition],
   );
@@ -1917,19 +1913,6 @@ export function FormBuilderEditor({
       setSelectedId(clone.id);
     },
     [definition.blocks, patchDefinition],
-  );
-
-  const moveBlock = useCallback(
-    (id: string, dir: 'up' | 'down') => {
-      patchDefinition((d) => {
-        const idx = d.blocks.findIndex((b) => b.id === id);
-        if (idx < 0) return d;
-        const target = dir === 'up' ? idx - 1 : idx + 1;
-        if (target < 0 || target >= d.blocks.length) return d;
-        return { ...d, blocks: arrayMove(d.blocks, idx, target) };
-      });
-    },
-    [patchDefinition],
   );
 
   const handleRequestMediaPick = useCallback((apply: (url: string) => void) => {
@@ -2031,7 +2014,6 @@ export function FormBuilderEditor({
             return { ...d, blocks };
           });
           setSelectedId(newBlock.id);
-          setRightTab('block');
           return;
         }
         // Fall through: append at end.
@@ -2100,7 +2082,6 @@ export function FormBuilderEditor({
     (block: FormBlock, node: ReactNode) => {
       const blocks = definition.blocks;
       const idx = blocks.findIndex((b) => b.id === block.id);
-      const isSelected = block.id === selectedId;
       const isDropTargetBlock = dropTarget?.id === block.id && activePaletteType !== null;
       const showTopIndicator = isDropTargetBlock && dropTarget?.pos === 'before';
       const showBottomIndicator = isDropTargetBlock && dropTarget?.pos === 'after';
@@ -2112,19 +2093,7 @@ export function FormBuilderEditor({
           {() => (
             <div>
               {showTopIndicator && dropIndicator(dragLabel)}
-              <div className="relative group/block">
-                {node}
-                {isSelected && (
-                  <FloatingSideToolbar
-                    isFirst={idx === 0}
-                    isLast={idx === blocks.length - 1}
-                    onMoveUp={() => moveBlock(block.id, 'up')}
-                    onMoveDown={() => moveBlock(block.id, 'down')}
-                    onDuplicate={() => duplicateOne(block.id)}
-                    onRemove={() => removeBlock(block.id)}
-                  />
-                )}
-              </div>
+              <div className="relative group/block">{node}</div>
               <AddBlockBtn onClick={() => setPickerInsertIdx(idx + 1)} />
               {showBottomIndicator && dropIndicator(dragLabel)}
             </div>
@@ -2132,15 +2101,7 @@ export function FormBuilderEditor({
         </SortableCanvasBlock>
       );
     },
-    [
-      definition.blocks,
-      selectedId,
-      dropTarget,
-      activePaletteType,
-      moveBlock,
-      duplicateOne,
-      removeBlock,
-    ],
+    [definition.blocks, dropTarget, activePaletteType],
   );
 
   const emptySlot = useMemo(
@@ -2216,7 +2177,10 @@ export function FormBuilderEditor({
           <span className="text-gray-200">›</span>
           <button
             type="button"
-            onClick={() => setRightTab('settings')}
+            onClick={() => {
+              setSettingsTab('settings');
+              setSettingsOpen(true);
+            }}
             className="text-gray-300 hover:text-gray-600 transition-colors"
           >
             Settings
@@ -2252,7 +2216,10 @@ export function FormBuilderEditor({
 
           <button
             type="button"
-            onClick={() => setRightTab('settings')}
+            onClick={() => {
+              setSettingsTab('settings');
+              setSettingsOpen(true);
+            }}
             className="hidden lg:flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-700 transition-colors"
           >
             <Settings size={14} />
@@ -2382,7 +2349,6 @@ export function FormBuilderEditor({
                     preview
                     flatCanvas
                     formTitle={name}
-                    venueContact={venueContact}
                     builder={builderOpts}
                     wrapBlock={wrapBlock}
                     emptyCanvasSlot={null}
@@ -2429,47 +2395,14 @@ export function FormBuilderEditor({
           </div>
 
           {/* ── Right Panel ────────────────────────────────────────────────── */}
+          {/* Form-level configuration (post-submit, theme, inbox) lives in the
+              header Settings modal; the right rail is only ever the block
+              palette or the active block's inspector. */}
           <aside
             className="w-80 flex-shrink-0 bg-white flex flex-col overflow-hidden"
             style={{ boxShadow: '-12px 0 32px -8px rgba(0,0,0,0.07)' }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Tab bar — hidden while editing a single block (matches the email
-                builder, where selecting a block hides the rail nav and shows
-                only the inspector with a Done button). */}
-            {!selected && (
-              <div className="flex h-12 shrink-0 items-stretch border-b border-gray-100 bg-white">
-                {(
-                  [
-                    ['block', 'Design'],
-                    ['settings', 'Settings'],
-                    ['theme', 'Theme'],
-                    ['submissions', 'Inbox'],
-                  ] as const
-                ).map(([id, label]) => {
-                  const active = rightTab === id;
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => setRightTab(id)}
-                      className={`relative flex-1 px-1.5 text-center text-[12px] font-medium transition sm:text-[13px] ${
-                        active ? 'text-gray-900' : 'text-gray-400 hover:text-gray-600'
-                      }`}
-                    >
-                      <span className="flex h-full items-center justify-center leading-tight">
-                        {label}
-                      </span>
-                      {active && (
-                        <span className="absolute left-1/2 -translate-x-1/2 bottom-0 h-[2px] w-12 bg-gray-900 rounded-full" />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Tab content */}
             <div
               className="fb-scroll-pane flex-1 overflow-y-auto"
               style={
@@ -2493,51 +2426,19 @@ export function FormBuilderEditor({
                   />
                 </div>
               ) : (
-                <>
-                  {rightTab === 'block' && (
-                    <div className="p-4">
-                      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-                        Blocks
-                      </p>
-                      <p className="mb-4 text-[11px] text-gray-400">
-                        Drag a block onto the canvas, or click a block on the canvas to edit it.
-                      </p>
-                      <div className="flex flex-col gap-2">
-                        {PALETTE.map((item) => (
-                          <PaletteCard key={item.type} {...item} />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {rightTab === 'settings' && (
-                    <div className="p-5 space-y-7">
-                      <FormSettingsPanel settings={definition.settings} onChange={patchSettings} />
-                      <div className="h-px w-full bg-gray-100" />
-                      <PostSubmitInspector
-                        postSubmit={definition.postSubmit}
-                        onChange={patchPostSubmit}
-                        onPreviewThankYou={() => setThankYouOpen(true)}
-                      />
-                    </div>
-                  )}
-
-                  {rightTab === 'theme' && (
-                    <div className="p-5">
-                      <ThemeInspector theme={mergedTheme} onChange={patchTheme} />
-                    </div>
-                  )}
-
-                  {rightTab === 'submissions' && (
-                    <div className="p-5">
-                      <SubmissionsInbox
-                        submissions={submissions}
-                        loading={submissionsLoading}
-                        blocks={definition.blocks}
-                      />
-                    </div>
-                  )}
-                </>
+                <div className="p-4">
+                  <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                    Blocks
+                  </p>
+                  <p className="mb-4 text-[11px] text-gray-400">
+                    Drag a block onto the canvas, or click a block on the canvas to edit it.
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    {PALETTE.map((item) => (
+                      <PaletteCard key={item.type} {...item} />
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
 
@@ -2585,8 +2486,25 @@ export function FormBuilderEditor({
           published={published}
           definition={definition}
           embedToken={embedToken}
-          venueContact={venueContact}
           onClose={() => setPreviewOpen(false)}
+        />
+      )}
+
+      {/* Form-level Settings (Settings / Theme / Inbox) */}
+      {settingsOpen && (
+        <FormSettingsModal
+          initialTab={settingsTab}
+          settings={definition.settings}
+          postSubmit={definition.postSubmit}
+          theme={mergedTheme}
+          blocks={definition.blocks}
+          submissions={submissions}
+          submissionsLoading={submissionsLoading}
+          onSettingsChange={patchSettings}
+          onPostSubmitChange={patchPostSubmit}
+          onThemeChange={patchTheme}
+          onPreviewThankYou={() => setThankYouOpen(true)}
+          onClose={() => setSettingsOpen(false)}
         />
       )}
 

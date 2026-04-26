@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  Fragment,
   useCallback,
   useMemo,
   useState,
@@ -21,14 +20,6 @@ import {
 } from '@/lib/marketing-form-schema';
 import { collectGoogleFontFamiliesFromDefinition } from '@/lib/google-fonts';
 import { sanitizeFormHtml } from '@/lib/sanitize-form-html';
-
-/** Branding fields for the venue_contact block (embed + builder preview). */
-export type VenueContactInfo = {
-  venueName?: string | null;
-  email?: string | null;
-  phone?: string | null;
-  addressLine?: string | null;
-};
 
 function blockStyleCss(s?: FormBlockStyle): CSSProperties {
   if (!s) return {};
@@ -77,8 +68,6 @@ function renderBlock(
    *  builder canvas (so blocks are clickable/editable, not fillable) and by
    *  the static preview. The interactive *live preview* sets this to false. */
   inputsDisabled: boolean,
-  venueContact: VenueContactInfo | null,
-  builder?: FormBuilderCanvasOpts | null,
 ) {
   const name = formFieldName(block);
   const label = block.label?.trim() || '';
@@ -122,30 +111,15 @@ function renderBlock(
           : L === 2
             ? 'text-xl font-semibold tracking-tight'
             : 'text-lg font-semibold';
-      const sel = builder?.selectedId === block.id;
       const sty: CSSProperties = {
         color: block.style?.color ?? theme.primaryColor,
         fontFamily: block.style?.fontFamily ?? (theme.headingFontFamily || undefined),
         ...blockStyleCss(block.style),
       };
+      // Heading text is edited via the inspector's "Text" field (not inline)
+      // so clicks always fall through to the block wrapper for selection.
       return (
-        <Tag
-          key={block.id}
-          className={`mb-3 min-h-[1.5em] outline-none ${cls}`}
-          style={sty}
-          contentEditable={!!(builder && sel)}
-          suppressContentEditableWarning
-          onClick={(e) => {
-            e.stopPropagation();
-            builder?.onSelectBlock(block.id);
-          }}
-          onBlur={(e) => {
-            const t = e.currentTarget.textContent?.trim() ?? '';
-            if (builder && t !== (block.content ?? '').trim()) {
-              builder.onPatchBlock(block.id, { content: t || 'Heading' });
-            }
-          }}
-        >
+        <Tag key={block.id} className={`mb-3 min-h-[1.5em] ${cls}`} style={sty}>
           {text}
         </Tag>
       );
@@ -428,38 +402,6 @@ function renderBlock(
         id
       );
     }
-    case 'venue_contact': {
-      const vc = venueContact;
-      const has =
-        vc &&
-        (vc.email || vc.phone || vc.addressLine || vc.venueName);
-      if (!has) {
-        return (
-          <div
-            key={block.id}
-            className="mb-4 rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-4 text-center text-xs text-gray-400"
-          >
-            Venue contact will appear here on your live embed (add branding under Settings → Branding).
-          </div>
-        );
-      }
-      return (
-        <div
-          key={block.id}
-          className="mb-4 border-t border-gray-100 pt-4 text-sm"
-          style={{ color: theme.mutedColor }}
-        >
-          {vc!.venueName ? (
-            <p className="font-semibold" style={{ color: theme.labelColor }}>
-              {vc!.venueName}
-            </p>
-          ) : null}
-          {vc!.email ? <p className="mt-1">{vc!.email}</p> : null}
-          {vc!.phone ? <p className="mt-1">{vc!.phone}</p> : null}
-          {vc!.addressLine ? <p className="mt-2 whitespace-pre-line">{vc!.addressLine}</p> : null}
-        </div>
-      );
-    }
     case 'submit': {
       const submitAlign = block.buttonAlign ?? 'center';
       const submitWidth = submitAlign === 'center' ? 'w-full' : 'inline-flex';
@@ -549,8 +491,6 @@ interface MarketingFormViewProps {
    *  Implies `preview` for routing/disabled purposes. */
   livePreview?: boolean;
   onPreviewSubmit?: () => void;
-  /** Shown for venue_contact blocks on embed; builder loads from /api/venues/me */
-  venueContact?: VenueContactInfo | null;
   /** Select blocks + edit heading in place on the canvas */
   builder?: FormBuilderCanvasOpts | null;
   /** Wrap each block (after builder chrome), e.g. sortable drag handles in the lead capture form editor */
@@ -568,7 +508,6 @@ export function MarketingFormView({
   preview = false,
   livePreview = false,
   onPreviewSubmit,
-  venueContact = null,
   builder = null,
   wrapBlock,
   emptyCanvasSlot = null,
@@ -730,12 +669,12 @@ export function MarketingFormView({
               <div className="grid grid-cols-2 gap-x-3">
                 {definition.blocks.map((b) => {
                   // Layout/content blocks always span full width; input blocks use colSpan
-                  const isLayoutBlock = ['heading', 'rich_text', 'image', 'html', 'submit', 'button', 'venue_contact'].includes(b.type);
+                  const isLayoutBlock = ['heading', 'rich_text', 'image', 'html', 'submit', 'button'].includes(b.type);
                   const colClass = isLayoutBlock || (b.colSpan ?? 2) === 2
                     ? 'col-span-2'
                     : 'col-span-1';
 
-                  const inner = renderBlock(b, theme, inputsDisabled, venueContact, builder);
+                  const inner = renderBlock(b, theme, inputsDisabled);
                   const boxCss = blockBoxCss(b);
                   let node: ReactNode;
                   if (!builder) {
@@ -750,6 +689,12 @@ export function MarketingFormView({
                       );
                   } else {
                     const selected = builder.selectedId === b.id;
+                    // In builder mode all child interactivity is muted with
+                    // `pointer-events: none`, so clicks/taps anywhere on the
+                    // block (including disabled-looking inputs and headings)
+                    // bubble straight to the wrapper. This fixes the bug where
+                    // a selected block would trap focus and require a canvas
+                    // click before another block could be selected.
                     node = (
                       <div
                         role="presentation"
@@ -762,6 +707,7 @@ export function MarketingFormView({
                             ? '0 12px 40px rgba(0,0,0,0.13), 0 4px 12px rgba(0,0,0,0.08)'
                             : 'none',
                           transition: 'outline 0.1s ease, box-shadow 0.2s ease',
+                          cursor: 'pointer',
                         }}
                         onMouseEnter={(e) => {
                           if (!selected) {
@@ -781,7 +727,7 @@ export function MarketingFormView({
                           builder.onSelectBlock(b.id);
                         }}
                       >
-                        {inner}
+                        <div style={{ pointerEvents: 'none' }}>{inner}</div>
                       </div>
                     );
                   }

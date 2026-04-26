@@ -19,8 +19,7 @@ export type FormBlockType =
   | 'checkbox_group'
   | 'textarea'
   | 'submit'
-  | 'button'
-  | 'venue_contact';
+  | 'button';
 
 /** Per-block typography (builder + public form). */
 export interface FormBlockStyle {
@@ -124,7 +123,6 @@ export const FORM_BLOCK_PADDING_DEFAULTS: Record<
   textarea:       { top: 0, bottom: 0, left: 0, right: 0 },
   submit:         { top: 0, bottom: 0, left: 0, right: 0 },
   button:         { top: 0, bottom: 0, left: 0, right: 0 },
-  venue_contact:  { top: 0, bottom: 0, left: 0, right: 0 },
 };
 
 /** Resolved padding for a block — explicit fields win, otherwise type default. */
@@ -178,7 +176,6 @@ export const FORM_BLOCK_TYPES: FormBlockType[] = [
   'textarea',
   'submit',
   'button',
-  'venue_contact',
 ];
 
 /** These blocks are always required — the toggle is hidden in the builder. */
@@ -253,10 +250,6 @@ export function defaultDefinition(): MarketingFormDefinition {
         label: 'Email',
         placeholder: 'you@example.com',
         required: true,
-      },
-      {
-        id: crypto.randomUUID(),
-        type: 'venue_contact',
       },
       {
         id: crypto.randomUUID(),
@@ -342,8 +335,6 @@ export function createBlock(type: FormBlockType): FormBlock {
         href: 'https://',
         buttonVariant: 'secondary',
       };
-    case 'venue_contact':
-      return { id, type: 'venue_contact' };
     default:
       return { id, type: 'heading', level: 2, content: 'Block' };
   }
