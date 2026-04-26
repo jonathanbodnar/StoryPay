@@ -78,6 +78,7 @@ interface Lead {
   wedding_date: string | null;
   guest_count: number | null;
   booking_timeline: string | null;
+  venue_matters: string | null;
   message: string | null;
   notes: string | null;
   status: LeadStatus;
@@ -1993,6 +1994,63 @@ function LeadDrawer({
             ) : null}
           </section>
 
+          {/* Inquiry Questions */}
+          <section className="space-y-3">
+            <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+              Inquiry Questions
+            </label>
+
+            {/* Touring timeline */}
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">
+                When do you plan to start touring?
+              </label>
+              <select
+                value={lead.booking_timeline ?? ''}
+                onChange={(e) => void saveField('bookingTimeline', e.target.value || null)}
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-800 focus:border-gray-400 focus:outline-none"
+              >
+                <option value="">— not answered —</option>
+                {[
+                  'Immediately — within the next month',
+                  'Soon — 1 to 3 months',
+                  'Planning ahead — 3 to 6 months',
+                  'Just exploring — 6+ months out',
+                ].map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+
+            {/* What matters most */}
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">
+                What matters most when choosing a venue?
+              </label>
+              <select
+                value={lead.venue_matters ?? ''}
+                onChange={(e) => void saveField('venueMatters', e.target.value || null)}
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-800 focus:border-gray-400 focus:outline-none"
+              >
+                <option value="">— not answered —</option>
+                {[
+                  'Outdoor ceremony space',
+                  'Inclusive pricing & all-in packages',
+                  'Unique / non-traditional setting',
+                  'On-site catering & bar',
+                  'Guest capacity (large or intimate)',
+                  'Location & accessibility',
+                  'Photo-worthy aesthetics',
+                  'Vendor flexibility',
+                  'Bridal suite & getting-ready space',
+                  'Experience & reputation',
+                ].map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+
+            {/* Anything else — editable */}
+            <Field label="Anything they'd like the venue to know" value={lead.message ?? ''} className=""
+              onSave={(v) => void saveField('message', v || null)} saving={savingField === 'message'} />
+          </section>
+
           {lead.first_touch_utm && typeof lead.first_touch_utm === 'object' && Object.keys(lead.first_touch_utm).length > 0 ? (
             <section>
               <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">
@@ -2003,16 +2061,6 @@ function LeadDrawer({
               </pre>
             </section>
           ) : null}
-
-          {/* Inquiry message */}
-          {lead.message && (
-            <section>
-              <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Inquiry message</label>
-              <div className="rounded-2xl bg-gray-50 p-4 text-sm text-gray-800 whitespace-pre-wrap">
-                {lead.message}
-              </div>
-            </section>
-          )}
 
           {/* Actions */}
           <section className="flex flex-wrap gap-2">

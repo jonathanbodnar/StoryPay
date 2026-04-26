@@ -85,6 +85,7 @@ export async function PATCH(
     weddingDate?: string | null;
     guestCount?: number | null;
     bookingTimeline?: string | null;
+    venueMatters?: string | null;
     message?: string | null;
     pipelineId?: string | null;
     stageId?: string | null;
@@ -134,6 +135,7 @@ export async function PATCH(
   if (typeof body.venueName === 'string')          updates.venue_name = body.venueName.trim() || null;
   if (typeof body.venueWebsiteUrl === 'string')    updates.venue_website_url = body.venueWebsiteUrl.trim() || null;
   if (typeof body.bookingTimeline === 'string' || body.bookingTimeline === null) updates.booking_timeline = body.bookingTimeline || null;
+  if (typeof body.venueMatters === 'string' || body.venueMatters === null) updates.venue_matters = body.venueMatters || null;
   if (typeof body.message === 'string' || body.message === null) updates.message = body.message;
   if (body.weddingDate === null || typeof body.weddingDate === 'string') updates.wedding_date = body.weddingDate || null;
   if (body.guestCount === null || typeof body.guestCount === 'number') updates.guest_count = body.guestCount;
