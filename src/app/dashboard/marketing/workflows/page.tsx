@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2, Plus, Trash2, Workflow } from 'lucide-react';
-import type { AutomationTriggerType } from '@/lib/marketing-email-schema';
 
 interface AutoRow {
   id: string;
@@ -35,7 +34,6 @@ export default function WorkflowsListPage() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [name, setName] = useState('');
-  const [triggerType, setTriggerType] = useState<AutomationTriggerType>('form_submitted');
   const [creating, setCreating] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -57,7 +55,6 @@ export default function WorkflowsListPage() {
 
   function openModal() {
     setName('');
-    setTriggerType('form_submitted');
     setErr(null);
     setModalOpen(true);
     setTimeout(() => nameRef.current?.focus(), 50);
@@ -92,17 +89,17 @@ export default function WorkflowsListPage() {
     if (!n) { setErr('Name is required'); return; }
     setCreating(true);
     setErr(null);
-    const triggerConfig =
-      triggerType === 'tag_added'             ? { tag_ids: [] as string[] }
-      : triggerType === 'stage_changed'       ? { to_stage_ids: [] as string[] }
-      : triggerType === 'wedding_date_followup' ? { days_after_wedding: 3 }
-      : triggerType === 'proposal_paid'       ? {}
-      : triggerType === 'form_submitted'      ? { form_ids: [] as string[] }
-      :                                         { trigger_link_ids: [] as string[] };
+    // Default to form_submitted with no specific form selected; the user picks
+    // their actual triggers (and can add multiples) in the canvas inspector.
     const res = await fetch('/api/marketing/automations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: n, triggerType, triggerConfig, steps: [] }),
+      body: JSON.stringify({
+        name: n,
+        triggerType: 'form_submitted',
+        triggerConfig: { form_ids: [] },
+        steps: [],
+      }),
     });
     const j = (await res.json().catch(() => ({}))) as { automation?: { id: string }; error?: string };
     setCreating(false);
@@ -220,7 +217,7 @@ export default function WorkflowsListPage() {
           >
             <h2 className="mb-1 text-lg font-bold text-gray-900">New workflow</h2>
             <p className="mb-5 text-sm text-gray-500">
-              Give it a name and pick a trigger — you&apos;ll configure steps on the next screen.
+              Give it a name — you&apos;ll pick triggers and add steps on the canvas.
             </p>
 
             <div className="space-y-4">
@@ -237,23 +234,6 @@ export default function WorkflowsListPage() {
                   placeholder="Speed to Lead — Inquiry Form"
                   onKeyDown={(e) => { if (e.key === 'Enter') void create(); }}
                 />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                  Trigger
-                </label>
-                <select
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:bg-white focus:outline-none transition-colors"
-                  value={triggerType}
-                  onChange={(e) => setTriggerType(e.target.value as AutomationTriggerType)}
-                >
-                  <option value="form_submitted">Form submitted (lead-capture form)</option>
-                  <option value="tag_added">Tag added</option>
-                  <option value="stage_changed">Stage changed (enters stage)</option>
-                  <option value="trigger_link_click">Trigger link click</option>
-                  <option value="wedding_date_followup">After wedding date (thank-you / review)</option>
-                  <option value="proposal_paid">Proposal paid (deposit or final)</option>
-                </select>
               </div>
             </div>
 

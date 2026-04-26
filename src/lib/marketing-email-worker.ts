@@ -28,25 +28,66 @@ async function enrollIfNew(automationId: string, venueId: string, leadId: string
   if (error) console.error('[marketing enroll]', error);
 }
 
+/** All trigger sources (primary + extras) for a workflow row, normalized to a flat shape. */
+type AutoTriggerRow = {
+  id: string;
+  trigger_type: string;
+  trigger_config: Record<string, unknown> | null;
+};
+type FlatTrigger = {
+  type: string;
+  tag_ids?: string[];
+  to_stage_ids?: string[];
+  trigger_link_ids?: string[];
+  form_ids?: string[];
+  days_after_wedding?: number;
+};
+function flatTriggersFor(row: AutoTriggerRow): FlatTrigger[] {
+  const cfg = (row.trigger_config || {}) as Record<string, unknown> & { extra_triggers?: FlatTrigger[] };
+  const primary: FlatTrigger = {
+    type: row.trigger_type,
+    tag_ids: cfg.tag_ids as string[] | undefined,
+    to_stage_ids: cfg.to_stage_ids as string[] | undefined,
+    trigger_link_ids: cfg.trigger_link_ids as string[] | undefined,
+    form_ids: cfg.form_ids as string[] | undefined,
+    days_after_wedding: cfg.days_after_wedding as number | undefined,
+  };
+  const extras = Array.isArray(cfg.extra_triggers) ? cfg.extra_triggers : [];
+  return [primary, ...extras];
+}
+
+/**
+ * Loads every active automation for the venue (small list per venue) so we can
+ * match against both the primary trigger AND extra_triggers in JSON. The
+ * previous implementation filtered by trigger_type at the SQL layer, which
+ * silently ignored multi-trigger workflows whose primary trigger differed
+ * from the trigger we are processing.
+ */
+async function loadVenueActiveAutomations(venueId: string): Promise<AutoTriggerRow[]> {
+  const { data } = await supabaseAdmin
+    .from('marketing_automations')
+    .select('id, trigger_type, trigger_config')
+    .eq('venue_id', venueId)
+    .eq('status', 'active');
+  return (data ?? []) as AutoTriggerRow[];
+}
+
 export async function onMarketingTagAdded(
   venueId: string,
   leadId: string,
   addedTagIds: string[],
 ): Promise<void> {
   if (!addedTagIds.length) return;
-  const { data: autos } = await supabaseAdmin
-    .from('marketing_automations')
-    .select('id, trigger_config')
-    .eq('venue_id', venueId)
-    .eq('status', 'active')
-    .eq('trigger_type', 'tag_added');
-  for (const row of autos ?? []) {
-    const cfg = (row.trigger_config || {}) as { tag_ids?: string[] };
-    const want = cfg.tag_ids?.filter(Boolean) ?? [];
-    const match =
-      want.length === 0 ? addedTagIds.length > 0 : addedTagIds.some((t) => want.includes(t));
-    if (!match) continue;
-    await enrollIfNew(row.id as string, venueId, leadId);
+  const autos = await loadVenueActiveAutomations(venueId);
+  for (const row of autos) {
+    const matched = flatTriggersFor(row).some((t) => {
+      if (t.type !== 'tag_added') return false;
+      const want = t.tag_ids?.filter(Boolean) ?? [];
+      return want.length === 0
+        ? addedTagIds.length > 0
+        : addedTagIds.some((id) => want.includes(id));
+    });
+    if (matched) await enrollIfNew(row.id, venueId, leadId);
   }
 }
 
@@ -56,17 +97,14 @@ export async function onMarketingStageChanged(
   newStageId: string | null,
 ): Promise<void> {
   if (!newStageId) return;
-  const { data: autos } = await supabaseAdmin
-    .from('marketing_automations')
-    .select('id, trigger_config')
-    .eq('venue_id', venueId)
-    .eq('status', 'active')
-    .eq('trigger_type', 'stage_changed');
-  for (const row of autos ?? []) {
-    const cfg = (row.trigger_config || {}) as { to_stage_ids?: string[] };
-    const stages = cfg.to_stage_ids?.filter(Boolean) ?? [];
-    if (!stages.length || !stages.includes(newStageId)) continue;
-    await enrollIfNew(row.id as string, venueId, leadId);
+  const autos = await loadVenueActiveAutomations(venueId);
+  for (const row of autos) {
+    const matched = flatTriggersFor(row).some((t) => {
+      if (t.type !== 'stage_changed') return false;
+      const stages = t.to_stage_ids?.filter(Boolean) ?? [];
+      return stages.length > 0 && stages.includes(newStageId);
+    });
+    if (matched) await enrollIfNew(row.id, venueId, leadId);
   }
 }
 
@@ -76,36 +114,38 @@ export async function onMarketingTriggerLinkClick(
   triggerLinkId: string,
 ): Promise<void> {
   if (!leadId) return;
-  const { data: autos } = await supabaseAdmin
-    .from('marketing_automations')
-    .select('id, trigger_config')
-    .eq('venue_id', venueId)
-    .eq('status', 'active')
-    .eq('trigger_type', 'trigger_link_click');
-  for (const row of autos ?? []) {
-    const cfg = (row.trigger_config || {}) as { trigger_link_ids?: string[] };
-    const links = cfg.trigger_link_ids?.filter(Boolean) ?? [];
-    if (!links.length || !links.includes(triggerLinkId)) continue;
-    await enrollIfNew(row.id as string, venueId, leadId);
+  const autos = await loadVenueActiveAutomations(venueId);
+  for (const row of autos) {
+    const matched = flatTriggersFor(row).some((t) => {
+      if (t.type !== 'trigger_link_click') return false;
+      const links = t.trigger_link_ids?.filter(Boolean) ?? [];
+      return links.length > 0 && links.includes(triggerLinkId);
+    });
+    if (matched) await enrollIfNew(row.id, venueId, leadId);
   }
 }
 
 /** Daily cron: enroll leads whose wedding_date + offset matches today in the venue timezone. */
 export async function processWeddingDateFollowupAutomations(): Promise<{ enrolled: number }> {
+  // Pull every active automation — we'll inspect both the primary trigger and
+  // any extra_triggers to find all `wedding_date_followup` offsets.
   const { data: autos, error } = await supabaseAdmin
     .from('marketing_automations')
-    .select('id, venue_id, trigger_config')
-    .eq('status', 'active')
-    .eq('trigger_type', 'wedding_date_followup');
+    .select('id, venue_id, trigger_type, trigger_config')
+    .eq('status', 'active');
   if (error || !autos?.length) return { enrolled: 0 };
 
   const byVenue = new Map<string, Array<{ id: string; days: number }>>();
   for (const row of autos) {
     const vid = row.venue_id as string;
-    const cfg = (row.trigger_config || {}) as { days_after_wedding?: number };
-    const days = Math.max(0, Math.min(3650, Number(cfg.days_after_wedding ?? 0) || 0));
+    const wedTriggers = flatTriggersFor(row as AutoTriggerRow).filter((t) => t.type === 'wedding_date_followup');
+    if (!wedTriggers.length) continue;
+    const offsets = new Set<number>();
+    for (const t of wedTriggers) {
+      offsets.add(Math.max(0, Math.min(3650, Number(t.days_after_wedding ?? 0) || 0)));
+    }
     const list = byVenue.get(vid) ?? [];
-    list.push({ id: row.id as string, days });
+    for (const days of offsets) list.push({ id: row.id as string, days });
     byVenue.set(vid, list);
   }
 
@@ -160,18 +200,14 @@ export async function onMarketingFormSubmitted(
   formId: string,
 ): Promise<void> {
   if (!leadId || !formId) return;
-  const { data: autos } = await supabaseAdmin
-    .from('marketing_automations')
-    .select('id, trigger_config')
-    .eq('venue_id', venueId)
-    .eq('status', 'active')
-    .eq('trigger_type', 'form_submitted');
-  for (const row of autos ?? []) {
-    const cfg = (row.trigger_config || {}) as { form_ids?: string[] };
-    const want = cfg.form_ids?.filter(Boolean) ?? [];
-    const match = want.length === 0 ? true : want.includes(formId);
-    if (!match) continue;
-    await enrollIfNew(row.id as string, venueId, leadId);
+  const autos = await loadVenueActiveAutomations(venueId);
+  for (const row of autos) {
+    const matched = flatTriggersFor(row).some((t) => {
+      if (t.type !== 'form_submitted') return false;
+      const want = t.form_ids?.filter(Boolean) ?? [];
+      return want.length === 0 ? true : want.includes(formId);
+    });
+    if (matched) await enrollIfNew(row.id, venueId, leadId);
   }
 }
 
@@ -221,15 +257,10 @@ export async function onMarketingProposalPaid(
     .maybeSingle();
   if (!lead?.id) return;
 
-  const { data: autos } = await supabaseAdmin
-    .from('marketing_automations')
-    .select('id')
-    .eq('venue_id', venueId)
-    .eq('status', 'active')
-    .eq('trigger_type', 'proposal_paid');
-
-  for (const row of autos ?? []) {
-    await enrollIfNew(row.id as string, venueId, lead.id as string);
+  const autos = await loadVenueActiveAutomations(venueId);
+  for (const row of autos) {
+    if (!flatTriggersFor(row).some((t) => t.type === 'proposal_paid')) continue;
+    await enrollIfNew(row.id, venueId, lead.id as string);
   }
 }
 

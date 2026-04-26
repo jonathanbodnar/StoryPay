@@ -408,4 +408,16 @@ export interface AutomationTriggerConfig {
   days_after_wedding?: number;
   /** form_submitted: enroll when one of these marketing form ids is submitted (empty = any form) */
   form_ids?: string[];
+  /** Additional OR-style triggers — enrollment fires when ANY of these (or the primary) match. */
+  extra_triggers?: ExtraTriggerSpec[];
+}
+
+/** One additional trigger source — same shape as the primary trigger, but with its own type. */
+export interface ExtraTriggerSpec {
+  type: AutomationTriggerType;
+  tag_ids?: string[];
+  to_stage_ids?: string[];
+  trigger_link_ids?: string[];
+  days_after_wedding?: number;
+  form_ids?: string[];
 }

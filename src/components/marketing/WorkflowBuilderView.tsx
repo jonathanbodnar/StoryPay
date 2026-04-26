@@ -20,7 +20,7 @@ import {
   SortableContext, verticalListSortingStrategy, useSortable, arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { AutomationTriggerType } from '@/lib/marketing-email-schema';
+import type { AutomationTriggerType, ExtraTriggerSpec } from '@/lib/marketing-email-schema';
 
 // ─── Sensor — never activates on inputs / buttons / links / data-no-dnd ──────
 class SmartPointerSensor extends PointerSensor {
@@ -72,7 +72,8 @@ type LocalStep =
   | { localId: string; step_type: 'send_email'; template_id: string }
   | { localId: string; step_type: 'send_sms';   body: string; media_urls?: string[] };
 
-type SelectedItem = { kind: 'trigger' } | { kind: 'step'; localId: string } | null;
+// triggerIdx: 0 = primary trigger, 1+ = extra triggers (extraTriggers[idx-1])
+type SelectedItem = { kind: 'trigger'; triggerIdx: number } | { kind: 'step'; localId: string } | null;
 
 // ─── Wait unit helpers ────────────────────────────────────────────────────────
 function minutesToDisplay(minutes: number): { value: number; unit: WaitUnit } {
@@ -147,17 +148,88 @@ function SortableStep({ id, children }: { id: string; children: (isDragging: boo
 
 // ─── + Add step button ────────────────────────────────────────────────────────
 function AddStepBtn({ onClick }: { onClick: () => void }) {
+  // Always-visible small grey circle that sits ON the connector line.
+  // Hover brightens it to the brand color (matching the screenshot).
   return (
-    <div className="group/addbtn relative flex h-10 items-center justify-center my-1">
+    <div className="group/addbtn relative flex h-10 items-center justify-center my-1" style={{ zIndex: 2 }}>
       <button
         type="button" data-no-dnd
         onClick={(e) => { e.stopPropagation(); onClick(); }}
-        className="relative z-10 flex h-6 w-6 items-center justify-center rounded-full bg-white opacity-0 group-hover/addbtn:opacity-100 transition-all duration-150 hover:scale-110"
-        style={{ border: '1.5px solid #1b1b1b', color: '#1b1b1b' }}
+        className="relative z-10 flex h-6 w-6 items-center justify-center rounded-full bg-white text-gray-400 transition-all duration-150 hover:scale-110 hover:border-gray-900 hover:text-gray-900"
+        style={{ border: '1px solid #d1d5db' }}
         title="Add step"
       >
         <Plus size={12} />
       </button>
+    </div>
+  );
+}
+
+// ─── Trigger card on the canvas ───────────────────────────────────────────────
+function TriggerCardCanvas({
+  idx, label, Icon, subtitle, selected, onClick, showRemove, onRemove,
+}: {
+  idx: number;
+  label: string;
+  Icon: React.FC<{ size?: number; className?: string }>;
+  subtitle: string;
+  selected: boolean;
+  onClick: () => void;
+  showRemove: boolean;
+  onRemove?: () => void;
+}) {
+  void idx;
+  return (
+    <div
+      className="relative group/trigger"
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      style={{ cursor: 'pointer', width: 240 }}
+      data-no-dnd
+    >
+      <div
+        className="overflow-hidden rounded-xl border bg-white"
+        style={{
+          transition: 'outline 0.1s ease, box-shadow 0.2s ease',
+          outline: selected ? '1px solid #3b82f6' : '1px solid transparent',
+          outlineOffset: '-1px',
+          boxShadow: selected ? '0 12px 40px rgba(0,0,0,0.13), 0 4px 12px rgba(0,0,0,0.08)' : 'none',
+          borderColor: selected ? 'transparent' : '#e5e7eb',
+        }}
+        onMouseEnter={(e) => {
+          if (!selected) {
+            (e.currentTarget as HTMLDivElement).style.outline = '1px solid #3b82f6';
+            (e.currentTarget as HTMLDivElement).style.boxShadow = '0 12px 40px rgba(0,0,0,0.13), 0 4px 12px rgba(0,0,0,0.08)';
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!selected) {
+            (e.currentTarget as HTMLDivElement).style.outline = '1px solid transparent';
+            (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
+          }
+        }}
+      >
+        <div className="flex items-start gap-3 p-4">
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-50">
+            <Icon size={16} className="text-emerald-700" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Trigger</p>
+            <p className="mt-0.5 text-sm font-semibold text-gray-900 truncate">{label}</p>
+            <p className="mt-0.5 truncate text-[11px] text-gray-500">{subtitle}</p>
+          </div>
+        </div>
+      </div>
+      {showRemove && (
+        <button
+          type="button"
+          data-no-dnd
+          title="Remove this trigger"
+          onClick={(e) => { e.stopPropagation(); onRemove?.(); }}
+          className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-400 opacity-0 shadow-sm transition-opacity hover:text-red-500 group-hover/trigger:opacity-100"
+        >
+          <Trash2 size={11} />
+        </button>
+      )}
     </div>
   );
 }
@@ -203,6 +275,34 @@ function StepPickerModal({ onSelect, onClose }: { onSelect: (t: StepKind) => voi
   );
 }
 
+function TriggerPickerModal({ onSelect, onClose }: { onSelect: (t: AutomationTriggerType) => void; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl p-6 w-[480px] max-w-full" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="text-base font-semibold text-gray-900">Add a trigger</h3>
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700"><Minus size={18} /></button>
+        </div>
+        <p className="mb-5 text-[11px] text-gray-500">The workflow will fire when this OR any other trigger matches.</p>
+        <div className="grid grid-cols-2 gap-3">
+          {TRIGGER_OPTIONS.map(({ value, label, Icon }) => (
+            <button key={value} type="button" onClick={() => onSelect(value)}
+              className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-left hover:border-gray-400 hover:bg-white transition-all group"
+            >
+              <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-50">
+                <Icon size={16} className="text-emerald-700" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold text-gray-900">{label}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Enrollment pill ──────────────────────────────────────────────────────────
 function EnrollPill({ count, onClick }: { count: number; onClick: () => void }) {
   if (count === 0) return null;
@@ -229,6 +329,16 @@ function triggerDesc(type: AutomationTriggerType, config: {
   if (type === 'wedding_date_followup') return `${config.daysAfterWedding} day${config.daysAfterWedding === 1 ? '' : 's'} after`;
   if (type === 'proposal_paid')         return 'On proposal paid';
   return 'Configure in panel →';
+}
+
+function extraTriggerDesc(t: ExtraTriggerSpec): string {
+  if (t.type === 'form_submitted')        return (t.form_ids?.length ?? 0) > 0          ? `${t.form_ids!.length} form(s) selected`     : 'Any form submission';
+  if (t.type === 'tag_added')             return (t.tag_ids?.length ?? 0) > 0           ? `${t.tag_ids!.length} tag(s) selected`       : 'Any tag added';
+  if (t.type === 'stage_changed')         return (t.to_stage_ids?.length ?? 0) > 0      ? `${t.to_stage_ids!.length} stage(s) selected` : 'Any stage entered';
+  if (t.type === 'trigger_link_click')    return (t.trigger_link_ids?.length ?? 0) > 0  ? `${t.trigger_link_ids!.length} link(s) selected` : 'Any trigger link';
+  if (t.type === 'wedding_date_followup') return `${t.days_after_wedding ?? 0} day${(t.days_after_wedding ?? 0) === 1 ? '' : 's'} after`;
+  if (t.type === 'proposal_paid')         return 'On proposal paid';
+  return '';
 }
 
 function stepMeta(s: LocalStep, templates: TemplateOpt[]): { title: string; subtitle: string; Icon: React.FC<{ size?: number; className?: string }> } {
@@ -266,6 +376,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
   const [selLinks,         setSelLinks]         = useState<string[]>([]);
   const [selForms,         setSelForms]         = useState<string[]>([]);
   const [daysAfterWedding, setDaysAfterWedding] = useState(3);
+  const [extraTriggers,    setExtraTriggers]    = useState<ExtraTriggerSpec[]>([]);
 
   const [selected, setSelected] = useState<SelectedItem>(null);
 
@@ -291,6 +402,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
 
   // ── Step picker + enrollment + test email ────────────────────────────────
   const [pickerIdx, setPickerIdx]           = useState<number | null>(null);
+  const [triggerPickerOpen, setTriggerPickerOpen] = useState(false);
   const [enrollCounts, setEnrollCounts]     = useState<Record<number, number>>({});
   const [enrollModal, setEnrollModal]       = useState<{ stepIndex: number } | null>(null);
   const [enrollList, setEnrollList]         = useState<EnrollContact[]>([]);
@@ -510,12 +622,14 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
         tag_ids?: string[]; to_stage_ids?: string[];
         trigger_link_ids?: string[]; form_ids?: string[];
         days_after_wedding?: number;
+        extra_triggers?: ExtraTriggerSpec[];
       };
       setSelTags(cfg.tag_ids ?? []);
       setSelStages(cfg.to_stage_ids ?? []);
       setSelLinks(cfg.trigger_link_ids ?? []);
       setSelForms(cfg.form_ids ?? []);
       setDaysAfterWedding(Math.max(0, Math.min(3650, Number(cfg.days_after_wedding ?? 3) || 0)));
+      setExtraTriggers(Array.isArray(cfg.extra_triggers) ? cfg.extra_triggers : []);
       const rawSteps = (j.steps ?? []) as Array<{ step_type: string; config_json: Record<string, unknown> }>;
       setSteps(rawSteps.map((s, i) => {
         const localId = `s-${i}-${Math.random().toString(36).slice(2)}`;
@@ -563,12 +677,48 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
 
   function buildTriggerConfig(): Record<string, unknown> {
     if (!auto) return {};
-    if (auto.trigger_type === 'tag_added')             return { tag_ids: selTags };
-    if (auto.trigger_type === 'stage_changed')         return { to_stage_ids: selStages };
-    if (auto.trigger_type === 'wedding_date_followup') return { days_after_wedding: Math.max(0, Math.min(3650, Math.floor(daysAfterWedding))) };
-    if (auto.trigger_type === 'proposal_paid')         return {};
-    if (auto.trigger_type === 'form_submitted')        return { form_ids: selForms };
-    return { trigger_link_ids: selLinks };
+    let primary: Record<string, unknown>;
+    if (auto.trigger_type === 'tag_added')                  primary = { tag_ids: selTags };
+    else if (auto.trigger_type === 'stage_changed')         primary = { to_stage_ids: selStages };
+    else if (auto.trigger_type === 'wedding_date_followup') primary = { days_after_wedding: Math.max(0, Math.min(3650, Math.floor(daysAfterWedding))) };
+    else if (auto.trigger_type === 'proposal_paid')         primary = {};
+    else if (auto.trigger_type === 'form_submitted')        primary = { form_ids: selForms };
+    else                                                    primary = { trigger_link_ids: selLinks };
+    if (extraTriggers.length > 0) primary.extra_triggers = extraTriggers;
+    return primary;
+  }
+
+  // ── Extra-trigger helpers ─────────────────────────────────────────────────
+  function defaultExtraSpec(type: AutomationTriggerType): ExtraTriggerSpec {
+    if (type === 'tag_added')             return { type, tag_ids: [] };
+    if (type === 'stage_changed')         return { type, to_stage_ids: [] };
+    if (type === 'trigger_link_click')    return { type, trigger_link_ids: [] };
+    if (type === 'wedding_date_followup') return { type, days_after_wedding: 3 };
+    if (type === 'proposal_paid')         return { type };
+    return { type: 'form_submitted', form_ids: [] };
+  }
+  function addExtraTrigger(type: AutomationTriggerType) {
+    setExtraTriggers((prev) => [...prev, defaultExtraSpec(type)]);
+    // Select the newly added extra trigger immediately
+    setSelected({ kind: 'trigger', triggerIdx: extraTriggers.length + 1 });
+  }
+  function removeExtraTrigger(idx: number) {
+    setExtraTriggers((prev) => prev.filter((_, i) => i !== idx));
+    setSelected(null);
+  }
+  function updateExtraTrigger(idx: number, patch: Partial<ExtraTriggerSpec>) {
+    setExtraTriggers((prev) => prev.map((t, i) => i === idx ? { ...t, ...patch } : t));
+  }
+  function changeExtraTriggerType(idx: number, newType: AutomationTriggerType) {
+    setExtraTriggers((prev) => prev.map((t, i) => i === idx ? defaultExtraSpec(newType) : t));
+  }
+  function toggleExtraField(idx: number, field: 'tag_ids' | 'to_stage_ids' | 'trigger_link_ids' | 'form_ids', value: string) {
+    setExtraTriggers((prev) => prev.map((t, i) => {
+      if (i !== idx) return t;
+      const cur = (t[field] as string[] | undefined) ?? [];
+      const next = cur.includes(value) ? cur.filter((x) => x !== value) : [...cur, value];
+      return { ...t, [field]: next };
+    }));
   }
 
   async function saveAll() {
@@ -918,58 +1068,89 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
               onMouseDown={(e) => e.stopPropagation()} // cards don't trigger pan
             >
               {/* Centered column */}
-              <div style={{ width: CARD_W, paddingBottom: 200 }}>
+              <div style={{ width: CARD_W, paddingBottom: 200, position: 'relative' }}>
 
-                {/* Trigger card */}
+                {/* ── Vertical grey connector line ──────────────────────────
+                     Runs through the center of the column behind every card.
+                     Cards have white backgrounds so they visually "interrupt"
+                     the line, leaving a clean joined look between them. */}
                 <div
-                  className="relative group/block"
-                  onClick={(e) => { e.stopPropagation(); setSelected({ kind: 'trigger' }); }}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <div
-                    className="overflow-hidden rounded-xl border bg-white"
-                    style={{
-                      transition: 'outline 0.1s ease, box-shadow 0.2s ease',
-                      outline: selected?.kind === 'trigger' ? '1px solid #3b82f6' : '1px solid transparent',
-                      outlineOffset: '-1px',
-                      boxShadow: selected?.kind === 'trigger' ? '0 12px 40px rgba(0,0,0,0.13), 0 4px 12px rgba(0,0,0,0.08)' : 'none',
-                      borderColor: selected?.kind === 'trigger' ? 'transparent' : '#e5e7eb',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (selected?.kind !== 'trigger') {
-                        (e.currentTarget as HTMLDivElement).style.outline = '1px solid #3b82f6';
-                        (e.currentTarget as HTMLDivElement).style.boxShadow = '0 12px 40px rgba(0,0,0,0.13), 0 4px 12px rgba(0,0,0,0.08)';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (selected?.kind !== 'trigger') {
-                        (e.currentTarget as HTMLDivElement).style.outline = '1px solid transparent';
-                        (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
-                      }
-                    }}
-                  >
-                    <div className="flex items-start gap-3 p-4">
-                      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-gray-50">
-                        <TriggerIcon size={16} className="text-gray-700" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Trigger</p>
-                        <p className="mt-0.5 text-sm font-semibold text-gray-900">{trig.label}</p>
-                        <p className="mt-0.5 truncate text-[11px] text-gray-500">{trigSubtitle}</p>
-                      </div>
-                    </div>
-                  </div>
+                  aria-hidden
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    bottom: 0,
+                    left: '50%',
+                    width: 1,
+                    transform: 'translateX(-0.5px)',
+                    background: '#e5e7eb',
+                    pointerEvents: 'none',
+                    zIndex: 0,
+                  }}
+                />
 
-                  {/* Side toolbar when selected */}
-                  {selected?.kind === 'trigger' && (
-                    <div className="absolute -right-11 top-1/2 -translate-y-1/2 z-10" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex flex-col items-center gap-1 bg-white rounded-2xl shadow-lg border border-gray-100 px-1.5 py-2">
-                        <button type="button" title="Delete workflow" onClick={() => void removeAutomation()}
-                          className="flex h-7 w-7 items-center justify-center rounded-xl text-red-400 hover:bg-red-50 hover:text-red-600 transition-all"
-                        ><Trash2 size={14} /></button>
-                      </div>
-                    </div>
-                  )}
+                {/* ── Trigger row — primary + extras + Add New Trigger ──── */}
+                <div
+                  className="relative"
+                  style={{
+                    // Pull the row out of the column's narrow width so multiple
+                    // trigger cards can sit side-by-side, centered on the column.
+                    width: 'max-content',
+                    position: 'relative',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 12,
+                    marginBottom: 12,
+                    zIndex: 2,
+                  }}
+                >
+                  {/* Primary trigger card (idx = 0) */}
+                  <TriggerCardCanvas
+                    idx={0}
+                    label={trig.label}
+                    Icon={TriggerIcon}
+                    subtitle={trigSubtitle}
+                    selected={selected?.kind === 'trigger' && selected.triggerIdx === 0}
+                    onClick={() => setSelected({ kind: 'trigger', triggerIdx: 0 })}
+                    showRemove={false}
+                  />
+
+                  {/* Extra triggers */}
+                  {extraTriggers.map((t, i) => {
+                    const meta = TRIGGER_OPTIONS.find((o) => o.value === t.type) ?? TRIGGER_OPTIONS[0]!;
+                    const ExtraIcon = meta.Icon;
+                    const tIdx = i + 1;
+                    return (
+                      <TriggerCardCanvas
+                        key={`extra-${i}`}
+                        idx={tIdx}
+                        label={meta.label}
+                        Icon={ExtraIcon}
+                        subtitle={extraTriggerDesc(t)}
+                        selected={selected?.kind === 'trigger' && selected.triggerIdx === tIdx}
+                        onClick={() => setSelected({ kind: 'trigger', triggerIdx: tIdx })}
+                        showRemove
+                        onRemove={() => removeExtraTrigger(i)}
+                      />
+                    );
+                  })}
+
+                  {/* Add new trigger placeholder */}
+                  <button
+                    type="button"
+                    data-no-dnd
+                    onClick={(e) => { e.stopPropagation(); setTriggerPickerOpen(true); }}
+                    className="flex items-center gap-2 rounded-xl border-2 border-dashed border-blue-300 bg-blue-50/30 px-4 py-4 text-sm font-semibold text-blue-600 hover:border-blue-400 hover:bg-blue-50 transition-colors"
+                    style={{ width: 200, minHeight: 86, justifyContent: 'flex-start' }}
+                    title="Add another trigger (OR-style)"
+                  >
+                    <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-white">
+                      <Plus size={16} />
+                    </span>
+                    Add New Trigger
+                  </button>
                 </div>
 
                 {/* Step list */}
@@ -977,7 +1158,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                   {steps.length === 0 && activePaletteType === null ? (
                     <>
                       <AddStepBtn onClick={() => setPickerIdx(0)} />
-                      <div className="rounded-xl border border-dashed border-gray-200 bg-white/80 px-4 py-8 text-center">
+                      <div className="relative rounded-xl border border-dashed border-gray-200 bg-white px-4 py-8 text-center" style={{ zIndex: 1 }}>
                         <p className="text-sm font-medium text-gray-600">No steps yet</p>
                         <p className="mt-1 text-xs text-gray-400">Drag a block from the right panel or use + above.</p>
                       </div>
@@ -1001,7 +1182,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
 
                             <div
                               className="relative group/block"
-                              style={{ cursor: 'pointer' }}
+                              style={{ cursor: 'pointer', zIndex: 1 }}
                               onClick={(e) => { e.stopPropagation(); if (!isDragging) setSelected({ kind: 'step', localId: s.localId }); }}
                             >
                               <div
@@ -1090,7 +1271,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
 
                 {/* End cap */}
                 <AddStepBtn onClick={() => setPickerIdx(steps.length)} />
-                <div className="rounded-xl border border-gray-100 bg-white/80 px-4 py-3 text-center">
+                <div className="relative rounded-xl border border-gray-100 bg-white px-4 py-3 text-center" style={{ zIndex: 1 }}>
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">End of workflow</p>
                 </div>
 
@@ -1110,10 +1291,11 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
             >
 
               {/* ── Trigger inspector ──────────────────────────────────── */}
-              {selected?.kind === 'trigger' ? (
+              {selected?.kind === 'trigger' && selected.triggerIdx === 0 ? (
+                /* Primary trigger inspector */
                 <div className="p-5">
                   <div className="mb-4 flex items-center justify-between">
-                    <span className="rounded-lg bg-gray-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-gray-600">Trigger</span>
+                    <span className="rounded-lg bg-gray-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-gray-600">Trigger 1</span>
                     <button type="button" onClick={() => setSelected(null)} className="text-xs text-gray-400 hover:text-gray-700 transition-colors">Done</button>
                   </div>
 
@@ -1216,6 +1398,121 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                     </button>
                   </div>
                 </div>
+
+              ) : selected?.kind === 'trigger' && selected.triggerIdx > 0 && extraTriggers[selected.triggerIdx - 1] ? (
+                /* Extra-trigger inspector — operates on extraTriggers[idx] */
+                (() => {
+                  const extraIdx = selected.triggerIdx - 1;
+                  const t = extraTriggers[extraIdx]!;
+                  return (
+                    <div className="p-5">
+                      <div className="mb-4 flex items-center justify-between">
+                        <span className="rounded-lg bg-gray-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-gray-600">Trigger {selected.triggerIdx + 1}</span>
+                        <button type="button" onClick={() => setSelected(null)} className="text-xs text-gray-400 hover:text-gray-700 transition-colors">Done</button>
+                      </div>
+
+                      <p className="mb-3 text-[11px] text-gray-400">This workflow will also fire when this trigger matches (OR-logic).</p>
+
+                      <div className="mb-4">
+                        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Trigger type</p>
+                        <select
+                          className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
+                          value={t.type}
+                          onChange={(e) => changeExtraTriggerType(extraIdx, e.target.value as AutomationTriggerType)}
+                        >
+                          {TRIGGER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </select>
+                      </div>
+
+                      {t.type === 'form_submitted' && (
+                        <div className="mb-4">
+                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Forms</p>
+                          {forms.length === 0 ? (
+                            <p className="text-[11px] text-gray-500">No forms yet.</p>
+                          ) : (
+                            <div className="max-h-52 space-y-1.5 overflow-y-auto text-xs">
+                              {forms.map((f) => (
+                                <label key={f.id} className="flex items-center gap-2 cursor-pointer">
+                                  <input type="checkbox" checked={(t.form_ids ?? []).includes(f.id)} onChange={() => toggleExtraField(extraIdx, 'form_ids', f.id)} />
+                                  <span className="truncate">{f.name}</span>
+                                  {!f.published && <span className="text-gray-400">(draft)</span>}
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                          <p className="mt-2 text-[11px] text-gray-400">Empty = enroll on any form.</p>
+                        </div>
+                      )}
+
+                      {t.type === 'tag_added' && (
+                        <div className="mb-4">
+                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Tags</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {tags.map((tg) => (
+                              <label key={tg.id} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-xs cursor-pointer hover:border-gray-300">
+                                <input type="checkbox" checked={(t.tag_ids ?? []).includes(tg.id)} onChange={() => toggleExtraField(extraIdx, 'tag_ids', tg.id)} />
+                                {tg.name}
+                              </label>
+                            ))}
+                          </div>
+                          <p className="mt-2 text-[11px] text-gray-400">Empty = fire on any tag added.</p>
+                        </div>
+                      )}
+
+                      {t.type === 'stage_changed' && (
+                        <div className="mb-4">
+                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Stages</p>
+                          <div className="max-h-52 space-y-1.5 overflow-y-auto text-xs">
+                            {stages.map((s) => (
+                              <label key={s.id} className="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" checked={(t.to_stage_ids ?? []).includes(s.id)} onChange={() => toggleExtraField(extraIdx, 'to_stage_ids', s.id)} />
+                                <span className="text-gray-400">{s.pipelineName}:</span> {s.name}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {t.type === 'trigger_link_click' && (
+                        <div className="mb-4">
+                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Trigger links</p>
+                          <div className="max-h-52 space-y-1.5 overflow-y-auto text-xs">
+                            {links.map((l) => (
+                              <label key={l.id} className="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" checked={(t.trigger_link_ids ?? []).includes(l.id)} onChange={() => toggleExtraField(extraIdx, 'trigger_link_ids', l.id)} />
+                                <span className="truncate">{l.name}</span>
+                                <span className="text-gray-400">({l.short_code})</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {t.type === 'wedding_date_followup' && (
+                        <div className="mb-4">
+                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Days after wedding</p>
+                          <input type="number" min={0} max={3650}
+                            className="w-28 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
+                            value={t.days_after_wedding ?? 0}
+                            onChange={(e) => updateExtraTrigger(extraIdx, { days_after_wedding: Math.max(0, Math.min(3650, Number(e.target.value) || 0)) })}
+                          />
+                        </div>
+                      )}
+
+                      {t.type === 'proposal_paid' && (
+                        <p className="mb-4 text-xs text-gray-500">Enrolls when a proposal is marked paid — lead matched by email.</p>
+                      )}
+
+                      <div className="mt-6 border-t border-gray-100 pt-4">
+                        <button type="button" onClick={() => removeExtraTrigger(extraIdx)}
+                          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-red-100 py-2 text-xs font-semibold text-red-500 hover:bg-red-50 transition-colors"
+                        >
+                          <Trash2 size={12} /> Remove this trigger
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()
 
               ) : selectedStep ? (
                 /* ── Step inspector ──────────────────────────────────────── */
@@ -1557,6 +1854,14 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
         <StepPickerModal
           onSelect={(kind) => { addStepAt(kind, pickerIdx); setPickerIdx(null); }}
           onClose={() => setPickerIdx(null)}
+        />
+      )}
+
+      {/* ── Trigger picker modal — for adding additional OR-triggers ──────── */}
+      {triggerPickerOpen && (
+        <TriggerPickerModal
+          onSelect={(type) => { addExtraTrigger(type); setTriggerPickerOpen(false); }}
+          onClose={() => setTriggerPickerOpen(false)}
         />
       )}
 
