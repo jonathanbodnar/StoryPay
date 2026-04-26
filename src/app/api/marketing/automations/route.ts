@@ -67,7 +67,10 @@ export async function POST(request: NextRequest) {
     triggerConfig = { form_ids: ids };
   }
 
-  const { data: auto, error } = await supabaseAdmin
+  // Attempt insert with nullable trigger_type (requires migration 066).
+  // If the column still has a NOT NULL constraint, fall back to a placeholder
+  // so workflow creation never hard-fails due to a pending migration.
+  let { data: auto, error } = await supabaseAdmin
     .from('marketing_automations')
     .insert({
       venue_id: venueId,
@@ -78,6 +81,24 @@ export async function POST(request: NextRequest) {
     })
     .select('*')
     .single();
+
+  if (error && /not.null constraint/i.test(error.message) && triggerType === null) {
+    // Migration 066 not yet applied — insert a placeholder trigger that the
+    // builder UI treats as "unset" (trigger_config.__placeholder = true).
+    const fallback = await supabaseAdmin
+      .from('marketing_automations')
+      .insert({
+        venue_id: venueId,
+        name,
+        status: 'draft',
+        trigger_type: 'tag_added' as AutomationTriggerType,
+        trigger_config: { __placeholder: true },
+      })
+      .select('*')
+      .single();
+    auto  = fallback.data;
+    error = fallback.error;
+  }
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const steps = Array.isArray(body.steps) ? body.steps : [];
   if (steps.length > 0) {

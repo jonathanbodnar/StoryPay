@@ -103,7 +103,13 @@ export async function PATCH(
 
   const stepsProvided = body.steps !== undefined && body.steps !== null;
   if (Object.keys(patch).length > 1) {
-    const { error } = await supabaseAdmin.from('marketing_automations').update(patch).eq('id', id).eq('venue_id', venueId);
+    let { error } = await supabaseAdmin.from('marketing_automations').update(patch).eq('id', id).eq('venue_id', venueId);
+    // If trigger_type: null fails (migration 066 not applied), use placeholder
+    if (error && /not.null constraint/i.test(error.message) && patch.trigger_type === null) {
+      const retryPatch = { ...patch, trigger_type: 'tag_added', trigger_config: { __placeholder: true } };
+      const retry = await supabaseAdmin.from('marketing_automations').update(retryPatch).eq('id', id).eq('venue_id', venueId);
+      error = retry.error;
+    }
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   } else if (stepsProvided) {
     const { error } = await supabaseAdmin

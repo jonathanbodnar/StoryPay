@@ -711,7 +711,13 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
     ]);
     if (aRes.ok) {
       const j = await aRes.json();
-      const a = j.automation as AutomationRow;
+      let a = j.automation as AutomationRow;
+      // If the row was created with a placeholder trigger (migration 066 not yet applied),
+      // treat it as if no trigger is set so the builder shows the empty state.
+      const rawCfg = (a.trigger_config || {}) as { __placeholder?: boolean };
+      if (rawCfg.__placeholder) {
+        a = { ...a, trigger_type: null };
+      }
       setAuto(a);
       const cfg = (a.trigger_config || {}) as {
         tag_ids?: string[]; to_stage_ids?: string[];
