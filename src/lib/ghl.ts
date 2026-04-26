@@ -298,33 +298,63 @@ export async function findOrCreateContact(
   if (existingId) return existingId;
 
   // ── 2. Create the contact ────────────────────────────────────────────────
-  // GHL's /contacts/ endpoint sometimes rejects a top-level `phone` field
-  // with 422 "property phone should not exist" when using agency tokens or
-  // on certain GHL account configurations.  Work around by:
-  //   (a) Try the full payload first.
-  //   (b) If GHL rejects `phone`, create without it, then PATCH phone on.
+  // GHL's /contacts/ endpoint has two known failure modes we recover from:
+  //   (a) 422 "property phone should not exist" — retry without `phone`,
+  //       then PATCH it on separately.
+  //   (b) 400 "does not allow duplicated contacts" — the body contains the
+  //       existing contactId in `meta.contactId`; extract and return it.
   let contactId: string | null = null;
-  try {
-    const createRes = await ghlRequest('/contacts/', token, {
-      method: 'POST',
-      body: { locationId, ...cleanPayload },
-      locationId,
-    });
+  const createRaw = await fetch(`${GHL_API_BASE}/contacts/`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      Version: '2021-07-28',
+      ...(locationId ? { 'X-Location-Id': locationId } : {}),
+    },
+    body: JSON.stringify({ locationId, ...cleanPayload }),
+  });
+
+  if (createRaw.ok) {
+    const createRes = await createRaw.json();
     contactId = createRes.contact?.id ?? null;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : '';
-    const isPhoneRejected = msg.includes('422') && msg.toLowerCase().includes('phone');
+  } else {
+    const errText = await createRaw.text();
+    let errJson: { statusCode?: number; message?: string; meta?: { contactId?: string } } = {};
+    try { errJson = JSON.parse(errText); } catch { /* ignore */ }
 
-    if (!isPhoneRejected) throw err; // unrelated error — surface it
-
-    // Retry without phone field
-    const { phone: _p, ...payloadWithoutPhone } = cleanPayload as Record<string, string>;
-    const retryRes = await ghlRequest('/contacts/', token, {
-      method: 'POST',
-      body: { locationId, ...payloadWithoutPhone },
-      locationId,
-    });
-    contactId = retryRes.contact?.id ?? null;
+    // GHL returns 400 with existing contactId when duplicates aren't allowed
+    if (errJson.meta?.contactId) {
+      contactId = errJson.meta.contactId;
+    } else if (createRaw.status === 422 && errText.toLowerCase().includes('phone')) {
+      // Retry without `phone` field
+      const { phone: _p, ...payloadWithoutPhone } = cleanPayload as Record<string, string>;
+      const retryRaw = await fetch(`${GHL_API_BASE}/contacts/`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          Version: '2021-07-28',
+          ...(locationId ? { 'X-Location-Id': locationId } : {}),
+        },
+        body: JSON.stringify({ locationId, ...payloadWithoutPhone }),
+      });
+      if (retryRaw.ok) {
+        const retryRes = await retryRaw.json();
+        contactId = retryRes.contact?.id ?? null;
+      } else {
+        const retryErr = await retryRaw.text();
+        let retryJson: { meta?: { contactId?: string } } = {};
+        try { retryJson = JSON.parse(retryErr); } catch { /* ignore */ }
+        if (retryJson.meta?.contactId) {
+          contactId = retryJson.meta.contactId;
+        } else {
+          throw new Error(`GHL API error ${retryRaw.status}: ${retryErr}`);
+        }
+      }
+    } else {
+      throw new Error(`GHL API error ${createRaw.status}: ${errText}`);
+    }
   }
 
   // ── 3. Patch phone if contact was created without it ────────────────────

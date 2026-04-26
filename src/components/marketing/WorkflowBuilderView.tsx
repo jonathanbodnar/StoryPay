@@ -449,7 +449,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
   const [testSending, setTestSending]       = useState(false);
   const [testResult, setTestResult]         = useState<string | null>(null);
   // SMS-specific state
-  const [testSmsPhone, setTestSmsPhone]     = useState('');
+  const [testSmsPhone, setTestSmsPhone]     = useState('+1');
   const [testSmsSending, setTestSmsSending] = useState(false);
   const [testSmsResult, setTestSmsResult]   = useState<string | null>(null);
   const [smsMediaPickerOpen, setSmsMediaPickerOpen] = useState(false);
@@ -961,12 +961,14 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
 
   // ── Test SMS ───────────────────────────────────────────────────────────────
   async function sendTestSms(stepOrder: number, smsBody: string, mediaUrls: string[]) {
-    if (!testSmsPhone.trim()) { setTestSmsResult('Enter a phone number first.'); return; }
+    const phone = testSmsPhone.trim();
+    // Need at least +1 plus 10 digits = 12 chars
+    if (phone.replace(/\D/g, '').length < 11) { setTestSmsResult('Enter a complete 10-digit number after +1.'); return; }
     setTestSmsSending(true); setTestSmsResult(null);
     const res = await fetch(`/api/marketing/automations/${id}/test-sms`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stepOrder, toPhone: testSmsPhone.trim(), body: smsBody, mediaUrls }),
+      body: JSON.stringify({ stepOrder, toPhone: phone, body: smsBody, mediaUrls }),
     });
     setTestSmsSending(false);
     const j = await res.json().catch(() => ({}));
@@ -1878,9 +1880,23 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                             placeholder="+1 555 000 0000"
                             className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs focus:border-gray-400 focus:outline-none"
                             value={testSmsPhone}
-                            onChange={(e) => { setTestSmsPhone(e.target.value); setTestSmsResult(null); }}
+                            onChange={(e) => {
+                              // Always keep +1 prefix for US numbers
+                              let v = e.target.value;
+                              if (!v.startsWith('+1')) {
+                                const digits = v.replace(/\D/g, '');
+                                v = '+1' + digits;
+                              }
+                              setTestSmsPhone(v);
+                              setTestSmsResult(null);
+                            }}
+                            onFocus={(e) => {
+                              // Put cursor at the end
+                              const len = e.target.value.length;
+                              e.target.setSelectionRange(len, len);
+                            }}
                           />
-                          <p className="mt-1 text-[10px] text-gray-400">* Please add country code (e.g. +1).</p>
+                          <p className="mt-1 text-[10px] text-gray-400">US numbers — type the 10-digit number after +1.</p>
                           <button
                             type="button"
                             disabled={testSmsSending}
