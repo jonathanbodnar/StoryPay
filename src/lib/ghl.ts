@@ -114,7 +114,8 @@ export async function sendSms(
   accessToken: string,
   locationId: string,
   contactId: string,
-  message: string
+  message: string,
+  attachments?: string[],
 ) {
   const cid = String(contactId ?? '').trim();
   if (!cid) {
@@ -139,9 +140,11 @@ export async function sendSms(
 
     if (conversationId) {
       // GHL requires contactId on this route even when conversationId is set (otherwise 404 "Contact id not given").
+      const msgBody: Record<string, unknown> = { type: 'SMS', conversationId, contactId: cid, message, locationId };
+      if (attachments?.length) msgBody.attachments = attachments;
       const result = await ghlRequest('/conversations/messages', token, {
         method: 'POST',
-        body: { type: 'SMS', conversationId, contactId: cid, message, locationId },
+        body: msgBody,
         locationId,
       });
       console.log(`[ghl] SMS sent via conversation ${conversationId}`);
@@ -152,9 +155,11 @@ export async function sendSms(
   }
 
   // Direct fallback (contact only — still must include contactId)
+  const fallbackBody: Record<string, unknown> = { type: 'SMS', contactId: cid, message, locationId };
+  if (attachments?.length) fallbackBody.attachments = attachments;
   return ghlRequest('/conversations/messages', token, {
     method: 'POST',
-    body: { type: 'SMS', contactId: cid, message, locationId },
+    body: fallbackBody,
     locationId,
   });
 }

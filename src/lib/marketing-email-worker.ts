@@ -341,6 +341,7 @@ async function sendAutomationSmsToLead(
   venueId: string,
   leadId: string,
   bodyTemplate: string,
+  mediaUrls?: string[],
 ): Promise<{ ok: boolean; error?: string }> {
   const appOrigin = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
   const vars = await buildMergeVars(venueId, leadId, appOrigin, { forSms: true });
@@ -368,7 +369,7 @@ async function sendAutomationSmsToLead(
       lastName: vars.last_name,
     });
     if (!contactId) return { ok: false, error: 'no_contact' };
-    await sendSms(token, loc, contactId, mergedBody);
+    await sendSms(token, loc, contactId, mergedBody, mediaUrls?.length ? mediaUrls : undefined);
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'sms_failed' };
   }
@@ -554,7 +555,8 @@ async function processOneEnrollment(en: {
     return true;
   }
   if (step.step_type === 'send_sms') {
-    const body = String((step.config_json as { body?: string }).body || '').trim();
+    const cfg = step.config_json as { body?: string; media_urls?: string[] };
+    const body = String(cfg.body || '').trim();
     if (!body) {
       await supabaseAdmin
         .from('marketing_automation_enrollments')
@@ -562,7 +564,7 @@ async function processOneEnrollment(en: {
         .eq('id', en.id);
       return true;
     }
-    const send = await sendAutomationSmsToLead(en.venue_id, en.lead_id, body);
+    const send = await sendAutomationSmsToLead(en.venue_id, en.lead_id, body, cfg.media_urls);
     if (!send.ok && send.error !== 'suppressed') {
       await supabaseAdmin
         .from('marketing_automation_enrollments')

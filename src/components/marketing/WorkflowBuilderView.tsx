@@ -5,10 +5,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, CalendarHeart, CheckSquare, ChevronDown, ChevronUp,
-  ClipboardList, Clock, DollarSign, GitBranch, Link2,
+  ClipboardList, Clock, DollarSign, GitBranch, Image as ImageIcon, Link2,
   Loader2, Mail, Minus, Plus, Send, Smartphone, Square,
-  Tag, Trash2, Users,
+  Tag, Trash2, Users, X, Zap,
 } from 'lucide-react';
+import { VenueMediaPickerModal } from '@/components/venue-media/VenueMediaPickerModal';
 import {
   DndContext, closestCenter, PointerSensor,
   useSensor, useSensors, useDraggable, DragOverlay,
@@ -69,7 +70,7 @@ type WaitUnit = 'minutes' | 'hours' | 'days';
 type LocalStep =
   | { localId: string; step_type: 'delay';      delay_minutes: number }
   | { localId: string; step_type: 'send_email'; template_id: string }
-  | { localId: string; step_type: 'send_sms';   body: string };
+  | { localId: string; step_type: 'send_sms';   body: string; media_urls?: string[] };
 
 type SelectedItem = { kind: 'trigger' } | { kind: 'step'; localId: string } | null;
 
@@ -300,6 +301,14 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
   const [testEmail, setTestEmail]           = useState('');
   const [testSending, setTestSending]       = useState(false);
   const [testResult, setTestResult]         = useState<string | null>(null);
+  // SMS-specific state
+  const [testSmsPhone, setTestSmsPhone]     = useState('');
+  const [testSmsSending, setTestSmsSending] = useState(false);
+  const [testSmsResult, setTestSmsResult]   = useState<string | null>(null);
+  const [smsMediaPickerOpen, setSmsMediaPickerOpen] = useState(false);
+  const [mergeTagOpen, setMergeTagOpen]     = useState(false);
+  const [triggerLinkOpen, setTriggerLinkOpen] = useState(false);
+  const smsTextareaRef                      = useRef<HTMLTextAreaElement>(null);
 
   // ── dnd sensors ───────────────────────────────────────────────────────────
   const sensors = useSensors(useSensor(SmartPointerSensor, { activationConstraint: { distance: 6 } }));
@@ -317,6 +326,14 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
     window.addEventListener('pointermove', mv, { passive: true });
     return () => window.removeEventListener('pointermove', mv);
   }, []);
+
+  // ── Close merge-tag / trigger-link dropdowns on outside click ─────────────
+  useEffect(() => {
+    if (!mergeTagOpen && !triggerLinkOpen) return;
+    const handler = () => { setMergeTagOpen(false); setTriggerLinkOpen(false); };
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [mergeTagOpen, triggerLinkOpen]);
 
   // ── Center canvas on first mount ───────────────────────────────────────────
   useEffect(() => {
@@ -462,8 +479,10 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
         const localId = `s-${i}-${Math.random().toString(36).slice(2)}`;
         if (s.step_type === 'delay')
           return { localId, step_type: 'delay', delay_minutes: Number((s.config_json as { delay_minutes?: number }).delay_minutes ?? 60) };
-        if (s.step_type === 'send_sms')
-          return { localId, step_type: 'send_sms', body: String((s.config_json as { body?: string }).body ?? DEFAULT_SMS) };
+        if (s.step_type === 'send_sms') {
+          const sc = s.config_json as { body?: string; media_urls?: string[] };
+          return { localId, step_type: 'send_sms', body: String(sc.body ?? DEFAULT_SMS), media_urls: sc.media_urls ?? [] };
+        }
         return { localId, step_type: 'send_email', template_id: String((s.config_json as { template_id?: string }).template_id ?? '') };
       }));
     }
@@ -525,7 +544,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
           if (s.step_type === 'delay')
             return { step_order: i, step_type: 'delay' as const, config: { delay_minutes: Math.max(1, Math.min(10080, s.delay_minutes)) } };
           if (s.step_type === 'send_sms')
-            return { step_order: i, step_type: 'send_sms' as const, config: { body: s.body.trim() } };
+            return { step_order: i, step_type: 'send_sms' as const, config: { body: s.body.trim(), media_urls: s.media_urls ?? [] } };
           return { step_order: i, step_type: 'send_email' as const, config: { template_id: s.template_id } };
         }),
       }),
@@ -640,6 +659,34 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
     setTestSending(false);
     const j = await res.json().catch(() => ({}));
     setTestResult(res.ok ? '✓ Sent! Check your inbox.' : `Error: ${(j as { error?: string }).error ?? 'Send failed'}`);
+  }
+
+  // ── Test SMS ───────────────────────────────────────────────────────────────
+  async function sendTestSms(stepOrder: number, smsBody: string, mediaUrls: string[]) {
+    if (!testSmsPhone.trim()) { setTestSmsResult('Enter a phone number first.'); return; }
+    setTestSmsSending(true); setTestSmsResult(null);
+    const res = await fetch(`/api/marketing/automations/${id}/test-sms`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stepOrder, toPhone: testSmsPhone.trim(), body: smsBody, mediaUrls }),
+    });
+    setTestSmsSending(false);
+    const j = await res.json().catch(() => ({}));
+    setTestSmsResult(res.ok ? '✓ SMS sent!' : `Error: ${(j as { error?: string }).error ?? 'Send failed'}`);
+  }
+
+  // ── Merge tag / trigger link insert ───────────────────────────────────────
+  function insertAtCursor(text: string, lid: string) {
+    const ta = smsTextareaRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart ?? ta.value.length;
+    const end = ta.selectionEnd ?? ta.value.length;
+    const newVal = ta.value.slice(0, start) + text + ta.value.slice(end);
+    setSteps((prev) => prev.map((x) => x.localId === lid && x.step_type === 'send_sms' ? { ...x, body: newVal } : x));
+    requestAnimationFrame(() => {
+      ta.focus();
+      ta.setSelectionRange(start + text.length, start + text.length);
+    });
   }
 
   // ── Render guards ──────────────────────────────────────────────────────────
@@ -1238,20 +1285,173 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                   })()}
 
                   {/* ── SMS step ─────────────────────────────────────── */}
-                  {selectedStep.step_type === 'send_sms' && (
-                    <div>
-                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Message body</p>
-                      <textarea
-                        className="min-h-[100px] w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
-                        value={selectedStep.body}
-                        onChange={(e) => {
-                          const v = e.target.value; const lid = selectedStep.localId;
-                          setSteps((prev) => prev.map((x) => x.localId === lid && x.step_type === 'send_sms' ? { ...x, body: v } : x));
-                        }}
-                      />
-                      <p className="mt-2 text-[11px] text-gray-400">{'Use {{first_name}} and {{venue_name}}. STOP/DND honored automatically.'}</p>
-                    </div>
-                  )}
+                  {selectedStep.step_type === 'send_sms' && (() => {
+                    const lid = selectedStep.localId;
+                    const stepOrder = steps.findIndex((s) => s.localId === lid);
+                    const smsBody = selectedStep.body;
+                    const mediaUrls = selectedStep.media_urls ?? [];
+                    // Character / segment count
+                    const charCount = smsBody.length;
+                    const segCount = charCount === 0 ? 0 : Math.ceil(charCount / 160);
+                    return (
+                      <div data-no-dnd>
+                        {/* ── Message label + toolbar ───────────────── */}
+                        <div className="mb-2 flex items-center justify-between">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Message</p>
+                          <div className="flex items-center gap-1">
+                            {/* Merge tags button */}
+                            <div className="relative">
+                              <button
+                                type="button"
+                                title="Insert merge tag"
+                                onClick={() => { setMergeTagOpen((v) => !v); setTriggerLinkOpen(false); }}
+                                className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-50 transition-colors"
+                              >
+                                <Tag size={11} /> Tags
+                              </button>
+                              {mergeTagOpen && (
+                                <div className="absolute right-0 top-full z-50 mt-1 w-52 rounded-xl border border-gray-200 bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+                                  <p className="border-b border-gray-100 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Merge Tags</p>
+                                  {[
+                                    { label: 'First name', code: '{{first_name}}' },
+                                    { label: 'Last name',  code: '{{last_name}}'  },
+                                    { label: 'Venue name', code: '{{venue_name}}' },
+                                    { label: 'Wedding date', code: '{{wedding_date}}' },
+                                    { label: 'Unsubscribe URL', code: '{{unsubscribe_url}}' },
+                                  ].map(({ label, code }) => (
+                                    <button key={code} type="button"
+                                      className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left hover:bg-gray-50 transition-colors"
+                                      onClick={() => { insertAtCursor(code, lid); setMergeTagOpen(false); }}
+                                    >
+                                      <span className="text-[12px] font-medium text-gray-800">{label}</span>
+                                      <span className="font-mono text-[10px] text-gray-400">{code}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            {/* Trigger links button */}
+                            <div className="relative">
+                              <button
+                                type="button"
+                                title="Insert trigger link"
+                                onClick={() => { setTriggerLinkOpen((v) => !v); setMergeTagOpen(false); }}
+                                className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-50 transition-colors"
+                              >
+                                <Zap size={11} /> Links
+                              </button>
+                              {triggerLinkOpen && (
+                                <div className="absolute right-0 top-full z-50 mt-1 w-60 rounded-xl border border-gray-200 bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+                                  <p className="border-b border-gray-100 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Trigger Links</p>
+                                  {links.length === 0 ? (
+                                    <p className="px-3 py-3 text-[11px] text-gray-400">No trigger links created yet.</p>
+                                  ) : links.map((lnk) => (
+                                    <button key={lnk.id} type="button"
+                                      className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left hover:bg-gray-50 transition-colors"
+                                      onClick={() => { insertAtCursor(`{{trigger_link.${lnk.short_code}}}`, lid); setTriggerLinkOpen(false); }}
+                                    >
+                                      <span className="text-[12px] font-medium text-gray-800">{lnk.name}</span>
+                                      <span className="font-mono text-[10px] text-gray-400">{`{{trigger_link.${lnk.short_code}}}`}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* ── Textarea ───────────────────────────────── */}
+                        <textarea
+                          ref={smsTextareaRef}
+                          className="min-h-[110px] w-full resize-y rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
+                          value={smsBody}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setSteps((prev) => prev.map((x) => x.localId === lid && x.step_type === 'send_sms' ? { ...x, body: v } : x));
+                          }}
+                        />
+                        {/* Character / segment count */}
+                        <div className="mt-1 flex items-center justify-end gap-2">
+                          <span className="text-[10px] text-gray-400">
+                            {charCount} char{charCount !== 1 ? 's' : ''} · {segCount} SMS segment{segCount !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+
+                        {/* ── Media attachments (MMS) ────────────────── */}
+                        <div className="mt-4">
+                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Attachments <span className="normal-case text-gray-300">(MMS, max 3 images)</span></p>
+                          {mediaUrls.length > 0 && (
+                            <div className="mb-2 flex flex-wrap gap-2">
+                              {mediaUrls.map((url) => (
+                                <div key={url} className="group relative h-16 w-16 overflow-hidden rounded-lg border border-gray-200">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={url} alt="" className="h-full w-full object-cover" />
+                                  <button
+                                    type="button"
+                                    className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                                    onClick={() => setSteps((prev) => prev.map((x) => x.localId === lid && x.step_type === 'send_sms' ? { ...x, media_urls: (x.media_urls ?? []).filter((u) => u !== url) } : x))}
+                                  >
+                                    <X size={9} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {mediaUrls.length < 3 && (
+                            <button
+                              type="button"
+                              onClick={() => setSmsMediaPickerOpen(true)}
+                              className="flex items-center gap-1.5 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-1.5 text-[11px] text-gray-500 hover:border-gray-400 hover:bg-gray-100 transition-colors"
+                            >
+                              <ImageIcon size={12} /> Add image from Media Gallery
+                            </button>
+                          )}
+                        </div>
+
+                        {/* ── Test SMS ───────────────────────────────── */}
+                        <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-3">
+                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Test phone number</p>
+                          <input
+                            type="tel"
+                            placeholder="+1 555 000 0000"
+                            className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs focus:border-gray-400 focus:outline-none"
+                            value={testSmsPhone}
+                            onChange={(e) => { setTestSmsPhone(e.target.value); setTestSmsResult(null); }}
+                          />
+                          <p className="mt-1 text-[10px] text-gray-400">* Please add country code (e.g. +1).</p>
+                          <button
+                            type="button"
+                            disabled={testSmsSending}
+                            onClick={() => void sendTestSms(stepOrder, smsBody, mediaUrls)}
+                            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50"
+                          >
+                            {testSmsSending ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}
+                            {testSmsSending ? 'Sending…' : 'Send Test SMS'}
+                          </button>
+                          {testSmsResult && (
+                            <p className={`mt-1.5 text-[11px] ${testSmsResult.startsWith('✓') ? 'text-emerald-600' : 'text-red-500'}`}>{testSmsResult}</p>
+                          )}
+                        </div>
+
+                        {/* ── Media picker modal ─────────────────────── */}
+                        {smsMediaPickerOpen && (
+                          <VenueMediaPickerModal
+                            mode="image"
+                            onSelect={(url) => {
+                              setSteps((prev) => prev.map((x) => {
+                                if (x.localId !== lid || x.step_type !== 'send_sms') return x;
+                                const existing = x.media_urls ?? [];
+                                if (existing.includes(url) || existing.length >= 3) return x;
+                                return { ...x, media_urls: [...existing, url] };
+                              }));
+                              setSmsMediaPickerOpen(false);
+                            }}
+                            onClose={() => setSmsMediaPickerOpen(false)}
+                          />
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   <div className="mt-6 border-t border-gray-100 pt-4">
                     <button type="button" onClick={() => removeStep(selectedStep.localId)}
