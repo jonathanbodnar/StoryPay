@@ -1299,10 +1299,12 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                   </div>
                 )}
 
-                {/* End cap */}
+                {/* End cap — pill-style just like the screenshot */}
                 <AddStepBtn onClick={() => setPickerIdx(steps.length)} />
-                <div className="relative rounded-xl border border-gray-100 bg-white px-4 py-3 text-center" style={{ zIndex: 1 }}>
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">End of workflow</p>
+                <div className="flex justify-center" style={{ zIndex: 2, position: 'relative' }}>
+                  <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-100 px-5 py-1.5 text-[11px] font-bold uppercase tracking-widest text-gray-400 select-none">
+                    End
+                  </span>
                 </div>
 
               </div>
@@ -1836,13 +1838,39 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                 </div>
 
               ) : (
-                /* ── Blocks palette ──────────────────────────────────── */
-                <div className="p-4">
-                  <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Blocks</p>
-                  <p className="mb-4 text-[11px] text-gray-400">Drag a block onto the canvas, or click a block on the canvas to edit it.</p>
-                  <div className="flex flex-col gap-2">
-                    {PALETTE.map((item) => <PaletteCard key={item.type} {...item} />)}
+                /* ── Blocks + Triggers palette ───────────────────────── */
+                <div className="p-4 space-y-6">
+
+                  {/* Action blocks */}
+                  <div>
+                    <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Blocks</p>
+                    <p className="mb-3 text-[11px] text-gray-400 leading-relaxed">Drag a block onto the canvas, or click + to insert at a specific position.</p>
+                    <div className="flex flex-col gap-2">
+                      {PALETTE.map((item) => <PaletteCard key={item.type} {...item} />)}
+                    </div>
                   </div>
+
+                  {/* Trigger blocks */}
+                  <div>
+                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Triggers &amp; Conditions</p>
+                    <p className="mb-3 text-[11px] text-gray-400 leading-relaxed">Add a trigger or condition mid-workflow — use the + button on the canvas to insert after any step.</p>
+                    <div className="flex flex-col gap-2">
+                      {TRIGGER_OPTIONS.map(({ value, label, Icon }) => (
+                        <div
+                          key={value}
+                          className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-3.5 py-3 cursor-default select-none"
+                        >
+                          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-50">
+                            <Icon size={15} className="text-emerald-700" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-semibold text-gray-800">{label}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
                 </div>
               )}
             </div>
