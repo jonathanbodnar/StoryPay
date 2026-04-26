@@ -147,26 +147,50 @@ export async function POST(request: NextRequest) {
     if (typeof v === 'string' && v.trim()) utm[k] = v.trim();
   }
 
-  const { data: lead, error: insertErr } = await supabaseAdmin
+  const insertPayload: Record<string, unknown> = {
+    venue_id:               venue.id,
+    first_name:             firstName,
+    last_name:              lastName,
+    name:                   name || `${firstName} ${lastName}`.trim(),
+    email,
+    phone:                  phone || null,
+    booking_timeline:       payload.booking_timeline || null,
+    venue_matters:          payload.venue_matters   || null,
+    message:                payload.message         || null,
+    source:                 payload.source          || 'directory',
+    first_touch_utm:        Object.keys(utm).length ? utm : {},
+    referral_source:        typeof payload.referral_source === 'string'
+                              ? payload.referral_source.trim() || null
+                              : null,
+    // Public listing leads must always live in the sales pipeline. Set this
+    // explicitly (instead of relying on the column default) so the lead is
+    // guaranteed to show up on the Kanban regardless of the venue's prior
+    // contact-only history or schema-default drift.
+    excluded_from_pipeline: false,
+  };
+
+  let insertResult = await supabaseAdmin
     .from('leads')
-    .insert({
-      venue_id:         venue.id,
-      first_name:       firstName,
-      last_name:        lastName,
-      name:             name || `${firstName} ${lastName}`.trim(),
-      email,
-      phone:            phone || null,
-      booking_timeline: payload.booking_timeline || null,
-      venue_matters:    payload.venue_matters   || null,
-      message:          payload.message         || null,
-      source:           payload.source          || 'directory',
-      first_touch_utm:  Object.keys(utm).length ? utm : {},
-      referral_source:  typeof payload.referral_source === 'string'
-                          ? payload.referral_source.trim() || null
-                          : null,
-    })
+    .insert(insertPayload)
     .select('id, track_token, created_at, email, phone')
     .single();
+
+  // Pre-051 schemas don't have excluded_from_pipeline. Strip and retry.
+  if (
+    insertResult.error &&
+    /column .*excluded_from_pipeline/i.test(insertResult.error.message)
+  ) {
+    const { excluded_from_pipeline: _omit, ...rest } = insertPayload as
+      Record<string, unknown> & { excluded_from_pipeline?: boolean };
+    void _omit;
+    insertResult = await supabaseAdmin
+      .from('leads')
+      .insert(rest)
+      .select('id, track_token, created_at, email, phone')
+      .single();
+  }
+
+  const { data: lead, error: insertErr } = insertResult;
 
   if (insertErr || !lead) {
     console.error('[public/leads] insert failed:', insertErr);
@@ -205,7 +229,10 @@ export async function POST(request: NextRequest) {
     }
   })();
 
-  // Place lead in "New Lead" stage of the default pipeline
+  // Place lead in the first stage (preferring "New Lead" when present) of the
+  // default pipeline. We update the just-inserted lead, then also rescue any
+  // earlier rows that share this email and are stuck (no pipeline_id/stage_id,
+  // or excluded_from_pipeline) so prior test submissions become visible too.
   try {
     const defaultPipelineId = await ensureDefaultPipeline(venue.id);
     const { data: stages } = await supabaseAdmin
@@ -215,23 +242,78 @@ export async function POST(request: NextRequest) {
       .eq('pipeline_id', defaultPipelineId)
       .order('position', { ascending: true });
 
-    // Prefer a stage named "New Lead"; fall back to the first stage
     const targetStage =
       (stages ?? []).find((s) => s.name.toLowerCase().replace(/\s+/g, '') === 'newlead') ??
       (stages ?? [])[0] ??
       null;
 
     if (targetStage) {
-      await supabaseAdmin
+      const stageStatus = legacyStatusForStageName(targetStage.name);
+      const nowIso = new Date().toISOString();
+
+      const baseUpdate: Record<string, unknown> = {
+        pipeline_id:            defaultPipelineId,
+        stage_id:               targetStage.id,
+        status:                 stageStatus,
+        // Explicitly include this lead in the pipeline. If the row was created
+        // earlier as a contact-only record and is being re-submitted via the
+        // listing form, it must appear on the Kanban now.
+        excluded_from_pipeline: false,
+        position:               0,
+        updated_at:             nowIso,
+      };
+
+      // Update the new lead. If the schema is missing excluded_from_pipeline
+      // (pre-051), drop the field and retry.
+      let upd = await supabaseAdmin
         .from('leads')
-        .update({
-          pipeline_id: defaultPipelineId,
-          stage_id:    targetStage.id,
-          status:      legacyStatusForStageName(targetStage.name),
-          updated_at:  new Date().toISOString(),
-        })
+        .update(baseUpdate)
         .eq('id', lr.id)
         .eq('venue_id', venue.id);
+      if (upd.error && /column .*excluded_from_pipeline/i.test(upd.error.message)) {
+        const { excluded_from_pipeline: _o, ...withoutFlag } = baseUpdate as
+          Record<string, unknown> & { excluded_from_pipeline?: boolean };
+        void _o;
+        upd = await supabaseAdmin
+          .from('leads')
+          .update(withoutFlag)
+          .eq('id', lr.id)
+          .eq('venue_id', venue.id);
+      }
+      if (upd.error) {
+        console.error('[public/leads] update pipeline on lead failed:', upd.error);
+      }
+
+      // Rescue earlier leads with the same email that ended up orphaned or
+      // contact-only — they should also live on the Kanban for this venue.
+      let stuck = await supabaseAdmin
+        .from('leads')
+        .update({
+          pipeline_id:            defaultPipelineId,
+          stage_id:               targetStage.id,
+          status:                 stageStatus,
+          excluded_from_pipeline: false,
+          updated_at:             nowIso,
+        })
+        .eq('venue_id', venue.id)
+        .ilike('email', lr.email)
+        .neq('id', lr.id)
+        .or(
+          `excluded_from_pipeline.eq.true,stage_id.is.null,pipeline_id.is.null,pipeline_id.neq.${defaultPipelineId}`,
+        );
+      if (stuck.error && /column .*excluded_from_pipeline/i.test(stuck.error.message)) {
+        await supabaseAdmin
+          .from('leads')
+          .update({
+            pipeline_id: defaultPipelineId,
+            stage_id:    targetStage.id,
+            status:      stageStatus,
+            updated_at:  nowIso,
+          })
+          .eq('venue_id', venue.id)
+          .ilike('email', lr.email)
+          .neq('id', lr.id);
+      }
 
       // Sync the pipeline/stage onto the matching venue_customers row so
       // the lead appears immediately in the kanban and contact profile.

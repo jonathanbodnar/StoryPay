@@ -128,8 +128,8 @@ export async function reconcileLeadsForKanban(venueId: string): Promise<void> {
 
   // Load the venue's current pipelines + stages + leads + contacts in one
   // round-trip. Cheap even for venues with hundreds of rows.
-  const leadsSelectWithFlag = 'id, email, pipeline_id, stage_id, excluded_from_pipeline';
-  const leadsSelectLegacy = 'id, email, pipeline_id, stage_id';
+  const leadsSelectWithFlag = 'id, email, pipeline_id, stage_id, excluded_from_pipeline, source';
+  const leadsSelectLegacy = 'id, email, pipeline_id, stage_id, source';
   // venue_customers gained pipeline_id + stage_id in migration 016. On older
   // databases those columns may not exist yet so we try with them first and
   // fall back to the basic contact fields if PostgREST rejects the query.
@@ -182,12 +182,14 @@ export async function reconcileLeadsForKanban(venueId: string): Promise<void> {
     pipeline_id: string | null;
     stage_id: string | null;
     excluded_from_pipeline?: boolean | null;
+    source?: string | null;
   }> | null = leadsResult.data as unknown as Array<{
     id: string;
     email: string | null;
     pipeline_id: string | null;
     stage_id: string | null;
     excluded_from_pipeline?: boolean | null;
+    source?: string | null;
   }> | null;
   if (leadsResult.error && /column .*excluded_from_pipeline/i.test(leadsResult.error.message)) {
     // Migration 051 not applied yet — reconcile against the legacy columns
@@ -203,7 +205,42 @@ export async function reconcileLeadsForKanban(venueId: string): Promise<void> {
       pipeline_id: string | null;
       stage_id: string | null;
       excluded_from_pipeline?: boolean | null;
+      source?: string | null;
     }> | null;
+  }
+
+  // Rescue leads that came from a public form (listing page, directory, etc.)
+  // but somehow have `excluded_from_pipeline = true`. The "None" stage is only
+  // exposed on the dashboard's manual Add Contact / Add Lead modal — public
+  // form submissions should never end up contact-only. Flip them back to
+  // false so they show up on the Kanban; their pipeline/stage placement is
+  // healed below in the regular reconcile pass.
+  const PUBLIC_LEAD_SOURCES = new Set(['directory', 'website', 'listing', 'form']);
+  const rescueIds = ((leadRows ?? []) as Array<{
+    id: string;
+    excluded_from_pipeline?: boolean | null;
+    source?: string | null;
+  }>)
+    .filter(
+      (l) =>
+        l.excluded_from_pipeline === true &&
+        typeof l.source === 'string' &&
+        PUBLIC_LEAD_SOURCES.has(l.source.toLowerCase()),
+    )
+    .map((l) => l.id);
+  if (rescueIds.length > 0) {
+    const { error: rescueErr } = await supabaseAdmin
+      .from('leads')
+      .update({ excluded_from_pipeline: false, updated_at: now })
+      .in('id', rescueIds);
+    if (rescueErr) {
+      console.warn('[reconcileLeadsForKanban] rescue update failed:', rescueErr.message);
+    } else {
+      // Mutate local list so downstream healing places these leads now too.
+      for (const row of leadRows ?? []) {
+        if (rescueIds.includes(row.id)) row.excluded_from_pipeline = false;
+      }
+    }
   }
 
   const pipelineIds = new Set<string>(((pipelineRows ?? []) as Array<{ id: string }>).map((p) => p.id));
