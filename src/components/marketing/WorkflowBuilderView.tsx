@@ -425,6 +425,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
   const panStartRef             = useRef({ clientX: 0, clientY: 0, px: 0, py: 0 });
   const canvasContainerRef      = useRef<HTMLDivElement>(null);
   const containerInitialized    = useRef(false);
+  const triggerRowRef           = useRef<HTMLDivElement>(null);
 
   // sync refs
   zoomRef.current = zoom;
@@ -1180,26 +1181,33 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
               <div style={{ width: CARD_W, paddingBottom: 200, position: 'relative' }}>
 
                 {/* ── Vertical grey connector line ──────────────────────────
-                     Runs through the center of the column behind every card.
-                     Cards have white backgrounds so they visually "interrupt"
-                     the line, leaving a clean joined look between them. */}
-                <div
-                  aria-hidden
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    bottom: 0,
-                    left: '50%',
-                    width: 1,
-                    transform: 'translateX(-0.5px)',
-                    background: '#e5e7eb',
-                    pointerEvents: 'none',
-                    zIndex: 0,
-                  }}
-                />
+                     Starts below the trigger row when no triggers are
+                     configured, so the line doesn't bleed through the
+                     transparent "Add New Trigger" dashed button. */}
+                {(() => {
+                  const hasTriggers = !!auto.trigger_type || extraTriggers.length > 0;
+                  const rowH = triggerRowRef.current?.offsetHeight ?? 100;
+                  return (
+                    <div
+                      aria-hidden
+                      style={{
+                        position: 'absolute',
+                        top: hasTriggers ? 0 : rowH + 12,
+                        bottom: 0,
+                        left: '50%',
+                        width: 1,
+                        transform: 'translateX(-0.5px)',
+                        background: '#e5e7eb',
+                        pointerEvents: 'none',
+                        zIndex: 0,
+                      }}
+                    />
+                  );
+                })()}
 
                 {/* ── Trigger row — primary + extras + Add New Trigger ──── */}
                 <div
+                  ref={triggerRowRef}
                   className="relative"
                   style={{
                     // Pull the row out of the column's narrow width so multiple
