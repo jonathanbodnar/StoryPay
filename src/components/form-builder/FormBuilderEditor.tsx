@@ -41,7 +41,6 @@ import {
   CircleDot,
   Code2,
   Copy,
-  ExternalLink,
   Eye,
   FileText,
   Hash,
@@ -1776,7 +1775,6 @@ function FormSettingsModal({
 
 // ─── Live preview modal (dark themed, device toggle, open in new tab) ────────
 function PreviewModal({
-  embedUrl,
   formTitle,
   published,
   definition,
@@ -1791,10 +1789,6 @@ function PreviewModal({
   onClose: () => void;
 }) {
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
-  // Bumped on every "Reset" so the form unmounts/remounts and clears its
-  // success/error state and inputs — quick way to re-test without closing
-  // the modal.
-  const [resetKey, setResetKey] = useState(0);
   const frameWidth = device === 'mobile' ? 380 : 720;
 
   return (
@@ -1804,98 +1798,73 @@ function PreviewModal({
       role="dialog"
       aria-modal="true"
     >
-      {/* Top bar */}
+      {/* Top bar — close + title on the left, centered device toggle */}
       <div
-        className="flex items-center justify-between gap-4 border-b border-white/10 px-5 py-3 text-white"
+        className="relative flex items-center border-b border-white/10 px-5 py-3 text-white"
         style={{ backgroundColor: '#1b1b1b' }}
       >
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex min-w-0 items-center gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-2 text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
+            className="rounded-lg p-2 text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
             aria-label="Close preview"
           >
             <XIcon size={18} />
           </button>
           <div className="min-w-0">
-            <p className="text-sm font-semibold truncate">{formTitle || 'Untitled form'}</p>
+            <p className="truncate text-sm font-semibold">{formTitle || 'Untitled form'}</p>
             <p className="text-[11px] text-gray-400">
               Live preview · fill it out to test — submissions don&apos;t persist
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-1 rounded-full bg-white/10 p-1">
-          <button
-            type="button"
-            onClick={() => setDevice('desktop')}
-            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-              device === 'desktop' ? 'bg-white text-gray-900' : 'text-gray-300 hover:text-white'
-            }`}
-          >
-            <Monitor size={13} /> Desktop
-          </button>
-          <button
-            type="button"
-            onClick={() => setDevice('mobile')}
-            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-              device === 'mobile' ? 'bg-white text-gray-900' : 'text-gray-300 hover:text-white'
-            }`}
-          >
-            <Smartphone size={13} /> Mobile
-          </button>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setResetKey((k) => k + 1)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 px-3 py-1.5 text-xs font-semibold text-gray-200 hover:bg-white/10 hover:text-white transition-colors"
-            title="Clear the form and try again"
-          >
-            Reset
-          </button>
-          <a
-            href={embedUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-gray-900 hover:bg-gray-100 transition-colors ${
-              published ? '' : 'opacity-60'
-            }`}
-            title={published ? 'Open the live embed URL' : 'Publish the form first'}
-          >
-            <ExternalLink size={13} /> Open
-          </a>
+        <div className="absolute left-1/2 -translate-x-1/2">
+          <div className="flex items-center gap-1 rounded-full bg-white/10 p-1">
+            <button
+              type="button"
+              onClick={() => setDevice('desktop')}
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                device === 'desktop' ? 'bg-white text-gray-900' : 'text-gray-300 hover:text-white'
+              }`}
+            >
+              <Monitor size={13} /> Desktop
+            </button>
+            <button
+              type="button"
+              onClick={() => setDevice('mobile')}
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                device === 'mobile' ? 'bg-white text-gray-900' : 'text-gray-300 hover:text-white'
+              }`}
+            >
+              <Smartphone size={13} /> Mobile
+            </button>
+          </div>
         </div>
       </div>
 
       {!published && (
-        <div className="px-5 py-1.5 text-xs bg-amber-50 text-amber-800 border-b border-amber-100">
+        <div className="border-b border-amber-100 bg-amber-50 px-5 py-1.5 text-xs text-amber-800">
           Publish the form so the embed URL works for visitors.
         </div>
       )}
 
-      <div className="flex-1 overflow-auto p-6 flex items-start justify-center">
+      {/* Form viewport — natural-height form rendered against its own theme
+          background. The outer container scrolls if the form is taller than
+          the modal, and shrinks to the form when it's shorter. */}
+      <div className="flex flex-1 justify-center overflow-auto py-6">
         <div
-          className="bg-white rounded-2xl shadow-2xl overflow-hidden transition-all"
-          style={{ width: frameWidth, maxWidth: '100%' }}
+          className="overflow-hidden rounded-2xl shadow-2xl transition-all"
+          style={{ width: frameWidth, maxWidth: 'calc(100% - 48px)', alignSelf: 'flex-start' }}
         >
-          {/* Live, interactive preview. Fully wired client-side validation +
-              the configured post-submit (thank-you / inline / redirect-banner)
-              so the user sees the exact UX their visitors will see — but no
-              data is persisted, no notifications fire, and no leads are
-              created. */}
-          <div style={{ height: '80vh', overflowY: 'auto' }}>
-            <MarketingFormView
-              key={resetKey}
-              definition={definition}
-              embedToken={embedToken}
-              formTitle={formTitle}
-              preview
-              livePreview
-            />
-          </div>
+          <MarketingFormView
+            definition={definition}
+            embedToken={embedToken}
+            formTitle={formTitle}
+            preview
+            livePreview
+          />
         </div>
       </div>
     </div>
