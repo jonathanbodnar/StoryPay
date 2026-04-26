@@ -211,22 +211,22 @@ export default function WorkflowsListPage() {
       {/* New Workflow Modal */}
       {modalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
           onClick={() => setModalOpen(false)}
         >
           <div
-            className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 shadow-2xl"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-semibold text-gray-900">New workflow</h2>
-            <p className="mt-1 text-sm text-gray-600">
+            <h2 className="mb-1 text-lg font-bold text-gray-900">New workflow</h2>
+            <p className="mb-5 text-sm text-gray-500">
               Give it a name and pick a trigger — you&apos;ll configure steps on the next screen.
             </p>
 
-            <div className="mt-4 space-y-4">
+            <div className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
-                  Name <span className="text-red-400">*</span>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                  Workflow Name <span className="text-red-400">*</span>
                 </label>
                 <input
                   ref={nameRef}
@@ -239,7 +239,7 @@ export default function WorkflowsListPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
                   Trigger
                 </label>
                 <select
@@ -273,8 +273,8 @@ export default function WorkflowsListPage() {
                 onClick={() => void create()}
                 className="flex items-center gap-2 rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-gray-700 disabled:opacity-60 transition-colors"
               >
-                {creating ? <Loader2 size={14} className="animate-spin" /> : null}
-                {creating ? 'Creating…' : 'Create →'}
+                {creating ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                {creating ? 'Creating…' : 'Build Workflow →'}
               </button>
             </div>
           </div>
