@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -447,16 +447,47 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
     return () => document.removeEventListener('click', handler);
   }, [mergeTagOpen, triggerLinkOpen]);
 
-  // ── Center canvas on first mount ───────────────────────────────────────────
-  useEffect(() => {
+  // ── Center canvas once the loading spinner clears ────────────────────────
+  // Important: while `loading` is true the canvas isn't in the DOM (a loading
+  // spinner is rendered instead), so the ref is null and any pan calculation
+  // would silently fail — leaving the workflow anchored at the left edge on
+  // refresh. We run a layout-effect once `loading` flips false so we measure
+  // the real container before paint and re-run the centering on resize.
+  useLayoutEffect(() => {
+    if (loading) return;
     const el = canvasContainerRef.current;
-    if (!el || containerInitialized.current) return;
-    containerInitialized.current = true;
-    const rect = el.getBoundingClientRect();
-    const initPan = { x: rect.width / 2 - CARD_W / 2, y: 60 };
-    panRef.current = initPan;
-    setPan(initPan);
-  }, []); // intentionally empty — fires once after mount
+    if (!el) return;
+
+    const center = () => {
+      const rect = el.getBoundingClientRect();
+      if (rect.width <= 0) return; // not laid out yet — try again later
+      const initPan = { x: rect.width / 2 - CARD_W / 2, y: 60 };
+      panRef.current = initPan;
+      zoomRef.current = 1;
+      setPan(initPan);
+      setZoom(1);
+      containerInitialized.current = true;
+    };
+
+    // Run immediately — and once more on the next frame in case width was 0
+    // because the surrounding flex layout hadn't settled yet.
+    center();
+    const raf = requestAnimationFrame(center);
+
+    // Keep the workflow centered if the user resizes the window.
+    const ro = new ResizeObserver(() => {
+      // Only auto-recenter if the user hasn't manually panned/zoomed. We
+      // detect "untouched" via the initialized flag never being flipped — if
+      // they have moved things, leave their view alone.
+      if (!containerInitialized.current) center();
+    });
+    ro.observe(el);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, [loading]);
 
   // ── Zoom at cursor ─────────────────────────────────────────────────────────
   const zoomAt = useCallback((clientX: number, clientY: number, factor: number) => {
