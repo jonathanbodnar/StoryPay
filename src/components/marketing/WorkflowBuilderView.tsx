@@ -183,7 +183,7 @@ function TriggerCardCanvas({
     <div
       className="relative group/trigger"
       onClick={(e) => { e.stopPropagation(); onClick(); }}
-      style={{ cursor: 'pointer', width: 240 }}
+      style={{ cursor: 'pointer', width: CARD_W }}
       data-no-dnd
     >
       <div
@@ -1173,7 +1173,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                     data-no-dnd
                     onClick={(e) => { e.stopPropagation(); setTriggerPickerOpen(true); }}
                     className="flex items-center gap-2 rounded-xl border-2 border-dashed border-blue-300 bg-blue-50/30 px-4 py-4 text-sm font-semibold text-blue-600 hover:border-blue-400 hover:bg-blue-50 transition-colors"
-                    style={{ width: 200, minHeight: 86, justifyContent: 'flex-start' }}
+                    style={{ width: CARD_W, minHeight: 86, justifyContent: 'flex-start' }}
                     title="Add another trigger (OR-style)"
                   >
                     <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-white">
