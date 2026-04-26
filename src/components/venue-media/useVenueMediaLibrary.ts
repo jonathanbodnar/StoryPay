@@ -11,6 +11,8 @@ export type VenueMediaAssetRow = {
   content_type: string;
   size_bytes: number;
   created_at: string;
+  /** Storage bucket the file lives in. Older rows may omit this field. */
+  source_bucket?: string | null;
 };
 
 export type VenueMediaUploadProgress = {

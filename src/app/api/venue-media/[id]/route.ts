@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { isMediaLibraryPath, VENUE_IMAGES_BUCKET } from '@/lib/venue-images-bucket';
+import { VENUE_IMAGES_BUCKET } from '@/lib/venue-images-bucket';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -40,7 +40,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     .update({ display_name: raw })
     .eq('id', id)
     .eq('venue_id', venueId)
-    .select('id, storage_path, public_url, file_name, display_name, content_type, size_bytes, created_at')
+    .select('id, storage_path, public_url, file_name, display_name, content_type, size_bytes, created_at, source_bucket')
     .maybeSingle();
 
   if (error) {
@@ -63,7 +63,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
 
   const { data: row, error: fetchErr } = await supabaseAdmin
     .from('venue_media_assets')
-    .select('id, storage_path')
+    .select('id, storage_path, source_bucket, public_url')
     .eq('id', id)
     .eq('venue_id', venueId)
     .maybeSingle();
@@ -76,21 +76,59 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  if (!isMediaLibraryPath(venueId, row.storage_path)) {
+  // Tenancy guard: storage paths always begin with the venue id (or, for
+  // legacy logos, with `venue-logos/<venueId>/`). Reject anything else so a
+  // crafted DB row can never delete another tenant's file.
+  const path = row.storage_path as string;
+  const bucket = (row.source_bucket as string | null) ?? VENUE_IMAGES_BUCKET;
+  const tenantOk =
+    path.startsWith(`${venueId}/`) || path.startsWith(`venue-logos/${venueId}/`);
+  if (!tenantOk) {
     return NextResponse.json({ error: 'Invalid asset path' }, { status: 400 });
   }
 
-  const { error: rmErr } = await supabaseAdmin.storage.from(VENUE_IMAGES_BUCKET).remove([row.storage_path]);
+  const { error: rmErr } = await supabaseAdmin.storage.from(bucket).remove([path]);
   if (rmErr) {
     console.error('[venue-media DELETE] storage', rmErr.message);
     return NextResponse.json({ error: rmErr.message }, { status: 500 });
   }
 
-  const { error: delErr } = await supabaseAdmin.from('venue_media_assets').delete().eq('id', id).eq('venue_id', venueId);
+  const { error: delErr } = await supabaseAdmin
+    .from('venue_media_assets')
+    .delete()
+    .eq('id', id)
+    .eq('venue_id', venueId);
 
   if (delErr) {
     console.error('[venue-media DELETE] db', delErr.message);
     return NextResponse.json({ error: delErr.message }, { status: 500 });
+  }
+
+  // Best-effort cleanup of references on the venue record. If we just deleted
+  // the file the brand logo / cover / gallery pointed at, clear those columns
+  // so the dashboard doesn't render broken images. Non-fatal on failure.
+  try {
+    const publicUrl = row.public_url as string | null;
+    if (publicUrl) {
+      const { data: venue } = await supabaseAdmin
+        .from('venues')
+        .select('brand_logo_url, cover_image_url, gallery_images')
+        .eq('id', venueId)
+        .maybeSingle();
+      if (venue) {
+        const updates: Record<string, unknown> = {};
+        if (venue.brand_logo_url === publicUrl) updates.brand_logo_url = null;
+        if (venue.cover_image_url === publicUrl) updates.cover_image_url = null;
+        if (Array.isArray(venue.gallery_images) && venue.gallery_images.includes(publicUrl)) {
+          updates.gallery_images = (venue.gallery_images as string[]).filter((u) => u !== publicUrl);
+        }
+        if (Object.keys(updates).length > 0) {
+          await supabaseAdmin.from('venues').update(updates).eq('id', venueId);
+        }
+      }
+    }
+  } catch (cleanupErr) {
+    console.warn('[venue-media DELETE] reference cleanup warning:', cleanupErr);
   }
 
   return NextResponse.json({ ok: true });

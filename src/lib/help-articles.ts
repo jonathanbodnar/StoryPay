@@ -544,7 +544,7 @@ Uploaded photos are public — they're served directly from a CDN so your listin
         id: 'listing-media-library',
         title: 'Media — shared images and files for listing, email, forms, and branding',
         tags: ['media', 'media library', 'images', 'files', 'assets', 'upload', 'reuse', 'photos', 'cdn', 'logo', 'pdf', 'documents'],
-        body: `Media is your venue-wide folder for everything you reuse across the product. Open it from the sidebar → **Media** (path: /dashboard/media). The old /dashboard/listing/media URL still works and redirects here.
+        body: `Media is your venue-wide folder for everything you reuse across the product. Open it from the sidebar → Media (path: /dashboard/media). The old /dashboard/listing/media URL still works and redirects here.
 
 What it is for:
 - Upload an image or file once, then reuse it wherever StoryPay needs an asset URL — directory Photos, marketing email templates (Image block, Button → File link), lead capture forms (Image block), and Settings → Branding (logo).
@@ -556,17 +556,23 @@ What you can upload:
 - Max 25 MB per file.
 - Video uploads are not supported.
 
+Auto-populated:
+- Anything you upload anywhere in the dashboard automatically lands in your Media library — no extra step needed. That includes:
+  - The brand logo on Settings → Branding (re-uploading the logo refreshes the existing library row instead of creating a duplicate).
+  - Cover and gallery photos on Venue listing → Photos.
+  - Any image you upload through the email or form builder using "Choose from media library" → Upload from device, or via the Image / Button (File link) blocks.
+
 Page features:
 - Drag and drop files anywhere on the page to upload — or click Upload.
-- Per-file progress bars during upload, with cancel-on-error.
-- Search by filename, filter pills (All / Images / Documents), sort (newest, oldest, name, size), and a grid ↔ list toggle.
-- Click any image thumbnail to preview it full-screen.
-- The "..." menu on each row gives you Copy URL, Download, Open in new tab, Rename, and Delete.
-- Rename is display-name only — the public URL doesn't change, so existing links keep working.
+- Per-file progress bars during upload.
+- Search by filename, filter pills (All / Images / Documents), sort (newest, oldest, name, size), and a grid ↔ list toggle (your view preference saves per browser).
+- Click any image thumbnail to preview it full-screen with arrow-key paging through the rest of your library.
+- A trash icon on every card lets you delete in one click; the "..." menu adds Copy URL, Download, Open in new tab, and Rename. The menu renders as a portal so it never gets cut off by surrounding cards or by the page edge, and closes automatically when you scroll.
+- Rename is display-name only — the public URL doesn't change, so existing links keep working everywhere they're already pasted.
 
 Used in indicator:
 - Each file shows where its URL is referenced today: Brand logo (Settings → Branding), Listing cover/gallery (Venue listing → Photos), Email templates and campaigns, Lead capture forms.
-- The Delete confirm modal lists every place the file is used so you can replace those references first if you don't want them to break.
+- The Delete confirm modal lists every place the file is used so you can replace those references first if you don't want them to break. If the file you delete is the brand logo, the listing cover image, or in the gallery, those references on the venue record are also cleared so the dashboard never renders a broken image.
 
 Tip: On Venue listing → Photos and the marketing Email/Form Image blocks, use "Choose from media library" to attach an existing asset without re-uploading.`,
       },
@@ -1774,6 +1780,47 @@ When to use a saved audience vs an inline campaign audience
 
 Tip — start with 3-4 evergreen audiences ("Active leads, no proposal", "Booked couples upcoming", "Past clients", "Newsletter subscribers") and use them as the backbone of every recurring email. Build narrower one-offs inline.`,
       },
+      {
+        id: 'me-form-builder',
+        title: 'Lead capture forms — drag-and-drop builder',
+        tags: ['form', 'forms', 'form builder', 'lead capture', 'inquiry form', 'embed', 'submit', 'fields', 'first name', 'last name', 'email', 'phone', 'address'],
+        body: `Marketing → Forms (path /dashboard/marketing/form-builder) is your lead capture form builder. The list page shows every form for the venue with an inline pencil (edit) and a trash icon (delete with confirm). Click "New form" to create one.
+
+The form editor mirrors the marketing email builder so the two surfaces feel identical:
+- Three-pane layout: thin left sidebar with Desktop / Mobile preview toggle and undo/redo, the live canvas in the middle, the right inspector panel.
+- Top bar: Back arrow, the form's internal name (used in your dashboard only — it does not render to the public form), and Settings / Embed / Live preview buttons on the right.
+- The right panel shows the Block Palette when nothing is selected (drag any tile onto the canvas) and switches to the selected block's tabbed inspector when you click a module.
+- Click the canvas background to deselect — the right panel returns to the block palette so you can drop in new modules.
+- A high-contrast drop indicator (#1b1b1b) shows exactly where a new block will land. You can drop at any position, including the very last slot.
+
+Block-level styling: every block's inspector exposes a shared Block tab with top padding, bottom padding, side gutters, and background color (same primitives the email builder uses). Per-block style controls live on their own tab — typography for Heading, the rich-text format toolbar for Text, presets for Button, and so on.
+
+Default new-form blocks: every newly created form is seeded with First name + Last name as a half-width pair, Phone, Email, and a Submit button. That's the most common contact-capture form out of the box; remove or rearrange whatever you don't need.
+
+Available blocks:
+- Heading and Text (with rich-text format toolbar — bold/italic/underline, lists, links).
+- Single-line text and paragraph text inputs.
+- Email, Phone, Number, Date, and Time pickers.
+- Address — split into individual labelled inputs (Street, City, State, ZIP code) so contact records land cleanly in your CRM. (The previous freeform single-line address was replaced.)
+- Dropdown, Radio, Checkbox group, Yes/No toggle.
+- File upload (uses the same Media-library bucket).
+- Image — same uploader as the email builder. Drag and drop from your computer, click Upload, or "Choose from media library" (shared picker). Supports alignment, width, padding, link wrap, and alt text. Anything uploaded here auto-registers in your Media library.
+- Button — full Flodesk-style tabbed inspector. Style tab gives you presets (Solid, Outline, Pill, Underlined link, etc.), a saved-styles modal (save/apply/delete styles), and full custom controls — Google font + weight + size + letter spacing, text color, background color, border color/width/radius, padding, full-width toggle. Default fill is the signature #1b1b1b so freshly placed buttons look right immediately. Older saved forms automatically map their previous button style onto the new presets.
+- Submit, Divider, and Spacer — same controls as the email builder.
+
+Form Settings modal (top-right gear): every form-level option lives here so the canvas stays focused on layout.
+- Public form name (the name that shows on the form itself).
+- Success behavior — thank-you screen text or redirect URL.
+- Notification recipients — email addresses that get a copy of every submission.
+- Embed CSS class.
+- Delete form — removes the form (also available next to the pencil on the Forms list page).
+
+Embed modal: copy-paste a script + div snippet that drops the form into any external website. The embed inherits the form's theme automatically.
+
+Live preview: opens the public-facing form inside a real iframe with real validation and real post-submit configuration (thank-you screen or redirect URL). Submissions don't write a lead and don't fire notification emails — it's a clean dry run so you can verify the experience end-to-end. The header centers the Desktop / Mobile toggle so you can verify both sizes.
+
+The public submission endpoint and the existing embed code are unchanged — the rebuild was visual + UX only, so any embed snippets you've already pasted on external sites continue to work.`,
+      },
     ],
   },
   {
@@ -2193,7 +2240,7 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/marketing/email/automations':['me-templates-vs-campaigns', 'me-builder', 'me-blocks', 'me-compliance', 'me-preview-test'],
   '/dashboard/marketing/email/preferences':['me-compliance', 'me-overview'],
   '/dashboard/marketing/email':            ['me-overview', 'me-builder', 'me-blocks', 'me-segments', 'me-templates-vs-campaigns', 'me-compliance'],
-  '/dashboard/marketing/form-builder':     ['listing-media-library', 'leads-overview', 'gs-overview'],
+  '/dashboard/marketing/form-builder':     ['me-form-builder', 'listing-media-library', 'leads-overview', 'gs-overview'],
 
   // Payments — new proposal / invoice
   '/dashboard/payments/new':        ['pay-new', 'pay-templates', 'pay-installments'],

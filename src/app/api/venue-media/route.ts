@@ -11,6 +11,9 @@ import {
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+const ASSET_COLUMNS =
+  'id, storage_path, public_url, file_name, display_name, content_type, size_bytes, created_at, source_bucket';
+
 async function getVenueId(): Promise<string | null> {
   const c = await cookies();
   return c.get('venue_id')?.value ?? null;
@@ -22,7 +25,7 @@ export async function GET() {
 
   const { data, error } = await supabaseAdmin
     .from('venue_media_assets')
-    .select('id, storage_path, public_url, file_name, display_name, content_type, size_bytes, created_at')
+    .select(ASSET_COLUMNS)
     .eq('venue_id', venueId)
     .order('created_at', { ascending: false });
 
@@ -83,23 +86,26 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'publicUrl does not match storage path' }, { status: 400 });
   }
 
+  // Upsert on (venue_id, storage_path) so re-registering the same file (e.g. a
+  // logo that was overwritten) refreshes metadata instead of 409-ing.
   const { data: row, error } = await supabaseAdmin
     .from('venue_media_assets')
-    .insert({
-      venue_id: venueId,
-      storage_path: path,
-      public_url: publicUrl,
-      file_name: fileName,
-      content_type: contentType,
-      size_bytes: sizeBytes,
-    })
-    .select('id, storage_path, public_url, file_name, display_name, content_type, size_bytes, created_at')
+    .upsert(
+      {
+        venue_id: venueId,
+        storage_path: path,
+        public_url: publicUrl,
+        file_name: fileName,
+        content_type: contentType,
+        size_bytes: sizeBytes,
+        source_bucket: VENUE_IMAGES_BUCKET,
+      },
+      { onConflict: 'venue_id,storage_path' },
+    )
+    .select(ASSET_COLUMNS)
     .single();
 
   if (error) {
-    if (/duplicate key|unique/i.test(error.message)) {
-      return NextResponse.json({ error: 'This file is already registered' }, { status: 409 });
-    }
     console.error('[venue-media POST]', error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
