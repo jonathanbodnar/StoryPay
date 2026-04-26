@@ -394,7 +394,8 @@ export type AutomationTriggerType =
   | 'stage_changed'
   | 'trigger_link_click'
   | 'wedding_date_followup'
-  | 'proposal_paid';
+  | 'proposal_paid'
+  | 'form_submitted';
 
 export interface AutomationTriggerConfig {
   /** tag_added: fire when any of these tags are added (empty = any tag) */
@@ -405,4 +406,6 @@ export interface AutomationTriggerConfig {
   trigger_link_ids?: string[];
   /** wedding_date_followup: enroll when wedding_date + this many full days equals today in venue timezone */
   days_after_wedding?: number;
+  /** form_submitted: enroll when one of these marketing form ids is submitted (empty = any form) */
+  form_ids?: string[];
 }

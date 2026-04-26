@@ -77,6 +77,11 @@ export async function PATCH(
     if (effectiveTrigger === 'proposal_paid') {
       body.triggerConfig = {};
     }
+    if (effectiveTrigger === 'form_submitted') {
+      const raw = (body.triggerConfig as { form_ids?: unknown }).form_ids;
+      const ids = Array.isArray(raw) ? raw.filter((v): v is string => typeof v === 'string') : [];
+      body.triggerConfig = { form_ids: ids };
+    }
   }
 
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };

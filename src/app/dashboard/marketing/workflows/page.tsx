@@ -55,7 +55,9 @@ export default function WorkflowsListPage() {
             ? { days_after_wedding: 3 }
             : triggerType === 'proposal_paid'
               ? {}
-              : { trigger_link_ids: [] as string[] };
+              : triggerType === 'form_submitted'
+                ? { form_ids: [] as string[] }
+                : { trigger_link_ids: [] as string[] };
     const res = await fetch('/api/marketing/automations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -167,6 +169,7 @@ export default function WorkflowsListPage() {
               value={triggerType}
               onChange={(e) => setTriggerType(e.target.value as AutomationTriggerType)}
             >
+              <option value="form_submitted">Form submitted (lead-capture form)</option>
               <option value="tag_added">Tag added</option>
               <option value="stage_changed">Stage changed (enters stage)</option>
               <option value="trigger_link_click">Trigger link click</option>

@@ -310,6 +310,52 @@ Recommended evergreen audiences for most venues: "Active leads, no proposal", "B
 - Deleting a form: from the Forms list page click the trash icon next to the pencil, OR open a form → Settings modal → Delete form. Both routes confirm and remove the form (deletes its definition + suppresses leads from old embeds).
 - Public submission endpoint and embed continue to work unchanged — the rebuild was visual + UX only; API contracts and the form definition JSON shape are backward compatible.
 
+## Workflows (visual automation builder — speed-to-lead funnels)
+StoryPay ships a visual workflow builder at Marketing → Workflows (/dashboard/marketing/workflows). It's how venues build automated follow-up sequences end-to-end without leaving the platform — the "speed-to-lead" engine.
+
+What a workflow is:
+- A trigger (one of the types below) plus a linear sequence of steps (Wait, Send email, Send SMS).
+- Each workflow has a status: Draft (does not enroll new leads), Active (enrolls and runs), or Paused (existing enrollments freeze in place; no new ones).
+- Enrolled leads run through the steps on the cron (1-minute resolution). Sends respect every existing suppression: marketing email opt-out, hard-bounced addresses, and SMS DND.
+
+Trigger types (set at create time, fixed after — duplicate the workflow to change trigger):
+- Form submitted — fires when a lead-capture form is submitted. Pick specific forms in the Settings tab, or leave empty to enroll on **any** form. Lead must include an email address. This is the primary speed-to-lead funnel: someone fills out your inquiry form → they're immediately dropped into the drip.
+- Tag added — fires when one of the chosen marketing tags is added to a lead (empty = any tag).
+- Stage changed — fires when a lead enters one of the chosen pipeline stages.
+- Trigger link click — fires when a lead clicks one of the chosen trigger links.
+- After wedding date — fires N days after a lead's wedding date in venue timezone (great for thank-you / review-request sequences).
+- Proposal paid — fires when a lead's proposal is marked paid.
+
+The builder UI:
+- Builder tab — visual canvas with a gridded background (matches the Workflows brand). Top card is the trigger (icon + label + subtitle that summarizes its current configuration). Below: each step renders as its own card with a colored top bar (Wait = slate, Email = sky, SMS = emerald). Use the dashed "+" connector between cards to insert Wait / Send email / Send SMS at any position.
+- Settings tab — workflow Status, fixed Trigger type display, and Trigger configuration (the lists of tags / stages / forms / etc. depending on trigger). Delete workflow lives here too.
+- Top bar: editable workflow name, status pill, Save button (saves name + status + trigger config + all steps in one PATCH).
+
+Reply-halt + owner notification (the "if they reply, sequence ends + notify the team" piece):
+- When a contact replies to any drip email through the platform's reply routing, the inbound webhook (POST /api/webhooks/inbound-email) ingests the reply into Conversations, then **automatically halts every active marketing automation enrollment for that contact** (status flips to "halted_by_reply", completed_at stamped).
+- The venue owner (notification_email, falling back to venues.email) gets a transactional email titled "Reply received: <Contact name> — <Venue>" with the reply preview and how many sequences were stopped. Honors Settings → Notifications email-toggle.
+- Halted enrollments don't restart automatically; the contact stays in the conversation thread and the team picks up from there.
+
+Database (no need to expose this to end-users, but useful for "how does it work?" questions):
+- marketing_automations — workflow row (name, status, trigger_type, trigger_config jsonb).
+- marketing_automation_steps — ordered steps (step_type: delay / send_email / send_sms, config_json).
+- marketing_automation_enrollments — one row per (workflow, lead). Status enum: active, completed, cancelled, failed, halted_by_reply (the reply-halt status added in migration 064). Updated by the cron worker.
+- Cron: /api/cron/marketing-email runs every minute when MARKETING_CRON_ENABLED=1. It picks up enrollments whose next_run_at <= now and advances them one step.
+
+Migration 064 (workflow_form_trigger_and_reply_halt) extends the enrollment status check constraint with the "halted_by_reply" value so the new reply-detection logic has a distinct status (separate from manual "cancelled").
+
+How form_submitted enrollment actually works under the hood:
+- POST /api/public/forms/[token]/submit ingests the submission, upserts venue_customers, optionally creates a lead in the configured pipeline stage.
+- After the lead row is in place (newly created OR matched-by-email to an existing lead), it calls onMarketingFormSubmitted(venueId, leadId, formId) which scans every active form_submitted workflow whose form_ids list contains this form (or is empty), and inserts an enrollments row with next_run_at = now. The cron picks it up immediately on the next tick.
+
+Setup checklist for a venue building their first speed-to-lead funnel:
+1. Marketing → Forms → make sure the form is configured to route to a pipeline stage and is published.
+2. Marketing → Workflows → New workflow → trigger = "Form submitted" → pick the form(s).
+3. Add steps: Send email (welcome) → Wait 2 days → Send email (case study) → Wait 3 days → … (repeat as needed).
+4. Set status to Active and Save.
+5. Confirm MARKETING_CRON_ENABLED=1 is set so the cron actually runs.
+6. Test: submit the form → check the enrollments table and the contact's inbox.
+
 ## Email Templates
 - Go to Settings → Email Templates to customize every type of outgoing email.
 - Template types: Invoice, Proposal, Payment Confirmation, Payment Notification, Subscription Confirmation, Subscription Cancelled, Payment Failed.

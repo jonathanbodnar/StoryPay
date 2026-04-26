@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { sendEmail } from '@/lib/email';
 import {
   firstEmailFromList,
   hashInboundDedupeFallback,
@@ -9,6 +10,96 @@ import {
   pickReplyRoutingAddressFromInboundEmail,
   verifyReplySignature,
 } from '@/lib/conversations-inbound-email';
+import { haltAutomationEnrollmentsForReply } from '@/lib/marketing-email-worker';
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * After a contact reply is successfully ingested, halt any active marketing
+ * automation enrollments for that contact and tell the venue owner. This is
+ * the "if they reply, sequence ends + notify team" piece of speed-to-lead.
+ */
+async function haltAndNotifyOnReply(
+  venueId: string,
+  fromEmail: string,
+  fromName: string | null,
+  subject: string | null,
+  bodyPreview: string,
+): Promise<void> {
+  try {
+    const { data: lead } = await supabaseAdmin
+      .from('leads')
+      .select('id, name, first_name, last_name, email')
+      .eq('venue_id', venueId)
+      .ilike('email', fromEmail)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!lead?.id) return;
+
+    const halted = await haltAutomationEnrollmentsForReply(
+      venueId,
+      lead.id as string,
+      'email_reply',
+    );
+    if (halted <= 0) return;
+
+    const { data: venue } = await supabaseAdmin
+      .from('venues')
+      .select('id, name, email, notification_email, email_notifications')
+      .eq('id', venueId)
+      .maybeSingle();
+    const notifyEnabled = (venue as { email_notifications?: boolean } | null)?.email_notifications !== false;
+    if (!notifyEnabled) return;
+
+    const notifyTo =
+      (venue as { notification_email?: string | null } | null)?.notification_email ||
+      (venue as { email?: string | null } | null)?.email ||
+      null;
+    if (!notifyTo) return;
+
+    const venueName = (venue as { name?: string | null } | null)?.name ?? 'your venue';
+    const contactDisplay =
+      [
+        (lead as { first_name?: string | null }).first_name ?? '',
+        (lead as { last_name?: string | null }).last_name ?? '',
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .trim() ||
+      (lead as { name?: string | null }).name ||
+      fromName ||
+      fromEmail;
+
+    const preview = bodyPreview.slice(0, 320);
+    const html = `
+      <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:0 auto;color:#1b1b1b;">
+        <h2 style="margin:0 0 8px;">${escapeHtml(contactDisplay)} replied</h2>
+        <p style="margin:0 0 12px;color:#555;">Their automated follow-up sequence has been paused.</p>
+        <p style="margin:0 0 4px;color:#666;font-size:12px;">From</p>
+        <p style="margin:0 0 12px;">${escapeHtml(fromEmail)}</p>
+        ${subject ? `<p style="margin:0 0 4px;color:#666;font-size:12px;">Subject</p><p style="margin:0 0 12px;">${escapeHtml(subject)}</p>` : ''}
+        ${preview ? `<p style="margin:0 0 4px;color:#666;font-size:12px;">Message preview</p><p style="margin:0 0 16px;white-space:pre-wrap;">${escapeHtml(preview)}</p>` : ''}
+        <p style="margin:0;color:#888;font-size:12px;">${halted} active workflow${halted === 1 ? '' : 's'} stopped for this contact.</p>
+      </div>`;
+
+    await sendEmail({
+      to: notifyTo,
+      subject: `Reply received: ${contactDisplay} — ${venueName}`,
+      html,
+      replyTo: fromEmail,
+    }).catch((e) => console.warn('[inbound-email] reply-notification email failed:', e));
+  } catch (e) {
+    console.warn('[inbound-email] haltAndNotifyOnReply failed:', e);
+  }
+}
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -102,6 +193,20 @@ async function ingestFromParsedFields(params: {
     console.warn('[inbound-email] no row inserted (duplicate or empty body?)', {
       threadId: parsed.threadId,
     });
+  }
+
+  // Speed-to-lead: a freshly-ingested reply should stop any active
+  // marketing automation enrollments for this contact and ping the venue.
+  // We only fire on the first ingest of a given message (r.inserted) so we
+  // don't re-halt or re-email on duplicate webhook deliveries.
+  if (r.inserted) {
+    await haltAndNotifyOnReply(
+      venueId,
+      fromEmail.toLowerCase(),
+      fromName ?? null,
+      subject,
+      text,
+    );
   }
 
   return NextResponse.json({ ok: true, inserted: r.inserted ?? false });

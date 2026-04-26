@@ -147,6 +147,64 @@ export async function processWeddingDateFollowupAutomations(): Promise<{ enrolle
   return { enrolled };
 }
 
+/**
+ * When a marketing form is submitted, enroll the matching lead in any active
+ * `form_submitted` workflow whose form_ids list includes this form (empty list = any form).
+ *
+ * The caller resolves `leadId` after upserting the lead row (form submit flow).
+ * Workflows that don't list this form id are skipped.
+ */
+export async function onMarketingFormSubmitted(
+  venueId: string,
+  leadId: string,
+  formId: string,
+): Promise<void> {
+  if (!leadId || !formId) return;
+  const { data: autos } = await supabaseAdmin
+    .from('marketing_automations')
+    .select('id, trigger_config')
+    .eq('venue_id', venueId)
+    .eq('status', 'active')
+    .eq('trigger_type', 'form_submitted');
+  for (const row of autos ?? []) {
+    const cfg = (row.trigger_config || {}) as { form_ids?: string[] };
+    const want = cfg.form_ids?.filter(Boolean) ?? [];
+    const match = want.length === 0 ? true : want.includes(formId);
+    if (!match) continue;
+    await enrollIfNew(row.id as string, venueId, leadId);
+  }
+}
+
+/**
+ * Halt all active automation enrollments for a lead because they replied
+ * (email reply detected by the inbound webhook, or SMS reply later).
+ * Returns the number of enrollments that were halted so the caller can
+ * decide whether to send the venue owner a "they replied" notification.
+ */
+export async function haltAutomationEnrollmentsForReply(
+  venueId: string,
+  leadId: string,
+  reason: 'email_reply' | 'sms_reply' = 'email_reply',
+): Promise<number> {
+  if (!leadId) return 0;
+  const { data: rows, error } = await supabaseAdmin
+    .from('marketing_automation_enrollments')
+    .update({
+      status: 'halted_by_reply',
+      completed_at: new Date().toISOString(),
+      last_error: reason,
+    })
+    .eq('venue_id', venueId)
+    .eq('lead_id', leadId)
+    .eq('status', 'active')
+    .select('id');
+  if (error) {
+    console.error('[automation halt-by-reply]', error);
+    return 0;
+  }
+  return rows?.length ?? 0;
+}
+
 /** When a proposal is marked paid, enroll matching lead (by email) in proposal_paid workflows. */
 export async function onMarketingProposalPaid(
   venueId: string,

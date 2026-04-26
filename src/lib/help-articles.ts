@@ -1832,6 +1832,53 @@ Live preview: opens the public-facing form inside a real iframe with real valida
 
 The public submission endpoint and the existing embed code are unchanged — the rebuild was visual + UX only, so any embed snippets you've already pasted on external sites continue to work.`,
       },
+      {
+        id: 'me-workflows',
+        title: 'Workflows — automated speed-to-lead funnels (email, SMS soon)',
+        tags: ['workflow', 'workflows', 'automation', 'speed to lead', 'follow up', 'sequence', 'drip', 'funnel', 'auto-reply', 'reply halt', 'form submitted', 'trigger', 'cron'],
+        body: `Marketing → Workflows is the visual builder for automated follow-up sequences. It's how venues turn a form submission into a multi-step drip funnel that runs by itself — the "speed-to-lead" engine.
+
+What you can build today
+- Trigger: Form submitted (a lead capture form), Tag added, Stage changed, Trigger link clicked, After wedding date, or Proposal paid.
+- Steps (in any order, as many as you want): Wait (delay), Send email, Send SMS.
+- Status: Draft (does nothing), Active (enrolls and runs), Paused (existing enrollments freeze, no new ones).
+
+Every workflow has its own canvas. The trigger card sits at the top, then each step is its own card connected by dashed "+" buttons that let you insert Wait / Send email / Send SMS at any position. The Settings tab is where you set status and trigger configuration (which forms / tags / stages / etc.).
+
+Building a "form-to-funnel" sequence (the most common use case)
+1. Marketing → Forms → make sure your inquiry form is published and configured to route into a pipeline stage. The form must include an Email field — the email is what enrolls the lead in the workflow.
+2. Marketing → Workflows → New workflow → trigger = "Form submitted (lead-capture form)". Pick the form(s) to listen to (or leave empty to enroll on any form).
+3. On the canvas, click "+" to add Wait → Send email steps. Example: Send email (welcome) → Wait 2 days → Send email (case study) → Wait 3 days → Send email (testimonials) — repeat for as long as you want the drip to run.
+4. Set the workflow Status to Active and click Save.
+5. Submit the form yourself to test. The contact is dropped into the sequence within ~1 minute.
+
+Reply detection — the drip stops when the contact replies
+- When a contact replies to any drip email through the platform's reply routing, the platform automatically halts every active marketing automation enrollment for that contact (status → halted_by_reply, completed_at stamped).
+- The venue owner gets a transactional email titled "Reply received: <Contact name> — <Venue>" with a preview of their reply and how many sequences were stopped. (Honors Settings → Notifications email-toggle and uses your venues.notification_email — falling back to your account email — as the destination.)
+- Halted enrollments don't auto-restart. The contact stays in the conversation thread; the team picks it up from there.
+
+Suppression — sequences respect every existing opt-out
+- Marketing email opt-out (the unsubscribe footer in every drip email).
+- Hard-bounced or suppressed addresses.
+- SMS DND, when SMS steps go live.
+- A workflow with status = Paused freezes all of its existing enrollments and refuses to enroll new ones.
+
+Editing a workflow that's already running
+- Step changes apply on each enrollment's NEXT step — leads currently waiting in step 3 won't replay step 1.
+- Trigger configuration changes (e.g. which forms are watched) only affect future enrollments.
+- Workflow trigger TYPE itself is fixed after creation — duplicate the workflow and pick a different trigger if you need to change it.
+- Status changes are instant.
+
+Where to delete
+- Workflows list page → ... → Delete (or open the workflow → Settings tab → Delete workflow).
+- Deleting a workflow also deletes its enrollments (CASCADE).
+
+Behind the scenes
+- A 1-minute cron worker (controlled by the MARKETING_CRON_ENABLED environment variable) advances every active enrollment one step. Drafts and paused workflows are skipped.
+- Enrollment statuses: active (running), completed (finished all steps), cancelled (manually stopped), failed (an error left it stuck), halted_by_reply (the contact replied — see above).
+
+Tip — keep your first sequence short and useful (3-5 emails over 14 days), make sure the first email arrives within minutes of the form submission, and trust the reply-halt to do its job. The fastest follow-up wins.`,
+      },
     ],
   },
   {
@@ -2248,10 +2295,11 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/marketing/email/campaigns':  ['me-builder', 'me-blocks', 'me-preview-test', 'me-segments', 'me-templates-vs-campaigns', 'me-compliance', 'brand-social-networks', 'brand-colors-saved'],
   '/dashboard/marketing/email/audiences':  ['me-segments', 'me-templates-vs-campaigns', 'me-overview', 'me-compliance'],
   '/dashboard/marketing/email/templates':  ['me-builder', 'me-blocks', 'me-templates-vs-campaigns', 'me-block-button', 'me-block-image', 'me-block-video', 'me-block-social', 'me-block-address', 'me-brand-colors'],
-  '/dashboard/marketing/email/automations':['me-templates-vs-campaigns', 'me-builder', 'me-blocks', 'me-compliance', 'me-preview-test'],
+  '/dashboard/marketing/email/automations':['me-workflows', 'me-templates-vs-campaigns', 'me-builder', 'me-blocks', 'me-compliance', 'me-preview-test'],
   '/dashboard/marketing/email/preferences':['me-compliance', 'me-overview'],
   '/dashboard/marketing/email':            ['me-overview', 'me-builder', 'me-blocks', 'me-segments', 'me-templates-vs-campaigns', 'me-compliance'],
-  '/dashboard/marketing/form-builder':     ['me-form-builder', 'listing-media-library', 'leads-overview', 'gs-overview'],
+  '/dashboard/marketing/form-builder':     ['me-form-builder', 'me-workflows', 'listing-media-library', 'leads-overview', 'gs-overview'],
+  '/dashboard/marketing/workflows':        ['me-workflows', 'me-form-builder', 'me-templates-vs-campaigns', 'me-compliance', 'me-overview'],
 
   // Payments — new proposal / invoice
   '/dashboard/payments/new':        ['pay-new', 'pay-templates', 'pay-installments'],

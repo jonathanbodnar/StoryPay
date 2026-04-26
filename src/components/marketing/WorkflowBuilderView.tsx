@@ -8,6 +8,7 @@ import {
   CalendarHeart,
   ChevronDown,
   ChevronUp,
+  ClipboardList,
   Clock,
   DollarSign,
   GitBranch,
@@ -53,6 +54,12 @@ interface LinkRow {
   short_code: string;
 }
 
+interface FormRow {
+  id: string;
+  name: string;
+  published: boolean;
+}
+
 interface TemplateOpt {
   id: string;
   name: string;
@@ -83,6 +90,8 @@ function triggerMeta(t: AutomationTriggerType): { label: string; Icon: typeof Ta
       return { label: 'After wedding date', Icon: CalendarHeart, iconClass: 'bg-rose-500 text-white' };
     case 'proposal_paid':
       return { label: 'Proposal paid', Icon: DollarSign, iconClass: 'bg-amber-500 text-white' };
+    case 'form_submitted':
+      return { label: 'Form submitted', Icon: ClipboardList, iconClass: 'bg-indigo-600 text-white' };
     default: {
       const u = t as string;
       return { label: u.replace(/_/g, ' '), Icon: Tag, iconClass: 'bg-slate-600 text-white' };
@@ -115,9 +124,11 @@ function triggerSubtitle(
   selTags: string[],
   selStages: string[],
   selLinks: string[],
+  selForms: string[],
   tags: TagRow[],
   stages: StageOpt[],
   links: LinkRow[],
+  forms: FormRow[],
   daysAfterWedding: number,
 ): string {
   switch (auto.trigger_type) {
@@ -141,6 +152,16 @@ function triggerSubtitle(
       return `${daysAfterWedding} day(s) after wedding date (venue timezone)`;
     case 'proposal_paid':
       return 'When a proposal is marked paid (matched by lead email)';
+    case 'form_submitted':
+      if (selForms.length === 0) return 'Runs when any lead-capture form is submitted';
+      {
+        const names = selForms
+          .map((id) => forms.find((f) => f.id === id)?.name)
+          .filter(Boolean)
+          .slice(0, 3);
+        const extra = selForms.length > 3 ? ` +${selForms.length - 3}` : '';
+        return `Form is any of: ${names.join(', ')}${extra}`;
+      }
     default:
       return '';
   }
@@ -156,6 +177,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
   const [tags, setTags] = useState<TagRow[]>([]);
   const [stages, setStages] = useState<StageOpt[]>([]);
   const [links, setLinks] = useState<LinkRow[]>([]);
+  const [forms, setForms] = useState<FormRow[]>([]);
   const [templates, setTemplates] = useState<TemplateOpt[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -165,6 +187,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
   const [selTags, setSelTags] = useState<string[]>([]);
   const [selStages, setSelStages] = useState<string[]>([]);
   const [selLinks, setSelLinks] = useState<string[]>([]);
+  const [selForms, setSelForms] = useState<string[]>([]);
   const [daysAfterWedding, setDaysAfterWedding] = useState(3);
 
   const [zoom, setZoom] = useState(1);
@@ -173,11 +196,12 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
-    const [aRes, tagRes, pipeRes, linkRes, tmplRes] = await Promise.all([
+    const [aRes, tagRes, pipeRes, linkRes, formsRes, tmplRes] = await Promise.all([
       fetch(`/api/marketing/automations/${id}`, { cache: 'no-store' }),
       fetch('/api/marketing/tags', { cache: 'no-store' }),
       fetch('/api/pipelines', { cache: 'no-store' }),
       fetch('/api/marketing/trigger-links', { cache: 'no-store' }),
+      fetch('/api/marketing/forms', { cache: 'no-store' }),
       fetch('/api/marketing/email-templates', { cache: 'no-store' }),
     ]);
     if (aRes.ok) {
@@ -188,11 +212,13 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
         tag_ids?: string[];
         to_stage_ids?: string[];
         trigger_link_ids?: string[];
+        form_ids?: string[];
         days_after_wedding?: number;
       };
       setSelTags(cfg.tag_ids ?? []);
       setSelStages(cfg.to_stage_ids ?? []);
       setSelLinks(cfg.trigger_link_ids ?? []);
+      setSelForms(cfg.form_ids ?? []);
       setDaysAfterWedding(Math.max(0, Math.min(3650, Number(cfg.days_after_wedding ?? 3) || 0)));
       const rawSteps = (j.steps ?? []) as Array<{ step_type: string; config_json: Record<string, unknown> }>;
       const mapped: LocalStep[] = rawSteps.map((s, i) => {
@@ -238,6 +264,10 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
       const d = await linkRes.json();
       setLinks(d.links ?? []);
     }
+    if (formsRes.ok) {
+      const d = await formsRes.json();
+      setForms(d.forms ?? []);
+    }
     if (tmplRes.ok) {
       const d = await tmplRes.json();
       setTemplates(d.templates ?? []);
@@ -270,6 +300,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
       return { days_after_wedding: Math.max(0, Math.min(3650, Math.floor(daysAfterWedding))) };
     }
     if (auto.trigger_type === 'proposal_paid') return {};
+    if (auto.trigger_type === 'form_submitted') return { form_ids: selForms };
     return { trigger_link_ids: selLinks };
   }
 
@@ -370,7 +401,18 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
   }
 
   const { label: triggerLabel, Icon: TriggerIcon, iconClass: triggerIconClass } = triggerMeta(auto.trigger_type);
-  const trigSub = triggerSubtitle(auto, selTags, selStages, selLinks, tags, stages, links, daysAfterWedding);
+  const trigSub = triggerSubtitle(
+    auto,
+    selTags,
+    selStages,
+    selLinks,
+    selForms,
+    tags,
+    stages,
+    links,
+    forms,
+    daysAfterWedding,
+  );
 
   function ConnectorAdd({ at }: { at: number }) {
     const open = insertMenuAt === at;
@@ -585,6 +627,37 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
               <p className="mt-3 text-xs text-slate-600">
                 Enrolls when a proposal is marked paid — lead matched by email.
               </p>
+            ) : null}
+            {auto.trigger_type === 'form_submitted' ? (
+              <div className="mt-3">
+                <p className="text-xs font-medium text-slate-500">Forms (empty = any form)</p>
+                {forms.length === 0 ? (
+                  <p className="mt-2 text-xs text-slate-500">
+                    No forms yet. Create one in{' '}
+                    <Link href="/dashboard/marketing/forms" className="text-[#155eef] hover:underline">
+                      Marketing → Forms
+                    </Link>
+                    .
+                  </p>
+                ) : (
+                  <div className="mt-2 max-h-56 space-y-1 overflow-y-auto text-xs">
+                    {forms.map((f) => (
+                      <label key={f.id} className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={selForms.includes(f.id)}
+                          onChange={() => toggle(selForms, f.id, setSelForms)}
+                        />
+                        {f.name}
+                        {!f.published ? <span className="text-slate-400">(draft)</span> : null}
+                      </label>
+                    ))}
+                  </div>
+                )}
+                <p className="mt-2 text-[11px] text-slate-500">
+                  The lead must include an email address on the form for enrollment.
+                </p>
+              </div>
             ) : null}
           </div>
 

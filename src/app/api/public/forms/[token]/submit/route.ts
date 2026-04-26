@@ -14,6 +14,7 @@ import {
   resolvePostSubmit,
   type AddressFieldKey,
 } from '@/lib/marketing-form-schema';
+import { onMarketingFormSubmitted } from '@/lib/marketing-email-worker';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -216,6 +217,7 @@ export async function POST(
 
   // ── Always upsert to venue_customers (contacts) if we have an email ───────
   let customerId: string | null = null;
+  let createdLeadId: string | null = null;
   if (emailVal && isEmail(emailVal)) {
     try {
       const { data: vc } = await supabaseAdmin
@@ -249,26 +251,59 @@ export async function POST(
           .maybeSingle();
 
         if (stageRow) {
-          const { error: leadErr } = await supabaseAdmin.from('leads').insert({
-            venue_id:    formRow.venue_id,
-            name:        contactName,
-            first_name:  firstNameVal || null,
-            last_name:   lastNameVal || null,
-            email:       emailVal,
-            phone:       phoneVal || null,
-            source:      'form',
-            status:      'lead',
-            pipeline_id: stageRow.pipeline_id,
-            stage_id:    stageRow.id,
-            position:    0,
-          });
+          const { data: leadRow, error: leadErr } = await supabaseAdmin
+            .from('leads')
+            .insert({
+              venue_id:    formRow.venue_id,
+              name:        contactName,
+              first_name:  firstNameVal || null,
+              last_name:   lastNameVal || null,
+              email:       emailVal,
+              phone:       phoneVal || null,
+              source:      'form',
+              status:      'lead',
+              pipeline_id: stageRow.pipeline_id,
+              stage_id:    stageRow.id,
+              position:    0,
+            })
+            .select('id')
+            .maybeSingle();
           if (leadErr) {
             console.warn('[form submit] lead insert failed:', leadErr.message);
+          } else if (leadRow?.id) {
+            createdLeadId = leadRow.id as string;
           }
         }
       } catch (e) {
         console.warn('[form submit] lead routing failed:', e);
       }
+    }
+
+    // Fall back to an existing lead with this email if no new one was created
+    // (e.g. form has no pipeline stage configured, or duplicate submitter).
+    if (!createdLeadId) {
+      try {
+        const { data: existingLead } = await supabaseAdmin
+          .from('leads')
+          .select('id')
+          .eq('venue_id', formRow.venue_id)
+          .ilike('email', emailVal)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (existingLead?.id) createdLeadId = existingLead.id as string;
+      } catch (e) {
+        console.warn('[form submit] existing lead lookup failed:', e);
+      }
+    }
+  }
+
+  // ── Speed-to-lead: enroll into any active `form_submitted` workflow ───────
+  if (createdLeadId) {
+    try {
+      await onMarketingFormSubmitted(formRow.venue_id, createdLeadId, formRow.id);
+    } catch (e) {
+      console.warn('[form submit] workflow enrollment failed:', e);
     }
   }
 

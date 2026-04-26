@@ -46,7 +46,8 @@ export async function POST(request: NextRequest) {
     triggerType !== 'stage_changed' &&
     triggerType !== 'trigger_link_click' &&
     triggerType !== 'wedding_date_followup' &&
-    triggerType !== 'proposal_paid'
+    triggerType !== 'proposal_paid' &&
+    triggerType !== 'form_submitted'
   ) {
     return NextResponse.json({ error: 'Invalid triggerType' }, { status: 400 });
   }
@@ -61,6 +62,11 @@ export async function POST(request: NextRequest) {
   }
   if (triggerType === 'proposal_paid') {
     triggerConfig = {};
+  }
+  if (triggerType === 'form_submitted') {
+    const raw = (triggerConfig as { form_ids?: unknown }).form_ids;
+    const ids = Array.isArray(raw) ? raw.filter((v): v is string => typeof v === 'string') : [];
+    triggerConfig = { form_ids: ids };
   }
 
   const { data: auto, error } = await supabaseAdmin
