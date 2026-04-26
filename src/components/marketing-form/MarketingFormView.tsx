@@ -17,6 +17,7 @@ import {
   formFieldName,
   mergeTheme,
   resolveBlockPadding,
+  resolvePostSubmit,
 } from '@/lib/marketing-form-schema';
 import { collectGoogleFontFamiliesFromDefinition } from '@/lib/google-fonts';
 import { sanitizeFormHtml } from '@/lib/sanitize-form-html';
@@ -72,7 +73,10 @@ export type FormBuilderCanvasOpts = {
 function renderBlock(
   block: FormBlock,
   theme: ReturnType<typeof mergeTheme>,
-  preview: boolean,
+  /** When true, every input/button is rendered with `disabled` — used by the
+   *  builder canvas (so blocks are clickable/editable, not fillable) and by
+   *  the static preview. The interactive *live preview* sets this to false. */
+  inputsDisabled: boolean,
   venueContact: VenueContactInfo | null,
   builder?: FormBuilderCanvasOpts | null,
 ) {
@@ -203,7 +207,7 @@ function renderBlock(
           autoComplete="given-name"
           placeholder={ph}
           required={!!block.required}
-          disabled={preview}
+          disabled={inputsDisabled}
           className="w-full border px-3 py-2 text-sm outline-none ring-brand-500 focus:ring-2"
           style={{ borderRadius: theme.borderRadius, borderColor: theme.inputBorder }}
         />,
@@ -218,7 +222,7 @@ function renderBlock(
           autoComplete="family-name"
           placeholder={ph}
           required={!!block.required}
-          disabled={preview}
+          disabled={inputsDisabled}
           className="w-full border px-3 py-2 text-sm outline-none ring-brand-500 focus:ring-2"
           style={{ borderRadius: theme.borderRadius, borderColor: theme.inputBorder }}
         />,
@@ -233,7 +237,7 @@ function renderBlock(
           autoComplete="email"
           placeholder={ph}
           required={!!block.required}
-          disabled={preview}
+          disabled={inputsDisabled}
           className="w-full border px-3 py-2 text-sm outline-none ring-brand-500 focus:ring-2"
           style={{ borderRadius: theme.borderRadius, borderColor: theme.inputBorder }}
         />,
@@ -248,7 +252,7 @@ function renderBlock(
           autoComplete="tel"
           placeholder={ph}
           required={!!block.required}
-          disabled={preview}
+          disabled={inputsDisabled}
           className="w-full border px-3 py-2 text-sm outline-none ring-brand-500 focus:ring-2"
           style={{ borderRadius: theme.borderRadius, borderColor: theme.inputBorder }}
         />,
@@ -263,7 +267,7 @@ function renderBlock(
           autoComplete="url"
           placeholder={ph}
           required={!!block.required}
-          disabled={preview}
+          disabled={inputsDisabled}
           className="w-full border px-3 py-2 text-sm outline-none ring-brand-500 focus:ring-2"
           style={{ borderRadius: theme.borderRadius, borderColor: theme.inputBorder }}
         />,
@@ -278,7 +282,7 @@ function renderBlock(
           step="any"
           placeholder={ph}
           required={!!block.required}
-          disabled={preview}
+          disabled={inputsDisabled}
           className="w-full border px-3 py-2 text-sm outline-none ring-brand-500 focus:ring-2"
           style={{ borderRadius: theme.borderRadius, borderColor: theme.inputBorder }}
         />,
@@ -291,7 +295,7 @@ function renderBlock(
           name={name}
           type="date"
           required={!!block.required}
-          disabled={preview}
+          disabled={inputsDisabled}
           className="w-full border px-3 py-2 text-sm outline-none ring-brand-500 focus:ring-2"
           style={{ borderRadius: theme.borderRadius, borderColor: theme.inputBorder }}
         />,
@@ -305,7 +309,7 @@ function renderBlock(
           rows={4}
           placeholder={ph}
           required={!!block.required}
-          disabled={preview}
+          disabled={inputsDisabled}
           className="w-full resize-y border px-3 py-2 text-sm outline-none ring-brand-500 focus:ring-2"
           style={{ borderRadius: theme.borderRadius, borderColor: theme.inputBorder }}
         />,
@@ -318,7 +322,7 @@ function renderBlock(
           name={name}
           type="file"
           required={!!block.required}
-          disabled={preview}
+          disabled={inputsDisabled}
           className="w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-gray-800 hover:file:bg-gray-200"
         />,
         name
@@ -341,7 +345,7 @@ function renderBlock(
                   name={name}
                   value={opt}
                   required={!!block.required}
-                  disabled={preview}
+                  disabled={inputsDisabled}
                   className="h-4 w-4 border-gray-300 text-brand-600 focus:ring-brand-500"
                 />
                 <span style={{ color: theme.labelColor }}>{opt}</span>
@@ -360,7 +364,7 @@ function renderBlock(
           id={id}
           name={name}
           required={!!block.required}
-          disabled={preview}
+          disabled={inputsDisabled}
           className="w-full border bg-white px-3 py-2 text-sm outline-none ring-brand-500 focus:ring-2"
           style={{ borderRadius: theme.borderRadius, borderColor: theme.inputBorder }}
           defaultValue=""
@@ -396,7 +400,7 @@ function renderBlock(
                   name={name}
                   value={opt}
                   required={isSingle ? !!block.required : undefined}
-                  disabled={preview}
+                  disabled={inputsDisabled}
                   className={`h-4 w-4 border-gray-300 text-brand-600 focus:ring-brand-500 ${isSingle ? '' : 'rounded'}`}
                 />
                 <span style={{ color: theme.labelColor }}>{opt}</span>
@@ -416,7 +420,7 @@ function renderBlock(
           name={name}
           rows={rows}
           required={!!block.required}
-          disabled={preview}
+          disabled={inputsDisabled}
           placeholder={ph}
           className="w-full resize-y border bg-white px-3 py-2 text-sm outline-none ring-brand-500 focus:ring-2"
           style={{ borderRadius: theme.borderRadius, borderColor: theme.inputBorder }}
@@ -464,7 +468,7 @@ function renderBlock(
         <div key={block.id} className={`mb-2 mt-2 ${submitWrap}`}>
           <button
             type="submit"
-            disabled={preview}
+            disabled={inputsDisabled}
             className={`${submitWidth} items-center justify-center px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-95 disabled:opacity-50`}
             style={{
               borderRadius: theme.borderRadius,
@@ -536,7 +540,14 @@ interface MarketingFormViewProps {
   definition: MarketingFormDefinition;
   embedToken: string;
   formTitle?: string;
+  /** Static preview — inputs are disabled and submits are intercepted (used
+   *  inside the builder canvas behind the block-edit overlay). */
   preview?: boolean;
+  /** Live preview — inputs are interactive, validation runs locally, and the
+   *  configured post-submit behavior (thank-you / inline message / redirect)
+   *  is simulated client-side without persisting anything or sending notifs.
+   *  Implies `preview` for routing/disabled purposes. */
+  livePreview?: boolean;
   onPreviewSubmit?: () => void;
   /** Shown for venue_contact blocks on embed; builder loads from /api/venues/me */
   venueContact?: VenueContactInfo | null;
@@ -555,6 +566,7 @@ export function MarketingFormView({
   embedToken,
   formTitle,
   preview = false,
+  livePreview = false,
   onPreviewSubmit,
   venueContact = null,
   builder = null,
@@ -571,10 +583,16 @@ export function MarketingFormView({
   const [message, setMessage] = useState<string | null>(null);
   const [successHtml, setSuccessHtml] = useState<string | null>(null);
 
+  // Inputs are disabled when:
+  //  - we're inside the builder canvas (clicking blocks edits them, not fills),
+  //  - or static preview is on AND live-preview is *not* on.
+  const inputsDisabled = !!builder || (preview && !livePreview);
+
   const onSubmit = useCallback(
     async (e: FormEvent<HTMLFormElement>) => {
       e.preventDefault();
-      if (preview) {
+      // Static preview (canvas / disabled preview) — bail without doing anything.
+      if (preview && !livePreview) {
         onPreviewSubmit?.();
         return;
       }
@@ -593,6 +611,35 @@ export function MarketingFormView({
           }
         }
       }
+
+      // Live-preview path: simulate the configured post-submit flow without
+      // hitting the API so we don't persist a fake submission, route a fake
+      // lead into a pipeline, or fire notification emails. The user gets the
+      // exact UX their visitors will see.
+      if (livePreview) {
+        const ps = resolvePostSubmit(definition);
+        if (ps.mode === 'redirect') {
+          setStatus('success');
+          setSuccessHtml(null);
+          setMessage(
+            ps.redirectUrl
+              ? `Preview only — would redirect to ${ps.redirectUrl}.`
+              : 'Preview only — would redirect (no URL set).',
+          );
+        } else if (ps.mode === 'inline_message') {
+          setStatus('success');
+          setMessage(null);
+          setSuccessHtml(ps.messageHtml || '<p>Thanks — your response was recorded.</p>');
+        } else {
+          setStatus('success');
+          setSuccessHtml(null);
+          setMessage('Thanks — your response was recorded.');
+        }
+        form.reset();
+        onPreviewSubmit?.();
+        return;
+      }
+
       setStatus('loading');
       const fd = new FormData(form);
       if (typeof window !== 'undefined') {
@@ -635,7 +682,7 @@ export function MarketingFormView({
         setMessage('Network error. Please try again.');
       }
     },
-    [embedToken, preview, onPreviewSubmit, definition.blocks]
+    [embedToken, preview, livePreview, onPreviewSubmit, definition]
   );
 
   const shellBg = flatCanvas ? '#ffffff' : theme.background;
@@ -688,7 +735,7 @@ export function MarketingFormView({
                     ? 'col-span-2'
                     : 'col-span-1';
 
-                  const inner = renderBlock(b, theme, preview || !!builder, venueContact, builder);
+                  const inner = renderBlock(b, theme, inputsDisabled, venueContact, builder);
                   const boxCss = blockBoxCss(b);
                   let node: ReactNode;
                   if (!builder) {

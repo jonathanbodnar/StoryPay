@@ -1460,6 +1460,10 @@ function PreviewModal({
   onClose: () => void;
 }) {
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
+  // Bumped on every "Reset" so the form unmounts/remounts and clears its
+  // success/error state and inputs — quick way to re-test without closing
+  // the modal.
+  const [resetKey, setResetKey] = useState(0);
   const frameWidth = device === 'mobile' ? 380 : 720;
 
   return (
@@ -1486,7 +1490,7 @@ function PreviewModal({
           <div className="min-w-0">
             <p className="text-sm font-semibold truncate">{formTitle || 'Untitled form'}</p>
             <p className="text-[11px] text-gray-400">
-              Live preview · this is what visitors see on your embed
+              Live preview · fill it out to test — submissions don&apos;t persist
             </p>
           </div>
         </div>
@@ -1512,17 +1516,27 @@ function PreviewModal({
           </button>
         </div>
 
-        <a
-          href={embedUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={`inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-gray-900 hover:bg-gray-100 transition-colors ${
-            published ? '' : 'opacity-60'
-          }`}
-          title={published ? 'Open the live embed URL' : 'Publish the form first'}
-        >
-          <ExternalLink size={13} /> Open
-        </a>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setResetKey((k) => k + 1)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 px-3 py-1.5 text-xs font-semibold text-gray-200 hover:bg-white/10 hover:text-white transition-colors"
+            title="Clear the form and try again"
+          >
+            Reset
+          </button>
+          <a
+            href={embedUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-gray-900 hover:bg-gray-100 transition-colors ${
+              published ? '' : 'opacity-60'
+            }`}
+            title={published ? 'Open the live embed URL' : 'Publish the form first'}
+          >
+            <ExternalLink size={13} /> Open
+          </a>
+        </div>
       </div>
 
       {!published && (
@@ -1536,14 +1550,20 @@ function PreviewModal({
           className="bg-white rounded-2xl shadow-2xl overflow-hidden transition-all"
           style={{ width: frameWidth, maxWidth: '100%' }}
         >
-          {/* Render the form right here so the user can interact with it. */}
+          {/* Live, interactive preview. Fully wired client-side validation +
+              the configured post-submit (thank-you / inline / redirect-banner)
+              so the user sees the exact UX their visitors will see — but no
+              data is persisted, no notifications fire, and no leads are
+              created. */}
           <div style={{ height: '80vh', overflowY: 'auto' }}>
             <MarketingFormView
+              key={resetKey}
               definition={definition}
               embedToken={embedToken}
               formTitle={formTitle}
               venueContact={venueContact}
               preview
+              livePreview
             />
           </div>
         </div>
