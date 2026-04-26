@@ -63,7 +63,7 @@ interface EnrollContact {
 }
 
 const DEFAULT_SMS = 'Hi {{first_name}}, a quick note from {{venue_name}}. Reply STOP to opt out.';
-const CARD_W = 320; // canvas card width in pixels
+const CARD_W = 240; // canvas card width in pixels
 
 type StepKind = 'delay' | 'send_email' | 'send_sms' | 'add_tag' | 'remove_tag' | 'change_stage';
 type WaitUnit = 'minutes' | 'hours' | 'days';
