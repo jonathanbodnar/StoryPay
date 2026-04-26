@@ -256,11 +256,35 @@ export function defaultDefinition(): MarketingFormDefinition {
         type: 'rich_text',
         content: '<p>Tell us about your event.</p>',
       },
+      // First name + last name share the first row at half-width each.
+      {
+        id: crypto.randomUUID(),
+        type: 'first_name',
+        label: 'First name',
+        placeholder: 'Jane',
+        required: true,
+        colSpan: 1,
+      },
+      {
+        id: crypto.randomUUID(),
+        type: 'last_name',
+        label: 'Last name',
+        placeholder: 'Doe',
+        required: true,
+        colSpan: 1,
+      },
       {
         id: crypto.randomUUID(),
         type: 'email',
         label: 'Email',
         placeholder: 'you@example.com',
+        required: true,
+      },
+      {
+        id: crypto.randomUUID(),
+        type: 'phone',
+        label: 'Phone',
+        placeholder: '+1 (555) 000-0000',
         required: true,
       },
       {
