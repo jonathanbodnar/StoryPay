@@ -1657,6 +1657,8 @@ function SubmissionsInbox({
 // The right rail is reserved for block palette / per-block inspector only.
 function FormSettingsModal({
   initialTab,
+  formName,
+  onFormNameChange,
   settings,
   postSubmit,
   theme,
@@ -1667,9 +1669,13 @@ function FormSettingsModal({
   onPostSubmitChange,
   onThemeChange,
   onPreviewThankYou,
+  onDeleteForm,
+  deletingForm,
   onClose,
 }: {
   initialTab: SettingsTab;
+  formName: string;
+  onFormNameChange: (next: string) => void;
   settings: FormSettings | undefined;
   postSubmit: PostSubmitConfig | undefined;
   theme: ReturnType<typeof mergeTheme>;
@@ -1680,6 +1686,8 @@ function FormSettingsModal({
   onPostSubmitChange: (next: PostSubmitConfig) => void;
   onThemeChange: (next: MarketingFormDefinition['theme']) => void;
   onPreviewThankYou: () => void;
+  onDeleteForm: () => void;
+  deletingForm: boolean;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<SettingsTab>(initialTab);
@@ -1744,6 +1752,25 @@ function FormSettingsModal({
         >
           {tab === 'settings' && (
             <div className="space-y-7 p-5">
+              <div className="space-y-2">
+                <label
+                  htmlFor="fb-form-name"
+                  className="text-[11px] font-semibold uppercase tracking-wider text-gray-400"
+                >
+                  Form name
+                </label>
+                <input
+                  id="fb-form-name"
+                  value={formName}
+                  placeholder="Untitled form"
+                  onChange={(e) => onFormNameChange(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-[13px] text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-200"
+                />
+                <p className="text-[11px] text-gray-400">
+                  Internal label only — visitors never see this.
+                </p>
+              </div>
+              <div className="h-px w-full bg-gray-100" />
               <FormSettingsPanel settings={settings} onChange={onSettingsChange} />
               <div className="h-px w-full bg-gray-100" />
               <PostSubmitInspector
@@ -1751,6 +1778,34 @@ function FormSettingsModal({
                 onChange={onPostSubmitChange}
                 onPreviewThankYou={onPreviewThankYou}
               />
+              <div className="h-px w-full bg-gray-100" />
+              <div className="space-y-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-red-500">
+                  Danger zone
+                </p>
+                <div className="flex items-start justify-between gap-4 rounded-xl border border-red-200 bg-red-50/50 p-4">
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-semibold text-gray-900">Delete this form</p>
+                    <p className="mt-0.5 text-[12px] text-gray-600">
+                      Permanently removes the form, its embed URL, and all its submissions. This
+                      can&apos;t be undone.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onDeleteForm}
+                    disabled={deletingForm}
+                    className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-md border border-red-300 bg-white px-3 py-1.5 text-[12px] font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                  >
+                    {deletingForm ? (
+                      <Loader2 size={13} className="animate-spin" />
+                    ) : (
+                      <Trash2 size={13} />
+                    )}
+                    Delete form
+                  </button>
+                </div>
+              </div>
             </div>
           )}
           {tab === 'theme' && (
@@ -2145,6 +2200,38 @@ export function FormBuilderEditor({
     (next: FormSettings) => patchDefinition((d) => ({ ...d, settings: next })),
     [patchDefinition],
   );
+  const patchName = useCallback(
+    (next: string) => setSnapshot((s) => ({ ...s, name: next })),
+    [setSnapshot],
+  );
+
+  const [deletingForm, setDeletingForm] = useState(false);
+  const handleDeleteForm = useCallback(async () => {
+    if (deletingForm) return;
+    if (typeof window === 'undefined') return;
+    const ok = window.confirm(
+      'Delete this form? This permanently removes the form, its embed URL, and all submissions. This cannot be undone.',
+    );
+    if (!ok) return;
+    setDeletingForm(true);
+    try {
+      // Cancel any pending autosave so we don't try to save a deleted form.
+      clearAutosaveTimer();
+      const res = await fetch(`/api/marketing/forms/${formId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        window.alert(j.error || 'Failed to delete form. Please try again.');
+        setDeletingForm(false);
+        return;
+      }
+      // Hard navigation back to the list — avoids any stale local state from
+      // this page trying to save against the now-deleted form.
+      window.location.assign('/dashboard/marketing/form-builder');
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Failed to delete form.');
+      setDeletingForm(false);
+    }
+  }, [deletingForm, formId, clearAutosaveTimer]);
 
   const addBlockAt = useCallback(
     (idx: number, type: FormBlockType) => {
@@ -2421,53 +2508,16 @@ export function FormBuilderEditor({
           } as CSSProperties
         }
       >
-        {/* Left: back + title */}
-        <div className="flex items-center gap-3 flex-shrink-0 w-72 min-w-0">
+        {/* Left: back link only — the form title lives in the Settings modal
+            and on the canvas itself, no need to duplicate it here. */}
+        <div className="flex flex-shrink-0 items-center">
           <Link
             href="/dashboard/marketing/form-builder"
-            className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-800 transition-colors flex-shrink-0"
+            className="flex flex-shrink-0 items-center gap-1.5 text-sm text-gray-400 transition-colors hover:text-gray-800"
           >
             <ArrowLeft size={14} />
             <span className="hidden sm:inline">Back</span>
           </Link>
-          <span className="text-gray-200" aria-hidden>
-            ›
-          </span>
-          <input
-            value={name}
-            placeholder="Untitled form"
-            onChange={(e) => setSnapshot((s) => ({ ...s, name: e.target.value }))}
-            aria-label="Form title"
-            title="Click to edit form title"
-            className="min-w-0 max-w-[14rem] rounded-md border border-transparent bg-transparent px-2 py-1 text-[14px] font-semibold text-gray-900 placeholder:text-gray-400 transition hover:border-gray-200 hover:bg-gray-50 focus:border-gray-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-gray-200"
-          />
-        </div>
-
-        {/* Center: breadcrumb steps (anchored to the canvas, not the entire bar) */}
-        <div
-          className="hidden sm:flex items-center gap-2 text-[11px] tracking-widest font-medium uppercase"
-          style={{ position: 'absolute', left: 'calc(50% - 144px)', transform: 'translateX(-50%)' }}
-        >
-          <span className="text-gray-700 border-b border-gray-700 pb-0.5">Design Form</span>
-          <span className="text-gray-200">›</span>
-          <button
-            type="button"
-            onClick={() => {
-              setSettingsTab('settings');
-              setSettingsOpen(true);
-            }}
-            className="text-gray-300 hover:text-gray-600 transition-colors"
-          >
-            Settings
-          </button>
-          <span className="text-gray-200">›</span>
-          <button
-            type="button"
-            onClick={() => setEmbedOpen(true)}
-            className="text-gray-300 hover:text-gray-600 transition-colors"
-          >
-            Embed
-          </button>
         </div>
 
         {/* Right: save + preview + save + publish */}
@@ -2771,6 +2821,8 @@ export function FormBuilderEditor({
       {settingsOpen && (
         <FormSettingsModal
           initialTab={settingsTab}
+          formName={name}
+          onFormNameChange={patchName}
           settings={definition.settings}
           postSubmit={definition.postSubmit}
           theme={mergedTheme}
@@ -2781,6 +2833,8 @@ export function FormBuilderEditor({
           onPostSubmitChange={patchPostSubmit}
           onThemeChange={patchTheme}
           onPreviewThankYou={() => setThankYouOpen(true)}
+          onDeleteForm={handleDeleteForm}
+          deletingForm={deletingForm}
           onClose={() => setSettingsOpen(false)}
         />
       )}
