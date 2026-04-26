@@ -87,6 +87,55 @@ export interface FormBlock {
   textareaSize?: 'small' | 'medium' | 'large';
   /** checkbox_group: 'single' behaves like radio (one choice), 'multiple' allows many */
   checkboxMode?: 'single' | 'multiple';
+
+  // ─── Block-level formatting (mirrors the email builder) ────────────────────
+  /** Per-block outer padding, in pixels. Falls back to FORM_BLOCK_PADDING_DEFAULTS. */
+  paddingTop?: number;
+  paddingBottom?: number;
+  paddingLeft?: number;
+  paddingRight?: number;
+  /** Per-block background color (any CSS color, or 'transparent'). */
+  blockBgColor?: string;
+}
+
+/** Per-type fallback padding when a block doesn't specify its own. Set to 0
+ * across the board so existing forms render exactly the same — opt-in by
+ * editing in the Block sub-tab of the inspector. */
+export const FORM_BLOCK_PADDING_DEFAULTS: Record<
+  FormBlockType,
+  { top: number; bottom: number; left: number; right: number }
+> = {
+  heading:        { top: 0, bottom: 0, left: 0, right: 0 },
+  rich_text:      { top: 0, bottom: 0, left: 0, right: 0 },
+  first_name:     { top: 0, bottom: 0, left: 0, right: 0 },
+  last_name:      { top: 0, bottom: 0, left: 0, right: 0 },
+  email:          { top: 0, bottom: 0, left: 0, right: 0 },
+  phone:          { top: 0, bottom: 0, left: 0, right: 0 },
+  url:            { top: 0, bottom: 0, left: 0, right: 0 },
+  number:         { top: 0, bottom: 0, left: 0, right: 0 },
+  date:           { top: 0, bottom: 0, left: 0, right: 0 },
+  address:        { top: 0, bottom: 0, left: 0, right: 0 },
+  image:          { top: 0, bottom: 0, left: 0, right: 0 },
+  file:           { top: 0, bottom: 0, left: 0, right: 0 },
+  html:           { top: 0, bottom: 0, left: 0, right: 0 },
+  radio:          { top: 0, bottom: 0, left: 0, right: 0 },
+  select:         { top: 0, bottom: 0, left: 0, right: 0 },
+  checkbox_group: { top: 0, bottom: 0, left: 0, right: 0 },
+  textarea:       { top: 0, bottom: 0, left: 0, right: 0 },
+  submit:         { top: 0, bottom: 0, left: 0, right: 0 },
+  button:         { top: 0, bottom: 0, left: 0, right: 0 },
+  venue_contact:  { top: 0, bottom: 0, left: 0, right: 0 },
+};
+
+/** Resolved padding for a block — explicit fields win, otherwise type default. */
+export function resolveBlockPadding(block: FormBlock): { top: number; bottom: number; left: number; right: number } {
+  const d = FORM_BLOCK_PADDING_DEFAULTS[block.type] ?? { top: 0, bottom: 0, left: 0, right: 0 };
+  return {
+    top:    block.paddingTop    ?? d.top,
+    bottom: block.paddingBottom ?? d.bottom,
+    left:   block.paddingLeft   ?? d.left,
+    right:  block.paddingRight  ?? d.right,
+  };
 }
 
 /** Per-form submission routing and notification settings. */

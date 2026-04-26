@@ -16,6 +16,7 @@ import {
   type MarketingFormDefinition,
   formFieldName,
   mergeTheme,
+  resolveBlockPadding,
 } from '@/lib/marketing-form-schema';
 import { collectGoogleFontFamiliesFromDefinition } from '@/lib/google-fonts';
 import { sanitizeFormHtml } from '@/lib/sanitize-form-html';
@@ -39,6 +40,21 @@ function blockStyleCss(s?: FormBlockStyle): CSSProperties {
     lineHeight: s.lineHeight,
     textTransform: s.textTransform === 'uppercase' ? 'uppercase' : undefined,
   };
+}
+
+/** Resolved per-block padding + background for the outer block wrapper.
+ *  Empty unless the user has explicitly set fields, so existing forms
+ *  render unchanged. */
+function blockBoxCss(block: FormBlock): CSSProperties {
+  const p = resolveBlockPadding(block);
+  const bg = block.blockBgColor;
+  const out: CSSProperties = {};
+  if (p.top)    out.paddingTop    = `${p.top}px`;
+  if (p.bottom) out.paddingBottom = `${p.bottom}px`;
+  if (p.left)   out.paddingLeft   = `${p.left}px`;
+  if (p.right)  out.paddingRight  = `${p.right}px`;
+  if (bg && bg !== 'transparent') out.background = bg;
+  return out;
 }
 
 function blockOptions(block: FormBlock): string[] {
@@ -673,9 +689,18 @@ export function MarketingFormView({
                     : 'col-span-1';
 
                   const inner = renderBlock(b, theme, preview || !!builder, venueContact, builder);
+                  const boxCss = blockBoxCss(b);
                   let node: ReactNode;
                   if (!builder) {
-                    node = inner;
+                    // Public embed — wrap only when the block actually carries
+                    // padding or a background, so unchanged blocks keep their
+                    // current layout exactly.
+                    node =
+                      Object.keys(boxCss).length > 0 ? (
+                        <div style={boxCss}>{inner}</div>
+                      ) : (
+                        inner
+                      );
                   } else {
                     const selected = builder.selectedId === b.id;
                     node = (
@@ -683,6 +708,7 @@ export function MarketingFormView({
                         role="presentation"
                         className="relative rounded-md transition group/fbblock"
                         style={{
+                          ...boxCss,
                           outline: selected ? '1px solid #3b82f6' : '1px solid transparent',
                           outlineOffset: '-1px',
                           boxShadow: selected

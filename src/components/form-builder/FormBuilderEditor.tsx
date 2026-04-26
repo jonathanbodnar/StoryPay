@@ -82,6 +82,7 @@ import {
 import { useFormHistory } from '@/hooks/useFormHistory';
 import {
   ALWAYS_REQUIRED_TYPES,
+  FORM_BLOCK_PADDING_DEFAULTS,
   INPUT_BLOCK_TYPES,
   type FormBlock,
   type FormBlockStyle,
@@ -202,6 +203,21 @@ function patchBlocks(blocks: FormBlock[], id: string, patch: Partial<FormBlock>)
 function humanizeBlockType(type: FormBlockType): string {
   const item = PALETTE.find((p) => p.type === type);
   return item?.label ?? type.replace(/_/g, ' ');
+}
+
+/** Per-block label for the primary inspector sub-tab. The Block sub-tab is
+ *  shared (background + padding) and labelled "Block" everywhere. */
+function blockPrimaryTabLabel(type: FormBlockType): string {
+  switch (type) {
+    case 'heading':       return 'Heading';
+    case 'rich_text':     return 'Content';
+    case 'html':          return 'HTML';
+    case 'image':         return 'Image';
+    case 'venue_contact': return 'Contact';
+    case 'submit':
+    case 'button':        return 'Button';
+    default:              return 'Field';
+  }
 }
 
 // ─── Palette card (right-panel draggable) ────────────────────────────────────
@@ -476,6 +492,21 @@ function BlockInspector({
   const optsText = (block.options || []).join('\n');
   const [spacingOpen, setSpacingOpen] = useState(true);
 
+  // ─── Sub-tab state (matches the email builder's per-block inspector) ───────
+  // Every block's inspector is split into two sub-tabs: a per-type "primary"
+  // tab (Heading / Image / Field / etc.) and a shared "Block" tab that exposes
+  // background + padding controls. Reset to 'primary' whenever the user
+  // selects a different block — uses the prev-state pattern so we don't have
+  // to drop into useEffect.
+  const [subTab, setSubTab] = useState<'primary' | 'block'>('primary');
+  const [paddingOpen, setPaddingOpen] = useState(true);
+  const [prevBlockId, setPrevBlockId] = useState(block.id);
+  if (prevBlockId !== block.id) {
+    setPrevBlockId(block.id);
+    setSubTab('primary');
+  }
+  const primaryTabLabel = blockPrimaryTabLabel(block.type);
+
   // Convenience helpers ── per-block patch into block.style
   const patchStyle = (patch: Partial<FormBlockStyle>) =>
     onChange({ style: { ...block.style, ...patch } });
@@ -533,7 +564,7 @@ function BlockInspector({
   return (
     <div className="text-[13px] text-gray-900">
       {/* Block-type pill + Done */}
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-3 flex items-center justify-between">
         <span className="rounded-lg bg-gray-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-gray-600">
           {humanizeBlockType(block.type)}
         </span>
@@ -545,6 +576,36 @@ function BlockInspector({
           Done
         </button>
       </div>
+
+      {/* Sub-tab bar — primary settings vs Block (padding / background) */}
+      <div className="-mx-5 mb-5 flex border-b border-gray-100 bg-gray-50/50 px-2">
+        {(
+          [
+            { id: 'primary' as const, label: primaryTabLabel },
+            { id: 'block' as const, label: 'Block' },
+          ]
+        ).map((t) => {
+          const active = subTab === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setSubTab(t.id)}
+              className={`relative flex-1 py-3 text-sm font-semibold transition-colors ${
+                active ? 'text-gray-900' : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              {t.label}
+              {active && (
+                <span className="absolute left-1/2 -translate-x-1/2 bottom-0 h-[2px] w-12 bg-gray-900 rounded-full" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {subTab === 'primary' && (
+        <>
 
       {/* Heading-specific font controls */}
       {block.type === 'heading' && (
@@ -935,6 +996,78 @@ function BlockInspector({
           )}
         </div>
       )}
+
+        </>
+      )}
+
+      {/* ── Shared Block sub-tab (background + padding) ─────────────────── */}
+      {subTab === 'block' && (() => {
+        const d = FORM_BLOCK_PADDING_DEFAULTS[block.type] ?? { top: 0, bottom: 0, left: 0, right: 0 };
+        return (
+          <div className="space-y-5">
+            <div>
+              <p className="text-sm font-semibold text-gray-900 mb-2">Background</p>
+              <FlodeskColorPicker
+                value={block.blockBgColor ?? 'transparent'}
+                onChange={(v) => onChange({ blockBgColor: v })}
+              />
+            </div>
+            <div className="border-t border-gray-100 pt-4">
+              <button
+                type="button"
+                onClick={() => setPaddingOpen((o) => !o)}
+                className="mb-3 flex w-full items-center justify-between"
+              >
+                <span className="text-sm font-semibold text-gray-700">Padding</span>
+                <ChevronDown
+                  size={14}
+                  className={`text-gray-400 transition-transform ${paddingOpen ? 'rotate-180' : ''}`}
+                />
+              </button>
+              {paddingOpen && (
+                <div className="space-y-5">
+                  <SliderControl
+                    label="Padding top"
+                    value={block.paddingTop ?? d.top}
+                    min={0}
+                    max={120}
+                    step={1}
+                    display={`${block.paddingTop ?? d.top}`}
+                    onChange={(v) => onChange({ paddingTop: v })}
+                  />
+                  <SliderControl
+                    label="Padding bottom"
+                    value={block.paddingBottom ?? d.bottom}
+                    min={0}
+                    max={120}
+                    step={1}
+                    display={`${block.paddingBottom ?? d.bottom}`}
+                    onChange={(v) => onChange({ paddingBottom: v })}
+                  />
+                  <SliderControl
+                    label="Padding left"
+                    value={block.paddingLeft ?? d.left}
+                    min={0}
+                    max={120}
+                    step={1}
+                    display={`${block.paddingLeft ?? d.left}`}
+                    onChange={(v) => onChange({ paddingLeft: v })}
+                  />
+                  <SliderControl
+                    label="Padding right"
+                    value={block.paddingRight ?? d.right}
+                    min={0}
+                    max={120}
+                    step={1}
+                    display={`${block.paddingRight ?? d.right}`}
+                    onChange={(v) => onChange({ paddingRight: v })}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Bottom action row: Duplicate + Remove */}
       <div className="mt-6 border-t border-gray-100 pt-4 flex items-center gap-2">
@@ -2281,36 +2414,40 @@ export function FormBuilderEditor({
             style={{ boxShadow: '-12px 0 32px -8px rgba(0,0,0,0.07)' }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Tab bar */}
-            <div className="flex h-12 shrink-0 items-stretch border-b border-gray-100 bg-white">
-              {(
-                [
-                  ['block', 'Design'],
-                  ['settings', 'Settings'],
-                  ['theme', 'Theme'],
-                  ['submissions', 'Inbox'],
-                ] as const
-              ).map(([id, label]) => {
-                const active = rightTab === id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setRightTab(id)}
-                    className={`relative flex-1 px-1.5 text-center text-[12px] font-medium transition sm:text-[13px] ${
-                      active ? 'text-gray-900' : 'text-gray-400 hover:text-gray-600'
-                    }`}
-                  >
-                    <span className="flex h-full items-center justify-center leading-tight">
-                      {label}
-                    </span>
-                    {active && (
-                      <span className="absolute left-1/2 -translate-x-1/2 bottom-0 h-[2px] w-12 bg-gray-900 rounded-full" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+            {/* Tab bar — hidden while editing a single block (matches the email
+                builder, where selecting a block hides the rail nav and shows
+                only the inspector with a Done button). */}
+            {!selected && (
+              <div className="flex h-12 shrink-0 items-stretch border-b border-gray-100 bg-white">
+                {(
+                  [
+                    ['block', 'Design'],
+                    ['settings', 'Settings'],
+                    ['theme', 'Theme'],
+                    ['submissions', 'Inbox'],
+                  ] as const
+                ).map(([id, label]) => {
+                  const active = rightTab === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setRightTab(id)}
+                      className={`relative flex-1 px-1.5 text-center text-[12px] font-medium transition sm:text-[13px] ${
+                        active ? 'text-gray-900' : 'text-gray-400 hover:text-gray-600'
+                      }`}
+                    >
+                      <span className="flex h-full items-center justify-center leading-tight">
+                        {label}
+                      </span>
+                      {active && (
+                        <span className="absolute left-1/2 -translate-x-1/2 bottom-0 h-[2px] w-12 bg-gray-900 rounded-full" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Tab content */}
             <div
@@ -2324,20 +2461,20 @@ export function FormBuilderEditor({
                 } as CSSProperties
               }
             >
-              {rightTab === 'block' && (
+              {selected ? (
+                <div className="p-5">
+                  <BlockInspector
+                    block={selected}
+                    onChange={patchSelected}
+                    onRemove={() => removeBlock(selected.id)}
+                    onDuplicate={() => duplicateOne(selected.id)}
+                    onDeselect={() => setSelectedId(null)}
+                    onRequestMediaPick={handleRequestMediaPick}
+                  />
+                </div>
+              ) : (
                 <>
-                  {selected ? (
-                    <div className="p-5">
-                      <BlockInspector
-                        block={selected}
-                        onChange={patchSelected}
-                        onRemove={() => removeBlock(selected.id)}
-                        onDuplicate={() => duplicateOne(selected.id)}
-                        onDeselect={() => setSelectedId(null)}
-                        onRequestMediaPick={handleRequestMediaPick}
-                      />
-                    </div>
-                  ) : (
+                  {rightTab === 'block' && (
                     <div className="p-4">
                       <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                         Blocks
@@ -2352,35 +2489,35 @@ export function FormBuilderEditor({
                       </div>
                     </div>
                   )}
+
+                  {rightTab === 'settings' && (
+                    <div className="p-5 space-y-7">
+                      <FormSettingsPanel settings={definition.settings} onChange={patchSettings} />
+                      <div className="h-px w-full bg-gray-100" />
+                      <PostSubmitInspector
+                        postSubmit={definition.postSubmit}
+                        onChange={patchPostSubmit}
+                        onPreviewThankYou={() => setThankYouOpen(true)}
+                      />
+                    </div>
+                  )}
+
+                  {rightTab === 'theme' && (
+                    <div className="p-5">
+                      <ThemeInspector theme={mergedTheme} onChange={patchTheme} />
+                    </div>
+                  )}
+
+                  {rightTab === 'submissions' && (
+                    <div className="p-5">
+                      <SubmissionsInbox
+                        submissions={submissions}
+                        loading={submissionsLoading}
+                        blocks={definition.blocks}
+                      />
+                    </div>
+                  )}
                 </>
-              )}
-
-              {rightTab === 'settings' && (
-                <div className="p-5 space-y-7">
-                  <FormSettingsPanel settings={definition.settings} onChange={patchSettings} />
-                  <div className="h-px w-full bg-gray-100" />
-                  <PostSubmitInspector
-                    postSubmit={definition.postSubmit}
-                    onChange={patchPostSubmit}
-                    onPreviewThankYou={() => setThankYouOpen(true)}
-                  />
-                </div>
-              )}
-
-              {rightTab === 'theme' && (
-                <div className="p-5">
-                  <ThemeInspector theme={mergedTheme} onChange={patchTheme} />
-                </div>
-              )}
-
-              {rightTab === 'submissions' && (
-                <div className="p-5">
-                  <SubmissionsInbox
-                    submissions={submissions}
-                    loading={submissionsLoading}
-                    blocks={definition.blocks}
-                  />
-                </div>
               )}
             </div>
 
