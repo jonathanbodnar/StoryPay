@@ -1434,21 +1434,21 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                         </div>
 
                         {/* ── Media picker modal ─────────────────────── */}
-                        {smsMediaPickerOpen && (
-                          <VenueMediaPickerModal
-                            mode="image"
-                            onSelect={(url) => {
-                              setSteps((prev) => prev.map((x) => {
-                                if (x.localId !== lid || x.step_type !== 'send_sms') return x;
-                                const existing = x.media_urls ?? [];
-                                if (existing.includes(url) || existing.length >= 3) return x;
-                                return { ...x, media_urls: [...existing, url] };
-                              }));
-                              setSmsMediaPickerOpen(false);
-                            }}
-                            onClose={() => setSmsMediaPickerOpen(false)}
-                          />
-                        )}
+                        <VenueMediaPickerModal
+                          open={smsMediaPickerOpen}
+                          onOpenChange={setSmsMediaPickerOpen}
+                          mode="image"
+                          title="Add image attachment"
+                          onSelect={(url) => {
+                            setSteps((prev) => prev.map((x) => {
+                              if (x.localId !== lid || x.step_type !== 'send_sms') return x;
+                              const existing = x.media_urls ?? [];
+                              if (existing.includes(url) || existing.length >= 3) return x;
+                              return { ...x, media_urls: [...existing, url] };
+                            }));
+                            setSmsMediaPickerOpen(false);
+                          }}
+                        />
                       </div>
                     );
                   })()}

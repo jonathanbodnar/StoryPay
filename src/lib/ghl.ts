@@ -258,7 +258,7 @@ export async function getGhlContact(accessToken: string, locationId: string, con
 export async function findOrCreateContact(
   accessToken: string,
   locationId: string,
-  contact: { email: string; phone?: string; firstName?: string; lastName?: string }
+  contact: { email?: string; phone?: string; firstName?: string; lastName?: string }
 ) {
   const token = await resolveLocationToken(accessToken, locationId);
 
@@ -267,9 +267,10 @@ export async function findOrCreateContact(
   const contactPayload = { ...contact, ...(normalizedPhone ? { phone: normalizedPhone } : { phone: undefined }) };
 
   const identifier = contactPayload.email || normalizedPhone;
+  if (!identifier) throw new Error('findOrCreateContact: email or phone required');
   const searchKey = contactPayload.email ? 'email' : 'phone';
   const searchRes = await ghlRequest(
-    `/contacts/search/duplicate?locationId=${locationId}&${searchKey}=${encodeURIComponent(identifier!)}`,
+    `/contacts/search/duplicate?locationId=${locationId}&${searchKey}=${encodeURIComponent(identifier)}`,
     token,
     { locationId }
   );
