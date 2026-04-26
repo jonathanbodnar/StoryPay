@@ -156,6 +156,41 @@ export async function PATCH(
   return NextResponse.json({ campaign: data });
 }
 
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const venueId = await getVenueId();
+  if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { id } = await params;
+
+  // Block delete while the worker is mid-send to avoid orphaning recipient
+  // rows that are about to be written. Any other status is fair game —
+  // recipients cascade via FK ON DELETE CASCADE.
+  const { data: existing, error: exErr } = await supabaseAdmin
+    .from('marketing_campaigns')
+    .select('id, status')
+    .eq('id', id)
+    .eq('venue_id', venueId)
+    .maybeSingle();
+  if (exErr) return NextResponse.json({ error: exErr.message }, { status: 500 });
+  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (existing.status === 'sending') {
+    return NextResponse.json(
+      { error: 'Cannot delete a campaign while it is sending. Wait for it to finish or cancel first.' },
+      { status: 400 },
+    );
+  }
+
+  const { error } = await supabaseAdmin
+    .from('marketing_campaigns')
+    .delete()
+    .eq('id', id)
+    .eq('venue_id', venueId);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}
+
 /** Test send to a single address (merge fields use venue + synthetic lead if leadId omitted). */
 export async function POST(
   request: NextRequest,

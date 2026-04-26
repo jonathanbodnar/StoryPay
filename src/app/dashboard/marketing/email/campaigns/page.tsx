@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2, Megaphone, Pen, Plus, Send } from 'lucide-react';
+import { ArrowLeft, Loader2, Megaphone, Pen, Plus, Send, Trash2 } from 'lucide-react';
 
 interface CampaignRow {
   id: string;
@@ -32,6 +32,7 @@ export default function CampaignsListPage() {
   const [subject, setSubject] = useState('');
   const [creating, setCreating] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -54,6 +55,30 @@ export default function CampaignsListPage() {
     setTimeout(() => nameRef.current?.focus(), 50);
   }
 
+  async function deleteCampaign(camp: CampaignRow) {
+    if (deletingId) return;
+    if (typeof window === 'undefined') return;
+    const ok = window.confirm(
+      `Delete "${camp.name}"? This permanently removes the email and its send history. This cannot be undone.`,
+    );
+    if (!ok) return;
+    setDeletingId(camp.id);
+    try {
+      const res = await fetch(`/api/marketing/campaigns/${camp.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        window.alert(j.error || 'Failed to delete email. Please try again.');
+        return;
+      }
+      setCampaigns((prev) => prev.filter((row) => row.id !== camp.id));
+      void load();
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Failed to delete email.');
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   async function createCampaign() {
     const n = name.trim();
     if (!n) { setErr('Campaign name is required'); return; }
@@ -74,76 +99,114 @@ export default function CampaignsListPage() {
   }
 
   return (
-    <div className="max-w-3xl">
-      {/* Header */}
-      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+    <div className="mx-auto max-w-4xl px-4 py-8">
+      {/* Header — mirrors the Lead Capture Forms list page so the two
+          marketing sub-pages feel like siblings. */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Emails</h1>
-          <p className="mt-1 text-sm text-gray-500">Create an email, pick your audience, preview, and send.</p>
+          <Link
+            href="/dashboard/marketing/analytics"
+            className="mb-2 inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900"
+          >
+            <ArrowLeft size={16} />
+            Marketing
+          </Link>
+          <h1 className="flex items-center gap-2 text-2xl font-semibold text-gray-900">
+            <Megaphone className="text-brand-600" size={28} />
+            Emails
+          </h1>
+          <p className="mt-1 text-sm text-gray-600">
+            Create an email, pick your audience, preview, and send. Drafts can be edited and
+            re-sent any time before they go out.
+          </p>
         </div>
         <button
           type="button"
           onClick={openModal}
-          className="flex items-center gap-2 rounded-2xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-gray-700 transition-colors"
+          className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"
         >
-          <Plus size={16} /> New Email
+          <Plus size={18} />
+          New email
         </button>
       </div>
 
       {/* List */}
       {loading ? (
-        <div className="flex justify-center py-20">
-          <Loader2 size={24} className="animate-spin text-gray-400" />
+        <div className="flex justify-center py-16 text-gray-500">
+          <Loader2 className="animate-spin" size={28} />
         </div>
       ) : campaigns.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-gray-200 py-16 text-center">
+        <div className="rounded-xl border border-dashed border-gray-200 bg-white py-16 text-center text-gray-600">
           <Megaphone size={32} className="mx-auto mb-3 text-gray-300" />
-          <p className="text-sm font-medium text-gray-500">No emails yet</p>
-          <p className="mt-1 text-xs text-gray-400">Create your first email — design it, pick an audience, then send or schedule</p>
+          <p className="mb-4">No emails yet.</p>
           <button
             type="button"
             onClick={openModal}
-            className="mt-4 inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            className="text-brand-600 hover:underline"
           >
-            <Plus size={15} /> New Email
+            Create your first email
           </button>
         </div>
       ) : (
-        <div className="space-y-2">
-          {campaigns.map((c) => (
-            <div
-              key={c.id}
-              className="flex items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white px-5 py-4 hover:border-gray-300 transition-colors"
-            >
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold text-gray-900">{c.name}</p>
-                <p className="mt-0.5 text-xs text-gray-400">
-                  Updated {new Date(c.updated_at).toLocaleDateString()}
-                  {c.scheduled_at ? ` · Scheduled ${new Date(c.scheduled_at).toLocaleString()}` : ''}
-                </p>
-              </div>
-              <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${STATUS_STYLES[c.status] ?? 'bg-gray-100 text-gray-600'}`}>
-                {c.status}
-              </span>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {c.status === 'draft' && (
-                  <Link
-                    href={`/dashboard/marketing/email/campaigns/${c.id}/design`}
-                    className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+        <ul className="space-y-2">
+          {campaigns.map((c) => {
+            const isDeleting = deletingId === c.id;
+            return (
+              <li key={c.id}>
+                <div className="group flex items-stretch overflow-hidden rounded-xl border border-gray-200 bg-white transition hover:border-brand-200 hover:bg-brand-50/40">
+                  <div className="flex min-w-0 flex-1 items-center gap-4 px-4 py-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium text-gray-900">{c.name}</p>
+                      <p className="truncate text-xs text-gray-500">
+                        Updated {new Date(c.updated_at).toLocaleDateString()}
+                        {c.scheduled_at
+                          ? ` · Scheduled ${new Date(c.scheduled_at).toLocaleString()}`
+                          : ''}
+                      </p>
+                    </div>
+                    <span
+                      className={`flex-shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${
+                        STATUS_STYLES[c.status] ?? 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      {c.status}
+                    </span>
+                    <div className="flex flex-shrink-0 items-center gap-2">
+                      {c.status === 'draft' && (
+                        <Link
+                          href={`/dashboard/marketing/email/campaigns/${c.id}/design`}
+                          className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+                        >
+                          <Pen size={12} /> Edit
+                        </Link>
+                      )}
+                      <Link
+                        href={`/dashboard/marketing/email/campaigns/${c.id}`}
+                        className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+                      >
+                        <Send size={12} /> {c.status === 'draft' ? 'Send' : 'View'}
+                      </Link>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void deleteCampaign(c)}
+                    disabled={isDeleting}
+                    title="Delete email"
+                    aria-label={`Delete ${c.name}`}
+                    className="flex flex-shrink-0 items-center justify-center border-l border-gray-100 px-4 text-gray-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
                   >
-                    <Pen size={12} /> Edit
-                  </Link>
-                )}
-                <Link
-                  href={`/dashboard/marketing/email/campaigns/${c.id}`}
-                  className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
-                >
-                  <Send size={12} /> {c.status === 'draft' ? 'Send' : 'View'}
-                </Link>
-              </div>
-            </div>
-          ))}
-        </div>
+                    {isDeleting ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <Trash2 size={16} />
+                    )}
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
 
       {/* New Campaign Modal */}
