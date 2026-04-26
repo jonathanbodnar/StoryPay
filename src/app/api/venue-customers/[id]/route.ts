@@ -230,10 +230,10 @@ export async function DELETE(
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { id } = await params;
 
-  // Fetch the customer's email so we can also remove the matching lead row.
+  // Fetch the customer's email + protected flag before deletion.
   const { data: vc, error: fetchErr } = await supabaseAdmin
     .from('venue_customers')
-    .select('id, customer_email')
+    .select('id, customer_email, is_protected')
     .eq('id', id)
     .eq('venue_id', venueId)
     .maybeSingle();
@@ -242,6 +242,14 @@ export async function DELETE(
     return NextResponse.json({ error: fetchErr.message }, { status: 500 });
   }
   if (!vc) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  // Block deletion of protected demo contacts.
+  if ((vc as { is_protected?: boolean }).is_protected) {
+    return NextResponse.json(
+      { error: 'This is a protected demo contact and cannot be deleted.' },
+      { status: 403 },
+    );
+  }
 
   const { error: delErr } = await supabaseAdmin
     .from('venue_customers')

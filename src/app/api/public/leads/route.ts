@@ -121,14 +121,14 @@ export async function POST(request: NextRequest) {
   const slug    = payload.listing_slug ?? payload.venue_slug;
   const venueId = payload.venue_id ?? payload.venue_listing_id;
 
-  const venueQuery = supabaseAdmin
+  const venueSelectQuery = supabaseAdmin
     .from('venues')
-    .select('id, slug, name, email, notification_email, email_notifications');
+    .select('id, slug, name, email, notification_email, email_notifications, is_demo');
 
   const { data: venue, error: venueErr } = venueId
-    ? await venueQuery.eq('id', venueId).maybeSingle()
+    ? await venueSelectQuery.eq('id', venueId).maybeSingle()
     : slug
-      ? await venueQuery.eq('slug', slug).maybeSingle()
+      ? await venueSelectQuery.eq('slug', slug).maybeSingle()
       : { data: null, error: null };
 
   if (venueErr) {
@@ -177,7 +177,10 @@ export async function POST(request: NextRequest) {
 
   const lr = lead as { id: string; created_at: string; email: string; phone: string | null };
 
-  void recordDuplicateCandidatesForNewLead(venue.id, lr.id, lr.email, lr.phone, lr.created_at);
+  // Skip duplicate recording for demo venues — they exist to test resubmission.
+  if (!(venue as { is_demo?: boolean }).is_demo) {
+    void recordDuplicateCandidatesForNewLead(venue.id, lr.id, lr.email, lr.phone, lr.created_at);
+  }
 
   // Upsert a venue_customers row so the lead is immediately visible on the
   // Contacts page and the contact profile inquiry fields are auto-populated.

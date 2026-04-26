@@ -364,10 +364,10 @@ export async function DELETE(
 
   const { id } = await context.params;
 
-  // Fetch email first so we can clean up the matching venue_customer row.
+  // Fetch email + protected flag before deletion.
   const { data: lead, error: fetchErr } = await supabaseAdmin
     .from('leads')
-    .select('id, email')
+    .select('id, email, is_protected')
     .eq('id', id)
     .eq('venue_id', venueId)
     .maybeSingle();
@@ -377,6 +377,14 @@ export async function DELETE(
     return NextResponse.json({ error: `Delete failed: ${fetchErr.message}` }, { status: 500 });
   }
   if (!lead) return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
+
+  // Block deletion of protected demo contacts.
+  if ((lead as { is_protected?: boolean }).is_protected) {
+    return NextResponse.json(
+      { error: 'This is a protected demo contact and cannot be deleted.' },
+      { status: 403 },
+    );
+  }
 
   const { error } = await supabaseAdmin
     .from('leads')

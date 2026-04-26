@@ -87,6 +87,7 @@ interface Lead {
   updated_at: string | null;
   venue_name: string | null;
   venue_website_url: string | null;
+  is_protected?: boolean;
   opportunity_value: number | null;
   pipeline_id: string | null;
   stage_id: string | null;
@@ -487,11 +488,19 @@ export default function LeadsPage() {
   }
 
   async function deleteLead(id: string) {
+    const lead = leads.find((l) => l.id === id);
+    if (lead?.is_protected) {
+      alert('This is a protected demo contact and cannot be deleted.');
+      return;
+    }
     if (!confirm('Delete this lead? This cannot be undone.')) return;
     const res = await fetch(`/api/leads/${id}`, { method: 'DELETE' });
     if (res.ok) {
       setLeads((prev) => prev.filter((l) => l.id !== id));
       if (selectedLead?.id === id) { setSelectedLead(null); setEditorOpen(false); }
+    } else {
+      const d = await res.json().catch(() => ({}));
+      alert((d as { error?: string }).error || 'Could not delete lead');
     }
   }
 
@@ -1777,7 +1786,14 @@ function LeadDrawer({
       <aside className="absolute right-0 top-0 bottom-0 w-full sm:w-[560px] border-l border-gray-200 bg-white overflow-y-auto flex flex-col">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
           <div className="min-w-0">
-            <h2 className="font-heading text-xl text-gray-900 truncate">{displayName(lead)}</h2>
+            <div className="flex items-center gap-2 min-w-0">
+              <h2 className="font-heading text-xl text-gray-900 truncate">{displayName(lead)}</h2>
+              {lead.is_protected && (
+                <span className="flex-shrink-0 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 border border-amber-200">
+                  🔒 Demo
+                </span>
+              )}
+            </div>
             <p className="text-xs text-gray-400">Added {formatDate(lead.created_at)} · {lead.source}</p>
           </div>
           <button onClick={onClose} className="rounded-xl p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700">
@@ -2096,12 +2112,14 @@ function LeadDrawer({
             >
               <UserPlus className="w-3.5 h-3.5" /> Create customer
             </button>
-            <button
-              onClick={onDelete}
-              className="ml-auto inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
-            >
-              <Trash2 className="w-3.5 h-3.5" /> Delete
-            </button>
+            {!lead.is_protected && (
+              <button
+                onClick={onDelete}
+                className="ml-auto inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Delete
+              </button>
+            )}
           </section>
 
           {/* Personalized trigger links (automatic attribution via ?t=) */}
