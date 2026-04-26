@@ -262,28 +262,87 @@ export async function findOrCreateContact(
 ) {
   const token = await resolveLocationToken(accessToken, locationId);
 
-  // Always normalize phone to E.164 before sending to GHL
+  // Normalise phone to E.164 before every GHL call.
   const normalizedPhone = contact.phone ? normalizePhone(contact.phone) : undefined;
-  const contactPayload = { ...contact, ...(normalizedPhone ? { phone: normalizedPhone } : { phone: undefined }) };
 
-  const identifier = contactPayload.email || normalizedPhone;
-  if (!identifier) throw new Error('findOrCreateContact: email or phone required');
-  const searchKey = contactPayload.email ? 'email' : 'phone';
-  const searchRes = await ghlRequest(
-    `/contacts/search/duplicate?locationId=${locationId}&${searchKey}=${encodeURIComponent(identifier)}`,
-    token,
-    { locationId }
+  // Build a payload without undefined values — GHL's strict schema
+  // validators reject unknown/undefined keys on some account configurations.
+  const basePayload: Record<string, string | undefined> = {
+    firstName: contact.firstName,
+    lastName:  contact.lastName,
+    email:     contact.email,
+    phone:     normalizedPhone ?? undefined,
+  };
+  // Drop keys whose value is undefined
+  const cleanPayload = Object.fromEntries(
+    Object.entries(basePayload).filter(([, v]) => v !== undefined)
   );
 
-  if (searchRes.contact?.id) return searchRes.contact.id;
+  const identifier = contact.email || normalizedPhone;
+  if (!identifier) throw new Error('findOrCreateContact: email or phone required');
 
-  const createRes = await ghlRequest('/contacts/', token, {
-    method: 'POST',
-    body: { locationId, ...contactPayload },
-    locationId,
-  });
+  // ── 1. Look up existing contact ─────────────────────────────────────────
+  const searchKey = contact.email ? 'email' : 'phone';
+  let existingId: string | null = null;
+  try {
+    const searchRes = await ghlRequest(
+      `/contacts/search/duplicate?locationId=${encodeURIComponent(locationId)}&${searchKey}=${encodeURIComponent(identifier)}`,
+      token,
+      { locationId }
+    );
+    existingId = searchRes.contact?.id ?? null;
+  } catch {
+    // Non-fatal — fall through to creation
+  }
 
-  return createRes.contact?.id;
+  if (existingId) return existingId;
+
+  // ── 2. Create the contact ────────────────────────────────────────────────
+  // GHL's /contacts/ endpoint sometimes rejects a top-level `phone` field
+  // with 422 "property phone should not exist" when using agency tokens or
+  // on certain GHL account configurations.  Work around by:
+  //   (a) Try the full payload first.
+  //   (b) If GHL rejects `phone`, create without it, then PATCH phone on.
+  let contactId: string | null = null;
+  try {
+    const createRes = await ghlRequest('/contacts/', token, {
+      method: 'POST',
+      body: { locationId, ...cleanPayload },
+      locationId,
+    });
+    contactId = createRes.contact?.id ?? null;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '';
+    const isPhoneRejected = msg.includes('422') && msg.toLowerCase().includes('phone');
+
+    if (!isPhoneRejected) throw err; // unrelated error — surface it
+
+    // Retry without phone field
+    const { phone: _p, ...payloadWithoutPhone } = cleanPayload as Record<string, string>;
+    const retryRes = await ghlRequest('/contacts/', token, {
+      method: 'POST',
+      body: { locationId, ...payloadWithoutPhone },
+      locationId,
+    });
+    contactId = retryRes.contact?.id ?? null;
+  }
+
+  // ── 3. Patch phone if contact was created without it ────────────────────
+  if (contactId && normalizedPhone && !cleanPayload.phone) {
+    try {
+      await ghlRequest(`/contacts/${encodeURIComponent(contactId)}`, token, {
+        method: 'PUT',
+        body: { phone: normalizedPhone, locationId },
+        locationId,
+      });
+    } catch {
+      // Non-fatal — contact exists but may lack phone in GHL; SMS will still
+      // work if the conversation is created with the contactId.
+      console.warn('[ghl] findOrCreateContact: could not patch phone onto new contact', contactId);
+    }
+  }
+
+  return contactId;
 }
 
 export function getOAuthUrl(clientId: string, redirectUri: string, state: string) {

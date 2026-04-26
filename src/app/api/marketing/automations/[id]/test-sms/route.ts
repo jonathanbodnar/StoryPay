@@ -40,22 +40,31 @@ export async function POST(
   const rawPhone = normalizePhone(toPhone.trim());
   if (!rawPhone) return NextResponse.json({ error: 'Invalid phone number' }, { status: 400 });
 
-  // Load the step config
-  const { data: step } = await supabaseAdmin
-    .from('marketing_automation_steps')
-    .select('step_type, config_json')
-    .eq('automation_id', id)
-    .eq('step_order', stepOrder)
-    .maybeSingle();
-  if (!step) return NextResponse.json({ error: 'Step not found' }, { status: 404 });
-  if (step.step_type !== 'send_sms') return NextResponse.json({ error: 'Step is not a send_sms step' }, { status: 400 });
+  // Use the caller-supplied body if provided (live editor value before save).
+  // Fall back to whatever is persisted in the DB for this step.
+  let smsBody = body.body?.trim() ?? '';
+  let savedMediaUrls: string[] = [];
 
-  // Use caller-supplied body (live editor value) or fall back to saved config
-  const cfg = step.config_json as { body?: string; media_urls?: string[] };
-  const smsBody = (body.body?.trim() || String(cfg.body || '').trim());
-  if (!smsBody) return NextResponse.json({ error: 'SMS body is empty' }, { status: 400 });
+  if (!smsBody) {
+    // Body not supplied inline — try to load from DB
+    const { data: step } = await supabaseAdmin
+      .from('marketing_automation_steps')
+      .select('step_type, config_json')
+      .eq('automation_id', id)
+      .eq('step_order', stepOrder)
+      .maybeSingle();
 
-  // Merge placeholder values so shortcodes don't appear literally in the test
+    if (!step) return NextResponse.json({ error: 'SMS body is required (step not saved yet — type a message above first)' }, { status: 400 });
+    if (step.step_type !== 'send_sms') return NextResponse.json({ error: 'Step is not an SMS step' }, { status: 400 });
+
+    const cfg = step.config_json as { body?: string; media_urls?: string[] };
+    smsBody = String(cfg.body || '').trim();
+    savedMediaUrls = cfg.media_urls ?? [];
+  }
+
+  if (!smsBody) return NextResponse.json({ error: 'SMS body is empty — type a message above first' }, { status: 400 });
+
+  // Merge placeholder values so merge tags don't appear literally in the test preview
   const preview = smsBody
     .replace(/\{\{first_name\}\}/g, 'Preview')
     .replace(/\{\{last_name\}\}/g, 'Contact')
@@ -89,7 +98,7 @@ export async function POST(
     // Merge caller-supplied media urls with the saved step media urls (deduplicated)
     const effectiveMedia = Array.from(new Set([
       ...(mediaUrls ?? []),
-      ...(cfg.media_urls ?? []),
+      ...savedMediaUrls,
     ])).slice(0, 3);
 
     await sendSms(token, loc, contactId, preview, effectiveMedia.length ? effectiveMedia : undefined);
