@@ -7,7 +7,7 @@ import {
   ArrowLeft, CalendarHeart, CheckSquare, ChevronDown, ChevronUp,
   ClipboardList, Clock, DollarSign, GitBranch, Link2,
   Loader2, Mail, Minus, Plus, Send, Smartphone, Square,
-  Tag, Trash2, Users, ZoomIn, ZoomOut,
+  Tag, Trash2, Users,
 } from 'lucide-react';
 import {
   DndContext, closestCenter, PointerSensor,
@@ -349,17 +349,26 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
     setPan(newPan);
   }, []);
 
-  // ── Wheel: Ctrl/Meta+scroll = zoom; otherwise = pan ──────────────────────
+  // ── Wheel: pinch = zoom; scroll = pan ────────────────────────────────────
+  // Mac trackpad pinch gesture fires wheel events with ctrlKey:true.
+  // Regular two-finger scroll fires with ctrlKey:false.
+  // Mouse wheel fires with ctrlKey only when user holds Ctrl key.
   useEffect(() => {
     const el = canvasContainerRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      if (e.ctrlKey || e.metaKey) {
-        // Trackpad pinch gesture or Ctrl+wheel
-        zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.008));
+      if (e.ctrlKey) {
+        // Pinch-to-zoom (Mac trackpad) or Ctrl+scroll (mouse).
+        // deltaY is negative when zooming out (spreading fingers) and positive
+        // when zooming in (pinching). We clamp delta to avoid huge jumps.
+        const delta = Math.max(-50, Math.min(50, e.deltaY));
+        const factor = delta < 0
+          ? 1 + Math.abs(delta) * 0.02   // spreading fingers → zoom in
+          : 1 / (1 + delta * 0.02);       // pinching fingers  → zoom out
+        zoomAt(e.clientX, e.clientY, factor);
       } else {
-        // Scroll / two-finger pan on trackpad
+        // Two-finger scroll → pan. deltaX/deltaY are in CSS pixels on Mac.
         const newPan = { x: panRef.current.x - e.deltaX, y: panRef.current.y - e.deltaY };
         panRef.current = newPan;
         setPan(newPan);
@@ -656,15 +665,6 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
 
   const trigSubtitle = triggerDesc(auto.trigger_type, { selForms, selTags, selStages, selLinks, daysAfterWedding });
 
-  // Dot grid background that moves with pan/zoom
-  const dotSize   = Math.max(1, zoom);
-  const gridSize  = Math.max(4, 20 * zoom);
-  const bgStyle: React.CSSProperties = {
-    backgroundImage: `radial-gradient(circle, #d1d5db ${dotSize}px, transparent ${dotSize}px)`,
-    backgroundSize:  `${gridSize}px ${gridSize}px`,
-    backgroundPosition: `${((pan.x % gridSize) + gridSize) % gridSize}px ${((pan.y % gridSize) + gridSize) % gridSize}px`,
-    backgroundColor: '#f8f8f8',
-  };
 
   // ── JSX ────────────────────────────────────────────────────────────────────
   return (
@@ -754,55 +754,63 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
             style={{
               flex: 1, position: 'relative', overflow: 'hidden',
               cursor: isPanning ? 'grabbing' : 'grab',
-              ...bgStyle,
+              background: '#f4f4f5',
             }}
             onMouseDown={onBgMouseDown}
             onDoubleClick={onBgDoubleClick}
           >
-            {/* Zoom controls — top-left overlay */}
+            {/* ── Zoom pill — left side, vertically centered ──────────────── */}
             <div
-              className="absolute top-3 left-3 z-10 flex items-center gap-1"
               data-no-dnd
               onMouseDown={(e) => e.stopPropagation()}
+              className="absolute left-3 top-1/2 -translate-y-1/2 z-10 flex flex-col items-center overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-md"
+              style={{ width: 44 }}
             >
-              <button type="button"
-                onClick={() => zoomAt(
-                  canvasContainerRef.current!.getBoundingClientRect().left + canvasContainerRef.current!.getBoundingClientRect().width / 2,
-                  canvasContainerRef.current!.getBoundingClientRect().top  + canvasContainerRef.current!.getBoundingClientRect().height / 2,
-                  1.2,
-                )}
-                className="flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:border-gray-400 hover:text-gray-800 transition-colors shadow-sm"
-                title="Zoom in (or Ctrl+scroll)"
+              {/* Zoom in */}
+              <button
+                type="button"
+                title="Zoom in"
+                onClick={() => {
+                  const el = canvasContainerRef.current;
+                  if (!el) return;
+                  const r = el.getBoundingClientRect();
+                  zoomAt(r.left + r.width / 2, r.top + r.height / 2, 1.25);
+                }}
+                className="flex h-11 w-full items-center justify-center text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors"
               >
-                <ZoomIn size={14} />
+                <Plus size={18} strokeWidth={1.75} />
               </button>
-              <button type="button"
-                onClick={() => zoomAt(
-                  canvasContainerRef.current!.getBoundingClientRect().left + canvasContainerRef.current!.getBoundingClientRect().width / 2,
-                  canvasContainerRef.current!.getBoundingClientRect().top  + canvasContainerRef.current!.getBoundingClientRect().height / 2,
-                  1 / 1.2,
-                )}
-                className="flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:border-gray-400 hover:text-gray-800 transition-colors shadow-sm"
-                title="Zoom out"
-              >
-                <ZoomOut size={14} />
-              </button>
-              <span className="ml-1 text-[11px] font-medium text-gray-400 tabular-nums select-none">
-                {Math.round(zoom * 100)}%
-              </span>
-              <button type="button" onClick={resetView}
-                className="ml-1 rounded px-1.5 py-0.5 text-[10px] text-gray-400 hover:text-gray-700 transition-colors"
-                title="Reset view"
-              >
-                Reset
-              </button>
-            </div>
 
-            {/* Zoom hint */}
-            <div
-              className="absolute bottom-3 left-3 z-10 text-[10px] text-gray-400 select-none pointer-events-none"
-            >
-              Ctrl+scroll to zoom · Drag canvas to pan · Double-click to zoom in
+              {/* Divider */}
+              <div className="w-full border-t border-gray-200" />
+
+              {/* Zoom % */}
+              <button
+                type="button"
+                title="Reset zoom"
+                onClick={resetView}
+                className="flex h-10 w-full items-center justify-center text-[11px] font-semibold tabular-nums text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors select-none"
+              >
+                {Math.round(zoom * 100)}%
+              </button>
+
+              {/* Divider */}
+              <div className="w-full border-t border-gray-200" />
+
+              {/* Zoom out */}
+              <button
+                type="button"
+                title="Zoom out"
+                onClick={() => {
+                  const el = canvasContainerRef.current;
+                  if (!el) return;
+                  const r = el.getBoundingClientRect();
+                  zoomAt(r.left + r.width / 2, r.top + r.height / 2, 1 / 1.25);
+                }}
+                className="flex h-11 w-full items-center justify-center text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+              >
+                <Minus size={18} strokeWidth={1.75} />
+              </button>
             </div>
 
             {/* Transform layer — all canvas content */}
