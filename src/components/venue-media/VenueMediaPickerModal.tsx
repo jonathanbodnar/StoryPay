@@ -201,7 +201,9 @@ export function VenueMediaPickerModal({
                       </span>
                     </div>
                   )}
-                  <span className="block truncate px-2 py-1.5 text-[11px] text-gray-600">{a.file_name}</span>
+                  <span className="block truncate px-2 py-1.5 text-[11px] text-gray-600">
+                    {a.display_name ?? a.file_name}
+                  </span>
                 </button>
               ))}
             </div>

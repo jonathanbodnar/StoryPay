@@ -22,7 +22,7 @@ export async function GET() {
 
   const { data, error } = await supabaseAdmin
     .from('venue_media_assets')
-    .select('id, storage_path, public_url, file_name, content_type, size_bytes, created_at')
+    .select('id, storage_path, public_url, file_name, display_name, content_type, size_bytes, created_at')
     .eq('venue_id', venueId)
     .order('created_at', { ascending: false });
 
@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
       content_type: contentType,
       size_bytes: sizeBytes,
     })
-    .select('id, storage_path, public_url, file_name, content_type, size_bytes, created_at')
+    .select('id, storage_path, public_url, file_name, display_name, content_type, size_bytes, created_at')
     .single();
 
   if (error) {

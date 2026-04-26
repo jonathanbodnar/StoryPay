@@ -43,6 +43,10 @@ const IMPLICIT_NAV_SIBLINGS: Record<string, string[]> = {
   // inside the Emails composer — anyone with access to Emails should
   // automatically get access to Audiences.
   nav_marketing_email_campaigns: ['nav_marketing_email_segments'],
+  // The Media library used to live under Listing; it's now top-level. Plans
+  // created before the move only have `nav_listing_media`, so mirror that
+  // permission onto the new id so existing plans don't lose access.
+  nav_listing_media: ['nav_main_media'],
 };
 
 /**

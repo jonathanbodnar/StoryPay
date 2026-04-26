@@ -542,24 +542,33 @@ Uploaded photos are public — they're served directly from a CDN so your listin
       },
       {
         id: 'listing-media-library',
-        title: 'Media library — shared images for listing, email, forms, and branding',
-        tags: ['media library', 'images', 'assets', 'upload', 'reuse', 'photos', 'cdn', 'logo'],
-        body: `The Media library is your venue-wide folder for image files. Open it from the sidebar → Venue listing → Media library (path: /dashboard/listing/media).
+        title: 'Media — shared images and files for listing, email, forms, and branding',
+        tags: ['media', 'media library', 'images', 'files', 'assets', 'upload', 'reuse', 'photos', 'cdn', 'logo', 'pdf', 'documents'],
+        body: `Media is your venue-wide folder for everything you reuse across the product. Open it from the sidebar → **Media** (path: /dashboard/media). The old /dashboard/listing/media URL still works and redirects here.
 
 What it is for:
-- Upload images once, then reuse them wherever StoryPay needs an image URL — directory Photos, marketing email templates (Image block), lead capture forms (Image block), and Settings → Branding (logo — "Choose from media library").
+- Upload an image or file once, then reuse it wherever StoryPay needs an asset URL — directory Photos, marketing email templates (Image block, Button → File link), lead capture forms (Image block), and Settings → Branding (logo).
 - Copy any asset's public URL from the library to paste elsewhere if needed.
 
-Rules:
-- Images only — JPEG, PNG, WebP, AVIF, or GIF. Max 10 MB per file.
-- Video uploads are not supported (use a hosted video link in text/HTML if you need video elsewhere).
+What you can upload:
+- Images: JPG, PNG, WebP, AVIF, GIF.
+- Files: PDF, Word (DOC/DOCX), Excel (XLS/XLSX), PowerPoint (PPT/PPTX), CSV, plain text.
+- Max 25 MB per file.
+- Video uploads are not supported.
 
-Managing files:
-- Upload multiple images from the Media library page; each appears in a grid with file name and size.
-- Use Copy URL to put the link on your clipboard.
-- Delete removes the file from storage permanently. Any page or email that still pointed at that URL will show a broken image — update those spots after deleting.
+Page features:
+- Drag and drop files anywhere on the page to upload — or click Upload.
+- Per-file progress bars during upload, with cancel-on-error.
+- Search by filename, filter pills (All / Images / Documents), sort (newest, oldest, name, size), and a grid ↔ list toggle.
+- Click any image thumbnail to preview it full-screen.
+- The "..." menu on each row gives you Copy URL, Download, Open in new tab, Rename, and Delete.
+- Rename is display-name only — the public URL doesn't change, so existing links keep working.
 
-Tip: On Venue listing → Photos, use From media library to add a library image to your gallery without uploading a second copy.`,
+Used in indicator:
+- Each file shows where its URL is referenced today: Brand logo (Settings → Branding), Listing cover/gallery (Venue listing → Photos), Email templates and campaigns, Lead capture forms.
+- The Delete confirm modal lists every place the file is used so you can replace those references first if you don't want them to break.
+
+Tip: On Venue listing → Photos and the marketing Email/Form Image blocks, use "Choose from media library" to attach an existing asset without re-uploading.`,
       },
       {
         id: 'listing-publish',
@@ -2167,6 +2176,7 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
 
   // Venue listing (directory + reviews + analytics)
   '/dashboard/listing/media': ['listing-media-library', 'listing-photos', 'listing-overview', 'brand-setup'],
+  '/dashboard/media': ['listing-media-library', 'listing-photos', 'listing-overview', 'brand-setup'],
   '/dashboard/listing/images': ['listing-photos', 'listing-media-library', 'listing-overview', 'listing-publish'],
   '/dashboard/listing/reviews': ['listing-reviews', 'listing-google-reviews', 'listing-overview', 'listing-publish'],
   '/dashboard/listing/analytics': ['listing-analytics-realtime', 'listing-analytics-retention', 'listing-overview', 'listing-publish'],
