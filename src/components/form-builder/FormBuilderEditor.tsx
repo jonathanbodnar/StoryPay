@@ -2504,7 +2504,9 @@ export function FormBuilderEditor({
               </button>
             </div>
 
-            {/* Form card */}
+            {/* Form card — clicking the empty form area (outside any block)
+                clears the selection so the right rail returns to the block
+                palette. Blocks themselves stopPropagation in their wrappers. */}
             <div
               className="mx-auto"
               style={{
@@ -2512,7 +2514,7 @@ export function FormBuilderEditor({
                 background: '#ffffff',
                 transition: 'max-width 0.3s ease',
               }}
-              onClick={(e) => e.stopPropagation()}
+              onClick={() => setSelectedId(null)}
             >
               {definition.blocks.length === 0 ? (
                 emptySlot
