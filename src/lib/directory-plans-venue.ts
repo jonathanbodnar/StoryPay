@@ -33,6 +33,19 @@ function planHasExplicitNavPermissions(navPermissions: unknown): boolean {
 }
 
 /**
+ * Implicit sibling pages: if the key on the left is enabled, the values on
+ * the right are auto-enabled too. Use this for pages that conceptually
+ * depend on each other so admins don't have to remember to flip both, and
+ * so plans created before a sibling existed don't lock users out of it.
+ */
+const IMPLICIT_NAV_SIBLINGS: Record<string, string[]> = {
+  // Audiences are created/edited from the Audiences page and then selected
+  // inside the Emails composer — anyone with access to Emails should
+  // automatically get access to Audiences.
+  nav_marketing_email_campaigns: ['nav_marketing_email_segments'],
+};
+
+/**
  * Allowed nav ids for a plan row. Always includes `nav_main_home` if any access remains.
  * Empty legacy + empty explicit → home only.
  */
@@ -58,6 +71,14 @@ export function computeAllowedNavIdsFromPlan(plan: {
   if (!set.has('nav_main_home')) {
     set.add('nav_main_home');
   }
+
+  // Apply implicit sibling expansions (e.g. Emails → Audiences).
+  for (const [parent, siblings] of Object.entries(IMPLICIT_NAV_SIBLINGS)) {
+    if (set.has(parent)) {
+      for (const id of siblings) set.add(id);
+    }
+  }
+
   return [...set];
 }
 
