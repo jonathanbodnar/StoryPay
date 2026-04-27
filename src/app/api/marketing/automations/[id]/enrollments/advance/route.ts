@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getVenueId } from '@/lib/auth-helpers';
 import { supabaseAdmin } from '@/lib/supabase';
+import { runEnrollmentsNow } from '@/lib/marketing-email-worker';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -48,13 +49,8 @@ export async function POST(
   const safeIds = (owned ?? []).map((r) => r.id as string);
   if (!safeIds.length) return NextResponse.json({ error: 'No valid enrollment IDs' }, { status: 400 });
 
-  // Set next_run_at to now — the cron will immediately process on its next tick
-  const { error } = await supabaseAdmin
-    .from('marketing_automation_enrollments')
-    .update({ next_run_at: new Date().toISOString() })
-    .in('id', safeIds)
-    .eq('status', 'active');
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // Execute the current step for each enrollment immediately (no cron wait).
+  const { processed } = await runEnrollmentsNow(safeIds);
 
-  return NextResponse.json({ advanced: safeIds.length });
+  return NextResponse.json({ advanced: processed });
 }

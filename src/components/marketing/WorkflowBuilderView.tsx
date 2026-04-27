@@ -1024,7 +1024,13 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
       body: JSON.stringify({ enrollmentIds: ids }),
     });
     setAdvancing(false);
-    if (res.ok) { setEnrollModal(null); void refreshCounts(); }
+    if (res.ok) {
+      setEnrollModal(null);
+      void refreshCounts();
+    } else {
+      const d = await res.json().catch(() => ({})) as { error?: string };
+      alert(d.error ?? 'Advance failed — check the execution logs for details.');
+    }
   }
 
   // ── Test email ─────────────────────────────────────────────────────────────

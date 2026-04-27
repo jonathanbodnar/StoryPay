@@ -512,6 +512,34 @@ export async function processAutomationEnrollmentsBatch(): Promise<{ processed: 
   return { processed: n };
 }
 
+/**
+ * Immediately execute the current step for the given enrollment IDs.
+ * Used by the "Advance selected" manual trigger in the workflow UI so
+ * the step fires right away instead of waiting for the next cron tick.
+ */
+export async function runEnrollmentsNow(enrollmentIds: string[]): Promise<{ processed: number }> {
+  if (!enrollmentIds.length) return { processed: 0 };
+  const { data, error } = await supabaseAdmin
+    .from('marketing_automation_enrollments')
+    .select('id, automation_id, venue_id, lead_id, current_step_index, status')
+    .in('id', enrollmentIds)
+    .eq('status', 'active');
+  if (error || !data?.length) return { processed: 0 };
+
+  let n = 0;
+  for (const en of data) {
+    const ok = await processOneEnrollment(en as {
+      id: string;
+      automation_id: string;
+      venue_id: string;
+      lead_id: string;
+      current_step_index: number;
+    });
+    if (ok) n++;
+  }
+  return { processed: n };
+}
+
 /** Write one execution log row — fire and forget, never throws. */
 async function logStepExecution(opts: {
   automation_id: string;
