@@ -1548,6 +1548,16 @@ function LeadDrawer({
   };
   const [enrollments, setEnrollments] = useState<EnrollmentRow[]>([]);
 
+  // On open, silently re-fetch the full record so fields added by newer
+  // migrations (venue_matters, etc.) are populated even if the Kanban
+  // list SELECT didn't include them. onReloadCurrentLead updates the
+  // parent's selectedLead state; this component will re-render with the
+  // fresher lead prop automatically.
+  useEffect(() => {
+    void onReloadCurrentLead?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lead.id]);
+
   useEffect(() => {
     fetch(`/api/leads/${lead.id}/enrollments`, { cache: 'no-store' })
       .then((r) => r.json())

@@ -110,6 +110,8 @@ export async function GET(request: NextRequest) {
     'lost_reason', 'referral_source', 'first_touch_utm',
     'assigned_member_id', 'marketing_email_opt_in',
     'excluded_from_pipeline', 'space_id',
+    // Added by migration 068 — may be absent on older DBs
+    'venue_matters',
   ];
 
   /**
