@@ -19,24 +19,13 @@ function authorize(request: NextRequest): boolean {
 }
 
 /**
- * Kill switch for the marketing email processor.
- *
- * Default behavior after this commit: DISABLED. The cron can keep hitting
- * Railway's scheduled URL without actually sending campaigns or advancing
- * automation steps — the endpoint just returns `{ ok: true, disabled: true }`.
- *
- * To re-enable, set MARKETING_CRON_ENABLED=1 (or "true"/"yes"/"on") in the
- * Railway service env. No redeploy required.
- *
- * (MARKETING_CRON_DISABLED=1 is also honored as an explicit "off" signal so
- * we don't regress anyone who already set it from the earlier kill-switch
- * patch.)
+ * The marketing cron is ENABLED by default.
+ * Set MARKETING_CRON_DISABLED=1 in Railway to pause all campaign sending
+ * and automation step advancement without a redeploy.
  */
 function cronEnabled(): boolean {
   const off = (process.env.MARKETING_CRON_DISABLED || '').trim().toLowerCase();
-  if (off === '1' || off === 'true' || off === 'yes' || off === 'on') return false;
-  const on = (process.env.MARKETING_CRON_ENABLED || '').trim().toLowerCase();
-  return on === '1' || on === 'true' || on === 'yes' || on === 'on';
+  return !(off === '1' || off === 'true' || off === 'yes' || off === 'on');
 }
 
 /** Scheduled HTTP job (e.g. Railway Cron, GitHub Actions, curl): campaigns + automation steps. */

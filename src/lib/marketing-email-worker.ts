@@ -15,17 +15,23 @@ import { formatInTimeZone } from 'date-fns-tz';
 
 const BATCH = 25;
 
-async function enrollIfNew(automationId: string, venueId: string, leadId: string): Promise<void> {
-  const { error } = await supabaseAdmin.from('marketing_automation_enrollments').insert({
-    automation_id: automationId,
-    venue_id: venueId,
-    lead_id: leadId,
-    current_step_index: 0,
-    status: 'active',
-    next_run_at: new Date().toISOString(),
-  });
-  if (error?.code === '23505') return;
-  if (error) console.error('[marketing enroll]', error);
+/** Returns the new enrollment id, or null if already enrolled / error. */
+async function enrollIfNew(automationId: string, venueId: string, leadId: string): Promise<string | null> {
+  const { data, error } = await supabaseAdmin
+    .from('marketing_automation_enrollments')
+    .insert({
+      automation_id: automationId,
+      venue_id: venueId,
+      lead_id: leadId,
+      current_step_index: 0,
+      status: 'active',
+      next_run_at: new Date().toISOString(),
+    })
+    .select('id')
+    .single();
+  if (error?.code === '23505') return null; // already enrolled
+  if (error) { console.error('[marketing enroll]', error); return null; }
+  return (data as { id: string }).id;
 }
 
 /** All trigger sources (primary + extras) for a workflow row, normalized to a flat shape. */
@@ -207,7 +213,20 @@ export async function onMarketingFormSubmitted(
       const want = t.form_ids?.filter(Boolean) ?? [];
       return want.length === 0 ? true : want.includes(formId);
     });
-    if (matched) await enrollIfNew(row.id, venueId, leadId);
+    if (!matched) continue;
+    const enrollmentId = await enrollIfNew(row.id, venueId, leadId);
+    // Speed-to-lead: immediately execute the first step instead of waiting
+    // for the next cron tick. If step 1 is a Wait it will schedule itself
+    // for later and return; if it's SMS/Email it fires right now.
+    if (enrollmentId) {
+      await processOneEnrollment({
+        id: enrollmentId,
+        automation_id: row.id,
+        venue_id: venueId,
+        lead_id: leadId,
+        current_step_index: 0,
+      });
+    }
   }
 }
 
