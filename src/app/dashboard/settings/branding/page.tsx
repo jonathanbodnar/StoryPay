@@ -399,42 +399,42 @@ export default function BrandingPage() {
 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 <div className="sm:col-span-2">
 <label className={LABEL}>Business Name</label>
-<input type="text"value={brand.venueName} onChange={upd('venueName')} placeholder="Your Venue Name"className={INPUT} />
+<input type="text"value={brand.venueName} onChange={upd('venueName', 'name')} placeholder="Your Venue Name"className={INPUT} />
 </div>
 <div>
 <label className={LABEL}>Contact Email</label>
-<input type="email"value={brand.email} onChange={upd('email')} placeholder="hello@yourvenue.com"className={INPUT} />
+<input type="email"value={brand.email} onChange={upd('email', 'brand_email')} placeholder="hello@yourvenue.com"className={INPUT} />
 </div>
 <div>
 <label className={LABEL}>Contact Phone</label>
-<input type="tel"value={brand.phone} onChange={upd('phone')} placeholder="(555) 000-0000"className={INPUT} />
+<input type="tel"value={brand.phone} onChange={upd('phone', 'brand_phone')} placeholder="(555) 000-0000"className={INPUT} />
 </div>
 <div className="sm:col-span-2">
 <label className={LABEL}>Website</label>
-<input type="url"value={brand.website} onChange={upd('website')} placeholder="https://yourvenue.com"className={INPUT} />
+<input type="url"value={brand.website} onChange={upd('website', 'brand_website')} placeholder="https://yourvenue.com"className={INPUT} />
 </div>
 <div className="sm:col-span-2">
 <label className={LABEL}>Street Address</label>
-<input type="text"value={brand.address} onChange={upd('address')} placeholder="123 Wedding Lane"className={INPUT} />
+<input type="text"value={brand.address} onChange={upd('address', 'brand_address')} placeholder="123 Wedding Lane"className={INPUT} />
 </div>
 <div>
 <label className={LABEL}>City</label>
-<input type="text"value={brand.city} onChange={upd('city')} placeholder="Columbus"className={INPUT} />
+<input type="text"value={brand.city} onChange={upd('city', 'brand_city')} placeholder="Columbus"className={INPUT} />
 </div>
 <div className="grid grid-cols-2 gap-3">
 <div>
 <label className={LABEL}>State</label>
-<input type="text"value={brand.state} onChange={upd('state')} placeholder="OH"maxLength={2} className={INPUT} />
+<input type="text"value={brand.state} onChange={upd('state', 'brand_state')} placeholder="OH"maxLength={2} className={INPUT} />
 </div>
 <div>
 <label className={LABEL}>ZIP</label>
-<input type="text"value={brand.zip} onChange={upd('zip')} placeholder="43215"className={INPUT} />
+<input type="text"value={brand.zip} onChange={upd('zip', 'brand_zip')} placeholder="43215"className={INPUT} />
 </div>
 </div>
 </div>
 <div>
 <label className={LABEL}>Footer Note</label>
-<textarea value={brand.footer_note} onChange={upd('footer_note')}
+<textarea value={brand.footer_note} onChange={upd('footer_note', 'brand_footer_note')}
 placeholder="Thank you for choosing our venue. All payments are non-refundable unless otherwise stated."
 rows={2}
 className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors resize-none"
