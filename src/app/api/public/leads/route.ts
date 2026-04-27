@@ -348,12 +348,22 @@ export async function POST(request: NextRequest) {
     console.error('[public/leads] attach default pipeline', e);
   }
 
-  // Fire form-submitted workflow trigger
+  // Fire form-submitted workflow trigger then kick the cron so any delay steps
+  // that were just scheduled get picked up automatically.
   try {
     const formId = await ensureListingForm(venue.id);
     if (formId) {
       console.log(`[public/leads] firing form trigger formId=${formId} venueId=${venue.id} leadId=${lr.id}`);
       await onMarketingFormSubmitted(venue.id, lr.id, formId);
+      // Kick the cron after a short delay to advance any delay steps that were
+      // just scheduled (fire-and-forget, never blocks the response).
+      void (async () => {
+        await new Promise((r) => setTimeout(r, 5_000));
+        const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com').replace(/\/$/, '');
+        const secret = process.env.MARKETING_CRON_SECRET || process.env.CRON_SECRET || '';
+        const url = `${appUrl}/api/cron/marketing-email${secret ? `?secret=${encodeURIComponent(secret)}` : ''}`;
+        fetch(url).catch(() => {/* fire-and-forget */});
+      })();
     } else {
       console.warn(`[public/leads] no listing form found for venue ${venue.id} — workflow not triggered`);
     }

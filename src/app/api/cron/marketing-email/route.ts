@@ -28,6 +28,21 @@ function cronEnabled(): boolean {
   return !(off === '1' || off === 'true' || off === 'yes' || off === 'on');
 }
 
+/**
+ * Ping this same cron endpoint after a short delay so that enrollments
+ * waiting on a delay step are picked up automatically without an external
+ * scheduler.  We call this after every run that had work to do, up to a
+ * configurable reschedule interval (default 60 s).
+ */
+function selfPingAfter(delayMs: number) {
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com').replace(/\/$/, '');
+  const secret = cronSecret();
+  const url = `${appUrl}/api/cron/marketing-email${secret ? `?secret=${encodeURIComponent(secret)}` : ''}`;
+  setTimeout(() => {
+    fetch(url, { method: 'GET' }).catch(() => {/* fire-and-forget */});
+  }, delayMs);
+}
+
 /** Scheduled HTTP job (e.g. Railway Cron, GitHub Actions, curl): campaigns + automation steps. */
 export async function GET(request: NextRequest) {
   if (!authorize(request)) {
@@ -37,12 +52,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       disabled: true,
-      hint: 'Set MARKETING_CRON_ENABLED=1 to resume sending.',
+      hint: 'Set MARKETING_CRON_DISABLED=1 to pause.',
       result: null,
     });
   }
   try {
     const result = await runMarketingEmailCron();
+    // If any automation steps ran, self-ping after 60 s so delay steps advance
+    // without needing an external cron service configured on Railway.
+    const hadWork =
+      (result.automationSteps as number) > 0 ||
+      (result.campaignRecipientsSent as number) > 0 ||
+      (result.weddingFollowupEnrollments as number) > 0;
+    if (hadWork) selfPingAfter(60_000);
     return NextResponse.json({ ok: true, result });
   } catch (e) {
     console.error('[cron marketing-email]', e);

@@ -219,7 +219,7 @@ export async function onMarketingFormSubmitted(
     // for the next cron tick. If step 1 is a Wait it will schedule itself
     // for later and return; if it's SMS/Email it fires right now.
     if (enrollmentId) {
-      await processOneEnrollment({
+      await processEnrollmentChain({
         id: enrollmentId,
         automation_id: row.id,
         venue_id: venueId,
@@ -509,14 +509,14 @@ export async function processAutomationEnrollmentsBatch(): Promise<{ processed: 
 
   let n = 0;
   for (const en of due) {
-    const ok = await processOneEnrollment(en as {
+    const result = await processEnrollmentChain(en as {
       id: string;
       automation_id: string;
       venue_id: string;
       lead_id: string;
       current_step_index: number;
     });
-    if (ok) n++;
+    if (result !== 'unknown') n++;
   }
   return { processed: n };
 }
@@ -546,11 +546,10 @@ export async function runEnrollmentsNow(enrollmentIds: string[]): Promise<{ proc
 
   let n = 0;
   for (const en of data) {
-    const ok = await processOneEnrollment({
-      ...(en as { id: string; automation_id: string; venue_id: string; lead_id: string; current_step_index: number }),
-      // Use the (now-reset) status so processOneEnrollment treats it as active.
-    });
-    if (ok) n++;
+    const result = await processEnrollmentChain(
+      en as { id: string; automation_id: string; venue_id: string; lead_id: string; current_step_index: number },
+    );
+    if (result !== 'unknown') n++;
   }
   return { processed: n };
 }
@@ -583,13 +582,23 @@ async function logStepExecution(opts: {
   }
 }
 
+/**
+ * Result of executing one workflow step:
+ *  'advanced'  – step executed, next step is due immediately (keep chaining)
+ *  'delayed'   – a Wait step scheduled the next run in the future (stop chaining)
+ *  'completed' – enrollment finished
+ *  'failed'    – enrollment marked failed (stop chaining)
+ *  'unknown'   – unrecognised step type (stop chaining)
+ */
+type StepResult = 'advanced' | 'delayed' | 'completed' | 'failed' | 'unknown';
+
 async function processOneEnrollment(en: {
   id: string;
   automation_id: string;
   venue_id: string;
   lead_id: string;
   current_step_index: number;
-}): Promise<boolean> {
+}): Promise<StepResult> {
   const { data: steps, error: se } = await supabaseAdmin
     .from('marketing_automation_steps')
     .select('id, step_order, step_type, config_json')
@@ -600,7 +609,7 @@ async function processOneEnrollment(en: {
       .from('marketing_automation_enrollments')
       .update({ status: 'failed', last_error: 'No steps' })
       .eq('id', en.id);
-    return true;
+    return 'failed';
   }
   const sorted = [...steps].sort((a, b) => (a.step_order as number) - (b.step_order as number));
   const idx = en.current_step_index;
@@ -609,7 +618,7 @@ async function processOneEnrollment(en: {
       .from('marketing_automation_enrollments')
       .update({ status: 'completed', completed_at: new Date().toISOString(), next_run_at: new Date().toISOString() })
       .eq('id', en.id);
-    return true;
+    return 'completed';
   }
   const step = sorted[idx] as { step_type: string; config_json: Record<string, unknown> };
   if (step.step_type === 'delay') {
@@ -621,7 +630,7 @@ async function processOneEnrollment(en: {
       .update({ current_step_index: idx + 1, next_run_at: next })
       .eq('id', en.id);
     void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'delay', status: 'success' });
-    return true;
+    return 'delayed';
   }
   if (step.step_type === 'send_email') {
     const templateId = String((step.config_json as { template_id?: string }).template_id || '');
@@ -630,7 +639,7 @@ async function processOneEnrollment(en: {
         .from('marketing_automation_enrollments')
         .update({ status: 'failed', last_error: 'Missing template_id' })
         .eq('id', en.id);
-      return true;
+      return 'failed';
     }
     const { data: tmpl } = await supabaseAdmin
       .from('marketing_email_templates')
@@ -643,7 +652,7 @@ async function processOneEnrollment(en: {
         .from('marketing_automation_enrollments')
         .update({ status: 'failed', last_error: 'Template not found' })
         .eq('id', en.id);
-      return true;
+      return 'failed';
     }
     const def = parseEmailDefinition(tmpl.definition_json);
     const send = await sendTemplateToLead(en.venue_id, en.lead_id, def, tmpl.subject as string, tmpl.preheader as string, undefined);
@@ -656,30 +665,22 @@ async function processOneEnrollment(en: {
         .update({ status: 'failed', last_error: send.error ?? 'send failed' })
         .eq('id', en.id);
       void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'send_email', status: 'failed', error_text: send.error ?? 'send failed' });
-      return true;
+      return 'failed';
     }
     void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'send_email', status: emailSkipped ? 'skipped' : 'success' });
     const nextIdx = idx + 1;
     if (nextIdx >= sorted.length) {
       await supabaseAdmin
         .from('marketing_automation_enrollments')
-        .update({
-          status: 'completed',
-          current_step_index: nextIdx,
-          completed_at: new Date().toISOString(),
-          next_run_at: new Date().toISOString(),
-        })
+        .update({ status: 'completed', current_step_index: nextIdx, completed_at: new Date().toISOString(), next_run_at: new Date().toISOString() })
         .eq('id', en.id);
-    } else {
-      await supabaseAdmin
-        .from('marketing_automation_enrollments')
-        .update({
-          current_step_index: nextIdx,
-          next_run_at: new Date().toISOString(),
-        })
-        .eq('id', en.id);
+      return 'completed';
     }
-    return true;
+    await supabaseAdmin
+      .from('marketing_automation_enrollments')
+      .update({ current_step_index: nextIdx, next_run_at: new Date().toISOString() })
+      .eq('id', en.id);
+    return 'advanced';
   }
   if (step.step_type === 'send_sms') {
     const cfg = step.config_json as { body?: string; media_urls?: string[] };
@@ -689,7 +690,7 @@ async function processOneEnrollment(en: {
         .from('marketing_automation_enrollments')
         .update({ status: 'failed', last_error: 'Empty SMS body' })
         .eq('id', en.id);
-      return true;
+      return 'failed';
     }
     const send = await sendAutomationSmsToLead(en.venue_id, en.lead_id, body, cfg.media_urls);
     console.log(`[worker] SMS step enrollment=${en.id} ok=${send.ok} error=${send.error ?? 'none'}`);
@@ -699,30 +700,22 @@ async function processOneEnrollment(en: {
         .update({ status: 'failed', last_error: send.error ?? 'sms failed' })
         .eq('id', en.id);
       void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'send_sms', status: 'failed', error_text: send.error ?? 'sms failed' });
-      return true;
+      return 'failed';
     }
     void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'send_sms', status: send.error === 'suppressed' ? 'skipped' : 'success' });
     const nextIdx = idx + 1;
     if (nextIdx >= sorted.length) {
       await supabaseAdmin
         .from('marketing_automation_enrollments')
-        .update({
-          status: 'completed',
-          current_step_index: nextIdx,
-          completed_at: new Date().toISOString(),
-          next_run_at: new Date().toISOString(),
-        })
+        .update({ status: 'completed', current_step_index: nextIdx, completed_at: new Date().toISOString(), next_run_at: new Date().toISOString() })
         .eq('id', en.id);
-    } else {
-      await supabaseAdmin
-        .from('marketing_automation_enrollments')
-        .update({
-          current_step_index: nextIdx,
-          next_run_at: new Date().toISOString(),
-        })
-        .eq('id', en.id);
+      return 'completed';
     }
-    return true;
+    await supabaseAdmin
+      .from('marketing_automation_enrollments')
+      .update({ current_step_index: nextIdx, next_run_at: new Date().toISOString() })
+      .eq('id', en.id);
+    return 'advanced';
   }
   // ── add_tag: apply one or more tags to the enrolled contact ─────────────
   if (step.step_type === 'add_tag') {
@@ -733,37 +726,31 @@ async function processOneEnrollment(en: {
       await supabaseAdmin.from('lead_tag_assignments').upsert(rows, { onConflict: 'lead_id,tag_id', ignoreDuplicates: true });
     }
     const nextIdx = idx + 1;
+    const done = nextIdx >= sorted.length;
     await supabaseAdmin.from('marketing_automation_enrollments').update(
-      nextIdx >= sorted.length
-        ? { status: 'completed', current_step_index: nextIdx, completed_at: new Date().toISOString(), next_run_at: new Date().toISOString() }
-        : { current_step_index: nextIdx, next_run_at: new Date().toISOString() },
+      done ? { status: 'completed', current_step_index: nextIdx, completed_at: new Date().toISOString(), next_run_at: new Date().toISOString() }
+           : { current_step_index: nextIdx, next_run_at: new Date().toISOString() },
     ).eq('id', en.id);
     void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'add_tag', status: 'success' });
-    return true;
+    return done ? 'completed' : 'advanced';
   }
 
-  // ── remove_tag: detach one or more tags from the enrolled contact ────────
   if (step.step_type === 'remove_tag') {
     const cfg = step.config_json as { tag_ids?: string[] };
     const tagIds = (cfg.tag_ids ?? []).filter(Boolean);
     if (tagIds.length > 0) {
-      await supabaseAdmin
-        .from('lead_tag_assignments')
-        .delete()
-        .eq('lead_id', en.lead_id)
-        .in('tag_id', tagIds);
+      await supabaseAdmin.from('lead_tag_assignments').delete().eq('lead_id', en.lead_id).in('tag_id', tagIds);
     }
     const nextIdx = idx + 1;
+    const done = nextIdx >= sorted.length;
     await supabaseAdmin.from('marketing_automation_enrollments').update(
-      nextIdx >= sorted.length
-        ? { status: 'completed', current_step_index: nextIdx, completed_at: new Date().toISOString(), next_run_at: new Date().toISOString() }
-        : { current_step_index: nextIdx, next_run_at: new Date().toISOString() },
+      done ? { status: 'completed', current_step_index: nextIdx, completed_at: new Date().toISOString(), next_run_at: new Date().toISOString() }
+           : { current_step_index: nextIdx, next_run_at: new Date().toISOString() },
     ).eq('id', en.id);
     void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'remove_tag', status: 'success' });
-    return true;
+    return done ? 'completed' : 'advanced';
   }
 
-  // ── change_stage: move the lead to a different pipeline stage ───────────
   if (step.step_type === 'change_stage') {
     const cfg = step.config_json as { stage_id?: string };
     const stageId = String(cfg.stage_id || '').trim();
@@ -771,16 +758,41 @@ async function processOneEnrollment(en: {
       await supabaseAdmin.from('leads').update({ stage_id: stageId }).eq('id', en.lead_id);
     }
     const nextIdx = idx + 1;
+    const done = nextIdx >= sorted.length;
     await supabaseAdmin.from('marketing_automation_enrollments').update(
-      nextIdx >= sorted.length
-        ? { status: 'completed', current_step_index: nextIdx, completed_at: new Date().toISOString(), next_run_at: new Date().toISOString() }
-        : { current_step_index: nextIdx, next_run_at: new Date().toISOString() },
+      done ? { status: 'completed', current_step_index: nextIdx, completed_at: new Date().toISOString(), next_run_at: new Date().toISOString() }
+           : { current_step_index: nextIdx, next_run_at: new Date().toISOString() },
     ).eq('id', en.id);
     void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'change_stage', status: 'success' });
-    return true;
+    return done ? 'completed' : 'advanced';
   }
 
-  return false;
+  return 'unknown';
+}
+
+/**
+ * Run an enrollment through as many consecutive steps as possible without
+ * pausing. Stops at a delay step (schedules future run), completion, failure,
+ * or an unknown step type. Cap at 50 steps to prevent infinite loops.
+ */
+async function processEnrollmentChain(
+  en: { id: string; automation_id: string; venue_id: string; lead_id: string; current_step_index: number },
+  maxSteps = 50,
+): Promise<StepResult> {
+  let state = en;
+  for (let i = 0; i < maxSteps; i++) {
+    const result = await processOneEnrollment(state);
+    if (result !== 'advanced') return result;
+    // Reload state so next iteration uses the updated current_step_index.
+    const { data } = await supabaseAdmin
+      .from('marketing_automation_enrollments')
+      .select('id, automation_id, venue_id, lead_id, current_step_index, status')
+      .eq('id', en.id)
+      .maybeSingle();
+    if (!data || (data.status as string) !== 'active') return result;
+    state = data as typeof en;
+  }
+  return 'advanced';
 }
 
 export async function processCampaignsCron(): Promise<{ campaigns: number; recipients: number }> {
