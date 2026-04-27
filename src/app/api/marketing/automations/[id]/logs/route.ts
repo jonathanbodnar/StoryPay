@@ -39,7 +39,14 @@ export async function GET(
   if (status && status !== 'all') query = query.eq('status', status);
 
   const { data: rows, error } = await query;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    // If the table doesn't exist yet (migration 067 not applied) return empty
+    // instead of a 500 so the UI shows the empty state rather than crashing.
+    if (/relation.*does not exist/i.test(error.message)) {
+      return NextResponse.json({ logs: [], hint: 'Run migration 067 to enable execution logs.' });
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 
   const logs = (rows ?? []).map((r) => {
     const rawLead = r.leads as unknown;
