@@ -181,10 +181,12 @@ export async function POST(request: NextRequest) {
     referral_source:        typeof payload.referral_source === 'string'
                               ? payload.referral_source.trim() || null
                               : null,
-    // Public listing leads must always live in the sales pipeline. Set this
-    // explicitly (instead of relying on the column default) so the lead is
-    // guaranteed to show up on the Kanban regardless of the venue's prior
-    // contact-only history or schema-default drift.
+    // Submitting the public form is explicit consent to be contacted.
+    // Force both flags on so existing DND/opt-out values on a previously
+    // seen contact don't silently block the workflow steps.
+    marketing_email_opt_in: true,
+    sms_dnd:                false,
+    // Public listing leads must always live in the sales pipeline.
     excluded_from_pipeline: false,
   };
 
