@@ -144,15 +144,30 @@ function formatDate(iso: string | null): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-/** MM-DD-YY compact format used on Kanban cards and the lead drawer. */
-function formatShortDate(iso: string | null): string {
+/** MM-DD-YY h:mma — compact date + 12-hour time in the venue's local timezone. */
+function formatShortDate(iso: string | null, tz?: string): string {
   if (!iso) return '—';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  const yy = String(d.getFullYear()).slice(-2);
-  return `${mm}-${dd}-${yy}`;
+  const locale = 'en-US';
+  const zone = tz || undefined;
+  try {
+    const datePart = new Intl.DateTimeFormat(locale, {
+      month: '2-digit', day: '2-digit', year: '2-digit',
+      timeZone: zone,
+    }).format(d).replace(/\//g, '-');
+    const timePart = new Intl.DateTimeFormat(locale, {
+      hour: 'numeric', minute: '2-digit', hour12: true,
+      timeZone: zone,
+    }).format(d).replace(/\s/g, '').toLowerCase(); // "10:30am"
+    return `${datePart} ${timePart}`;
+  } catch {
+    // Fallback if tz string is invalid
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const yy = String(d.getFullYear()).slice(-2);
+    return `${mm}-${dd}-${yy}`;
+  }
 }
 
 function formatDateTime(iso: string): string {
@@ -300,6 +315,7 @@ export default function LeadsPage() {
   const [hideRevenue, setHideRevenue] = useState(false);
   const [insights, setInsights] = useState<LeadInsightsPayload | null>(null);
   const [insightsLoading, setInsightsLoading] = useState(true);
+  const [venueTz, setVenueTz] = useState<string | undefined>(undefined);
 
   const loadTags = useCallback(async () => {
     const res = await fetch('/api/marketing/tags', { cache: 'no-store' });
@@ -330,6 +346,17 @@ export default function LeadsPage() {
         setHideRevenue(Boolean(s.hideRevenue));
       }
     })();
+  }, []);
+
+  // Fetch venue timezone once so card dates can be localised.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => {
+    void fetch('/api/venues/me', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { timezone?: string } | null) => {
+        if (d?.timezone) setVenueTz(d.timezone);
+      })
+      .catch(() => {});
   }, []);
 
   const activePipeline = useMemo(
@@ -759,6 +786,7 @@ export default function LeadsPage() {
           onToggleLeadTag={setLeadTagSelection}
           onCreateTagForLead={createTagAndAssignToLead}
           onDeleteLead={deleteLead}
+          venueTz={venueTz}
         />
       )}
 
@@ -772,6 +800,7 @@ export default function LeadsPage() {
           onQuickStageChange={(id, stageId) => updateLead(id, { stageId })}
           onToggleLeadTag={setLeadTagSelection}
           onCreateTagForLead={createTagAndAssignToLead}
+          venueTz={venueTz}
         />
       )}
 
@@ -810,6 +839,7 @@ export default function LeadsPage() {
           }}
           onToggleLeadTag={setLeadTagSelection}
           onCreateTagForLead={createTagAndAssignToLead}
+          venueTz={venueTz}
         />
       )}
 
@@ -1132,7 +1162,7 @@ function KanbanBoard({
   dragLeadId, dragOverStage,
   allTags,
   onCardClick, onDragStartCard, onDragEndCard, onDragOverStage, onDropStage, onToggleLeadTag,
-  onCreateTagForLead, onDeleteLead,
+  onCreateTagForLead, onDeleteLead, venueTz,
 }: {
   pipeline: Pipeline;
   leadsByStage: Map<string, Lead[]>;
@@ -1150,6 +1180,7 @@ function KanbanBoard({
   onToggleLeadTag: (leadId: string, tagId: string) => void;
   onCreateTagForLead: (leadId: string, name: string) => Promise<void>;
   onDeleteLead: (id: string) => void;
+  venueTz?: string;
 }) {
   return (
     <div
@@ -1216,6 +1247,7 @@ function KanbanBoard({
                       onToggleLeadTag={onToggleLeadTag}
                       onCreateTagForLead={onCreateTagForLead}
                       onDelete={() => onDeleteLead(lead.id)}
+                      venueTz={venueTz}
                     />
                   ))
                 )}
@@ -1230,7 +1262,7 @@ function KanbanBoard({
 
 function KanbanCard({
   lead, allTags, bookingBadge, stageWinPct, hideRevenue, isDragging, onClick, onDragStart, onDragEnd, onToggleLeadTag,
-  onCreateTagForLead, onDelete,
+  onCreateTagForLead, onDelete, venueTz,
 }: {
   lead: Lead;
   allTags: MarketingTag[];
@@ -1244,6 +1276,7 @@ function KanbanCard({
   onToggleLeadTag: (leadId: string, tagId: string) => void;
   onCreateTagForLead: (leadId: string, name: string) => Promise<void>;
   onDelete: () => void;
+  venueTz?: string;
 }) {
   const weighted =
     lead.opportunity_value != null ? lead.opportunity_value * (stageWinPct / 100) : null;
@@ -1339,7 +1372,7 @@ function KanbanCard({
 
       <div className="mt-2 flex items-center justify-between gap-2 pt-2 border-t border-gray-100">
         <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
-          <Clock className="w-3 h-3" /> Created: {formatShortDate(lead.created_at)}
+          <Clock className="w-3 h-3" /> Created: {formatShortDate(lead.created_at, venueTz)}
         </div>
         <div className="flex items-center gap-2 text-[11px]">
           {lead.note_count > 0 && (
@@ -1368,7 +1401,7 @@ function KanbanCard({
 // ─── List view ───────────────────────────────────────────────────────────────
 
 function ListBoard({
-  leads, stages, allTags, hideRevenue, onRowClick, onQuickStageChange, onToggleLeadTag, onCreateTagForLead,
+  leads, stages, allTags, hideRevenue, onRowClick, onQuickStageChange, onToggleLeadTag, onCreateTagForLead, venueTz,
 }: {
   leads: Lead[];
   stages: Stage[];
@@ -1378,6 +1411,7 @@ function ListBoard({
   onQuickStageChange: (id: string, stageId: string) => void;
   onToggleLeadTag: (leadId: string, tagId: string) => void;
   onCreateTagForLead: (leadId: string, name: string) => Promise<void>;
+  venueTz?: string;
 }) {
   if (leads.length === 0) {
     return (
@@ -1466,7 +1500,7 @@ function ListBoard({
                     </span>
                   )}
                   <div className="text-[11px] text-gray-400 whitespace-nowrap pt-1">
-                    Created: {formatShortDate(lead.created_at)}
+                    Created: {formatShortDate(lead.created_at, venueTz)}
                   </div>
                   {stages.length > 0 && (
                     <select
@@ -1513,6 +1547,7 @@ function LeadDrawer({
   onReloadCurrentLead,
   onToggleLeadTag,
   onCreateTagForLead,
+  venueTz,
 }: {
   lead: Lead;
   pipelines: Pipeline[];
@@ -1530,6 +1565,7 @@ function LeadDrawer({
   onReloadCurrentLead?: () => void | Promise<void>;
   onToggleLeadTag: (leadId: string, tagId: string) => void;
   onCreateTagForLead: (leadId: string, name: string) => Promise<void>;
+  venueTz?: string;
 }) {
   const [newNote, setNewNote] = useState('');
   const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([]);
@@ -1843,7 +1879,7 @@ function LeadDrawer({
                 </span>
               )}
             </div>
-            <p className="text-xs text-gray-400">Created: {formatShortDate(lead.created_at)} · {lead.source}</p>
+            <p className="text-xs text-gray-400">Created: {formatShortDate(lead.created_at, venueTz)} · {lead.source}</p>
           </div>
           <button onClick={onClose} className="rounded-xl p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700">
             <X className="w-5 h-5" />
@@ -2008,7 +2044,7 @@ function LeadDrawer({
             {/* Read-only created date */}
             <div className="col-span-2 rounded-xl border border-gray-100 bg-gray-50/60 px-3 py-2.5">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-0.5">Date created</p>
-              <p className="text-sm text-gray-700">{formatShortDate(lead.created_at)}</p>
+              <p className="text-sm text-gray-700">{formatShortDate(lead.created_at, venueTz)}</p>
             </div>
             <div className="col-span-2">
               <label className="flex items-start gap-2.5 cursor-pointer rounded-xl border border-gray-100 bg-gray-50/80 px-3 py-2.5">
