@@ -34,7 +34,7 @@ export async function GET(
     const stepIndex = Number(stepIndexParam);
     const { data: rows, error } = await supabaseAdmin
       .from('marketing_automation_enrollments')
-      .select('id, current_step_index, status, next_run_at, leads(id, first_name, last_name, email, name)')
+      .select('id, current_step_index, status, next_run_at, last_error, leads(id, first_name, last_name, email, name)')
       .eq('automation_id', id)
       .eq('current_step_index', stepIndex)
       .in('status', ['active', 'failed'])
@@ -48,6 +48,7 @@ export async function GET(
         id: r.id as string,
         stepIndex: r.current_step_index as number,
         status: r.status as string,
+        lastError: (r.last_error as string | null) ?? null,
         nextRunAt: r.next_run_at as string | null,
         leadId: lead?.id ?? null,
         firstName: lead?.first_name || lead?.name?.split(' ')[0] || '—',

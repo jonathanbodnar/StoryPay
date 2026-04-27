@@ -76,6 +76,7 @@ interface FormRow   { id: string; name: string; published: boolean }
 interface TemplateOpt { id: string; name: string }
 interface EnrollContact {
   id: string; stepIndex: number; status: string; nextRunAt: string | null;
+  lastError: string | null;
   leadId: string | null; firstName: string; lastName: string; email: string;
 }
 
@@ -2539,7 +2540,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
             <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
               <div>
                 <h3 className="text-base font-semibold text-gray-900">Contacts at Step {enrollModal.stepIndex + 1}</h3>
-                <p className="mt-0.5 text-xs text-gray-500">Select contacts and click "Advance" to process their next step immediately.</p>
+                <p className="mt-0.5 text-xs text-gray-500">Select contacts and click "Retry / Advance" to execute the step immediately. Failed contacts will be reset and retried.</p>
               </div>
               <button type="button" onClick={() => setEnrollModal(null)} className="text-gray-400 hover:text-gray-700"><Minus size={18} /></button>
             </div>
@@ -2567,12 +2568,15 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                   </thead>
                   <tbody>
                     {enrollList.map((c) => (
-                      <tr key={c.id} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer" onClick={() => setSelEnroll((prev) => { const n = new Set(prev); n.has(c.id) ? n.delete(c.id) : n.add(c.id); return n; })}>
+                      <tr key={c.id} className={`border-b border-gray-50 cursor-pointer hover:bg-gray-50 ${c.status === 'failed' ? 'bg-red-50/30' : ''}`} onClick={() => setSelEnroll((prev) => { const n = new Set(prev); n.has(c.id) ? n.delete(c.id) : n.add(c.id); return n; })}>
                         <td className="px-4 py-2.5">{selEnroll.has(c.id) ? <CheckSquare size={15} className="text-blue-500" /> : <Square size={15} className="text-gray-300" />}</td>
                         <td className="px-4 py-2.5 font-medium text-gray-900">{c.firstName} {c.lastName}</td>
                         <td className="px-4 py-2.5 text-gray-500">{c.email}</td>
                         <td className="px-4 py-2.5">
                           <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${c.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>{c.status}</span>
+                          {c.status === 'failed' && c.lastError && (
+                            <p className="mt-0.5 text-[10px] text-red-500 leading-tight max-w-[160px] truncate" title={c.lastError}>{c.lastError}</p>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -2588,7 +2592,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                   className="flex items-center gap-1.5 rounded-xl bg-brand-900 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800 disabled:opacity-50 transition-colors"
                 >
                   {advancing ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-                  {advancing ? 'Advancing…' : 'Advance selected'}
+                  {advancing ? 'Running…' : enrollList.filter((c) => selEnroll.has(c.id) && c.status === 'failed').length > 0 ? 'Retry selected' : 'Advance selected'}
                 </button>
               </div>
             </div>

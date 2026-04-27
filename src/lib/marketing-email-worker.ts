@@ -523,17 +523,23 @@ export async function runEnrollmentsNow(enrollmentIds: string[]): Promise<{ proc
     .from('marketing_automation_enrollments')
     .select('id, automation_id, venue_id, lead_id, current_step_index, status')
     .in('id', enrollmentIds)
-    .eq('status', 'active');
+    .in('status', ['active', 'failed']); // allow re-running failed enrollments
   if (error || !data?.length) return { processed: 0 };
+
+  // Reset any failed enrollments back to active so processOneEnrollment can run them.
+  const failedIds = data.filter((r) => r.status === 'failed').map((r) => r.id as string);
+  if (failedIds.length) {
+    await supabaseAdmin
+      .from('marketing_automation_enrollments')
+      .update({ status: 'active', last_error: null })
+      .in('id', failedIds);
+  }
 
   let n = 0;
   for (const en of data) {
-    const ok = await processOneEnrollment(en as {
-      id: string;
-      automation_id: string;
-      venue_id: string;
-      lead_id: string;
-      current_step_index: number;
+    const ok = await processOneEnrollment({
+      ...(en as { id: string; automation_id: string; venue_id: string; lead_id: string; current_step_index: number }),
+      // Use the (now-reset) status so processOneEnrollment treats it as active.
     });
     if (ok) n++;
   }
