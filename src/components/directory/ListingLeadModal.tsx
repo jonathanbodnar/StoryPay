@@ -66,16 +66,10 @@ export function ListingLeadModal({ venueName, venueId, venueSlug, apiBase, confi
         throw new Error(j.error || 'Something went wrong. Please try again.');
       }
 
-      const data = await res.json().catch(() => ({})) as {
-        venue_slug?: string; venue_website?: string | null;
-      };
-      const slug    = data.venue_slug    ?? venueSlug ?? '';
-      const website = data.venue_website ?? '';
-      const params  = new URLSearchParams();
-      if (slug)    params.set('slug',    slug);
-      if (website) params.set('website', website);
-      params.set('name', venueName);
-      window.location.href = `${confirmationBase}/confirmation?${params.toString()}`;
+      const data = await res.json().catch(() => ({})) as { venue_slug?: string };
+      const slug = data.venue_slug ?? venueSlug ?? '';
+      // Redirect to the venue-specific thank-you page — clean URL for Meta Pixel tracking.
+      window.location.href = `${confirmationBase}/venue/${slug}/thankyou`;
     } catch (err: unknown) {
       setErrMsg(err instanceof Error ? err.message : 'Something went wrong.');
       setStatus('error');

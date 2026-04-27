@@ -86,6 +86,8 @@ export type PublicVenuePayload = {
     listing_verified: boolean;
     /** "Sponsored" label (admin-approved). */
     listing_sponsored: boolean;
+    /** Venue's own website URL (brand_website), used on the thank-you page. */
+    brand_website: string | null;
   };
   reviews: {
     average_rating: number | null;
@@ -141,6 +143,7 @@ export async function getPublicVenueBySlug(rawSlug: string): Promise<PublicVenue
         'google_reviews_fetched_at',
         'directory_verified_status',
         'directory_sponsored_status',
+        'brand_website',
       ].join(','),
     )
     .eq('slug', slug)
@@ -280,6 +283,7 @@ export async function getPublicVenueBySlug(rawSlug: string): Promise<PublicVenue
       ga4_measurement_id,
       listing_verified,
       listing_sponsored,
+      brand_website: v.brand_website != null ? String(v.brand_website) : null,
     },
     reviews: {
       average_rating,
