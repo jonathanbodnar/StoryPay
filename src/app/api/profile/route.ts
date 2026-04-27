@@ -39,34 +39,37 @@ export async function GET() {
   // ── Venue owner ────────────────────────────────────────────────────────────
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('id, name, email, phone, owner_id')
+    .select('id, name, email, phone, owner_id, owner_first_name, owner_last_name')
     .eq('id', venueId)
     .single();
 
   if (!venue) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
 
-  // Try to get the owner's personal name from profiles table
-  let ownerFullName: string | null = null;
-  if (venue.owner_id) {
+  // Names are stored directly on venues (owner_first_name / owner_last_name).
+  // Fall back to splitting profiles.full_name for accounts created before
+  // migration 070.
+  let firstName = (venue as Record<string, unknown>).owner_first_name as string | null ?? '';
+  let lastName  = (venue as Record<string, unknown>).owner_last_name  as string | null ?? '';
+
+  if (!firstName && venue.owner_id) {
     const { data: profile } = await supabaseAdmin
       .from('profiles')
       .select('full_name')
       .eq('id', venue.owner_id)
       .maybeSingle();
-    ownerFullName = profile?.full_name ?? null;
+    if (profile?.full_name) {
+      const parts = profile.full_name.trim().split(/\s+/);
+      firstName = parts[0] ?? '';
+      lastName  = parts.slice(1).join(' ');
+    }
   }
-
-  // Split full_name into first / last for the form
-  const nameParts = (ownerFullName ?? '').trim().split(/\s+/);
-  const firstName = nameParts[0] ?? '';
-  const lastName  = nameParts.slice(1).join(' ');
 
   return NextResponse.json({
     type:       'owner',
     id:         venue.id,
     first_name: firstName,
     last_name:  lastName,
-    full_name:  ownerFullName ?? '',
+    full_name:  [firstName, lastName].filter(Boolean).join(' '),
     email:      venue.email   ?? '',
     phone:      venue.phone   ?? '',
     venue_name: venue.name    ?? '',
@@ -111,43 +114,37 @@ export async function PATCH(request: NextRequest) {
   }
 
   // ── Venue owner ────────────────────────────────────────────────────────────
-  const { data: venue } = await supabaseAdmin
-    .from('venues')
-    .select('id, owner_id')
-    .eq('id', venueId)
-    .single();
-
-  if (!venue) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
-
   // Validate required owner fields
-  const email = body.email?.trim().toLowerCase() ?? '';
-  const phone = body.phone?.trim() ?? '';
-  const firstName = body.first_name?.trim() ?? '';
-  const lastName  = body.last_name?.trim()  ?? '';
+  const email     = (body.email     ?? '').trim().toLowerCase();
+  const phone     = (body.phone     ?? '').trim();
+  const firstName = (body.first_name ?? '').trim();
+  const lastName  = (body.last_name  ?? '').trim();
   if (!firstName) return NextResponse.json({ error: 'First name is required.' }, { status: 400 });
   if (!email)     return NextResponse.json({ error: 'Email is required.' },      { status: 400 });
   if (!phone)     return NextResponse.json({ error: 'Phone is required.' },      { status: 400 });
 
-  // Build full_name from first + last and upsert into profiles
-  // (update alone silently no-ops if the row doesn't exist yet)
   const fullName = [firstName, lastName].filter(Boolean).join(' ');
-  if (venue.owner_id) {
-    const { error: profErr } = await supabaseAdmin
-      .from('profiles')
-      .upsert({ id: venue.owner_id, full_name: fullName }, { onConflict: 'id' });
-    if (profErr) {
-      console.error('[PATCH /api/profile] profiles upsert failed:', profErr.message);
-      return NextResponse.json({ error: profErr.message }, { status: 500 });
-    }
-  }
 
-  // Update contact fields on the venues row
+  // Store names directly on the venues row (no FK dependency, always reliable).
+  // Also keep profiles.full_name in sync for backward compat where owner_id is set.
   const { error: venueErr } = await supabaseAdmin
     .from('venues')
-    .update({ email, phone })
+    .update({ email, phone, owner_first_name: firstName, owner_last_name: lastName } as Record<string, unknown>)
     .eq('id', venueId);
 
   if (venueErr) return NextResponse.json({ error: venueErr.message }, { status: 500 });
+
+  // Best-effort: also sync profiles.full_name (ignore errors — non-critical)
+  const { data: venueRow } = await supabaseAdmin
+    .from('venues')
+    .select('owner_id')
+    .eq('id', venueId)
+    .single();
+  if (venueRow?.owner_id) {
+    await supabaseAdmin
+      .from('profiles')
+      .upsert({ id: venueRow.owner_id, full_name: fullName }, { onConflict: 'id' });
+  }
 
   return NextResponse.json({ ok: true, first_name: firstName, last_name: lastName, full_name: fullName });
 }
