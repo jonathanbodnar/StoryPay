@@ -52,31 +52,50 @@ function isEmail(s: string): boolean {
 /**
  * Ensure the venue has a "Listing Lead Form" in marketing_forms.
  * Returns the form id (creates one if absent).
+ * Falls back to a name-based lookup when migration 068 (is_listing_form) is missing.
  */
 async function ensureListingForm(venueId: string): Promise<string | null> {
   try {
-    const { data: existing } = await supabaseAdmin
+    // Try the is_listing_form flag first (migration 068).
+    const byFlag = await supabaseAdmin
       .from('marketing_forms')
       .select('id')
       .eq('venue_id', venueId)
       .eq('is_listing_form', true)
       .maybeSingle();
 
-    if (existing) return existing.id as string;
+    if (!byFlag.error && byFlag.data) return byFlag.data.id as string;
 
+    // If the column doesn't exist yet, fall back to matching by name.
+    const colMissing = byFlag.error && /column.*is_listing_form/i.test(byFlag.error.message);
+    if (colMissing || byFlag.error) {
+      // Fallback: find or create by name only.
+      const byName = await supabaseAdmin
+        .from('marketing_forms')
+        .select('id')
+        .eq('venue_id', venueId)
+        .ilike('name', 'Listing Lead Form')
+        .maybeSingle();
+      if (byName.data) return byName.data.id as string;
+      // Create without is_listing_form (column absent).
+      const created = await supabaseAdmin
+        .from('marketing_forms')
+        .insert({ venue_id: venueId, name: 'Listing Lead Form', published: true })
+        .select('id')
+        .single();
+      return created.data ? (created.data.id as string) : null;
+    }
+
+    // No existing row — create it with the flag.
     const { data: created } = await supabaseAdmin
       .from('marketing_forms')
-      .insert({
-        venue_id: venueId,
-        name: 'Listing Lead Form',
-        is_listing_form: true,
-        published: true,
-      })
+      .insert({ venue_id: venueId, name: 'Listing Lead Form', is_listing_form: true, published: true })
       .select('id')
       .single();
 
     return created ? (created.id as string) : null;
-  } catch {
+  } catch (e) {
+    console.error('[public/leads] ensureListingForm failed:', e);
     return null;
   }
 }
@@ -330,7 +349,12 @@ export async function POST(request: NextRequest) {
   // Fire form-submitted workflow trigger
   try {
     const formId = await ensureListingForm(venue.id);
-    if (formId) await onMarketingFormSubmitted(venue.id, lr.id, formId);
+    if (formId) {
+      console.log(`[public/leads] firing form trigger formId=${formId} venueId=${venue.id} leadId=${lr.id}`);
+      await onMarketingFormSubmitted(venue.id, lr.id, formId);
+    } else {
+      console.warn(`[public/leads] no listing form found for venue ${venue.id} — workflow not triggered`);
+    }
   } catch (e) {
     console.error('[public/leads] workflow trigger', e);
   }

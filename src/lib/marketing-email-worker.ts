@@ -403,12 +403,21 @@ async function sendAutomationSmsToLead(
     .select('ghl_access_token, ghl_location_id, ghl_connected')
     .eq('id', venueId)
     .maybeSingle();
-  if (!(venue as { ghl_connected?: boolean } | null)?.ghl_connected) {
+  // Allow sending when an agency-level key is set in the environment — that key
+  // works for all sub-accounts without per-venue OAuth, so don't require the
+  // ghl_connected flag in that case.
+  const hasAgencyKey = !!(process.env.GHL_AGENCY_API_KEY || process.env.GHL_PRIVATE_KEY);
+  const venueConnected = (venue as { ghl_connected?: boolean } | null)?.ghl_connected === true;
+  if (!hasAgencyKey && !venueConnected) {
+    console.error(`[worker] SMS skipped for venue ${venueId}: GHL not connected and no agency key set`);
     return { ok: false, error: 'ghl_not_connected' };
   }
   const token = getGhlToken(venue as { ghl_access_token?: string | null });
   const loc = venue?.ghl_location_id as string | null;
-  if (!token || !loc) return { ok: false, error: 'ghl_not_configured' };
+  if (!token || !loc) {
+    console.error(`[worker] SMS skipped for venue ${venueId}: token=${!!token} loc=${loc}`);
+    return { ok: false, error: 'ghl_not_configured' };
+  }
   const mergedBody = mergeMarketingFields(bodyTemplate, vars).trim();
   if (!mergedBody) return { ok: false, error: 'empty_after_merge' };
   try {
@@ -680,6 +689,7 @@ async function processOneEnrollment(en: {
       return true;
     }
     const send = await sendAutomationSmsToLead(en.venue_id, en.lead_id, body, cfg.media_urls);
+    console.log(`[worker] SMS step enrollment=${en.id} ok=${send.ok} error=${send.error ?? 'none'}`);
     if (!send.ok && send.error !== 'suppressed') {
       await supabaseAdmin
         .from('marketing_automation_enrollments')
