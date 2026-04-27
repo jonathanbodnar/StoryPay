@@ -37,12 +37,23 @@ export async function GET() {
   }
 
   // ── Venue owner ────────────────────────────────────────────────────────────
-  const { data: venue } = await supabaseAdmin
+  // Try the full column list first; gracefully fall back if migration 070
+  // (owner_first_name / owner_last_name) hasn't been applied yet.
+  let venueResult = await supabaseAdmin
     .from('venues')
     .select('id, name, email, phone, owner_id, owner_first_name, owner_last_name')
     .eq('id', venueId)
     .single();
 
+  if (venueResult.error && /column.*owner_(first|last)_name.*does not exist/i.test(venueResult.error.message)) {
+    venueResult = await supabaseAdmin
+      .from('venues')
+      .select('id, name, email, phone, owner_id')
+      .eq('id', venueId)
+      .single();
+  }
+
+  const venue = venueResult.data;
   if (!venue) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
 
   // Names are stored directly on venues (owner_first_name / owner_last_name).
@@ -127,11 +138,20 @@ export async function PATCH(request: NextRequest) {
 
   // Store names directly on the venues row (no FK dependency, always reliable).
   // Also keep profiles.full_name in sync for backward compat where owner_id is set.
-  const { error: venueErr } = await supabaseAdmin
+  let venueUpdateResult = await supabaseAdmin
     .from('venues')
     .update({ email, phone, owner_first_name: firstName, owner_last_name: lastName } as Record<string, unknown>)
     .eq('id', venueId);
 
+  // Graceful fallback if migration 070 columns don't exist yet
+  if (venueUpdateResult.error && /column.*owner_(first|last)_name.*does not exist/i.test(venueUpdateResult.error.message)) {
+    venueUpdateResult = await supabaseAdmin
+      .from('venues')
+      .update({ email, phone })
+      .eq('id', venueId);
+  }
+
+  const venueErr = venueUpdateResult.error;
   if (venueErr) return NextResponse.json({ error: venueErr.message }, { status: 500 });
 
   // Best-effort: also sync profiles.full_name (ignore errors — non-critical)
