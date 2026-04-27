@@ -647,7 +647,10 @@ async function processOneEnrollment(en: {
     }
     const def = parseEmailDefinition(tmpl.definition_json);
     const send = await sendTemplateToLead(en.venue_id, en.lead_id, def, tmpl.subject as string, tmpl.preheader as string, undefined);
-    if (!send.ok && send.error !== 'suppressed') {
+    // 'suppressed' = unsubscribed, 'opt_out' = marketing_email_opt_in is false.
+    // Both are soft skips — advance to the next step rather than failing the enrollment.
+    const emailSkipped = send.error === 'suppressed' || send.error === 'opt_out';
+    if (!send.ok && !emailSkipped) {
       await supabaseAdmin
         .from('marketing_automation_enrollments')
         .update({ status: 'failed', last_error: send.error ?? 'send failed' })
@@ -655,7 +658,7 @@ async function processOneEnrollment(en: {
       void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'send_email', status: 'failed', error_text: send.error ?? 'send failed' });
       return true;
     }
-    void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'send_email', status: send.error === 'suppressed' ? 'skipped' : 'success' });
+    void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'send_email', status: emailSkipped ? 'skipped' : 'success' });
     const nextIdx = idx + 1;
     if (nextIdx >= sorted.length) {
       await supabaseAdmin
