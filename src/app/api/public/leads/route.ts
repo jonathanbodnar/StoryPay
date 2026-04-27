@@ -124,7 +124,7 @@ export async function POST(request: NextRequest) {
 
   const venueSelectQuery = supabaseAdmin
     .from('venues')
-    .select('id, slug, name, email, notification_email, email_notifications, is_demo');
+    .select('id, slug, name, email, notification_email, email_notifications, is_demo, brand_website');
 
   const { data: venue, error: venueErr } = venueId
     ? await venueSelectQuery.eq('id', venueId).maybeSingle()
@@ -370,7 +370,13 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json(
-    { ok: true, lead_id: lead.id, track_token: (lead as { track_token?: string }).track_token ?? null },
+    {
+      ok: true,
+      lead_id: lead.id,
+      track_token: (lead as { track_token?: string }).track_token ?? null,
+      venue_slug: venue.slug ?? null,
+      venue_website: (venue as { brand_website?: string | null }).brand_website ?? null,
+    },
     { status: 201 },
   );
 }

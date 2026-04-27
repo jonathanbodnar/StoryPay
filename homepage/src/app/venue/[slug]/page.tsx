@@ -369,6 +369,7 @@ export default async function PublicVenuePage({ params }: { params: Promise<{ sl
                 <ListingLeadModal
                   venueName={venue.name}
                   venueId={venue.id}
+                  venueSlug={venue.slug}
                   apiBase={API_BASE}
                 />
               </div>

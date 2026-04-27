@@ -14,12 +14,14 @@ const TOURING_OPTIONS = [
 interface Props {
   venueName: string;
   venueId: string;
+  venueSlug?: string;
   apiBase: string; // e.g. "https://app.storyvenue.com"
+  confirmationBase?: string; // e.g. "" (same origin) or "https://storyvenue.com"
 }
 
 type Status = 'idle' | 'submitting' | 'success' | 'error';
 
-export function ListingLeadModal({ venueName, venueId, apiBase }: Props) {
+export function ListingLeadModal({ venueName, venueId, venueSlug, apiBase, confirmationBase = '' }: Props) {
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<Status>('idle');
   const [errMsg, setErrMsg] = useState('');
@@ -64,7 +66,16 @@ export function ListingLeadModal({ venueName, venueId, apiBase }: Props) {
         throw new Error(j.error || 'Something went wrong. Please try again.');
       }
 
-      setStatus('success');
+      const data = await res.json().catch(() => ({})) as {
+        venue_slug?: string; venue_website?: string | null;
+      };
+      const slug    = data.venue_slug    ?? venueSlug ?? '';
+      const website = data.venue_website ?? '';
+      const params  = new URLSearchParams();
+      if (slug)    params.set('slug',    slug);
+      if (website) params.set('website', website);
+      params.set('name', venueName);
+      window.location.href = `${confirmationBase}/confirmation?${params.toString()}`;
     } catch (err: unknown) {
       setErrMsg(err instanceof Error ? err.message : 'Something went wrong.');
       setStatus('error');
