@@ -144,6 +144,17 @@ function formatDate(iso: string | null): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+/** MM-DD-YY compact format used on Kanban cards and the lead drawer. */
+function formatShortDate(iso: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${mm}-${dd}-${yy}`;
+}
+
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
@@ -1328,7 +1339,7 @@ function KanbanCard({
 
       <div className="mt-2 flex items-center justify-between gap-2 pt-2 border-t border-gray-100">
         <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
-          <Clock className="w-3 h-3" /> {formatDate(lead.created_at)}
+          <Clock className="w-3 h-3" /> Created: {formatShortDate(lead.created_at)}
         </div>
         <div className="flex items-center gap-2 text-[11px]">
           {lead.note_count > 0 && (
@@ -1455,7 +1466,7 @@ function ListBoard({
                     </span>
                   )}
                   <div className="text-[11px] text-gray-400 whitespace-nowrap pt-1">
-                    {formatDate(lead.created_at)}
+                    Created: {formatShortDate(lead.created_at)}
                   </div>
                   {stages.length > 0 && (
                     <select
@@ -1832,7 +1843,7 @@ function LeadDrawer({
                 </span>
               )}
             </div>
-            <p className="text-xs text-gray-400">Added {formatDate(lead.created_at)} · {lead.source}</p>
+            <p className="text-xs text-gray-400">Created: {formatShortDate(lead.created_at)} · {lead.source}</p>
           </div>
           <button onClick={onClose} className="rounded-xl p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700">
             <X className="w-5 h-5" />
@@ -1994,6 +2005,11 @@ function LeadDrawer({
               onSave={(v) => void saveField('lastName', v)} saving={savingField === 'lastName'} />
             <Field label="Email" value={lead.email} type="email" className="col-span-2"
               onSave={(v) => void saveField('email', v)} saving={savingField === 'email'} />
+            {/* Read-only created date */}
+            <div className="col-span-2 rounded-xl border border-gray-100 bg-gray-50/60 px-3 py-2.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-0.5">Date created</p>
+              <p className="text-sm text-gray-700">{formatShortDate(lead.created_at)}</p>
+            </div>
             <div className="col-span-2">
               <label className="flex items-start gap-2.5 cursor-pointer rounded-xl border border-gray-100 bg-gray-50/80 px-3 py-2.5">
                 <input
