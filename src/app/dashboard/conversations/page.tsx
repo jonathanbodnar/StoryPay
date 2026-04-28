@@ -111,8 +111,52 @@ interface TeamContact {
   email: string;
   first_name: string;
   last_name: string;
+  phone: string | null;
   role: 'owner' | 'admin' | 'member';
   sort_order: number;
+}
+
+// ── TeamContactButton ──────────────────────────────────────────────────────────
+// Small helper: opens/creates a conversation thread for a team contact and
+// sets the appropriate composer tab (email | sms).
+function TeamContactButton({
+  icon, label, email, compose, existingThreadId, onSelectThread, onLoadThreads,
+}: {
+  icon: React.ReactNode; label: string; email: string;
+  compose: 'email' | 'sms';
+  existingThreadId: string | null;
+  onSelectThread: (threadId: string) => void;
+  onLoadThreads: () => Promise<void>;
+}) {
+  const [loading, setLoading] = useState(false);
+  async function handle() {
+    if (loading) return;
+    if (existingThreadId) { onSelectThread(existingThreadId); return; }
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/conversations/open-or-create?email=${encodeURIComponent(email)}`);
+      if (res.ok) {
+        const { thread_id } = await res.json() as { thread_id: string };
+        await onLoadThreads();
+        onSelectThread(thread_id);
+      }
+    } finally { setLoading(false); }
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => void handle()}
+      disabled={loading}
+      title={`${label} ${email}`}
+      className={classNames(
+        'inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors disabled:opacity-40',
+        compose === 'email' ? 'hover:border-blue-300 hover:text-blue-700' : 'hover:border-green-300 hover:text-green-700',
+      )}
+    >
+      {loading ? <Loader2 size={11} className="animate-spin" /> : icon}
+      {label}
+    </button>
+  );
 }
 
 export default function ConversationsPage() {
@@ -780,11 +824,73 @@ export default function ConversationsPage() {
             </div>
           </div>
           <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto">
+            {/* ── Team contacts directory (shown at top when Team filter is active) ── */}
+            {threadListFilter === 'team_contacts' && teamContacts.length > 0 && (
+              <div className="border-b border-gray-200 bg-gray-50/60 px-3 py-3">
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Account Owner &amp; Team</p>
+                <div className="space-y-1.5">
+                  {teamContacts.map((tc) => {
+                    const tcName = [tc.first_name, tc.last_name].filter(Boolean).join(' ') || tc.email;
+                    const tcInitial = tcName.charAt(0).toUpperCase();
+                    const existingThread = threads.find(
+                      (t) => (t.contact_email || '').toLowerCase() === tc.email.toLowerCase(),
+                    );
+                    return (
+                      <div key={tc.email} className="flex items-center gap-2.5 rounded-xl bg-white border border-gray-100 px-3 py-2.5">
+                        <div className={classNames(
+                          'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white',
+                          tc.role === 'owner' ? 'bg-indigo-700' : 'bg-gray-700',
+                        )}>
+                          {tcInitial}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm font-semibold text-gray-900 truncate">{tcName}</span>
+                            <span className={classNames(
+                              'flex-shrink-0 rounded px-1.5 py-0 text-[9px] font-semibold uppercase tracking-wide',
+                              tc.role === 'owner' ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-600',
+                            )}>
+                              {tc.role === 'owner' ? 'Owner' : tc.role === 'admin' ? 'Admin' : 'Team'}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-gray-400 truncate">{tc.email}{tc.phone ? ` · ${tc.phone}` : ''}</p>
+                        </div>
+                        {/* Quick-start buttons */}
+                        <div className="flex flex-shrink-0 items-center gap-1">
+                          <TeamContactButton
+                            icon={<Mail size={13} />}
+                            label="Email"
+                            email={tc.email}
+                            compose="email"
+                            existingThreadId={existingThread?.thread_id ?? null}
+                            onSelectThread={(id) => { setSelectedId(id); setMobileShowThread(true); setComposerTab('email'); }}
+                            onLoadThreads={loadThreads}
+                          />
+                          <TeamContactButton
+                            icon={<MessageSquare size={13} />}
+                            label="SMS"
+                            email={tc.email}
+                            compose="sms"
+                            existingThreadId={existingThread?.thread_id ?? null}
+                            onSelectThread={(id) => { setSelectedId(id); setMobileShowThread(true); setComposerTab('sms'); }}
+                            onLoadThreads={loadThreads}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {threadsFiltered.length > 0 && (
+                  <p className="mt-3 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Recent Threads</p>
+                )}
+              </div>
+            )}
+
             {loadingList ? (
               <div className="flex justify-center py-12 text-gray-400">
                 <Loader2 className="h-6 w-6 animate-spin" />
               </div>
-            ) : threads.length === 0 ? (
+            ) : threads.length === 0 && threadListFilter !== 'team_contacts' ? (
               <p className="px-4 py-10 text-center text-sm text-gray-500">
                 {threadListFilter === 'starred'
                   ? 'No starred conversations. Star a thread from the list using the star icon.'
@@ -792,15 +898,13 @@ export default function ConversationsPage() {
                     ? 'No pinned conversations. Pin a thread from the list using the pin icon.'
                     : threadListFilter === 'unread'
                       ? 'No unread conversations.'
-                      : threadListFilter === 'team_contacts'
-                        ? 'No conversations with your account owner or team members yet.'
-                        : 'No conversations yet. Start one with a contact.'}
+                      : 'No conversations yet. Start one with a contact.'}
               </p>
-            ) : threadsFiltered.length === 0 ? (
+            ) : threadsFiltered.length === 0 && threadListFilter !== 'team_contacts' ? (
               <p className="px-4 py-10 text-center text-sm text-gray-500">
                 No threads match your search.
               </p>
-            ) : (
+            ) : threadsFiltered.length > 0 ? (
               threadsFiltered.map((t) => {
                 const name =
                   [t.contact_first_name, t.contact_last_name].filter(Boolean).join(' ') ||
@@ -899,7 +1003,7 @@ export default function ConversationsPage() {
                   </div>
                 );
               })
-            )}
+            ) : null}
           </div>
         </aside>
 
@@ -1728,6 +1832,18 @@ export default function ConversationsPage() {
         <ContactProfileDrawer
           venueCustomerId={threadDetail.venue_customer_id}
           onClose={() => setProfileDrawerOpen(false)}
+          initialContact={
+            threadDetail.venue_customers
+              ? {
+                  id: threadDetail.venue_customers.id,
+                  first_name: threadDetail.venue_customers.first_name,
+                  last_name: threadDetail.venue_customers.last_name,
+                  customer_email: threadDetail.venue_customers.customer_email,
+                  phone: threadDetail.venue_customers.phone,
+                  contact_stage: threadDetail.contact_stage ?? null,
+                }
+              : null
+          }
         />
       )}
     </div>
