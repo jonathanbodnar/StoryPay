@@ -512,6 +512,19 @@ ${triggerBlock}
     return NextResponse.json({ error: insErr?.message ?? 'Failed to save message' }, { status: 500 });
   }
 
+  // Keep the thread's external_reply_channel in sync with what was actually sent
+  // so the chat list badge reflects the correct channel (SMS vs Email).
+  if (visibility === 'external' && (replyChannel === 'sms' || replyChannel === 'email')) {
+    const currentChannel = (gate.thread as { external_reply_channel?: string }).external_reply_channel ?? 'email';
+    if (currentChannel !== replyChannel) {
+      await supabaseAdmin
+        .from('conversation_threads')
+        .update({ external_reply_channel: replyChannel })
+        .eq('id', threadId)
+        .eq('venue_id', venueId);
+    }
+  }
+
   const readerRef = conversationReaderRef(user);
   await supabaseAdmin.from('conversation_thread_reads').upsert(
     {

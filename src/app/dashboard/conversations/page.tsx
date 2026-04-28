@@ -321,7 +321,7 @@ export default function ConversationsPage() {
   }, [composerExpanded]);
 
   useEffect(() => {
-    setComposerTab('team');
+    setComposerTab('sms');
     setEmailSubject('');
     setBody('');
     setMentionedIds([]);
@@ -1124,13 +1124,6 @@ export default function ConversationsPage() {
                         setComposerTab(tab);
                         setComposerMenuOpen(false);
                         if (tab !== 'team') setMentionedIds([]);
-                        if (tab === 'email') {
-                          setEmailSubject((s) => {
-                            if (s.trim()) return s;
-                            const sub = threadDetail.subject?.trim();
-                            return sub && sub !== 'Conversation' ? sub : '';
-                          });
-                        }
                       }}
                       onExpand={() => setComposerExpanded(true)}
                       onInputChange={(v) => {
@@ -1165,11 +1158,6 @@ export default function ConversationsPage() {
                         setComposerTab('email');
                         setMentionedIds([]);
                         setSendError('');
-                        setEmailSubject((s) => {
-                          if (s.trim()) return s;
-                          const sub = threadDetail.subject?.trim();
-                          return sub && sub !== 'Conversation' ? sub : '';
-                        });
                       }}
                       className={classNames(
                         'flex min-w-0 flex-1 items-center justify-center gap-1 rounded-xl py-2 text-[11px] font-semibold transition-colors sm:text-xs',
@@ -1276,6 +1264,7 @@ export default function ConversationsPage() {
                               value={emailCc}
                               onChange={(e) => setEmailCc(e.target.value)}
                               placeholder="email@example.com, …"
+                              autoComplete="off"
                               className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
                               style={{ fontSize: 16 }}
                             />
@@ -1289,6 +1278,7 @@ export default function ConversationsPage() {
                               value={emailBcc}
                               onChange={(e) => setEmailBcc(e.target.value)}
                               placeholder="email@example.com, …"
+                              autoComplete="off"
                               className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
                               style={{ fontSize: 16 }}
                             />
