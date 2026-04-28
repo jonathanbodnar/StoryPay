@@ -642,8 +642,8 @@ export default function ListingReviewsPage() {
                       <p className="text-sm font-semibold text-emerald-900">Connected to Google Business</p>
                       <p className="text-xs text-emerald-700 mt-0.5">
                         {googleFetchedAt
-                          ? <>Last synced {new Date(googleFetchedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}.</>
-                          : 'Reviews sync from Google every 24 hours.'}
+                          ? <>Last synced {new Date(googleFetchedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}. Auto-refreshes every 24 h.</>
+                          : googleLoading ? 'Fetching from Google…' : 'Auto-refreshes every 24 h.'}
                       </p>
                     </div>
                   </div>
@@ -875,7 +875,7 @@ export default function ListingReviewsPage() {
               })()
             ) : googlePlaceInput.trim() && !googleLoading ? (
               <p className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/80 px-4 py-10 text-center text-sm text-gray-500">
-                No reviews returned yet — click &quot;Refresh now&quot; above to re-fetch from Google.
+                No reviews found yet. If your Google Business Profile has reviews they will appear here automatically. Use &quot;Refresh now&quot; to force a sync immediately.
               </p>
             ) : null}
           </div>

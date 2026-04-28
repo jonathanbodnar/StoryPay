@@ -45,14 +45,27 @@ export async function GET(request: NextRequest) {
   let cache = parseGoogleReviewsCache(row.google_reviews_cache);
   const pid = row.google_place_id?.trim() ?? '';
 
-  if (refresh && pid && isValidGooglePlaceId(pid)) {
-    const fresh = await refreshVenueGoogleReviews(venueId, pid);
-    if (fresh) cache = fresh;
+  if (pid && isValidGooglePlaceId(pid)) {
+    // Auto-refresh when: explicitly requested, no cache yet, or cache is older than 24 h.
+    const fetchedAt = row.google_reviews_fetched_at ? new Date(row.google_reviews_fetched_at) : null;
+    const ageHours  = fetchedAt ? (Date.now() - fetchedAt.getTime()) / 3_600_000 : Infinity;
+    const noCache   = !cache || !(cache as { reviews?: unknown[] }).reviews?.length;
+    if (refresh || noCache || ageHours >= 24) {
+      const fresh = await refreshVenueGoogleReviews(venueId, pid);
+      if (fresh) cache = fresh;
+    }
   }
+
+  // Re-read fetched_at so auto-refresh above is reflected in the response.
+  const { data: updated } = await supabaseAdmin
+    .from('venues')
+    .select('google_reviews_fetched_at')
+    .eq('id', venueId)
+    .maybeSingle();
 
   return NextResponse.json({
     google_place_id: pid || null,
-    google_reviews_fetched_at: row.google_reviews_fetched_at,
+    google_reviews_fetched_at: (updated as { google_reviews_fetched_at?: string | null } | null)?.google_reviews_fetched_at ?? row.google_reviews_fetched_at,
     cache,
   });
 }
