@@ -302,39 +302,47 @@ export default function ConversationsPage() {
     void reloadMessages(selectedId);
   }, [selectedId, reloadMessages]);
 
+  // Auto-scroll to newest message whenever messages change. Using
+  // requestAnimationFrame ensures the DOM has painted the new rows before
+  // we scroll, otherwise scrollIntoView lands on the previous bottom.
   useEffect(() => {
     if (!selectedId) return;
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const id = requestAnimationFrame(() => {
+      bottomRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+    });
+    return () => cancelAnimationFrame(id);
   }, [messages, selectedId]);
 
-  // Background poll — silently fetch new messages every 5 s without triggering
-  // the slow GHL sync (nosync=1). Keeps the thread live for back-and-forth SMS.
+  // Background poll — silently fetch new messages every 5 s. For SMS threads
+  // we hit the full endpoint (no nosync) so the GHL→DB sync runs server-side
+  // and pulls in any new replies that arrived since the last tick. The DB
+  // dedup index prevents duplicate inserts. For email threads we skip the
+  // sync since they're webhook-driven and don't need polling.
   useEffect(() => {
     if (!selectedId) return;
-    const interval = setInterval(async () => {
-      // Skip if the tab is hidden to save resources.
+    const channel = threadDetail?.external_reply_channel ?? 'email';
+    const isSms = channel === 'sms';
+
+    const tick = async () => {
       if (document.visibilityState === 'hidden') return;
       try {
-        const res = await fetch(
-          `/api/conversations/threads/${selectedId}/messages?nosync=1`,
-          { cache: 'no-store' },
-        );
+        const url = `/api/conversations/threads/${selectedId}/messages${isSms ? '' : '?nosync=1'}`;
+        const res = await fetch(url, { cache: 'no-store' });
         if (!res.ok) return;
         const fresh = await res.json();
-        // Only update state if the message count changed to avoid unnecessary re-renders.
         setMessages(prev => {
           if (!Array.isArray(fresh)) return prev;
           if (fresh.length !== prev.length) return fresh;
-          // Also check if the latest message id changed (e.g. a new message arrived
-          // with the same count as a deleted one — extremely unlikely but safe).
           const lastFresh = fresh[fresh.length - 1]?.id;
           const lastPrev  = prev[prev.length - 1]?.id;
           return lastFresh !== lastPrev ? fresh : prev;
         });
-      } catch { /* network hiccup — ignore, next tick will retry */ }
-    }, 5_000);
+      } catch { /* ignore — next tick retries */ }
+    };
+
+    const interval = setInterval(tick, 5_000);
     return () => clearInterval(interval);
-  }, [selectedId]);
+  }, [selectedId, threadDetail?.external_reply_channel]);
 
   useEffect(() => {
     if (!composerExpanded) return;
