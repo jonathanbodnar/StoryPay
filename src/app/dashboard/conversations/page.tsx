@@ -146,6 +146,7 @@ export default function ConversationsPage() {
   const listRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const stuckToBottomRef = useRef(true);
   const composerFileRef = useRef<HTMLInputElement>(null);
   const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
   const deepLinkConsumed = useRef(false);
@@ -258,6 +259,24 @@ export default function ConversationsPage() {
       .catch(() => {});
   }, []);
 
+  // Multi-attempt scroll to bottom — handles late layout from async content
+  // (embedded email cards, image loads, etc.). Schedules immediate, rAF,
+  // and several timed scrolls so we win regardless of when layout settles.
+  const scrollToBottomNow = useCallback(() => {
+    const fire = () => {
+      const el = messagesScrollRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    };
+    fire();
+    requestAnimationFrame(() => {
+      fire();
+      requestAnimationFrame(fire);
+    });
+    setTimeout(fire, 50);
+    setTimeout(fire, 200);
+    setTimeout(fire, 500);
+  }, []);
+
   const reloadMessages = useCallback(async (id: string) => {
     setLoadingThread(true);
     setSendError('');
@@ -285,6 +304,9 @@ export default function ConversationsPage() {
       }
       if (mRes.ok) setMessages(await mRes.json());
       else setMessages([]);
+      // Force re-pin to bottom after messages render (handles late layout).
+      stuckToBottomRef.current = true;
+      scrollToBottomNow();
       if (tRes.ok) {
         await fetch(`/api/conversations/threads/${id}/read`, { method: 'POST' });
         await loadThreads();
@@ -292,7 +314,7 @@ export default function ConversationsPage() {
     } finally {
       setLoadingThread(false);
     }
-  }, [loadThreads]);
+  }, [loadThreads, scrollToBottomNow]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -302,12 +324,6 @@ export default function ConversationsPage() {
     }
     void reloadMessages(selectedId);
   }, [selectedId, reloadMessages]);
-
-  // Tracks whether the user is "stuck to the bottom". When true, any
-  // layout change (composer growing while typing, polling adding messages,
-  // etc.) re-anchors them to the latest message. When the user scrolls up
-  // to read history, this flips to false and we leave their view alone.
-  const stuckToBottomRef = useRef(true);
 
   function isNearBottom(el: HTMLElement, threshold = 80) {
     return el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
