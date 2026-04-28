@@ -1371,8 +1371,20 @@ function KanbanCard({
       )}
 
       <div className="mt-2 flex items-center justify-between gap-2 pt-2 border-t border-gray-100">
-        <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
-          <Clock className="w-3 h-3" /> Created: {formatShortDate(lead.created_at, venueTz)}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
+            <Clock className="w-3 h-3" /> Created: {formatShortDate(lead.created_at, venueTz)}
+          </div>
+          {lead.email && (
+            <Link
+              href={`/dashboard/conversations?email=${encodeURIComponent(lead.email)}&compose=sms`}
+              onClick={(e) => e.stopPropagation()}
+              title="Text this contact"
+              className="inline-flex items-center justify-center rounded-lg p-1 text-gray-400 hover:bg-violet-50 hover:text-violet-600 transition-colors"
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+            </Link>
+          )}
         </div>
         <div className="flex items-center gap-2 text-[11px]">
           {lead.note_count > 0 && (
@@ -1481,6 +1493,16 @@ function ListBoard({
                   )}
                 </div>
                 <div className="flex items-center gap-3 shrink-0 flex-wrap justify-end">
+                  {lead.email && (
+                    <Link
+                      href={`/dashboard/conversations?email=${encodeURIComponent(lead.email)}&compose=sms`}
+                      onClick={(e) => e.stopPropagation()}
+                      title="Text this contact"
+                      className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-violet-50 hover:text-violet-600 transition-colors"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                    </Link>
+                  )}
                   <LeadTagPopover
                     lead={lead}
                     allTags={allTags}
@@ -1881,9 +1903,20 @@ function LeadDrawer({
             </div>
             <p className="text-xs text-gray-400">Created: {formatShortDate(lead.created_at, venueTz)} · {lead.source}</p>
           </div>
-          <button onClick={onClose} className="rounded-xl p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700">
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1">
+            {lead.email && (
+              <Link
+                href={`/dashboard/conversations?email=${encodeURIComponent(lead.email)}&compose=sms`}
+                title="Text this contact"
+                className="rounded-xl p-2 text-gray-400 hover:bg-violet-50 hover:text-violet-600 transition-colors"
+              >
+                <MessageSquare className="w-5 h-5" />
+              </Link>
+            )}
+            <button onClick={onClose} className="rounded-xl p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 p-6 space-y-6">
