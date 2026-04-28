@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, CalendarHeart, CheckSquare, ChevronDown, ChevronUp,
   ClipboardList, Clock, DollarSign, GitBranch, Image as ImageIcon, Link2,
-  Loader2, Mail, Minus, Plus, Send, Smartphone, Square,
+  Loader2, Mail, MessageSquare, Minus, Plus, Send, Smartphone, Square,
   Tag, Trash2, Users, X, Zap,
 } from 'lucide-react';
 import { VenueMediaPickerModal } from '@/components/venue-media/VenueMediaPickerModal';
@@ -83,15 +83,16 @@ interface EnrollContact {
 const DEFAULT_SMS = 'Hi {{first_name}}, a quick note from {{venue_name}}. Reply STOP to opt out.';
 const CARD_W = 240; // canvas card width in pixels
 
-type StepKind = 'delay' | 'send_email' | 'send_sms' | 'add_tag' | 'remove_tag' | 'change_stage';
+type StepKind = 'delay' | 'send_email' | 'send_sms' | 'add_tag' | 'remove_tag' | 'change_stage' | 'create_conversation';
 type WaitUnit = 'minutes' | 'hours' | 'days';
 type LocalStep =
-  | { localId: string; step_type: 'delay';        delay_minutes: number }
-  | { localId: string; step_type: 'send_email';   template_id: string }
-  | { localId: string; step_type: 'send_sms';     body: string; media_urls?: string[] }
-  | { localId: string; step_type: 'add_tag';      tag_ids: string[] }
-  | { localId: string; step_type: 'remove_tag';   tag_ids: string[] }
-  | { localId: string; step_type: 'change_stage'; stage_id: string };
+  | { localId: string; step_type: 'delay';                delay_minutes: number }
+  | { localId: string; step_type: 'send_email';            template_id: string }
+  | { localId: string; step_type: 'send_sms';              body: string; media_urls?: string[] }
+  | { localId: string; step_type: 'add_tag';               tag_ids: string[] }
+  | { localId: string; step_type: 'remove_tag';            tag_ids: string[] }
+  | { localId: string; step_type: 'change_stage';          stage_id: string }
+  | { localId: string; step_type: 'create_conversation' };
 
 // triggerIdx: 0 = primary trigger, 1+ = extra triggers (extraTriggers[idx-1])
 type SelectedItem = { kind: 'trigger'; triggerIdx: number } | { kind: 'step'; localId: string } | null;
@@ -113,9 +114,10 @@ const PALETTE: { type: StepKind; label: string; desc: string; group: 'actions' |
   { type: 'delay',        label: 'Wait',          desc: 'Pause for a duration',        group: 'actions',  Icon: Clock },
   { type: 'send_email',   label: 'Send Email',    desc: 'Choose a saved template',     group: 'actions',  Icon: Mail },
   { type: 'send_sms',     label: 'Send SMS',      desc: 'Send a text message',         group: 'actions',  Icon: Smartphone },
-  { type: 'add_tag',      label: 'Add Tag',       desc: 'Apply tags to contact',       group: 'contact',  Icon: Tag },
-  { type: 'remove_tag',   label: 'Remove Tag',    desc: 'Remove tags from contact',    group: 'contact',  Icon: Tag },
-  { type: 'change_stage', label: 'Change Stage',  desc: 'Move contact to a stage',     group: 'contact',  Icon: GitBranch },
+  { type: 'add_tag',               label: 'Add Tag',              desc: 'Apply tags to contact',          group: 'contact',  Icon: Tag },
+  { type: 'remove_tag',            label: 'Remove Tag',           desc: 'Remove tags from contact',       group: 'contact',  Icon: Tag },
+  { type: 'change_stage',          label: 'Change Stage',         desc: 'Move contact to a stage',        group: 'contact',  Icon: GitBranch },
+  { type: 'create_conversation',   label: 'Create Conversation',  desc: 'Open a conversation thread',     group: 'contact',  Icon: MessageSquare },
 ];
 
 const TRIGGER_OPTIONS: { value: AutomationTriggerType; label: string; Icon: React.FC<{ size?: number; className?: string }> }[] = [
@@ -402,6 +404,9 @@ function stepMeta(s: LocalStep, templates: TemplateOpt[]): { title: string; subt
   }
   if (s.step_type === 'change_stage') {
     return { title: 'Change Stage', subtitle: s.stage_id ? 'Stage selected' : 'Choose stage →', Icon: GitBranch };
+  }
+  if (s.step_type === 'create_conversation') {
+    return { title: 'Create Conversation', subtitle: 'Opens thread + logs messages', Icon: MessageSquare };
   }
   const tpl = templates.find((t) => t.id === s.template_id);
   return { title: 'Send Email', subtitle: tpl?.name ?? 'Choose a template →', Icon: Mail };
@@ -753,6 +758,8 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
           const sc = s.config_json as { stage_id?: string };
           return { localId, step_type: 'change_stage' as const, stage_id: String(sc.stage_id ?? '') };
         }
+        if (s.step_type === 'create_conversation')
+          return { localId, step_type: 'create_conversation' as const };
         return { localId, step_type: 'send_email' as const, template_id: String((s.config_json as { template_id?: string }).template_id ?? '') };
       }));
     }
@@ -888,6 +895,8 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
             return { step_order: i, step_type: 'remove_tag' as const, config: { tag_ids: s.tag_ids } };
           if (s.step_type === 'change_stage')
             return { step_order: i, step_type: 'change_stage' as const, config: { stage_id: s.stage_id } };
+          if (s.step_type === 'create_conversation')
+            return { step_order: i, step_type: 'create_conversation' as const, config: {} };
           return { step_order: i, step_type: 'send_email' as const, config: { template_id: s.template_id } };
         }),
       }),
@@ -949,12 +958,13 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
   function addStepAt(kind: StepKind, insertIdx: number) {
     const localId = `s-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const step: LocalStep =
-      kind === 'delay'        ? { localId, step_type: 'delay',        delay_minutes: 60 }
-      : kind === 'send_sms'   ? { localId, step_type: 'send_sms',     body: DEFAULT_SMS }
-      : kind === 'add_tag'    ? { localId, step_type: 'add_tag',      tag_ids: [] }
-      : kind === 'remove_tag' ? { localId, step_type: 'remove_tag',   tag_ids: [] }
-      : kind === 'change_stage' ? { localId, step_type: 'change_stage', stage_id: '' }
-      :                         { localId, step_type: 'send_email',   template_id: templates[0]?.id ?? '' };
+      kind === 'delay'               ? { localId, step_type: 'delay',               delay_minutes: 60 }
+      : kind === 'send_sms'          ? { localId, step_type: 'send_sms',            body: DEFAULT_SMS }
+      : kind === 'add_tag'           ? { localId, step_type: 'add_tag',             tag_ids: [] }
+      : kind === 'remove_tag'        ? { localId, step_type: 'remove_tag',          tag_ids: [] }
+      : kind === 'change_stage'      ? { localId, step_type: 'change_stage',        stage_id: '' }
+      : kind === 'create_conversation' ? { localId, step_type: 'create_conversation' }
+      :                                { localId, step_type: 'send_email',          template_id: templates[0]?.id ?? '' };
     setSteps((prev) => { const c = [...prev]; c.splice(insertIdx, 0, step); return c; });
     setSelected({ kind: 'step', localId });
     scheduleAutoSave();
@@ -2059,6 +2069,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                     <span className="rounded-lg bg-gray-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-gray-600">
                       {selectedStep.step_type === 'send_email' ? 'send email'
                         : selectedStep.step_type === 'send_sms' ? 'send sms'
+                        : selectedStep.step_type === 'create_conversation' ? 'create conversation'
                         : 'wait'}
                     </span>
                     <button type="button" onClick={() => setSelected(null)} className="text-xs text-gray-400 hover:text-gray-700 transition-colors">Done</button>
@@ -2433,6 +2444,23 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                       </div>
                     );
                   })()}
+
+                  {selectedStep.step_type === 'create_conversation' && (
+                    <div className="rounded-xl border border-sky-100 bg-sky-50 p-3">
+                      <div className="flex items-start gap-2">
+                        <MessageSquare size={14} className="mt-0.5 shrink-0 text-sky-500" />
+                        <div className="text-[11px] text-sky-800 leading-relaxed">
+                          <p className="font-semibold mb-1">What this step does</p>
+                          <ul className="list-disc pl-3 space-y-0.5">
+                            <li>Finds or creates a Conversation thread for this lead</li>
+                            <li>Stamps a timestamped system message so you can see exactly when the lead entered this workflow</li>
+                            <li>All automated SMS &amp; emails in this workflow are also automatically logged to the same thread</li>
+                          </ul>
+                          <p className="mt-2 text-sky-600">Place this step first in your workflow for the best experience.</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="mt-6 border-t border-gray-100 pt-4">
                     <button type="button" onClick={() => removeStep(selectedStep.localId)}

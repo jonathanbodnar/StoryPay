@@ -387,12 +387,131 @@ async function resolvePhoneForLead(venueId: string, leadId: string): Promise<str
   return normalizePhone(vc?.phone as string | null);
 }
 
+// ─── Conversation thread helpers ─────────────────────────────────────────────
+
+/**
+ * Given a lead, finds (or creates) a venue_customer record and a conversation
+ * thread for them. Returns the thread ID so automated messages can be logged.
+ * Never throws — returns null on any error so callers can safely fire-and-forget.
+ */
+async function findOrCreateThreadForLead(
+  venueId: string,
+  leadId: string,
+): Promise<string | null> {
+  try {
+    const { data: lead } = await supabaseAdmin
+      .from('leads')
+      .select('email, first_name, last_name, name, phone')
+      .eq('id', leadId)
+      .eq('venue_id', venueId)
+      .maybeSingle();
+    if (!lead) return null;
+
+    const email = String(lead.email || '').trim().toLowerCase();
+    if (!email) return null;
+
+    // Find matching venue_customer
+    let { data: vc } = await supabaseAdmin
+      .from('venue_customers')
+      .select('id')
+      .eq('venue_id', venueId)
+      .ilike('customer_email', email)
+      .maybeSingle();
+
+    // Create one if missing
+    if (!vc) {
+      const fn = (lead.first_name as string | null)?.trim() || (lead.name as string | null)?.split(/\s+/)[0] || '';
+      const ln = (lead.last_name as string | null)?.trim() || '';
+      const { data: created } = await supabaseAdmin
+        .from('venue_customers')
+        .insert({
+          venue_id: venueId,
+          customer_email: email,
+          first_name: fn || null,
+          last_name: ln || null,
+          phone: (lead.phone as string | null) || null,
+        })
+        .select('id')
+        .single();
+      vc = created;
+    }
+    if (!vc) return null;
+
+    // Find existing thread
+    const { data: existing } = await supabaseAdmin
+      .from('conversation_threads')
+      .select('id')
+      .eq('venue_id', venueId)
+      .eq('venue_customer_id', (vc as { id: string }).id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existing) return (existing as { id: string }).id;
+
+    // Create a new thread
+    const { data: thread } = await supabaseAdmin
+      .from('conversation_threads')
+      .insert({
+        venue_id: venueId,
+        venue_customer_id: (vc as { id: string }).id,
+        subject: 'Lead Conversation',
+        external_reply_channel: 'sms',
+      })
+      .select('id')
+      .single();
+
+    return thread ? (thread as { id: string }).id : null;
+  } catch (e) {
+    console.error('[worker] findOrCreateThreadForLead error (non-fatal):', e);
+    return null;
+  }
+}
+
+/**
+ * Writes a system-generated message to a conversation thread.
+ * Updates the thread summary so it appears at the top of the inbox.
+ * Never throws.
+ */
+async function logToConversationThread(opts: {
+  threadId: string;
+  venueId: string;
+  channel: 'sms' | 'email';
+  body: string;
+}): Promise<void> {
+  try {
+    const preview = opts.body.replace(/\s+/g, ' ').trim().slice(0, 240);
+    await supabaseAdmin.from('conversation_messages').insert({
+      thread_id: opts.threadId,
+      visibility: 'external',
+      channel: opts.channel,
+      body: opts.body,
+      sender_kind: 'system',
+      external_email_sent: true,
+    });
+    // The DB trigger updates last_message_at/preview/visibility automatically,
+    // but we also keep external_reply_channel correct on the thread.
+    await supabaseAdmin
+      .from('conversation_threads')
+      .update({
+        external_reply_channel: opts.channel,
+        last_message_preview: preview,
+        last_message_at: new Date().toISOString(),
+        last_message_visibility: 'external',
+      })
+      .eq('id', opts.threadId)
+      .eq('venue_id', opts.venueId);
+  } catch (e) {
+    console.error('[worker] logToConversationThread error (non-fatal):', e);
+  }
+}
+
 async function sendAutomationSmsToLead(
   venueId: string,
   leadId: string,
   bodyTemplate: string,
   mediaUrls?: string[],
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; mergedBody?: string }> {
   const appOrigin = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
   const vars = await buildMergeVars(venueId, leadId, appOrigin, { forSms: true });
   if (!vars) return { ok: false, error: 'suppressed' };
@@ -432,7 +551,7 @@ async function sendAutomationSmsToLead(
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'sms_failed' };
   }
-  return { ok: true };
+  return { ok: true, mergedBody };
 }
 
 async function sendTemplateToLead(
@@ -442,7 +561,7 @@ async function sendTemplateToLead(
   subject: string,
   preheader: string,
   opts?: { campaignRecipientId?: string },
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; mergedSubject?: string }> {
   const appOrigin = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
   const vars = await buildMergeVars(venueId, leadId, appOrigin);
   if (!vars) return { ok: false, error: 'opt_out' };
@@ -494,7 +613,7 @@ async function sendTemplateToLead(
     html: fullHtml,
     from: { name: fromName },
   });
-  return r.success ? { ok: true } : { ok: false, error: r.error };
+  return r.success ? { ok: true, mergedSubject } : { ok: false, error: r.error };
 }
 
 export async function processAutomationEnrollmentsBatch(): Promise<{ processed: number }> {
@@ -668,6 +787,11 @@ async function processOneEnrollment(en: {
       return 'failed';
     }
     void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'send_email', status: emailSkipped ? 'skipped' : 'success' });
+    if (send.ok && send.mergedSubject) {
+      void findOrCreateThreadForLead(en.venue_id, en.lead_id).then((threadId) => {
+        if (threadId) void logToConversationThread({ threadId, venueId: en.venue_id, channel: 'email', body: `[Email] ${send.mergedSubject}` });
+      });
+    }
     const nextIdx = idx + 1;
     if (nextIdx >= sorted.length) {
       await supabaseAdmin
@@ -703,6 +827,11 @@ async function processOneEnrollment(en: {
       return 'failed';
     }
     void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'send_sms', status: send.error === 'suppressed' ? 'skipped' : 'success' });
+    if (send.ok && send.mergedBody) {
+      void findOrCreateThreadForLead(en.venue_id, en.lead_id).then((threadId) => {
+        if (threadId) void logToConversationThread({ threadId, venueId: en.venue_id, channel: 'sms', body: send.mergedBody! });
+      });
+    }
     const nextIdx = idx + 1;
     if (nextIdx >= sorted.length) {
       await supabaseAdmin
@@ -764,6 +893,40 @@ async function processOneEnrollment(en: {
            : { current_step_index: nextIdx, next_run_at: new Date().toISOString() },
     ).eq('id', en.id);
     void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'change_stage', status: 'success' });
+    return done ? 'completed' : 'advanced';
+  }
+
+  // ── create_conversation: open/find a conversation thread and stamp it ─────
+  if (step.step_type === 'create_conversation') {
+    // Fetch the workflow name for the system message
+    const { data: autoRow } = await supabaseAdmin
+      .from('marketing_automations')
+      .select('name')
+      .eq('id', en.automation_id)
+      .maybeSingle();
+    const workflowName = (autoRow as { name?: string } | null)?.name?.trim() || 'a workflow';
+
+    const threadId = await findOrCreateThreadForLead(en.venue_id, en.lead_id);
+    if (threadId) {
+      const now = new Date();
+      const ts = now.toLocaleString('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric',
+        hour: 'numeric', minute: '2-digit', hour12: true,
+      });
+      await logToConversationThread({
+        threadId,
+        venueId: en.venue_id,
+        channel: 'sms',
+        body: `[System] Lead entered workflow "${workflowName}" on ${ts}`,
+      });
+    }
+    const nextIdx = idx + 1;
+    const done = nextIdx >= sorted.length;
+    await supabaseAdmin.from('marketing_automation_enrollments').update(
+      done ? { status: 'completed', current_step_index: nextIdx, completed_at: new Date().toISOString(), next_run_at: new Date().toISOString() }
+           : { current_step_index: nextIdx, next_run_at: new Date().toISOString() },
+    ).eq('id', en.id);
+    void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'create_conversation', status: threadId ? 'success' : 'skipped', error_text: threadId ? undefined : 'no_email_on_lead' });
     return done ? 'completed' : 'advanced';
   }
 
