@@ -372,7 +372,7 @@ export default function SettingsPage() {
  className="shrink-0 inline-flex items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
  >
  {syncingContacts ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
- {syncingContacts ? 'Syncing…' : 'Sync contacts from GHL'}
+ {syncingContacts ? 'Syncing…' : 'Sync from StoryVenue Legacy'}
  </button>
  </div>
 
