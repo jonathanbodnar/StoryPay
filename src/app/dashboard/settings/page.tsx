@@ -352,10 +352,6 @@ export default function SettingsPage() {
  </div>
  <div className="min-w-0">
  <p className="text-sm font-medium text-gray-900">Contact Sync</p>
- <p className="mt-0.5 text-xs text-gray-500 leading-relaxed">
- Syncs all contacts from GHL into StoryVenue. Auto-syncs every hour — or click
- the button to sync now.
- </p>
  {venue.ghl_contacts_synced_at && (
  <p className="mt-1.5 text-[11px] text-gray-400">
  Last synced{' '}
