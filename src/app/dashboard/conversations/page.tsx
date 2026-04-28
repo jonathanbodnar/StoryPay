@@ -307,6 +307,35 @@ export default function ConversationsPage() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, selectedId]);
 
+  // Background poll — silently fetch new messages every 5 s without triggering
+  // the slow GHL sync (nosync=1). Keeps the thread live for back-and-forth SMS.
+  useEffect(() => {
+    if (!selectedId) return;
+    const interval = setInterval(async () => {
+      // Skip if the tab is hidden to save resources.
+      if (document.visibilityState === 'hidden') return;
+      try {
+        const res = await fetch(
+          `/api/conversations/threads/${selectedId}/messages?nosync=1`,
+          { cache: 'no-store' },
+        );
+        if (!res.ok) return;
+        const fresh = await res.json();
+        // Only update state if the message count changed to avoid unnecessary re-renders.
+        setMessages(prev => {
+          if (!Array.isArray(fresh)) return prev;
+          if (fresh.length !== prev.length) return fresh;
+          // Also check if the latest message id changed (e.g. a new message arrived
+          // with the same count as a deleted one — extremely unlikely but safe).
+          const lastFresh = fresh[fresh.length - 1]?.id;
+          const lastPrev  = prev[prev.length - 1]?.id;
+          return lastFresh !== lastPrev ? fresh : prev;
+        });
+      } catch { /* network hiccup — ignore, next tick will retry */ }
+    }, 5_000);
+    return () => clearInterval(interval);
+  }, [selectedId]);
+
   useEffect(() => {
     if (!composerExpanded) return;
     const node = composerTextareaRef.current;

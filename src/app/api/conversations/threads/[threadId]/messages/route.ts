@@ -103,7 +103,7 @@ async function assertThreadVenue(threadId: string, venueId: string) {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ threadId: string }> },
 ) {
   const venueId = await getVenueId();
@@ -117,7 +117,10 @@ export async function GET(
     external_reply_channel?: string;
     venue_customer_id: string;
   };
-  if (thread.external_reply_channel === 'sms') {
+  // Skip the GHL poll-sync for lightweight background refreshes (?nosync=1).
+  // The full sync runs on initial thread open and explicit user-triggered reloads.
+  const nosync = request.nextUrl.searchParams.get('nosync') === '1';
+  if (!nosync && thread.external_reply_channel === 'sms') {
     await syncInboundSmsFromGhlForThread({
       venueId,
       threadId,
