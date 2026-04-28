@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -303,28 +303,60 @@ export default function ConversationsPage() {
     void reloadMessages(selectedId);
   }, [selectedId, reloadMessages]);
 
-  // Auto-scroll to newest message. Sets scrollTop directly on the container
-  // (more reliable than scrollIntoView, which can land short when the layout
-  // is resizing — e.g. composer collapsing after a send). Fires on:
-  //   • messages array change (new inbound or outbound)
-  //   • composer collapse/expand (changes container height)
-  //   • thread switch
-  //
-  // Uses double-rAF: first frame waits for React commit, second waits for
-  // browser layout/paint of any container resize, then scrolls.
+  // Tracks whether the user is "stuck to the bottom". When true, any
+  // layout change (composer growing while typing, polling adding messages,
+  // etc.) re-anchors them to the latest message. When the user scrolls up
+  // to read history, this flips to false and we leave their view alone.
+  const stuckToBottomRef = useRef(true);
+
+  function isNearBottom(el: HTMLElement, threshold = 80) {
+    return el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+  }
+
+  function scrollToBottomIfStuck() {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    if (stuckToBottomRef.current) el.scrollTop = el.scrollHeight;
+  }
+
+  // Update "stuck to bottom" flag whenever the user scrolls.
   useEffect(() => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    const onScroll = () => { stuckToBottomRef.current = isNearBottom(el); };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [selectedId]);
+
+  // When the messages container OR its inner content resizes (composer
+  // textarea growing as you type, new messages added, images loading, etc.)
+  // re-pin the scroll to the bottom if the user was already there.
+  useEffect(() => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => { scrollToBottomIfStuck(); });
+    ro.observe(el);
+    // Also observe the inner content so growing message bubbles trigger pin.
+    const inner = el.firstElementChild as HTMLElement | null;
+    if (inner) ro.observe(inner);
+    return () => ro.disconnect();
+  }, [selectedId]);
+
+  // Force-scroll on send / thread switch / new messages — useLayoutEffect
+  // runs synchronously after DOM mutations but before paint, so the user
+  // never sees an "unstuck" frame. Always pins to bottom regardless of
+  // whether they were near it (this fires on user-initiated changes only).
+  useLayoutEffect(() => {
     if (!selectedId) return;
-    let raf2 = 0;
-    const raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => {
-        const el = messagesScrollRef.current;
-        if (el) el.scrollTop = el.scrollHeight;
-      });
+    stuckToBottomRef.current = true;
+    const el = messagesScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+    // Belt-and-braces: rAF in case layout settles in the next frame.
+    const raf = requestAnimationFrame(() => {
+      const e2 = messagesScrollRef.current;
+      if (e2) e2.scrollTop = e2.scrollHeight;
     });
-    return () => {
-      cancelAnimationFrame(raf1);
-      if (raf2) cancelAnimationFrame(raf2);
-    };
+    return () => cancelAnimationFrame(raf);
   }, [messages, selectedId, composerExpanded]);
 
   // Background poll — silently fetch new messages every 5 s. For SMS threads
