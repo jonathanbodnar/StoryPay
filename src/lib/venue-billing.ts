@@ -373,7 +373,7 @@ export async function changeVenuePlan(
   const amountDollars = newCents / 100;
   const checkoutData: Record<string, unknown> = {
     amount: amountDollars,
-    description: `StoryPay directory — ${target.name} (monthly)`,
+    description: `StoryVenue directory — ${target.name} (monthly)`,
     customer_email: ctx.venue.email || undefined,
     customer_name: ctx.venue.name,
     success_url: `${APP_URL}/dashboard/directory-billing`,
@@ -457,7 +457,7 @@ export async function startUpdatePaymentMethodCheckout(
   const secret = requirePlatformLunarPaySecretKey();
   const checkoutData: Record<string, unknown> = {
     amount: cents / 100,
-    description: `StoryPay directory — ${ctx.plan.name} (update card)`,
+    description: `StoryVenue directory — ${ctx.plan.name} (update card)`,
     customer_email: ctx.venue.email || undefined,
     customer_name: ctx.venue.name,
     success_url: `${APP_URL}/dashboard/directory-billing?payment_update=1`,
@@ -532,7 +532,7 @@ export async function verifyUpdatePaymentMethod(
     amount: cents,
     frequency: 'monthly',
     startOn,
-    description: `StoryPay directory — ${ctx.plan.name}`,
+    description: `StoryVenue directory — ${ctx.plan.name}`,
   })) as Record<string, unknown>;
   const sub = (subResult.data as Record<string, unknown>) || subResult;
   const newSubId = (sub.id as string | number | undefined) ?? null;

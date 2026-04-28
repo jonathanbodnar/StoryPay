@@ -207,7 +207,7 @@ function LivePreview({ brand }: { brand: BrandState }) {
  <p className="mt-3 text-[10px] text-gray-400 text-center leading-relaxed">{brand.footer_note}</p>
  )}
 
- <p className="mt-2 text-[10px] text-gray-300 text-center">Powered by StoryPay</p>
+ <p className="mt-2 text-[10px] text-gray-300 text-center">Powered by StoryVenue</p>
  </div>
  </div>
  );

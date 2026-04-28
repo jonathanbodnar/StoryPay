@@ -6,7 +6,7 @@ import { ghlRequest, refreshAccessToken } from '@/lib/ghl';
 
 export const runtime = 'nodejs';
 
-// UUID v4 regex — tells a StoryPay-native (venue_customers.id) ID apart from
+// UUID v4 regex — tells a StoryVenue-native (venue_customers.id) ID apart from
 // LunarPay (numeric) and GHL (alphanumeric) IDs.
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -42,16 +42,16 @@ export async function GET(
     } catch { /* use existing token */ }
   }
 
-  // Source detection: UUID → venue_customers (StoryPay-native);
+  // Source detection: UUID → venue_customers (StoryVenue-native);
   // numeric → LunarPay; anything else alphanumeric → GHL.
-  const isStoryPayId = UUID_RE.test(id);
+  const isStoryVenueId = UUID_RE.test(id);
   const isLunarPayId = /^\d+$/.test(id);
 
   let customer: Record<string, unknown> | null = null;
   let customerEmail = '';
 
-  // StoryPay-native customers (created in-dashboard without LunarPay/GHL yet)
-  if (isStoryPayId) {
+  // StoryVenue-native customers (created in-dashboard without LunarPay/GHL yet)
+  if (isStoryVenueId) {
     const { data: row } = await supabaseAdmin
       .from('venue_customers')
       .select(
@@ -187,11 +187,11 @@ export async function PATCH(
   }
 
   const errors: string[] = [];
-  const isStoryPayId = UUID_RE.test(id);
+  const isStoryVenueId = UUID_RE.test(id);
   const isLunarPayId = /^\d+$/.test(id);
 
   // Update in our own venue_customers when the id is a UUID
-  if (isStoryPayId) {
+  if (isStoryVenueId) {
     const { error } = await supabaseAdmin
       .from('venue_customers')
       .update({
@@ -203,7 +203,7 @@ export async function PATCH(
       })
       .eq('id', id)
       .eq('venue_id', venueId);
-    if (error) errors.push(`StoryPay: ${error.message}`);
+    if (error) errors.push(`StoryVenue: ${error.message}`);
   }
 
   // Update in LunarPay if numeric ID
@@ -220,7 +220,7 @@ export async function PATCH(
   }
 
   // Update in GHL if alphanumeric (non-UUID, non-numeric) ID
-  if (venue.ghl_connected && ghlToken && venue.ghl_location_id && !isStoryPayId && !isLunarPayId) {
+  if (venue.ghl_connected && ghlToken && venue.ghl_location_id && !isStoryVenueId && !isLunarPayId) {
     try {
       await ghlRequest(`/contacts/${id}`, ghlToken, {
         method: 'PUT',

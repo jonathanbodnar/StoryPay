@@ -328,7 +328,7 @@ export default function TriggerLinksPage() {
           </div>
           <p className="text-sm text-gray-500 max-w-xl">
             Tags appear on lead cards in Kanban and List views. Use them to segment leads now; later they can drive
-            automations. Tags use your StoryPay accent styling on the board.
+            automations. Tags use your StoryVenue accent styling on the board.
           </p>
         </div>
         <button

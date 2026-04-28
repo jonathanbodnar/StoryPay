@@ -4,7 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 /**
  * Sign-in endpoint.
  *
- * StoryPay uses token-based auth — the "password" on the login form is the
+ * StoryVenue uses token-based auth — the "password" on the login form is the
  * venue's login_token (for owners) or the team member's invite_token (for
  * team members). Users retrieve their token via "Forgot password?" which
  * emails them their sign-in link.

@@ -233,7 +233,7 @@ export default function TeamPage() {
  <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
  <div>
  <h1 className="font-heading text-2xl text-gray-900">Team</h1>
- <p className="mt-1 text-sm text-gray-500">Manage who has access to your StoryPay account</p>
+ <p className="mt-1 text-sm text-gray-500">Manage who has access to your StoryVenue account</p>
  </div>
  <div className="flex items-center gap-3">
  {saved && (

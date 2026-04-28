@@ -54,7 +54,7 @@ export function LoginClient() {
         <p className="text-center text-sm text-gray-500 mt-5">
           {mode === 'venue' ? (
             <>
-              New to StoryPay?{' '}
+              New to StoryVenue?{' '}
               <Link href={signupHref} className="font-semibold text-gray-900 hover:underline">
                 Create a venue account
               </Link>

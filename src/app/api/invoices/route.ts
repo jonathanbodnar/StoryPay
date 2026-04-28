@@ -218,7 +218,7 @@ export async function POST(request: NextRequest) {
                   <div style="text-align: center; margin: 32px 0;">
                     <a href="${proposalUrl}" style="display: inline-block; background-color: #1b1b1b; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">View & Pay Invoice</a>
                   </div>
-                  <p style="color: #9ca3af; font-size: 12px; text-align: center; margin-top: 24px; margin-bottom: 0;">Powered by StoryPay & LunarPay</p>
+                  <p style="color: #9ca3af; font-size: 12px; text-align: center; margin-top: 24px; margin-bottom: 0;">Powered by StoryVenue & LunarPay</p>
                 </div>
               </div>
             `,

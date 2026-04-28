@@ -10,7 +10,7 @@ export const runtime = 'nodejs';
 
 /**
  * Same people as /api/customers (GHL + LunarPay + venue_customers), but each result
- * includes a StoryPay `venue_customers.id` for starting a conversation thread.
+ * includes a StoryVenue `venue_customers.id` for starting a conversation thread.
  */
 export async function GET(request: NextRequest) {
   const venueId = await getVenueId();

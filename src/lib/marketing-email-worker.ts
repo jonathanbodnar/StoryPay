@@ -606,7 +606,7 @@ async function sendTemplateToLead(
       `<!-- preheader: ${mergedPre.replace(/<!--/g, '').slice(0, 200)} -->\n${html}`
     : html;
   const { data: venue } = await supabaseAdmin.from('venues').select('name').eq('id', venueId).maybeSingle();
-  const fromName = `${(venue?.name as string) || 'Venue'} via StoryPay`;
+  const fromName = `${(venue?.name as string) || 'Venue'} via StoryVenue`;
   const r = await sendEmail({
     to: vars.email,
     subject: mergedSubject,

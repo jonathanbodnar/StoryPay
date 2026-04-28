@@ -124,7 +124,7 @@ export async function createQuickBooksInvoice(
       CustomerRef: { value: '1', name: txn.customer_name },
       DocNumber: txn.id.slice(0, 20),
       TxnDate: txn.date.slice(0, 10),
-      PrivateNote: `Synced from StoryPay - ${txn.id}`,
+      PrivateNote: `Synced from StoryVenue - ${txn.id}`,
     }),
   });
   return res.json();
@@ -153,7 +153,7 @@ export async function createQuickBooksSalesReceipt(
       }],
       CustomerRef: { value: '1', name: txn.customer_name },
       TxnDate: txn.date.slice(0, 10),
-      PrivateNote: `Synced from StoryPay - ${txn.id}`,
+      PrivateNote: `Synced from StoryVenue - ${txn.id}`,
     }),
   });
   return res.json();
@@ -182,7 +182,7 @@ export async function createFreshBooksInvoice(
             code: 'USD',
           },
         }],
-        notes: `Synced from StoryPay - ${txn.id}`,
+        notes: `Synced from StoryVenue - ${txn.id}`,
       },
     }),
   });

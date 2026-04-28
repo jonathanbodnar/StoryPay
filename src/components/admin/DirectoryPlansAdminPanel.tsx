@@ -288,7 +288,7 @@ export function DirectoryPlansAdminPanel() {
         {!platformFortisMerchantIdConfigured ? (
           <p className="mt-2 text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 max-w-3xl">
             Set <code className="text-xs">STORYPAY_PLATFORM_FORTIS_MERCHANT_ID</code> in production env so new charges use
-            your StoryPay merchant unless a plan specifies its own id.
+            your StoryVenue merchant unless a plan specifies its own id.
           </p>
         ) : null}
         {err && <p className="mt-2 text-sm text-red-600">{err}</p>}

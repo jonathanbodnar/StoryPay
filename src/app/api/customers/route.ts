@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Always persist to StoryPay's own venue_customers table. This is the source
+  // Always persist to StoryVenue's own venue_customers table. This is the source
   // of truth inside the dashboard — LunarPay / GHL are downstream sinks.
   const { data: row, error: dbErr } = await supabaseAdmin
     .from('venue_customers')

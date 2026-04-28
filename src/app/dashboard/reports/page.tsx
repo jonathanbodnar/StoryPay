@@ -82,7 +82,7 @@ const REPORTS: ReportDef[] = [
  {
  type: 'bank-reconciliation',
  label: 'Bank Reconciliation',
- description: 'Match StoryPay collections to your bank deposits. Shows gross payments, processing fees deducted, refunds, and estimated net deposit — ready for your accountant.',
+ description: 'Match StoryVenue collections to your bank deposits. Shows gross payments, processing fees deducted, refunds, and estimated net deposit — ready for your accountant.',
  icon: Landmark,
  color: '#0369a1',
  bg: 'bg-sky-50',
@@ -150,7 +150,7 @@ async function downloadPDF(data: ReportData, label: string, dateRange: DateRange
  doc.setTextColor(255, 255, 255);
  doc.setFontSize(13);
  doc.setFont('helvetica', 'bold');
- doc.text('StoryPay', 14, 11);
+ doc.text('StoryVenue', 14, 11);
  doc.setFontSize(10);
  doc.setFont('helvetica', 'normal');
  doc.text(label, 60, 11);
@@ -191,7 +191,7 @@ async function downloadPDF(data: ReportData, label: string, dateRange: DateRange
  doc.setPage(i);
  doc.setFontSize(7);
  doc.setTextColor(150);
- doc.text(`Generated ${new Date().toLocaleDateString('en-US', { dateStyle: 'long' })} · StoryPay`, 14, 205);
+ doc.text(`Generated ${new Date().toLocaleDateString('en-US', { dateStyle: 'long' })} · StoryVenue`, 14, 205);
  doc.text(`Page ${i} of ${pages}`, 260, 205);
  }
 

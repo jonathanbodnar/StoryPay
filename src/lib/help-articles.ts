@@ -28,7 +28,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         id: 'gs-overview',
         title: 'Platform overview',
         tags: ['overview', 'intro', 'dashboard', 'what is', 'storypay', 'storyvenue'],
-        body: `StoryPay (at app.storyvenue.com) is the all-in-one command center for wedding venues. From one dashboard you manage your public directory listing on storyvenue.com, the leads it generates, customer profiles, proposals, invoices, payments, a booking calendar, branding, email templates, and your team.
+        body: `StoryVenue (at app.storyvenue.com) is the all-in-one command center for wedding venues. From one dashboard you manage your public directory listing on storyvenue.com, the leads it generates, customer profiles, proposals, invoices, payments, a booking calendar, branding, email templates, and your team.
 
 After logging in you land on the Home dashboard which shows your revenue, pipeline, recent proposals, and recent transactions at a glance.
 
@@ -53,7 +53,7 @@ How the two sites fit together:
 - storyvenue.com is the public-facing directory browsed by couples looking for a venue
 - app.storyvenue.com is the private admin dashboard where you run your business
 
-Couples browse your listing on storyvenue.com → submit an inquiry → the lead lands in your Leads inbox here → you reply, book a tour, send a proposal, and collect payment — all without leaving StoryPay.
+Couples browse your listing on storyvenue.com → submit an inquiry → the lead lands in your Leads inbox here → you reply, book a tour, send a proposal, and collect payment — all without leaving StoryVenue.
 
 The floating sparkle button (bottom-right) opens Ask AI, which can answer questions about your account in real time.
 
@@ -106,7 +106,7 @@ Click the bubble to open the setup checklist. It tracks the core setup steps:
 6. Send Your First Proposal — send it to a client so they can sign and pay
 7. Invite a Team Member — add staff to your account (Settings → Team)
 
-Check off each step manually as you complete it. When all steps are checked, click "I'm Ready — Start Using StoryPay" to dismiss the bubble permanently. You can also skip the wizard at any time and come straight to the dashboard — payment processing setup is optional and can be completed later.
+Check off each step manually as you complete it. When all steps are checked, click "I'm Ready — Start Using StoryVenue" to dismiss the bubble permanently. You can also skip the wizard at any time and come straight to the dashboard — payment processing setup is optional and can be completed later.
 
 To restart the checklist at any time, go to Settings → General → Restart Setup Guide. This only clears the checkmarks — it does not delete any data.
 
@@ -116,7 +116,7 @@ Note: The setup guide is only visible to account owners. Admins and Members do n
         id: 'gs-login',
         title: 'Logging in and your login link',
         tags: ['login', 'link', 'access', 'sign in', 'token', 'magic link', 'forgot password'],
-        body: `StoryPay uses magic-link login at app.storyvenue.com/login — no password needed.
+        body: `StoryVenue uses magic-link login at app.storyvenue.com/login — no password needed.
 
 Enter the email address on your account and click Send Login Link. We email a personalised login URL that signs you in with a single click. The link is valid for one hour.
 
@@ -168,7 +168,7 @@ The two tables at the bottom show your 5 most recent proposals (with links to vi
         id: 'dash-announcement-ticker',
         title: 'Announcement ticker — what it is and why you can\'t close it',
         tags: ['announcement', 'ticker', 'news', 'banner', 'top bar', 'broadcast', 'platform updates'],
-        body: `The thin dark scrolling bar at the very top of every page (labelled "News") is the announcement ticker. It surfaces platform-wide messages from the StoryPay team — things like:
+        body: `The thin dark scrolling bar at the very top of every page (labelled "News") is the announcement ticker. It surfaces platform-wide messages from the StoryVenue team — things like:
 
 - Scheduled maintenance windows and downtime notices
 - New feature launches and big changes to existing tools
@@ -176,10 +176,10 @@ The two tables at the bottom show your 5 most recent proposals (with links to vi
 - Time-sensitive operational notices (deliverability issues, integrations being retired, etc.)
 
 Why there's no "X" to close it
-The ticker is intentionally non-dismissible from the venue side. When the StoryPay team broadcasts something it's because every venue genuinely needs to see it, and a per-venue dismiss would mean important messages get hidden in the moments they matter most. There's no per-user "snooze" cookie — if you see it, every other user on your venue sees it too.
+The ticker is intentionally non-dismissible from the venue side. When the StoryVenue team broadcasts something it's because every venue genuinely needs to see it, and a per-venue dismiss would mean important messages get hidden in the moments they matter most. There's no per-user "snooze" cookie — if you see it, every other user on your venue sees it too.
 
 Who can turn it off
-Only the StoryPay team can hide an announcement. Each announcement has an Active / Inactive toggle on the super admin dashboard; the moment a message is deactivated it disappears from every venue ticker on the next page load. Announcements are also rotated and replaced regularly, so the bar will feel fresh rather than static.
+Only the StoryVenue team can hide an announcement. Each announcement has an Active / Inactive toggle on the super admin dashboard; the moment a message is deactivated it disappears from every venue ticker on the next page load. Announcements are also rotated and replaced regularly, so the bar will feel fresh rather than static.
 
 Clicking the link in an announcement
 If a message has a link, clicking it opens the destination in a new tab (or the same tab, for in-app routes). Hovering anywhere over the scrolling text pauses the animation so you can read or click without chasing the message.`,
@@ -313,7 +313,7 @@ To edit or stop a series: click any occurrence → Edit → change the Repeats o
         id: 'cal-conflicts',
         title: 'Double-booking protection',
         tags: ['conflict', 'double booking', 'overlap', 'same date', 'protection'],
-        body: `StoryPay checks for booking conflicts at the database level, not just in the UI. If you try to add an event to a space that already has another event during that time window, you will see a conflict warning.
+        body: `StoryVenue checks for booking conflicts at the database level, not just in the UI. If you try to add an event to a space that already has another event during that time window, you will see a conflict warning.
 
 The warning shows:
 - The conflicting event name
@@ -329,7 +329,7 @@ Conflict detection only applies when you select a specific space. Events with no
         id: 'cal-ical',
         title: 'Syncing with Google Calendar, Outlook, and Apple Calendar',
         tags: ['ical', 'google calendar', 'outlook', 'apple calendar', 'sync', 'subscribe', 'phone'],
-        body: `StoryPay provides an iCal subscription feed so your events appear in any calendar app on your phone or computer.
+        body: `StoryVenue provides an iCal subscription feed so your events appear in any calendar app on your phone or computer.
 
 To set it up: go to Settings → Integrations → scroll to the "Google Calendar, Outlook & Apple Calendar" card. Copy your iCal URL.
 
@@ -355,23 +355,23 @@ Apple Calendar (Mac):
 
 iPhone: Settings → Calendar → Accounts → Add Account → Other → Add Subscribed Calendar → paste the URL.
 
-Note: This is a one-way sync — StoryPay events appear in your personal calendar. Events you add in Google/Outlook do NOT flow back into StoryPay. Updates may take up to 24 hours to appear depending on the calendar app.`,
+Note: This is a one-way sync — StoryVenue events appear in your personal calendar. Events you add in Google/Outlook do NOT flow back into StoryVenue. Updates may take up to 24 hours to appear depending on the calendar app.`,
       },
       {
         id: 'cal-calendly',
         title: 'Connecting Calendly',
         tags: ['calendly', 'sync', 'booking', 'tour booking', 'integration', 'connect calendly'],
-        body: `Connect Calendly so that when someone books a tour (or any appointment) through your Calendly link, it automatically appears on your StoryPay calendar and creates a customer profile.
+        body: `Connect Calendly so that when someone books a tour (or any appointment) through your Calendly link, it automatically appears on your StoryVenue calendar and creates a customer profile.
 
 To connect:
 1. Go to Settings → Integrations → Calendly card → click Connect
 2. Go to calendly.com/integrations/api_webhooks → API & Webhooks → Personal Access Tokens → Generate New Token
-3. Copy the token and paste it into StoryPay → click Connect
+3. Copy the token and paste it into StoryVenue → click Connect
 
 Once connected:
-- New Calendly bookings appear on your StoryPay calendar instantly (real-time via webhook)
+- New Calendly bookings appear on your StoryVenue calendar instantly (real-time via webhook)
 - A customer profile is created automatically for each booking
-- Cancellations in Calendly automatically mark the event cancelled in StoryPay
+- Cancellations in Calendly automatically mark the event cancelled in StoryVenue
 
 Use Sync Now to import all upcoming Calendly events at any time (useful after first connecting).
 
@@ -381,7 +381,7 @@ To disconnect, click Disconnect on the Calendly card. Your existing calendar eve
         id: 'cal-availability',
         title: 'Public availability page',
         tags: ['availability', 'public', 'share', 'open dates', 'prospects', 'widget'],
-        body: `StoryPay generates a public availability page for your venue that shows which dates are open or booked — without revealing any customer names or details.
+        body: `StoryVenue generates a public availability page for your venue that shows which dates are open or booked — without revealing any customer names or details.
 
 Find your availability URL at Settings → Integrations → Google Calendar / Outlook & Apple Calendar card → Public Availability Page.
 
@@ -432,8 +432,8 @@ Email replies (Resend inbound)
 - What you need in your workspace: a Resend inbound domain (MX records added in DNS), the \`email.received\` webhook pointed at \`<your-host>/api/webhooks/inbound-email\`, and the environment variables \`RESEND_API_KEY\`, \`CONVERSATIONS_INBOUND_DOMAIN\`, \`CONVERSATIONS_INBOUND_SECRET\` set on the host. (Optional \`INBOUND_EMAIL_WEBHOOK_TOKEN\` lets you reject unknown callers.)
 
 SMS replies (GHL inbound)
-- Outbound SMS goes through your connected GoHighLevel sub-account's A2P-approved number. Inbound replies hit GHL first, which posts them to StoryPay's inbound SMS webhook, and the message is attached to the matching thread by phone number.
-- Troubleshooting: if SMS replies aren't appearing, confirm the contact's phone is on file in E.164 format, that the GHL integration still shows "Connected" in Settings → Integrations, and that the GHL webhook/private integration that posts inbound SMS to StoryPay is live.
+- Outbound SMS goes through your connected GoHighLevel sub-account's A2P-approved number. Inbound replies hit GHL first, which posts them to StoryVenue's inbound SMS webhook, and the message is attached to the matching thread by phone number.
+- Troubleshooting: if SMS replies aren't appearing, confirm the contact's phone is on file in E.164 format, that the GHL integration still shows "Connected" in Settings → Integrations, and that the GHL webhook/private integration that posts inbound SMS to StoryVenue is live.
 
 If a reply doesn't show up
 - For email: check that DNS MX records are still valid, the Resend inbound webhook is \`Active\`, and your Railway (or other host) logs show the \`/api/webhooks/inbound-email\` route receiving the event. "Address not found" bounces usually mean the reply-to domain isn't set up on Resend yet.
@@ -547,7 +547,7 @@ Uploaded photos are public — they're served directly from a CDN so your listin
         body: `Media is your venue-wide folder for everything you reuse across the product. Open it from the sidebar → Media (path: /dashboard/media). The old /dashboard/listing/media URL still works and redirects here.
 
 What it is for:
-- Upload an image or file once, then reuse it wherever StoryPay needs an asset URL — directory Photos, marketing email templates (Image block, Button → File link), lead capture forms (Image block), and Settings → Branding (logo).
+- Upload an image or file once, then reuse it wherever StoryVenue needs an asset URL — directory Photos, marketing email templates (Image block, Button → File link), lead capture forms (Image block), and Settings → Branding (logo).
 - Copy any asset's public URL from the library to paste elsewhere if needed.
 
 What you can upload:
@@ -578,7 +578,7 @@ Click any file to preview it
 - The preview modal's toolbar always shows Open in new tab and Download, so you can grab the file regardless of the file type.
 
 Download
-- Click Download from the asset menu (or from the preview modal toolbar) and the file saves directly to your computer with its original name. The download streams through the StoryPay app domain so browsers always trigger a real save instead of opening the file in a new tab.
+- Click Download from the asset menu (or from the preview modal toolbar) and the file saves directly to your computer with its original name. The download streams through the StoryVenue app domain so browsers always trigger a real save instead of opening the file in a new tab.
 
 Used in indicator:
 - Each file shows where its URL is referenced today: Brand logo (Settings → Branding), Listing cover/gallery (Venue listing → Photos), Email templates and campaigns, Lead capture forms.
@@ -671,7 +671,7 @@ Google's Places API cannot look up service-area businesses by name search. Use t
 
 Once connected:
 - A green "Connected to Google Business" banner appears.
-- StoryPay fetches and caches your Google reviews.
+- StoryVenue fetches and caches your Google reviews.
 - Use the refresh icon to force a cache refresh at any time.
 - To switch to a different Google Business, click "Change business."
 
@@ -712,7 +712,7 @@ Privacy: only approximate location data (city-level) is captured. No names, emai
       },
       {
         id: 'listing-analytics-retention',
-        title: 'Daily views & analytics retention — does StoryPay save historical traffic?',
+        title: 'Daily views & analytics retention — does StoryVenue save historical traffic?',
         tags: ['analytics', 'history', 'historical', 'retention', 'daily views', 'data retention', 'page views', 'unique visitors', '30 days', '90 days', '365 days', 'archive', 'old data', 'last 30 days'],
         body: `Yes — every event on your storyvenue.com listing is saved permanently in the listing_events table. There is no auto-prune, no TTL, no cron job that deletes old rows. The Analytics dashboard's date-range picker (1 / 7 / 14 / 30 / 60 / 90 days) is purely a query window, not a retention boundary.
 
@@ -756,7 +756,7 @@ If you're convinced data should be there but isn't
         tags: ['leads', 'pipeline', 'kanban', 'sales', 'inbox', 'directory leads', 'form', 'space', 'contact stage'],
         body: `The Leads page is your sales pipeline. Open it from the sidebar → Leads.
 
-Every contact is always visible in some pipeline stage. When you open Leads, StoryPay reconciles your leads and contacts so that every contact with a real email shows up in the pipeline, and every lead is snapped to the pipeline + stage stored on its matching contact profile. If you move a contact's stage on the Contacts page, the Leads Kanban reflects it — and vice versa. Leads pointing at a deleted pipeline/stage automatically heal to the default pipeline's first stage instead of disappearing from the board.
+Every contact is always visible in some pipeline stage. When you open Leads, StoryVenue reconciles your leads and contacts so that every contact with a real email shows up in the pipeline, and every lead is snapped to the pipeline + stage stored on its matching contact profile. If you move a contact's stage on the Contacts page, the Leads Kanban reflects it — and vice versa. Leads pointing at a deleted pipeline/stage automatically heal to the default pipeline's first stage instead of disappearing from the board.
 
 Two ways leads arrive:
 - Inquiries submitted through your storyvenue.com directory listing show up automatically.
@@ -792,7 +792,7 @@ Tags & attribution — Leads support marketing tags and trigger links (Marketing
         body: `The Leads page includes tools for forecasting, accountability, and team permissions.
 
 Weighted pipeline
-- Each stage has a win probability (0–100%). If unset, StoryPay uses sensible defaults from the stage kind (open vs won vs lost).
+- Each stage has a win probability (0–100%). If unset, StoryVenue uses sensible defaults from the stage kind (open vs won vs lost).
 - Weighted amounts multiply opportunity value by that probability. You'll see wtd on Kanban column headers and on cards, plus a venue-wide weighted total in the insights strip.
 
 Deal value
@@ -987,7 +987,7 @@ If AI gives a stale answer, refresh the page to reset the context.`,
         id: 'leads-notifications',
         title: 'Lead notification emails',
         tags: ['notification', 'email', 'lead email', 'alert', 'inquiry email', 'not receiving'],
-        body: `When a new lead comes in, StoryPay emails you a formatted summary so you don't need to open the dashboard every hour.
+        body: `When a new lead comes in, StoryVenue emails you a formatted summary so you don't need to open the dashboard every hour.
 
 The email includes the couple's name, contact info, wedding date (if given), estimated guest count, booking timeline, and their full message. A "View in dashboard" link jumps straight to the lead.
 
@@ -1026,7 +1026,7 @@ If the field looks missing
         id: 'leads-to-proposal',
         title: 'Turning a lead into a customer and proposal',
         tags: ['convert', 'proposal', 'customer', 'lead to customer', 'book', 'quote'],
-        body: `Leads are the top of your funnel. Once a lead is qualified, here's the recommended path through StoryPay:
+        body: `Leads are the top of your funnel. Once a lead is qualified, here's the recommended path through StoryVenue:
 
 1. Leads → open the inquiry, review details
 2. Mark contacted once you've replied
@@ -1131,7 +1131,7 @@ If a lead in your inbox shares the same email as this customer, the profile may 
 
 Referral source (how the couple found you) is separate from pipeline: Instagram, Google, Wedding Wire, The Knot, Referral, Venue Website, Facebook, or Other. Set it from the Overview tab / contact area.
 
-If pipeline or stage changes fail with a database-related error, your environment may need the latest database migration applied — contact whoever manages your StoryPay database or support.`,
+If pipeline or stage changes fail with a database-related error, your environment may need the latest database migration applied — contact whoever manages your StoryVenue database or support.`,
       },
       {
         id: 'cust-tasks',
@@ -1602,7 +1602,7 @@ The address is pulled from your venue Branding settings (Settings → Branding �
 - Block — shared block settings (alignment, top/bottom padding, side gutters, background color).
 
 Compliance
-You should keep an Address block in every marketing email. The same applies to the unsubscribe footer added automatically by StoryPay (see the email compliance article).`,
+You should keep an Address block in every marketing email. The same applies to the unsubscribe footer added automatically by StoryVenue (see the email compliance article).`,
       },
       {
         id: 'me-block-divider-spacer',
@@ -1690,7 +1690,7 @@ Desktop email clients (Outlook, full-screen Gmail web, etc.) get the full 600px-
         id: 'me-compliance',
         title: 'Email compliance — minimal footer and preference center',
         tags: ['compliance', 'unsubscribe', 'opt out', 'preferences', 'preference center', 'can-spam', 'casl', 'gdpr', 'footer'],
-        body: `Every marketing email sent through StoryPay automatically includes a minimal compliance footer with:
+        body: `Every marketing email sent through StoryVenue automatically includes a minimal compliance footer with:
 - Your venue name (from Branding → venue name).
 - Your physical address (from Branding → Contact Information).
 - An unsubscribe link.
@@ -1707,7 +1707,7 @@ Suppression
 Recipients on the suppression list are skipped automatically by every campaign and automation. They still receive transactional emails (proposals, invoices, payment confirmations) — those are exempt from CAN-SPAM and never use marketing-email infrastructure.
 
 Why this matters
-- CAN-SPAM (US) and CASL (Canada) require a physical address and a one-click unsubscribe in every commercial email. StoryPay's automatic footer covers both.
+- CAN-SPAM (US) and CASL (Canada) require a physical address and a one-click unsubscribe in every commercial email. StoryVenue's automatic footer covers both.
 - GDPR-style consent is up to you — collect opt-ins via your lead capture forms (Marketing → Lead Capture Forms include a marketing-opt-in checkbox).
 
 What you can edit
@@ -1771,7 +1771,7 @@ Using a saved audience in a campaign
 1. Open or create a campaign at Marketing → Emails.
 2. In the Audience section, pick "Use a saved audience" and choose your audience from the dropdown.
 3. You can still layer additional behavior filters on top (e.g. start with "Booked couples 2026" but require a wedding date on file). Those filters compose with — they don't replace — the audience's filters.
-4. Save the campaign. When it sends, StoryPay re-resolves the audience and delivers to whoever currently matches.
+4. Save the campaign. When it sends, StoryVenue re-resolves the audience and delivers to whoever currently matches.
 
 Editing an audience
 - Edits show up automatically on the next send for any draft or scheduled campaigns using the audience.
@@ -1891,7 +1891,7 @@ Tip — keep your first sequence short and useful (3-5 emails over 14 days), mak
         id: 'email-types',
         title: 'Email template types',
         tags: ['email', 'templates', 'automated', 'notification', 'test email', 'preview'],
-        body: `StoryPay sends automated emails on your behalf. Customize each one at Settings → Email Templates.
+        body: `StoryVenue sends automated emails on your behalf. Customize each one at Settings → Email Templates.
 
 The 7 template types are:
 1. Invoice — sent when you send an invoice to a customer
@@ -1948,18 +1948,18 @@ Preview your template using the Preview button — it shows a sample email with 
         id: 'int-calendly',
         title: 'Connecting Calendly',
         tags: ['calendly', 'booking', 'sync', 'tour booking', 'integration', 'connect'],
-        body: `Calendly integration automatically syncs bookings (tours, meetings, tastings) from Calendly into your StoryPay calendar and customer profiles.
+        body: `Calendly integration automatically syncs bookings (tours, meetings, tastings) from Calendly into your StoryVenue calendar and customer profiles.
 
 To connect:
 1. Go to Settings → Integrations → Calendly card → click Connect
 2. Go to calendly.com/integrations/api_webhooks
 3. Click API & Webhooks → Personal Access Tokens → Generate New Token
-4. Copy the token and paste it into StoryPay → click Connect
+4. Copy the token and paste it into StoryVenue → click Connect
 
 After connecting:
 - New Calendly bookings appear on your calendar automatically in real time
 - A customer profile is auto-created for the invitee's email
-- Cancellations in Calendly mark the event cancelled in StoryPay
+- Cancellations in Calendly mark the event cancelled in StoryVenue
 - Use Sync Now to import all upcoming Calendly events at any time
 
 To disconnect: click Disconnect on the Calendly card.`,
@@ -1968,7 +1968,7 @@ To disconnect: click Disconnect on the Calendly card.`,
         id: 'int-google-cal',
         title: 'Google Calendar, Outlook & Apple Calendar sync',
         tags: ['google calendar', 'outlook', 'apple calendar', 'ical', 'sync', 'subscribe', 'phone calendar'],
-        body: `Sync your StoryPay calendar to any calendar app using an iCal subscription feed. This is one-way: StoryPay events appear in your calendar app. Events added in Google/Outlook do not flow back into StoryPay.
+        body: `Sync your StoryVenue calendar to any calendar app using an iCal subscription feed. This is one-way: StoryVenue events appear in your calendar app. Events added in Google/Outlook do not flow back into StoryVenue.
 
 Find your iCal URL: Settings → Integrations → Google Calendar / Outlook & Apple Calendar card.
 
@@ -1995,7 +1995,7 @@ Updates may take up to 24 hours depending on the calendar app.`,
         tags: ['quickbooks', 'accounting', 'integration', 'sync', 'qbo'],
         body: `Go to Settings → Integrations. Click Connect on the QuickBooks Online card.
 
-You'll be redirected to Intuit to authorise the connection. After approving, you're returned to StoryPay and the integration shows as Connected.
+You'll be redirected to Intuit to authorise the connection. After approving, you're returned to StoryVenue and the integration shows as Connected.
 
 Once connected:
 - Invoices and payments sync automatically to QuickBooks
@@ -2112,11 +2112,11 @@ Toggle each switch on or off, then click Save. Changes take effect immediately.`
         id: 'sms-notifications',
         title: 'SMS notifications for customers',
         tags: ['sms', 'text message', 'phone', 'messaging', 'ghl', 'notification'],
-        body: `When you send a proposal or invoice to a customer with a phone number on file, StoryPay automatically sends them an SMS with a link.
+        body: `When you send a proposal or invoice to a customer with a phone number on file, StoryVenue automatically sends them an SMS with a link.
 
 For SMS to work:
 1. The customer must have a phone number entered when creating the proposal or invoice.
-2. Phone numbers are automatically formatted to US E.164 format (+1XXXXXXXXXX). Enter numbers in any format — StoryPay handles the rest.
+2. Phone numbers are automatically formatted to US E.164 format (+1XXXXXXXXXX). Enter numbers in any format — StoryVenue handles the rest.
 3. Your account's GHL (Go High Level) sub-account must be connected. SMS routes through your A2P-approved phone number.
 
 If SMS is not sending, check:
@@ -2138,7 +2138,7 @@ Note: SMS uses your GHL sub-account's verified A2P phone number automatically �
         id: 'updates-overview',
         title: "What's New — release notes and unread badge",
         tags: ["what's new", 'whats new', 'updates', 'release notes', 'changelog', 'red dot', 'unread', 'notifications'],
-        body: `What's New (sidebar → What's New) is your running changelog for StoryPay. Every time we ship a new feature, improvement, or fix, it lands here as an entry with a short outcome-focused headline and description so you can see at a glance what changed and why it matters to your venue.
+        body: `What's New (sidebar → What's New) is your running changelog for StoryVenue. Every time we ship a new feature, improvement, or fix, it lands here as an entry with a short outcome-focused headline and description so you can see at a glance what changed and why it matters to your venue.
 
 The page has two tabs: What's New (changelog) and Feature Requests.
 
@@ -2158,7 +2158,7 @@ If the red dot sticks around after you visit the page, refresh once. If it still
         id: 'updates-feature-requests',
         title: 'Submitting a feature request',
         tags: ['feature request', 'suggest', 'feedback', 'idea', 'roadmap', 'vote', "what's new"],
-        body: `You can ask for new features directly inside StoryPay — no external form.
+        body: `You can ask for new features directly inside StoryVenue — no external form.
 
 How to submit
 1. Open What's New (sidebar) and switch to the Feature Requests tab.
@@ -2173,7 +2173,7 @@ Voting
 - Requests are sorted by most votes so the most popular ideas rise to the top.
 
 What happens next
-- A StoryPay admin reviews every request and can approve, edit, or remove it.
+- A StoryVenue admin reviews every request and can approve, edit, or remove it.
 - Approved: the request becomes a new What's New entry with an auto-generated outcome-based headline and description. It disappears from the active list because the feature is now live and tracked in the changelog.
 - Removed: if the request is a duplicate, out of scope, or won't be built, it's removed. No action needed from you.
 
@@ -2198,7 +2198,7 @@ Tip: write the description as an outcome — "I want to be able to X so that Y" 
         id: 'ai-overview',
         title: 'What is Ask AI?',
         tags: ['ask ai', 'ai', 'chat', 'assistant', 'help'],
-        body: `Ask AI is your built-in assistant, powered by your live account data and an internal summary of the StoryPay product — navigation, CRM, Conversations inbox (SMS / Email / Team tabs, two-way replies), Venue listing (directory, Media library, photos, analytics, reviews), Leads pipelines and intelligence, calendar, payments, marketing tools, team permissions, settings, What's New / changelog, feature requests, and Help Center guidance. It knows your current revenue, recent proposals, and — when you're on the Leads page — a detailed snapshot of leads, stages, and notes.
+        body: `Ask AI is your built-in assistant, powered by your live account data and an internal summary of the StoryVenue product — navigation, CRM, Conversations inbox (SMS / Email / Team tabs, two-way replies), Venue listing (directory, Media library, photos, analytics, reviews), Leads pipelines and intelligence, calendar, payments, marketing tools, team permissions, settings, What's New / changelog, feature requests, and Help Center guidance. It knows your current revenue, recent proposals, and — when you're on the Leads page — a detailed snapshot of leads, stages, and notes.
 
 Open it by clicking the sparkle button (bottom-right corner of any page) or by clicking Ask AI in the sidebar.
 

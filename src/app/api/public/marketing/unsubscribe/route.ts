@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
   return new NextResponse(
     `<!DOCTYPE html><html><body style="font-family:sans-serif;padding:40px;text-align:center;max-width:480px;margin:0 auto">
       <h1 style="font-weight:600">You are unsubscribed</h1>
-      <p style="color:#52525b">You will no longer receive marketing emails from this venue through StoryPay.</p>
+      <p style="color:#52525b">You will no longer receive marketing emails from this venue through StoryVenue.</p>
       <p style="margin-top:20px;font-size:14px;"><a href="${resub}" style="color:#2563eb;">Subscribe again</a></p>
     </body></html>`,
     { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } },

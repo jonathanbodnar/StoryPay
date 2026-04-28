@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
 
     const lines: string[] = [
       'BEGIN:VCALENDAR', 'VERSION:2.0',
-      `PRODID:-//StoryPay//${escapeIcal(venue.name)}//EN`,
+      `PRODID:-//StoryVenue//${escapeIcal(venue.name)}//EN`,
       'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
       `X-WR-CALNAME:${escapeIcal(venue.name)} — Events`,
       'X-WR-TIMEZONE:America/New_York',

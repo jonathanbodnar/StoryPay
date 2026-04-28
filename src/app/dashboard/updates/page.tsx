@@ -664,7 +664,7 @@ export default function UpdatesPage() {
  Active Development
  </span>
  </div>
- <p className="text-sm text-gray-500">See what&apos;s new in StoryPay and help shape what we build next.</p>
+ <p className="text-sm text-gray-500">See what&apos;s new in StoryVenue and help shape what we build next.</p>
  </div>
 
  {/* Tabs */}

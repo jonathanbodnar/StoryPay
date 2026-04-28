@@ -300,7 +300,7 @@ export async function POST(request: NextRequest) {
                   </p>
                   <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
                   <p style="color: #bbb; font-size: 12px; text-align: center;">
-                    Sent via StoryPay on behalf of ${venue.name}
+                    Sent via StoryVenue on behalf of ${venue.name}
                   </p>
                 </div>
               `,

@@ -4,7 +4,7 @@
  * There is no separate `venue_listings` table. The `public.venues` row IS the
  * directory listing — it already carries all the directory-facing fields
  * (slug, location, capacity, features, cover_image_url, gallery_images,
- * is_published, notification_email, …) alongside the StoryPay-internal ones
+ * is_published, notification_email, …) alongside the StoryVenue-internal ones
  * (brand_*, lunarpay_*, onboarding_*, etc.). The dashboard PATCH endpoint
  * writes through this allow-list so a venue owner can never touch an internal
  * column.
@@ -45,7 +45,7 @@ export type ListingWritableField = (typeof LISTING_WRITABLE_FIELDS)[number];
 
 /**
  * The directory-facing projection of a `venues` row. API responses use this
- * shape so the frontend never sees internal StoryPay columns.
+ * shape so the frontend never sees internal StoryVenue columns.
  */
 export const LISTING_READABLE_FIELDS = [
   'id',

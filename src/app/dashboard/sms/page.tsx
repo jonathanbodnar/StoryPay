@@ -105,7 +105,7 @@ export default function SmsPage() {
  <h2 className="font-heading text-lg font-semibold text-gray-900">Connect Messaging</h2>
  <p className="mx-auto mt-2 max-w-md text-sm text-gray-500">
  Connect your messaging account to send SMS messages to your customers directly from
- StoryPay.
+ StoryVenue.
  </p>
  <a
  href="/dashboard/settings"

@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
       customer_name: p.customer_name || 'Customer',
       customer_email: p.customer_email || '',
       amount: p.price,
-      description: `StoryPay Payment - ${p.customer_name || 'Customer'}`,
+      description: `StoryVenue Payment - ${p.customer_name || 'Customer'}`,
       date: p.paid_at || p.created_at,
     };
 

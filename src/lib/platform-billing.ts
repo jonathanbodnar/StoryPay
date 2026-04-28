@@ -1,5 +1,5 @@
 /**
- * StoryPay-owned billing (venues pay you). Per-plan Fortis merchant overrides env default.
+ * StoryVenue-owned billing (venues pay you). Per-plan Fortis merchant overrides env default.
  */
 export function getPlatformFortisMerchantId(planFortisOverride?: string | null): string | null {
   const o = planFortisOverride?.trim();

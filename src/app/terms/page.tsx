@@ -20,7 +20,7 @@ export default function TermsPage() {
       {/* Nav */}
       <nav className="border-b border-gray-100 px-6 py-4 flex items-center justify-between max-w-4xl mx-auto">
         <Link href="/">
-          <Image src="/storypay-logo-dark.png" alt="StoryPay" width={110} height={26} />
+          <Image src="/storypay-logo-dark.png" alt="StoryVenue" width={110} height={26} />
         </Link>
         <Link href="/login" className="text-sm text-gray-500 hover:text-gray-800 transition-colors">
           Sign In
@@ -35,7 +35,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-lg font-bold text-gray-900 mb-3">1. Acceptance of Terms</h2>
-            <p>Welcome to StoryPay. These Terms of Use (&ldquo;Terms&rdquo;) govern your access to and use of StoryPay&rsquo;s proposal and payment platform, including our website, dashboard, APIs, and related services (collectively, the &ldquo;Services&rdquo;), operated by Story Venue Marketing.</p>
+            <p>Welcome to StoryVenue. These Terms of Use (&ldquo;Terms&rdquo;) govern your access to and use of StoryVenue&rsquo;s proposal and payment platform, including our website, dashboard, APIs, and related services (collectively, the &ldquo;Services&rdquo;), operated by Story Venue Marketing.</p>
             <p className="mt-2">By accessing or using our Services, you agree to be bound by these Terms. If you do not agree, you may not access or use the Services.</p>
           </section>
 
@@ -51,7 +51,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-lg font-bold text-gray-900 mb-3">3. Account Registration &amp; Access</h2>
-            <p>Access to StoryPay is provided by invitation from Story Venue Marketing. When your account is created, you receive a secure login link by email. You agree to:</p>
+            <p>Access to StoryVenue is provided by invitation from Story Venue Marketing. When your account is created, you receive a secure login link by email. You agree to:</p>
             <ul className="list-disc pl-5 space-y-1 mt-2">
               <li>Keep your login credentials and links confidential</li>
               <li>Not share your login link with unauthorized persons</li>
@@ -63,7 +63,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-lg font-bold text-gray-900 mb-3">4. Platform Services</h2>
-            <p>StoryPay provides tools for wedding venues to create and send proposals and invoices, collect e-signatures, process payments, manage customers, and communicate with clients. By using the Services you agree to:</p>
+            <p>StoryVenue provides tools for wedding venues to create and send proposals and invoices, collect e-signatures, process payments, manage customers, and communicate with clients. By using the Services you agree to:</p>
             <ul className="list-disc pl-5 space-y-1 mt-2">
               <li>Only send proposals and invoices for legitimate goods and services you provide</li>
               <li>Comply with all applicable laws, regulations, and payment network rules</li>
@@ -75,10 +75,10 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-lg font-bold text-gray-900 mb-3">5. Payment Processing</h2>
-            <p>Payment processing is provided through LunarPay (powered by Fortis). By accepting payments through StoryPay, you acknowledge that:</p>
+            <p>Payment processing is provided through LunarPay (powered by Fortis). By accepting payments through StoryVenue, you acknowledge that:</p>
             <ul className="list-disc pl-5 space-y-1 mt-2">
               <li>Payment processing is subject to LunarPay&rsquo;s and Fortis&rsquo;s terms and conditions</li>
-              <li>Card data goes directly to Fortis — StoryPay never stores cardholder data</li>
+              <li>Card data goes directly to Fortis — StoryVenue never stores cardholder data</li>
               <li>You must complete merchant onboarding before accepting payments</li>
               <li>Processing fees apply as described in your account agreement</li>
               <li>You are responsible for refunds, chargebacks, and disputes with your customers</li>
@@ -87,7 +87,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-lg font-bold text-gray-900 mb-3">6. Prohibited Activities</h2>
-            <p>You may not use StoryPay to:</p>
+            <p>You may not use StoryVenue to:</p>
             <ul className="list-disc pl-5 space-y-1 mt-2">
               <li>Process transactions for illegal goods or services</li>
               <li>Engage in fraudulent, deceptive, or misleading practices</li>
@@ -102,17 +102,17 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-lg font-bold text-gray-900 mb-3">7. Your Content</h2>
-            <p>You retain ownership of all content you create in StoryPay — including proposal templates, invoices, customer data, branding assets, and email templates. By uploading content, you grant us a limited license to use it solely to provide the Services. You represent that you have all rights necessary to upload and use such content.</p>
+            <p>You retain ownership of all content you create in StoryVenue — including proposal templates, invoices, customer data, branding assets, and email templates. By uploading content, you grant us a limited license to use it solely to provide the Services. You represent that you have all rights necessary to upload and use such content.</p>
           </section>
 
           <section>
             <h2 className="text-lg font-bold text-gray-900 mb-3">8. SMS Messaging</h2>
-            <p>StoryPay may send SMS messages to your customers using your connected GHL (Go High Level) account and A2P-registered phone number. You are responsible for ensuring you have proper consent from your customers to receive SMS communications as required by applicable law (including TCPA).</p>
+            <p>StoryVenue may send SMS messages to your customers using your connected GHL (Go High Level) account and A2P-registered phone number. You are responsible for ensuring you have proper consent from your customers to receive SMS communications as required by applicable law (including TCPA).</p>
           </section>
 
           <section>
             <h2 className="text-lg font-bold text-gray-900 mb-3">9. Intellectual Property</h2>
-            <p>The StoryPay platform, including its software, design, and documentation, is owned by Story Venue Marketing. You may not copy, modify, distribute, or create derivative works from our platform without express written permission. Our name, logo, and trademarks may not be used without prior authorization.</p>
+            <p>The StoryVenue platform, including its software, design, and documentation, is owned by Story Venue Marketing. You may not copy, modify, distribute, or create derivative works from our platform without express written permission. Our name, logo, and trademarks may not be used without prior authorization.</p>
           </section>
 
           <section>
@@ -153,7 +153,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-lg font-bold text-gray-900 mb-3">17. Miscellaneous</h2>
             <ul className="list-disc pl-5 space-y-1">
-              <li><strong>Entire Agreement:</strong> These Terms constitute the entire agreement between you and Story Venue Marketing regarding StoryPay.</li>
+              <li><strong>Entire Agreement:</strong> These Terms constitute the entire agreement between you and Story Venue Marketing regarding StoryVenue.</li>
               <li><strong>Severability:</strong> If any provision is found unenforceable, the remaining provisions continue in effect.</li>
               <li><strong>Waiver:</strong> Our failure to enforce any right does not constitute a waiver of that right.</li>
               <li><strong>Assignment:</strong> You may not assign your rights under these Terms without our consent.</li>
@@ -163,7 +163,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-lg font-bold text-gray-900 mb-3">18. Contact Us</h2>
             <div className="mt-2 bg-gray-50 rounded-xl p-4 text-sm">
-              <p className="font-semibold">StoryPay</p>
+              <p className="font-semibold">StoryVenue</p>
               <p>Operated by Story Venue Marketing</p>
               <p>Email: <a href="mailto:clients@storyvenuemarketing.com" className="text-gray-900 underline">clients@storyvenuemarketing.com</a></p>
               <p>Website: <a href="https://storypay.io" className="text-gray-900 underline">storypay.io</a></p>
@@ -173,7 +173,7 @@ export default function TermsPage() {
         </div>
 
         <div className="mt-12 pt-8 border-t border-gray-100 flex items-center justify-between text-xs text-gray-400">
-          <span>© {new Date().getFullYear()} StoryPay. All rights reserved.</span>
+          <span>© {new Date().getFullYear()} StoryVenue. All rights reserved.</span>
           <Link href="/privacy" className="hover:text-gray-600 transition-colors">← Privacy Policy</Link>
         </div>
       </main>

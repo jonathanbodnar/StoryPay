@@ -240,7 +240,7 @@ function LivePreview({
  <Eye size={14}/> Preview Full {mode === 'invoice' ? 'Invoice' : 'Proposal'}
  </button>
 
- <p className="text-[10px] text-gray-300 text-center">Powered by StoryPay</p>
+ <p className="text-[10px] text-gray-300 text-center">Powered by StoryVenue</p>
  </div>
  </div>
  );
@@ -1351,7 +1351,7 @@ export default function NewProposalInvoicePage() {
  <button className="w-full rounded-xl py-3.5 text-sm font-bold text-white"style={{backgroundColor:brandColor||'#1b1b1b'}}>
  {mode==='invoice'?'Pay Now':'Review & Sign'}
  </button>
- <p className="text-[11px] text-gray-300 text-center">Powered by StoryPay</p>
+ <p className="text-[11px] text-gray-300 text-center">Powered by StoryVenue</p>
  </div>
  </div>
  </div>

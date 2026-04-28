@@ -511,7 +511,7 @@ function AdminNavSidebar({
     <div className="flex flex-col h-full" style={{ backgroundColor: '#fafaf9' }}>
       <div className="px-5 pt-5 pb-3 border-b border-gray-100">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/storyvenue-dark-logo.png" alt="StoryPay Admin" className="h-8 object-contain" />
+        <img src="/storyvenue-dark-logo.png" alt="StoryVenue Admin" className="h-8 object-contain" />
         <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mt-1.5">Super Admin</p>
       </div>
 
@@ -1159,7 +1159,7 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
           <form onSubmit={handleLogin} className="bg-white rounded-2xl p-8">
             <div className="flex justify-center mb-5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/storyvenue-dark-logo.png" alt="StoryPay" className="h-8 object-contain" />
+              <img src="/storyvenue-dark-logo.png" alt="StoryVenue" className="h-8 object-contain" />
             </div>
             <h2 className="font-heading text-xl text-gray-900 mb-6 text-center">Admin Login</h2>
             {loginError && <div className="bg-red-50 text-red-700 text-sm rounded-xl px-4 py-2 mb-4">{loginError}</div>}
@@ -1196,7 +1196,7 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
       {/* ── Mobile top bar ── */}
       <div className="lg:hidden fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 h-14 border-b border-gray-200 bg-white">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/storyvenue-dark-logo.png" alt="StoryPay" className="h-7 object-contain" />
+        <img src="/storyvenue-dark-logo.png" alt="StoryVenue" className="h-7 object-contain" />
         <button onClick={() => setMobileSidebarOpen(v => !v)} className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100">
           {mobileSidebarOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
@@ -1290,7 +1290,7 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
 
             <div className="rounded-xl border border-gray-200 bg-gray-50/80 p-4 sm:p-5 space-y-3">
               <div>
-                <h3 className="text-sm font-semibold text-gray-900">Directory SaaS (StoryPay)</h3>
+                <h3 className="text-sm font-semibold text-gray-900">Directory SaaS (StoryVenue)</h3>
                 <p className="text-xs text-gray-500 mt-1 max-w-3xl">
                   MRR from priced directory plans assigned to venues. &quot;Active&quot; counts venues with subscription status
                   active or trialing (set when recurring billing is wired). &quot;Assigned&quot; includes all non-canceled
@@ -1551,11 +1551,11 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
                 </div>
               </div>
 
-              {/* StoryPay SaaS cash (platform_billing_events) */}
+              {/* StoryVenue SaaS cash (platform_billing_events) */}
               <div className="rounded-xl bg-white border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">StoryPay SaaS cash</p>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">StoryVenue SaaS cash</p>
                     <p className="text-2xl font-bold text-gray-900 mt-1">
                       {statsLoading ? '...' : formatCents(stats?.platformSaaSRevenueInRangeCents ?? 0)}
                     </p>
@@ -2456,7 +2456,7 @@ function BlogTab({
 
   function emptyPost(): Partial<BlogPost> {
     return { title: '', slug: '', meta_title: '', meta_description: '', excerpt: '', content: '',
-      author_name: 'StoryPay Team', category: '', tags: [], featured_image: '', og_image: '',
+      author_name: 'StoryVenue Team', category: '', tags: [], featured_image: '', og_image: '',
       status: 'draft', noindex: false };
   }
 
@@ -2588,7 +2588,7 @@ function BlogTab({
               </div>
               <div>
                 <label className={LABEL}>Author</label>
-                <input type="text" value={form.author_name || ''} onChange={upd('author_name')} placeholder="StoryPay Team" className={INPUT} />
+                <input type="text" value={form.author_name || ''} onChange={upd('author_name')} placeholder="StoryVenue Team" className={INPUT} />
               </div>
               <div>
                 <label className={LABEL}>Status</label>

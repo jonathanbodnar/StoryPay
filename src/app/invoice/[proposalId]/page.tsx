@@ -334,7 +334,7 @@ export default function InvoicePage() {
 
         {/* Powered-by footer — minimal */}
         <div className="mt-6 flex flex-col items-center gap-1 print:hidden">
-          <p className="text-xs text-gray-300">Powered by StoryPay</p>
+          <p className="text-xs text-gray-300">Powered by StoryVenue</p>
         </div>
       </div>
     </div>

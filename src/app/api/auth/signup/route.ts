@@ -138,7 +138,7 @@ export async function POST(request: NextRequest) {
   try {
     const emailResult = await sendEmail({
       to: email,
-      subject: `Welcome to StoryPay — log in to finish setting up ${venueName}`,
+      subject: `Welcome to StoryVenue — log in to finish setting up ${venueName}`,
       html: welcomeEmailHtml({ firstName, venueName, loginUrl }),
     });
     emailSent = emailResult.success !== false;
@@ -170,12 +170,12 @@ function welcomeEmailHtml({
   return `
 <div style="font-family:'Open Sans',Arial,sans-serif;max-width:560px;margin:0 auto;background:#ffffff">
   <div style="background-color:#1b1b1b;padding:28px 32px;border-radius:12px 12px 0 0">
-    <h1 style="color:white;font-size:22px;margin:0;font-weight:300">StoryPay</h1>
+    <h1 style="color:white;font-size:22px;margin:0;font-weight:300">StoryVenue</h1>
   </div>
   <div style="padding:32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
     <h2 style="color:#111827;font-size:20px;font-weight:700;margin:0 0 16px">Welcome, ${escapeHtml(firstName)}!</h2>
     <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 16px">
-      Your StoryPay account for <strong>${escapeHtml(venueName)}</strong> is ready.
+      Your StoryVenue account for <strong>${escapeHtml(venueName)}</strong> is ready.
       Click the button below to log in and start setting up your directory listing.
     </p>
     <div style="text-align:center;margin:32px 0">
@@ -190,7 +190,7 @@ function welcomeEmailHtml({
     </p>
     <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0 16px">
     <p style="color:#9ca3af;font-size:11px;text-align:center;margin:0">
-      If you didn&apos;t sign up for StoryPay, you can safely ignore this email.
+      If you didn&apos;t sign up for StoryVenue, you can safely ignore this email.
     </p>
   </div>
 </div>`;

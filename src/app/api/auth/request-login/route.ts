@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     const loginUrl = `${appUrl}/login/${venue.login_token}`;
     await sendEmail({
       to: normalized,
-      subject: `Your StoryPay login link for ${venue.name || 'your account'}`,
+      subject: `Your StoryVenue login link for ${venue.name || 'your account'}`,
       html: loginEmailHtml({ name: venue.name || 'your account', loginUrl, appUrl, isTeamMember: false }),
     });
   }
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
 
     await sendEmail({
       to: normalized,
-      subject: `Your StoryPay login link`,
+      subject: `Your StoryVenue login link`,
       html: loginEmailHtml({
         name: member.first_name || 'there',
         loginUrl,
@@ -81,10 +81,10 @@ function loginEmailHtml({
 }) {
   const headerHtml = logoUrl
     ? `<div style="background-color:#ffffff;padding:24px 32px 20px;border-radius:12px 12px 0 0;border:1px solid #e5e7eb;border-bottom:4px solid ${brandColor}">
-        <img src="${logoUrl}" alt="${venueName || 'StoryPay'}" style="max-height:48px;max-width:180px;width:auto;height:auto;display:block;">
+        <img src="${logoUrl}" alt="${venueName || 'StoryVenue'}" style="max-height:48px;max-width:180px;width:auto;height:auto;display:block;">
        </div>`
     : `<div style="background-color:${brandColor};padding:28px 32px;border-radius:12px 12px 0 0">
-        <h1 style="color:white;font-size:22px;margin:0;font-weight:300">${isTeamMember && venueName ? venueName : 'StoryPay'}</h1>
+        <h1 style="color:white;font-size:22px;margin:0;font-weight:300">${isTeamMember && venueName ? venueName : 'StoryVenue'}</h1>
        </div>`;
 
   return `
@@ -94,12 +94,12 @@ function loginEmailHtml({
     <h2 style="color:#111827;font-size:20px;font-weight:700;margin:0 0 16px">Your login link</h2>
     <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 8px">Hi ${name},</p>
     <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 24px">
-      Click the button below to log in to your StoryPay account${isTeamMember && venueName ? ` (${venueName})` : ''}. This link is valid for your current session.
+      Click the button below to log in to your StoryVenue account${isTeamMember && venueName ? ` (${venueName})` : ''}. This link is valid for your current session.
     </p>
     <div style="text-align:center;margin:32px 0">
       <a href="${loginUrl}"
         style="background-color:${brandColor};border-radius:10px;color:#ffffff;display:inline-block;font-family:'Open Sans',Arial,sans-serif;font-size:16px;font-weight:700;line-height:48px;text-align:center;text-decoration:none;width:220px;">
-        <span style="color:#ffffff;text-decoration:none;">Log In to StoryPay</span>
+        <span style="color:#ffffff;text-decoration:none;">Log In to StoryVenue</span>
       </a>
     </div>
     <p style="color:#9ca3af;font-size:12px;text-align:center;margin:8px 0 0">

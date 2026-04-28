@@ -26,7 +26,7 @@ function inviteEmailHtml({
     <h2 style="color:#111827;font-size:20px;font-weight:700;margin:0 0 16px">You&rsquo;ve been invited to join ${venueName}</h2>
     <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 8px">Hi ${inviteeName},</p>
     <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 24px">
-      You&rsquo;ve been invited to join <strong>${venueName}</strong> on StoryPay as a <strong>${roleLabel}</strong>.
+      You&rsquo;ve been invited to join <strong>${venueName}</strong> on StoryVenue as a <strong>${roleLabel}</strong>.
       Click the button below to accept your invitation and access the account.
     </p>
     <div style="text-align:center;margin:32px 0">
@@ -40,7 +40,7 @@ function inviteEmailHtml({
     </p>
     <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0 16px">
     <p style="color:#9ca3af;font-size:11px;text-align:center;margin:0">
-      Sent by ${venueName} via StoryPay. If you didn&apos;t expect this, you can safely ignore it.
+      Sent by ${venueName} via StoryVenue. If you didn&apos;t expect this, you can safely ignore it.
     </p>
   </div>
 </div>`;
@@ -77,7 +77,7 @@ export async function POST(
 
   await sendEmail({
     to: member.email,
-    subject: `You've been invited to join ${venue?.name || 'Your Venue'} on StoryPay`,
+    subject: `You've been invited to join ${venue?.name || 'Your Venue'} on StoryVenue`,
     html: inviteEmailHtml({
       venueName:   venue?.name || 'Your Venue',
       inviteeName: member.first_name || member.name || 'there',

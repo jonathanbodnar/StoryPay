@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
       messages: [
         {
           role: 'system',
-          content: `You are a technical writer for StoryPay, a wedding venue management platform.
+          content: `You are a technical writer for StoryVenue, a wedding venue management platform.
 Your job is to draft a concise help article from a real user conversation.
 
 Rules:

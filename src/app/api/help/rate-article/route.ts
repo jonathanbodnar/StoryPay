@@ -64,7 +64,7 @@ async function rewriteArticle(articleId: string, title: string, body: string) {
     messages: [
       {
         role: 'system',
-        content: `You are a technical writer for StoryPay, a wedding venue management platform.
+        content: `You are a technical writer for StoryVenue, a wedding venue management platform.
 Rewrite the following help article to be clearer and more helpful.
 Rules:
 - Keep the same topic but improve clarity, structure, and completeness

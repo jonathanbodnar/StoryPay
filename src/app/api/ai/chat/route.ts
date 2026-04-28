@@ -4,10 +4,10 @@ import { supabaseAdmin } from '@/lib/supabase';
 import OpenAI from 'openai';
 
 const PLATFORM_DOCS = `
-# StoryPay Platform Documentation
+# StoryVenue Platform Documentation
 
 ## Overview
-StoryPay is an all-in-one platform for wedding venues to manage proposals, invoices, payments, a booking calendar, contact CRM profiles, email templates, branding, integrations, and team members — all from one place.
+StoryVenue is an all-in-one platform for wedding venues to manage proposals, invoices, payments, a booking calendar, contact CRM profiles, email templates, branding, integrations, and team members — all from one place.
 
 ## Navigation / Sections
 - Home (Dashboard): Revenue overview, KPI cards, recent proposals and transactions, date range filter.
@@ -24,7 +24,7 @@ StoryPay is an all-in-one platform for wedding venues to manage proposals, invoi
 - What's New: Changelog and Feature Requests board. The sidebar menu item shows a **red dot with unread count** whenever there are entries a user hasn't reviewed; visiting the page marks everything read for that user (per-user read state). Feature Requests submitted by venues can be **approved, edited, or removed** by super admins. When a super admin approves a request it's automatically converted into a **What's New** changelog entry with an outcome-based auto-generated headline + description, and the request is removed from the venue's own feature-request list.
 - Settings (sidebar flyout): General (venue info, service fee), Branding, Email Templates, Integrations (Calendly, Google Calendar, QuickBooks, FreshBooks), Team (roles, invites, **Hide $** for team members — owners only), Notifications. Venues may also store **listing marketing monthly spend** on the account for Leads ROI — when that value exists, insights use it.
 - Sidebar collapse (desktop): Chevron next to the logo narrows the sidebar to an icon rail and shows a compact mark; preference is saved in the browser.
-- Announcement ticker (top of every page, dark "News" bar): broadcasts platform-wide messages from the StoryPay team (downtime, new features, billing/compliance updates). It is **intentionally NOT dismissible** from the venue side — there is no X / close button. Visibility is controlled exclusively from the **super admin Announcements tab**: each row has Activate / Deactivate; deactivating an announcement removes it from every venue's ticker on the next page load. Hovering pauses the scroll so users can read or click an embedded link. If a venue user asks how to "remove" or "close" the news bar, the answer is they cannot — only StoryPay support can deactivate the message, and they will when it's no longer relevant. Implementation: src/components/AnnouncementTicker.tsx pulls /api/announcements, which calls the get_active_announcements RPC (filters is_active = true). Super admin UI lives at /admin → Announcements.
+- Announcement ticker (top of every page, dark "News" bar): broadcasts platform-wide messages from the StoryVenue team (downtime, new features, billing/compliance updates). It is **intentionally NOT dismissible** from the venue side — there is no X / close button. Visibility is controlled exclusively from the **super admin Announcements tab**: each row has Activate / Deactivate; deactivating an announcement removes it from every venue's ticker on the next page load. Hovering pauses the scroll so users can read or click an embedded link. If a venue user asks how to "remove" or "close" the news bar, the answer is they cannot — only StoryVenue support can deactivate the message, and they will when it's no longer relevant. Implementation: src/components/AnnouncementTicker.tsx pulls /api/announcements, which calls the get_active_announcements RPC (filters is_active = true). Super admin UI lives at /admin → Announcements.
 
 ## Venue listing, reviews, and storyvenue.com
 - Public read API (no login): GET /api/public/venues/[slug] returns published venue fields plus **published** reviews only (404 if venue not published).
@@ -37,7 +37,7 @@ StoryPay is an all-in-one platform for wedding venues to manage proposals, invoi
 - **Search flow (primary)**: The tab auto-searches Google using your venue name and location as soon as it opens. If your business appears in results, click "Yes, that's us" to link it.
 - **Google Maps URL paste (fallback)**: If the search doesn't return your business (common for service-area businesses with no storefront), expand "Can't find it? Paste a Google Maps link instead" and paste any Google Maps URL — share link (maps.app.goo.gl), full browser URL, or a link from your Google Business Profile. The system extracts the Place ID automatically.
 - **Service-area businesses**: If your business has no fixed address (you travel to clients), the Google Places API cannot look it up by name. Use the Maps URL fallback instead. If that also fails, copy your Place ID from Google's Place ID Finder (linked in the UI) and paste it directly.
-- Once connected, a green "Connected to Google Business" banner appears. StoryPay caches your reviews and refreshes them periodically. You can force a refresh with the refresh icon.
+- Once connected, a green "Connected to Google Business" banner appears. StoryVenue caches your reviews and refreshes them periodically. You can force a refresh with the refresh icon.
 - Requires GOOGLE_PLACES_API_KEY to be set in the environment. If not set, a 503 response is returned and the fallback is shown.
 - On the public storyvenue.com listing, up to 5 Google reviews are shown in a single-column layout. A "See all Google reviews" button links directly to your Google Maps listing so couples can read every review.
 
@@ -114,11 +114,11 @@ StoryPay is an all-in-one platform for wedding venues to manage proposals, invoi
 ### Calendly
 - Connect at Settings → Integrations → Calendly → Connect.
 - Requires a Personal Access Token from calendly.com/integrations/api_webhooks.
-- Once connected: new bookings appear on StoryPay calendar in real time; contact profiles auto-created; cancellations auto-update.
+- Once connected: new bookings appear on StoryVenue calendar in real time; contact profiles auto-created; cancellations auto-update.
 - Sync Now button imports all upcoming Calendly events on demand.
 
 ### Google Calendar / Outlook / Apple Calendar (iCal)
-- One-way sync: StoryPay events appear in your calendar app.
+- One-way sync: StoryVenue events appear in your calendar app.
 - Find your iCal URL: Settings → Integrations → Google Calendar / Outlook & Apple Calendar card.
 - Google Calendar: + next to Other calendars → From URL → paste → Add calendar.
 - Outlook: Add calendar → Subscribe from web → paste URL → Import.
@@ -178,7 +178,7 @@ StoryPay is an all-in-one platform for wedding venues to manage proposals, invoi
 - **Social Networks** (Settings → Branding → Social Networks, anchored at #social-networks): per-venue social profile URLs used by the marketing email **Social block**. Supported platforms: Instagram, Facebook, TikTok, LinkedIn, YouTube, Twitter / X, Pinterest, Website. One URL per platform; up to 8 total. Auto-prefixes https:// when missing; auto-saves with debounce. Each row has Open link + Remove. Source of truth for which platforms exist and which URL each one points to. Inside any specific email, the Social block's Links tab has a per-row eye toggle so the user can hide one or more platforms from THAT email only (per-block field socialHiddenPlatforms on the EmailBlock; branding registry is unchanged). DB column: venues.brand_socials (jsonb array of {platform, url} objects, migration 059).
 
 ## Marketing email builder (Templates / Campaigns / Automations / Segments)
-StoryPay ships a Flodesk-style drag-and-drop email builder used in three places:
+StoryVenue ships a Flodesk-style drag-and-drop email builder used in three places:
 - Marketing → Email Templates (/dashboard/marketing/email/templates) — reusable design library; templates are not sent, they're starting points.
 - Marketing → Email Campaigns (/dashboard/marketing/email/campaigns) — one-off broadcasts with three steps (Design → Recipients → Review). The campaigns list page uses the same brand-aligned layout as the Forms and Audiences list pages: centered content, consistent list-item style, a signature-black "New campaign" button, and a trash icon on each campaign row so you can delete any campaign (with a confirm prompt) without opening it.
 - Marketing → Email Automations (/dashboard/marketing/email/automations) — multi-step drip sequences triggered by an event (new lead, tag, date, etc.). Each step is its own email with a delay.
@@ -311,7 +311,7 @@ Recommended evergreen audiences for most venues: "Active leads, no proposal", "B
 - Public submission endpoint and embed continue to work unchanged — the rebuild was visual + UX only; API contracts and the form definition JSON shape are backward compatible.
 
 ## Workflows (visual automation builder — speed-to-lead funnels)
-StoryPay ships a visual workflow builder at Marketing → Workflows (/dashboard/marketing/workflows). It's how venues build automated follow-up sequences end-to-end without leaving the platform — the "speed-to-lead" engine.
+StoryVenue ships a visual workflow builder at Marketing → Workflows (/dashboard/marketing/workflows). It's how venues build automated follow-up sequences end-to-end without leaving the platform — the "speed-to-lead" engine.
 
 What a workflow is:
 - A trigger (one of the types below) plus a linear sequence of steps (Wait, Send email, Send SMS).
@@ -388,7 +388,7 @@ Setup checklist for a venue building their first speed-to-lead funnel:
 - Confirm the amount and click Issue Refund. Processes immediately through LunarPay.
 
 ## Payment Processing
-- StoryPay uses LunarPay (powered by Fortis) for all payment processing.
+- StoryVenue uses LunarPay (powered by Fortis) for all payment processing.
 - Account must complete Fortis onboarding before accepting payments.
 - Card numbers go directly to Fortis — PCI SAQ-A compliant.
 
@@ -663,7 +663,7 @@ ${allLeads.slice(0, 30).map((l) => {
 `.trim();
   }
 
-  const systemPrompt = `You are Ask AI, the intelligent support assistant built into StoryPay — a proposal and payment platform for wedding venues.
+  const systemPrompt = `You are Ask AI, the intelligent support assistant built into StoryVenue — a proposal and payment platform for wedding venues.
 
 You help venue owners with:
 - Platform support and how-to questions

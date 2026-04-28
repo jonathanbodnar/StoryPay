@@ -182,7 +182,7 @@ export default function OnboardingChecklist() {
  <Rocket size={17} className="text-white"/>
  </div>
  <div>
- <p className="text-sm font-semibold text-white leading-tight">Get Started with StoryPay</p>
+ <p className="text-sm font-semibold text-white leading-tight">Get Started with StoryVenue</p>
  <p className="text-xs text-white/60 mt-0.5">{completedCount} of {totalSteps} steps completed</p>
  </div>
  </div>
@@ -252,7 +252,7 @@ export default function OnboardingChecklist() {
  className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 px-5 py-3 text-sm font-bold text-white transition-colors disabled:opacity-60"
  >
  <Sparkles size={15} />
- {confirming ? 'Saving...' :"I'm Ready — Start Using StoryPay"}
+ {confirming ? 'Saving...' :"I'm Ready — Start Using StoryVenue"}
  </button>
  ) : (
  <div className="flex items-center justify-between">

@@ -257,7 +257,7 @@ export default function UpdateCardPage() {
         </div>
 
         <p className="mt-8 text-center text-xs text-gray-400">
-          Powered by StoryPay
+          Powered by StoryVenue
         </p>
       </div>
     </div>

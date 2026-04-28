@@ -308,7 +308,7 @@ export default function Sidebar({
             {rail ? (
               <Image
                 src="/storyvenue-sidebar-mark.png"
-                alt="StoryPay"
+                alt="StoryVenue"
                 width={40}
                 height={40}
                 className="object-contain opacity-90"
@@ -317,7 +317,7 @@ export default function Sidebar({
             ) : (
               <Image
                 src="/storyvenue-dark-logo.png"
-                alt="StoryPay"
+                alt="StoryVenue"
                 width={148}
                 height={38}
                 className="opacity-90"
@@ -718,7 +718,7 @@ export default function Sidebar({
     <>
       <div className="lg:hidden fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 h-14" style={{ backgroundColor: '#fafaf9', boxShadow: '0 4px 16px -2px rgba(0,0,0,0.07)' }}>
         <Link href="/dashboard">
-          <Image src="/storyvenue-dark-logo.png" alt="StoryPay" width={90} height={22} />
+          <Image src="/storyvenue-dark-logo.png" alt="StoryVenue" width={90} height={22} />
         </Link>
         <div className="flex items-center gap-2">
           <a

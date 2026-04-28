@@ -38,7 +38,7 @@ async function resolveVenueCustomerIdForEmail(venueId: string, email: string): P
 /**
  * GET /api/conversations/open-or-create?email=
  *
- * Resolves StoryPay venue_customer (creating/linking via merge when needed),
+ * Resolves StoryVenue venue_customer (creating/linking via merge when needed),
  * then returns the most recent conversation thread for that contact or
  * creates one. Used from Contacts when `venueCustomerId` is not on the row.
  */

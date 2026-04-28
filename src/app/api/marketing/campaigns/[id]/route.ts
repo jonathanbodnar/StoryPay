@@ -274,7 +274,7 @@ export async function POST(
   const fullHtml = pre.trim()
     ? `<!-- preheader: ${pre.replace(/<!--/g, '').slice(0, 200)} -->\n${html}`
     : html;
-  const fromName = `${(venue?.name as string) || 'Venue'} via StoryPay`;
+  const fromName = `${(venue?.name as string) || 'Venue'} via StoryVenue`;
   const r = await sendEmail({ to, subject, html: fullHtml, from: { name: `${fromName} (preview)` } });
   if (!r.success) return NextResponse.json({ error: r.error ?? 'Send failed' }, { status: 500 });
   return NextResponse.json({ ok: true });

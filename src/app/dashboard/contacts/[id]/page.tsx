@@ -92,7 +92,7 @@ const CEREMONY_TYPES   = [
 const FILE_TYPES    = ['contract','floor_plan','vendor_agreement','insurance','photo','other'];
 const FILE_STATUSES = ['pending','received','approved'];
 
-function isPlaceholderStoryPayEmail(email: string): boolean {
+function isPlaceholderStoryVenueEmail(email: string): boolean {
   const e = email.trim().toLowerCase();
   return !e || !e.includes('@') || e.endsWith('@storypay.internal') || e.includes('@ghl-sms.storypay.placeholder');
 }
@@ -728,7 +728,7 @@ export default function CustomerDetailPage() {
   const conversationsOutreach = useMemo(() => {
     const vid = venueCustomer?.id;
     const em = (customer?.email || venueCustomer?.customer_email || '').trim().toLowerCase();
-    if (!vid && isPlaceholderStoryPayEmail(em)) return null;
+    if (!vid && isPlaceholderStoryVenueEmail(em)) return null;
     const emailHref = vid
       ? `/dashboard/conversations?customer=${encodeURIComponent(vid)}&compose=email`
       : `/dashboard/conversations?customerFromEmail=${encodeURIComponent(em)}&compose=email`;

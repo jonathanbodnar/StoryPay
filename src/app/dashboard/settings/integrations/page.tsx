@@ -43,7 +43,7 @@ const PROVIDERS = {
  quickbooks: {
  name: 'QuickBooks Online',
  shortName: 'QuickBooks',
- description: 'Sync your StoryPay transactions as sales receipts in QuickBooks Online.',
+ description: 'Sync your StoryVenue transactions as sales receipts in QuickBooks Online.',
  color: '#2CA01C',
  logo: '📗',
  setupUrl: 'https://developer.intuit.com/app/developer/qbo/docs/get-started',
@@ -51,7 +51,7 @@ const PROVIDERS = {
  freshbooks: {
  name: 'FreshBooks',
  shortName: 'FreshBooks',
- description: 'Sync your StoryPay transactions as invoices in FreshBooks.',
+ description: 'Sync your StoryVenue transactions as invoices in FreshBooks.',
  color: '#0075DD',
  logo: '📘',
  setupUrl: 'https://www.freshbooks.com/api/start',
@@ -251,7 +251,7 @@ export default function IntegrationsPage() {
  <div className="mb-8">
  <h1 className="font-heading text-2xl text-gray-900">Integrations</h1>
  <p className="mt-1 text-sm text-gray-500">
- Connect your tools to sync data automatically with StoryPay.
+ Connect your tools to sync data automatically with StoryVenue.
  </p>
  </div>
 
@@ -299,7 +299,7 @@ export default function IntegrationsPage() {
            )}
          </div>
          <p className="mt-1 text-sm text-gray-500">
-           Sync Calendly bookings to your StoryPay calendar automatically. When someone books a tour or meeting in Calendly, it appears instantly on your calendar.
+           Sync Calendly bookings to your StoryVenue calendar automatically. When someone books a tour or meeting in Calendly, it appears instantly on your calendar.
          </p>
          {calendly?.connected && (
            <p className="mt-2 text-xs text-gray-400">
@@ -387,7 +387,7 @@ export default function IntegrationsPage() {
      <div className="border-t border-gray-200 bg-gray-50/50 px-6 py-3">
        <div className="flex items-center gap-2 text-xs text-gray-400">
          <ArrowRight size={11} />
-         <span>Calendly bookings sync one-way into your StoryPay calendar as events. Customer profiles are created automatically.</span>
+         <span>Calendly bookings sync one-way into your StoryVenue calendar as events. Customer profiles are created automatically.</span>
        </div>
      </div>
    )}
@@ -409,8 +409,8 @@ export default function IntegrationsPage() {
            </span>
          </div>
          <p className="mt-1 text-sm text-gray-500">
-           Subscribe to your StoryPay calendar from any calendar app. Your events sync automatically — no login required.
-           This is a <strong>one-way</strong> feed: StoryPay events appear in your personal calendar.
+           Subscribe to your StoryVenue calendar from any calendar app. Your events sync automatically — no login required.
+           This is a <strong>one-way</strong> feed: StoryVenue events appear in your personal calendar.
          </p>
        </div>
      </div>
@@ -625,7 +625,7 @@ export default function IntegrationsPage() {
  <div className="border-t border-gray-200 bg-gray-50/50 px-6 py-3">
  <div className="flex items-center gap-2 text-xs text-gray-400">
  <ArrowRight size={11} />
- <span>StoryPay paid transactions sync one-way into {provider.shortName} as {key === 'quickbooks' ? 'sales receipts' : 'invoices'}</span>
+ <span>StoryVenue paid transactions sync one-way into {provider.shortName} as {key === 'quickbooks' ? 'sales receipts' : 'invoices'}</span>
  </div>
  </div>
  )}

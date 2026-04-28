@@ -15,7 +15,7 @@ export interface MergedContact {
   /** Resolved from `venue_customers` pipeline stage (matches Leads funnel / contact profile). */
   funnelStage?: string | null;
   funnelStageColor?: string | null;
-  /** StoryPay `venue_customers.id` when known (for profile + conversations deep links). */
+  /** StoryVenue `venue_customers.id` when known (for profile + conversations deep links). */
   venueCustomerId?: string | null;
 }
 
@@ -93,7 +93,7 @@ function attachVenueCustomerIds(contacts: MergedContact[], vcIdLookup: Map<strin
 }
 
 /**
- * Merged list for the dashboard: GHL + LunarPay + StoryPay `venue_customers`,
+ * Merged list for the dashboard: GHL + LunarPay + StoryVenue `venue_customers`,
  * deduplicated by email (GHL wins, then LP, then native rows without dup email).
  */
 export async function mergeVenueContacts(
@@ -290,7 +290,7 @@ export async function mergeVenueContacts(
 /**
  * Resolve or create a `venue_customers` row for a merged contact so conversation threads
  * can use `venue_customer_id` (FK). Contacts list uses merge (GHL/LP/native); conversations
- * must anchor to StoryPay customer rows.
+ * must anchor to StoryVenue customer rows.
  */
 export async function ensureVenueCustomerIdForMergedContact(
   venueId: string,

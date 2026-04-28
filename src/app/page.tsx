@@ -39,8 +39,8 @@ function CDUnit({ v, label }: { v: number; label: string }) {
 // ── FAQ — all closed by default ───────────────────────────────────────────────
 const FAQS = [
   {
-    q: 'What is StoryPay\u2122?',
-    a: 'StoryPay\u2122 is a proposal and payment platform built specifically for wedding venues. Send beautiful contracts, collect e-signatures, and get paid, all from one dashboard.',
+    q: 'What is StoryVenue\u2122?',
+    a: 'StoryVenue\u2122 is a proposal and payment platform built specifically for wedding venues. Send beautiful contracts, collect e-signatures, and get paid, all from one dashboard.',
   },
   {
     q: "What's included in early access?",
@@ -234,7 +234,7 @@ function DashboardScreen() {
   return (
     <div className="w-full bg-white overflow-hidden flex flex-col" style={{ height: 596 }}>
       <div className="px-4 pt-2 pb-2 flex items-center justify-between border-b border-gray-100" style={{ backgroundColor: BRAND }}>
-        <span className="text-[10px] font-bold text-white/80 uppercase tracking-wider">StoryPay</span>
+        <span className="text-[10px] font-bold text-white/80 uppercase tracking-wider">StoryVenue</span>
         <div className="flex items-center gap-2">
           <Bell size={11} className="text-white/60" />
           <div className="h-5 w-5 rounded-full bg-white/20 flex items-center justify-center text-[8px] font-bold text-white">JW</div>
@@ -377,7 +377,7 @@ export default function LandingPage() {
 
         {/* Nav */}
         <nav className="mx-auto max-w-5xl px-5 sm:px-8 py-5 flex items-center justify-between">
-          <Image src="/storypay-logo-dark.png" alt="StoryPay" width={110} height={26} />
+          <Image src="/storypay-logo-dark.png" alt="StoryVenue" width={110} height={26} />
           <a href="/login" className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all">
             Log In
           </a>
@@ -391,7 +391,7 @@ export default function LandingPage() {
             className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-5 sm:mb-6 leading-tight"
             style={{ fontFamily: "'Playfair Display', serif", fontWeight: 400 }}
           >
-            Introducing StoryPay<sup className="text-[0.2em] align-super font-normal tracking-normal">TM</sup>
+            Introducing StoryVenue<sup className="text-[0.2em] align-super font-normal tracking-normal">TM</sup>
           </h1>
 
           {/* Subheadline */}
@@ -541,7 +541,7 @@ export default function LandingPage() {
               Frequently asked questions
             </h2>
             <p className="text-sm text-gray-400 max-w-md mx-auto">
-              Everything you need to know about StoryPay&#8482;. Find answers to the most common questions below.
+              Everything you need to know about StoryVenue&#8482;. Find answers to the most common questions below.
             </p>
           </div>
           <div className="space-y-2">
@@ -553,7 +553,7 @@ export default function LandingPage() {
       {/* ── Footer ── */}
       <footer className="py-8 px-4 border-t border-gray-100">
         <div className="mx-auto max-w-5xl flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p className="text-xs text-gray-400">&copy; {new Date().getFullYear()} StoryPay&#8482; by <a href="https://storyvenue.com" target="_blank" rel="noreferrer" className="hover:text-gray-600 transition-colors underline">StoryVenue</a></p>
+          <p className="text-xs text-gray-400">&copy; {new Date().getFullYear()} StoryVenue&#8482; by <a href="https://storyvenue.com" target="_blank" rel="noreferrer" className="hover:text-gray-600 transition-colors underline">StoryVenue</a></p>
           <div className="flex items-center gap-4 text-xs text-gray-400">
             <a href="/privacy" className="hover:text-gray-600 transition-colors">Privacy Policy</a>
             <a href="/terms" className="hover:text-gray-600 transition-colors">Terms of Use</a>

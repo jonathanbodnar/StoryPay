@@ -254,7 +254,7 @@ export default function DirectoryBillingPage() {
           <CreditCard size={22} className="text-gray-700" /> Plans &amp; billing
         </h1>
         <p className="mt-1 text-sm text-gray-500">
-          Manage your StoryPay directory plan, update your card on file, and review past invoices.
+          Manage your StoryVenue directory plan, update your card on file, and review past invoices.
           Billing is handled securely by LunarPay.
         </p>
       </div>
@@ -602,7 +602,7 @@ export default function DirectoryBillingPage() {
 
       {confirmCancel ? (
         <ConfirmDialog
-          title="Cancel your StoryPay directory subscription?"
+          title="Cancel your StoryVenue directory subscription?"
           body={
             <>
               Your paid plan will end and your venue will drop back to the free tier. Billing stops

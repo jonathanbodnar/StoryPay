@@ -126,7 +126,7 @@ function PreviewModal({ template, venueName, logoUrl, brandColor, onClose }: {
  {template.footer && (
  <p className="text-xs text-gray-400 text-center mt-4 pt-4 border-t border-gray-200">{fill(template.footer)}</p>
  )}
- <p className="text-[10px] text-gray-300 text-center mt-4">Sent via StoryPay</p>
+ <p className="text-[10px] text-gray-300 text-center mt-4">Sent via StoryVenue</p>
  </div>
  </div>
  </div>

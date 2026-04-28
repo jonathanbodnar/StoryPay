@@ -86,7 +86,7 @@ export async function createDirectoryPlatformCheckoutSession(venueId: string): P
   const amountDollars = cents / 100;
   const checkoutData: Record<string, unknown> = {
     amount: amountDollars,
-    description: `StoryPay directory — ${ctx.plan.name} (monthly)`,
+    description: `StoryVenue directory — ${ctx.plan.name} (monthly)`,
     customer_email: ctx.venue.email || undefined,
     customer_name: ctx.venue.name,
     success_url: `${APP_URL}/dashboard/directory-billing`,
@@ -176,7 +176,7 @@ export async function verifyDirectoryPlatformCheckoutAndSubscribe(
     amount: cents,
     frequency: 'monthly',
     startOn,
-    description: `StoryPay directory — ${ctx.plan.name}`,
+    description: `StoryVenue directory — ${ctx.plan.name}`,
   };
 
   const subResult = await createSubscription(secret, subPayload as Record<string, unknown>);
@@ -311,7 +311,7 @@ function pickExternalId(obj: unknown): string | null {
 }
 
 /**
- * Handle LunarPay webhook payloads for StoryPay platform (directory SaaS) revenue.
+ * Handle LunarPay webhook payloads for StoryVenue platform (directory SaaS) revenue.
  * Returns true if handled (caller should still 200).
  */
 export async function handleLunarPayWebhookForPlatformLedger(raw: Record<string, unknown>): Promise<boolean> {

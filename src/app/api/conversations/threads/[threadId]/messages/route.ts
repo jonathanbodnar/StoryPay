@@ -439,7 +439,7 @@ ${escapeHtml(rawBody)
   .join('')}
 ${triggerBlock}
 <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0" />
-<p style="font-size:12px;color:#6b7280">Sent via StoryPay Conversations — reply to this email to continue the thread.</p>
+<p style="font-size:12px;color:#6b7280">Sent via StoryVenue Conversations — reply to this email to continue the thread.</p>
 </div>`;
 
       const subjectLine =

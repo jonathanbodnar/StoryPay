@@ -166,7 +166,7 @@ export function proposalEmailHtml({
         </p>
         <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0">
         <p style="color:#9ca3af;font-size:11px;text-align:center;margin:0">
-          Sent via StoryPay on behalf of ${venueName}
+          Sent via StoryVenue on behalf of ${venueName}
         </p>
       </div>
     </div>
@@ -219,7 +219,7 @@ export function invoiceEmailHtml({
         </p>
         <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0">
         <p style="color:#9ca3af;font-size:11px;text-align:center;margin:0">
-          Sent via StoryPay on behalf of ${venueName}
+          Sent via StoryVenue on behalf of ${venueName}
         </p>
       </div>
     </div>

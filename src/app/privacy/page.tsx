@@ -20,7 +20,7 @@ export default function PrivacyPage() {
       {/* Nav */}
       <nav className="border-b border-gray-100 px-6 py-4 flex items-center justify-between max-w-4xl mx-auto">
         <Link href="/">
-          <Image src="/storypay-logo-dark.png" alt="StoryPay" width={110} height={26} />
+          <Image src="/storypay-logo-dark.png" alt="StoryVenue" width={110} height={26} />
         </Link>
         <Link href="/login" className="text-sm text-gray-500 hover:text-gray-800 transition-colors">
           Sign In
@@ -35,7 +35,7 @@ export default function PrivacyPage() {
 
           <section>
             <h2 className="text-lg font-bold text-gray-900 mb-3">1. Introduction</h2>
-            <p>StoryPay (&ldquo;we,&rdquo; &ldquo;our,&rdquo; or &ldquo;us&rdquo;) is a proposal and payment platform built for wedding venues. We are committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our platform and related services (collectively, the &ldquo;Services&rdquo;).</p>
+            <p>StoryVenue (&ldquo;we,&rdquo; &ldquo;our,&rdquo; or &ldquo;us&rdquo;) is a proposal and payment platform built for wedding venues. We are committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our platform and related services (collectively, the &ldquo;Services&rdquo;).</p>
             <p className="mt-2">By using our Services, you consent to the practices described in this policy.</p>
           </section>
 
@@ -66,7 +66,7 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-lg font-bold text-gray-900 mb-3">3. How We Use Your Information</h2>
             <ul className="list-disc pl-5 space-y-1">
-              <li>Operate and provide the StoryPay platform</li>
+              <li>Operate and provide the StoryVenue platform</li>
               <li>Send proposals, invoices, and payment links to your customers on your behalf</li>
               <li>Process payments through LunarPay (powered by Fortis)</li>
               <li>Send SMS notifications through your connected GHL account</li>
@@ -97,7 +97,7 @@ export default function PrivacyPage() {
             <ul className="list-disc pl-5 space-y-1">
               <li>SSL/TLS encryption for all data in transit</li>
               <li>Secure, isolated database storage per venue</li>
-              <li>PCI SAQ-A compliance — card numbers never touch StoryPay servers</li>
+              <li>PCI SAQ-A compliance — card numbers never touch StoryVenue servers</li>
               <li>Session tokens stored in secure, httpOnly cookies</li>
               <li>Magic-link authentication — no passwords stored</li>
             </ul>
@@ -140,7 +140,7 @@ export default function PrivacyPage() {
             <h2 className="text-lg font-bold text-gray-900 mb-3">11. Contact Us</h2>
             <p>If you have questions about this Privacy Policy, contact us:</p>
             <div className="mt-2 bg-gray-50 rounded-xl p-4 text-sm">
-              <p className="font-semibold">StoryPay</p>
+              <p className="font-semibold">StoryVenue</p>
               <p>Operated by Story Venue Marketing</p>
               <p>Email: <a href="mailto:clients@storyvenuemarketing.com" className="text-gray-900 underline">clients@storyvenuemarketing.com</a></p>
               <p>Website: <a href="https://storypay.io" className="text-gray-900 underline">storypay.io</a></p>
@@ -150,7 +150,7 @@ export default function PrivacyPage() {
         </div>
 
         <div className="mt-12 pt-8 border-t border-gray-100 flex items-center justify-between text-xs text-gray-400">
-          <span>© {new Date().getFullYear()} StoryPay. All rights reserved.</span>
+          <span>© {new Date().getFullYear()} StoryVenue. All rights reserved.</span>
           <Link href="/terms" className="hover:text-gray-600 transition-colors">Terms of Use →</Link>
         </div>
       </main>

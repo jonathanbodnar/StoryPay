@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
     proposals: d.proposals,
   }));
 
-  // ── StoryPay directory SaaS: MRR from plan assignments + cash from platform_billing_events ──
+  // ── StoryVenue directory SaaS: MRR from plan assignments + cash from platform_billing_events ──
   const ACTIVE_SUB = new Set(['active', 'trialing']);
   const EXCLUDE_FROM_ASSIGNED_MRR = new Set(['canceled']);
 

@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
           body: JSON.stringify({
             locationId: venue.ghl_location_id,
             email: SUPPORT_EMAIL,
-            name: 'StoryPay Support',
+            name: 'StoryVenue Support',
           }),
         });
         const createData = await createRes.json();
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
           body: JSON.stringify({
             type: 'Email',
             contactId,
-            subject: `[StoryPay Support] ${subject}`,
+            subject: `[StoryVenue Support] ${subject}`,
             html: `
               <div style="font-family: 'Open Sans', Arial, sans-serif; max-width: 600px;">
                 <h2 style="color: #1b1b1b; font-family: 'Playfair Display', Georgia, serif;">Support Ticket</h2>
