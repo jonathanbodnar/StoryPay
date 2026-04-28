@@ -7,6 +7,7 @@ import {
   parseGhlInboundSmsPayload,
 } from '@/lib/ghl-sms-conversations';
 import { applySmsDndForVenueCustomer, isSmsOptOutKeyword } from '@/lib/sms-compliance';
+import { syncSingleGhlContact } from '@/lib/ghl-contacts-sync';
 
 export async function POST(request: NextRequest) {
   try {
@@ -65,8 +66,20 @@ export async function POST(request: NextRequest) {
         break;
 
       case 'ContactCreate':
-      case 'ContactUpdate':
+      case 'ContactUpdate': {
+        const data = payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)
+          ? (payload.data as Record<string, unknown>)
+          : null;
+        const locationId = (payload.locationId ?? data?.locationId) as string | undefined;
+        const contactId  = (payload.contactId  ?? data?.id ?? data?.contactId) as string | undefined;
+        if (locationId && contactId) {
+          // Fire-and-forget — webhook responses must be quick; sync runs async.
+          void syncSingleGhlContact(locationId, contactId).catch((err) => {
+            console.error('[ghl webhook] ContactCreate/Update sync failed:', err);
+          });
+        }
         break;
+      }
 
       case 'AppInstall': {
         const data = payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)

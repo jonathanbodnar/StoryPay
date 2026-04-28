@@ -11,6 +11,9 @@ import {
  ExternalLink,
  Rocket,
  RotateCcw,
+ Users,
+ Download,
+ AlertCircle,
 } from 'lucide-react';
 
 interface VenueInfo {
@@ -25,6 +28,7 @@ interface VenueInfo {
  onboarding_status: string | null;
  ghl_connected: boolean;
  ghl_location_id: string | null;
+ ghl_contacts_synced_at: string | null;
  lunarpay_merchant_id: number | null;
  service_fee_rate: number;
  brand_logo_url: string | null;
@@ -69,6 +73,33 @@ export default function SettingsPage() {
 
  // Onboarding state — only need reset here, checklist lives on dashboard
  const [resetting, setResetting] = useState(false);
+
+ // GHL contact sync
+ const [syncingContacts, setSyncingContacts] = useState(false);
+ const [syncResult, setSyncResult] = useState<{ created: number; updated: number; linked: number; fetched: number } | null>(null);
+ const [syncError, setSyncError] = useState('');
+
+ async function syncGhlContacts() {
+   setSyncingContacts(true);
+   setSyncError('');
+   setSyncResult(null);
+   try {
+     const res = await fetch('/api/integrations/ghl/sync-contacts', { method: 'POST' });
+     const data = await res.json();
+     if (!res.ok || !data.ok) {
+       setSyncError(data.error || 'Contact sync failed');
+       return;
+     }
+     setSyncResult(data.counts);
+     // Refresh venue payload so the "last synced" timestamp updates inline.
+     const venueRes = await fetch('/api/venues/me', { cache: 'no-store' });
+     if (venueRes.ok) setVenue(await venueRes.json());
+   } catch {
+     setSyncError('Contact sync failed. Please try again.');
+   } finally {
+     setSyncingContacts(false);
+   }
+ }
 
  async function resetOnboarding() {
  setResetting(true);
@@ -297,6 +328,7 @@ export default function SettingsPage() {
  </div>
  <div className="px-6 py-5">
  {venue.ghl_connected || venue.ghl_location_id ? (
+ <div className="space-y-5">
  <div className="flex items-center justify-between">
  <div>
  <p className="text-sm font-medium text-gray-900">Connected</p>
@@ -309,6 +341,55 @@ export default function SettingsPage() {
  <CheckCircle2 size={14} />
  Connected
  </span>
+ </div>
+
+ {/* Contact import — copy GHL contacts into our DB so they're never lost. */}
+ <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+ <div className="flex items-start justify-between gap-4 flex-wrap">
+ <div className="flex items-start gap-3 min-w-0 flex-1">
+ <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white border border-gray-200">
+ <Users size={16} className="text-gray-500" />
+ </div>
+ <div className="min-w-0">
+ <p className="text-sm font-medium text-gray-900">Sync GHL Contacts</p>
+ <p className="mt-0.5 text-xs text-gray-500 leading-relaxed">
+ Pulls every contact from your GHL sub-account into StoryVenue so you keep them
+ even if you disconnect or cancel GHL. Runs automatically every hour; click below
+ to import on demand.
+ </p>
+ {venue.ghl_contacts_synced_at && (
+ <p className="mt-1.5 text-[11px] text-gray-400">
+ Last synced{' '}
+ {new Date(venue.ghl_contacts_synced_at).toLocaleString(undefined, {
+ dateStyle: 'medium', timeStyle: 'short',
+ })}
+ </p>
+ )}
+ </div>
+ </div>
+ <button
+ onClick={() => void syncGhlContacts()}
+ disabled={syncingContacts}
+ className="shrink-0 inline-flex items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+ >
+ {syncingContacts ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+ {syncingContacts ? 'Importing…' : 'Import contacts now'}
+ </button>
+ </div>
+
+ {syncResult && (
+ <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50 px-3.5 py-2.5 text-xs text-emerald-800">
+ <span className="font-semibold">Done.</span> Pulled {syncResult.fetched} contact{syncResult.fetched === 1 ? '' : 's'} —{' '}
+ {syncResult.created} new, {syncResult.linked} matched by email, {syncResult.updated} updated.
+ </div>
+ )}
+ {syncError && (
+ <div className="mt-3 rounded-xl border border-red-100 bg-red-50 px-3.5 py-2.5 text-xs text-red-700 flex items-start gap-2">
+ <AlertCircle size={13} className="mt-0.5 shrink-0" />
+ <span>{syncError}</span>
+ </div>
+ )}
+ </div>
  </div>
  ) : (
  <div className="text-center py-4">
