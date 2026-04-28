@@ -41,6 +41,15 @@ export function getStatusColor(status: string): { bg: string; text: string } {
   }
 }
 
+/** Capitalize the first letter of each word in a name string. */
+export function toTitleCase(str: string | null | undefined): string {
+  if (!str) return '';
+  return str
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export function generateToken(): string {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
   let result = '';

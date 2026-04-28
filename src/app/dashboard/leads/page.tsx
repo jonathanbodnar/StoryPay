@@ -18,6 +18,7 @@ import AddLeadModal, { NO_PIPELINE_STAGE } from '@/components/leads/AddLeadModal
 import { TimezoneSelect } from '@/components/TimezoneSelect';
 import { DEFAULT_VENUE_TIMEZONE, resolveVenueTimezone, wallClockToUtc } from '@/lib/venue-timezone';
 import { effectiveWinProbability } from '@/lib/pipelines';
+import { toTitleCase } from '@/lib/utils';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -188,8 +189,8 @@ function formatMoney(n: number | null, hideRevenue = false): string {
 }
 
 function displayName(lead: Lead): string {
-  const composed = [lead.first_name, lead.last_name].filter(Boolean).join(' ').trim();
-  return composed || lead.name || 'Unnamed lead';
+  const composed = toTitleCase([lead.first_name, lead.last_name].filter(Boolean).join(' ').trim());
+  return composed || toTitleCase(lead.name ?? '') || 'Unnamed lead';
 }
 
 function duplicateReasonLabel(reason: DuplicateMatchBrief['reason']): string {
@@ -1716,7 +1717,7 @@ function LeadDrawer({
   const memberNameById = useMemo(() => {
     const m = new Map<string, string>();
     for (const tm of teamMembers) {
-      const label = [tm.first_name, tm.last_name].filter(Boolean).join(' ') || tm.name;
+      const label = toTitleCase([tm.first_name, tm.last_name].filter(Boolean).join(' ')) || toTitleCase(tm.name ?? '') || tm.name;
       m.set(tm.id, label);
     }
     return m;
@@ -2115,7 +2116,7 @@ function LeadDrawer({
               <option value="">Unassigned</option>
               {teamMembers.filter((m) => m.status === 'active').map((m) => (
                 <option key={m.id} value={m.id}>
-                  {[m.first_name, m.last_name].filter(Boolean).join(' ') || m.name}
+                  {toTitleCase([m.first_name, m.last_name].filter(Boolean).join(' ')) || toTitleCase(m.name ?? '') || m.name}
                 </option>
               ))}
             </select>

@@ -15,7 +15,7 @@ import {
   Upload,
   Trash2,
 } from 'lucide-react';
-import { classNames } from '@/lib/utils';
+import { classNames, toTitleCase } from '@/lib/utils';
 import AddLeadModal, {
   NO_PIPELINE_STAGE,
   type LeadDraft,
@@ -24,7 +24,7 @@ import AddLeadModal, {
   type VenueSpaceLite,
 } from '@/components/leads/AddLeadModal';
 
-const capitalizeName = (name: string) => name.replace(/\b\w/g, (c) => c.toUpperCase());
+const capitalizeName = (name: string) => toTitleCase(name);
 
 interface ContactRow {
   id: string | number;

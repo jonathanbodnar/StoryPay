@@ -10,7 +10,7 @@ import {
   Upload, Undo2, ChevronDown, ChevronUp, Copy,
   RefreshCw, Info, CalendarPlus, Clock, MapPin,
 } from 'lucide-react';
-import { classNames, formatCents, formatDate, formatDateTime, getStatusColor } from '@/lib/utils';
+import { classNames, formatCents, formatDate, formatDateTime, getStatusColor, toTitleCase } from '@/lib/utils';
 import { slugifyStageLabel } from '@/lib/pipeline-stage-slug';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -553,7 +553,7 @@ export default function ContactProfileDrawer({ venueCustomerId, onClose, initial
   const totalPending = proposals.filter((p) => ['sent','opened','signed'].includes(p.status)).reduce((s, p) => s + (p.price || 0), 0);
   const displayEmail = vc && !isPlaceholderEmail(vc.customer_email) ? vc.customer_email : null;
   const displayName = vc
-    ? [vc.first_name, vc.last_name].filter(Boolean).join(' ').trim() || vc.customer_email || 'Loading…'
+    ? toTitleCase([vc.first_name, vc.last_name].filter(Boolean).join(' ').trim()) || vc.customer_email || 'Loading…'
     : 'Loading…';
   const initials = displayName.charAt(0).toUpperCase() || '?';
 
@@ -756,7 +756,7 @@ export default function ContactProfileDrawer({ venueCustomerId, onClose, initial
                       </div>
                     ) : vc.partner_first_name ? (
                       <div className="space-y-2 text-sm text-gray-700">
-                        <div className="flex items-center gap-2"><User size={13} className="text-gray-400"/>{[vc.partner_first_name,vc.partner_last_name].filter(Boolean).join(' ')}</div>
+                        <div className="flex items-center gap-2"><User size={13} className="text-gray-400"/>{toTitleCase([vc.partner_first_name,vc.partner_last_name].filter(Boolean).join(' '))}</div>
                         {vc.partner_email && <div className="flex items-center gap-2"><Mail size={13} className="text-gray-400"/>{vc.partner_email}</div>}
                         {vc.partner_phone && <div className="flex items-center gap-2"><Phone size={13} className="text-gray-400"/>{vc.partner_phone}</div>}
                       </div>

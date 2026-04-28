@@ -30,7 +30,7 @@ import {
   MailCheck,
   Trash2,
 } from 'lucide-react';
-import { classNames } from '@/lib/utils';
+import { classNames, toTitleCase } from '@/lib/utils';
 import { EmojiPickerPopover } from '@/components/EmojiPickerPopover';
 import ContactProfileDrawer from '@/components/conversations/ContactProfileDrawer';
 
@@ -196,6 +196,11 @@ export default function ConversationsPage() {
   const [sendError, setSendError] = useState('');
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [teamContacts, setTeamContacts] = useState<TeamContact[]>([]);
+
+  // Pipeline stages for inline stage selector in thread view
+  const [threadPipelines, setThreadPipelines] = useState<{id:string;name:string;is_default:boolean;stages:{id:string;name:string;color:string;position:number}[]}[]>([]);
+  const threadPipelinesLoaded = useRef(false);
+  const [stageUpdating, setStageUpdating] = useState(false);
   const [mobileShowThread, setMobileShowThread] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [contactSearch, setContactSearch] = useState('');
@@ -518,11 +523,13 @@ export default function ConversationsPage() {
   const contactLabel = useMemo(() => {
     if (threadDetail?.venue_customers) {
       const v = threadDetail.venue_customers;
-      return [v.first_name, v.last_name].filter(Boolean).join(' ') || v.customer_email || 'Contact';
+      const name = [v.first_name, v.last_name].filter(Boolean).join(' ');
+      return toTitleCase(name) || v.customer_email || 'Contact';
     }
     const row = threads.find((t) => t.thread_id === selectedId);
     if (row) {
-      return [row.contact_first_name, row.contact_last_name].filter(Boolean).join(' ') || row.contact_email || 'Contact';
+      const name = [row.contact_first_name, row.contact_last_name].filter(Boolean).join(' ');
+      return toTitleCase(name) || row.contact_email || 'Contact';
     }
     return 'Contact';
   }, [threadDetail, threads, selectedId]);
@@ -743,6 +750,44 @@ export default function ConversationsPage() {
     if (selectedId === threadId) await reloadMessages(threadId);
   }
 
+  // Load pipelines once when a thread is opened (lazy — no blocking effect).
+  useEffect(() => {
+    if (threadPipelinesLoaded.current || !selectedId) return;
+    threadPipelinesLoaded.current = true;
+    fetch('/api/pipelines', { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.pipelines) setThreadPipelines(d.pipelines); })
+      .catch(() => {});
+  }, [selectedId]);
+
+  async function patchThreadStage(stageId: string) {
+    const vcId = threadDetail?.venue_customer_id;
+    if (!vcId || stageUpdating) return;
+    const pipe = threadPipelines.find((p) => p.stages.some((s) => s.id === stageId));
+    if (!pipe) return;
+    setStageUpdating(true);
+    const res = await fetch(`/api/venue-customers/${vcId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pipelineId: pipe.id, stageId }),
+    });
+    if (res.ok) {
+      const st = pipe.stages.find((s) => s.id === stageId);
+      if (st && threadDetail) {
+        setThreadDetail((prev) => prev ? { ...prev, contact_stage: { name: st.name, color: st.color } } : prev);
+        // Also update the thread list badge
+        setThreads((prev) =>
+          prev.map((t) =>
+            t.thread_id === threadDetail.id
+              ? { ...t }
+              : t,
+          ),
+        );
+      }
+    }
+    setStageUpdating(false);
+  }
+
   async function markThreadUnread(threadId: string, e: React.MouseEvent) {
     e.stopPropagation(); e.preventDefault();
     setListActionError('');
@@ -891,8 +936,8 @@ export default function ConversationsPage() {
                 <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Account Owner &amp; Team</p>
                 <div className="space-y-1.5">
                   {teamContacts.map((tc) => {
-                    const tcFirst = tc.first_name?.trim() || '';
-                    const tcLast  = tc.last_name?.trim()  || '';
+                    const tcFirst = toTitleCase(tc.first_name?.trim() || '');
+                    const tcLast  = toTitleCase(tc.last_name?.trim()  || '');
                     const tcName  = [tcFirst, tcLast].filter(Boolean).join(' ') || tc.email;
                     const tcInitial = (tcFirst || tcName).charAt(0).toUpperCase();
                     const existingThread = threads.find(
@@ -974,7 +1019,7 @@ export default function ConversationsPage() {
             ) : threadsFiltered.length > 0 ? (
               threadsFiltered.map((t) => {
                 const name =
-                  [t.contact_first_name, t.contact_last_name].filter(Boolean).join(' ') ||
+                  toTitleCase([t.contact_first_name, t.contact_last_name].filter(Boolean).join(' ')) ||
                   t.contact_email ||
                   'Contact';
                 const unreadN = Number(t.unread_count ?? 0);
@@ -1150,22 +1195,6 @@ export default function ConversationsPage() {
                   </p>
                 </div>
                 <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2">
-                  {threadDetail.contact_stage?.name ? (
-                    <span
-                      className="inline-flex max-w-[140px] truncate rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-semibold text-gray-800 sm:max-w-[200px]"
-                      style={
-                        threadDetail.contact_stage.color
-                          ? {
-                              borderColor: threadDetail.contact_stage.color,
-                              backgroundColor: `${threadDetail.contact_stage.color}18`,
-                            }
-                          : undefined
-                      }
-                      title={threadDetail.contact_stage.name}
-                    >
-                      {threadDetail.contact_stage.name}
-                    </span>
-                  ) : null}
                   {contactProfileHref ? (
                     <button
                       type="button"
@@ -1179,6 +1208,55 @@ export default function ConversationsPage() {
                   ) : null}
                 </div>
               </header>
+
+              {/* ── Inline pipeline stage selector ── */}
+              {(() => {
+                const allStages = threadPipelines.flatMap((p) => p.stages.map((s) => ({...s, pipelineId: p.id})));
+                if (!allStages.length && !threadDetail.contact_stage?.name) return null;
+                const activeName = threadDetail.contact_stage?.name?.toLowerCase().trim();
+                // Find the active stage by matching name when we have stages loaded
+                const activeStage = allStages.find((s) => s.name.toLowerCase().trim() === activeName);
+                return (
+                  <div className="flex-shrink-0 border-b border-gray-100 px-3 py-2 sm:px-5">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="mr-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Stage</span>
+                      {allStages.length > 0 ? allStages.map((st) => {
+                        const isActive = activeStage ? st.id === activeStage.id : st.name.toLowerCase().trim() === activeName;
+                        return (
+                          <button
+                            key={st.id}
+                            type="button"
+                            disabled={stageUpdating}
+                            onClick={() => void patchThreadStage(st.id)}
+                            className={classNames(
+                              'rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors disabled:opacity-50',
+                              isActive ? '' : 'border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-700',
+                            )}
+                            style={isActive ? {
+                              backgroundColor: `${st.color}22`,
+                              color: st.color,
+                              borderColor: `${st.color}55`,
+                            } : undefined}
+                          >
+                            {st.name}
+                          </button>
+                        );
+                      }) : threadDetail.contact_stage?.name ? (
+                        <span
+                          className="rounded-full border px-2.5 py-1 text-[11px] font-semibold"
+                          style={threadDetail.contact_stage.color ? {
+                            backgroundColor: `${threadDetail.contact_stage.color}22`,
+                            color: threadDetail.contact_stage.color,
+                            borderColor: `${threadDetail.contact_stage.color}55`,
+                          } : { borderColor: '#e5e7eb', color: '#374151' }}
+                        >
+                          {threadDetail.contact_stage.name}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {threadDetail.venue_customers ? (
                 <div className="flex-shrink-0 border-b border-gray-100 bg-white px-3 py-3 sm:px-5">

@@ -8,6 +8,7 @@ import {
   Search, Pencil, Trash2, Check, User,
 } from 'lucide-react';
 import { describeRule, type RecurrenceRule } from '@/lib/recurrence';
+import { toTitleCase } from '@/lib/utils';
 import { formatInTimeZone, toDate } from 'date-fns-tz';
 import { TimezoneSelect } from '@/components/TimezoneSelect';
 import {
@@ -64,8 +65,8 @@ interface CalEvent {
 }
 
 function teamMemberLabel(m: { name?: string | null; first_name?: string | null; last_name?: string | null; email?: string | null }) {
-  const full = [m.first_name, m.last_name].filter(Boolean).join(' ').trim();
-  return m.name?.trim() || full || m.email || 'Unnamed';
+  const full = toTitleCase([m.first_name, m.last_name].filter(Boolean).join(' ').trim());
+  return toTitleCase(m.name?.trim() || '') || full || m.email || 'Unnamed';
 }
 
 interface ConflictInfo { id: string; title: string; start_at: string; end_at: string; }
@@ -406,7 +407,7 @@ export default function CalendarPage() {
   }
 
   function pickContact(c: ContactLite) {
-    const display = [c.first_name, c.last_name].filter(Boolean).join(' ').trim();
+    const display = toTitleCase([c.first_name, c.last_name].filter(Boolean).join(' ').trim());
     const email = c.customer_email ?? '';
     setForm((p) => ({ ...p, customer_email: email }));
     setContactQuery(display ? `${display}${email ? ` <${email}>` : ''}` : email);

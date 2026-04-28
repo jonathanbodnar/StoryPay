@@ -11,7 +11,7 @@ import {
   AlertCircle, Undo2, Smartphone,
 } from 'lucide-react';
 import RefundModal from '@/components/RefundModal';
-import { formatCents, formatDate, formatDateTime, getStatusColor, classNames } from '@/lib/utils';
+import { formatCents, formatDate, formatDateTime, getStatusColor, classNames, toTitleCase } from '@/lib/utils';
 import { slugifyStageLabel } from '@/lib/pipeline-stage-slug';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -836,7 +836,7 @@ export default function CustomerDetailPage() {
             </div>
             <div>
               <div className="flex items-center gap-3 flex-wrap">
-                <h1 className="font-heading text-xl text-gray-900">{customer.name}</h1>
+                <h1 className="font-heading text-xl text-gray-900">{toTitleCase(customer.name ?? '')}</h1>
                 {venueCustomer && (
                   <span
                     className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border ${pipelineUi.currentStageMeta ? 'border-transparent' : 'border-gray-200 bg-gray-100 text-gray-700'}`}
@@ -1164,7 +1164,7 @@ export default function CustomerDetailPage() {
               </div>
             ) : venueCustomer?.partner_first_name ? (
               <div className="space-y-2 text-sm">
-                <div className="flex items-center gap-2 text-gray-700"><User size={13} className="text-gray-400" />{[venueCustomer.partner_first_name, venueCustomer.partner_last_name].filter(Boolean).join(' ')}</div>
+                <div className="flex items-center gap-2 text-gray-700"><User size={13} className="text-gray-400" />{toTitleCase([venueCustomer.partner_first_name, venueCustomer.partner_last_name].filter(Boolean).join(' '))}</div>
                 {venueCustomer.partner_email && <div className="flex items-center gap-2 text-gray-700"><Mail size={13} className="text-gray-400" />{venueCustomer.partner_email}</div>}
                 {venueCustomer.partner_phone && <div className="flex items-center gap-2 text-gray-700"><Phone size={13} className="text-gray-400" />{venueCustomer.partner_phone}</div>}
               </div>
