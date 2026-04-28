@@ -244,6 +244,21 @@ export default function ConversationsPage() {
     loadThreads();
   }, [loadThreads]);
 
+  // Auto-hide scrollbar: add `is-scrolling` class while scrolling,
+  // remove it 600 ms after the last scroll event.
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    let timer: ReturnType<typeof setTimeout>;
+    function onScroll() {
+      el!.classList.add('is-scrolling');
+      clearTimeout(timer);
+      timer = setTimeout(() => el!.classList.remove('is-scrolling'), 600);
+    }
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => { el.removeEventListener('scroll', onScroll); clearTimeout(timer); };
+  }, []);
+
   useEffect(() => {
     if (deepLinkConsumed.current || typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
@@ -866,7 +881,7 @@ export default function ConversationsPage() {
               />
             </div>
           </div>
-          <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto">
+          <div ref={listRef} className="sp-thread-list min-h-0 flex-1 overflow-y-auto">
             {/* ── Team contacts directory (shown at top when Team filter is active) ── */}
             {threadListFilter === 'team_contacts' && teamContacts.length > 0 && (
               <div className="border-b border-gray-200 bg-gray-50/60 px-3 py-3">

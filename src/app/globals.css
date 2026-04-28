@@ -81,3 +81,30 @@ html, body {
 .sp-form-scrollbar.sp-form-scrollbar--scrolling::-webkit-scrollbar-thumb {
   background-color: rgba(100, 116, 139, 0.45);
 }
+
+/* ── Thread-list auto-hiding scrollbar ───────────────────────────────────── */
+/* Hidden by default; fades in while scrolling, fades out 600ms after stop.  */
+.sp-thread-list {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.6s ease;
+}
+.sp-thread-list.is-scrolling {
+  scrollbar-color: rgba(100, 116, 139, 0.45) transparent;
+  transition: scrollbar-color 0.1s ease;
+}
+.sp-thread-list::-webkit-scrollbar {
+  width: 4px;
+}
+.sp-thread-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sp-thread-list::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 4px;
+  transition: background-color 0.6s ease;
+}
+.sp-thread-list.is-scrolling::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 116, 139, 0.45);
+  transition: background-color 0.1s ease;
+}
