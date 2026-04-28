@@ -8,7 +8,7 @@ import {
   DollarSign, Users, FileText, Clock, XCircle, Building2,
   TrendingUp, LogOut, Home,
   Megaphone, Plus, Trash2, Pencil, X, Loader2, ThumbsUp, ThumbsDown,
-  Check, BarChart2, ExternalLink, ChevronRight, Search,
+  Check, BarChart2, ExternalLink, ChevronRight, Search, RefreshCw,
   LayoutDashboard, Menu, Lightbulb, BookOpen, Star, Globe, Layers,
   Repeat, Wallet, BadgeCheck, Sparkles, CalendarDays,
 } from 'lucide-react';
@@ -2982,34 +2982,58 @@ interface ChartState {
   status: 'idle' | 'loading' | 'done' | 'error';
   data: Record<string, TrendPoint[]>;
   error?: string;
+  cachedAt?: string;
 }
 
-function TrendChartCard({ widget, months, autoLoadIndex = 0 }: { widget: TrendWidget; months: number; autoLoadIndex?: number }) {
-  const [state, setState] = React.useState<ChartState>({ status: 'idle', data: {} });
+function TrendChartCard({ widget, months, forceRefreshTick = 0 }: { widget: TrendWidget; months: number; forceRefreshTick?: number }) {
   const effectiveMonths = widget.months ?? months;
+  const lsKey = `trends|${widget.keywords.join(',')}|${effectiveMonths}`;
 
-  const loadChart = React.useCallback(async () => {
-    setState({ status: 'loading', data: {} });
+  // Seed state from localStorage immediately so charts appear with no delay.
+  const [state, setState] = React.useState<ChartState>(() => {
+    if (typeof window === 'undefined') return { status: 'idle', data: {} };
     try {
-      const qs = new URLSearchParams({
-        keywords: widget.keywords.join(','),
-        months: String(effectiveMonths),
-      });
-      const res = await fetch(`/api/admin/trends?${qs}`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'Failed to load');
-      setState({ status: 'done', data: json.data });
-    } catch (e) {
-      setState({ status: 'error', data: {}, error: e instanceof Error ? e.message : 'Unknown error' });
-    }
-  }, [widget.keywords, effectiveMonths]); // eslint-disable-line react-hooks/exhaustive-deps
+      const raw = localStorage.getItem(lsKey);
+      if (raw) {
+        const { data, cachedAt } = JSON.parse(raw) as { data: Record<string, TrendPoint[]>; cachedAt: string };
+        return { status: 'done', data, cachedAt };
+      }
+    } catch { /* ignore */ }
+    return { status: 'idle', data: {} };
+  });
 
-  // Auto-load on mount (staggered to avoid rate-limiting Google).
-  // Re-fires when loadChart changes, which happens when effectiveMonths changes.
+  const loadChart = React.useCallback(async (force = false) => {
+    // If we already have data and this isn't a forced refresh, fetch silently in background.
+    const hasData = Object.values(state.data ?? {}).some(d => d.length > 0);
+    if (!hasData || force) setState(s => ({ ...s, status: 'loading' }));
+
+    try {
+      const qs = new URLSearchParams({ keywords: widget.keywords.join(','), months: String(effectiveMonths) });
+      if (force) qs.set('refresh', '1');
+      const res  = await fetch(`/api/admin/trends?${qs}`);
+      const json = await res.json() as { data?: Record<string, TrendPoint[]>; cachedAt?: string; error?: string };
+      if (!res.ok) throw new Error(json.error ?? 'Failed to load');
+      const newState: ChartState = { status: 'done', data: json.data ?? {}, cachedAt: json.cachedAt };
+      setState(newState);
+      try { localStorage.setItem(lsKey, JSON.stringify({ data: json.data, cachedAt: json.cachedAt })); } catch { /* ignore */ }
+    } catch (e) {
+      setState(s => ({ ...s, status: s.status === 'done' ? 'done' : 'error', error: e instanceof Error ? e.message : 'Unknown error' }));
+    }
+  }, [widget.keywords, effectiveMonths, lsKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // On mount (or when months changes): silently fetch from API to get latest cached data.
   React.useEffect(() => {
-    const t = setTimeout(() => { void loadChart(); }, autoLoadIndex * 1500);
-    return () => clearTimeout(t);
-  }, [loadChart, autoLoadIndex]);
+    void loadChart(false);
+  }, [loadChart]);
+
+  // When parent triggers a forced refresh (Refresh All button), reload with ?refresh=1.
+  const prevTick = React.useRef(forceRefreshTick);
+  React.useEffect(() => {
+    if (forceRefreshTick !== prevTick.current) {
+      prevTick.current = forceRefreshTick;
+      void loadChart(true);
+    }
+  }, [forceRefreshTick, loadChart]);
 
   // Merge per-keyword series into [{date, kw1, kw2, ...}] for Recharts
   const chartData = React.useMemo(() => {
@@ -3031,27 +3055,30 @@ function TrendChartCard({ widget, months, autoLoadIndex = 0 }: { widget: TrendWi
           <p className="text-sm font-semibold text-gray-900">{widget.title}</p>
           <p className="text-xs text-gray-400 mt-0.5">{widget.description}</p>
         </div>
-        <a href={`https://trends.google.com/trends/explore?q=${encodeURIComponent(widget.keywords[0])}&geo=US`}
-          target="_blank" rel="noreferrer"
-          className="flex-shrink-0 text-[11px] text-gray-400 hover:text-gray-600 transition-colors mt-0.5 whitespace-nowrap">
-          Open ↗
-        </a>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {state.cachedAt && state.status !== 'loading' && (
+            <span className="text-[10px] text-gray-300 whitespace-nowrap">
+              {new Date(state.cachedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+            </span>
+          )}
+          {state.status === 'loading' && <Loader2 size={12} className="animate-spin text-gray-400" />}
+          <a href={`https://trends.google.com/trends/explore?q=${encodeURIComponent(widget.keywords[0])}&geo=US`}
+            target="_blank" rel="noreferrer"
+            className="text-[11px] text-gray-400 hover:text-gray-600 transition-colors whitespace-nowrap">
+            Open ↗
+          </a>
+        </div>
       </div>
       <div className="p-4">
-        {state.status === 'idle' && (
+        {(state.status === 'idle' || state.status === 'loading') && Object.keys(state.data).length === 0 && (
           <div className="flex items-center justify-center py-14">
             <Loader2 size={22} className="animate-spin text-gray-300" />
           </div>
         )}
-        {state.status === 'loading' && (
-          <div className="flex items-center justify-center py-14">
-            <Loader2 size={22} className="animate-spin text-gray-400" />
-          </div>
-        )}
-        {state.status === 'error' && (
+        {state.status === 'error' && Object.keys(state.data).length === 0 && (
           <div className="flex flex-col items-center justify-center gap-3 py-10 bg-red-50 rounded-xl">
             <p className="text-xs text-red-500 text-center max-w-[240px]">{state.error}</p>
-            <button onClick={() => void loadChart()}
+            <button onClick={() => void loadChart(false)}
               className="rounded-xl border border-red-200 px-4 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 transition-colors">
               Retry
             </button>
@@ -3085,19 +3112,18 @@ function TrendChartCard({ widget, months, autoLoadIndex = 0 }: { widget: TrendWi
 }
 
 function TrendsTab() {
-  const [section, setSection] = React.useState<'venues' | 'wedding'>('venues');
-  const [months, setMonths] = React.useState(12);
-  const [sectionKey, setSectionKey] = React.useState(0); // bump to remount cards on section/time change
+  const [section, setSection]           = React.useState<'venues' | 'wedding'>('venues');
+  const [months, setMonths]             = React.useState(12);
+  const [refreshTick, setRefreshTick]   = React.useState(0);
+  const [refreshing, setRefreshing]     = React.useState(false);
   const widgets = section === 'venues' ? VENUE_WIDGETS : WEDDING_WIDGETS;
 
-  function handleSectionChange(s: 'venues' | 'wedding') {
-    setSection(s);
-    setSectionKey(k => k + 1);
-  }
-
-  function handleTimeChange(m: number) {
-    setMonths(m);
-    setSectionKey(k => k + 1);
+  async function handleRefreshAll() {
+    setRefreshing(true);
+    setRefreshTick(t => t + 1);
+    // Give cards time to finish fetching before clearing spinner.
+    await new Promise(r => setTimeout(r, widgets.length * 3000 + 2000));
+    setRefreshing(false);
   }
 
   return (
@@ -3107,36 +3133,45 @@ function TrendsTab() {
           <h2 className="font-heading text-xl text-gray-900">Google Trends — Wedding Industry</h2>
           <p className="text-sm text-gray-500 mt-0.5">Live search trend data pulled from Google. Find content angles, seasonal patterns, and what brides are searching for right now.</p>
         </div>
-        <a href="https://trends.google.com/trends/explore?q=wedding+venue&geo=US" target="_blank" rel="noreferrer"
-          className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3.5 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
-          <ExternalLink size={13} /> Open Google Trends ↗
-        </a>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => void handleRefreshAll()}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3.5 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors">
+            {refreshing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+            {refreshing ? 'Refreshing…' : 'Refresh now'}
+          </button>
+          <a href="https://trends.google.com/trends/explore?q=wedding+venue&geo=US" target="_blank" rel="noreferrer"
+            className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3.5 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+            <ExternalLink size={13} /> Open Google Trends ↗
+          </a>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex rounded-xl border border-gray-200 overflow-hidden">
-          <button onClick={() => handleSectionChange('venues')}
+          <button onClick={() => setSection('venues')}
             className={`px-4 py-2 text-sm font-semibold transition-colors ${section === 'venues' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
             🏛 Wedding Venues
           </button>
-          <button onClick={() => handleSectionChange('wedding')}
+          <button onClick={() => setSection('wedding')}
             className={`px-4 py-2 text-sm font-semibold transition-colors border-l border-gray-200 ${section === 'wedding' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
             💍 Wedding Industry
           </button>
         </div>
-        <select value={months} onChange={e => handleTimeChange(Number(e.target.value))}
+        <select value={months} onChange={e => setMonths(Number(e.target.value))}
           className="rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:border-gray-400 transition-colors">
           {TIME_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       </div>
 
       <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-800">
-        <strong>Note:</strong> Charts load automatically. Data is fetched live from Google and cached for 6 hours. Values are indexed 0–100 (relative search interest).
+        <strong>Note:</strong> Charts show cached data instantly and auto-refresh every 24 h. Use &ldquo;Refresh now&rdquo; to force a new pull from Google. Values are indexed 0–100 (relative search interest).
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-        {widgets.map((widget, i) => (
-          <TrendChartCard key={`${sectionKey}-${widget.id}`} widget={widget} months={months} autoLoadIndex={i} />
+        {widgets.map(widget => (
+          <TrendChartCard key={`${widget.id}-${months}`} widget={widget} months={months} forceRefreshTick={refreshTick} />
         ))}
       </div>
 

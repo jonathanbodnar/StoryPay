@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/lib/supabase';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const googleTrends = require('google-trends-api');
 
@@ -9,27 +10,37 @@ async function verifyAdmin() {
   return token && token === process.env.ADMIN_SECRET;
 }
 
-// ── In-memory cache: keyword → { data, fetchedAt } ──────────────────────────
-interface CacheEntry {
-  data: TrendPoint[];
-  fetchedAt: number;
-}
-const CACHE = new Map<string, CacheEntry>();
-const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
-
 export interface TrendPoint {
   date: string;   // "Jan 2024"
   value: number;
 }
 
-// Fetch a single keyword, with a retry on rate-limit (CAPTCHA) response.
-async function fetchKeyword(keyword: string, startTime: Date): Promise<TrendPoint[]> {
-  const cacheKey = `${keyword}|${startTime.toISOString().slice(0, 7)}`;
-  const cached = CACHE.get(cacheKey);
-  if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
-    return cached.data;
-  }
+const STALE_HOURS = 24; // Re-fetch from Google after 24 h
 
+// ── DB helpers ───────────────────────────────────────────────────────────────
+
+async function dbGet(key: string): Promise<{ data: Record<string, TrendPoint[]>; updatedAt: string } | null> {
+  const { data, error } = await supabaseAdmin
+    .from('admin_kv_cache')
+    .select('value, updated_at')
+    .eq('key', key)
+    .maybeSingle();
+  if (error || !data) return null;
+  return {
+    data: (data as { value: Record<string, TrendPoint[]>; updated_at: string }).value,
+    updatedAt: (data as { value: Record<string, TrendPoint[]>; updated_at: string }).updated_at,
+  };
+}
+
+async function dbSet(key: string, value: Record<string, TrendPoint[]>): Promise<void> {
+  await supabaseAdmin
+    .from('admin_kv_cache')
+    .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+}
+
+// ── Google fetch ─────────────────────────────────────────────────────────────
+
+async function fetchKeyword(keyword: string, startTime: Date): Promise<TrendPoint[]> {
   const raw: string = await googleTrends.interestOverTime({
     keyword,
     startTime,
@@ -44,17 +55,13 @@ async function fetchKeyword(keyword: string, startTime: Date): Promise<TrendPoin
     throw new Error(`Google Trends returned non-JSON for "${keyword}"`);
   }
 
-  const points: TrendPoint[] = (parsed.default?.timelineData ?? []).map(pt => ({
+  return (parsed.default?.timelineData ?? []).map(pt => ({
     date: pt.formattedAxisTime,
     value: pt.value[0] ?? 0,
   }));
-
-  CACHE.set(cacheKey, { data: points, fetchedAt: Date.now() });
-  return points;
 }
 
-// Fetch multiple keywords sequentially with a small delay to avoid rate-limiting.
-async function fetchKeywords(
+async function fetchFromGoogle(
   keywords: string[],
   startTime: Date,
 ): Promise<Record<string, TrendPoint[]>> {
@@ -72,7 +79,7 @@ async function fetchKeywords(
   return result;
 }
 
-// ── GET /api/admin/trends?keywords=a,b,c&months=12 ──────────────────────────
+// ── GET /api/admin/trends?keywords=a,b,c&months=12[&refresh=1] ──────────────
 export async function GET(request: NextRequest) {
   if (!(await verifyAdmin())) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -80,21 +87,46 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = request.nextUrl;
   const keywordsParam = searchParams.get('keywords') ?? 'wedding venue';
-  const months = parseInt(searchParams.get('months') ?? '12', 10);
+  const months       = parseInt(searchParams.get('months') ?? '12', 10);
+  const forceRefresh = searchParams.get('refresh') === '1';
 
   const keywords = keywordsParam
     .split(',')
     .map(k => k.trim())
     .filter(Boolean)
-    .slice(0, 5); // cap at 5 per request
+    .slice(0, 5);
+
+  const cacheKey = `trends|${keywords.join(',')}|${months}`;
 
   const startTime = new Date();
   startTime.setMonth(startTime.getMonth() - months);
 
+  // 1. Try DB cache first ─────────────────────────────────────────────────────
+  const cached = await dbGet(cacheKey);
+
+  if (cached && !forceRefresh) {
+    const ageHours = (Date.now() - new Date(cached.updatedAt).getTime()) / 3_600_000;
+
+    // If stale (> 24 h), kick off a background refresh so next visit gets fresh data.
+    if (ageHours >= STALE_HOURS) {
+      void fetchFromGoogle(keywords, startTime).then(data => dbSet(cacheKey, data)).catch(() => {/* best-effort */});
+    }
+
+    // Always return cached data immediately (stale-while-revalidate).
+    return NextResponse.json({ data: cached.data, keywords, months, cachedAt: cached.updatedAt });
+  }
+
+  // 2. No cache OR forced refresh — fetch from Google synchronously ──────────
   try {
-    const data = await fetchKeywords(keywords, startTime);
-    return NextResponse.json({ data, keywords, months });
+    const data = await fetchFromGoogle(keywords, startTime);
+    const now  = new Date().toISOString();
+    void dbSet(cacheKey, data); // persist; fire-and-forget is fine
+    return NextResponse.json({ data, keywords, months, cachedAt: now });
   } catch (err) {
+    // If fetch fails but we have stale cache, return it rather than erroring.
+    if (cached) {
+      return NextResponse.json({ data: cached.data, keywords, months, cachedAt: cached.updatedAt, stale: true });
+    }
     const msg = err instanceof Error ? err.message : 'Unknown error';
     return NextResponse.json({ error: msg }, { status: 500 });
   }
