@@ -137,3 +137,38 @@ export async function GET(
     contact_stage,
   });
 }
+
+/** DELETE — permanently removes the conversation thread and all its messages. */
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ threadId: string }> },
+) {
+  const venueId = await getVenueId();
+  if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { threadId } = await params;
+
+  // Verify ownership before deletion.
+  const { data: thread } = await supabaseAdmin
+    .from('conversation_threads')
+    .select('id')
+    .eq('id', threadId)
+    .eq('venue_id', venueId)
+    .maybeSingle();
+
+  if (!thread) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  // Messages + read receipts cascade via FK in the DB; delete thread row.
+  const { error } = await supabaseAdmin
+    .from('conversation_threads')
+    .delete()
+    .eq('id', threadId)
+    .eq('venue_id', venueId);
+
+  if (error) {
+    console.error('[DELETE conversation thread]', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}

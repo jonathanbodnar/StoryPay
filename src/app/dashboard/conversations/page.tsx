@@ -26,6 +26,9 @@ import {
   Smile,
   Paperclip,
   Zap,
+  MailOpen,
+  MailCheck,
+  Trash2,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
 import { EmojiPickerPopover } from '@/components/EmojiPickerPopover';
@@ -120,13 +123,14 @@ interface TeamContact {
 // Small helper: opens/creates a conversation thread for a team contact and
 // sets the appropriate composer tab (email | sms).
 function TeamContactButton({
-  icon, label, email, compose, existingThreadId, onSelectThread, onLoadThreads,
+  icon, label, email, compose, existingThreadId, onSelectThread, onLoadThreads, title: titleProp,
 }: {
   icon: React.ReactNode; label: string; email: string;
   compose: 'email' | 'sms';
   existingThreadId: string | null;
   onSelectThread: (threadId: string) => void;
   onLoadThreads: () => Promise<void>;
+  title?: string;
 }) {
   const [loading, setLoading] = useState(false);
   async function handle() {
@@ -142,19 +146,28 @@ function TeamContactButton({
       }
     } finally { setLoading(false); }
   }
+  const iconOnly = !label;
   return (
     <button
       type="button"
       onClick={() => void handle()}
       disabled={loading}
-      title={`${label} ${email}`}
+      title={titleProp ?? `${label || compose.toUpperCase()} ${email}`}
       className={classNames(
-        'inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors disabled:opacity-40',
-        compose === 'email' ? 'hover:border-blue-300 hover:text-blue-700' : 'hover:border-green-300 hover:text-green-700',
+        'inline-flex items-center justify-center transition-colors disabled:opacity-40',
+        iconOnly
+          ? classNames(
+              'h-7 w-7 rounded-lg border border-gray-200 text-gray-500',
+              compose === 'sms' ? 'hover:border-green-300 hover:bg-green-50 hover:text-green-700' : 'hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700',
+            )
+          : classNames(
+              'gap-1 rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900',
+              compose === 'email' ? 'hover:border-blue-300 hover:text-blue-700' : 'hover:border-green-300 hover:text-green-700',
+            ),
       )}
     >
-      {loading ? <Loader2 size={11} className="animate-spin" /> : icon}
-      {label}
+      {loading ? <Loader2 size={iconOnly ? 13 : 11} className="animate-spin" /> : icon}
+      {!iconOnly && label}
     </button>
   );
 }
@@ -712,6 +725,36 @@ export default function ConversationsPage() {
     if (selectedId === threadId) await reloadMessages(threadId);
   }
 
+  async function markThreadUnread(threadId: string, e: React.MouseEvent) {
+    e.stopPropagation(); e.preventDefault();
+    setListActionError('');
+    const res = await fetch(`/api/conversations/threads/${threadId}/read`, { method: 'DELETE', cache: 'no-store' });
+    if (!res.ok) { const d = await res.json().catch(() => ({})); setListActionError((d as { error?: string }).error || 'Could not mark unread'); return; }
+    setThreads((prev) => prev.map((t) => t.thread_id === threadId ? { ...t, unread_count: 1 } : t));
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('storypay:conversations-unread'));
+  }
+
+  async function markThreadRead(threadId: string, e: React.MouseEvent) {
+    e.stopPropagation(); e.preventDefault();
+    setListActionError('');
+    const res = await fetch(`/api/conversations/threads/${threadId}/read`, { method: 'POST', cache: 'no-store' });
+    if (!res.ok) { const d = await res.json().catch(() => ({})); setListActionError((d as { error?: string }).error || 'Could not mark read'); return; }
+    setThreads((prev) => prev.map((t) => t.thread_id === threadId ? { ...t, unread_count: 0 } : t));
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('storypay:conversations-unread'));
+  }
+
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  async function deleteThread(threadId: string) {
+    setListActionError('');
+    const res = await fetch(`/api/conversations/threads/${threadId}`, { method: 'DELETE', cache: 'no-store' });
+    if (!res.ok) { const d = await res.json().catch(() => ({})); setListActionError((d as { error?: string }).error || 'Could not delete thread'); return; }
+    setThreads((prev) => prev.filter((t) => t.thread_id !== threadId));
+    if (selectedId === threadId) { setSelectedId(null); setMobileShowThread(false); }
+    setConfirmDeleteId(null);
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('storypay:conversations-unread'));
+  }
+
   useEffect(() => {
     const t = setTimeout(() => {
       if (!showNew || !contactSearch.trim()) {
@@ -830,50 +873,56 @@ export default function ConversationsPage() {
                 <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Account Owner &amp; Team</p>
                 <div className="space-y-1.5">
                   {teamContacts.map((tc) => {
-                    const tcName = [tc.first_name, tc.last_name].filter(Boolean).join(' ') || tc.email;
-                    const tcInitial = tcName.charAt(0).toUpperCase();
+                    const tcFirst = tc.first_name?.trim() || '';
+                    const tcLast  = tc.last_name?.trim()  || '';
+                    const tcName  = [tcFirst, tcLast].filter(Boolean).join(' ') || tc.email;
+                    const tcInitial = (tcFirst || tcName).charAt(0).toUpperCase();
                     const existingThread = threads.find(
                       (t) => (t.contact_email || '').toLowerCase() === tc.email.toLowerCase(),
                     );
+                    const roleLabel = tc.role === 'owner' ? 'Owner' : tc.role === 'admin' ? 'Admin' : 'Team';
                     return (
-                      <div key={tc.email} className="flex items-center gap-2.5 rounded-xl bg-white border border-gray-100 px-3 py-2.5">
+                      <div key={tc.email} className="flex items-center gap-2 rounded-xl bg-white border border-gray-100 px-3 py-2">
+                        {/* Avatar */}
                         <div className={classNames(
-                          'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white',
+                          'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold text-white',
                           tc.role === 'owner' ? 'bg-indigo-700' : 'bg-gray-700',
                         )}>
                           {tcInitial}
                         </div>
+                        {/* Name + badge */}
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-sm font-semibold text-gray-900 truncate">{tcName}</span>
+                          <div className="flex flex-wrap items-baseline gap-1.5 leading-tight">
+                            <span className="text-sm font-semibold text-gray-900">{tcName}</span>
                             <span className={classNames(
-                              'flex-shrink-0 rounded px-1.5 py-0 text-[9px] font-semibold uppercase tracking-wide',
+                              'rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide leading-none',
                               tc.role === 'owner' ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-600',
                             )}>
-                              {tc.role === 'owner' ? 'Owner' : tc.role === 'admin' ? 'Admin' : 'Team'}
+                              {roleLabel}
                             </span>
                           </div>
-                          <p className="text-[11px] text-gray-400 truncate">{tc.email}{tc.phone ? ` · ${tc.phone}` : ''}</p>
                         </div>
-                        {/* Quick-start buttons */}
+                        {/* Icon-only SMS → Email quick-start buttons */}
                         <div className="flex flex-shrink-0 items-center gap-1">
                           <TeamContactButton
-                            icon={<Mail size={13} />}
-                            label="Email"
-                            email={tc.email}
-                            compose="email"
-                            existingThreadId={existingThread?.thread_id ?? null}
-                            onSelectThread={(id) => { setSelectedId(id); setMobileShowThread(true); setComposerTab('email'); }}
-                            onLoadThreads={loadThreads}
-                          />
-                          <TeamContactButton
-                            icon={<MessageSquare size={13} />}
-                            label="SMS"
+                            icon={<MessageSquare size={15} />}
+                            label=""
                             email={tc.email}
                             compose="sms"
                             existingThreadId={existingThread?.thread_id ?? null}
                             onSelectThread={(id) => { setSelectedId(id); setMobileShowThread(true); setComposerTab('sms'); }}
                             onLoadThreads={loadThreads}
+                            title={`SMS ${tcName}`}
+                          />
+                          <TeamContactButton
+                            icon={<Mail size={15} />}
+                            label=""
+                            email={tc.email}
+                            compose="email"
+                            existingThreadId={existingThread?.thread_id ?? null}
+                            onSelectThread={(id) => { setSelectedId(id); setMobileShowThread(true); setComposerTab('email'); }}
+                            onLoadThreads={loadThreads}
+                            title={`Email ${tcName}`}
                           />
                         </div>
                       </div>
@@ -935,21 +984,19 @@ export default function ConversationsPage() {
                       selectedId === t.thread_id ? 'bg-white border-l-[3px] border-l-neutral-900' : '',
                     )}
                   >
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="group/row flex items-center justify-between gap-2">
                       <span className={classNames('min-w-0 truncate text-sm font-semibold', unread ? 'text-gray-900' : 'text-gray-700')}>
                         {name}
                       </span>
                       <span className="flex shrink-0 items-center gap-0.5">
+                        {/* Always-visible: star + pin */}
                         <button
                           type="button"
                           title={t.has_starred ? 'Remove star' : 'Star thread'}
                           onClick={(e) => void toggleThreadStarPin(t.thread_id, 'is_starred', e)}
                           className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-amber-600"
                         >
-                          <Star
-                            size={15}
-                            className={t.has_starred ? 'fill-amber-400 text-amber-500' : ''}
-                          />
+                          <Star size={15} className={t.has_starred ? 'fill-amber-400 text-amber-500' : ''} />
                         </button>
                         <button
                           type="button"
@@ -959,8 +1006,59 @@ export default function ConversationsPage() {
                         >
                           <Pin size={15} className={t.has_pinned ? 'text-sky-600' : ''} />
                         </button>
+                        {/* Hover-revealed: mark read/unread + delete */}
+                        <span className="hidden group-hover/row:flex items-center gap-0.5">
+                          {unread ? (
+                            <button
+                              type="button"
+                              title="Mark as read"
+                              onClick={(e) => void markThreadRead(t.thread_id, e)}
+                              className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-emerald-600"
+                            >
+                              <MailCheck size={14} />
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              title="Mark as unread"
+                              onClick={(e) => void markThreadUnread(t.thread_id, e)}
+                              className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-blue-600"
+                            >
+                              <MailOpen size={14} />
+                            </button>
+                          )}
+                          {confirmDeleteId === t.thread_id ? (
+                            <span className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                type="button"
+                                title="Confirm delete"
+                                onClick={(e) => { e.stopPropagation(); void deleteThread(t.thread_id); }}
+                                className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-white bg-red-600 hover:bg-red-700"
+                              >
+                                Delete
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(null); }}
+                                className="rounded p-1 text-gray-400 hover:bg-gray-100"
+                              >
+                                <X size={12} />
+                              </button>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              title="Delete conversation"
+                              onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(t.thread_id); }}
+                              className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-red-600"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </span>
+                        {/* Unread badge (only when not hovered) */}
                         {unread ? (
-                          <span className="flex items-center gap-1 pl-0.5">
+                          <span className="flex items-center gap-1 pl-0.5 group-hover/row:hidden">
                             {unreadN > 1 ? (
                               <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white tabular-nums">
                                 {unreadN > 99 ? '99+' : unreadN}
