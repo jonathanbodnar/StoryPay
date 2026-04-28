@@ -563,8 +563,19 @@ export default function ConversationsPage() {
       setEmailBcc('');
       setSelectedTriggerLinkId('');
       setComposerExpanded(false);
-      await reloadMessages(selectedId);
-      await loadThreads();
+      // Append the returned message directly — no full reload, no scroll jump.
+      // The API returns the raw DB row; add the author_label so it renders correctly.
+      if (data?.id) {
+        const newMsg: Msg = {
+          ...data,
+          author_label: data.sender_kind === 'team'
+            ? (data.venue_team_member_id ? 'Team member' : 'Owner')
+            : 'Owner',
+          trigger_link: null,
+        };
+        setMessages(prev => [...prev, newMsg]);
+      }
+      void loadThreads();
     } finally {
       setSending(false);
     }
