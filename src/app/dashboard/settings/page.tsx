@@ -5,6 +5,7 @@ import { useRef } from 'react';
 import {
  LinkIcon,
  CheckCircle2,
+ Check,
  CreditCard,
  MessageSquare,
  Loader2,
@@ -29,6 +30,7 @@ interface VenueInfo {
  ghl_connected: boolean;
  ghl_location_id: string | null;
  ghl_contacts_synced_at: string | null;
+ legacy_location_id?: string | null;
  lunarpay_merchant_id: number | null;
  service_fee_rate: number;
  brand_logo_url: string | null;
@@ -78,6 +80,34 @@ export default function SettingsPage() {
  const [syncingContacts, setSyncingContacts] = useState(false);
  const [syncResult, setSyncResult] = useState<{ created: number; updated: number; linked: number; fetched: number } | null>(null);
  const [syncError, setSyncError] = useState('');
+
+ // StoryVenue Legacy (GHL) location ID — manual entry
+ const [locationIdInput, setLocationIdInput] = useState('');
+ const [savingLocationId, setSavingLocationId] = useState(false);
+ const [locationIdSaved, setLocationIdSaved] = useState(false);
+ const [locationIdError, setLocationIdError] = useState('');
+
+ async function saveLocationId() {
+   const val = locationIdInput.trim();
+   if (!val) return;
+   setSavingLocationId(true);
+   setLocationIdError('');
+   setLocationIdSaved(false);
+   try {
+     const res = await fetch('/api/venues/me', {
+       method: 'PATCH',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({ ghl_location_id: val, ghl_connected: true }),
+     });
+     if (!res.ok) { setLocationIdError('Failed to save. Please try again.'); return; }
+     const updated = await res.json();
+     setVenue(prev => prev ? { ...prev, ghl_location_id: updated.ghl_location_id, ghl_connected: true } : prev);
+     setLocationIdSaved(true);
+     setLocationIdInput('');
+     setTimeout(() => setLocationIdSaved(false), 3000);
+   } catch { setLocationIdError('Failed to save. Please try again.'); }
+   finally { setSavingLocationId(false); }
+ }
 
  async function syncGhlContacts() {
    setSyncingContacts(true);
@@ -130,6 +160,7 @@ export default function SettingsPage() {
  const data = await res.json();
  setVenue(data);
  setFeeInput(String(data.service_fee_rate ?? 2.75));
+ if (data.ghl_location_id) setLocationIdInput(data.ghl_location_id);
  setBrand({
  brand_logo_url: data.brand_logo_url || '',
  brand_tagline: data.brand_tagline || '',
@@ -320,30 +351,57 @@ export default function SettingsPage() {
  </div>
  </section>}
 
- {/* Messaging Integration */}
+ {/* StoryVenue Legacy (Messaging) Integration */}
  <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="flex items-center gap-3 border-b border-gray-200 px-6 py-4">
  <MessageSquare size={18} className="text-gray-400"/>
- <h2 className="font-heading text-base font-semibold text-gray-900">Messaging</h2>
+ <h2 className="font-heading text-base font-semibold text-gray-900">StoryVenue Legacy</h2>
  </div>
- <div className="px-6 py-5">
- {venue.ghl_connected || venue.ghl_location_id ? (
- <div className="space-y-5">
+ <div className="px-6 py-5 space-y-5">
+
+ {/* Status row */}
  <div className="flex items-center justify-between">
  <div>
- <p className="text-sm font-medium text-gray-900">Connected</p>
+ <p className="text-sm font-medium text-gray-900">
+ {venue.ghl_connected || venue.ghl_location_id ? 'Connected' : 'Not Connected'}
+ </p>
  <p className="mt-0.5 text-sm text-gray-500">
- Your messaging account is connected. SMS notifications will be sent automatically
- when proposals are created.
+ {venue.ghl_connected || venue.ghl_location_id
+ ? 'SMS messaging is active.'
+ : 'Enter your StoryVenue Legacy sub-account ID below to enable SMS.'}
  </p>
  </div>
- <span className="shrink-0 ml-4 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
- <CheckCircle2 size={14} />
- Connected
+ <span className={`shrink-0 ml-4 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${venue.ghl_connected || venue.ghl_location_id ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
+ {venue.ghl_connected || venue.ghl_location_id ? <><CheckCircle2 size={14} /> Connected</> : 'Not connected'}
  </span>
  </div>
 
- {/* Contact sync — mirror GHL contacts into our DB so they're never lost. */}
+ {/* Sub-account ID field — always visible so it can be edited */}
+ <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+ <p className="text-xs font-medium text-gray-700 mb-2">Sub-Account ID</p>
+ <div className="flex gap-2">
+ <input
+ type="text"
+ value={locationIdInput}
+ onChange={e => setLocationIdInput(e.target.value)}
+ placeholder="Paste your sub-account ID here"
+ className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none"
+ />
+ <button
+ onClick={() => void saveLocationId()}
+ disabled={savingLocationId || !locationIdInput.trim()}
+ className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4 py-2 text-xs font-semibold text-white hover:bg-gray-700 disabled:opacity-50 transition-colors"
+ >
+ {savingLocationId ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+ {savingLocationId ? 'Saving…' : 'Save'}
+ </button>
+ </div>
+ {locationIdSaved && <p className="mt-2 text-xs text-emerald-600">Saved successfully.</p>}
+ {locationIdError && <p className="mt-2 text-xs text-red-600">{locationIdError}</p>}
+ </div>
+
+ {/* Contact sync — only show when connected */}
+ {(venue.ghl_connected || venue.ghl_location_id) && (
  <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
  <div className="flex items-start justify-between gap-4 flex-wrap">
  <div className="flex items-start gap-3 min-w-0 flex-1">
@@ -371,7 +429,6 @@ export default function SettingsPage() {
  {syncingContacts ? 'Syncing…' : 'Sync from StoryVenue Legacy'}
  </button>
  </div>
-
  {syncResult && (
  <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50 px-3.5 py-2.5 text-xs text-emerald-800">
  <span className="font-semibold">Done.</span> Pulled {syncResult.fetched} contact{syncResult.fetched === 1 ? '' : 's'} —{' '}
@@ -384,25 +441,6 @@ export default function SettingsPage() {
  <span>{syncError}</span>
  </div>
  )}
- </div>
- </div>
- ) : (
- <div className="text-center py-4">
- <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-brand-900/10">
- <LinkIcon size={20} className="text-brand-900"/>
- </div>
- <p className="text-sm font-medium text-gray-900">Connect Messaging</p>
- <p className="mx-auto mt-1 max-w-sm text-sm text-gray-500">
- Link your messaging account to automatically send SMS notifications to customers
- when proposals are created.
- </p>
- <a
- href="/api/messaging/connect"
- className="mt-4 inline-flex items-center gap-2 rounded-lg bg-brand-900 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-700"
- >
- <ExternalLink size={16} />
- Connect Account
- </a>
  </div>
  )}
  </div>
