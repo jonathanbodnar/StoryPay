@@ -781,6 +781,13 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
 
   useEffect(() => { if (!loading) void refreshCounts(); }, [loading, refreshCounts]);
 
+  // Poll every 30 s so pills move automatically once delays expire and the cron fires.
+  useEffect(() => {
+    if (loading) return;
+    const t = setInterval(() => { void refreshCounts(); }, 30_000);
+    return () => clearInterval(t);
+  }, [loading, refreshCounts]);
+
   // ── Helpers ────────────────────────────────────────────────────────────────
   function toggle(arr: string[], v: string, set: (x: string[]) => void) {
     set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
