@@ -11,7 +11,7 @@ import {
   LayoutGrid, List as ListIcon, Plus, Settings2, X,
   Globe, CalendarPlus, Clock, GripVertical, ArrowLeft, ArrowRight,
   ChevronDown, Filter, Link2, Copy, Tags,
-  History, ListTodo, CheckSquare, Square, Send, Activity,
+  History, ListTodo, CheckSquare, Square, Send, Activity, StickyNote,
 } from 'lucide-react';
 import LeadInsightsStrip, { type LeadInsightsPayload } from '@/components/leads/LeadInsightsStrip';
 import AddLeadModal, { NO_PIPELINE_STAGE } from '@/components/leads/AddLeadModal';
@@ -1095,12 +1095,14 @@ function LeadTagPopover({
   onToggleTag,
   onCreateTagForLead,
   align = 'right',
+  compact = false,
 }: {
   lead: Lead;
   allTags: MarketingTag[];
   onToggleTag: (leadId: string, tagId: string) => void;
   onCreateTagForLead: (leadId: string, name: string) => Promise<void>;
   align?: 'left' | 'right';
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -1118,19 +1120,37 @@ function LeadTagPopover({
 
   return (
     <div className="relative shrink-0" ref={rootRef} onClick={(e) => e.stopPropagation()}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        title="Tags — add or remove"
-        className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium transition-colors ${
-          n > 0
-            ? 'border-brand-900/30 bg-brand-900/5 text-brand-900'
-            : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50'
-        }`}
-      >
-        <Tags className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        {n > 0 ? <span className="tabular-nums">{n}</span> : null}
-      </button>
+      {compact ? (
+        /* Icon-only button for action row */
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          title={n > 0 ? `${n} tag${n === 1 ? '' : 's'} — manage` : 'Add tags'}
+          className="relative inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-orange-50 hover:text-orange-500 transition-colors"
+        >
+          <Tags className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          {n > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-orange-400 text-[9px] font-bold text-white leading-none">
+              {n > 9 ? '9+' : n}
+            </span>
+          )}
+        </button>
+      ) : (
+        /* Pill button for list/drawer views */
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          title="Tags — add or remove"
+          className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium transition-colors ${
+            n > 0
+              ? 'border-brand-900/30 bg-brand-900/5 text-brand-900'
+              : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50'
+          }`}
+        >
+          <Tags className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          {n > 0 ? <span className="tabular-nums">{n}</span> : null}
+        </button>
+      )}
       {open ? (
         <div
           className={`absolute z-[60] mt-1 w-64 rounded-xl border border-gray-200 bg-white p-2 ${
@@ -1290,6 +1310,7 @@ function KanbanCard({
         isDragging ? 'opacity-50 border-gray-400' : 'border-gray-200'
       }`}
     >
+      {/* ── Header row: name + meta controls ──────────────────────── */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="font-medium text-sm text-gray-900 truncate">{displayName(lead)}</p>
@@ -1305,22 +1326,15 @@ function KanbanCard({
             </span>
           )}
         </div>
-        <div className="flex shrink-0 items-start gap-1.5">
+        <div className="flex shrink-0 items-center gap-1">
           {lead.assigned_member && (
             <span
-              className="inline-flex h-8 min-w-[2rem] items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-[11px] font-semibold text-gray-700"
+              className="inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-[10px] font-semibold text-gray-700"
               title={lead.assigned_member.name}
             >
               {lead.assigned_member.initials}
             </span>
           )}
-          <LeadTagPopover
-            lead={lead}
-            allTags={allTags}
-            onToggleTag={onToggleLeadTag}
-            onCreateTagForLead={onCreateTagForLead}
-            align="right"
-          />
           {!lead.is_protected && (
             <button
               type="button"
@@ -1335,76 +1349,117 @@ function KanbanCard({
         </div>
       </div>
 
-      <div className="mt-2 space-y-1 text-xs text-gray-500">
-        {lead.email && (
-          <div className="flex items-center gap-1.5 truncate">
-            <Mail className="w-3 h-3 shrink-0" /> <span className="truncate">{lead.email}</span>
-          </div>
-        )}
-        {lead.phone && (
-          <div className="flex items-center gap-1.5 truncate">
-            <Phone className="w-3 h-3 shrink-0" /> {lead.phone}
-          </div>
-        )}
-        {lead.wedding_date && (
-          <div className="flex items-center gap-1.5">
-            <CalendarIcon className="w-3 h-3 shrink-0" /> {formatDate(lead.wedding_date)}
-          </div>
-        )}
-        {lead.guest_count != null && (
-          <div className="flex items-center gap-1.5">
-            <Users className="w-3 h-3 shrink-0" /> {lead.guest_count} guests
-          </div>
-        )}
-      </div>
-
+      {/* ── Booking badge ───────────────────────────────────────────── */}
       {bookingBadge && (
-        <div className="mt-2 flex justify-end">
+        <div className="mt-1.5">
           <div
-            className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-900"
+            className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-900"
             title={bookingBadge.variant === 'wedding' ? 'Wedding booked' : 'Upcoming appointment'}
           >
-            <CalendarPlus className="w-3.5 h-3.5 shrink-0 text-sky-700" />
+            <CalendarPlus className="w-3 h-3 shrink-0 text-sky-700" />
             <span className="tabular-nums">{formatBookingPillText(bookingBadge.iso, bookingBadge.variant)}</span>
           </div>
         </div>
       )}
 
-      <div className="mt-2 flex items-center justify-between gap-2 pt-2 border-t border-gray-100">
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
-            <Clock className="w-3 h-3" /> Created: {formatShortDate(lead.created_at, venueTz)}
-          </div>
-          {lead.email && (
-            <Link
-              href={`/dashboard/conversations?email=${encodeURIComponent(lead.email)}&compose=sms`}
-              onClick={(e) => e.stopPropagation()}
-              title="Text this contact"
-              className="inline-flex items-center justify-center rounded-lg p-1 text-gray-400 hover:bg-violet-50 hover:text-violet-600 transition-colors"
-            >
-              <MessageSquare className="w-3.5 h-3.5" />
-            </Link>
-          )}
-        </div>
-        <div className="flex items-center gap-2 text-[11px]">
+      {/* ── Action buttons ──────────────────────────────────────────── */}
+      <div
+        className="mt-2 flex items-center gap-1 pt-2 border-t border-gray-100"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Call */}
+        {lead.phone ? (
+          <a
+            href={`tel:${lead.phone}`}
+            title={`Call ${lead.phone}`}
+            className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-green-50 hover:text-green-600 transition-colors"
+          >
+            <Phone className="w-3.5 h-3.5" />
+          </a>
+        ) : (
+          <span className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-200 cursor-not-allowed" title="No phone on file">
+            <Phone className="w-3.5 h-3.5" />
+          </span>
+        )}
+
+        {/* SMS */}
+        {lead.email ? (
+          <Link
+            href={`/dashboard/conversations?email=${encodeURIComponent(lead.email)}&compose=sms`}
+            title="Send SMS"
+            className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-violet-50 hover:text-violet-600 transition-colors"
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+          </Link>
+        ) : (
+          <span className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-200 cursor-not-allowed" title="No email on file">
+            <MessageSquare className="w-3.5 h-3.5" />
+          </span>
+        )}
+
+        {/* Email */}
+        {lead.email ? (
+          <Link
+            href={`/dashboard/conversations?email=${encodeURIComponent(lead.email)}&compose=email`}
+            title="Send email"
+            className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-sky-50 hover:text-sky-600 transition-colors"
+          >
+            <Mail className="w-3.5 h-3.5" />
+          </Link>
+        ) : (
+          <span className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-200 cursor-not-allowed" title="No email on file">
+            <Mail className="w-3.5 h-3.5" />
+          </span>
+        )}
+
+        {/* Notes — open drawer */}
+        <button
+          type="button"
+          title={lead.note_count > 0 ? `${lead.note_count} note${lead.note_count === 1 ? '' : 's'} — open` : 'Add a note'}
+          onClick={onClick}
+          className="relative inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-amber-50 hover:text-amber-600 transition-colors"
+        >
+          <StickyNote className="w-3.5 h-3.5" />
           {lead.note_count > 0 && (
-            <span className="inline-flex items-center gap-1 text-gray-500">
-              <MessageSquare className="w-3 h-3" /> {lead.note_count}
+            <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-white leading-none">
+              {lead.note_count > 9 ? '9+' : lead.note_count}
             </span>
           )}
-          {lead.opportunity_value != null && (
-            <span className="inline-flex flex-col items-end gap-0.5 font-semibold text-gray-800 tabular-nums">
-              <span className="inline-flex items-center gap-1">
-                {formatMoney(lead.opportunity_value, hideRevenue)}
-              </span>
-              {!hideRevenue && weighted != null && weighted > 0 && (
-                <span className="text-[10px] font-medium text-gray-400 tabular-nums">
-                  wtd {formatMoney(weighted)}
-                </span>
-              )}
-            </span>
-          )}
-        </div>
+        </button>
+
+        {/* Tags */}
+        <LeadTagPopover
+          lead={lead}
+          allTags={allTags}
+          onToggleTag={onToggleLeadTag}
+          onCreateTagForLead={onCreateTagForLead}
+          align="left"
+          compact
+        />
+
+        {/* New appointment */}
+        <Link
+          href={`/dashboard/calendar?new=1${lead.email ? `&email=${encodeURIComponent(lead.email)}` : ''}${lead.first_name || lead.name ? `&name=${encodeURIComponent((lead.first_name && lead.last_name ? `${lead.first_name} ${lead.last_name}` : lead.first_name || lead.name || '').trim())}` : ''}`}
+          title="New appointment"
+          className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
+        >
+          <CalendarPlus className="w-3.5 h-3.5" />
+        </Link>
+
+        {/* Opportunity value (right-aligned) */}
+        {lead.opportunity_value != null && (
+          <span className="ml-auto flex flex-col items-end text-[11px] font-semibold text-gray-700 tabular-nums leading-tight">
+            {formatMoney(lead.opportunity_value, hideRevenue)}
+            {!hideRevenue && weighted != null && weighted > 0 && (
+              <span className="text-[10px] font-normal text-gray-400">wtd {formatMoney(weighted)}</span>
+            )}
+          </span>
+        )}
+      </div>
+
+      {/* ── Footer: created date ────────────────────────────────────── */}
+      <div className="mt-1.5 flex items-center gap-1 text-[10px] text-gray-400">
+        <Clock className="w-2.5 h-2.5" /> {formatShortDate(lead.created_at, venueTz)}
       </div>
     </div>
   );

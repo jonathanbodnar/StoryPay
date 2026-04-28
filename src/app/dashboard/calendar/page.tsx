@@ -288,6 +288,31 @@ export default function CalendarPage() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
+  // Deep-link: /dashboard/calendar?new=1&email=...&name=... opens the new event
+  // modal pre-filled with the lead's contact info (used by the lead card SMS icon).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('new') !== '1') return;
+    const email = params.get('email') ?? '';
+    const name  = params.get('name') ?? '';
+    // Strip the query string so refreshing doesn't re-open the modal.
+    window.history.replaceState({}, '', '/dashboard/calendar');
+    const f = emptyForm();
+    if (email) f.customer_email = email;
+    if (name)  f.title = `Appointment — ${name}`;
+    setEditingId(null);
+    setForm(f);
+    setContactQuery(email);
+    setContactResults([]);
+    setContactDropdownOpen(false);
+    setManageSpaces(false);
+    setEditingSpaceId(null);
+    setConflicts([]);
+    setSaveError('');
+    setShowModal(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Load the team-member list once on mount. The "Assigned to" dropdown is
   // only rendered when the list is non-empty so venues without team members
   // see the form unchanged.
