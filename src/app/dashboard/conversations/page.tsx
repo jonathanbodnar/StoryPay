@@ -827,24 +827,9 @@ export default function ConversationsPage() {
                       {t.last_message_preview || t.subject || 'No messages'}
                     </p>
                     <div className="mt-0.5 flex items-center gap-2 text-[10px] text-gray-400">
-                      {t.external_reply_channel === 'sms' && (
-                        <span className="inline-flex items-center gap-0.5 rounded bg-violet-100 px-1.5 py-0 text-violet-900">
-                          <MessageSquare size={10} /> SMS
-                        </span>
-                      )}
                       {t.last_message_visibility === 'internal' && (
                         <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0 text-amber-800">
                           <Lock size={10} /> Team
-                        </span>
-                      )}
-                      {t.last_message_visibility === 'external' && t.external_reply_channel !== 'sms' && (
-                        <span className="inline-flex items-center gap-0.5 rounded bg-sky-100 px-1.5 py-0 text-sky-800">
-                          <Mail size={10} /> Email
-                        </span>
-                      )}
-                      {t.last_message_visibility === 'external' && t.external_reply_channel === 'sms' && (
-                        <span className="inline-flex items-center gap-0.5 rounded bg-sky-100/80 px-1.5 py-0 text-sky-900">
-                          Client
                         </span>
                       )}
                     </div>
@@ -1404,10 +1389,21 @@ export default function ConversationsPage() {
                           ref={composerTextareaRef}
                           value={body}
                           onChange={(e) => setBody(e.target.value)}
+                          onKeyDown={(e) => {
+                            // SMS/Email: Enter sends. Shift+Enter inserts a newline.
+                            // Team notes: Enter always inserts a newline (no hot-send).
+                            if (e.key === 'Enter' && !e.shiftKey && composerTab !== 'team') {
+                              e.preventDefault();
+                              const form = (e.target as HTMLTextAreaElement).closest('form');
+                              if (form) form.requestSubmit();
+                            }
+                          }}
                           rows={composerTab === 'team' ? 3 : 4}
                           placeholder={
                             composerTab === 'team'
                               ? 'Write a team note…'
+                              : composerTab === 'sms'
+                              ? 'Type a message… (Enter to send, Shift+Enter for new line)'
                               : 'Type a message…'
                           }
                           className="block w-full resize-none border-0 bg-transparent px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none"
