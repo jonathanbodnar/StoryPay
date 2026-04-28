@@ -1722,6 +1722,14 @@ export default function ConversationsPage() {
           </div>
         </div>
       )}
+
+      {/* Contact profile drawer */}
+      {profileDrawerOpen && threadDetail?.venue_customer_id && (
+        <ContactProfileDrawer
+          venueCustomerId={threadDetail.venue_customer_id}
+          onClose={() => setProfileDrawerOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -2178,13 +2186,5 @@ function CollapsedComposer({
         <Send size={14} />
       </button>
     </div>
-
-    {/* Contact profile drawer */}
-    {profileDrawerOpen && threadDetail?.venue_customer_id && (
-      <ContactProfileDrawer
-        venueCustomerId={threadDetail.venue_customer_id}
-        onClose={() => setProfileDrawerOpen(false)}
-      />
-    )}
   );
 }
