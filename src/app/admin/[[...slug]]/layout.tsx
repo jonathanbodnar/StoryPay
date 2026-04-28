@@ -2984,11 +2984,11 @@ interface ChartState {
   error?: string;
 }
 
-function TrendChartCard({ widget, months }: { widget: TrendWidget; months: number }) {
+function TrendChartCard({ widget, months, autoLoadIndex = 0 }: { widget: TrendWidget; months: number; autoLoadIndex?: number }) {
   const [state, setState] = React.useState<ChartState>({ status: 'idle', data: {} });
   const effectiveMonths = widget.months ?? months;
 
-  async function loadChart() {
+  const loadChart = React.useCallback(async () => {
     setState({ status: 'loading', data: {} });
     try {
       const qs = new URLSearchParams({
@@ -3002,7 +3002,14 @@ function TrendChartCard({ widget, months }: { widget: TrendWidget; months: numbe
     } catch (e) {
       setState({ status: 'error', data: {}, error: e instanceof Error ? e.message : 'Unknown error' });
     }
-  }
+  }, [widget.keywords, effectiveMonths]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-load on mount (staggered to avoid rate-limiting Google).
+  // Re-fires when loadChart changes, which happens when effectiveMonths changes.
+  React.useEffect(() => {
+    const t = setTimeout(() => { void loadChart(); }, autoLoadIndex * 1500);
+    return () => clearTimeout(t);
+  }, [loadChart, autoLoadIndex]);
 
   // Merge per-keyword series into [{date, kw1, kw2, ...}] for Recharts
   const chartData = React.useMemo(() => {
@@ -3032,13 +3039,8 @@ function TrendChartCard({ widget, months }: { widget: TrendWidget; months: numbe
       </div>
       <div className="p-4">
         {state.status === 'idle' && (
-          <div className="flex flex-col items-center justify-center gap-3 py-10 bg-gray-50 rounded-xl">
-            <TrendingUp size={22} className="text-gray-300" />
-            <p className="text-xs text-gray-400 text-center max-w-[200px]">{widget.description}</p>
-            <button onClick={loadChart}
-              className="rounded-xl bg-gray-900 px-5 py-2 text-xs font-semibold text-white hover:bg-gray-700 transition-colors">
-              Load Chart
-            </button>
+          <div className="flex items-center justify-center py-14">
+            <Loader2 size={22} className="animate-spin text-gray-300" />
           </div>
         )}
         {state.status === 'loading' && (
@@ -3049,7 +3051,7 @@ function TrendChartCard({ widget, months }: { widget: TrendWidget; months: numbe
         {state.status === 'error' && (
           <div className="flex flex-col items-center justify-center gap-3 py-10 bg-red-50 rounded-xl">
             <p className="text-xs text-red-500 text-center max-w-[240px]">{state.error}</p>
-            <button onClick={loadChart}
+            <button onClick={() => void loadChart()}
               className="rounded-xl border border-red-200 px-4 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 transition-colors">
               Retry
             </button>
@@ -3129,12 +3131,12 @@ function TrendsTab() {
       </div>
 
       <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-800">
-        <strong>Note:</strong> Click &ldquo;Load Chart&rdquo; on each card to fetch live data from Google. Charts are cached for 6 hours. Data is indexed 0–100 (relative search interest).
+        <strong>Note:</strong> Charts load automatically. Data is fetched live from Google and cached for 6 hours. Values are indexed 0–100 (relative search interest).
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-        {widgets.map(widget => (
-          <TrendChartCard key={`${sectionKey}-${widget.id}`} widget={widget} months={months} />
+        {widgets.map((widget, i) => (
+          <TrendChartCard key={`${sectionKey}-${widget.id}`} widget={widget} months={months} autoLoadIndex={i} />
         ))}
       </div>
 
