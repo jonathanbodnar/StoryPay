@@ -8,7 +8,7 @@ import {
   ChevronRight, AlertCircle, Smartphone, Check,
   Activity, Receipt, FileCheck, Plus, Trash2,
   Upload, Undo2, ChevronDown, ChevronUp, Copy,
-  RefreshCw, Info,
+  RefreshCw, Info, CalendarPlus, Clock, MapPin,
 } from 'lucide-react';
 import { classNames, formatCents, formatDate, formatDateTime, getStatusColor } from '@/lib/utils';
 import { slugifyStageLabel } from '@/lib/pipeline-stage-slug';
@@ -45,6 +45,23 @@ interface FileRow {
   file_size: number | null; uploaded_by: string | null; created_at: string; url: string | null;
 }
 interface LeadInquiry { booking_timeline: string | null; venue_matters: string | null; }
+interface Appointment {
+  id: string; title: string; event_type: string;
+  start_at: string; end_at: string; all_day: boolean;
+  notes: string | null; status: string;
+  venue_spaces: { id: string; name: string; color: string } | null;
+}
+
+const APPOINTMENT_EVENT_TYPES = [
+  { value: 'tour',       label: 'Tour' },
+  { value: 'meeting',    label: 'Meeting' },
+  { value: 'phone_call', label: 'Phone Call' },
+  { value: 'tasting',    label: 'Tasting' },
+  { value: 'rehearsal',  label: 'Rehearsal' },
+  { value: 'wedding',    label: 'Wedding' },
+  { value: 'reception',  label: 'Reception' },
+  { value: 'other',      label: 'Other' },
+];
 
 const CEREMONY_TYPES = [
   { value: 'ceremony_only', label: 'Ceremony Only' },
@@ -65,7 +82,7 @@ const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
   event_created: <Calendar size={12} />, stage_changed: <Activity size={12} />,
 };
 
-type DrawerTab = 'overview' | 'notes' | 'activity' | 'payments' | 'tasks' | 'documents';
+type DrawerTab = 'overview' | 'notes' | 'activity' | 'payments' | 'tasks' | 'documents' | 'schedule';
 
 function isPlaceholderEmail(email: string): boolean {
   const e = email.trim().toLowerCase();
@@ -85,10 +102,46 @@ interface DrawerCacheEntry {
   inquiry: LeadInquiry | null;
   proposals: Proposal[];
   files: FileRow[];
+  appointments: Appointment[];
   loadedPayments: boolean;
   loadedDocs: boolean;
+  loadedAppts: boolean;
 }
 const DRAWER_CACHE = new Map<string, DrawerCacheEntry>();
+
+// ── ApptCard helper ───────────────────────────────────────────────────────────
+function ApptCard({ appt, onCancel, past }: { appt: Appointment; onCancel?: () => void; past?: boolean }) {
+  const start = new Date(appt.start_at);
+  const end   = new Date(appt.end_at);
+  const dateStr = start.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  const timeStr = appt.all_day ? 'All day'
+    : `${start.toLocaleTimeString(undefined, {hour:'numeric',minute:'2-digit'})} – ${end.toLocaleTimeString(undefined, {hour:'numeric',minute:'2-digit'})}`;
+  const typeLabel = appt.event_type.replace(/_/g,' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-gray-100 bg-gray-50/60 px-4 py-3 group">
+      <div className="flex-shrink-0 flex flex-col items-center justify-center w-10 text-center">
+        <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">{start.toLocaleDateString(undefined,{month:'short'})}</span>
+        <span className="text-xl font-bold text-gray-900 leading-none">{start.getDate()}</span>
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-gray-900 truncate">{appt.title}</p>
+        <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs text-gray-500">
+          <span className="flex items-center gap-1"><Clock size={11}/>{timeStr}</span>
+          {appt.venue_spaces && <span className="flex items-center gap-1"><MapPin size={11}/>{appt.venue_spaces.name}</span>}
+          <span className="rounded-full border border-gray-200 px-1.5 py-0">{typeLabel}</span>
+        </div>
+        {appt.notes && <p className="mt-1 text-[11px] text-gray-400 truncate">{appt.notes}</p>}
+      </div>
+      {!past && onCancel && (
+        <button type="button" onClick={onCancel} title="Cancel appointment"
+          className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity rounded p-1 text-gray-300 hover:text-red-500">
+          <Trash2 size={13}/>
+        </button>
+      )}
+    </div>
+  );
+}
 
 // ── Component ──────────────────────────────────────────────────────────────────
 export interface InitialContact {
@@ -157,6 +210,16 @@ export default function ContactProfileDrawer({ venueCustomerId, onClose, initial
   const [loadingDocs, setLoadingDocs] = useState(false);
   const loadedPayments = useRef(cached?.loadedPayments ?? false);
   const loadedDocs = useRef(cached?.loadedDocs ?? false);
+
+  // Schedule tab
+  const [appointments, setAppointments] = useState<Appointment[]>(cached?.appointments ?? []);
+  const [loadingAppts, setLoadingAppts] = useState(false);
+  const loadedAppts = useRef(cached?.loadedAppts ?? false);
+  const [showApptForm, setShowApptForm] = useState(false);
+  const [apptForm, setApptForm] = useState({ title: '', event_type: 'tour', date: '', start_time: '09:00', end_time: '10:00', space_id: '', notes: '' });
+  const [savingAppt, setSavingAppt] = useState(false);
+  const [apptError, setApptError] = useState('');
+  const [apptConflict, setApptConflict] = useState<{ title: string; start_at: string }[] | null>(null);
 
   const [activeTab, setActiveTab] = useState<DrawerTab>('overview');
   const [visible, setVisible] = useState(false);
@@ -293,6 +356,16 @@ export default function ContactProfileDrawer({ venueCustomerId, onClose, initial
     } finally { setLoadingDocs(false); }
   }, [venueCustomerId]);
 
+  const fetchAppointments = useCallback(async () => {
+    if (loadedAppts.current) return;
+    loadedAppts.current = true;
+    setLoadingAppts(true);
+    try {
+      const res = await fetch(`/api/venue-customers/${venueCustomerId}/appointments`);
+      if (res.ok) setAppointments(await res.json());
+    } finally { setLoadingAppts(false); }
+  }, [venueCustomerId]);
+
   // On mount: fire ALL fetches in parallel. Hero is already painted from
   // cache or initialContact stub, so nothing is blocking the UI.
   useEffect(() => {
@@ -304,17 +377,19 @@ export default function ContactProfileDrawer({ venueCustomerId, onClose, initial
   // Persist current state to module cache so reopens are instant.
   useEffect(() => {
     DRAWER_CACHE.set(venueCustomerId, {
-      vc, pipelines, notes, tasks, activity, spaces, inquiry, proposals, files,
+      vc, pipelines, notes, tasks, activity, spaces, inquiry, proposals, files, appointments,
       loadedPayments: loadedPayments.current,
       loadedDocs: loadedDocs.current,
+      loadedAppts: loadedAppts.current,
     });
-  }, [venueCustomerId, vc, pipelines, notes, tasks, activity, spaces, inquiry, proposals, files]);
+  }, [venueCustomerId, vc, pipelines, notes, tasks, activity, spaces, inquiry, proposals, files, appointments]);
 
   // When tab changes, load on-demand data
   useEffect(() => {
     if (activeTab === 'payments' && vc && !loadedPayments.current) void fetchPayments(vc);
     if (activeTab === 'documents' && !loadedDocs.current) void fetchDocs();
-  }, [activeTab, vc, fetchPayments, fetchDocs]);
+    if (activeTab === 'schedule' && !loadedAppts.current) void fetchAppointments();
+  }, [activeTab, vc, fetchPayments, fetchDocs, fetchAppointments]);
 
   // ── Pipeline ───────────────────────────────────────────────────────────────
   const pipelineUi = useMemo(() => {
@@ -427,6 +502,40 @@ export default function ContactProfileDrawer({ venueCustomerId, onClose, initial
     await fetch(`/api/venue-customers/${venueCustomerId}/files?fileId=${fileId}`, { method: 'DELETE' });
     setFiles((p) => p.filter((f) => f.id !== fileId));
   }
+  async function saveAppointment(forceConflict = false) {
+    if (!apptForm.date || !apptForm.start_time || !apptForm.end_time) { setApptError('Date and times are required'); return; }
+    setSavingAppt(true); setApptError(''); setApptConflict(null);
+    const start_at = `${apptForm.date}T${apptForm.start_time}:00`;
+    const end_at   = `${apptForm.date}T${apptForm.end_time}:00`;
+    if (new Date(end_at) <= new Date(start_at)) { setApptError('End time must be after start time'); setSavingAppt(false); return; }
+    const payload: Record<string, unknown> = {
+      title:      apptForm.title.trim() || undefined,
+      event_type: apptForm.event_type,
+      start_at, end_at,
+      space_id:   apptForm.space_id || null,
+      notes:      apptForm.notes.trim() || null,
+    };
+    if (forceConflict) payload.override_conflict = true;
+    const res = await fetch(`/api/venue-customers/${venueCustomerId}/appointments`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 409) {
+      setApptConflict((data as { conflicts?: { title: string; start_at: string }[] }).conflicts ?? []);
+      setSavingAppt(false); return;
+    }
+    if (!res.ok) { setApptError((data as { error?: string }).error || 'Failed to save'); setSavingAppt(false); return; }
+    setAppointments((p) => [...p, data as Appointment].sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime()));
+    setShowApptForm(false);
+    setApptForm({ title: '', event_type: 'tour', date: '', start_time: '09:00', end_time: '10:00', space_id: '', notes: '' });
+    setSavingAppt(false);
+  }
+
+  async function cancelAppointment(eventId: string) {
+    await fetch(`/api/venue-customers/${venueCustomerId}/appointments?eventId=${eventId}`, { method: 'DELETE' });
+    setAppointments((p) => p.filter((a) => a.id !== eventId));
+  }
+
   function copyLink(p: Proposal) {
     void navigator.clipboard.writeText(`${window.location.origin}/proposal/${p.public_token}`);
     setCopiedId(p.id); setTimeout(() => setCopiedId(null), 2000);
@@ -462,13 +571,16 @@ export default function ContactProfileDrawer({ venueCustomerId, onClose, initial
     );
   }
 
-  const tabs: { id: DrawerTab; label: string; count?: number }[] = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'notes', label: 'Notes', count: notes.length || undefined },
-    { id: 'activity', label: 'Activity' },
-    { id: 'payments', label: 'Payments', count: proposals.length || undefined },
-    { id: 'tasks', label: 'Tasks', count: openTasks.length || undefined },
-    { id: 'documents', label: 'Docs', count: files.length || undefined },
+  const upcomingAppts = appointments.filter((a) => new Date(a.end_at) >= new Date());
+
+  const tabs: { id: DrawerTab; label: string; count?: number; icon?: React.ReactNode }[] = [
+    { id: 'overview',  label: 'Overview' },
+    { id: 'notes',     label: 'Notes',    count: notes.length || undefined },
+    { id: 'activity',  label: 'Activity' },
+    { id: 'payments',  label: 'Payments', count: proposals.length || undefined },
+    { id: 'tasks',     label: 'Tasks',    count: openTasks.length || undefined },
+    { id: 'documents', label: 'Docs',     count: files.length || undefined },
+    { id: 'schedule',  label: 'Schedule', count: upcomingAppts.length || undefined, icon: <Calendar size={12}/> },
   ];
 
   return (
@@ -570,9 +682,9 @@ export default function ContactProfileDrawer({ venueCustomerId, onClose, initial
             <div className="flex flex-shrink-0 overflow-x-auto border-b border-gray-200">
               {tabs.map((t) => (
                 <button key={t.id} type="button" onClick={() => setActiveTab(t.id)}
-                  className={classNames('flex-shrink-0 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors whitespace-nowrap',
+                  className={classNames('flex-shrink-0 inline-flex items-center gap-1 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors whitespace-nowrap',
                     activeTab === t.id ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700')}>
-                  {t.label}{t.count != null ? ` (${t.count})` : ''}
+                  {t.icon}{t.label}{t.count != null ? ` (${t.count})` : ''}
                 </button>
               ))}
             </div>
@@ -900,6 +1012,151 @@ export default function ContactProfileDrawer({ venueCustomerId, onClose, initial
                               ))}
                             </tbody>
                           </table>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* SCHEDULE */}
+              {activeTab === 'schedule' && (
+                <div className="space-y-4">
+                  {/* Booking form toggle */}
+                  {!showApptForm ? (
+                    <button
+                      type="button"
+                      onClick={() => { setShowApptForm(true); setApptError(''); setApptConflict(null); }}
+                      className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white"
+                      style={{backgroundColor:'#1b1b1b'}}
+                    >
+                      <CalendarPlus size={15}/>Schedule Appointment
+                    </button>
+                  ) : (
+                    <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+                      <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5"><CalendarPlus size={14}/>New Appointment</h4>
+
+                      {/* Event type */}
+                      <div>
+                        <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Type</label>
+                        <div className="flex flex-wrap gap-1.5">
+                          {APPOINTMENT_EVENT_TYPES.map((et) => (
+                            <button key={et.value} type="button"
+                              onClick={() => setApptForm((p) => ({...p, event_type: et.value}))}
+                              className={classNames(
+                                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                                apptForm.event_type === et.value
+                                  ? 'border-gray-900 bg-gray-900 text-white'
+                                  : 'border-gray-200 text-gray-600 hover:border-gray-400',
+                              )}>
+                              {et.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Title */}
+                      <div>
+                        <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Title (optional)</label>
+                        <input
+                          value={apptForm.title}
+                          onChange={(e) => setApptForm((p) => ({...p, title: e.target.value}))}
+                          placeholder={`${displayName} — ${apptForm.event_type.replace(/_/g,' ')}`}
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+                        />
+                      </div>
+
+                      {/* Date + times */}
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="col-span-3 sm:col-span-1">
+                          <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Date</label>
+                          <input type="date" value={apptForm.date} onChange={(e) => setApptForm((p) => ({...p, date: e.target.value}))}
+                            className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"/>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Start</label>
+                          <input type="time" value={apptForm.start_time} onChange={(e) => setApptForm((p) => ({...p, start_time: e.target.value}))}
+                            className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"/>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">End</label>
+                          <input type="time" value={apptForm.end_time} onChange={(e) => setApptForm((p) => ({...p, end_time: e.target.value}))}
+                            className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"/>
+                        </div>
+                      </div>
+
+                      {/* Space */}
+                      {spaces.length > 0 && (
+                        <div>
+                          <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Space (optional)</label>
+                          <select value={apptForm.space_id} onChange={(e) => setApptForm((p) => ({...p, space_id: e.target.value}))}
+                            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-gray-400 focus:outline-none">
+                            <option value="">No space</option>
+                            {spaces.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                          </select>
+                        </div>
+                      )}
+
+                      {/* Notes */}
+                      <div>
+                        <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Notes (optional)</label>
+                        <textarea value={apptForm.notes} onChange={(e) => setApptForm((p) => ({...p, notes: e.target.value}))} rows={2}
+                          className="w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"/>
+                      </div>
+
+                      {/* Conflict warning */}
+                      {apptConflict && apptConflict.length > 0 && (
+                        <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 space-y-2">
+                          <p className="text-xs font-semibold text-amber-900 flex items-center gap-1.5"><AlertCircle size={13}/>Space conflict with:</p>
+                          {apptConflict.map((c, i) => (
+                            <p key={i} className="text-xs text-amber-800">• {c.title} — {new Date(c.start_at).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'})}</p>
+                          ))}
+                          <button type="button" onClick={() => void saveAppointment(true)}
+                            className="rounded-lg bg-amber-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-800">
+                            Schedule anyway
+                          </button>
+                        </div>
+                      )}
+
+                      {apptError && <p className="text-xs text-red-600 flex items-center gap-1"><AlertCircle size={12}/>{apptError}</p>}
+
+                      <div className="flex gap-2 pt-1">
+                        <button type="button" onClick={() => { setShowApptForm(false); setApptError(''); setApptConflict(null); }}
+                          className="flex-1 rounded-xl border border-gray-200 py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+                        <button type="button" onClick={() => void saveAppointment(false)} disabled={savingAppt || !apptForm.date}
+                          className="flex-1 rounded-xl py-2 text-sm font-semibold text-white disabled:opacity-40"
+                          style={{backgroundColor:'#1b1b1b'}}>
+                          {savingAppt ? 'Saving…' : 'Book Appointment'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Appointments list */}
+                  {loadingAppts ? (
+                    <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-gray-400"/></div>
+                  ) : appointments.length === 0 ? (
+                    <p className="text-sm text-gray-400">No appointments yet.</p>
+                  ) : (
+                    <>
+                      {upcomingAppts.length > 0 && (
+                        <div>
+                          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Upcoming</p>
+                          <div className="space-y-2">
+                            {upcomingAppts.map((a) => (
+                              <ApptCard key={a.id} appt={a} onCancel={() => void cancelAppointment(a.id)}/>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {appointments.filter((a) => new Date(a.end_at) < new Date()).length > 0 && (
+                        <div>
+                          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Past</p>
+                          <div className="space-y-2 opacity-60">
+                            {appointments.filter((a) => new Date(a.end_at) < new Date()).slice(-5).reverse().map((a) => (
+                              <ApptCard key={a.id} appt={a} past />
+                            ))}
+                          </div>
                         </div>
                       )}
                     </>
