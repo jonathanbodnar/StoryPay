@@ -358,22 +358,17 @@ export default function ConversationsPage() {
     return () => ro.disconnect();
   }, [selectedId]);
 
-  // Force-scroll on send / thread switch / new messages — useLayoutEffect
-  // runs synchronously after DOM mutations but before paint, so the user
-  // never sees an "unstuck" frame. Always pins to bottom regardless of
-  // whether they were near it (this fires on user-initiated changes only).
+  // Force-scroll on send / thread switch / new messages / loading-done —
+  // useLayoutEffect runs synchronously after DOM mutations but before paint,
+  // so the user never sees an "unstuck" frame. The `loadingThread` dep is
+  // critical: when the spinner is replaced by the messages list, this is
+  // the moment scrollHeight finally reflects the real content height.
   useLayoutEffect(() => {
     if (!selectedId) return;
+    if (loadingThread) return; // skip while spinner is up — content not rendered yet
     stuckToBottomRef.current = true;
-    const el = messagesScrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-    // Belt-and-braces: rAF in case layout settles in the next frame.
-    const raf = requestAnimationFrame(() => {
-      const e2 = messagesScrollRef.current;
-      if (e2) e2.scrollTop = e2.scrollHeight;
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [messages, selectedId, composerExpanded]);
+    scrollToBottomNow();
+  }, [messages, selectedId, composerExpanded, loadingThread, scrollToBottomNow]);
 
   // Background poll — silently fetch new messages every 5 s. For SMS threads
   // we hit the full endpoint (no nosync) so the GHL→DB sync runs server-side
@@ -1015,6 +1010,7 @@ export default function ConversationsPage() {
 
               <div
                 ref={messagesScrollRef}
+                style={{ scrollBehavior: 'auto' }}
                 className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 sm:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               >
                 {loadingThread ? (
