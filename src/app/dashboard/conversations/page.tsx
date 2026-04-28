@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
 import { EmojiPickerPopover } from '@/components/EmojiPickerPopover';
+import ContactProfileDrawer from '@/components/conversations/ContactProfileDrawer';
 
 interface ThreadRow {
   thread_id: string;
@@ -444,6 +445,8 @@ export default function ConversationsPage() {
     ? `/dashboard/contacts/${threadDetail.venue_customer_id}`
     : null;
 
+  const [profileDrawerOpen, setProfileDrawerOpen] = useState(false);
+
   const selectedTriggerMeta = useMemo(
     () => triggerLinkOptions.find((t) => t.id === selectedTriggerLinkId),
     [triggerLinkOptions, selectedTriggerLinkId],
@@ -773,12 +776,14 @@ export default function ConversationsPage() {
                     onClick={() => {
                       setSelectedId(t.thread_id);
                       setMobileShowThread(true);
+                      setProfileDrawerOpen(false);
                     }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
                         setSelectedId(t.thread_id);
                         setMobileShowThread(true);
+                        setProfileDrawerOpen(false);
                       }
                     }}
                     className={classNames(
@@ -893,14 +898,15 @@ export default function ConversationsPage() {
                     </span>
                   ) : null}
                   {contactProfileHref ? (
-                    <Link
-                      href={contactProfileHref}
+                    <button
+                      type="button"
+                      onClick={() => setProfileDrawerOpen(true)}
                       className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50"
                     >
                       <User size={14} />
                       Profile
                       <ChevronRight size={14} className="text-gray-400" />
-                    </Link>
+                    </button>
                   ) : null}
                 </div>
               </header>
@@ -2123,5 +2129,13 @@ function CollapsedComposer({
         <Send size={14} />
       </button>
     </div>
+
+    {/* Contact profile drawer */}
+    {profileDrawerOpen && threadDetail?.venue_customer_id && (
+      <ContactProfileDrawer
+        venueCustomerId={threadDetail.venue_customer_id}
+        onClose={() => setProfileDrawerOpen(false)}
+      />
+    )}
   );
 }
