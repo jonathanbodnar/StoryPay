@@ -105,7 +105,15 @@ interface TeamMember {
 }
 
 type ComposerTab = 'team' | 'email' | 'sms';
-type ThreadListFilter = 'all' | 'unread' | 'starred' | 'pinned';
+type ThreadListFilter = 'all' | 'unread' | 'starred' | 'pinned' | 'team_contacts';
+
+interface TeamContact {
+  email: string;
+  first_name: string;
+  last_name: string;
+  role: 'owner' | 'admin' | 'member';
+  sort_order: number;
+}
 
 export default function ConversationsPage() {
   const [threads, setThreads] = useState<ThreadRow[]>([]);
@@ -127,6 +135,7 @@ export default function ConversationsPage() {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState('');
   const [team, setTeam] = useState<TeamMember[]>([]);
+  const [teamContacts, setTeamContacts] = useState<TeamContact[]>([]);
   const [mobileShowThread, setMobileShowThread] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [contactSearch, setContactSearch] = useState('');
@@ -245,9 +254,11 @@ export default function ConversationsPage() {
   useEffect(() => {
     fetch('/api/team')
       .then((r) => r.json())
-      .then((d) => {
-        if (Array.isArray(d)) setTeam(d);
-      })
+      .then((d) => { if (Array.isArray(d)) setTeam(d); })
+      .catch(() => {});
+    fetch('/api/conversations/team-contacts')
+      .then((r) => r.json())
+      .then((d) => { if (Array.isArray(d)) setTeamContacts(d); })
       .catch(() => {});
   }, []);
 
@@ -500,24 +511,50 @@ export default function ConversationsPage() {
 
   const threadsFiltered = useMemo(() => {
     const q = threadSearch.trim().toLowerCase();
-    const base = !q
-      ? threads
-      : threads.filter((t) => {
-          const name = [t.contact_first_name, t.contact_last_name]
-            .filter(Boolean)
-            .join(' ')
-            .toLowerCase();
-          const em = (t.contact_email || '').toLowerCase();
-          const ph = (t.contact_phone || '').toLowerCase();
-          return name.includes(q) || em.includes(q) || ph.includes(q);
-        });
+
+    // For team_contacts filter: show only threads whose contact email matches
+    // a team contact. Apply before search so search still works within it.
+    let base = threads;
+    if (threadListFilter === 'team_contacts' && teamContacts.length > 0) {
+      const emailSet = new Set(teamContacts.map((tc) => tc.email.toLowerCase()));
+      base = threads.filter((t) => emailSet.has((t.contact_email || '').toLowerCase()));
+    }
+
+    if (q) {
+      base = base.filter((t) => {
+        const name = [t.contact_first_name, t.contact_last_name]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        const em = (t.contact_email || '').toLowerCase();
+        const ph = (t.contact_phone || '').toLowerCase();
+        return name.includes(q) || em.includes(q) || ph.includes(q);
+      });
+    }
+
+    if (threadListFilter === 'team_contacts' && teamContacts.length > 0) {
+      // Sort: owner first (sort_order 0), then members, then by last message
+      const emailOrder = new Map(
+        teamContacts
+          .slice()
+          .sort((a, b) => a.sort_order - b.sort_order || a.first_name.localeCompare(b.first_name))
+          .map((tc, idx) => [tc.email.toLowerCase(), idx]),
+      );
+      return [...base].sort((a, b) => {
+        const aIdx = emailOrder.get((a.contact_email || '').toLowerCase()) ?? 9999;
+        const bIdx = emailOrder.get((b.contact_email || '').toLowerCase()) ?? 9999;
+        if (aIdx !== bIdx) return aIdx - bIdx;
+        return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime();
+      });
+    }
+
     return [...base].sort((a, b) => {
       const ap = a.has_pinned ? 1 : 0;
       const bp = b.has_pinned ? 1 : 0;
       if (bp !== ap) return bp - ap;
       return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime();
     });
-  }, [threads, threadSearch]);
+  }, [threads, threadSearch, threadListFilter, teamContacts]);
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
@@ -712,6 +749,7 @@ export default function ConversationsPage() {
                 { id: 'unread' as const, label: 'Unread' },
                 { id: 'starred' as const, label: 'Starred' },
                 { id: 'pinned' as const, label: 'Pinned' },
+                { id: 'team_contacts' as const, label: 'Team' },
               ] as const
             ).map((tab) => (
               <button
@@ -754,7 +792,9 @@ export default function ConversationsPage() {
                     ? 'No pinned conversations. Pin a thread from the list using the pin icon.'
                     : threadListFilter === 'unread'
                       ? 'No unread conversations.'
-                      : 'No conversations yet. Start one with a contact.'}
+                      : threadListFilter === 'team_contacts'
+                        ? 'No conversations with your account owner or team members yet.'
+                        : 'No conversations yet. Start one with a contact.'}
               </p>
             ) : threadsFiltered.length === 0 ? (
               <p className="px-4 py-10 text-center text-sm text-gray-500">
@@ -837,6 +877,24 @@ export default function ConversationsPage() {
                           <Lock size={10} /> Team
                         </span>
                       )}
+                      {(() => {
+                        const tc = teamContacts.find(
+                          (c) => c.email.toLowerCase() === (t.contact_email || '').toLowerCase(),
+                        );
+                        if (!tc) return null;
+                        return (
+                          <span
+                            className={classNames(
+                              'inline-flex items-center rounded px-1.5 py-0',
+                              tc.role === 'owner'
+                                ? 'bg-indigo-100 text-indigo-800'
+                                : 'bg-gray-100 text-gray-600',
+                            )}
+                          >
+                            {tc.role === 'owner' ? 'Owner' : 'Team'}
+                          </span>
+                        );
+                      })()}
                     </div>
                   </div>
                 );
@@ -866,18 +924,9 @@ export default function ConversationsPage() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-base font-semibold text-gray-900">{contactLabel}</p>
                   <p className="truncate text-xs text-gray-500">
-                    {threadDetail.external_reply_channel === 'sms' ? (
-                      <>
-                        <span className="inline-flex items-center gap-0.5 font-medium text-violet-800">
-                          <MessageSquare size={12} /> SMS
-                        </span>
-                        {threadDetail.venue_customers?.phone ?
-                          <> · {threadDetail.venue_customers.phone}</>
-                        : null}
-                      </>
-                    ) : (
-                      threadDetail.venue_customers?.customer_email
-                    )}
+                    {threadDetail.external_reply_channel === 'sms'
+                      ? threadDetail.venue_customers?.phone ?? ''
+                      : threadDetail.venue_customers?.customer_email ?? ''}
                   </p>
                 </div>
                 <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2">
