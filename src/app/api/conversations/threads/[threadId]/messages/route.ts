@@ -528,6 +528,7 @@ ${triggerBlock}
     }
   }
 
+  // Mark the sender as having read this thread.
   const readerRef = conversationReaderRef(user);
   await supabaseAdmin.from('conversation_thread_reads').upsert(
     {
@@ -537,6 +538,17 @@ ${triggerBlock}
     },
     { onConflict: 'thread_id,reader_ref' },
   );
+
+  // For team notes with @mentions, delete the mentioned members' read receipts
+  // so the thread shows as unread for them until they open it.
+  if (visibility === 'internal' && mentionedIds.length > 0) {
+    const mentionedRefs = mentionedIds.map((id) => `m:${id}`);
+    await supabaseAdmin
+      .from('conversation_thread_reads')
+      .delete()
+      .eq('thread_id', threadId)
+      .in('reader_ref', mentionedRefs);
+  }
 
   return NextResponse.json(row, { status: 201 });
 }

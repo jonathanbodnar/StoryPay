@@ -189,6 +189,9 @@ export default function ConversationsPage() {
   const [emailSubject, setEmailSubject] = useState('');
   const [body, setBody] = useState('');
   const [mentionedIds, setMentionedIds] = useState<string[]>([]);
+  const [mentionPopupOpen, setMentionPopupOpen] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionHighlight, setMentionHighlight] = useState(0);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState('');
   const [team, setTeam] = useState<TeamMember[]>([]);
@@ -1440,7 +1443,21 @@ export default function ConversationsPage() {
                                         : 'border border-gray-300 bg-gray-200 text-gray-900',
                                   )}
                                 >
-                                  <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                                  {isInternal && (m.mentioned_member_ids?.length ?? 0) > 0 ? (
+                                    <p className="whitespace-pre-wrap break-words">
+                                      {m.body.split(/(@\w+)/g).map((seg, si) =>
+                                        seg.startsWith('@') ? (
+                                          <mark key={si} className="rounded bg-amber-200/70 px-0.5 font-semibold text-amber-900 not-italic">
+                                            {seg}
+                                          </mark>
+                                        ) : (
+                                          seg
+                                        ),
+                                      )}
+                                    </p>
+                                  ) : (
+                                    <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                                  )}
                                   {triggerHref && m.trigger_link && (
                                     <p className="mt-1.5 text-[11px] text-gray-700">
                                       <Link
@@ -1462,6 +1479,15 @@ export default function ConversationsPage() {
                                   {m.visibility === 'external' && m.external_email_sent === false && m.send_error && (
                                     <span className="text-amber-600">
                                       {m.channel === 'sms' ? 'SMS not sent' : 'Email not sent'}: {m.send_error}
+                                    </span>
+                                  )}
+                                  {isInternal && (m.mentioned_member_ids?.length ?? 0) > 0 && (
+                                    <span className="flex items-center gap-1 text-amber-700">
+                                      <Users size={10} />
+                                      {team
+                                        .filter((t) => m.mentioned_member_ids?.includes(t.id))
+                                        .map((t) => `@${t.first_name || [t.first_name, t.last_name].filter(Boolean).join(' ')}`)
+                                        .join(', ')}
                                     </span>
                                   )}
                                 </div>
@@ -1657,11 +1683,117 @@ export default function ConversationsPage() {
                         </label>
                       )}
                       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white focus-within:border-gray-500">
+                        {/* @mention autocomplete popup */}
+                        {mentionPopupOpen && composerTab === 'team' && (() => {
+                          const filtered = team.filter((m) => {
+                            const name = [m.first_name, m.last_name].filter(Boolean).join(' ').toLowerCase();
+                            return name.startsWith(mentionQuery.toLowerCase()) || m.first_name?.toLowerCase().startsWith(mentionQuery.toLowerCase());
+                          });
+                          if (!filtered.length) return null;
+                          return (
+                            <div className="mx-2 mb-1 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
+                              {filtered.map((m, i) => {
+                                const label = [m.first_name, m.last_name].filter(Boolean).join(' ') || m.email || 'Member';
+                                return (
+                                  <button
+                                    key={m.id}
+                                    type="button"
+                                    onMouseDown={(e) => {
+                                      e.preventDefault();
+                                      // Replace @query in body with @FirstName
+                                      const ta = composerTextareaRef.current;
+                                      if (ta) {
+                                        const cursor = ta.selectionStart ?? body.length;
+                                        const before = body.slice(0, cursor);
+                                        const after = body.slice(cursor);
+                                        const atMatch = before.match(/@(\w*)$/);
+                                        if (atMatch && atMatch.index !== undefined) {
+                                          const newBody = before.slice(0, atMatch.index) + `@${m.first_name || label} ` + after;
+                                          setBody(newBody);
+                                          // Restore focus + move cursor after the inserted mention
+                                          requestAnimationFrame(() => {
+                                            const pos = (atMatch.index ?? 0) + (m.first_name || label).length + 2;
+                                            ta.setSelectionRange(pos, pos);
+                                            ta.focus();
+                                          });
+                                        }
+                                      }
+                                      if (!mentionedIds.includes(m.id)) setMentionedIds((p) => [...p, m.id]);
+                                      setMentionPopupOpen(false);
+                                      setMentionQuery('');
+                                    }}
+                                    className={classNames(
+                                      'flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors',
+                                      i === mentionHighlight ? 'bg-gray-100 text-gray-900' : 'text-gray-700 hover:bg-gray-50',
+                                    )}
+                                  >
+                                    <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-gray-800 text-xs font-bold text-white">
+                                      {(m.first_name || label).charAt(0).toUpperCase()}
+                                    </span>
+                                    <span className="font-medium">{label}</span>
+                                    {mentionedIds.includes(m.id) && <span className="ml-auto text-[10px] font-semibold text-amber-600">Tagged</span>}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
                         <textarea
                           ref={composerTextareaRef}
                           value={body}
-                          onChange={(e) => setBody(e.target.value)}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setBody(val);
+                            if (composerTab === 'team') {
+                              const cursor = e.target.selectionStart ?? val.length;
+                              const before = val.slice(0, cursor);
+                              const atMatch = before.match(/@(\w*)$/);
+                              if (atMatch) {
+                                setMentionQuery(atMatch[1]);
+                                setMentionPopupOpen(true);
+                                setMentionHighlight(0);
+                              } else {
+                                setMentionPopupOpen(false);
+                                setMentionQuery('');
+                              }
+                            }
+                          }}
                           onKeyDown={(e) => {
+                            // Navigate @mention popup
+                            if (mentionPopupOpen && composerTab === 'team') {
+                              const filtered = team.filter((m) => {
+                                const name = [m.first_name, m.last_name].filter(Boolean).join(' ').toLowerCase();
+                                return name.startsWith(mentionQuery.toLowerCase()) || m.first_name?.toLowerCase().startsWith(mentionQuery.toLowerCase());
+                              });
+                              if (e.key === 'ArrowDown') { e.preventDefault(); setMentionHighlight((h) => Math.min(h + 1, filtered.length - 1)); return; }
+                              if (e.key === 'ArrowUp')   { e.preventDefault(); setMentionHighlight((h) => Math.max(h - 1, 0)); return; }
+                              if (e.key === 'Escape')    { setMentionPopupOpen(false); setMentionQuery(''); return; }
+                              if ((e.key === 'Enter' || e.key === 'Tab') && filtered[mentionHighlight]) {
+                                e.preventDefault();
+                                const m = filtered[mentionHighlight];
+                                const ta = composerTextareaRef.current;
+                                if (ta) {
+                                  const cursor = ta.selectionStart ?? body.length;
+                                  const before = body.slice(0, cursor);
+                                  const after = body.slice(cursor);
+                                  const atMatch = before.match(/@(\w*)$/);
+                                  if (atMatch && atMatch.index !== undefined) {
+                                    const label = m.first_name || [m.first_name, m.last_name].filter(Boolean).join(' ') || 'Member';
+                                    const newBody = before.slice(0, atMatch.index) + `@${label} ` + after;
+                                    setBody(newBody);
+                                    requestAnimationFrame(() => {
+                                      const pos = (atMatch.index ?? 0) + label.length + 2;
+                                      ta.setSelectionRange(pos, pos);
+                                      ta.focus();
+                                    });
+                                  }
+                                }
+                                if (!mentionedIds.includes(m.id)) setMentionedIds((p) => [...p, m.id]);
+                                setMentionPopupOpen(false);
+                                setMentionQuery('');
+                                return;
+                              }
+                            }
                             // SMS/Email: Enter sends. Shift+Enter inserts a newline.
                             // Team notes: Enter always inserts a newline (no hot-send).
                             if (e.key === 'Enter' && !e.shiftKey && composerTab !== 'team') {
@@ -1673,7 +1805,7 @@ export default function ConversationsPage() {
                           rows={composerTab === 'team' ? 3 : 4}
                           placeholder={
                             composerTab === 'team'
-                              ? 'Write a team note…'
+                              ? 'Write a team note… type @ to mention a teammate'
                               : composerTab === 'sms'
                               ? 'Type a message… (Enter to send, Shift+Enter for new line)'
                               : 'Type a message…'
