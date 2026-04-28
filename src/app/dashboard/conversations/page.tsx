@@ -30,7 +30,7 @@ import {
   MailCheck,
   Trash2,
 } from 'lucide-react';
-import { classNames, toTitleCase } from '@/lib/utils';
+import { classNames, toTitleCase, dispatchStageChange, onStageChange } from '@/lib/utils';
 import { EmojiPickerPopover } from '@/components/EmojiPickerPopover';
 import ContactProfileDrawer from '@/components/conversations/ContactProfileDrawer';
 
@@ -340,6 +340,16 @@ export default function ConversationsPage() {
       .then((r) => r.json())
       .then((d) => { if (Array.isArray(d)) setTeamContacts(d); })
       .catch(() => {});
+
+    // Keep the thread header stage in sync when the profile drawer (or any other
+    // component) changes the stage for the currently-open contact.
+    return onStageChange(({ vcId, stageName, stageColor }) => {
+      if (!vcId) return;
+      setThreadDetail((prev) => {
+        if (!prev || prev.venue_customer_id !== vcId) return prev;
+        return { ...prev, contact_stage: { name: stageName, color: stageColor } };
+      });
+    });
   }, []);
 
   useEffect(() => {
@@ -775,14 +785,7 @@ export default function ConversationsPage() {
       const st = pipe.stages.find((s) => s.id === stageId);
       if (st && threadDetail) {
         setThreadDetail((prev) => prev ? { ...prev, contact_stage: { name: st.name, color: st.color } } : prev);
-        // Also update the thread list badge
-        setThreads((prev) =>
-          prev.map((t) =>
-            t.thread_id === threadDetail.id
-              ? { ...t }
-              : t,
-          ),
-        );
+        dispatchStageChange({ vcId, pipelineId: pipe.id, stageId, stageName: st.name, stageColor: st.color });
       }
     }
     setStageUpdating(false);

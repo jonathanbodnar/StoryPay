@@ -18,7 +18,7 @@ import AddLeadModal, { NO_PIPELINE_STAGE } from '@/components/leads/AddLeadModal
 import { TimezoneSelect } from '@/components/TimezoneSelect';
 import { DEFAULT_VENUE_TIMEZONE, resolveVenueTimezone, wallClockToUtc } from '@/lib/venue-timezone';
 import { effectiveWinProbability } from '@/lib/pipelines';
-import { toTitleCase } from '@/lib/utils';
+import { toTitleCase, dispatchStageChange, onStageChange } from '@/lib/utils';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -349,6 +349,23 @@ export default function LeadsPage() {
     })();
   }, []);
 
+  // Keep the Kanban in sync when another open component (e.g. conversation stage
+  // pills) changes a lead's stage without going through this page's updateLead.
+  // We only act on events carrying a `leadId` that exists in our current list.
+  useEffect(() => {
+    return onStageChange(({ leadId, stageId }) => {
+      if (!leadId || !stageId) return;
+      setLeads((prev) =>
+        prev.some((l) => l.id === leadId && l.stage_id !== stageId)
+          ? prev.map((l) => (l.id === leadId ? { ...l, stage_id: stageId } : l))
+          : prev,
+      );
+      setSelectedLead((prev) =>
+        prev?.id === leadId && prev.stage_id !== stageId ? { ...prev, stage_id: stageId } : prev,
+      );
+    });
+  }, []);
+
   // Fetch venue timezone once so card dates can be localised.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
@@ -488,6 +505,22 @@ export default function LeadsPage() {
       const data = await res.json();
       setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, ...data.lead } as Lead : l)));
       if (selectedLead?.id === id) setSelectedLead((prev) => (prev ? { ...prev, ...data.lead } : prev));
+      // Broadcast stage change so other open components can sync without reload.
+      if (patch.stageId && data.lead?.stage_id) {
+        const updatedLead = data.lead as Lead;
+        const sid = updatedLead.stage_id ?? '';
+        const pipe = pipelines.find((p) => p.stages.some((s) => s.id === sid));
+        const stg = pipe?.stages.find((s) => s.id === sid);
+        if (stg) {
+          dispatchStageChange({
+            leadId: id,
+            pipelineId: updatedLead.pipeline_id ?? pipe?.id ?? '',
+            stageId: sid,
+            stageName: stg.name,
+            stageColor: stg.color,
+          });
+        }
+      }
       void loadInsights();
     } else {
       void loadLeads();

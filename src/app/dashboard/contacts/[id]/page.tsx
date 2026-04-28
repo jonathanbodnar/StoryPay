@@ -11,7 +11,7 @@ import {
   AlertCircle, Undo2, Smartphone,
 } from 'lucide-react';
 import RefundModal from '@/components/RefundModal';
-import { formatCents, formatDate, formatDateTime, getStatusColor, classNames, toTitleCase } from '@/lib/utils';
+import { formatCents, formatDate, formatDateTime, getStatusColor, classNames, toTitleCase, dispatchStageChange, onStageChange } from '@/lib/utils';
 import { slugifyStageLabel } from '@/lib/pipeline-stage-slug';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -317,6 +317,21 @@ export default function CustomerDetailPage() {
   }, [customerId]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  // Keep stage in sync with other components open in the same session.
+  const vcIdForSync = venueCustomer?.id;
+  useEffect(() => {
+    if (!vcIdForSync) return;
+    return onStageChange(({ vcId, stageId, stageName }) => {
+      if (vcId !== vcIdForSync) return;
+      const pipe = pipelines.find((p) => p.stages.some((s) => s.id === stageId));
+      if (!pipe) return;
+      const slug = slugifyStageLabel(stageName);
+      setVenueCustomer((prev) =>
+        prev ? { ...prev, pipeline_id: pipe.id, stage_id: stageId, pipeline_stage: slug } : prev,
+      );
+    });
+  }, [vcIdForSync, pipelines]);
 
   // ── Contact save ────────────────────────────────────────────────────────────
   function startEditContact() {
@@ -768,6 +783,15 @@ export default function CustomerDetailPage() {
       setVenueCustomer((current) =>
         current?.pipeline_id === pipelineId && current?.stage_id === stageId ? body : current,
       );
+      if (stageRow) {
+        dispatchStageChange({
+          vcId: venueCustomer.id,
+          pipelineId,
+          stageId,
+          stageName: stageRow.name,
+          stageColor: stageRow.color,
+        });
+      }
       return;
     }
     let msg = 'Could not update pipeline.';

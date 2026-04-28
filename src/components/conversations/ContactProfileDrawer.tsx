@@ -10,7 +10,7 @@ import {
   Upload, Undo2, ChevronDown, ChevronUp, Copy,
   RefreshCw, Info, CalendarPlus, Clock, MapPin,
 } from 'lucide-react';
-import { classNames, formatCents, formatDate, formatDateTime, getStatusColor, toTitleCase } from '@/lib/utils';
+import { classNames, formatCents, formatDate, formatDateTime, getStatusColor, toTitleCase, dispatchStageChange, onStageChange } from '@/lib/utils';
 import { slugifyStageLabel } from '@/lib/pipeline-stage-slug';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -414,8 +414,34 @@ export default function ContactProfileDrawer({ venueCustomerId, onClose, initial
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pipelineId: pipelineUi.safePipelineId, stageId }),
     });
-    if (!res.ok) { const d = await res.json().catch(() => ({})); setPipelineActionError((d as { error?: string }).error || 'Could not update.'); }
+    if (res.ok) {
+      if (stageRow) {
+        dispatchStageChange({
+          vcId: vc.id,
+          pipelineId: pipelineUi.safePipelineId,
+          stageId,
+          stageName: stageRow.name,
+          stageColor: stageRow.color,
+        });
+      }
+    } else {
+      const d = await res.json().catch(() => ({}));
+      setPipelineActionError((d as { error?: string }).error || 'Could not update.');
+    }
   }
+
+  // Keep the drawer's stage in sync when the conversation thread (or any other
+  // component) changes the stage for this same contact.
+  useEffect(() => {
+    return onStageChange(({ vcId, stageId, stageName }) => {
+      if (!vcId || vcId !== venueCustomerId) return;
+      setVc((v) => {
+        if (!v) return v;
+        const slug = slugifyStageLabel(stageName);
+        return { ...v, stage_id: stageId, pipeline_stage: slug };
+      });
+    });
+  }, [venueCustomerId]);
 
   // ── Mutations ──────────────────────────────────────────────────────────────
   async function saveContact() {

@@ -41,6 +41,40 @@ export function getStatusColor(status: string): { bg: string; text: string } {
   }
 }
 
+// ── Stage-change event bus ────────────────────────────────────────────────────
+// Components fire `dispatchStageChange` after a successful API call.
+// Other components call `onStageChange` (in a useEffect) to react.
+//
+// Payload uses `vcId` (venue_customer_id) so the conversation thread and
+// the profile drawer — which are simultaneously open — can stay in sync.
+// The leads page fires with `leadId` only; that lets the Kanban self-sync.
+export interface StageChangeEvent {
+  /** venue_customer_id — present when the caller patches /api/venue-customers */
+  vcId?: string;
+  /** lead id — present when the caller patches /api/leads */
+  leadId?: string;
+  pipelineId: string;
+  stageId: string;
+  stageName: string;
+  stageColor: string;
+}
+
+const STAGE_CHANGE_EVENT = 'sp:stage-change';
+
+export function dispatchStageChange(detail: StageChangeEvent): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent<StageChangeEvent>(STAGE_CHANGE_EVENT, { detail }));
+}
+
+export function onStageChange(
+  handler: (detail: StageChangeEvent) => void,
+): () => void {
+  if (typeof window === 'undefined') return () => {};
+  const listener = (e: Event) => handler((e as CustomEvent<StageChangeEvent>).detail);
+  window.addEventListener(STAGE_CHANGE_EVENT, listener);
+  return () => window.removeEventListener(STAGE_CHANGE_EVENT, listener);
+}
+
 /** Capitalize the first letter of each word in a name string. */
 export function toTitleCase(str: string | null | undefined): string {
   if (!str) return '';
