@@ -343,7 +343,7 @@ export default function SettingsPage() {
  </span>
  </div>
 
- {/* Contact import — copy GHL contacts into our DB so they're never lost. */}
+ {/* Contact sync — mirror GHL contacts into our DB so they're never lost. */}
  <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
  <div className="flex items-start justify-between gap-4 flex-wrap">
  <div className="flex items-start gap-3 min-w-0 flex-1">
@@ -351,11 +351,10 @@ export default function SettingsPage() {
  <Users size={16} className="text-gray-500" />
  </div>
  <div className="min-w-0">
- <p className="text-sm font-medium text-gray-900">Sync GHL Contacts</p>
+ <p className="text-sm font-medium text-gray-900">Contact Sync</p>
  <p className="mt-0.5 text-xs text-gray-500 leading-relaxed">
- Pulls every contact from your GHL sub-account into StoryVenue so you keep them
- even if you disconnect or cancel GHL. Runs automatically every hour; click below
- to import on demand.
+ Syncs all contacts from GHL into StoryVenue. Auto-syncs every hour — or click
+ the button to sync now.
  </p>
  {venue.ghl_contacts_synced_at && (
  <p className="mt-1.5 text-[11px] text-gray-400">
@@ -373,7 +372,7 @@ export default function SettingsPage() {
  className="shrink-0 inline-flex items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
  >
  {syncingContacts ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
- {syncingContacts ? 'Importing…' : 'Import contacts now'}
+ {syncingContacts ? 'Syncing…' : 'Sync contacts from GHL'}
  </button>
  </div>
 
