@@ -1050,7 +1050,7 @@ export default function ConversationsPage() {
                       selectedId === t.thread_id ? 'bg-white border-l-[3px] border-l-neutral-900' : '',
                     )}
                   >
-                    <div className="group/row flex items-center justify-between gap-2">
+                    <div className="flex items-center justify-between gap-2">
                       <span className={classNames('min-w-0 truncate text-sm font-semibold', unread ? 'text-gray-900' : 'text-gray-700')}>
                         {name}
                       </span>
@@ -1072,66 +1072,58 @@ export default function ConversationsPage() {
                         >
                           <Pin size={15} className={t.has_pinned ? 'text-sky-600' : ''} />
                         </button>
-                        {/* Hover-revealed: mark read/unread + delete */}
-                        <span className="hidden group-hover/row:flex items-center gap-0.5">
-                          {unread ? (
-                            <button
-                              type="button"
-                              title="Mark as read"
-                              onClick={(e) => void markThreadRead(t.thread_id, e)}
-                              className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-emerald-600"
-                            >
-                              <MailCheck size={14} />
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              title="Mark as unread"
-                              onClick={(e) => void markThreadUnread(t.thread_id, e)}
-                              className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-blue-600"
-                            >
-                              <MailOpen size={14} />
-                            </button>
-                          )}
-                          {confirmDeleteId === t.thread_id ? (
-                            <span className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
-                              <button
-                                type="button"
-                                title="Confirm delete"
-                                onClick={(e) => { e.stopPropagation(); void deleteThread(t.thread_id); }}
-                                className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-white bg-red-600 hover:bg-red-700"
-                              >
-                                Delete
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(null); }}
-                                className="rounded p-1 text-gray-400 hover:bg-gray-100"
-                              >
-                                <X size={12} />
-                              </button>
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              title="Delete conversation"
-                              onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(t.thread_id); }}
-                              className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-red-600"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          )}
-                        </span>
-                        {/* Unread badge (only when not hovered) */}
+                        {/* Always-visible: mark read/unread + delete */}
                         {unread ? (
-                          <span className="flex items-center gap-1 pl-0.5 group-hover/row:hidden">
-                            {unreadN > 1 ? (
-                              <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white tabular-nums">
-                                {unreadN > 99 ? '99+' : unreadN}
-                              </span>
-                            ) : (
-                              <span className="h-2 w-2 rounded-full bg-red-500" />
-                            )}
+                          <button
+                            type="button"
+                            title="Mark as read"
+                            onClick={(e) => void markThreadRead(t.thread_id, e)}
+                            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-emerald-600"
+                          >
+                            <MailCheck size={14} />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            title="Mark as unread"
+                            onClick={(e) => void markThreadUnread(t.thread_id, e)}
+                            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-blue-600"
+                          >
+                            <MailOpen size={14} />
+                          </button>
+                        )}
+                        {confirmDeleteId === t.thread_id ? (
+                          <span className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              title="Confirm delete"
+                              onClick={(e) => { e.stopPropagation(); void deleteThread(t.thread_id); }}
+                              className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-white bg-red-600 hover:bg-red-700"
+                            >
+                              Delete
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(null); }}
+                              className="rounded p-1 text-gray-400 hover:bg-gray-100"
+                            >
+                              <X size={12} />
+                            </button>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            title="Delete conversation"
+                            onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(t.thread_id); }}
+                            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-red-600"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                        {/* Unread count badge */}
+                        {unread && unreadN > 1 ? (
+                          <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white tabular-nums">
+                            {unreadN > 99 ? '99+' : unreadN}
                           </span>
                         ) : null}
                       </span>
