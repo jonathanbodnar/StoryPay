@@ -145,6 +145,7 @@ export default function ConversationsPage() {
   const [listActionError, setListActionError] = useState('');
   const listRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
   const composerFileRef = useRef<HTMLInputElement>(null);
   const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
   const deepLinkConsumed = useRef(false);
@@ -302,16 +303,29 @@ export default function ConversationsPage() {
     void reloadMessages(selectedId);
   }, [selectedId, reloadMessages]);
 
-  // Auto-scroll to newest message whenever messages change. Using
-  // requestAnimationFrame ensures the DOM has painted the new rows before
-  // we scroll, otherwise scrollIntoView lands on the previous bottom.
+  // Auto-scroll to newest message. Sets scrollTop directly on the container
+  // (more reliable than scrollIntoView, which can land short when the layout
+  // is resizing — e.g. composer collapsing after a send). Fires on:
+  //   • messages array change (new inbound or outbound)
+  //   • composer collapse/expand (changes container height)
+  //   • thread switch
+  //
+  // Uses double-rAF: first frame waits for React commit, second waits for
+  // browser layout/paint of any container resize, then scrolls.
   useEffect(() => {
     if (!selectedId) return;
-    const id = requestAnimationFrame(() => {
-      bottomRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        const el = messagesScrollRef.current;
+        if (el) el.scrollTop = el.scrollHeight;
+      });
     });
-    return () => cancelAnimationFrame(id);
-  }, [messages, selectedId]);
+    return () => {
+      cancelAnimationFrame(raf1);
+      if (raf2) cancelAnimationFrame(raf2);
+    };
+  }, [messages, selectedId, composerExpanded]);
 
   // Background poll — silently fetch new messages every 5 s. For SMS threads
   // we hit the full endpoint (no nosync) so the GHL→DB sync runs server-side
@@ -952,6 +966,7 @@ export default function ConversationsPage() {
               ) : null}
 
               <div
+                ref={messagesScrollRef}
                 className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 sm:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               >
                 {loadingThread ? (
