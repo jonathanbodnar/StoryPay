@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Loader2, Save, CheckCircle2, User, CreditCard,
-  ShieldCheck, Phone, ArrowRight,
+  ShieldCheck, Mail, Phone, ArrowRight,
   BadgeCheck, AlertCircle, Download, Trash2, AlertTriangle,
   KeyRound, Eye, EyeOff, AtSign,
 } from 'lucide-react';
