@@ -10,7 +10,6 @@ import {
 import { describeRule, type RecurrenceRule } from '@/lib/recurrence';
 import { toTitleCase } from '@/lib/utils';
 import { formatInTimeZone, toDate } from 'date-fns-tz';
-import { TimezoneSelect } from '@/components/TimezoneSelect';
 import {
   addCalendarDaysYmd,
   dateStrInTimeZone,
@@ -196,6 +195,12 @@ export default function CalendarPage() {
   const [saving,       setSaving]       = useState(false);
   const [saveError,    setSaveError]    = useState('');
   const [conflicts,    setConflicts]    = useState<ConflictInfo[]>([]);
+
+  // Default/Custom time slot toggle in create modal
+  const [timeMode, setTimeMode]         = useState<'default' | 'custom'>('default');
+  const [availSlots, setAvailSlots]     = useState<{ time: string; label: string; available: boolean }[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState('');
 
   // Detail modal
   const [selectedEvent, setSelectedEvent] = useState<CalEvent | null>(null);
@@ -658,6 +663,9 @@ export default function CalendarPage() {
     if (time)    { f.start_time = time; f.end_time = `${String(Math.min(23, parseInt(time) + 1)).padStart(2, '0')}:00`; }
     setEditingId(null);
     setForm(f);
+    setTimeMode('default');
+    setAvailSlots([]);
+    setSelectedSlot('');
     setContactQuery('');
     setContactResults([]);
     setContactDropdownOpen(false);
@@ -666,6 +674,31 @@ export default function CalendarPage() {
     setConflicts([]);
     setSaveError('');
     setShowModal(true);
+    // Fetch availability slots for the given date
+    if (dateStr) fetchSlots(dateStr);
+  }
+
+  function fetchSlots(dateStr: string) {
+    setLoadingSlots(true);
+    setAvailSlots([]);
+    fetch(`/api/calendar/slots?date=${dateStr}`, { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => {
+        if (d?.slots) {
+          setAvailSlots(d.slots);
+          const first = d.slots.find((s: { available: boolean }) => s.available);
+          if (first) {
+            setSelectedSlot(first.time);
+            setForm((f) => {
+              const [h, m] = first.time.split(':').map(Number);
+              const endH = Math.min(23, h + 1);
+              return { ...f, start_time: first.time, end_time: `${String(endH).padStart(2,'0')}:${String(m).padStart(2,'0')}` };
+            });
+          }
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingSlots(false));
   }
 
   // Open the modal in Edit mode, pre-populated from an existing event. We
@@ -872,15 +905,6 @@ export default function CalendarPage() {
             <button onClick={next} className="rounded-lg border border-gray-200 p-2 hover:bg-gray-50 transition-colors"><ChevronRight size={16} /></button>
             <button onClick={goToday}
               className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">Today</button>
-            <div className="flex items-center gap-2 min-w-0" data-noprint="">
-              <label htmlFor="cal-tz" className="text-[11px] text-gray-500 whitespace-nowrap shrink-0">Time zone</label>
-              <TimezoneSelect
-                id="cal-tz"
-                value={venueTz}
-                onChange={patchVenueTimezone}
-                className="min-w-[180px] max-w-[min(100%,240px)] rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-[11px] text-gray-700 focus:border-gray-400 focus:outline-none"
-              />
-            </div>
           </div>
           <div className="flex rounded-xl border border-gray-200 overflow-hidden" data-noprint="">
             {(['month','week','day','revenue'] as CalView[]).map((v, i) => (
@@ -1299,13 +1323,15 @@ export default function CalendarPage() {
                 <div>
                   <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Start Date *</label>
                   <input type="date" value={form.date}
-                    onChange={e => setForm(p => ({
-                      ...p,
-                      date: e.target.value,
-                      // Snap end date forward if the new start is after it,
-                      // and also auto-fill end_date on first pick.
-                      end_date: (!p.end_date || p.end_date < e.target.value) ? e.target.value : p.end_date,
-                    }))}
+                    onChange={e => {
+                      const d = e.target.value;
+                      setForm(p => ({
+                        ...p,
+                        date: d,
+                        end_date: (!p.end_date || p.end_date < d) ? d : p.end_date,
+                      }));
+                      if (timeMode === 'default' && !editingId) fetchSlots(d);
+                    }}
                     className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
                 </div>
                 <div>
@@ -1329,17 +1355,85 @@ export default function CalendarPage() {
                 <label htmlFor="allday" className="text-sm text-gray-700">All day</label>
               </div>
               {!form.all_day && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Start Time</label>
-                    <input type="time" value={form.start_time} onChange={e => setForm(p => ({ ...p, start_time: e.target.value }))}
-                      className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">End Time</label>
-                    <input type="time" value={form.end_time} onChange={e => setForm(p => ({ ...p, end_time: e.target.value }))}
-                      className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
-                  </div>
+                <div className="space-y-3">
+                  {/* Default / Custom toggle */}
+                  {!editingId && (
+                    <div className="flex rounded-lg border border-gray-200 overflow-hidden w-fit">
+                      {(['default','custom'] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => {
+                            setTimeMode(mode);
+                            if (mode === 'default' && form.date && availSlots.length === 0) {
+                              fetchSlots(form.date);
+                            }
+                          }}
+                          className={`px-4 py-1.5 text-xs font-medium transition-colors capitalize ${timeMode === mode ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                        >
+                          {mode}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {timeMode === 'default' && !editingId ? (
+                    // Show available slots from availability settings
+                    <div>
+                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Available Slot</label>
+                      {loadingSlots ? (
+                        <div className="flex items-center gap-2 text-sm text-gray-400">
+                          <Loader2 size={13} className="animate-spin" /> Loading available times…
+                        </div>
+                      ) : availSlots.length === 0 ? (
+                        <p className="text-xs text-gray-400">
+                          {form.date ? 'No available slots — this day may be marked unavailable in Calendar Settings.' : 'Pick a date to see available slots.'}
+                        </p>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          {availSlots.map((slot) => (
+                            <button
+                              key={slot.time}
+                              type="button"
+                              disabled={!slot.available}
+                              onClick={() => {
+                                setSelectedSlot(slot.time);
+                                const [h, m] = slot.time.split(':').map(Number);
+                                const endH = Math.min(23, h + 1);
+                                setForm((f) => ({ ...f, start_time: slot.time, end_time: `${String(endH).padStart(2,'0')}:${String(m).padStart(2,'0')}` }));
+                              }}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                                !slot.available
+                                  ? 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed line-through'
+                                  : selectedSlot === slot.time
+                                  ? 'border-gray-900 bg-gray-900 text-white'
+                                  : 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'
+                              }`}
+                            >
+                              {slot.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <p className="mt-1.5 text-[10px] text-gray-400">
+                        Based on your <a href="/dashboard/settings/calendar?tab=availability" target="_blank" className="underline hover:text-gray-600">availability settings</a>. Greyed slots are already booked.
+                      </p>
+                    </div>
+                  ) : (
+                    // Custom time pickers
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Start Time</label>
+                        <input type="time" value={form.start_time} onChange={e => setForm(p => ({ ...p, start_time: e.target.value }))}
+                          className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">End Time</label>
+                        <input type="time" value={form.end_time} onChange={e => setForm(p => ({ ...p, end_time: e.target.value }))}
+                          className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

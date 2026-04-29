@@ -47,21 +47,48 @@ export async function GET(req: NextRequest) {
 
     const tokenExpiry = new Date(Date.now() + (expires_in ?? 3600) * 1000).toISOString();
 
-    // Save to venue_calendar_settings
-    await supabaseAdmin
+    // Ensure the row exists first (GET /api/calendar/settings auto-creates it,
+    // but the user may have jumped straight to OAuth without visiting General tab)
+    const { data: existing } = await supabaseAdmin
       .from('venue_calendar_settings')
-      .upsert(
-        {
-          venue_id: venueId,
+      .select('id')
+      .eq('venue_id', venueId)
+      .maybeSingle();
+
+    let saveError;
+    if (existing) {
+      const { error } = await supabaseAdmin
+        .from('venue_calendar_settings')
+        .update({
           google_connected: true,
           google_account_email: accountEmail,
           google_access_token: access_token,
           google_refresh_token: refresh_token ?? null,
           google_token_expiry: tokenExpiry,
           updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'venue_id' }
+        })
+        .eq('venue_id', venueId);
+      saveError = error;
+    } else {
+      const { error } = await supabaseAdmin
+        .from('venue_calendar_settings')
+        .insert({
+          venue_id: venueId,
+          google_connected: true,
+          google_account_email: accountEmail,
+          google_access_token: access_token,
+          google_refresh_token: refresh_token ?? null,
+          google_token_expiry: tokenExpiry,
+        });
+      saveError = error;
+    }
+
+    if (saveError) {
+      console.error('[google/callback] DB save error:', saveError.message);
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings/calendar?tab=connections&error=db_failed`
       );
+    }
 
     return NextResponse.redirect(
       `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings/calendar?tab=connections&connected=1`

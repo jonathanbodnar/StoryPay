@@ -27,6 +27,8 @@ interface CalendarSettings {
 }
 
 interface AvailRow {
+  id?: string;
+  venue_id?: string;
   day_of_week: number;
   is_available: boolean;
   start_time: string;
@@ -71,7 +73,7 @@ interface NotifRow {
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-const TIMEZONES = [
+const TIMEZONE_LIST = [
   'America/New_York',
   'America/Chicago',
   'America/Denver',
@@ -81,15 +83,54 @@ const TIMEZONES = [
   'Pacific/Honolulu',
   'America/Toronto',
   'America/Vancouver',
+  'America/Sao_Paulo',
   'Europe/London',
   'Europe/Paris',
   'Europe/Berlin',
+  'Europe/Madrid',
+  'Europe/Rome',
+  'Europe/Amsterdam',
+  'Africa/Lagos',
+  'Asia/Dubai',
+  'Asia/Kolkata',
+  'Asia/Bangkok',
+  'Asia/Singapore',
   'Asia/Tokyo',
   'Asia/Shanghai',
-  'Asia/Kolkata',
   'Australia/Sydney',
+  'Australia/Melbourne',
   'Pacific/Auckland',
+  'Pacific/Honolulu',
 ];
+
+function tzLabel(tz: string): string {
+  try {
+    const now = new Date();
+    const fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      timeZoneName: 'short',
+    });
+    const parts = fmt.formatToParts(now);
+    const abbr = parts.find((p) => p.type === 'timeZoneName')?.value ?? '';
+    const offsetMs = -new Date(now.toLocaleString('en-US', { timeZone: tz })).getTime()
+      + now.getTime();
+    // Use Intl offset trick
+    const offsetMin = (new Date().getTimezoneOffset()) - (new Date(
+      new Date().toLocaleString('en-US', { timeZone: tz })
+    ).getTime() - new Date().getTime()) / 60000;
+    void offsetMs; void offsetMin;
+    // Simpler: extract from shortOffset
+    const fmtOffset = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      timeZoneName: 'shortOffset',
+    });
+    const offsetStr = fmtOffset.formatToParts(now).find((p) => p.type === 'timeZoneName')?.value ?? '';
+    const city = tz.split('/').pop()?.replace(/_/g, ' ') ?? tz;
+    return `${offsetStr} ${city} (${abbr})`;
+  } catch {
+    return tz;
+  }
+}
 
 const NOTIF_TYPES = [
   { type: 'booked_unconfirmed', label: 'Appointment Booked (Unconfirmed)', desc: 'Notifies when an appointment is booked with an unconfirmed status.' },
@@ -226,8 +267,8 @@ function GeneralTab() {
             onChange={(e) => setSettings((s) => ({ ...s, timezone: e.target.value }))}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
           >
-            {TIMEZONES.map((tz) => (
-              <option key={tz} value={tz}>{tz.replace('_', ' ')}</option>
+            {TIMEZONE_LIST.map((tz) => (
+              <option key={tz} value={tz}>{tzLabel(tz)}</option>
             ))}
           </select>
         </div>
@@ -270,13 +311,14 @@ function ConnectionsTab() {
   const errorMsg = searchParams.get('error');
 
   const loadSettings = useCallback(() => {
-    fetch('/api/calendar/settings')
+    fetch('/api/calendar/settings', { cache: 'no-store' })
       .then((r) => r.json())
       .then((d) => {
         setSettings(d);
         setLinkedCalId(d.google_linked_calendar_id ?? '');
         setLoading(false);
-      });
+      })
+      .catch(() => setLoading(false));
   }, []);
 
   const loadConflictCals = useCallback(() => {
@@ -439,66 +481,49 @@ function ConnectionsTab() {
       {settings.google_connected && (
         <Card
           title="Conflict Calendars"
-          description="Add additional calendars to check when determining availability. Events on these calendars will block time slots."
+          description="Check the calendars below to prevent double bookings. Events on checked calendars will block your available time slots."
         >
-          {conflictCals.length > 0 && (
-            <div className="space-y-2 mb-4">
-              {conflictCals.map((cc) => (
-                <div key={cc.id} className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded bg-white border border-gray-200 flex items-center justify-center">
-                      <GoogleCalIcon size={14} />
+          {loadingCals ? (
+            <div className="flex items-center gap-2 text-sm text-gray-400">
+              <Loader2 size={14} className="animate-spin" /> Loading your Google Calendars…
+            </div>
+          ) : googleCals.length === 0 ? (
+            <div className="text-center py-4">
+              <p className="text-sm text-gray-400">No Google Calendars found.</p>
+              <button onClick={loadGoogleCals} className="mt-2 text-xs text-blue-600 hover:underline flex items-center gap-1 mx-auto">
+                <RefreshCw size={11} /> Retry
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {googleCals.map((cal) => {
+                const conflictRow = conflictCals.find((c) => c.google_calendar_id === cal.id);
+                const isChecked = !!conflictRow;
+                return (
+                  <label key={cal.id} className="flex items-center gap-3 rounded-lg border border-gray-200 px-3 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => isChecked ? removeConflictCal(conflictRow!.id) : addConflictCal(cal)}
+                      className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-900"
+                    />
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <GoogleCalIcon size={16} />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{cal.name}{cal.primary ? ' (Primary)' : ''}</p>
+                        <p className="text-xs text-gray-400">{settings.google_account_email}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{cc.calendar_name ?? cc.google_calendar_id}</p>
-                      {cc.account_email && <p className="text-xs text-gray-500">{cc.account_email}</p>}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => removeConflictCal(cc.id)}
-                    className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ))}
+                    {isChecked && (
+                      <span className="text-xs text-green-600 font-medium shrink-0 flex items-center gap-1">
+                        <Check size={11} /> Blocking
+                      </span>
+                    )}
+                  </label>
+                );
+              })}
             </div>
           )}
-
-          <div>
-            <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Add from connected calendars</p>
-            {loadingCals ? (
-              <div className="text-sm text-gray-400">Loading…</div>
-            ) : googleCals.length === 0 ? (
-              <p className="text-sm text-gray-400">No Google Calendars found.</p>
-            ) : (
-              <div className="space-y-1">
-                {googleCals.map((cal) => {
-                  const added = conflictCals.some((c) => c.google_calendar_id === cal.id);
-                  return (
-                    <div key={cal.id} className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2">
-                      <div className="flex items-center gap-2">
-                        <GoogleCalIcon size={14} />
-                        <span className="text-sm text-gray-700">{cal.name}{cal.primary ? ' (Primary)' : ''}</span>
-                      </div>
-                      {added ? (
-                        <span className="text-xs text-green-600 font-medium flex items-center gap-1">
-                          <Check size={12} /> Added
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => addConflictCal(cal)}
-                          className="text-xs text-blue-600 hover:text-blue-700 font-medium"
-                        >
-                          + Add
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
         </Card>
       )}
     </div>
@@ -516,13 +541,41 @@ function AvailabilityTab() {
   const [showAddOverride, setShowAddOverride] = useState(false);
   const [newOverride, setNewOverride] = useState({ date: '', is_available: false, start_time: '09:00', end_time: '17:00', label: '' });
 
+  const defaultAvail = (): AvailRow[] =>
+    Array.from({ length: 7 }, (_, i) => ({
+      id: `default-${i}`,
+      venue_id: '',
+      day_of_week: i,
+      is_available: i >= 1 && i <= 5,
+      start_time: '09:00:00',
+      end_time: '17:00:00',
+    }));
+
   const loadData = useCallback(() => {
     Promise.all([
-      fetch('/api/calendar/availability').then((r) => r.json()),
+      fetch('/api/calendar/availability', { cache: 'no-store' }).then((r) => r.json()),
       fetch('/api/calendar/date-overrides').then((r) => r.json()),
     ]).then(([a, o]) => {
-      setAvail(Array.isArray(a) ? a : []);
+      const rows: AvailRow[] = Array.isArray(a) ? a : [];
+      // If we got fewer than 7 rows, fill missing days with defaults
+      if (rows.length < 7) {
+        const existing = new Set(rows.map((r) => r.day_of_week));
+        const missing = Array.from({ length: 7 }, (_, i) => i).filter((i) => !existing.has(i));
+        missing.forEach((i) => rows.push({
+          id: `default-${i}`,
+          venue_id: '',
+          day_of_week: i,
+          is_available: i >= 1 && i <= 5,
+          start_time: '09:00:00',
+          end_time: '17:00:00',
+        }));
+        rows.sort((a, b) => a.day_of_week - b.day_of_week);
+      }
+      setAvail(rows);
       setOverrides(Array.isArray(o) ? o : []);
+      setLoading(false);
+    }).catch(() => {
+      setAvail(defaultAvail());
       setLoading(false);
     });
   }, []);

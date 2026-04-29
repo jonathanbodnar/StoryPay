@@ -26,8 +26,11 @@ export async function GET() {
   }
 
   // Don't expose raw tokens to client
-  const safe = { ...data, google_access_token: undefined, google_refresh_token: undefined };
-  return NextResponse.json(safe);
+  const { google_access_token: _at, google_refresh_token: _rt, ...safe } = data;
+  void _at; void _rt;
+  return NextResponse.json(safe, {
+    headers: { 'Cache-Control': 'no-store, max-age=0' },
+  });
 }
 
 export async function PUT(req: NextRequest) {
@@ -48,6 +51,7 @@ export async function PUT(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const result = { ...data, google_access_token: undefined, google_refresh_token: undefined };
+  const { google_access_token: _at2, google_refresh_token: _rt2, ...result } = data;
+  void _at2; void _rt2;
   return NextResponse.json(result);
 }

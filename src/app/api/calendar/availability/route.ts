@@ -14,22 +14,29 @@ export async function GET() {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // If no rows exist, seed defaults (Mon–Fri 9–5)
-  if (!data || data.length === 0) {
-    const defaults = Array.from({ length: 7 }, (_, i) => ({
-      venue_id: venueId,
-      day_of_week: i,
-      is_available: i >= 1 && i <= 5,
-      start_time: '09:00:00',
-      end_time: '17:00:00',
-    }));
-    const { data: seeded, error: seedErr } = await supabaseAdmin
-      .from('venue_availability')
-      .insert(defaults)
-      .select()
-      .order('day_of_week');
-    if (seedErr) return NextResponse.json({ error: seedErr.message }, { status: 500 });
-    return NextResponse.json(seeded);
+  // If fewer than 7 rows, seed/fill any missing days with defaults (Mon–Fri 9–5)
+  if (!data || data.length < 7) {
+    const existingDays = new Set((data ?? []).map((r: { day_of_week: number }) => r.day_of_week));
+    const missing = Array.from({ length: 7 }, (_, i) => i).filter((i) => !existingDays.has(i));
+    if (missing.length > 0) {
+      const defaults = missing.map((i) => ({
+        venue_id: venueId,
+        day_of_week: i,
+        is_available: i >= 1 && i <= 5,
+        start_time: '09:00:00',
+        end_time: '17:00:00',
+      }));
+      await supabaseAdmin
+        .from('venue_availability')
+        .upsert(defaults, { onConflict: 'venue_id,day_of_week' });
+      // Re-fetch after seeding
+      const { data: refetched } = await supabaseAdmin
+        .from('venue_availability')
+        .select('*')
+        .eq('venue_id', venueId)
+        .order('day_of_week');
+      return NextResponse.json(refetched ?? []);
+    }
   }
 
   return NextResponse.json(data);
