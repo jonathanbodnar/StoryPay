@@ -302,8 +302,8 @@ function VenueLoginForm() {
 
         <button
           type="submit"
-          disabled={loading || !email.trim()}
-          className="w-full flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={loading}
+          className="w-full flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60 hover:opacity-85"
           style={{ backgroundColor: '#1b1b1b' }}
         >
           {loading ? <Loader2 size={15} className="animate-spin" /> : null}
@@ -330,6 +330,12 @@ function CoupleLoginForm({
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const [forgotMode, setForgotMode] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotError, setForgotError] = useState('');
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
@@ -352,11 +358,84 @@ function CoupleLoginForm({
     }
   }
 
+  async function handleForgot(e: React.FormEvent) {
+    e.preventDefault();
+    setForgotLoading(true);
+    setForgotError('');
+    try {
+      const supabase = getCoupleSupabase();
+      const { error: resetErr } = await supabase.auth.resetPasswordForEmail(
+        forgotEmail.trim().toLowerCase(),
+        { redirectTo: `${window.location.origin}/couple/reset-password` },
+      );
+      if (resetErr) { setForgotError(resetErr.message); return; }
+      setForgotSent(true);
+    } catch {
+      setForgotError('Network error. Please try again.');
+    } finally {
+      setForgotLoading(false);
+    }
+  }
+
+  if (forgotMode) {
+    return forgotSent ? (
+      <div className="text-center">
+        <div className="text-4xl mb-4">📬</div>
+        <h2 className="text-lg font-bold text-gray-900 mb-2">Check your inbox</h2>
+        <p className="text-sm text-gray-500 leading-relaxed">
+          If <span className="font-medium text-gray-700">{forgotEmail}</span> is linked to an account, we sent a
+          password reset link.
+        </p>
+        <button
+          onClick={() => { setForgotMode(false); setForgotSent(false); setForgotEmail(''); }}
+          className="mt-5 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+        >
+          ← Back to Sign In
+        </button>
+      </div>
+    ) : (
+      <>
+        <button
+          onClick={() => setForgotMode(false)}
+          className="text-xs text-gray-400 hover:text-gray-600 mb-4 flex items-center gap-1 transition-colors"
+        >
+          ← Back
+        </button>
+        <h2 className="text-lg font-bold text-gray-900 mb-1">Forgot your password?</h2>
+        <p className="text-sm text-gray-500 mb-6">Enter your email and we&apos;ll send you a reset link.</p>
+        <form onSubmit={(e) => void handleForgot(e)} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
+            <input
+              type="email"
+              required
+              value={forgotEmail}
+              onChange={(e) => setForgotEmail(e.target.value)}
+              placeholder="you@example.com"
+              className={INPUT}
+              autoFocus
+            />
+          </div>
+          {forgotError && <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{forgotError}</p>}
+          <button
+            type="submit"
+            disabled={forgotLoading || !forgotEmail.trim()}
+            className="w-full flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold text-white transition-colors hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-60"
+            style={{ backgroundColor: '#1b1b1b' }}
+          >
+            {forgotLoading ? <Loader2 size={15} className="animate-spin" /> : null}
+            {forgotLoading ? 'Sending...' : 'Send Reset Link'}
+          </button>
+        </form>
+      </>
+    );
+  }
+
   return (
     <>
       <h1 className="text-xl font-bold text-gray-900 mb-1 text-center">Welcome back</h1>
       <p className="text-sm text-gray-500 mb-6 text-center">
-        Sign in to save venues and manage your wedding profile.
+        Sign in to save venues and manage<br />your wedding profile.
       </p>
 
       <form onSubmit={(e) => void onSubmit(e)} className="space-y-4">
@@ -396,22 +475,31 @@ function CoupleLoginForm({
           </div>
         </div>
 
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={rememberMe}
-            onChange={(e) => setRememberMe(e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-400"
-          />
-          <span className="text-sm text-gray-600">Keep me logged in</span>
-        </label>
+        <div className="flex items-center justify-between">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-400"
+            />
+            <span className="text-sm text-gray-600">Remember me</span>
+          </label>
+          <button
+            type="button"
+            onClick={() => { setForgotMode(true); setForgotEmail(email); }}
+            className="text-sm text-gray-500 hover:text-gray-800 transition-colors"
+          >
+            Forgot password?
+          </button>
+        </div>
 
         {error && <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
 
         <button
           type="submit"
           disabled={loading || !email.trim() || !password}
-          className="w-full flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold text-white transition-colors hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-60"
           style={{ backgroundColor: '#1b1b1b' }}
         >
           {loading ? <Loader2 size={15} className="animate-spin" /> : null}
