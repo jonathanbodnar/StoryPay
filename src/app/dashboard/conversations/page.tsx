@@ -58,6 +58,8 @@ interface ThreadDetail {
   venue_customer_id: string;
   external_reply_channel?: string;
   contact_stage?: { name: string; color: string | null } | null;
+  /** Authoritative DB stage_id — use this to highlight the correct pill. */
+  contact_stage_id?: string | null;
   venue_customers: {
     id: string;
     first_name: string;
@@ -343,11 +345,15 @@ export default function ConversationsPage() {
 
     // Keep the thread header stage in sync when the profile drawer (or any other
     // component) changes the stage for the currently-open contact.
-    return onStageChange(({ vcId, stageName, stageColor }) => {
+    return onStageChange(({ vcId, stageId, stageName, stageColor }) => {
       if (!vcId) return;
       setThreadDetail((prev) => {
         if (!prev || prev.venue_customer_id !== vcId) return prev;
-        return { ...prev, contact_stage: { name: stageName, color: stageColor } };
+        return {
+          ...prev,
+          contact_stage: { name: stageName, color: stageColor },
+          contact_stage_id: stageId,
+        };
       });
     });
   }, []);
@@ -426,6 +432,31 @@ export default function ConversationsPage() {
     }
     void reloadMessages(selectedId);
   }, [selectedId, reloadMessages]);
+
+  // Re-fetch the thread detail (incl. latest stage) when the user switches back
+  // to this browser tab from another tab/window where they may have changed the stage.
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState === 'visible' && selectedId) {
+        // Only refresh the thread detail (not messages) to avoid disrupting the chat.
+        fetch(`/api/conversations/threads/${selectedId}`, { cache: 'no-store' })
+          .then((r) => r.ok ? r.json() : null)
+          .then((raw) => {
+            if (!raw) return;
+            const vc = raw.venue_customers;
+            setThreadDetail((prev) => prev ? {
+              ...prev,
+              contact_stage: raw.contact_stage ?? prev.contact_stage,
+              contact_stage_id: raw.contact_stage_id ?? prev.contact_stage_id,
+              venue_customers: (Array.isArray(vc) ? vc[0] : vc) ?? prev.venue_customers,
+            } : prev);
+          })
+          .catch(() => {});
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [selectedId]);
 
   function isNearBottom(el: HTMLElement, threshold = 80) {
     return el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
@@ -784,7 +815,11 @@ export default function ConversationsPage() {
     if (res.ok) {
       const st = pipe.stages.find((s) => s.id === stageId);
       if (st && threadDetail) {
-        setThreadDetail((prev) => prev ? { ...prev, contact_stage: { name: st.name, color: st.color } } : prev);
+        setThreadDetail((prev) => prev ? {
+          ...prev,
+          contact_stage: { name: st.name, color: st.color },
+          contact_stage_id: stageId,
+        } : prev);
         dispatchStageChange({ vcId, pipelineId: pipe.id, stageId, stageName: st.name, stageColor: st.color });
       }
     }
@@ -1208,15 +1243,21 @@ export default function ConversationsPage() {
               {(() => {
                 const allStages = threadPipelines.flatMap((p) => p.stages.map((s) => ({...s, pipelineId: p.id})));
                 if (!allStages.length && !threadDetail.contact_stage?.name) return null;
+
+                // Use stage_id as the primary match (reliable); fall back to name comparison.
+                const activeId = threadDetail.contact_stage_id ?? null;
                 const activeName = threadDetail.contact_stage?.name?.toLowerCase().trim();
-                // Find the active stage by matching name when we have stages loaded
-                const activeStage = allStages.find((s) => s.name.toLowerCase().trim() === activeName);
+
                 return (
                   <div className="flex-shrink-0 border-b border-gray-100 px-3 py-2 sm:px-5">
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className="mr-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Stage</span>
                       {allStages.length > 0 ? allStages.map((st) => {
-                        const isActive = activeStage ? st.id === activeStage.id : st.name.toLowerCase().trim() === activeName;
+                        // ID match is authoritative; name match is fallback for legacy data.
+                        const isActive = activeId
+                          ? st.id === activeId
+                          : (activeName ? st.name.toLowerCase().trim() === activeName : false);
+                        const color = st.color || null;
                         return (
                           <button
                             key={st.id}
@@ -1227,11 +1268,11 @@ export default function ConversationsPage() {
                               'rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors disabled:opacity-50',
                               isActive ? '' : 'border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-700',
                             )}
-                            style={isActive ? {
-                              backgroundColor: `${st.color}22`,
-                              color: st.color,
-                              borderColor: `${st.color}55`,
-                            } : undefined}
+                            style={isActive && color ? {
+                              backgroundColor: `${color}22`,
+                              color,
+                              borderColor: `${color}55`,
+                            } : isActive ? { backgroundColor: '#f3f4f6', color: '#111827', borderColor: '#d1d5db' } : undefined}
                           >
                             {st.name}
                           </button>

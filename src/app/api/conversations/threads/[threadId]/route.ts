@@ -71,7 +71,7 @@ export async function GET(
   const { data: contact } = await supabaseAdmin
     .from('venue_customers')
     .select(
-      'id, first_name, last_name, customer_email, phone, sms_dnd, conversation_dnd_all, conversation_dnd_email, conversation_dnd_calls, conversation_dnd_inbound_sms, stage_id, pipeline_id, pipeline_stage',
+      'id, first_name, last_name, customer_email, phone, sms_dnd, conversation_dnd_all, conversation_dnd_email, conversation_dnd_calls, conversation_dnd_inbound_sms, stage_id, pipeline_id, pipeline_stage, conversation_dnd_inbound_sms',
     )
     .eq('id', thread.venue_customer_id)
     .eq('venue_id', venueId)
@@ -131,10 +131,32 @@ export async function GET(
     contact_stage = { name: humanizePipelineSlug(pipelineKey), color: null };
   }
 
+  // Resolve the authoritative stage_id: prefer venue_customers.stage_id,
+  // then fall back to the matched stage from leads/slug so the client always
+  // has an ID to highlight the correct pill without fragile name matching.
+  const resolvedStageId: string | null =
+    (c?.stage_id as string | null) ??
+    (contact_stage
+      ? await (async () => {
+          // Try to find the stage ID by name+pipelineId if we only have name
+          const pid = (c?.pipeline_id as string | null) ?? null;
+          if (!pid) return null;
+          const { data: st } = await supabaseAdmin
+            .from('lead_pipeline_stages')
+            .select('id')
+            .eq('venue_id', venueId)
+            .eq('pipeline_id', pid)
+            .ilike('name', contact_stage!.name)
+            .maybeSingle();
+          return (st as { id?: string } | null)?.id ?? null;
+        })()
+      : null);
+
   return NextResponse.json({
     ...thread,
     venue_customers: contact ?? null,
     contact_stage,
+    contact_stage_id: resolvedStageId,
   });
 }
 
