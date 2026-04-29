@@ -121,9 +121,14 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   const { error } = await supabaseAdmin.from('venues').delete().eq('id', venueId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Delete the Supabase Auth user so the email is freed for re-registration
+  // Delete the Supabase Auth user + profile so the email is freed for re-registration
   const ownerId = (venue as { owner_id?: string | null }).owner_id;
   if (ownerId) {
+    try {
+      await supabaseAdmin.from('profiles').delete().eq('id', ownerId);
+    } catch (e) {
+      console.warn('[admin/venues/delete] profile deletion failed (non-fatal):', e);
+    }
     try {
       await supabaseAdmin.auth.admin.deleteUser(ownerId);
     } catch (e) {

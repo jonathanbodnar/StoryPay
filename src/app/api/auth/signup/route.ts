@@ -68,9 +68,35 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { data: authCreate, error: authErr } = await supabaseAdmin.auth.admin.createUser({
+  // Clean up any orphan auth.users row that has this email but no venue —
+  // this happens when an account was deleted but the auth user wasn't
+  // (e.g. manual SQL cleanup, old delete code, or partial rollback).
+  // Without this cleanup, auth.admin.createUser fails with "already registered"
+  // and the user can never re-register with the same email.
+  try {
+    let page = 1;
+    let foundOrphan: string | null = null;
+    while (page <= 5 && !foundOrphan) {
+      const { data: list } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 200 });
+      const users = list?.users ?? [];
+      if (users.length === 0) break;
+      const match = users.find((u) => (u.email || '').toLowerCase() === email);
+      if (match) foundOrphan = match.id;
+      if (users.length < 200) break;
+      page += 1;
+    }
+    if (foundOrphan) {
+      console.warn('[signup] removing orphan auth user', foundOrphan, 'for', email);
+      await supabaseAdmin.auth.admin.deleteUser(foundOrphan);
+    }
+  } catch (e) {
+    console.warn('[signup] orphan cleanup failed (non-fatal):', e);
+  }
+
+  let { data: authCreate, error: authErr } = await supabaseAdmin.auth.admin.createUser({
     email,
     email_confirm: true,
+    password,
     user_metadata: {
       full_name:  fullName,
       first_name: firstName,
@@ -78,6 +104,45 @@ export async function POST(request: NextRequest) {
       source:     'signup',
     },
   });
+
+  // Last-resort recovery: if Supabase still says "already registered" even
+  // though we have no venue with that email, look up the orphan via
+  // getUserByEmail-style listing and delete it, then retry once.
+  if (authErr && /already.*registered|already.*exists/i.test(authErr.message ?? '')) {
+    try {
+      let recovered = false;
+      let page = 1;
+      while (page <= 10 && !recovered) {
+        const { data: list } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 1000 });
+        const users = list?.users ?? [];
+        if (users.length === 0) break;
+        const match = users.find((u) => (u.email || '').toLowerCase() === email);
+        if (match) {
+          await supabaseAdmin.auth.admin.deleteUser(match.id);
+          recovered = true;
+        }
+        if (users.length < 1000) break;
+        page += 1;
+      }
+      if (recovered) {
+        const retry = await supabaseAdmin.auth.admin.createUser({
+          email,
+          email_confirm: true,
+          password,
+          user_metadata: {
+            full_name:  fullName,
+            first_name: firstName,
+            last_name:  lastName,
+            source:     'signup-retry',
+          },
+        });
+        authCreate = retry.data;
+        authErr = retry.error;
+      }
+    } catch (e) {
+      console.error('[signup] orphan recovery failed:', e);
+    }
+  }
 
   if (authErr || !authCreate?.user) {
     console.error('[signup] auth.admin.createUser failed:', authErr);
