@@ -151,6 +151,94 @@ async function enrichThreadsWithStarPinFlags<T extends { thread_id: string }>(
   });
 }
 
+/** Batch-attach contact_stage + contact_stage_id to every row in one trip.
+ *
+ *  - Resolves stage via the same chain as the profile page:
+ *    venue_customers.stage_id  →  most-recent leads.stage_id (by email)
+ *  - All four queries are batched with `.in()` so this stays cheap even at 120 rows.
+ */
+async function enrichWithStages<T extends { thread_id: string; venue_customer_id?: string | null }>(
+  rows: T[],
+  venueId: string,
+): Promise<(T & { contact_stage: { name: string; color: string | null } | null; contact_stage_id: string | null })[]> {
+  if (rows.length === 0) return rows.map((r) => ({ ...r, contact_stage: null, contact_stage_id: null }));
+
+  const vcIds = [...new Set(rows.map((r) => r.venue_customer_id).filter((x): x is string => !!x))];
+  if (vcIds.length === 0) return rows.map((r) => ({ ...r, contact_stage: null, contact_stage_id: null }));
+
+  // 1) Pull all venue_customers (id → email + stage_id) in one query.
+  const { data: vcRows } = await supabaseAdmin
+    .from('venue_customers')
+    .select('id, customer_email, stage_id')
+    .eq('venue_id', venueId)
+    .in('id', vcIds);
+
+  type VcRow = { id: string; customer_email: string | null; stage_id: string | null };
+  const vcMap = new Map<string, VcRow>(
+    (vcRows ?? []).map((v) => [
+      (v as VcRow).id,
+      { id: (v as VcRow).id, customer_email: (v as VcRow).customer_email, stage_id: (v as VcRow).stage_id },
+    ]),
+  );
+
+  // 2) Collect emails of contacts that don't already have a stage_id.
+  const emailsNeedingLead = [
+    ...new Set(
+      [...vcMap.values()]
+        .filter((v) => !v.stage_id && v.customer_email)
+        .map((v) => v.customer_email!.toLowerCase().trim())
+        .filter(Boolean),
+    ),
+  ];
+
+  // 3) Look up the most-recent lead per email (one query, sort+dedupe in JS).
+  const emailToStageId = new Map<string, string>();
+  if (emailsNeedingLead.length > 0) {
+    const { data: leads } = await supabaseAdmin
+      .from('leads')
+      .select('email, stage_id, updated_at')
+      .eq('venue_id', venueId)
+      .in('email', emailsNeedingLead)
+      .order('updated_at', { ascending: false });
+    for (const l of (leads ?? []) as { email: string | null; stage_id: string | null }[]) {
+      const k = (l.email ?? '').toLowerCase().trim();
+      if (!k || !l.stage_id) continue;
+      if (!emailToStageId.has(k)) emailToStageId.set(k, l.stage_id);
+    }
+  }
+
+  // 4) Build vcId → stageId map (vc.stage_id beats lead.stage_id).
+  const vcToStageId = new Map<string, string>();
+  for (const v of vcMap.values()) {
+    if (v.stage_id) {
+      vcToStageId.set(v.id, v.stage_id);
+    } else if (v.customer_email) {
+      const sid = emailToStageId.get(v.customer_email.toLowerCase().trim());
+      if (sid) vcToStageId.set(v.id, sid);
+    }
+  }
+
+  // 5) Resolve all stage names+colors in one query.
+  const stageIds = [...new Set(vcToStageId.values())];
+  const stageMap = new Map<string, { name: string; color: string | null }>();
+  if (stageIds.length > 0) {
+    const { data: stages } = await supabaseAdmin
+      .from('lead_pipeline_stages')
+      .select('id, name, color')
+      .eq('venue_id', venueId)
+      .in('id', stageIds);
+    for (const s of (stages ?? []) as { id: string; name: string; color: string | null }[]) {
+      stageMap.set(s.id, { name: s.name, color: s.color ?? null });
+    }
+  }
+
+  return rows.map((r) => {
+    const sid = r.venue_customer_id ? vcToStageId.get(r.venue_customer_id) ?? null : null;
+    const stage = sid ? stageMap.get(sid) ?? null : null;
+    return { ...r, contact_stage: stage, contact_stage_id: sid };
+  });
+}
+
 /** Pinned threads first; then by last activity (newest first). */
 function sortThreadsPinnedFirst<
   T extends { has_pinned?: boolean; last_message_at?: string | null },
@@ -201,10 +289,11 @@ export async function GET(request: NextRequest) {
       rows = rows.filter((r) => ok.has(r.thread_id));
     }
     const enriched = sortThreadsPinnedFirst(await enrichThreadsWithStarPinFlags(rows, venueId));
-    return NextResponse.json(enriched);
+    const withStages = await enrichWithStages(enriched, venueId);
+    return NextResponse.json(withStages);
   }
 
-  let rows = (data ?? []) as { thread_id: string; last_message_at?: string }[];
+  let rows = (data ?? []) as { thread_id: string; venue_customer_id?: string | null; last_message_at?: string }[];
   if (starredOnly) {
     const ok = await threadIdsWithThreadColumn(venueId, 'is_starred');
     rows = rows.filter((r) => ok.has(r.thread_id));
@@ -214,7 +303,8 @@ export async function GET(request: NextRequest) {
     rows = rows.filter((r) => ok.has(r.thread_id));
   }
   const enriched = sortThreadsPinnedFirst(await enrichThreadsWithStarPinFlags(rows, venueId));
-  return NextResponse.json(enriched);
+  const withStages = await enrichWithStages(enriched, venueId);
+  return NextResponse.json(withStages);
 }
 
 export async function POST(request: NextRequest) {

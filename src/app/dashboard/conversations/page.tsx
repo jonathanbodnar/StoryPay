@@ -49,6 +49,8 @@ interface ThreadRow {
   venue_customer_id: string;
   has_starred?: boolean;
   has_pinned?: boolean;
+  contact_stage?: { name: string; color: string | null } | null;
+  contact_stage_id?: string | null;
 }
 
 interface ThreadDetail {
@@ -343,8 +345,8 @@ export default function ConversationsPage() {
       .then((d) => { if (Array.isArray(d)) setTeamContacts(d); })
       .catch(() => {});
 
-    // Keep the thread header stage in sync when the profile drawer (or any other
-    // component) changes the stage for the currently-open contact.
+    // Keep the thread header AND the left-list stage badge in sync when the
+    // profile drawer (or any other component) changes the stage.
     return onStageChange(({ vcId, stageId, stageName, stageColor }) => {
       if (!vcId) return;
       setThreadDetail((prev) => {
@@ -355,6 +357,13 @@ export default function ConversationsPage() {
           contact_stage_id: stageId,
         };
       });
+      setThreads((prev) =>
+        prev.map((t) =>
+          t.venue_customer_id === vcId
+            ? { ...t, contact_stage: { name: stageName, color: stageColor }, contact_stage_id: stageId }
+            : t,
+        ),
+      );
     });
   }, []);
 
@@ -433,12 +442,15 @@ export default function ConversationsPage() {
     void reloadMessages(selectedId);
   }, [selectedId, reloadMessages]);
 
-  // Re-fetch the thread detail (incl. latest stage) when the user switches back
-  // to this browser tab from another tab/window where they may have changed the stage.
+  // Re-fetch the thread detail + threads list (incl. latest stages) when the user
+  // switches back to this browser tab after changing a stage elsewhere.
   useEffect(() => {
     function onVisible() {
-      if (document.visibilityState === 'visible' && selectedId) {
-        // Only refresh the thread detail (not messages) to avoid disrupting the chat.
+      if (document.visibilityState !== 'visible') return;
+      // Refresh the threads list so left-pane stage badges stay current.
+      void loadThreads();
+      // Refresh the open thread's stage info without disrupting the chat.
+      if (selectedId) {
         fetch(`/api/conversations/threads/${selectedId}`, { cache: 'no-store' })
           .then((r) => r.ok ? r.json() : null)
           .then((raw) => {
@@ -456,7 +468,7 @@ export default function ConversationsPage() {
     }
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [selectedId]);
+  }, [selectedId, loadThreads]);
 
   function isNearBottom(el: HTMLElement, threshold = 80) {
     return el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
@@ -791,15 +803,16 @@ export default function ConversationsPage() {
     if (selectedId === threadId) await reloadMessages(threadId);
   }
 
-  // Load pipelines once when a thread is opened (lazy — no blocking effect).
+  // Load pipelines on page mount so the active stage pill can be highlighted
+  // the moment a thread's detail arrives (no first-open delay).
   useEffect(() => {
-    if (threadPipelinesLoaded.current || !selectedId) return;
+    if (threadPipelinesLoaded.current) return;
     threadPipelinesLoaded.current = true;
     fetch('/api/pipelines', { cache: 'no-store' })
       .then((r) => r.ok ? r.json() : null)
       .then((d) => { if (d?.pipelines) setThreadPipelines(d.pipelines); })
       .catch(() => {});
-  }, [selectedId]);
+  }, []);
 
   async function patchThreadStage(stageId: string) {
     const vcId = threadDetail?.venue_customer_id;
@@ -820,6 +833,13 @@ export default function ConversationsPage() {
           contact_stage: { name: st.name, color: st.color },
           contact_stage_id: stageId,
         } : prev);
+        setThreads((prev) =>
+          prev.map((t) =>
+            t.venue_customer_id === vcId
+              ? { ...t, contact_stage: { name: st.name, color: st.color }, contact_stage_id: stageId }
+              : t,
+          ),
+        );
         dispatchStageChange({ vcId, pipelineId: pipe.id, stageId, stageName: st.name, stageColor: st.color });
       }
     }
@@ -1166,7 +1186,20 @@ export default function ConversationsPage() {
                     <p className="truncate text-xs text-gray-500">
                       {t.last_message_preview || t.subject || 'No messages'}
                     </p>
-                    <div className="mt-0.5 flex items-center gap-2 text-[10px] text-gray-400">
+                    <div className="mt-1 flex items-center gap-1.5 text-[10px] text-gray-400">
+                      {t.contact_stage?.name ? (
+                        <span
+                          className="inline-flex items-center rounded-full border px-1.5 py-0 text-[10px] font-semibold"
+                          style={t.contact_stage.color ? {
+                            backgroundColor: `${t.contact_stage.color}1f`,
+                            color: t.contact_stage.color,
+                            borderColor: `${t.contact_stage.color}55`,
+                          } : { backgroundColor: '#f3f4f6', color: '#374151', borderColor: '#e5e7eb' }}
+                          title={t.contact_stage.name}
+                        >
+                          {t.contact_stage.name}
+                        </span>
+                      ) : null}
                       {t.last_message_visibility === 'internal' && (
                         <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0 text-amber-800">
                           <Lock size={10} /> Team
