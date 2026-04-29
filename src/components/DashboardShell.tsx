@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import AnnouncementTicker from '@/components/AnnouncementTicker';
 import ImpersonationBanner from '@/components/ImpersonationBanner';
@@ -40,6 +41,8 @@ export default function DashboardShell({
   const [collapsed, setCollapsed] = useState(false);
   const [paymentsActive, setPaymentsActive] = useState<boolean | null>(null);
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const isOnSettings = pathname.startsWith('/dashboard/settings');
 
   useEffect(() => {
@@ -58,6 +61,15 @@ export default function DashboardShell({
       .then((d: { active?: boolean } | null) => setPaymentsActive(d?.active ?? false))
       .catch(() => setPaymentsActive(false));
   }, []);
+
+  // On first login (?welcome=1) open the StoryPay onboarding modal as a
+  // gentle prompt, then strip the query param so it doesn't persist.
+  useEffect(() => {
+    if (searchParams.get('welcome') === '1') {
+      window.dispatchEvent(new CustomEvent('storypay:open-onboarding'));
+      router.replace('/dashboard');
+    }
+  }, [searchParams, router]);
 
   const toggleCollapsed = useCallback(() => {
     setCollapsed((c) => {

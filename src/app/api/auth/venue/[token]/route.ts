@@ -28,13 +28,14 @@ export async function GET(
       return NextResponse.redirect(`${base}/login/invalid`);
     }
 
-    const destination = venue.setup_completed
-      ? '/dashboard'
-      : venue.onboarding_status === 'active'
-        ? '/dashboard'
-        : '/setup';
+    // Always go to the dashboard — StoryPay application is optional.
+    // On first-ever login (setup not yet completed) pass ?welcome=1 so the
+    // dashboard can pop open the StoryPay onboarding modal as a gentle prompt.
+    const isFirstLogin = !venue.setup_completed;
+    const destination = isFirstLogin ? '/dashboard?welcome=1' : '/dashboard';
 
-    if (!venue.setup_completed && venue.onboarding_status === 'active') {
+    // Mark setup complete so we never show the /setup page again.
+    if (isFirstLogin) {
       await supabaseAdmin
         .from('venues')
         .update({ setup_completed: true })
