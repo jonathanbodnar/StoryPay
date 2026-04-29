@@ -73,6 +73,39 @@ function teamMemberLabel(m: { name?: string | null; first_name?: string | null; 
   return toTitleCase(m.name?.trim() || '') || full || m.email || 'Unnamed';
 }
 
+// Split notes text into segments; wrap URLs in <a> tags.
+// Also trims repetitive separator lines (====) common in auto-generated descriptions.
+function renderNotesWithLinks(text: string): React.ReactNode[] {
+  // Strip lines that are just repeated = chars (scheduling tool separators)
+  const cleaned = text
+    .split('\n')
+    .filter((line) => !/^={3,}$/.test(line.trim()))
+    .join('\n')
+    .trim();
+
+  const URL_RE = /https?:\/\/[^\s<>)"]+/g;
+  const parts: React.ReactNode[] = [];
+  let last = 0;
+  let match: RegExpExecArray | null;
+  while ((match = URL_RE.exec(cleaned)) !== null) {
+    if (match.index > last) {
+      parts.push(cleaned.slice(last, match.index));
+    }
+    const url = match[0];
+    // Shorten very long URLs for display
+    const display = url.length > 50 ? url.slice(0, 47) + '…' : url;
+    parts.push(
+      <a key={match.index} href={url} target="_blank" rel="noopener noreferrer"
+        className="text-blue-600 hover:underline break-all">
+        {display}
+      </a>
+    );
+    last = match.index + url.length;
+  }
+  if (last < cleaned.length) parts.push(cleaned.slice(last));
+  return parts;
+}
+
 interface ConflictInfo { id: string; title: string; start_at: string; end_at: string; }
 
 /** Dropdown + legend order (keep phone_call after tour). */
@@ -901,7 +934,7 @@ export default function CalendarPage() {
               onClick={() => openNewEvent()}
               className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"
             >
-              <Plus size={18} /> Add event
+              <Plus size={18} /> Create event
             </button>
           </div>
         </div>
@@ -1621,7 +1654,14 @@ export default function CalendarPage() {
                   </Link>
                 </p>
               )}
-              {selectedEvent.notes && <p><span className="text-gray-400">Notes:</span> {selectedEvent.notes}</p>}
+              {selectedEvent.notes && (
+                <div>
+                  <span className="text-gray-400">Notes:</span>
+                  <div className="mt-1 text-sm text-gray-700 whitespace-pre-wrap break-words leading-relaxed">
+                    {renderNotesWithLinks(selectedEvent.notes)}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="flex justify-between items-center mt-5 gap-3">
               {selectedEvent.source === 'google' ? (
