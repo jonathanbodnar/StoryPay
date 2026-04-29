@@ -73,6 +73,8 @@ interface ThreadDetail {
     conversation_dnd_email?: boolean;
     conversation_dnd_calls?: boolean;
     conversation_dnd_inbound_sms?: boolean;
+    stage_id?: string | null;
+    pipeline_id?: string | null;
   } | null;
 }
 
@@ -414,6 +416,27 @@ export default function ConversationsPage() {
           venue_customers,
           contact_stage: raw.contact_stage ?? null,
         });
+
+        // Defensive enrichment: ALWAYS hit /api/venue-customers/[id] in
+        // parallel — same endpoint the profile drawer uses — and use its
+        // pipeline_context as the authoritative source of stage info.
+        // This eliminates any divergence between the conversation pill bar
+        // and the rest of the app.
+        const vcId = raw.venue_customer_id;
+        if (vcId) {
+          fetch(`/api/venue-customers/${vcId}`, { cache: 'no-store' })
+            .then((r) => r.ok ? r.json() : null)
+            .then((vcData: { pipeline_context?: { pipelineId: string; stageId: string } } | null) => {
+              const stageId = vcData?.pipeline_context?.stageId;
+              if (!stageId) return;
+              setThreadDetail((prev) => {
+                if (!prev || prev.id !== id) return prev;
+                if (prev.contact_stage_id === stageId) return prev;
+                return { ...prev, contact_stage_id: stageId };
+              });
+            })
+            .catch(() => {});
+        }
       } else {
         const err = await tRes.json().catch(() => ({}));
         setThreadDetail(null);
@@ -1277,9 +1300,19 @@ export default function ConversationsPage() {
                 const allStages = threadPipelines.flatMap((p) => p.stages.map((s) => ({...s, pipelineId: p.id})));
                 if (!allStages.length && !threadDetail.contact_stage?.name) return null;
 
-                // Use stage_id as the primary match (reliable); fall back to name comparison.
-                const activeId = threadDetail.contact_stage_id ?? null;
+                // Resolve the active stage ID with multiple fallbacks so the pill
+                // *always* highlights when we have any stage data at all.
+                let activeId =
+                  threadDetail.contact_stage_id ??
+                  // venue_customers.stage_id is embedded in the response
+                  ((threadDetail.venue_customers as { stage_id?: string | null } | null)?.stage_id ?? null);
+
+                // Last-ditch: match by name if we have a name but no ID.
                 const activeName = threadDetail.contact_stage?.name?.toLowerCase().trim();
+                if (!activeId && activeName) {
+                  const byName = allStages.find((s) => s.name.toLowerCase().trim() === activeName);
+                  if (byName) activeId = byName.id;
+                }
 
                 return (
                   <div className="flex-shrink-0 border-b border-gray-100 px-3 py-2 sm:px-5">
