@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { getDbAsync } from '@/lib/db';
 import { verifyAdminCookie } from '@/lib/admin-auth';
 
 /**
@@ -18,7 +18,7 @@ export async function POST() {
   if (!ok) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const sql = getDb();
+    const sql = await getDbAsync();
 
     await sql`
       CREATE TABLE IF NOT EXISTS public.venue_calendar_settings (

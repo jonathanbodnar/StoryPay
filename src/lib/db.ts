@@ -21,15 +21,34 @@
  */
 
 import postgres from 'postgres';
+import { lookup } from 'dns/promises';
+
+// Railway (and some other hosts) can't reach Supabase's pooler over IPv6.
+// Resolve the hostname to an IPv4 address first so the postgres driver
+// never attempts an IPv6 TCP connection.
+async function resolveIPv4(host: string): Promise<string> {
+  try {
+    const { address } = await lookup(host, { family: 4 });
+    return address;
+  } catch {
+    return host;
+  }
+}
 
 let _sql: ReturnType<typeof postgres> | null = null;
 
+function buildConnectionString(raw: string): string {
+  return raw; // synchronous fallback — IPv4 fix applied in getDbAsync
+}
+
+/** Synchronous getter — returns cached client or creates one with raw URL.
+ *  Use getDbAsync() on first call to benefit from IPv4 resolution. */
 export function getDb(): ReturnType<typeof postgres> {
   if (!_sql) {
     const connectionString =
       process.env.DATABASE_URL ||
       process.env.POSTGRES_URL ||
-      process.env.POSTGRES_PRISMA_URL;   // Vercel sometimes injects this name
+      process.env.POSTGRES_PRISMA_URL;
 
     if (!connectionString) {
       const msg =
@@ -42,14 +61,49 @@ export function getDb(): ReturnType<typeof postgres> {
       throw new Error(msg);
     }
 
-    _sql = postgres(connectionString, {
+    _sql = postgres(buildConnectionString(connectionString), {
       max: 5,
       idle_timeout: 20,
-      connect_timeout: 10,
-      prepare: false,   // required for PgBouncer transaction mode
-      ssl: 'require',   // Supabase requires SSL on all connections
+      connect_timeout: 15,
+      prepare: false,
+      ssl: 'require',
     });
   }
+  return _sql;
+}
+
+/** Async variant that pre-resolves the pooler hostname to IPv4 before
+ *  creating the postgres client. Use this for DDL / migration routes. */
+export async function getDbAsync(): Promise<ReturnType<typeof postgres>> {
+  if (_sql) return _sql;
+
+  const connectionString =
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_URL ||
+    process.env.POSTGRES_PRISMA_URL;
+
+  if (!connectionString) {
+    throw new Error('DATABASE_URL is not set. See db.ts for setup instructions.');
+  }
+
+  let connStr = connectionString;
+  try {
+    const url = new URL(connectionString);
+    const ipv4 = await resolveIPv4(url.hostname);
+    if (ipv4 !== url.hostname) {
+      url.hostname = ipv4;
+      connStr = url.toString();
+      console.log(`[db] IPv4 forced: ${ipv4}`);
+    }
+  } catch { /* leave unchanged */ }
+
+  _sql = postgres(connStr, {
+    max: 5,
+    idle_timeout: 20,
+    connect_timeout: 15,
+    prepare: false,
+    ssl: 'require',
+  });
   return _sql;
 }
 
