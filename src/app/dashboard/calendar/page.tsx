@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
   ChevronLeft, ChevronRight, Plus, X, Loader2, Calendar,
   AlertTriangle, ExternalLink, Info, Repeat,
-  Search, Pencil, Trash2, Check, User,
+  Search, Pencil, Trash2, Check, User, Settings,
 } from 'lucide-react';
 import { describeRule, type RecurrenceRule } from '@/lib/recurrence';
 import { toTitleCase } from '@/lib/utils';
@@ -844,6 +844,12 @@ export default function CalendarPage() {
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            <Link
+              href="/dashboard/settings/calendar"
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+            >
+              <Settings size={15} /> Calendar Settings
+            </Link>
             <button
               onClick={() => openNewEvent()}
               className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"

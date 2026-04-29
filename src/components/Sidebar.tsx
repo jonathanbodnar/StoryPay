@@ -82,6 +82,7 @@ const settingsItems: NavItem[] = [
   { label: 'General', href: '/dashboard/settings', icon: Settings, navId: 'nav_settings_general' },
   { label: 'Branding', href: '/dashboard/settings/branding', icon: Palette, navId: 'nav_settings_branding' },
   { label: 'Email Templates', href: '/dashboard/settings/email-templates', icon: Mail, navId: 'nav_settings_email_templates' },
+  { label: 'Calendar', href: '/dashboard/settings/calendar', icon: Calendar, navId: 'nav_settings_calendar' },
   { label: 'Integrations', href: '/dashboard/settings/integrations', icon: Link2, navId: 'nav_settings_integrations' },
   { label: 'Team', href: '/dashboard/settings/team', icon: UsersRound, navId: 'nav_settings_team' },
   { label: 'Notifications', href: '/dashboard/settings/notifications', icon: Bell, navId: 'nav_settings_notifications' },
