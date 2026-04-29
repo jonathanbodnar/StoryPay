@@ -12,7 +12,7 @@ import { ModeToggle } from '@/app/login/LoginClient';
  *
  * The two flows hit different backends:
  *  - Venue: POST /api/auth/signup (magic-link sign-in, no password).
- *  - Couple: POST /api/couple/signup (password-based, email confirmation).
+ *  - Couple: POST /api/couple/signup (password-based, auto sign-in).
  */
 
 type AuthMode = 'venue' | 'couple';
@@ -278,6 +278,7 @@ function VenueSignupForm() {
 // ───────── Couple signup (password + confirm password) ────────────────────
 
 function CoupleSignupForm() {
+  const router = useRouter();
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -287,7 +288,6 @@ function CoupleSignupForm() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [done, setDone] = useState(false);
 
   const passwordsMatch = password === confirmPassword;
 
@@ -297,11 +297,12 @@ function CoupleSignupForm() {
     setError('');
     setLoading(true);
     try {
+      const normalizedEmail = email.trim().toLowerCase();
       const res = await fetch('/api/couple/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: email.trim().toLowerCase(),
+          email: normalizedEmail,
           password,
           display_name: displayName.trim(),
         }),
@@ -311,29 +312,25 @@ function CoupleSignupForm() {
         setError(typeof data.error === 'string' ? data.error : 'Sign up failed.');
         return;
       }
-      setDone(true);
+
+      // Account created with email_confirm:true on the server — sign in
+      // immediately on the client so they have a session, then redirect.
+      const { getCoupleSupabase } = await import('@/lib/couple-browser');
+      const supabase = getCoupleSupabase();
+      const { error: signInErr } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password,
+      });
+      if (signInErr) {
+        setError('Account created. Please sign in to continue.');
+        router.push('/login?as=couple');
+        return;
+      }
+
+      router.replace('/couple/dashboard');
     } finally {
       setLoading(false);
     }
-  }
-
-  if (done) {
-    return (
-      <div className="text-center">
-        <div className="text-4xl mb-4">📬</div>
-        <h2 className="text-lg font-bold text-gray-900 mb-2">Check your email</h2>
-        <p className="text-sm text-gray-500 leading-relaxed">
-          We sent a confirmation link to <span className="font-medium text-gray-700">{email}</span>. After you
-          confirm, come back here to log in and start saving venues.
-        </p>
-        <Link
-          href="/login?as=couple"
-          className="mt-5 inline-block text-sm font-medium text-gray-900 hover:underline"
-        >
-          Go to login
-        </Link>
-      </div>
-    );
   }
 
   return (

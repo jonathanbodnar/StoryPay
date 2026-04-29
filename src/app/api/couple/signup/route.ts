@@ -63,5 +63,5 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  return NextResponse.json({ ok: true, message: 'Check your email to confirm, then sign in.' });
+  return NextResponse.json({ ok: true });
 }
