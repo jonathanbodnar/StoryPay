@@ -246,6 +246,7 @@ export default function CalendarPage() {
   // Detail modal
   const [selectedEvent, setSelectedEvent] = useState<CalEvent | null>(null);
   const [deleting,      setDeleting]      = useState(false);
+  const [selectedEventContactId, setSelectedEventContactId] = useState<string | null>(null);
 
   // Team members for the "assigned to" selector in the event modal
   const [teamMembers, setTeamMembers] = useState<TeamMemberLite[]>([]);
@@ -378,6 +379,22 @@ export default function CalendarPage() {
       .catch(() => { if (!cancelled) setTeamMembers([]); });
     return () => { cancelled = true; };
   }, []);
+
+  // ── Resolve contact ID for the event detail modal ─────────────────────────
+  useEffect(() => {
+    setSelectedEventContactId(null);
+    if (!selectedEvent?.customer_email) return;
+    let cancelled = false;
+    fetch('/api/venue-customers/lookup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: selectedEvent.customer_email }),
+    })
+      .then((r) => r.ok ? r.json() : null)
+      .then((contact) => { if (!cancelled && contact?.id) setSelectedEventContactId(contact.id); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [selectedEvent?.customer_email]);
 
   // ── Contact search (debounced) ─────────────────────────────────────────────
   useEffect(() => {
@@ -1660,8 +1677,14 @@ export default function CalendarPage() {
               {selectedEvent.customer_email && (
                 <p>
                   <span className="text-gray-400">Customer:</span>{' '}
-                  <Link href={`/dashboard/contacts?search=${encodeURIComponent(selectedEvent.customer_email)}`}
-                    className="text-blue-600 hover:underline inline-flex items-center gap-1">
+                  <Link
+                    href={
+                      selectedEventContactId
+                        ? `/dashboard/contacts/${selectedEventContactId}`
+                        : `/dashboard/contacts?search=${encodeURIComponent(selectedEvent.customer_email)}`
+                    }
+                    className="text-blue-600 hover:underline inline-flex items-center gap-1"
+                  >
                     {selectedEvent.customer_email} <ExternalLink size={11} />
                   </Link>
                 </p>
