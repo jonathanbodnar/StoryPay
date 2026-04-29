@@ -261,6 +261,60 @@ export async function mergeVenueContacts(
     console.error('[mergeVenueContacts] venue_customers fetch error:', err);
   }
 
+  // Also pull directly from the `leads` table for any contacts that were
+  // created before the venue_customers mirror write was added. This ensures
+  // leads page contacts always appear on the contacts page too.
+  try {
+    const { data: leadRows, error: leadErr } = await supabaseAdmin
+      .from('leads')
+      .select('id, first_name, last_name, name, email, phone, stage_id, pipeline_id, status, created_at')
+      .eq('venue_id', venueId)
+      .order('created_at', { ascending: false });
+
+    if (leadErr) {
+      console.error('[mergeVenueContacts] leads fetch error:', leadErr);
+    } else {
+      for (const l of leadRows ?? []) {
+        const email = ((l.email as string) || '').toLowerCase();
+        if (email && seenEmails.has(email)) continue;
+        const firstName = (l.first_name as string) || '';
+        const lastName  = (l.last_name  as string) || '';
+        const fullName  = (l.name as string) || [firstName, lastName].filter(Boolean).join(' ') || email || 'Unknown';
+        merged.push({
+          id: l.id as string,
+          name: fullName,
+          firstName,
+          lastName,
+          email: (l.email as string) || '',
+          phone: (l.phone as string) || '',
+          source: 'storypay',
+        });
+        if (email) seenEmails.add(email);
+        // Back-fill venue_customers so future loads are fast and the mirror is consistent
+        if (email) {
+          supabaseAdmin.from('venue_customers').upsert(
+            {
+              venue_id:       venueId,
+              customer_email: email,
+              first_name:     firstName || null,
+              last_name:      lastName  || null,
+              phone:          (l.phone as string) || null,
+              pipeline_id:    (l.pipeline_id as string) || null,
+              stage_id:       (l.stage_id   as string) || null,
+              pipeline_stage: (l.status     as string) || null,
+              updated_at:     new Date().toISOString(),
+            },
+            { onConflict: 'venue_id,customer_email' },
+          ).then(({ error: e }) => {
+            if (e) console.warn('[mergeVenueContacts] backfill upsert warn:', e.message);
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[mergeVenueContacts] leads fetch error:', err);
+  }
+
   attachFunnelMetadata(merged, funnelLookup);
   attachVenueCustomerIds(merged, vcIdLookup);
 
