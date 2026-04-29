@@ -82,6 +82,34 @@ html, body {
   background-color: rgba(100, 116, 139, 0.45);
 }
 
+/* ── Generic auto-hiding scrollbar (modal forms, panels, etc.) ──────────── */
+/* Apply .scrollbar-autohide to any scrollable container.                   */
+/* Toggling .is-scrolling shows the thumb while scrolling.                  */
+.scrollbar-autohide {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.6s ease;
+}
+.scrollbar-autohide.is-scrolling {
+  scrollbar-color: rgba(100, 116, 139, 0.45) transparent;
+  transition: scrollbar-color 0.1s ease;
+}
+.scrollbar-autohide::-webkit-scrollbar {
+  width: 4px;
+}
+.scrollbar-autohide::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-autohide::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 4px;
+  transition: background-color 0.6s ease;
+}
+.scrollbar-autohide.is-scrolling::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 116, 139, 0.45);
+  transition: background-color 0.1s ease;
+}
+
 /* ── Thread-list auto-hiding scrollbar ───────────────────────────────────── */
 /* Hidden by default; fades in while scrolling, fades out 600ms after stop.  */
 .sp-thread-list {

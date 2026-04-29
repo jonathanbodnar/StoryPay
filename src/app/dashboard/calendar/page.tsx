@@ -210,6 +210,8 @@ export default function CalendarPage() {
   const printRef  = useRef<HTMLDivElement>(null);
   const didInitCalFromVenue = useRef(false);
   const tzSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const modalBodyRef = useRef<HTMLDivElement>(null);
+  const modalScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [year,  setYear]  = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
@@ -1094,7 +1096,17 @@ export default function CalendarPage() {
       {/* ── Create / Edit Event Modal ── */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 max-h-[90vh] overflow-y-auto">
+          <div
+            ref={modalBodyRef}
+            className="relative w-full max-w-lg rounded-2xl bg-white p-6 max-h-[90vh] overflow-y-auto scrollbar-autohide"
+            onScroll={() => {
+              const el = modalBodyRef.current;
+              if (!el) return;
+              el.classList.add('is-scrolling');
+              if (modalScrollTimer.current) clearTimeout(modalScrollTimer.current);
+              modalScrollTimer.current = setTimeout(() => el.classList.remove('is-scrolling'), 800);
+            }}
+          >
             <button onClick={() => { setShowModal(false); setEditingId(null); setConflicts([]); setSaveError(''); }}
               className="absolute right-4 top-4 text-gray-400 hover:text-gray-600"><X size={20} /></button>
             <h2 className="font-heading text-lg font-semibold text-gray-900 mb-5">{editingId ? 'Edit Event' : 'New Event'}</h2>
