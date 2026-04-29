@@ -25,16 +25,16 @@ export async function GET() {
   const venueId = c.get('venue_id')?.value;
   if (!venueId) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
-  // Fetch all venue customers
+  // Fetch all venue customers using actual table column names
   const { data: customers, error } = await supabaseAdmin
     .from('venue_customers')
     .select(`
-      id, name, email, phone, instagram, wedding_date,
-      partner_name, event_type, guest_count,
-      pipeline_stage, stage_id,
-      created_at, updated_at,
-      ghl_contact_id,
-      lead_source, status
+      id, customer_email, first_name, last_name, phone,
+      partner_first_name, partner_last_name,
+      wedding_date, guest_count, ceremony_type,
+      pipeline_stage, stage_id, referral_source,
+      ghl_contact_id, lunarpay_customer_id,
+      created_at, updated_at
     `)
     .eq('venue_id', venueId)
     .order('created_at', { ascending: false });
@@ -45,10 +45,11 @@ export async function GET() {
 
   // CSV headers
   const headers = [
-    'ID', 'Name', 'Email', 'Phone', 'Instagram',
-    'Partner Name', 'Event Type', 'Wedding/Event Date', 'Guest Count',
-    'Pipeline Stage', 'Lead Source', 'Status',
-    'GHL Contact ID', 'Created At', 'Updated At',
+    'ID', 'First Name', 'Last Name', 'Email', 'Phone',
+    'Partner First Name', 'Partner Last Name',
+    'Wedding/Event Date', 'Guest Count', 'Ceremony Type',
+    'Pipeline Stage', 'Referral Source',
+    'GHL Contact ID', 'LunarPay Customer ID', 'Created At', 'Updated At',
   ];
 
   const lines: string[] = [headers.join(',')];
@@ -56,18 +57,19 @@ export async function GET() {
   for (const c of rows) {
     const row = [
       escapeCsv(c.id),
-      escapeCsv(c.name),
-      escapeCsv(c.email),
+      escapeCsv(c.first_name),
+      escapeCsv(c.last_name),
+      escapeCsv(c.customer_email),
       escapeCsv(c.phone),
-      escapeCsv(c.instagram),
-      escapeCsv(c.partner_name),
-      escapeCsv(c.event_type),
+      escapeCsv(c.partner_first_name),
+      escapeCsv(c.partner_last_name),
       escapeCsv(c.wedding_date),
       escapeCsv(c.guest_count),
+      escapeCsv(c.ceremony_type),
       escapeCsv(c.pipeline_stage),
-      escapeCsv(c.lead_source),
-      escapeCsv(c.status),
+      escapeCsv(c.referral_source),
       escapeCsv(c.ghl_contact_id),
+      escapeCsv(c.lunarpay_customer_id),
       escapeCsv(c.created_at ? new Date(c.created_at).toISOString() : ''),
       escapeCsv(c.updated_at ? new Date(c.updated_at).toISOString() : ''),
     ];

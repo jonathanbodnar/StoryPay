@@ -604,11 +604,10 @@ export async function POST(request: NextRequest) {
     String(row.created_at ?? new Date().toISOString()),
   );
 
-  // Contact-only leads live on the Contacts page, which reads from
-  // venue_customers. Upsert a mirror row so the new contact is searchable
-  // there even though it has no pipeline/stage. (The kanban reconciler also
-  // syncs contacts → leads in the other direction for regular leads.)
-  if (excludeFromPipeline) {
+  // Always mirror the new lead into venue_customers so the contact appears
+  // on the Contacts page (which reads from venue_customers) regardless of
+  // whether the lead has a pipeline stage or not.
+  {
     const emailLower = email.toLowerCase();
     const { error: vcErr } = await supabaseAdmin
       .from('venue_customers')
@@ -619,8 +618,9 @@ export async function POST(request: NextRequest) {
           first_name:     firstName || null,
           last_name:      lastName || null,
           phone:          body.phone?.trim() || null,
-          pipeline_id:    null,
-          stage_id:       null,
+          pipeline_id:    excludeFromPipeline ? null : (pipelineId ?? null),
+          stage_id:       excludeFromPipeline ? null : (stageId ?? null),
+          pipeline_stage: excludeFromPipeline ? null : initialStatus,
           updated_at:     new Date().toISOString(),
         },
         { onConflict: 'venue_id,customer_email' },
