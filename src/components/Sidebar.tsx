@@ -527,10 +527,10 @@ export default function Sidebar({
                     <button
                       type="button"
                       onClick={() => setShowOnboardingModal(true)}
-                      className="flex w-full items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm font-semibold text-indigo-700 hover:bg-indigo-50 transition-colors"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-700 hover:bg-indigo-50 transition-colors whitespace-nowrap"
                     >
-                      <Zap size={14} className="text-indigo-500" />
-                      <span>Apply for StoryPay™</span>
+                      <Zap size={13} className="shrink-0 text-indigo-500" />
+                      <span className="truncate">Apply for StoryPay™</span>
                     </button>
                   )}
                   {paymentsFiltered.map((sub) => {
@@ -810,15 +810,15 @@ export default function Sidebar({
             style={{ top: flyoutPos.top, left: flyoutPos.left }}
             role="menu"
           >
-            {/* Apply for StoryPay — shown only when not yet active */}
+            {/* Apply for StoryPay™ — shown only when not yet active */}
             {paymentsActive === false && (
               <button
                 type="button"
                 onClick={() => { setShowOnboardingModal(true); setFlyout(null); setFlyoutPos(null); }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 border-b border-gray-100"
+                className="flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 border-b border-gray-100 whitespace-nowrap"
               >
-                <Zap size={14} className="text-indigo-500" />
-                Apply for StoryPay™
+                <Zap size={13} className="shrink-0 text-indigo-500" />
+                <span className="truncate">Apply for StoryPay™</span>
               </button>
             )}
             {paymentsFiltered.map((sub) => {

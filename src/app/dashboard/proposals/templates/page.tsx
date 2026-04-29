@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { Plus, FileText, Pencil, Eye, X, PenLine, User, CalendarDays, Search, Loader2 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
+import PaymentGate from '@/components/PaymentGate';
 
 interface Field {
  id: string;
@@ -31,7 +32,7 @@ function stripHtml(html: string) {
  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-export default function TemplatesPage() {
+function TemplatesPageInner() {
  const [templates, setTemplates] = useState<Template[]>([]);
  const [loading, setLoading] = useState(true);
  const [search, setSearch] = useState('');
@@ -232,6 +233,10 @@ export default function TemplatesPage() {
  )}
  </div>
  );
+}
+
+export default function TemplatesPage() {
+  return <PaymentGate><TemplatesPageInner /></PaymentGate>;
 }
 
 // Highlight matching text
