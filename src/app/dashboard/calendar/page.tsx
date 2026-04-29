@@ -1466,7 +1466,7 @@ export default function CalendarPage() {
                         </div>
                       )}
                       <p className="mt-1.5 text-[10px] text-gray-400">
-                        Based on your <a href="/dashboard/settings/calendar?tab=availability" target="_blank" className="underline hover:text-gray-600">availability settings</a>. Greyed slots are already booked.
+                        Based on your <a href="/dashboard/settings/calendar?tab=availability" target="_blank" className="underline hover:text-gray-600">availability settings</a>. Greyed slots are already booked or blocked by Google Calendar.
                       </p>
                     </div>
                   ) : (
