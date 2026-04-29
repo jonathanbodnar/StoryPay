@@ -19,13 +19,12 @@ export async function GET() {
 
   const { data } = await supabaseAdmin
     .from('venues')
-    .select('onboarding_status, lunarpay_sk')
+    .select('onboarding_status, lunarpay_merchant_id')
     .eq('id', venueId)
     .maybeSingle();
 
   const status = (data as { onboarding_status?: string | null } | null)?.onboarding_status ?? null;
-  const hasSk  = !!(data as { lunarpay_sk?: string | null } | null)?.lunarpay_sk;
-  const active = status === 'active' && hasSk;
+  const active = status === 'active';
 
   return NextResponse.json({ active, status: status ?? 'not_registered' });
 }

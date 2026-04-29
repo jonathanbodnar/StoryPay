@@ -26,7 +26,7 @@ export async function GET() {
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('lunarpay_merchant_id, lunarpay_org_token, onboarding_status, lunarpay_sk, lunarpay_pk')
+    .select('lunarpay_merchant_id, lunarpay_org_token, onboarding_status, lunarpay_secret_key, lunarpay_publishable_key')
     .eq('id', venueId)
     .maybeSingle();
 
@@ -34,8 +34,8 @@ export async function GET() {
     lunarpay_merchant_id?: number | null;
     lunarpay_org_token?: string | null;
     onboarding_status?: string | null;
-    lunarpay_sk?: string | null;
-    lunarpay_pk?: string | null;
+    lunarpay_secret_key?: string | null;
+    lunarpay_publishable_key?: string | null;
   };
   const v = venue as VenueRow | null;
 
@@ -44,7 +44,7 @@ export async function GET() {
   }
 
   // If already active we can skip the live poll
-  if (v.onboarding_status === 'active' && v.lunarpay_sk) {
+  if (v.onboarding_status === 'active' && v.lunarpay_secret_key) {
     return NextResponse.json({
       status: 'active',
       isActive: true,
@@ -89,8 +89,10 @@ export async function GET() {
     const updates: Record<string, unknown> = { onboarding_status: lpStatus.toLowerCase() || v.onboarding_status };
 
     if (isActive && data?.secretKey && data?.publishableKey) {
-      updates.lunarpay_sk = data.secretKey;
-      updates.lunarpay_pk = data.publishableKey;
+      updates.lunarpay_secret_key = data.secretKey;
+      updates.lunarpay_publishable_key = data.publishableKey;
+      updates.onboarding_status = 'active';
+    } else if (isActive) {
       updates.onboarding_status = 'active';
     }
     if (data?.orgToken) updates.lunarpay_org_token = data.orgToken;

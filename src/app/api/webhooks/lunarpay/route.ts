@@ -66,8 +66,8 @@ export async function POST(request: NextRequest) {
       await supabaseAdmin
         .from('venues')
         .update({
-          lunarpay_sk:       keys.secretKey,
-          lunarpay_pk:       keys.publishableKey,
+          lunarpay_secret_key:       keys.secretKey,
+          lunarpay_publishable_key:  keys.publishableKey,
           onboarding_status: 'active',
         })
         .eq('id', venueId);
