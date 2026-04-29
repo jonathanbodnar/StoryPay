@@ -48,6 +48,8 @@ export async function GET(request: NextRequest) {
     },
     profile: profile ?? {
       id: user.id,
+      first_name: null,
+      last_name: null,
       display_name: null,
       phone: null,
       address_line1: null,

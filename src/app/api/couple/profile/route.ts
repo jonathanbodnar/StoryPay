@@ -13,6 +13,8 @@ function str(v: unknown, max: number): string | null | undefined {
   return t || null;
 }
 
+const REQUIRED_FIELDS = ['first_name', 'last_name', 'phone'] as const;
+
 export async function PATCH(request: NextRequest) {
   const user = await getCoupleAuthUser(request);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -24,11 +26,51 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
+  // ── Validate required fields ──────────────────────────────────────────
+  for (const field of REQUIRED_FIELDS) {
+    const v = body[field];
+    if (typeof v !== 'string' || !v.trim()) {
+      const label = field.replace('_', ' ');
+      return NextResponse.json(
+        { error: `${label.charAt(0).toUpperCase() + label.slice(1)} is required.` },
+        { status: 400 },
+      );
+    }
+  }
+
+  // Optional: allow updating the auth email if provided + different
+  const newEmailRaw = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+  if (newEmailRaw && newEmailRaw !== (user.email ?? '').toLowerCase()) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmailRaw)) {
+      return NextResponse.json({ error: 'Invalid email format.' }, { status: 400 });
+    }
+    const { error: emailErr } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
+      email: newEmailRaw,
+      email_confirm: true,
+    });
+    if (emailErr) {
+      const m = emailErr.message ?? '';
+      if (/registered|exists|duplicate/i.test(m)) {
+        return NextResponse.json({ error: 'That email is already in use.' }, { status: 409 });
+      }
+      console.error('[couple/profile] email update', emailErr);
+      return NextResponse.json({ error: m || 'Could not update email' }, { status: 500 });
+    }
+  }
+
+  // ── Build profile patch ───────────────────────────────────────────────
+  const firstName = (body.first_name as string).trim();
+  const lastName = (body.last_name as string).trim();
+  const derivedDisplay = `${firstName} ${lastName}`.trim();
+
   const patch: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
+    first_name: firstName,
+    last_name: lastName,
+    // Keep display_name in sync for backwards compatibility
+    display_name: derivedDisplay,
   };
 
-  if ('display_name' in body) patch.display_name = str(body.display_name, 200) ?? null;
   if ('phone' in body) patch.phone = str(body.phone, 40) ?? null;
   if ('address_line1' in body) patch.address_line1 = str(body.address_line1, 200) ?? null;
   if ('address_line2' in body) patch.address_line2 = str(body.address_line2, 200) ?? null;
@@ -57,17 +99,36 @@ export async function PATCH(request: NextRequest) {
     await supabaseAdmin.from('couple_profiles').insert({ id: user.id });
   }
 
-  const { data, error } = await supabaseAdmin
+  // First attempt with first_name/last_name. If schema cache rejects them,
+  // retry without those fields and just keep display_name in sync.
+  let { data, error } = await supabaseAdmin
     .from('couple_profiles')
     .update(patch)
     .eq('id', user.id)
     .select('*')
     .maybeSingle();
 
+  if (error && /first_name|last_name/i.test(error.message)) {
+    const fallback = { ...patch };
+    delete (fallback as Record<string, unknown>).first_name;
+    delete (fallback as Record<string, unknown>).last_name;
+    const retry = await supabaseAdmin
+      .from('couple_profiles')
+      .update(fallback)
+      .eq('id', user.id)
+      .select('*')
+      .maybeSingle();
+    data = retry.data;
+    error = retry.error;
+  }
+
   if (error) {
     console.error('[couple/profile]', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ profile: data });
+  return NextResponse.json({
+    profile: data,
+    email: newEmailRaw && newEmailRaw !== (user.email ?? '').toLowerCase() ? newEmailRaw : user.email,
+  });
 }

@@ -23,6 +23,8 @@ const BRAND = '#1b1b1b';
 interface AdminCoupleRow {
   id: string;
   email: string | null;
+  first_name: string | null;
+  last_name: string | null;
   display_name: string | null;
   phone: string | null;
   city: string | null;
@@ -32,6 +34,13 @@ interface AdminCoupleRow {
   last_sign_in_at: string | null;
   email_confirmed_at: string | null;
   saved_venue_count: number;
+}
+
+function fullName(c: AdminCoupleRow): string {
+  const f = (c.first_name ?? '').trim();
+  const l = (c.last_name ?? '').trim();
+  const combined = `${f} ${l}`.trim();
+  return combined || (c.display_name?.trim() || '');
 }
 
 function fmtDate(s: string | null): string {
@@ -67,7 +76,8 @@ export function CoupleManagementPortal() {
   // Edit modal state
   const [editing, setEditing] = useState<AdminCoupleRow | null>(null);
   const [editTab, setEditTab] = useState<'profile' | 'email' | 'password'>('profile');
-  const [editName, setEditName] = useState('');
+  const [editFirstName, setEditFirstName] = useState('');
+  const [editLastName, setEditLastName] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editWeddingDate, setEditWeddingDate] = useState('');
   const [editEmail, setEditEmail] = useState('');
@@ -109,7 +119,7 @@ export function CoupleManagementPortal() {
     const q = search.trim().toLowerCase();
     if (!q) return couples;
     return couples.filter((c) => {
-      const hay = [c.email, c.display_name, c.phone, c.city, c.state]
+      const hay = [c.email, c.first_name, c.last_name, c.display_name, c.phone, c.city, c.state]
         .filter((v): v is string => Boolean(v))
         .map((v) => v.toLowerCase())
         .join(' ');
@@ -120,7 +130,15 @@ export function CoupleManagementPortal() {
   function openEdit(c: AdminCoupleRow) {
     setEditing(c);
     setEditTab('profile');
-    setEditName(c.display_name ?? '');
+    let f = c.first_name ?? '';
+    let l = c.last_name ?? '';
+    if (!f && !l && c.display_name) {
+      const parts = c.display_name.trim().split(/\s+/);
+      f = parts[0] ?? '';
+      l = parts.slice(1).join(' ');
+    }
+    setEditFirstName(f);
+    setEditLastName(l);
     setEditPhone(c.phone ?? '');
     setEditWeddingDate(c.wedding_date ?? '');
     setEditEmail(c.email ?? '');
@@ -138,8 +156,12 @@ export function CoupleManagementPortal() {
     try {
       const body: Record<string, string | null> = {};
       if (editTab === 'profile') {
-        body.display_name = editName.trim() || null;
-        body.phone = editPhone.trim() || null;
+        if (!editFirstName.trim()) { setEditError('First name is required'); setEditSaving(false); return; }
+        if (!editLastName.trim()) { setEditError('Last name is required'); setEditSaving(false); return; }
+        if (!editPhone.trim()) { setEditError('Phone is required'); setEditSaving(false); return; }
+        body.first_name = editFirstName.trim();
+        body.last_name = editLastName.trim();
+        body.phone = editPhone.trim();
         body.wedding_date = editWeddingDate || null;
       } else if (editTab === 'email') {
         if (!editEmail.trim() || !editEmail.includes('@')) {
@@ -294,7 +316,7 @@ export function CoupleManagementPortal() {
                   filtered.map((c) => (
                     <tr key={c.id} className="hover:bg-gray-50/60 transition-colors">
                       <td className="px-4 py-3 align-top">
-                        <div className="font-medium text-gray-900">{c.display_name || '—'}</div>
+                        <div className="font-medium text-gray-900">{fullName(c) || '—'}</div>
                         <div className="text-xs text-gray-400">
                           Joined {fmtDate(c.created_at)}
                           {!c.email_confirmed_at && (
@@ -364,7 +386,7 @@ export function CoupleManagementPortal() {
             >
               <X size={20} />
             </button>
-            <h3 className="text-lg font-bold text-gray-900 mb-1">{editing.display_name || 'Couple'}</h3>
+            <h3 className="text-lg font-bold text-gray-900 mb-1">{fullName(editing) || 'Couple'}</h3>
             <p className="text-sm text-gray-500 mb-5">{editing.email}</p>
 
             <div className="flex gap-1 mb-5 border-b border-gray-100">
@@ -402,12 +424,18 @@ export function CoupleManagementPortal() {
 
             {editTab === 'profile' && (
               <div className="space-y-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Display name</label>
-                  <input value={editName} onChange={(e) => setEditName(e.target.value)} className={INPUT} />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">First name <span className="text-red-500">*</span></label>
+                    <input value={editFirstName} onChange={(e) => setEditFirstName(e.target.value)} className={INPUT} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Last name <span className="text-red-500">*</span></label>
+                    <input value={editLastName} onChange={(e) => setEditLastName(e.target.value)} className={INPUT} />
+                  </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Phone</label>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Phone <span className="text-red-500">*</span></label>
                   <input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className={INPUT} />
                 </div>
                 <div>

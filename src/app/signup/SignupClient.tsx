@@ -279,8 +279,10 @@ function VenueSignupForm() {
 
 function CoupleSignupForm() {
   const router = useRouter();
-  const [displayName, setDisplayName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
@@ -293,6 +295,9 @@ function CoupleSignupForm() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!firstName.trim()) { setError('First name is required.'); return; }
+    if (!lastName.trim()) { setError('Last name is required.'); return; }
+    if (!phone.trim()) { setError('Phone number is required.'); return; }
     if (!passwordsMatch) { setError('Passwords do not match.'); return; }
     setError('');
     setLoading(true);
@@ -304,7 +309,9 @@ function CoupleSignupForm() {
         body: JSON.stringify({
           email: normalizedEmail,
           password,
-          display_name: displayName.trim(),
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+          phone: phone.trim(),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -341,28 +348,58 @@ function CoupleSignupForm() {
       </p>
 
       <form onSubmit={(e) => void onSubmit(e)} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Your name</label>
-          <input
-            type="text"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="Alex & Jordan"
-            className={INPUT}
-          />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">First name</label>
+            <input
+              type="text"
+              required
+              autoComplete="given-name"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              placeholder="Alex"
+              className={INPUT}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Last name</label>
+            <input
+              type="text"
+              required
+              autoComplete="family-name"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              placeholder="Smith"
+              className={INPUT}
+            />
+          </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
-          <input
-            type="email"
-            required
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            className={INPUT}
-          />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
+            <input
+              type="email"
+              required
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              className={INPUT}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Phone</label>
+            <input
+              type="tel"
+              required
+              autoComplete="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="(555) 123-4567"
+              className={INPUT}
+            />
+          </div>
         </div>
 
         <div>

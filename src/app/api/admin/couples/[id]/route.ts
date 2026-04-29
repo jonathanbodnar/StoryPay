@@ -28,6 +28,8 @@ export async function PATCH(
   let body: {
     email?: string;
     password?: string;
+    first_name?: string | null;
+    last_name?: string | null;
     display_name?: string | null;
     phone?: string | null;
     wedding_date?: string | null;
@@ -62,8 +64,10 @@ export async function PATCH(
     }
   }
 
-  // ── Update couple_profiles (display_name/phone/wedding_date) ────────────
+  // ── Update couple_profiles ────────────────────────────────────────────
   const profileUpdates: Record<string, unknown> = {};
+  if ('first_name' in body) profileUpdates.first_name = body.first_name?.toString().trim() || null;
+  if ('last_name' in body) profileUpdates.last_name = body.last_name?.toString().trim() || null;
   if ('display_name' in body) profileUpdates.display_name = body.display_name?.toString().trim() || null;
   if ('phone' in body) profileUpdates.phone = body.phone?.toString().trim() || null;
   if ('wedding_date' in body) {
@@ -71,12 +75,36 @@ export async function PATCH(
     profileUpdates.wedding_date = v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
   }
 
+  // Keep display_name in sync with first/last when admin only sends names
+  if (
+    ('first_name' in body || 'last_name' in body) &&
+    !('display_name' in body)
+  ) {
+    const f = body.first_name?.toString().trim() ?? '';
+    const l = body.last_name?.toString().trim() ?? '';
+    const combined = `${f} ${l}`.trim();
+    if (combined) profileUpdates.display_name = combined;
+  }
+
   if (Object.keys(profileUpdates).length > 0) {
     profileUpdates.updated_at = new Date().toISOString();
-    const { error: profErr } = await supabaseAdmin
+    let { error: profErr } = await supabaseAdmin
       .from('couple_profiles')
       .update(profileUpdates)
       .eq('id', id);
+
+    // If first_name/last_name columns don't exist yet, retry without them
+    if (profErr && /first_name|last_name/i.test(profErr.message)) {
+      const fallback = { ...profileUpdates };
+      delete (fallback as Record<string, unknown>).first_name;
+      delete (fallback as Record<string, unknown>).last_name;
+      const retry = await supabaseAdmin
+        .from('couple_profiles')
+        .update(fallback)
+        .eq('id', id);
+      profErr = retry.error;
+    }
+
     if (profErr) {
       console.error('[admin/couples PATCH] profile update error:', profErr);
       return NextResponse.json({ error: profErr.message }, { status: 500 });

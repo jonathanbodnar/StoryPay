@@ -2499,6 +2499,12 @@ const MIGRATIONS = [
     description: 'Creates venue_calendar_settings, venue_availability, venue_date_overrides, venue_conflict_calendars, and venue_calendar_notifications tables. Required for Google Calendar sync and Calendar Settings.',
     endpoint: '/api/admin/run-migration-076',
   },
+  {
+    id: '077',
+    name: 'Couple First/Last Name (077)',
+    description: 'Adds first_name and last_name columns to couple_profiles and backfills from display_name where possible. Required for the new couple signup form.',
+    endpoint: '/api/admin/run-migration-077',
+  },
 ];
 
 function SystemTab() {
