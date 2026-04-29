@@ -225,8 +225,8 @@ function VenueLoginForm() {
           {forgotError && <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{forgotError}</p>}
           <button
             type="submit"
-            disabled={forgotLoading || !forgotEmail.trim()}
-            className="w-full flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold text-white transition-colors hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={forgotLoading}
+            className="w-full flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-85 disabled:cursor-not-allowed"
             style={{ backgroundColor: '#1b1b1b' }}
           >
             {forgotLoading ? <Loader2 size={15} className="animate-spin" /> : null}
@@ -303,7 +303,7 @@ function VenueLoginForm() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60 hover:opacity-85"
+          className="w-full flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-85 disabled:cursor-not-allowed"
           style={{ backgroundColor: '#1b1b1b' }}
         >
           {loading ? <Loader2 size={15} className="animate-spin" /> : null}
@@ -360,15 +360,20 @@ function CoupleLoginForm({
 
   async function handleForgot(e: React.FormEvent) {
     e.preventDefault();
+    if (!forgotEmail.trim()) return;
     setForgotLoading(true);
     setForgotError('');
     try {
-      const supabase = getCoupleSupabase();
-      const { error: resetErr } = await supabase.auth.resetPasswordForEmail(
-        forgotEmail.trim().toLowerCase(),
-        { redirectTo: `${window.location.origin}/couple/reset-password` },
-      );
-      if (resetErr) { setForgotError(resetErr.message); return; }
+      const res = await fetch('/api/auth/couple/forgot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail.trim() }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setForgotError(d.error || 'Something went wrong. Please try again.');
+        return;
+      }
       setForgotSent(true);
     } catch {
       setForgotError('Network error. Please try again.');
@@ -419,8 +424,8 @@ function CoupleLoginForm({
           {forgotError && <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{forgotError}</p>}
           <button
             type="submit"
-            disabled={forgotLoading || !forgotEmail.trim()}
-            className="w-full flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold text-white transition-colors hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={forgotLoading}
+            className="w-full flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-85 disabled:cursor-not-allowed"
             style={{ backgroundColor: '#1b1b1b' }}
           >
             {forgotLoading ? <Loader2 size={15} className="animate-spin" /> : null}
@@ -498,8 +503,8 @@ function CoupleLoginForm({
 
         <button
           type="submit"
-          disabled={loading || !email.trim() || !password}
-          className="w-full flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold text-white transition-colors hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={loading}
+          className="w-full flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-85 disabled:cursor-not-allowed"
           style={{ backgroundColor: '#1b1b1b' }}
         >
           {loading ? <Loader2 size={15} className="animate-spin" /> : null}

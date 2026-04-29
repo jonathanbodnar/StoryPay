@@ -251,8 +251,8 @@ function VenueSignupForm() {
 
         <button
           type="submit"
-          disabled={loading || !canSubmit}
-          className="w-full flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold text-white transition-colors hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={loading}
+          className="w-full flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-85 disabled:cursor-not-allowed"
           style={{ backgroundColor: '#1b1b1b' }}
         >
           {loading ? <Loader2 size={15} className="animate-spin" /> : null}
@@ -420,8 +420,8 @@ function CoupleSignupForm() {
 
         <button
           type="submit"
-          disabled={loading || !email.trim() || password.length < 8 || !passwordsMatch}
-          className="w-full flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold text-white transition-colors hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={loading}
+          className="w-full flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-85 disabled:cursor-not-allowed"
           style={{ backgroundColor: '#1b1b1b' }}
         >
           {loading ? <Loader2 size={15} className="animate-spin" /> : null}
