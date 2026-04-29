@@ -11,6 +11,7 @@ import {
   Check, BarChart2, ExternalLink, ChevronRight, Search, RefreshCw,
   LayoutDashboard, Menu, Lightbulb, BookOpen, Star, Globe, Layers,
   Repeat, Wallet, BadgeCheck, Sparkles, CalendarDays, Eye, EyeOff,
+  Settings, Database, CheckCircle2, AlertCircle,
 } from 'lucide-react';
 import {
   VenueManagementPortal,
@@ -45,7 +46,8 @@ type AdminTabKey =
   | 'article-ratings'
   | 'blog'
   | 'seo-pages'
-  | 'trends';
+  | 'trends'
+  | 'system';
 
 const ADMIN_TAB_KEYS: ReadonlySet<string> = new Set<AdminTabKey>([
   'dashboard',
@@ -61,6 +63,7 @@ const ADMIN_TAB_KEYS: ReadonlySet<string> = new Set<AdminTabKey>([
   'blog',
   'seo-pages',
   'trends',
+  'system',
 ]);
 
 const PAGE_LABELS: Record<string, { label: string; url: string; description: string }> = {
@@ -493,6 +496,7 @@ const ADMIN_NAV_ITEMS = [
   { key: 'suggested-articles', label: 'Suggested Articles', icon: BookOpen },
   { key: 'search-analytics', label: 'Search Analytics', icon: BarChart2 },
   { key: 'article-ratings', label: 'Article Ratings', icon: Star },
+  { key: 'system', label: 'System / Migrations', icon: Settings },
 ] as const;
 
 /** Module-level component so React does not remount the sidebar on every parent render. */
@@ -2454,6 +2458,9 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
           </div>
         )}
 
+        {/* ── System / Migrations Tab ── */}
+        {activeTab === 'system' && <SystemTab />}
+
         {/* ── Blog Posts Tab ── */}
         {activeTab === 'blog' && <BlogTab subSegments={tabRest} onNavigate={goBlog} />}
 
@@ -2473,6 +2480,86 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
     </div>
     {children}
     </>
+  );
+}
+
+// ─── System / Migrations Tab ─────────────────────────────────────────────────
+
+const MIGRATIONS = [
+  {
+    id: '076',
+    name: 'Calendar Settings Tables (076)',
+    description: 'Creates venue_calendar_settings, venue_availability, venue_date_overrides, venue_conflict_calendars, and venue_calendar_notifications tables. Required for Google Calendar sync and Calendar Settings.',
+    endpoint: '/api/admin/run-migration-076',
+  },
+];
+
+function SystemTab() {
+  const [results, setResults] = useState<Record<string, { ok: boolean; message: string }>>({});
+  const [running, setRunning] = useState<Record<string, boolean>>({});
+
+  async function runMigration(id: string, endpoint: string) {
+    setRunning((r) => ({ ...r, [id]: true }));
+    try {
+      const res = await fetch(endpoint, { method: 'POST' });
+      const data = await res.json();
+      setResults((r) => ({
+        ...r,
+        [id]: res.ok
+          ? { ok: true, message: data.message ?? 'Migration applied successfully.' }
+          : { ok: false, message: data.error ?? 'Migration failed.' },
+      }));
+    } catch (e) {
+      setResults((r) => ({ ...r, [id]: { ok: false, message: String(e) } }));
+    } finally {
+      setRunning((r) => ({ ...r, [id]: false }));
+    }
+  }
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      <div>
+        <h2 className="font-heading text-xl text-gray-900">System / Migrations</h2>
+        <p className="text-sm text-gray-500 mt-0.5">Run database migrations that haven&apos;t been applied to production yet. Each migration is idempotent — safe to run multiple times.</p>
+      </div>
+
+      <div className="space-y-3">
+        {MIGRATIONS.map((m) => {
+          const result = results[m.id];
+          const busy = running[m.id];
+          return (
+            <div key={m.id} className="rounded-2xl border border-gray-200 bg-white p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center shrink-0">
+                    <Database size={16} className="text-gray-500" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-900">{m.name}</p>
+                    <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{m.description}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => runMigration(m.id, m.endpoint)}
+                  disabled={busy}
+                  className="shrink-0 flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white hover:opacity-85 disabled:cursor-not-allowed transition-opacity"
+                  style={{ backgroundColor: '#1b1b1b' }}
+                >
+                  {busy ? <Loader2 size={13} className="animate-spin" /> : <Settings size={13} />}
+                  {busy ? 'Running…' : 'Run'}
+                </button>
+              </div>
+              {result && (
+                <div className={`mt-3 flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${result.ok ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
+                  {result.ok ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                  {result.message}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
