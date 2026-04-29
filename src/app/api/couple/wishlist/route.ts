@@ -56,11 +56,20 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ items });
 }
 
+/**
+ * POST /api/couple/wishlist
+ *
+ * Body:
+ *   { slug: string, action?: 'add' | 'remove' | 'toggle' }
+ *
+ * Default action is 'add' (back-compat). When action='toggle', the result
+ * tells the caller which state the venue ended up in via `saved: boolean`.
+ */
 export async function POST(request: NextRequest) {
   const user = await getCoupleAuthUser(request);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  let body: { slug?: string };
+  let body: { slug?: string; action?: 'add' | 'remove' | 'toggle' };
   try {
     body = await request.json();
   } catch {
@@ -69,6 +78,7 @@ export async function POST(request: NextRequest) {
 
   const slug = (body.slug ?? '').trim().toLowerCase();
   if (!slug) return NextResponse.json({ error: 'slug is required' }, { status: 400 });
+  const action = body.action ?? 'add';
 
   const { data: venue, error: vErr } = await supabaseAdmin
     .from('venues')
@@ -79,13 +89,43 @@ export async function POST(request: NextRequest) {
   if (vErr || !venue) {
     return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
   }
-  if (!venue.is_published) {
+  if (!venue.is_published && action !== 'remove') {
     return NextResponse.json({ error: 'That venue is not listed publicly.' }, { status: 400 });
   }
 
+  const venueId = venue.id as string;
+
+  // Determine current state for toggle action
+  let isSaved = false;
+  if (action === 'toggle' || action === 'remove') {
+    const { data: existing } = await supabaseAdmin
+      .from('couple_saved_venues')
+      .select('venue_id')
+      .eq('couple_id', user.id)
+      .eq('venue_id', venueId)
+      .maybeSingle();
+    isSaved = Boolean(existing);
+  }
+
+  const shouldRemove = action === 'remove' || (action === 'toggle' && isSaved);
+
+  if (shouldRemove) {
+    const { error: delErr } = await supabaseAdmin
+      .from('couple_saved_venues')
+      .delete()
+      .eq('couple_id', user.id)
+      .eq('venue_id', venueId);
+    if (delErr) {
+      console.error('[couple/wishlist POST remove]', delErr);
+      return NextResponse.json({ error: delErr.message }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, venue_id: venueId, saved: false });
+  }
+
+  // Add (or no-op if already there)
   const { error: insErr } = await supabaseAdmin.from('couple_saved_venues').insert({
     couple_id: user.id,
-    venue_id: venue.id as string,
+    venue_id: venueId,
   });
 
   if (insErr && !/duplicate key|unique constraint/i.test(insErr.message)) {
@@ -93,5 +133,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: insErr.message }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, venue_id: venue.id });
+  return NextResponse.json({ ok: true, venue_id: venueId, saved: true });
 }

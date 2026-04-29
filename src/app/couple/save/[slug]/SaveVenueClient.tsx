@@ -85,25 +85,24 @@ export function SaveVenueClient({ slug }: { slug: string }) {
       if (cancelled) return;
 
       if (res.ok) {
-        setStatus('saved');
+        // If we have a safe redirect, bounce back immediately so the user
+        // can keep browsing/saving venues without an interstitial page.
         if (safeRedirect) {
-          // brief flash so the bride sees confirmation, then return to the directory
-          window.setTimeout(() => {
-            window.location.assign(safeRedirect);
-          }, 700);
+          window.location.assign(safeRedirect);
+          return;
         }
+        setStatus('saved');
         return;
       }
 
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       // Treat the "already saved" case as success.
       if (/already|duplicate|unique/i.test(data.error ?? '')) {
-        setStatus('already');
         if (safeRedirect) {
-          window.setTimeout(() => {
-            window.location.assign(safeRedirect);
-          }, 700);
+          window.location.assign(safeRedirect);
+          return;
         }
+        setStatus('already');
         return;
       }
 
