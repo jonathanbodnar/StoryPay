@@ -5,8 +5,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Loader2, Save, CheckCircle2, User, CreditCard,
-  ShieldCheck, Mail, Phone, ArrowRight, RefreshCw,
+  ShieldCheck, Mail, Phone, ArrowRight,
   BadgeCheck, AlertCircle, Download, Trash2, AlertTriangle,
+  KeyRound, Eye, EyeOff, AtSign,
 } from 'lucide-react';
 
 // ── Styles ────────────────────────────────────────────────────────────────────
@@ -96,10 +97,21 @@ export default function ProfilePage() {
   // Member form state
   const [memberForm, setMemberForm] = useState({ first_name: '', last_name: '', email: '' });
 
-  // Send-login-link state
-  const [sendingLink, setSendingLink]   = useState(false);
-  const [linkSent, setLinkSent]         = useState(false);
-  const [linkError, setLinkError]       = useState('');
+  // Email change state
+  const [emailForm, setEmailForm]           = useState({ new_email: '', current_password_for_email: '' });
+  const [emailSaving, setEmailSaving]       = useState(false);
+  const [emailSaved, setEmailSaved]         = useState(false);
+  const [emailError, setEmailError]         = useState('');
+  const [showEmailPass, setShowEmailPass]   = useState(false);
+
+  // Password change state
+  const [passForm, setPassForm]             = useState({ current_password: '', new_password: '', confirm_password: '' });
+  const [passSaving, setPassSaving]         = useState(false);
+  const [passSaved, setPassSaved]           = useState(false);
+  const [passError, setPassError]           = useState('');
+  const [showCurPass, setShowCurPass]       = useState(false);
+  const [showNewPass, setShowNewPass]       = useState(false);
+  const [showConfPass, setShowConfPass]     = useState(false);
 
   // Delete account state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -187,6 +199,45 @@ export default function ProfilePage() {
       else { setLinkError('Could not send link. Try again.'); }
     } catch { setLinkError('Network error — please try again'); }
     finally { setSendingLink(false); }
+  }
+
+  async function updateEmail(e: React.FormEvent) {
+    e.preventDefault();
+    setEmailSaving(true); setEmailError(''); setEmailSaved(false);
+    try {
+      const res = await fetch('/api/profile/credentials', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'email', ...emailForm }),
+      });
+      const data = await res.json() as { ok?: boolean; email?: string; error?: string };
+      if (!res.ok) { setEmailError(data.error ?? 'Failed to update email'); return; }
+      // Update local state so the header reflects the new email
+      setOwnerForm((f) => ({ ...f, email: data.email ?? f.email }));
+      setProfile((p) => p ? { ...p, email: data.email ?? (p as OwnerProfile).email } as Profile : p);
+      setEmailForm({ new_email: '', current_password_for_email: '' });
+      setEmailSaved(true);
+      setTimeout(() => setEmailSaved(false), 4000);
+    } catch { setEmailError('Network error — please try again'); }
+    finally { setEmailSaving(false); }
+  }
+
+  async function updatePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setPassSaving(true); setPassError(''); setPassSaved(false);
+    try {
+      const res = await fetch('/api/profile/credentials', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'password', ...passForm }),
+      });
+      const data = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok) { setPassError(data.error ?? 'Failed to update password'); return; }
+      setPassForm({ current_password: '', new_password: '', confirm_password: '' });
+      setPassSaved(true);
+      setTimeout(() => setPassSaved(false), 4000);
+    } catch { setPassError('Network error — please try again'); }
+    finally { setPassSaving(false); }
   }
 
   async function exportClients() {
@@ -427,34 +478,152 @@ export default function ProfilePage() {
         <div className={SECTION}>
           <div className={SECTION_HEAD}>
             <ShieldCheck size={16} className="text-gray-500" />
-            <h2 className="text-sm font-semibold text-gray-900">Account Security</h2>
+            <h2 className="text-sm font-semibold text-gray-900">Login & Security</h2>
           </div>
-          <div className="px-6 py-5 space-y-3">
-            <p className="text-sm text-gray-500">
-              StoryVenue uses secure magic-link sign-in — there&apos;s no password to remember.
-              Request a new sign-in link at any time and it will be emailed to you.
+
+          {/* Change Email */}
+          <div className="px-6 py-5 border-b border-gray-100">
+            <div className="flex items-center gap-2 mb-3">
+              <AtSign size={14} className="text-gray-400" />
+              <h3 className="text-sm font-semibold text-gray-800">Change Email</h3>
+            </div>
+            <p className="text-xs text-gray-500 mb-4">
+              Current email: <span className="font-medium text-gray-700">{ownerForm.email || profile.email}</span>
             </p>
-            {linkSent ? (
-              <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700 font-medium">
-                <CheckCircle2 size={15} /> Sign-in link sent — check your inbox.
+            <form onSubmit={(e) => void updateEmail(e)} className="space-y-3 max-w-md">
+              <div>
+                <label className={LABEL}>New Email Address</label>
+                <input
+                  type="email"
+                  value={emailForm.new_email}
+                  onChange={(e) => setEmailForm((f) => ({ ...f, new_email: e.target.value }))}
+                  placeholder="new@email.com"
+                  className={INPUT}
+                  required
+                />
               </div>
-            ) : (
+              <div>
+                <label className={LABEL}>Confirm with Current Password</label>
+                <div className="relative">
+                  <input
+                    type={showEmailPass ? 'text' : 'password'}
+                    value={emailForm.current_password_for_email}
+                    onChange={(e) => setEmailForm((f) => ({ ...f, current_password_for_email: e.target.value }))}
+                    placeholder="Your current password"
+                    className={INPUT + ' pr-10'}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowEmailPass((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showEmailPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+              </div>
+              {emailError && (
+                <div className="flex items-center gap-2 rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
+                  <AlertCircle size={13} /> {emailError}
+                </div>
+              )}
+              {emailSaved && (
+                <div className="flex items-center gap-2 rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-700 font-medium">
+                  <CheckCircle2 size={13} /> Email updated successfully.
+                </div>
+              )}
               <button
-                type="button"
-                onClick={sendLoginLink}
-                disabled={sendingLink}
-                className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60 transition-colors"
+                type="submit"
+                disabled={emailSaving || !emailForm.new_email}
+                className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 transition-opacity"
+                style={{ backgroundColor: '#1b1b1b' }}
               >
-                {sendingLink ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-                {sendingLink ? 'Sending…' : 'Send new sign-in link'}
+                {emailSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                {emailSaving ? 'Saving…' : 'Update Email'}
               </button>
-            )}
-            {linkError && (
-              <p className="text-xs text-red-500">{linkError}</p>
-            )}
-            <p className="text-xs text-gray-400">
-              Link will be sent to <strong>{ownerForm.email || profile.email}</strong>
-            </p>
+            </form>
+          </div>
+
+          {/* Change Password */}
+          <div className="px-6 py-5">
+            <div className="flex items-center gap-2 mb-3">
+              <KeyRound size={14} className="text-gray-400" />
+              <h3 className="text-sm font-semibold text-gray-800">Change Password</h3>
+            </div>
+            <form onSubmit={(e) => void updatePassword(e)} className="space-y-3 max-w-md">
+              <div>
+                <label className={LABEL}>Current Password</label>
+                <div className="relative">
+                  <input
+                    type={showCurPass ? 'text' : 'password'}
+                    value={passForm.current_password}
+                    onChange={(e) => setPassForm((f) => ({ ...f, current_password: e.target.value }))}
+                    placeholder="Enter current password"
+                    className={INPUT + ' pr-10'}
+                  />
+                  <button type="button" onClick={() => setShowCurPass((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    {showCurPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className={LABEL}>New Password</label>
+                <div className="relative">
+                  <input
+                    type={showNewPass ? 'text' : 'password'}
+                    value={passForm.new_password}
+                    onChange={(e) => setPassForm((f) => ({ ...f, new_password: e.target.value }))}
+                    placeholder="At least 8 characters"
+                    className={INPUT + ' pr-10'}
+                    minLength={8}
+                  />
+                  <button type="button" onClick={() => setShowNewPass((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    {showNewPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className={LABEL}>Confirm New Password</label>
+                <div className="relative">
+                  <input
+                    type={showConfPass ? 'text' : 'password'}
+                    value={passForm.confirm_password}
+                    onChange={(e) => setPassForm((f) => ({ ...f, confirm_password: e.target.value }))}
+                    placeholder="Repeat new password"
+                    className={INPUT + ' pr-10'}
+                  />
+                  <button type="button" onClick={() => setShowConfPass((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    {showConfPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+                {passForm.new_password && passForm.confirm_password && passForm.new_password !== passForm.confirm_password && (
+                  <p className="mt-1 text-xs text-red-500">Passwords do not match.</p>
+                )}
+              </div>
+              {passError && (
+                <div className="flex items-center gap-2 rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
+                  <AlertCircle size={13} /> {passError}
+                </div>
+              )}
+              {passSaved && (
+                <div className="flex items-center gap-2 rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-700 font-medium">
+                  <CheckCircle2 size={13} /> Password updated successfully.
+                </div>
+              )}
+              <button
+                type="submit"
+                disabled={
+                  passSaving ||
+                  !passForm.new_password ||
+                  passForm.new_password.length < 8 ||
+                  passForm.new_password !== passForm.confirm_password
+                }
+                className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 transition-opacity"
+                style={{ backgroundColor: '#1b1b1b' }}
+              >
+                {passSaving ? <Loader2 size={13} className="animate-spin" /> : <KeyRound size={13} />}
+                {passSaving ? 'Saving…' : 'Update Password'}
+              </button>
+            </form>
           </div>
         </div>
 
