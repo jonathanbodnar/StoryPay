@@ -1204,7 +1204,7 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
                 </div>
               </div>
             </div>
-            <button type="submit" className="w-full text-white font-semibold py-2.5 rounded-xl transition-colors hover:opacity-90" style={{ backgroundColor: BRAND }}>
+            <button type="submit" className="w-full text-white font-semibold py-2.5 rounded-xl transition-colors hover:opacity-85" style={{ backgroundColor: BRAND }}>
               Sign In
             </button>
           </form>

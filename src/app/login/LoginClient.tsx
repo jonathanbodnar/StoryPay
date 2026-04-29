@@ -226,7 +226,7 @@ function VenueLoginForm() {
           <button
             type="submit"
             disabled={forgotLoading || !forgotEmail.trim()}
-            className="w-full flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold text-white transition-colors hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-60"
             style={{ backgroundColor: '#1b1b1b' }}
           >
             {forgotLoading ? <Loader2 size={15} className="animate-spin" /> : null}
