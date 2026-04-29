@@ -1,107 +1,93 @@
+/**
+ * POST /api/webhooks/lunarpay
+ *
+ * Receives merchant.approved / merchant.denied events from LunarPay.
+ * On approval: stores the merchant's lp_sk_ and lp_pk_ keys and marks
+ * the venue as active so payments can begin immediately.
+ */
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
-import { handleLunarPayWebhookForPlatformLedger } from '@/lib/platform-directory-billing';
 import crypto from 'crypto';
+import { supabaseAdmin } from '@/lib/supabase';
 
-const LP_WEBHOOK_SECRET = process.env.LP_WEBHOOK_SECRET || '';
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
-function verifySignature(payload: string, signature: string): boolean {
-  if (!LP_WEBHOOK_SECRET) return false;
+const WEBHOOK_SECRET = process.env.LUNARPAY_WEBHOOK_SECRET ?? '';
+
+function verify(rawBody: string, signature: string): boolean {
+  if (!WEBHOOK_SECRET) return true; // skip verification if secret not configured (dev)
   const expected = crypto
-    .createHmac('sha256', LP_WEBHOOK_SECRET)
-    .update(payload)
+    .createHmac('sha256', WEBHOOK_SECRET)
+    .update(rawBody)
     .digest('hex');
-  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
-}
-
-interface WebhookPayload {
-  event: string;
-  merchant: {
-    id: number;
-    email: string;
-    name?: string;
-    businessName?: string;
-    organizationId?: number;
-  };
-  keys?: {
-    publishableKey: string;
-    secretKey: string;
-  };
+  try {
+    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+  } catch {
+    return false;
+  }
 }
 
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
-  const signature = request.headers.get('x-lunarpay-signature') || '';
+  const signature = request.headers.get('x-lunarpay-signature') ?? '';
 
-  if (LP_WEBHOOK_SECRET && signature) {
-    if (!verifySignature(rawBody, signature)) {
-      console.error('[lunarpay-webhook] Invalid signature');
-      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
-    }
+  if (!verify(rawBody, signature)) {
+    console.warn('[webhooks/lunarpay] invalid signature');
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
   }
 
-  let payload: WebhookPayload;
+  type Payload = {
+    event: string;
+    merchant: { id: number; email: string; businessName?: string; organizationId?: number };
+    onboarding: { status: string };
+    keys?: { publishableKey: string; secretKey: string };
+  };
+
+  let payload: Payload;
   try {
-    payload = JSON.parse(rawBody);
+    payload = JSON.parse(rawBody) as Payload;
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { event, merchant, keys } = payload;
+  const { event, merchant, onboarding, keys } = payload;
+  console.log('[webhooks/lunarpay]', event, merchant?.id);
 
-  if (!event || !merchant?.id) {
-    return NextResponse.json({ error: 'Missing event or merchant data' }, { status: 400 });
+  if (event === 'merchant.approved' && keys?.secretKey && keys?.publishableKey) {
+    // Find the venue by merchantId
+    const { data: venues } = await supabaseAdmin
+      .from('venues')
+      .select('id')
+      .eq('lunarpay_merchant_id', merchant.id)
+      .limit(1);
+
+    const venueId = (venues as { id: string }[] | null)?.[0]?.id;
+    if (venueId) {
+      await supabaseAdmin
+        .from('venues')
+        .update({
+          lunarpay_sk:       keys.secretKey,
+          lunarpay_pk:       keys.publishableKey,
+          onboarding_status: 'active',
+        })
+        .eq('id', venueId);
+      console.log('[webhooks/lunarpay] venue activated', venueId);
+    }
   }
 
-  console.log(`[lunarpay-webhook] event=${event} merchantId=${merchant.id} email=${merchant.email}`);
-
-  const { data: venue, error: findError } = await supabaseAdmin
-    .from('venues')
-    .select('id, onboarding_status')
-    .eq('lunarpay_merchant_id', merchant.id)
-    .maybeSingle();
-
-  if (findError || !venue) {
-    const handled = await handleLunarPayWebhookForPlatformLedger(payload as unknown as Record<string, unknown>);
-    if (handled) {
-      return NextResponse.json({ received: true });
-    }
-    console.log(`[lunarpay-webhook] No venue for merchantId=${merchant.id} (not a platform ledger event)`);
-    return NextResponse.json({ received: true });
-  }
-
-  if (event === 'merchant.approved') {
-    const updateData: Record<string, unknown> = {
-      onboarding_status: 'active',
-    };
-
-    if (keys?.secretKey) {
-      updateData.lunarpay_secret_key = keys.secretKey;
-    }
-    if (keys?.publishableKey) {
-      updateData.lunarpay_publishable_key = keys.publishableKey;
-    }
-
-    const { error: updateError } = await supabaseAdmin
+  if (event === 'merchant.denied') {
+    const { data: venues } = await supabaseAdmin
       .from('venues')
-      .update(updateData)
-      .eq('id', venue.id);
-
-    if (updateError) {
-      console.error(`[lunarpay-webhook] DB update failed for venue=${venue.id}:`, updateError.message);
-      return NextResponse.json({ error: 'Update failed' }, { status: 500 });
+      .select('id')
+      .eq('lunarpay_merchant_id', merchant.id)
+      .limit(1);
+    const venueId = (venues as { id: string }[] | null)?.[0]?.id;
+    if (venueId) {
+      await supabaseAdmin
+        .from('venues')
+        .update({ onboarding_status: `denied_${onboarding.status.toLowerCase()}` })
+        .eq('id', venueId);
     }
-
-    console.log(`[lunarpay-webhook] Venue ${venue.id} marked as active`);
-  } else if (event === 'merchant.denied') {
-    await supabaseAdmin
-      .from('venues')
-      .update({ onboarding_status: 'denied' })
-      .eq('id', venue.id);
-
-    console.log(`[lunarpay-webhook] Venue ${venue.id} marked as denied`);
-  } else {
-    console.log(`[lunarpay-webhook] Unhandled event: ${event}`);
   }
 
   return NextResponse.json({ received: true });

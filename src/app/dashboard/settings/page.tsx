@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import LunarPayOnboarding from '@/components/settings/LunarPayOnboarding';
 import { useRef } from 'react';
 import {
  LinkIcon,
@@ -152,8 +153,7 @@ export default function SettingsPage() {
  } finally { setResetting(false); }
  }
 
- useEffect(() => {
- async function load() {
+ async function loadVenue() {
  try {
  const res = await fetch('/api/venues/me', { cache: 'no-store' });
  if (res.ok) {
@@ -175,7 +175,6 @@ export default function SettingsPage() {
  brand_footer_note: data.brand_footer_note || '',
  });
  }
- // Check role — hide owner-only controls for team members
  const sessionRes = await fetch('/api/session/me', { cache: 'no-store' });
  if (sessionRes.ok) {
  const session = await sessionRes.json();
@@ -185,8 +184,8 @@ export default function SettingsPage() {
  setLoading(false);
  }
  }
- load();
- }, []);
+
+ useEffect(() => { void loadVenue(); }, []);
 
  async function saveBranding() {
  setBrandSaving(true);
@@ -297,36 +296,8 @@ export default function SettingsPage() {
  <CreditCard size={18} className="text-gray-400"/>
  <h2 className="font-heading text-base font-semibold text-gray-900">Payment Processing</h2>
  </div>
- <div className="px-6 py-5">
- <div className="flex items-center justify-between">
- <div>
- <p className="text-sm font-medium text-gray-900">LunarPay</p>
- <p className="mt-0.5 text-sm text-gray-500">
- {isActive
- ? 'Your merchant account is active and ready to process payments.'
- : venue.onboarding_status === 'bank_information_sent'
- ? 'Your application is under review. This typically takes 24–48 hours.'
- : 'Complete onboarding to start accepting payments.'}
- </p>
- </div>
- <div className="shrink-0 ml-4">
- {isActive ? (
- <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
- <CheckCircle2 size={14} />
- Active
- </span>
- ) : (
- <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
- {venue.onboarding_status === 'bank_information_sent' ? 'Under Review' : 'Pending'}
- </span>
- )}
- </div>
- </div>
- {venue.lunarpay_merchant_id && (
- <p className="mt-3 text-xs text-gray-400">
- Merchant ID: {venue.lunarpay_merchant_id}
- </p>
- )}
+ <div className="px-6 py-6">
+ <LunarPayOnboarding onActivated={() => void loadVenue()} />
  </div>
  </section>
 
