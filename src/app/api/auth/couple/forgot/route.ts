@@ -2,38 +2,77 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 
-export async function POST(req: NextRequest) {
-  const { email } = await req.json();
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
-  if (!email?.trim() || !email.includes('@')) {
+/**
+ * Couple "forgot password" handler.
+ *
+ * Flow:
+ *  1. Generate a recovery link via `auth.admin.generateLink`. This
+ *     implicitly verifies the user exists — Supabase returns an error
+ *     otherwise.
+ *  2. Email the link via Resend (we deliver our own email so we don't
+ *     depend on Supabase's SMTP / redirect-URL allowlist).
+ *
+ * To prevent account enumeration, we always return `{ ok: true }`. Server
+ * logs contain the diagnostic detail for debugging delivery problems.
+ */
+export async function POST(req: NextRequest) {
+  let payload: { email?: string };
+  try {
+    payload = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+
+  const email = payload.email?.trim()?.toLowerCase() ?? '';
+  if (!email || !email.includes('@')) {
     return NextResponse.json({ error: 'A valid email is required.' }, { status: 400 });
   }
 
-  const normalized = email.trim().toLowerCase();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.storyvenue.com';
   const redirectTo = `${appUrl}/couple/reset-password`;
 
-  // generateLink returns the magic recovery URL without sending an email.
-  // This avoids any Supabase redirect-URL allowlist requirement.
-  const { data, error } = await supabaseAdmin.auth.admin.generateLink({
-    type: 'recovery',
-    email: normalized,
-    options: { redirectTo },
-  });
+  console.log('[couple/forgot] request for', email);
 
-  if (error || !data?.properties?.action_link) {
-    // Don't reveal whether the account exists — always return success to the caller
-    console.error('[couple/forgot] generateLink error:', error?.message);
+  // ── Generate recovery link ───────────────────────────────────────────────
+  let resetUrl: string | null = null;
+  try {
+    const { data, error } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'recovery',
+      email,
+      options: { redirectTo },
+    });
+    if (error) {
+      console.error('[couple/forgot] generateLink error:', error.message);
+    } else if (!data?.properties?.action_link) {
+      console.error('[couple/forgot] generateLink returned no action_link');
+    } else {
+      resetUrl = data.properties.action_link;
+    }
+  } catch (e) {
+    console.error('[couple/forgot] generateLink exception:', e);
+  }
+
+  if (!resetUrl) {
+    // Either user doesn't exist or Supabase had a problem — silent ok to
+    // avoid revealing account existence
     return NextResponse.json({ ok: true });
   }
 
-  const resetUrl = data.properties.action_link;
-
-  await sendEmail({
-    to: normalized,
+  // ── Send our own email via Resend ────────────────────────────────────────
+  const result = await sendEmail({
+    to: email,
     subject: 'Reset your StoryVenue password',
     html: resetEmailHtml(resetUrl, appUrl),
   });
+
+  if (!result.success) {
+    console.error('[couple/forgot] sendEmail failed for', email, result.error);
+  } else {
+    console.log('[couple/forgot] email sent to', email);
+  }
 
   return NextResponse.json({ ok: true });
 }
@@ -58,7 +97,7 @@ function resetEmailHtml(resetUrl: string, appUrl: string) {
     </div>
     <p style="color:#9ca3af;font-size:12px;text-align:center;margin:8px 0 0">
       If the button doesn&apos;t work, copy this link:<br>
-      <a href="${resetUrl}" style="color:#1b1b1b;text-decoration:underline;">${resetUrl}</a>
+      <a href="${resetUrl}" style="color:#1b1b1b;text-decoration:underline;word-break:break-all;">${resetUrl}</a>
     </p>
     <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0 16px">
     <p style="color:#9ca3af;font-size:11px;text-align:center;margin:0">
