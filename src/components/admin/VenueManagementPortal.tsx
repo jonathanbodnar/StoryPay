@@ -7,6 +7,8 @@ import {
   Search,
   Eye,
   Copy,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react';
 import { DIRECTORY_BADGE_STATUSES, directoryBadgeLabel } from '@/lib/directory-badges';
 import {
@@ -111,6 +113,9 @@ export function VenueManagementPortal({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [copiedGhl, setCopiedGhl] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<AdminVenueRow | null>(null);
+  const [deleteConfirmName, setDeleteConfirmName] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   const loadPlans = useCallback(async () => {
     setPlansLoading(true);
@@ -216,6 +221,23 @@ export function VenueManagementPortal({
     }
   }
 
+  async function deleteVenue(venueId: string) {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/venues/${venueId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        alert(j.error || 'Delete failed');
+        return;
+      }
+      setDeleteTarget(null);
+      setDeleteConfirmName('');
+      await onRefresh();
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   async function copyDirectoryBillingLink(venueId: string) {
     try {
       const res = await fetch(`/api/admin/venues/${venueId}/directory-checkout`, { method: 'POST' });
@@ -256,6 +278,7 @@ export function VenueManagementPortal({
   }
 
   return (
+    <>
     <div className="space-y-6">
       <div>
         <h2 className="font-heading text-xl text-gray-900">Venue management</h2>
@@ -472,6 +495,7 @@ export function VenueManagementPortal({
               }}
               onViewAs={() => void viewAsVenue(venue.id)}
               onCopyBillingLink={() => void copyDirectoryBillingLink(venue.id)}
+              onDelete={() => { setDeleteTarget(venue); setDeleteConfirmName(''); }}
             />
           ))
         )}
@@ -613,6 +637,13 @@ export function VenueManagementPortal({
                           >
                             <Eye size={12} /> View as venue
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => { setDeleteTarget(venue); setDeleteConfirmName(''); }}
+                            className="inline-flex items-center justify-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100"
+                          >
+                            <Trash2 size={12} /> Delete
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -624,6 +655,57 @@ export function VenueManagementPortal({
         </div>
       </div>
     </div>
+
+    {/* Delete confirmation modal */}
+    {deleteTarget && (
+      <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 p-4">
+        <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100">
+              <AlertTriangle size={20} className="text-red-600" />
+            </div>
+            <div>
+              <h3 className="font-bold text-gray-900">Delete Venue</h3>
+              <p className="text-xs text-gray-500">This cannot be undone</p>
+            </div>
+          </div>
+          <p className="text-sm text-gray-700 mb-1">
+            You are about to permanently delete <strong>{deleteTarget.name}</strong> and all of
+            their data — contacts, conversations, leads, payments, and files.
+          </p>
+          <p className="text-sm text-gray-700 mb-4">
+            Type <strong>{deleteTarget.name}</strong> to confirm:
+          </p>
+          <input
+            type="text"
+            value={deleteConfirmName}
+            onChange={(e) => setDeleteConfirmName(e.target.value)}
+            placeholder={deleteTarget.name}
+            className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm mb-4 focus:border-red-400 focus:outline-none focus:ring-1 focus:ring-red-200"
+          />
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => { setDeleteTarget(null); setDeleteConfirmName(''); }}
+              disabled={deleting}
+              className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={deleteConfirmName !== deleteTarget.name || deleting}
+              onClick={() => void deleteVenue(deleteTarget.id)}
+              className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+              {deleting ? 'Deleting…' : 'Delete Venue'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
@@ -638,6 +720,7 @@ function VenueMobileCard({
   onCopyLogin,
   onViewAs,
   onCopyBillingLink,
+  onDelete,
 }: {
   venue: AdminVenueRow;
   lpSummary: LunarPayAdminSummary;
@@ -649,6 +732,7 @@ function VenueMobileCard({
   onCopyLogin: (url: string, id: string) => void;
   onViewAs: () => void;
   onCopyBillingLink: () => void;
+  onDelete: () => void;
 }) {
   const vs = (venue.directory_verified_status as string) || 'none';
   const ss = (venue.directory_sponsored_status as string) || 'none';
@@ -736,6 +820,13 @@ function VenueMobileCard({
           className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg border border-pink-200 bg-pink-50 py-2 text-xs font-semibold text-pink-900"
         >
           <Eye size={12} /> View as
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg border border-red-200 bg-red-50 py-2 text-xs font-semibold text-red-700"
+        >
+          <Trash2 size={12} /> Delete
         </button>
       </div>
     </div>

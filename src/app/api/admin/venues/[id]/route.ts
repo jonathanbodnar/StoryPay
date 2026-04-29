@@ -83,3 +83,43 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (!data) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
   return NextResponse.json({ venue: data });
 }
+
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!(await verifyAdminCookie())) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const { id: venueId } = await params;
+  if (!venueId) return NextResponse.json({ error: 'Missing venue id' }, { status: 400 });
+
+  // Confirm the venue exists first
+  const { data: venue } = await supabaseAdmin
+    .from('venues')
+    .select('id, name')
+    .eq('id', venueId)
+    .maybeSingle();
+  if (!venue) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
+
+  // Clean up Supabase Storage files for this venue (best-effort — don't block on failure)
+  try {
+    const storageBuckets = [
+      { bucket: 'venue-images', prefix: `${venueId}/` },
+      { bucket: 'venue-assets', prefix: `venue-logos/${venueId}/` },
+      { bucket: 'venue-assets', prefix: `venue-covers/${venueId}/` },
+    ];
+    for (const { bucket, prefix } of storageBuckets) {
+      const { data: files } = await supabaseAdmin.storage.from(bucket).list(prefix, { limit: 1000 });
+      if (files && files.length > 0) {
+        const paths = files.map((f: { name: string }) => `${prefix}${f.name}`);
+        await supabaseAdmin.storage.from(bucket).remove(paths);
+      }
+    }
+  } catch {
+    // Storage cleanup failure is non-fatal — proceed with DB deletion
+  }
+
+  // Delete the venue — all related rows cascade automatically
+  const { error } = await supabaseAdmin.from('venues').delete().eq('id', venueId);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ deleted: true, venueId, venueName: venue.name });
+}

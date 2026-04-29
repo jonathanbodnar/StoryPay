@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Loader2, Save, CheckCircle2, User, CreditCard,
   ShieldCheck, Mail, Phone, ArrowRight, RefreshCw,
-  BadgeCheck, AlertCircle,
+  BadgeCheck, AlertCircle, Download, Trash2, AlertTriangle,
 } from 'lucide-react';
 
 // ── Styles ────────────────────────────────────────────────────────────────────
@@ -100,6 +101,14 @@ export default function ProfilePage() {
   const [linkSent, setLinkSent]         = useState(false);
   const [linkError, setLinkError]       = useState('');
 
+  // Delete account state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirm, setDeleteConfirm]     = useState('');
+  const [deleting, setDeleting]               = useState(false);
+  const [deleteError, setDeleteError]         = useState('');
+  const [exporting, setExporting]             = useState(false);
+  const router = useRouter();
+
   useEffect(() => {
     async function load() {
       try {
@@ -180,6 +189,41 @@ export default function ProfilePage() {
     finally { setSendingLink(false); }
   }
 
+  async function exportClients() {
+    setExporting(true);
+    try {
+      const res = await fetch('/api/venues/me/export-clients');
+      if (!res.ok) { alert('Export failed. Please try again.'); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `clients_export_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function deleteAccount() {
+    if (!profile || profile.type !== 'owner') return;
+    setDeleting(true); setDeleteError('');
+    try {
+      const res = await fetch('/api/venues/me/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmName: deleteConfirm }),
+      });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) { setDeleteError(data.error || 'Deletion failed'); return; }
+      router.push('/');
+    } catch { setDeleteError('Network error — please try again'); }
+    finally { setDeleting(false); }
+  }
+
   // ── Loading / error states ─────────────────────────────────────────────────
   if (loading) {
     return (
@@ -211,6 +255,7 @@ export default function ProfilePage() {
 
   // ── Owner UI ────────────────────────────────────────────────────────────────
   if (profile.type === 'owner') {
+    const venueName = profile.venue_name; // capture for use in JSX closures
     const sub = billing?.subscription;
     const plan = billing?.current_plan;
     const subStatus = billing?.subscription_status ?? 'none';
@@ -412,6 +457,103 @@ export default function ProfilePage() {
             </p>
           </div>
         </div>
+
+        {/* ── Danger Zone ───────────────────────────────────────────────── */}
+        <div className="rounded-2xl border border-red-200 bg-white overflow-hidden mb-5">
+          <div className="px-6 py-4 border-b border-red-100 flex items-center gap-2.5">
+            <AlertTriangle size={16} className="text-red-500" />
+            <h2 className="text-sm font-semibold text-red-700">Account Data</h2>
+          </div>
+          <div className="px-6 py-5 space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-gray-900">Export Client Data</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Download all your contacts and clients as a CSV file.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void exportClients()}
+                disabled={exporting}
+                className="shrink-0 flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              >
+                {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                {exporting ? 'Exporting…' : 'Download CSV'}
+              </button>
+            </div>
+            <div className="border-t border-red-100 pt-4 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-red-700">Delete Account</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Permanently delete your venue and all data. This cannot be undone.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setShowDeleteModal(true); setDeleteConfirm(''); setDeleteError(''); }}
+                className="shrink-0 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 transition-colors"
+              >
+                <Trash2 size={14} /> Delete Account
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Delete confirmation modal */}
+        {showDeleteModal && (
+          <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100">
+                  <AlertTriangle size={20} className="text-red-600" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900">Delete Your Account</h3>
+                  <p className="text-xs text-gray-500">Permanent — cannot be undone</p>
+                </div>
+              </div>
+              <p className="text-sm text-gray-700 mb-1">
+                This will permanently delete <strong>{venueName}</strong> and all associated
+                data — contacts, conversations, leads, payments, and files.
+              </p>
+              <p className="text-sm text-gray-700 mb-4">
+                Type <strong>{venueName}</strong> to confirm:
+              </p>
+              <input
+                type="text"
+                value={deleteConfirm}
+                onChange={(e) => setDeleteConfirm(e.target.value)}
+                placeholder={venueName}
+                className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm mb-3 focus:border-red-400 focus:outline-none focus:ring-1 focus:ring-red-200"
+              />
+              {deleteError && (
+                <p className="mb-3 text-xs text-red-600 flex items-center gap-1">
+                  <AlertCircle size={13} /> {deleteError}
+                </p>
+              )}
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteModal(false)}
+                  disabled={deleting}
+                  className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={deleteConfirm !== venueName || deleting}
+                  onClick={() => void deleteAccount()}
+                  className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                  {deleting ? 'Deleting…' : 'Delete Forever'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
