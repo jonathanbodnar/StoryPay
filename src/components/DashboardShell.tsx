@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import AnnouncementTicker from '@/components/AnnouncementTicker';
 import ImpersonationBanner from '@/components/ImpersonationBanner';
@@ -37,6 +38,9 @@ export default function DashboardShell({
   children: React.ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [paymentsActive, setPaymentsActive] = useState<boolean | null>(null);
+  const pathname = usePathname();
+  const isOnSettings = pathname.startsWith('/dashboard/settings');
 
   useEffect(() => {
     try {
@@ -46,6 +50,13 @@ export default function DashboardShell({
     } catch {
       /* ignore */
     }
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/lunarpay/active', { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((d: { active?: boolean } | null) => setPaymentsActive(d?.active ?? false))
+      .catch(() => setPaymentsActive(false));
   }, []);
 
   const toggleCollapsed = useCallback(() => {
@@ -95,6 +106,30 @@ export default function DashboardShell({
               .
             </div>
           ) : null}
+
+          {/* StoryPay not active banner — shown on all /dashboard/settings pages */}
+          {isOnSettings && paymentsActive === false ? (
+            <div className="mb-5 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3.5 text-sm text-red-900">
+              <span className="mt-0.5 shrink-0 text-red-500">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+              </span>
+              <span>
+                <span className="font-semibold">Payment processing is not active.</span>{' '}
+                You cannot send proposals or process payments until your StoryPay merchant account is approved.{' '}
+                <button
+                  type="button"
+                  onClick={() => window.dispatchEvent(new CustomEvent('storypay:open-onboarding'))}
+                  className="underline font-semibold hover:text-red-700"
+                >
+                  Apply for StoryPay
+                </button>
+                .
+              </span>
+            </div>
+          ) : null}
+
           <DirectoryRouteGuard allowedNavIds={allowedNavIds}>{children}</DirectoryRouteGuard>
         </main>
       </div>

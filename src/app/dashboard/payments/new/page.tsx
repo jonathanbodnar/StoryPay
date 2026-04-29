@@ -9,6 +9,7 @@ import {
  PenLine, Package, Tag, Percent, ChevronRight,
 } from 'lucide-react';
 import { formatCents } from '@/lib/utils';
+import PaymentGate from '@/components/PaymentGate';
 import dynamic from 'next/dynamic';
 import {
   computeDiscountCents,
@@ -247,7 +248,7 @@ function LivePreview({
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
-export default function NewProposalInvoicePage() {
+function NewProposalInvoicePageInner() {
  const router = useRouter();
  const searchParams = useSearchParams();
 
@@ -1365,8 +1366,16 @@ export default function NewProposalInvoicePage() {
  onGenerated={(html)=>{setContractHtml(html);setShowEditor(true);setShowAI(false);}}
  onClose={()=>setShowAI(false)}
  prefillClientName={clientName}
- />
- )}
- </div>
- );
+      />
+    )}
+    </div>
+  );
+}
+
+export default function NewProposalInvoicePage() {
+  return (
+    <PaymentGate>
+      <NewProposalInvoicePageInner />
+    </PaymentGate>
+  );
 }

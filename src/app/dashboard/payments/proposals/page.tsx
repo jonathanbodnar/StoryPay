@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { Search, X, Loader2, FileText, Send, Plus, Pencil, Eye, Trash2, Copy, ExternalLink } from 'lucide-react';
 import { formatCents, formatDate, getStatusColor, classNames } from '@/lib/utils';
+import PaymentGate from '@/components/PaymentGate';
 
 interface Proposal {
  id: string;
@@ -18,7 +19,7 @@ interface Proposal {
  created_at: string;
 }
 
-export default function PaymentsProposalsPage() {
+function PaymentsProposalsPageInner() {
  const [proposals, setProposals] = useState<Proposal[]>([]);
  const [loading, setLoading] = useState(true);
  const [search, setSearch] = useState('');
@@ -253,9 +254,17 @@ export default function PaymentsProposalsPage() {
  </div>
  </div>
  )}
- </div>
- </div>
- )}
- </div>
- );
+  </div>
+  </div>
+  )}
+  </div>
+  );
+}
+
+export default function PaymentsProposalsPage() {
+  return (
+    <PaymentGate>
+      <PaymentsProposalsPageInner />
+    </PaymentGate>
+  );
 }

@@ -18,8 +18,10 @@ import {
   Ticket,
   Package,
   UserCircle,
+  Zap,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
+import LunarPayOnboarding from '@/components/settings/LunarPayOnboarding';
 
 interface Venue { id: string; name: string; ghl_location_id: string; }
 type UserRole = 'owner' | 'admin' | 'member';
@@ -115,6 +117,8 @@ export default function Sidebar({
   const [mounted, setMounted] = useState(false);
   const [convUnread, setConvUnread] = useState(0);
   const [updatesUnread, setUpdatesUnread] = useState(0);
+  const [paymentsActive, setPaymentsActive] = useState<boolean | null>(null); // null = loading
+  const [showOnboardingModal, setShowOnboardingModal] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -167,6 +171,27 @@ export default function Sidebar({
   useEffect(() => {
     if (pathname.startsWith('/dashboard/updates')) setUpdatesUnread(0);
   }, [pathname]);
+
+  // Fetch payments active status once on mount (and after onboarding completes).
+  const refreshPaymentsActive = useCallback(() => {
+    fetch('/api/lunarpay/active', { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((d: { active?: boolean } | null) => {
+        setPaymentsActive(d?.active ?? false);
+      })
+      .catch(() => setPaymentsActive(false));
+  }, []);
+
+  useEffect(() => {
+    refreshPaymentsActive();
+  }, [refreshPaymentsActive]);
+
+  // Listen for the global "open onboarding" event fired by the settings banner.
+  useEffect(() => {
+    const handler = () => setShowOnboardingModal(true);
+    window.addEventListener('storypay:open-onboarding', handler);
+    return () => window.removeEventListener('storypay:open-onboarding', handler);
+  }, []);
 
   const isOnSettings = pathname.startsWith('/dashboard/settings');
   const isOnMarketing = pathname.startsWith('/dashboard/marketing');
@@ -497,6 +522,17 @@ export default function Sidebar({
               </button>
               {paymentsOpen && (
                 <div className="mt-0.5 ml-2 pl-2 space-y-0.5 py-0.5">
+                  {/* Apply for StoryPay — first item, shown when not yet active */}
+                  {paymentsActive === false && (
+                    <button
+                      type="button"
+                      onClick={() => setShowOnboardingModal(true)}
+                      className="flex w-full items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm font-semibold text-indigo-700 hover:bg-indigo-50 transition-colors"
+                    >
+                      <Zap size={14} className="text-indigo-500" />
+                      <span>Apply for StoryPay</span>
+                    </button>
+                  )}
                   {paymentsFiltered.map((sub) => {
                     const SubIcon = sub.icon;
                     const active = isSubActive(sub.href);
@@ -765,9 +801,78 @@ export default function Sidebar({
 
       {flyoutBackdrop}
       {flyoutPanel(listingFiltered, 'listing')}
-      {flyoutPanel(paymentsFiltered, 'payments')}
+      {/* Payments flyout (collapsed sidebar) */}
+      {(() => {
+        if (!flyout || flyout !== 'payments' || !flyoutPos || !collapsed) return null;
+        const node = (
+          <div
+            className="hidden lg:block fixed z-[100] w-56 rounded-xl border border-gray-200 bg-white py-1 shadow-lg"
+            style={{ top: flyoutPos.top, left: flyoutPos.left }}
+            role="menu"
+          >
+            {/* Apply for StoryPay — shown only when not yet active */}
+            {paymentsActive === false && (
+              <button
+                type="button"
+                onClick={() => { setShowOnboardingModal(true); setFlyout(null); setFlyoutPos(null); }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 border-b border-gray-100"
+              >
+                <Zap size={14} className="text-indigo-500" />
+                Apply for StoryPay
+              </button>
+            )}
+            {paymentsFiltered.map((sub) => {
+              const SubIcon = sub.icon;
+              const active = isSubActive(sub.href);
+              return (
+                <Link
+                  key={sub.label}
+                  href={sub.href}
+                  className={`flex items-center gap-2 px-3 py-2 text-sm ${active ? 'font-semibold text-gray-900 bg-gray-50' : 'text-gray-600 hover:bg-gray-50'}`}
+                  onClick={() => { setFlyout(null); setFlyoutPos(null); }}
+                >
+                  <SubIcon size={14} />
+                  {sub.label}
+                </Link>
+              );
+            })}
+          </div>
+        );
+        return mounted ? createPortal(node, document.body) : null;
+      })()}
       {flyoutPanel(marketingFiltered, 'marketing')}
       {flyoutPanel(settingsFiltered, 'settings')}
+
+      {/* StoryPay Onboarding Modal */}
+      {showOnboardingModal && mounted && createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4">
+          <div className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+              <div className="flex items-center gap-2.5">
+                <Zap size={18} className="text-indigo-600" />
+                <h2 className="font-semibold text-gray-900">Apply for StoryPay</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowOnboardingModal(false)}
+                className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="px-6 py-5">
+              <LunarPayOnboarding
+                onActivated={() => {
+                  refreshPaymentsActive();
+                  setShowOnboardingModal(false);
+                }}
+              />
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
     </>
   );
 }
