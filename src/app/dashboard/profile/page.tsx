@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Loader2, Save, CheckCircle2, User, CreditCard,
-  ShieldCheck, Mail, Phone, ArrowRight,
+  ShieldCheck, Phone, ArrowRight,
   BadgeCheck, AlertCircle, Download, Trash2, AlertTriangle,
   KeyRound, Eye, EyeOff, AtSign,
 } from 'lucide-react';
@@ -184,21 +184,6 @@ export default function ProfilePage() {
       setTimeout(() => setSaved(false), 3000);
     } catch { setError('Network error — please try again'); }
     finally { setSaving(false); }
-  }
-
-  async function sendLoginLink() {
-    if (!profile || profile.type !== 'owner') return;
-    setSendingLink(true); setLinkError('');
-    try {
-      const res = await fetch('/api/auth/request-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: ownerForm.email || profile.email }),
-      });
-      if (res.ok) { setLinkSent(true); setTimeout(() => setLinkSent(false), 6000); }
-      else { setLinkError('Could not send link. Try again.'); }
-    } catch { setLinkError('Network error — please try again'); }
-    finally { setSendingLink(false); }
   }
 
   async function updateEmail(e: React.FormEvent) {
