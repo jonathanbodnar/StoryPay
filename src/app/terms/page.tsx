@@ -20,7 +20,7 @@ export default function TermsPage() {
       {/* Nav */}
       <nav className="border-b border-gray-100 px-6 py-4 flex items-center justify-between max-w-4xl mx-auto">
         <Link href="/">
-          <Image src="/storypay-logo-dark.png" alt="StoryVenue" width={110} height={26} />
+          <Image src="/storyvenue-logo-dark.png" alt="StoryVenue" width={130} height={32} />
         </Link>
         <Link href="/login" className="text-sm text-gray-500 hover:text-gray-800 transition-colors">
           Sign In
@@ -166,7 +166,7 @@ export default function TermsPage() {
               <p className="font-semibold">StoryVenue</p>
               <p>Operated by Story Venue Marketing</p>
               <p>Email: <a href="mailto:clients@storyvenuemarketing.com" className="text-gray-900 underline">clients@storyvenuemarketing.com</a></p>
-              <p>Website: <a href="https://storypay.io" className="text-gray-900 underline">storypay.io</a></p>
+              <p>Website: <a href="https://app.storyvenue.com" className="text-gray-900 underline">app.storyvenue.com</a></p>
             </div>
           </section>
 
