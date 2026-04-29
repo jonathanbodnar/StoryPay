@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
-import { slugifyStageLabel } from '@/lib/pipeline-stage-slug';
+import { resolveVenueCustomerPipelineContext } from '@/lib/venue-customer-pipeline-sync';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -30,24 +30,6 @@ async function stageById(venueId: string, stageId: string): Promise<StagePill | 
   };
 }
 
-async function stageFromPipelineSlug(
-  venueId: string,
-  pipelineId: string,
-  pipelineKey: string,
-): Promise<StagePill | null> {
-  if (!pipelineKey) return null;
-  const { data: stages } = await supabaseAdmin
-    .from('lead_pipeline_stages')
-    .select('name, color')
-    .eq('pipeline_id', pipelineId)
-    .eq('venue_id', venueId);
-  const match = (stages ?? []).find((s) => slugifyStageLabel(String(s.name)) === pipelineKey);
-  if (!match) return null;
-  return {
-    name: String(match.name),
-    color: ((match as { color?: string | null }).color ?? null) as string | null,
-  };
-}
 
 export async function GET(
   _request: NextRequest,
@@ -85,76 +67,28 @@ export async function GET(
   } | null;
 
   const email = (c?.customer_email ?? '').trim();
-  const pipelineSlugRaw = (c?.pipeline_stage ?? '').trim();
-  const pipelineKey = pipelineSlugRaw ? slugifyStageLabel(pipelineSlugRaw) : '';
+  // Legacy slug fallback for very old contacts that never got stage_id.
+  const pipelineKey = (c?.pipeline_stage ?? '').trim().toLowerCase().replace(/\s+/g, '_');
 
+  // Use the shared pipeline-resolution utility which safely handles multiple
+  // leads per email (uses .limit(1) + array access, not .maybeSingle()).
   let contact_stage: StagePill | null = null;
-  // Track the authoritative stage_id as we resolve it so we can return it to
-  // the client for reliable pill highlighting (ID match beats name match).
   let resolvedStageId: string | null = null;
 
-  if (c?.stage_id) {
-    contact_stage = await stageById(venueId, c.stage_id);
-    if (contact_stage) resolvedStageId = c.stage_id as string;
-  }
+  if (email || c?.stage_id || c?.pipeline_id) {
+    const ctx = await resolveVenueCustomerPipelineContext(venueId, {
+      customer_email: email,
+      pipeline_id: (c?.pipeline_id as string | null) ?? null,
+      stage_id: (c?.stage_id as string | null) ?? null,
+    });
 
-  if (!contact_stage && c?.pipeline_id && pipelineKey) {
-    contact_stage = await stageFromPipelineSlug(venueId, c.pipeline_id, pipelineKey);
-    if (contact_stage) {
-      // Resolve the actual stage ID from name so the client can do ID matching.
-      const { data: st } = await supabaseAdmin
-        .from('lead_pipeline_stages')
-        .select('id')
-        .eq('venue_id', venueId)
-        .eq('pipeline_id', c.pipeline_id as string)
-        .ilike('name', contact_stage.name)
-        .maybeSingle();
-      resolvedStageId = (st as { id?: string } | null)?.id ?? null;
+    if (ctx?.stageId) {
+      resolvedStageId = ctx.stageId;
+      contact_stage = await stageById(venueId, ctx.stageId);
     }
   }
 
-  if (email) {
-    const { data: lead } = await supabaseAdmin
-      .from('leads')
-      .select('stage_id, pipeline_id, status')
-      .eq('venue_id', venueId)
-      .ilike('email', email)
-      .order('updated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    const lr = lead as {
-      stage_id?: string | null;
-      pipeline_id?: string | null;
-      status?: string | null;
-    } | null;
-
-    if (!contact_stage && lr?.stage_id) {
-      contact_stage = await stageById(venueId, lr.stage_id as string);
-      if (contact_stage) resolvedStageId = lr.stage_id as string;
-    }
-
-    if (!contact_stage && lr?.pipeline_id && pipelineKey) {
-      contact_stage = await stageFromPipelineSlug(venueId, lr.pipeline_id as string, pipelineKey);
-      if (contact_stage && lr.pipeline_id) {
-        const { data: st } = await supabaseAdmin
-          .from('lead_pipeline_stages')
-          .select('id')
-          .eq('venue_id', venueId)
-          .eq('pipeline_id', lr.pipeline_id as string)
-          .ilike('name', contact_stage.name)
-          .maybeSingle();
-        resolvedStageId = (st as { id?: string } | null)?.id ?? null;
-      }
-    }
-
-    if (!contact_stage) {
-      const status = (lr?.status ?? '').trim();
-      if (status) {
-        contact_stage = { name: humanizePipelineSlug(slugifyStageLabel(status)), color: null };
-      }
-    }
-  }
-
+  // Slug-only fallback for very old contacts with no stage/pipeline IDs.
   if (!contact_stage && pipelineKey) {
     contact_stage = { name: humanizePipelineSlug(pipelineKey), color: null };
   }
