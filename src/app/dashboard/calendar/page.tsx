@@ -61,6 +61,11 @@ interface CalEvent {
   recurrence_rule?: RecurrenceRule | null;
   parent_id?: string;
   is_occurrence?: boolean;
+  // Google Calendar fields
+  source?: 'google';
+  read_only?: boolean;
+  google_calendar_name?: string;
+  html_link?: string;
 }
 
 function teamMemberLabel(m: { name?: string | null; first_name?: string | null; last_name?: string | null; email?: string | null }) {
@@ -134,6 +139,7 @@ function fmtHour(h: number) {
 
 // Event color helper
 function evtColor(evt: CalEvent) {
+  if (evt.source === 'google') return '#4285F4'; // Google Blue for Google Calendar events
   const typeColor = EVENT_COLORS[evt.event_type as keyof typeof EVENT_COLORS];
   return evt.venue_spaces?.color ?? typeColor ?? '#6b7280';
 }
@@ -283,11 +289,15 @@ export default function CalendarPage() {
       from = toDate(`${ymdStart}T00:00:00`, { timeZone: tz }).toISOString();
       to = toDate(`${ymdEnd}T23:59:59.999`, { timeZone: tz }).toISOString();
     }
-    const [evRes, spRes] = await Promise.all([
+    const [evRes, spRes, gRes] = await Promise.all([
       fetch(`/api/calendar?from=${from}&to=${to}`),
       fetch('/api/spaces'),
+      fetch(`/api/calendar/google/events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
     ]);
-    if (evRes.ok) setEvents(await evRes.json());
+    const localEvents: CalEvent[] = evRes.ok ? await evRes.json() : [];
+    const googleEvents: CalEvent[] = gRes.ok ? await gRes.json() : [];
+    // Merge: local events take precedence; Google events are appended
+    setEvents([...localEvents, ...googleEvents]);
     if (spRes.ok) setSpaces(await spRes.json());
     setLoading(false);
   }, [year, month, view, anchorDate, venueTz]);
@@ -823,10 +833,14 @@ export default function CalendarPage() {
                       key={`${e.id}-${dateStr}`}
                       onClick={ev => { ev.stopPropagation(); setSelectedEvent(e); }}
                       className="absolute left-0.5 right-0.5 rounded text-white text-[10px] font-medium px-1 py-0.5 text-left overflow-hidden leading-tight hover:opacity-90 transition-opacity"
-                      style={{ top, height, backgroundColor: evtColor(e), zIndex: 2 }}
+                      style={{
+                        top, height, zIndex: 2,
+                        backgroundColor: evtColor(e),
+                        ...(e.source === 'google' ? { backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255,255,255,0.15) 3px, rgba(255,255,255,0.15) 4px)' } : {}),
+                      }}
                     >
                       <span className="block truncate">
-                        {isContinuation && '← '}{e.title}{endsLater && ' →'}
+                        {e.source === 'google' && '📅 '}{isContinuation && '← '}{e.title}{endsLater && ' →'}
                       </span>
                       {height > 28 && <span className="block text-[9px] opacity-80 truncate">{fmtTime(e.start_at, tz)} – {fmtTime(e.end_at, tz)}</span>}
                     </button>
@@ -949,9 +963,12 @@ export default function CalendarPage() {
                             {dayEvts.slice(0, 3).map(evt => (
                               <button key={evt.id}
                                 onClick={e => { e.stopPropagation(); setSelectedEvent(evt); }}
-                                className="w-full text-left rounded px-1.5 py-0.5 text-[11px] font-medium text-white truncate leading-tight"
-                                style={{ backgroundColor: evtColor(evt) }}>
-                                {evt.title}
+                                className={`w-full text-left rounded px-1.5 py-0.5 text-[11px] font-medium truncate leading-tight ${evt.source === 'google' ? 'text-white opacity-85' : 'text-white'}`}
+                                style={{
+                                  backgroundColor: evtColor(evt),
+                                  ...(evt.source === 'google' ? { backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255,255,255,0.15) 3px, rgba(255,255,255,0.15) 4px)' } : {}),
+                                }}>
+                                {evt.source === 'google' && '📅 '}{evt.title}
                               </button>
                             ))}
                             {dayEvts.length > 3 && <p className="text-[10px] text-gray-400 pl-1">+{dayEvts.length - 3} more</p>}
@@ -1558,10 +1575,18 @@ export default function CalendarPage() {
               <div>
                 <p className="font-semibold text-gray-900">{selectedEvent.title}</p>
                 <p className="text-xs text-gray-400 capitalize">
-                  {EVENT_TYPE_LABELS[selectedEvent.event_type as keyof typeof EVENT_TYPE_LABELS] ?? selectedEvent.event_type} · {selectedEvent.status}
+                  {selectedEvent.source === 'google'
+                    ? `Google Calendar · ${selectedEvent.google_calendar_name ?? 'Google'}`
+                    : `${EVENT_TYPE_LABELS[selectedEvent.event_type as keyof typeof EVENT_TYPE_LABELS] ?? selectedEvent.event_type} · ${selectedEvent.status}`}
                 </p>
               </div>
             </div>
+            {selectedEvent.source === 'google' && (
+              <div className="mb-3 flex items-center gap-2 rounded-lg bg-blue-50 border border-blue-100 px-3 py-2 text-xs text-blue-700">
+                <span>📅</span>
+                <span>From Google Calendar — read only in StoryVenue.</span>
+              </div>
+            )}
             <div className="space-y-2 text-sm text-gray-700">
               {dateStrInTimeZone(selectedEvent.start_at, tzResolved) === dateStrInTimeZone(selectedEvent.end_at, tzResolved) ? (
                 <p><span className="text-gray-400">Date:</span> {new Date(selectedEvent.start_at).toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric', timeZone: tzResolved })}</p>
@@ -1599,26 +1624,37 @@ export default function CalendarPage() {
               {selectedEvent.notes && <p><span className="text-gray-400">Notes:</span> {selectedEvent.notes}</p>}
             </div>
             <div className="flex justify-between items-center mt-5 gap-3">
-              <button
-                onClick={() => openEditEvent(selectedEvent)}
-                className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-                Edit
-              </button>
-              <button
-                onClick={() => {
-                  if (selectedEvent.recurrence_rule) {
-                    // Deleting the parent nukes every occurrence. Warn the
-                    // user before they accidentally wipe a weekly series.
-                    const ok = window.confirm('This is a repeating event. Deleting it will remove every occurrence in the series. Continue?');
-                    if (!ok) return;
-                  }
-                  handleDelete(selectedEvent.id);
-                }}
-                disabled={deleting}
-                className="flex items-center gap-1.5 rounded-xl border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
-                {deleting && <Loader2 size={13} className="animate-spin" />}
-                {selectedEvent.recurrence_rule ? 'Delete Series' : 'Delete Event'}
-              </button>
+              {selectedEvent.source === 'google' ? (
+                // Google events: open in Google Calendar, no edit/delete here
+                <a
+                  href={selectedEvent.html_link ?? 'https://calendar.google.com'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                  Open in Google Calendar <ExternalLink size={12} />
+                </a>
+              ) : (
+                <>
+                  <button
+                    onClick={() => openEditEvent(selectedEvent)}
+                    className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (selectedEvent.recurrence_rule) {
+                        const ok = window.confirm('This is a repeating event. Deleting it will remove every occurrence in the series. Continue?');
+                        if (!ok) return;
+                      }
+                      handleDelete(selectedEvent.id);
+                    }}
+                    disabled={deleting}
+                    className="flex items-center gap-1.5 rounded-xl border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
+                    {deleting && <Loader2 size={13} className="animate-spin" />}
+                    {selectedEvent.recurrence_rule ? 'Delete Series' : 'Delete Event'}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
