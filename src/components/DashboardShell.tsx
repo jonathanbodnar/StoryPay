@@ -62,11 +62,11 @@ export default function DashboardShell({
       .catch(() => setPaymentsActive(false));
   }, []);
 
-  // On first login (?welcome=1) open the StoryPay onboarding modal as a
-  // gentle prompt, then strip the query param so it doesn't persist.
+  // On first login (?welcome=1) open the "Get Started" onboarding checklist,
+  // then strip the query param so it doesn't persist.
   useEffect(() => {
     if (searchParams.get('welcome') === '1') {
-      window.dispatchEvent(new CustomEvent('storypay:open-onboarding'));
+      window.dispatchEvent(new CustomEvent('onboarding:open'));
       router.replace('/dashboard');
     }
   }, [searchParams, router]);
@@ -129,13 +129,13 @@ export default function DashboardShell({
               </span>
               <span>
                 <span className="font-semibold">Payment processing is not active.</span>{' '}
-                You cannot send proposals or process payments until your StoryPay merchant account is approved.{' '}
+                You cannot send proposals or process payments until your StoryPay™ merchant account is approved.{' '}
                 <button
                   type="button"
                   onClick={() => window.dispatchEvent(new CustomEvent('storypay:open-onboarding'))}
                   className="underline font-semibold hover:text-red-700"
                 >
-                  Apply for StoryPay
+                  Apply for StoryPay™
                 </button>
                 .
               </span>

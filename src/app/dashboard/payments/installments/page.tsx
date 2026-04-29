@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { Search, X, Loader2, Calendar, User, ArrowRight } from 'lucide-react';
 import { formatCents, formatDate, getStatusColor, classNames } from '@/lib/utils';
+import PaymentGate from '@/components/PaymentGate';
 
 interface Schedule {
  id: number | string;
@@ -17,7 +18,7 @@ interface Schedule {
  customerName?: string | null;
 }
 
-export default function InstallmentsPage() {
+function InstallmentsPageInner() {
  const [schedules, setSchedules] = useState<Schedule[]>([]);
  const [loading, setLoading] = useState(true);
  const [search, setSearch] = useState('');
@@ -122,4 +123,8 @@ export default function InstallmentsPage() {
  )}
  </div>
  );
+}
+
+export default function InstallmentsPage() {
+  return <PaymentGate><InstallmentsPageInner /></PaymentGate>;
 }

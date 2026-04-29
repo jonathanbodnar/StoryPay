@@ -35,8 +35,8 @@ export default function PaymentGate({ children }: { children: React.ReactNode })
       </div>
       <h2 className="mb-2 text-xl font-bold text-gray-900">Payment processing required</h2>
       <p className="mb-6 max-w-sm text-sm text-gray-500">
-        You need an approved StoryPay merchant account before you can send proposals or process
-        payments. The application takes just a few minutes.
+        You need an approved StoryPay™ merchant account before you can send proposals or process
+        payments. The application takes just a few minutes — and it&apos;s free for venue owners.
       </p>
       <button
         type="button"
@@ -44,7 +44,7 @@ export default function PaymentGate({ children }: { children: React.ReactNode })
         className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 transition-colors"
       >
         <Zap size={15} />
-        Apply for StoryPay
+        Apply for StoryPay™
       </button>
     </div>
   );

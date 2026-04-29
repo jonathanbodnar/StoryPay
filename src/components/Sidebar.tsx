@@ -522,7 +522,7 @@ export default function Sidebar({
               </button>
               {paymentsOpen && (
                 <div className="mt-0.5 ml-2 pl-2 space-y-0.5 py-0.5">
-                  {/* Apply for StoryPay — first item, shown when not yet active */}
+                  {/* Apply for StoryPay™ — first item, shown when not yet active */}
                   {paymentsActive === false && (
                     <button
                       type="button"
@@ -530,7 +530,7 @@ export default function Sidebar({
                       className="flex w-full items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm font-semibold text-indigo-700 hover:bg-indigo-50 transition-colors"
                     >
                       <Zap size={14} className="text-indigo-500" />
-                      <span>Apply for StoryPay</span>
+                      <span>Apply for StoryPay™</span>
                     </button>
                   )}
                   {paymentsFiltered.map((sub) => {
@@ -818,7 +818,7 @@ export default function Sidebar({
                 className="flex w-full items-center gap-2 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 border-b border-gray-100"
               >
                 <Zap size={14} className="text-indigo-500" />
-                Apply for StoryPay
+                Apply for StoryPay™
               </button>
             )}
             {paymentsFiltered.map((sub) => {
@@ -850,7 +850,7 @@ export default function Sidebar({
             <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
               <div className="flex items-center gap-2.5">
                 <Zap size={18} className="text-indigo-600" />
-                <h2 className="font-semibold text-gray-900">Apply for StoryPay</h2>
+                <h2 className="font-semibold text-gray-900">Apply for StoryPay™</h2>
               </div>
               <button
                 type="button"

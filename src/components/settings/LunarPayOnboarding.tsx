@@ -269,7 +269,7 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
           <p className="font-semibold text-emerald-800">Payments active</p>
           <p className="mt-0.5 text-sm text-emerald-700">
             Your merchant account is approved and ready. You can send proposals, collect deposits,
-            and process payments directly through StoryPay.
+            and process payments directly through StoryPay™.
           </p>
           {lpStatus?.merchantId && (
             <p className="mt-2 text-xs text-emerald-600">Merchant ID: {lpStatus.merchantId}</p>
@@ -407,7 +407,7 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
             <div className="pt-2 border-t border-gray-200">
               <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Bank Account (for deposits)</p>
               <p className="text-[11px] text-gray-400 mb-3">
-                This information is transmitted securely to Fortis and is never stored on StoryPay servers.
+                This information is transmitted securely to Fortis and is never stored on StoryPay™ servers.
               </p>
               <div className="space-y-3">
                 <Field label="Account Holder Name" value={s2.accountHolderName}
@@ -542,15 +542,24 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
             <CreditCard size={20} className="text-white" />
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900">Apply for StoryPay Payments</h3>
+            <h3 className="font-semibold text-gray-900">Apply for StoryPay™ Payments</h3>
             <p className="text-xs text-gray-500">Powered by LunarPay · PCI-compliant</p>
           </div>
         </div>
 
         <p className="text-sm text-gray-600 mb-5">
-          Accept credit cards and bank transfers directly through StoryPay. Send proposals, collect
+          Accept credit cards and bank transfers directly through StoryPay™. Send proposals, collect
           deposits, and run payment schedules — all without leaving the platform.
         </p>
+
+        {/* Free for venue owners — highlighted as top feature */}
+        <div className="mb-4 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+          <BadgeCheck size={20} className="shrink-0 text-emerald-600" />
+          <div>
+            <p className="text-sm font-bold text-emerald-800">Free for Venue Owners — 0% Processing Fees</p>
+            <p className="text-xs text-emerald-700">Keep 100% of every payment. No monthly fees, no hidden charges.</p>
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 mb-6">
           {[

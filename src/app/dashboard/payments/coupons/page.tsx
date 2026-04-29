@@ -1,4 +1,5 @@
 'use client';
+import PaymentGate from '@/components/PaymentGate';
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -9,7 +10,7 @@ const INPUT =
   'w-full rounded-2xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none transition-colors';
 const LABEL = 'block text-sm font-medium text-gray-700 mb-1.5';
 
-export default function VenueCouponsPage() {
+function CouponsPageInner() {
   const [coupons, setCoupons] = useState<VenueCouponRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -461,4 +462,8 @@ export default function VenueCouponsPage() {
       </div>
     </div>
   );
+}
+
+export default function CouponsPage() {
+  return <PaymentGate><CouponsPageInner /></PaymentGate>;
 }

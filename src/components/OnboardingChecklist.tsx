@@ -132,6 +132,13 @@ export default function OnboardingChecklist() {
 
  // Called by Settings"Restart Guide"— clears localStorage and DB flag
  // This is triggered by a custom event dispatched from the settings page
+ // Listen for external open trigger (e.g. from ?welcome=1 on first login)
+ useEffect(() => {
+ function onOpen() { setModalOpen(true); }
+ window.addEventListener('onboarding:open', onOpen);
+ return () => window.removeEventListener('onboarding:open', onOpen);
+ }, []);
+
  useEffect(() => {
  function onReset() {
  if (!venueId) return;

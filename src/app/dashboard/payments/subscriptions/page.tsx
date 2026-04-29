@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { Search, X, Loader2, RefreshCw, User, ArrowRight } from 'lucide-react';
 import { formatCents, formatDate, getStatusColor, classNames } from '@/lib/utils';
+import PaymentGate from '@/components/PaymentGate';
 
 interface Subscription {
  id: string;
@@ -16,7 +17,7 @@ interface Subscription {
  customerName?: string | null;
 }
 
-export default function SubscriptionsPage() {
+function SubscriptionsPageInner() {
  const [subs, setSubs] = useState<Subscription[]>([]);
  const [loading, setLoading] = useState(true);
  const [search, setSearch] = useState('');
@@ -147,4 +148,8 @@ export default function SubscriptionsPage() {
  )}
  </div>
  );
+}
+
+export default function SubscriptionsPage() {
+  return <PaymentGate><SubscriptionsPageInner /></PaymentGate>;
 }

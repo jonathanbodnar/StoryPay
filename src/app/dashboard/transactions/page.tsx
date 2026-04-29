@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Loader2, Eye, X, RotateCcw, User } from 'lucide-react';
 import { formatCents, formatDate, getStatusColor, classNames } from '@/lib/utils';
+import PaymentGate from '@/components/PaymentGate';
 import RefundModal from '@/components/RefundModal';
 
 type TabKey = 'charges' | 'schedules' | 'subscriptions';
@@ -50,7 +51,7 @@ const tabs: { key: TabKey; label: string }[] = [
  { key: 'subscriptions', label: 'Subscriptions' },
 ];
 
-export default function TransactionsPage() {
+function TransactionsPageInner() {
  const [activeTab, setActiveTab] = useState<TabKey>('charges');
  const [charges, setCharges] = useState<Charge[]>([]);
  const [schedules, setSchedules] = useState<Schedule[]>([]);
@@ -378,4 +379,8 @@ export default function TransactionsPage() {
  )}
  </div>
  );
+}
+
+export default function TransactionsPage() {
+  return <PaymentGate><TransactionsPageInner /></PaymentGate>;
 }

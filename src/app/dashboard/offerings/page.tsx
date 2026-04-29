@@ -19,6 +19,7 @@ import {
   Loader2, Package, Layers, Plus, Pencil, Trash2, X, Check, Search,
 } from 'lucide-react';
 import { formatCents } from '@/lib/utils';
+import PaymentGate from '@/components/PaymentGate';
 
 const INPUT =
   'w-full rounded-2xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors';
@@ -93,7 +94,7 @@ function bundleTotalCents(bundle: BundleRow): number {
 
 type TabFilter = 'all' | 'items' | 'bundles';
 
-export default function OfferingsPage() {
+function OfferingsPageInner() {
   const [items, setItems] = useState<ItemRow[]>([]);
   const [bundles, setBundles] = useState<BundleRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1251,4 +1252,8 @@ function BundleForm({
       </div>
     </form>
   );
+}
+
+export default function OfferingsPage() {
+  return <PaymentGate><OfferingsPageInner /></PaymentGate>;
 }
