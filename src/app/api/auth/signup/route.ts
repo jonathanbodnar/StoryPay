@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
+import bcrypt from 'bcryptjs';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -11,6 +12,8 @@ interface SignupPayload {
   last_name?: string;
   email?: string;
   phone?: string;
+  password?: string;
+  remember_me?: boolean;
 }
 
 function isEmail(s: string): boolean {
@@ -25,17 +28,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const venueName = (payload.venue_name ?? '').trim();
-  const firstName = (payload.first_name ?? '').trim();
-  const lastName  = (payload.last_name ?? '').trim();
-  const email     = (payload.email ?? '').trim().toLowerCase();
-  const phone     = (payload.phone ?? '').trim();
+  const venueName  = (payload.venue_name ?? '').trim();
+  const firstName  = (payload.first_name ?? '').trim();
+  const lastName   = (payload.last_name ?? '').trim();
+  const email      = (payload.email ?? '').trim().toLowerCase();
+  const phone      = (payload.phone ?? '').trim();
+  const password   = (payload.password ?? '').trim();
+  const rememberMe = payload.remember_me ?? false;
 
   if (!venueName) return NextResponse.json({ error: 'Venue name is required.' }, { status: 400 });
   if (!firstName) return NextResponse.json({ error: 'First name is required.' }, { status: 400 });
   if (!lastName)  return NextResponse.json({ error: 'Last name is required.' },  { status: 400 });
   if (!email || !isEmail(email)) {
     return NextResponse.json({ error: 'A valid email address is required.' }, { status: 400 });
+  }
+  if (!password || password.length < 8) {
+    return NextResponse.json({ error: 'Password must be at least 8 characters.' }, { status: 400 });
   }
 
   const fullName = `${firstName} ${lastName}`.trim();
@@ -111,15 +119,20 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // Hash password before storing
+  const passwordHash = await bcrypt.hash(password, 12);
+
   const { data: venue, error: venueErr } = await supabaseAdmin
     .from('venues')
     .insert({
-      owner_id: userId,
-      name:     venueName,
+      owner_id:      userId,
+      name:          venueName,
       email,
-      phone:    phone || null,
+      phone:         phone || null,
+      password_hash: passwordHash,
+      setup_completed: true,
     })
-    .select('id, login_token')
+    .select('id')
     .single();
 
   if (venueErr || !venue) {
@@ -131,41 +144,35 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const appUrl   = process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com';
-  const loginUrl = `${appUrl}/login/${venue.login_token}`;
-
-  let emailSent = false;
+  // Send welcome email (best-effort, non-blocking)
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com';
   try {
-    const emailResult = await sendEmail({
+    await sendEmail({
       to: email,
-      subject: `Welcome to StoryVenue — log in to finish setting up ${venueName}`,
-      html: welcomeEmailHtml({ firstName, venueName, loginUrl }),
+      subject: `Welcome to StoryVenue — your account for ${venueName} is ready`,
+      html: welcomeEmailHtml({ firstName, venueName, dashboardUrl: `${appUrl}/dashboard` }),
     });
-    emailSent = emailResult.success !== false;
-    if (!emailSent) {
-      console.warn('[signup] email not sent:', emailResult.error);
-    }
   } catch (e) {
-    console.error('[signup] email send threw:', e);
+    console.warn('[signup] welcome email failed (non-fatal):', e);
   }
 
-  return NextResponse.json({
-    ok:         true,
-    venue_id:   venue.id,
-    email,
-    email_sent: emailSent,
-    login_url:  emailSent ? undefined : loginUrl,
+  // Log the user in immediately by setting the session cookie
+  const maxAge = rememberMe ? 60 * 60 * 24 * 365 : 60 * 60 * 24 * 30;
+  const response = NextResponse.json({ ok: true, redirect: '/dashboard?welcome=1' });
+  response.cookies.set('venue_id', venue.id, {
+    path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge,
   });
+  return response;
 }
 
 function welcomeEmailHtml({
   firstName,
   venueName,
-  loginUrl,
+  dashboardUrl,
 }: {
   firstName: string;
   venueName: string;
-  loginUrl: string;
+  dashboardUrl: string;
 }): string {
   return `
 <div style="font-family:'Open Sans',Arial,sans-serif;max-width:560px;margin:0 auto;background:#ffffff">
@@ -176,18 +183,15 @@ function welcomeEmailHtml({
     <h2 style="color:#111827;font-size:20px;font-weight:700;margin:0 0 16px">Welcome, ${escapeHtml(firstName)}!</h2>
     <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 16px">
       Your StoryVenue account for <strong>${escapeHtml(venueName)}</strong> is ready.
-      Click the button below to log in and start setting up your directory listing.
+      Sign in anytime at <a href="${dashboardUrl}" style="color:#1b1b1b;text-decoration:underline;">app.storyvenue.com</a>
+      using your email address and the password you created.
     </p>
     <div style="text-align:center;margin:32px 0">
-      <a href="${loginUrl}"
+      <a href="${dashboardUrl}"
         style="background-color:#1b1b1b;border-radius:10px;color:#ffffff;display:inline-block;font-family:'Open Sans',Arial,sans-serif;font-size:16px;font-weight:700;line-height:48px;text-align:center;text-decoration:none;width:240px;">
-        <span style="color:#ffffff;text-decoration:none;">Log In &amp; Get Started</span>
+        <span style="color:#ffffff;text-decoration:none;">Go to Dashboard</span>
       </a>
     </div>
-    <p style="color:#9ca3af;font-size:12px;text-align:center;margin:8px 0 0">
-      If the button doesn&apos;t work, copy this link:<br>
-      <a href="${loginUrl}" style="color:#1b1b1b;text-decoration:underline;">${loginUrl}</a>
-    </p>
     <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0 16px">
     <p style="color:#9ca3af;font-size:11px;text-align:center;margin:0">
       If you didn&apos;t sign up for StoryVenue, you can safely ignore this email.

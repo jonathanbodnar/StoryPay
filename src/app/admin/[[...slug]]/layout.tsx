@@ -10,7 +10,7 @@ import {
   Megaphone, Plus, Trash2, Pencil, X, Loader2, ThumbsUp, ThumbsDown,
   Check, BarChart2, ExternalLink, ChevronRight, Search, RefreshCw,
   LayoutDashboard, Menu, Lightbulb, BookOpen, Star, Globe, Layers,
-  Repeat, Wallet, BadgeCheck, Sparkles, CalendarDays,
+  Repeat, Wallet, BadgeCheck, Sparkles, CalendarDays, Eye, EyeOff,
 } from 'lucide-react';
 import {
   VenueManagementPortal,
@@ -583,7 +583,9 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
   );
 
   const [authState, setAuthState]   = useState<AuthState>('loading');
-  const [secret, setSecret]         = useState('');
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPass, setAdminPass]   = useState('');
+  const [showAdminPass, setShowAdminPass] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
@@ -1096,9 +1098,14 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    const res = await fetch('/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ secret }) });
-    if (!res.ok) { setLoginError('Invalid secret'); return; }
-    setSecret(''); fetchVenues();
+    setLoginError('');
+    const res = await fetch('/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: adminEmail.trim(), password: adminPass }),
+    });
+    if (!res.ok) { setLoginError('Invalid email or password.'); return; }
+    setAdminEmail(''); setAdminPass(''); fetchVenues();
   }
 
   async function handleLogout() {
@@ -1163,12 +1170,42 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
             </div>
             <h2 className="font-heading text-xl text-gray-900 mb-6 text-center">Admin Login</h2>
             {loginError && <div className="bg-red-50 text-red-700 text-sm rounded-xl px-4 py-2 mb-4">{loginError}</div>}
-            <label className="block text-sm font-medium text-gray-700 mb-1">Admin Secret</label>
-            <input type="password" value={secret} onChange={e => setSecret(e.target.value)} required
-              className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-900 focus:border-brand-900 outline-none mb-4"
-              placeholder="Enter admin secret..." />
+            <div className="space-y-3 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input
+                  type="email"
+                  required
+                  autoFocus
+                  value={adminEmail}
+                  onChange={e => setAdminEmail(e.target.value)}
+                  className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-900 focus:border-brand-900 outline-none"
+                  placeholder="admin@storyvenue.com"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <div className="relative">
+                  <input
+                    type={showAdminPass ? 'text' : 'password'}
+                    required
+                    value={adminPass}
+                    onChange={e => setAdminPass(e.target.value)}
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-900 focus:border-brand-900 outline-none pr-10"
+                    placeholder="••••••••"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminPass(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    {showAdminPass ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+            </div>
             <button type="submit" className="w-full text-white font-semibold py-2.5 rounded-xl transition-colors hover:opacity-90" style={{ backgroundColor: BRAND }}>
-              Login
+              Sign In
             </button>
           </form>
         </div>

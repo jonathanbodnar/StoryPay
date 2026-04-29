@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, Eye, EyeOff } from 'lucide-react';
 import { ModeToggle } from '@/app/login/LoginClient';
 
@@ -60,27 +60,36 @@ export function SignupClient() {
   );
 }
 
-// ───────── Venue signup (magic link, no password) ─────────────────────────
+// ───────── Venue signup (email + password) ────────────────────────────────
 
 function VenueSignupForm() {
+  const router = useRouter();
   const [venueName, setVenueName] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const [sent, setSent] = useState(false);
-  const [sentEmail, setSentEmail] = useState('');
-  const [devLoginUrl, setDevLoginUrl] = useState<string | null>(null);
-
-  const canSubmit = venueName.trim() && firstName.trim() && lastName.trim() && email.trim();
+  const passwordsMatch = password === confirmPassword;
+  const canSubmit =
+    venueName.trim() &&
+    firstName.trim() &&
+    lastName.trim() &&
+    email.trim() &&
+    password.length >= 8 &&
+    passwordsMatch;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
+    if (!passwordsMatch) { setError('Passwords do not match.'); return; }
     setLoading(true);
     setError('');
     try {
@@ -88,11 +97,13 @@ function VenueSignupForm() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          venue_name: venueName.trim(),
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
-          email: email.trim(),
-          phone: phone.trim(),
+          venue_name:  venueName.trim(),
+          first_name:  firstName.trim(),
+          last_name:   lastName.trim(),
+          email:       email.trim(),
+          phone:       phone.trim(),
+          password,
+          remember_me: rememberMe,
         }),
       });
       const data = await res.json();
@@ -100,59 +111,13 @@ function VenueSignupForm() {
         setError(data.error || 'Could not create your account. Please try again.');
         return;
       }
-      setSentEmail(email.trim());
-      setDevLoginUrl(data.login_url ?? null);
-      setSent(true);
+      // Session cookie is set server-side; redirect to dashboard
+      router.replace(data.redirect ?? '/dashboard?welcome=1');
     } catch {
       setError('Network error. Please try again.');
     } finally {
       setLoading(false);
     }
-  }
-
-  if (sent) {
-    return (
-      <div className="text-center">
-        {devLoginUrl ? (
-          <>
-            <div className="text-4xl mb-4">🎉</div>
-            <h2 className="text-lg font-bold text-gray-900 mb-2">Account created</h2>
-            <p className="text-sm text-gray-500 leading-relaxed mb-5">
-              We couldn&apos;t send your welcome email, but your account for{' '}
-              <span className="font-medium text-gray-700">{sentEmail}</span> is ready. Click below to log in now.
-            </p>
-            <a
-              href={devLoginUrl}
-              className="inline-flex items-center justify-center gap-2 rounded-lg px-6 py-3 text-sm font-semibold text-white bg-gray-900 hover:bg-gray-800 transition-colors"
-            >
-              Log in to your dashboard →
-            </a>
-          </>
-        ) : (
-          <>
-            <div className="text-4xl mb-4">📬</div>
-            <h2 className="text-lg font-bold text-gray-900 mb-2">Check your inbox</h2>
-            <p className="text-sm text-gray-500 leading-relaxed">
-              We sent a login link to <span className="font-medium text-gray-700">{sentEmail}</span>. Click it to
-              finish setting up your venue.
-            </p>
-          </>
-        )}
-
-        <div className="mt-6 text-sm text-gray-500">
-          {devLoginUrl ? 'Need to start over?' : "Didn't get it?"}{' '}
-          <button
-            onClick={() => {
-              setSent(false);
-              setDevLoginUrl(null);
-            }}
-            className="text-gray-900 underline hover:no-underline"
-          >
-            Try again
-          </button>
-        </div>
-      </div>
-    );
   }
 
   return (
@@ -226,6 +191,62 @@ function VenueSignupForm() {
           />
         </div>
 
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
+          <div className="relative">
+            <input
+              type={showPass ? 'text' : 'password'}
+              required
+              minLength={8}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Min. 8 characters"
+              className={`${INPUT} pr-10`}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPass((v) => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Confirm password</label>
+          <div className="relative">
+            <input
+              type={showConfirm ? 'text' : 'password'}
+              required
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Re-enter password"
+              className={`${INPUT} pr-10 ${confirmPassword && !passwordsMatch ? 'border-red-400 focus:border-red-400 focus:ring-red-200' : ''}`}
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirm((v) => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+          {confirmPassword && !passwordsMatch && (
+            <p className="text-xs text-red-500 mt-1">Passwords do not match.</p>
+          )}
+        </div>
+
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={rememberMe}
+            onChange={(e) => setRememberMe(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-400"
+          />
+          <span className="text-sm text-gray-600">Keep me logged in</span>
+        </label>
+
         {error && <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
 
         <button
@@ -254,20 +275,25 @@ function VenueSignupForm() {
   );
 }
 
-// ───────── Couple signup (password + confirm email) ───────────────────────
+// ───────── Couple signup (password + confirm password) ────────────────────
 
 function CoupleSignupForm() {
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
 
+  const passwordsMatch = password === confirmPassword;
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!passwordsMatch) { setError('Passwords do not match.'); return; }
     setError('');
     setLoading(true);
     try {
@@ -363,14 +389,38 @@ function CoupleSignupForm() {
               {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
           </div>
-          <p className="mt-1 text-xs text-gray-400">At least 8 characters.</p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Confirm password</label>
+          <div className="relative">
+            <input
+              type={showConfirm ? 'text' : 'password'}
+              required
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Re-enter password"
+              className={`${INPUT} pr-10 ${confirmPassword && !passwordsMatch ? 'border-red-400 focus:border-red-400 focus:ring-red-200' : ''}`}
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirm((v) => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+          {confirmPassword && !passwordsMatch && (
+            <p className="text-xs text-red-500 mt-1">Passwords do not match.</p>
+          )}
         </div>
 
         {error && <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
 
         <button
           type="submit"
-          disabled={loading || !email.trim() || password.length < 8}
+          disabled={loading || !email.trim() || password.length < 8 || !passwordsMatch}
           className="w-full flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60"
           style={{ backgroundColor: '#1b1b1b' }}
         >

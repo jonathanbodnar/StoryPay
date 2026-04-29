@@ -208,7 +208,7 @@ function VenueLoginForm() {
           ← Back
         </button>
         <h2 className="text-lg font-bold text-gray-900 mb-1">Forgot your password?</h2>
-        <p className="text-sm text-gray-500 mb-6">Enter your email and we&apos;ll send you a sign-in link.</p>
+        <p className="text-sm text-gray-500 mb-6">Enter your email and we&apos;ll send you a reset link.</p>
         <form onSubmit={handleForgot} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
@@ -230,7 +230,7 @@ function VenueLoginForm() {
             style={{ backgroundColor: '#1b1b1b' }}
           >
             {forgotLoading ? <Loader2 size={15} className="animate-spin" /> : null}
-            {forgotLoading ? 'Sending...' : 'Send Sign-In Link'}
+            {forgotLoading ? 'Sending...' : 'Send Reset Link'}
           </button>
         </form>
       </>
@@ -326,6 +326,7 @@ function CoupleLoginForm({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -394,6 +395,16 @@ function CoupleLoginForm({
             </button>
           </div>
         </div>
+
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={rememberMe}
+            onChange={(e) => setRememberMe(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-400"
+          />
+          <span className="text-sm text-gray-600">Keep me logged in</span>
+        </label>
 
         {error && <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
 
