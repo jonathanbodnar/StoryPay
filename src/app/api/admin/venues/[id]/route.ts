@@ -91,10 +91,10 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   const { id: venueId } = await params;
   if (!venueId) return NextResponse.json({ error: 'Missing venue id' }, { status: 400 });
 
-  // Confirm the venue exists first
+  // Confirm the venue exists and grab owner_id for auth cleanup
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('id, name')
+    .select('id, name, owner_id')
     .eq('id', venueId)
     .maybeSingle();
   if (!venue) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
@@ -120,6 +120,16 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   // Delete the venue — all related rows cascade automatically
   const { error } = await supabaseAdmin.from('venues').delete().eq('id', venueId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Delete the Supabase Auth user so the email is freed for re-registration
+  const ownerId = (venue as { owner_id?: string | null }).owner_id;
+  if (ownerId) {
+    try {
+      await supabaseAdmin.auth.admin.deleteUser(ownerId);
+    } catch (e) {
+      console.warn('[admin/venues/delete] auth user deletion failed (non-fatal):', e);
+    }
+  }
 
   return NextResponse.json({ deleted: true, venueId, venueName: venue.name });
 }

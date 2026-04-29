@@ -36,10 +36,10 @@ export async function POST(request: NextRequest) {
   let body: { confirmName?: string };
   try { body = await request.json(); } catch { body = {}; }
 
-  // Fetch venue to validate confirm name
+  // Fetch venue to validate confirm name and grab owner_id for auth cleanup
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('id, name')
+    .select('id, name, owner_id')
     .eq('id', venueId)
     .maybeSingle();
 
@@ -65,9 +65,19 @@ export async function POST(request: NextRequest) {
     }
   } catch { /* non-fatal */ }
 
-  // Delete venue — cascade handles all related rows
+  // Delete venue row — cascade handles all related rows
   const { error } = await supabaseAdmin.from('venues').delete().eq('id', venueId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Delete the Supabase Auth user so the email can be reused for a new account
+  const ownerId = (venue as { owner_id?: string | null }).owner_id;
+  if (ownerId) {
+    try {
+      await supabaseAdmin.auth.admin.deleteUser(ownerId);
+    } catch (e) {
+      console.warn('[venues/me/delete] auth user deletion failed (non-fatal):', e);
+    }
+  }
 
   // Clear session cookies
   const response = NextResponse.json({ deleted: true });
