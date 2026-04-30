@@ -9,6 +9,7 @@ import {
 } from '@/lib/recurrence';
 import { syncAppointmentRemindersForEvent } from '@/lib/appointment-reminders';
 import { dispatchCalendarNotification, buildNotifVarsForEvent } from '@/lib/calendar-notifications';
+import { pushEventCreateToGoogle } from '@/lib/google-calendar-push';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -234,27 +235,50 @@ export async function POST(request: NextRequest) {
 
   void syncAppointmentRemindersForEvent(String((row as { id: string }).id));
 
-  // Fire booked_confirmed notification (fire-and-forget)
-  if ((status ?? 'confirmed') === 'confirmed' && customer_email) {
-    void (async () => {
-      try {
-        const { data: calSettings } = await supabaseAdmin
-          .from('venue_calendar_settings')
-          .select('timezone')
-          .eq('venue_id', venueId)
-          .maybeSingle();
-        const tz = (calSettings as { timezone?: string } | null)?.timezone;
-        const eventId = String((row as { id: string }).id);
+  // Push to Google Calendar (fire-and-forget — local insert succeeded so we
+  // never block on Google) + dispatch booked_confirmed notification.
+  void (async () => {
+    try {
+      const { data: calSettings } = await supabaseAdmin
+        .from('venue_calendar_settings')
+        .select('timezone')
+        .eq('venue_id', venueId)
+        .maybeSingle();
+      const tz = (calSettings as { timezone?: string } | null)?.timezone ?? null;
+      const eventId = String((row as { id: string }).id);
+
+      // Push the event to Google Calendar so the venue owner sees it there too.
+      const link = await pushEventCreateToGoogle(venueId, {
+        title: (title as string).trim(),
+        start_at: start_at as string,
+        end_at: end_at as string,
+        all_day: !!all_day,
+        notes: (notes as string | null) ?? null,
+        attendees: customer_email ? [customer_email as string] : [],
+        time_zone: tz,
+      });
+      if (link) {
+        await supabaseAdmin
+          .from('calendar_events')
+          .update({
+            google_event_id: link.google_event_id,
+            google_calendar_id: link.google_calendar_id,
+            google_html_link: link.html_link ?? null,
+          })
+          .eq('id', eventId);
+      }
+
+      if ((status ?? 'confirmed') === 'confirmed' && customer_email) {
         const vars = await buildNotifVarsForEvent(
           { id: eventId, venue_id: venueId, title: (title as string).trim(), start_at: start_at as string, end_at: end_at as string, customer_email: customer_email as string },
-          tz,
+          tz ?? undefined,
         );
         if (vars) await dispatchCalendarNotification(venueId, 'booked_confirmed', vars);
-      } catch (e) {
-        console.error('[calendar POST] notification dispatch error:', e);
       }
-    })();
-  }
+    } catch (e) {
+      console.error('[calendar POST] post-insert side-effects error:', e);
+    }
+  })();
 
   return NextResponse.json(flattenRow(row as Parameters<typeof flattenRow>[0]), { status: 201 });
 }

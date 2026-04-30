@@ -4,6 +4,7 @@ import { getVenueId } from '@/lib/auth-helpers';
 import { normalizeRule } from '@/lib/recurrence';
 import { syncAppointmentRemindersForEvent } from '@/lib/appointment-reminders';
 import { dispatchCalendarNotification, buildNotifVarsForEvent } from '@/lib/calendar-notifications';
+import { pushEventUpdateToGoogle, pushEventDeleteToGoogle } from '@/lib/google-calendar-push';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -178,25 +179,57 @@ export async function PATCH(
 
   void syncAppointmentRemindersForEvent(id);
 
-  // Fire cancellation or reschedule notification (fire-and-forget)
+  // Push update to Google Calendar + dispatch notifications (fire-and-forget)
   if (row) {
     const eventRow = row as Record<string, unknown>;
+
+    // Sync to Google whenever any user-visible field changed (title, time,
+    // notes, status). Always derive a complete event body from the new row.
+    const googleEventId   = (eventRow.google_event_id as string | null) ?? null;
+    const googleCalendarId = (eventRow.google_calendar_id as string | null) ?? null;
     const isCancelled = updates.status === 'cancelled';
-    const isRescheduled = !isCancelled && ('start_at' in updates || 'end_at' in updates);
 
-    if (isCancelled || isRescheduled) {
-      void (async () => {
-        try {
-          const customerEmail = (eventRow.customer_email as string | null)?.trim();
-          if (!customerEmail) return;
+    void (async () => {
+      try {
+        const { data: calSettings } = await supabaseAdmin
+          .from('venue_calendar_settings')
+          .select('timezone')
+          .eq('venue_id', venueId)
+          .maybeSingle();
+        const tz = (calSettings as { timezone?: string } | null)?.timezone ?? null;
 
-          const { data: calSettings } = await supabaseAdmin
-            .from('venue_calendar_settings')
-            .select('timezone')
-            .eq('venue_id', venueId)
-            .maybeSingle();
-          const tz = (calSettings as { timezone?: string } | null)?.timezone;
+        // Google Calendar push: cancellation deletes the event, otherwise patch.
+        if (googleEventId) {
+          if (isCancelled) {
+            await pushEventDeleteToGoogle(venueId, {
+              google_event_id: googleEventId,
+              google_calendar_id: googleCalendarId,
+            });
+            await supabaseAdmin
+              .from('calendar_events')
+              .update({ google_event_id: null, google_calendar_id: null, google_html_link: null })
+              .eq('id', id);
+          } else {
+            await pushEventUpdateToGoogle(
+              venueId,
+              { google_event_id: googleEventId, google_calendar_id: googleCalendarId },
+              {
+                title: String(eventRow.title ?? 'Appointment'),
+                start_at: String(eventRow.start_at),
+                end_at: String(eventRow.end_at),
+                all_day: !!eventRow.all_day,
+                notes: (eventRow.notes as string | null) ?? null,
+                attendees: eventRow.customer_email ? [String(eventRow.customer_email)] : [],
+                time_zone: tz,
+              },
+            );
+          }
+        }
 
+        // Send cancellation / reschedule emails + SMS when relevant.
+        const isRescheduled = !isCancelled && ('start_at' in updates || 'end_at' in updates);
+        const customerEmail = (eventRow.customer_email as string | null)?.trim();
+        if ((isCancelled || isRescheduled) && customerEmail) {
           const vars = await buildNotifVarsForEvent(
             {
               id,
@@ -206,7 +239,7 @@ export async function PATCH(
               end_at: String(updates.end_at ?? eventRow.end_at ?? ''),
               customer_email: customerEmail,
             },
-            tz,
+            tz ?? undefined,
           );
           if (vars) {
             await dispatchCalendarNotification(
@@ -215,11 +248,11 @@ export async function PATCH(
               vars,
             );
           }
-        } catch (e) {
-          console.error('[calendar PATCH] notification dispatch error:', e);
         }
-      })();
-    }
+      } catch (e) {
+        console.error('[calendar PATCH] post-update side-effects error:', e);
+      }
+    })();
   }
 
   return NextResponse.json(row ? flattenRow(row) : null);
@@ -234,6 +267,27 @@ export async function DELETE(
   const { id: rawId } = await params;
   const id = parentIdOf(rawId);
 
+  // Fetch the Google linkage BEFORE deleting so we can push the deletion to
+  // Google after the local row is gone. Wrapped in a try/no-op so legacy DBs
+  // without the google_event_id column still work.
+  let googleLink: { google_event_id: string | null; google_calendar_id: string | null } | null = null;
+  try {
+    const { data: existing } = await supabaseAdmin
+      .from('calendar_events')
+      .select('google_event_id, google_calendar_id')
+      .eq('id', id)
+      .eq('venue_id', venueId)
+      .maybeSingle();
+    if (existing) {
+      googleLink = {
+        google_event_id: (existing as { google_event_id?: string | null }).google_event_id ?? null,
+        google_calendar_id: (existing as { google_calendar_id?: string | null }).google_calendar_id ?? null,
+      };
+    }
+  } catch {
+    // Column missing — migration not applied yet. Just skip Google sync.
+  }
+
   const { error } = await supabaseAdmin
     .from('calendar_events')
     .delete()
@@ -244,5 +298,11 @@ export async function DELETE(
     console.error('[calendar DELETE]', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  // Push the delete to Google (fire-and-forget — local delete already succeeded)
+  if (googleLink?.google_event_id) {
+    void pushEventDeleteToGoogle(venueId, googleLink);
+  }
+
   return NextResponse.json({ success: true });
 }

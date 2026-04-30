@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
+import { refreshAppointmentRemindersForVenue } from '@/lib/appointment-reminders';
 
 export async function GET() {
   const venueId = await getVenueId();
@@ -65,5 +66,13 @@ export async function PUT(req: NextRequest) {
     .order('channel');
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Re-sync reminder rows for already-scheduled future events so saved
+  // template/offset/enabled changes take effect immediately. Fire-and-forget —
+  // failures are logged but don't block the save.
+  refreshAppointmentRemindersForVenue(venueId).catch((e) => {
+    console.error('[notifications PUT] refreshAppointmentRemindersForVenue failed:', e);
+  });
+
   return NextResponse.json(data);
 }

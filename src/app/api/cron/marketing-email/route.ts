@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runMarketingEmailCron } from '@/lib/marketing-email-worker';
+import { processAppointmentRemindersCron } from '@/lib/appointment-reminders';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -58,6 +59,18 @@ export async function GET(request: NextRequest) {
   }
   try {
     const result = await runMarketingEmailCron();
+
+    // Safety net: also process appointment reminders here so they fire on the
+    // same 5-minute cadence as the marketing cron, even if the dedicated
+    // appointment-reminders-cron workflow isn't enabled. Failures don't fail
+    // the marketing cron.
+    let appointmentReminders: unknown = null;
+    try {
+      appointmentReminders = await processAppointmentRemindersCron();
+    } catch (e) {
+      console.error('[cron marketing-email] appointment reminders processor failed:', e);
+    }
+
     // If any automation steps ran, self-ping after 60 s so delay steps advance
     // without needing an external cron service configured on Railway.
     const hadWork =
@@ -65,7 +78,7 @@ export async function GET(request: NextRequest) {
       (result.campaignRecipientsSent as number) > 0 ||
       (result.weddingFollowupEnrollments as number) > 0;
     if (hadWork) selfPingAfter(60_000);
-    return NextResponse.json({ ok: true, result });
+    return NextResponse.json({ ok: true, result, appointmentReminders });
   } catch (e) {
     console.error('[cron marketing-email]', e);
     return NextResponse.json({ error: 'Processor failed' }, { status: 500 });

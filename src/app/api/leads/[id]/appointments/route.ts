@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { syncAppointmentRemindersForEvent } from '@/lib/appointment-reminders';
+import { pushEventCreateToGoogle } from '@/lib/google-calendar-push';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -127,6 +128,41 @@ export async function POST(
   }
 
   void syncAppointmentRemindersForEvent(event.id as string);
+
+  // Push the new event up to Google Calendar (fire-and-forget) and record the
+  // returned google_event_id on the calendar_events row so future updates and
+  // deletes can sync back to Google.
+  void (async () => {
+    try {
+      const { data: calSettings } = await supabaseAdmin
+        .from('venue_calendar_settings')
+        .select('timezone')
+        .eq('venue_id', venueId)
+        .maybeSingle();
+      const tz = (calSettings as { timezone?: string } | null)?.timezone ?? null;
+      const link = await pushEventCreateToGoogle(venueId, {
+        title,
+        start_at,
+        end_at,
+        all_day: !!body.all_day,
+        notes: (body.notes as string | null) ?? null,
+        attendees: lead.email ? [lead.email] : [],
+        time_zone: tz,
+      });
+      if (link) {
+        await supabaseAdmin
+          .from('calendar_events')
+          .update({
+            google_event_id: link.google_event_id,
+            google_calendar_id: link.google_calendar_id,
+            google_html_link: link.html_link ?? null,
+          })
+          .eq('id', event.id as string);
+      }
+    } catch (e) {
+      console.error('[leads/appointments] Google push failed:', e);
+    }
+  })();
 
   // Auto-add a timestamped note so the activity thread shows the scheduling.
   const when = new Date(start_at).toLocaleString(undefined, {
