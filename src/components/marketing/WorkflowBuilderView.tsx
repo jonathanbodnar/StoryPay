@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -294,13 +295,56 @@ const MERGE_VAR_CATEGORY_LABELS: Record<string, string> = {
   system:       'System',
 };
 
-function MergeVarPickerPopover({ onPick, onClose, scopes }: {
+function MergeVarPickerPopover({ anchorRef, onPick, onClose, scopes }: {
+  /** Trigger button — popover anchors to its bottom-right corner. */
+  anchorRef: RefObject<HTMLElement | null>;
   onPick: (tag: string) => void;
   onClose: () => void;
   /** Optional scope filter. Omit to show ALL 50 variables (recommended for workflows). */
   scopes?: Array<'calendar' | 'marketing' | 'transactional'>;
 }) {
-  const [query, setQuery] = useState('');
+  const [query, setQuery]   = useState('');
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+  const popoverRef          = useRef<HTMLDivElement>(null);
+
+  // Position the popover relative to the trigger button using viewport coords.
+  // We render via a portal to document.body to escape any parent overflow clipping.
+  useLayoutEffect(() => {
+    function updateCoords() {
+      const a = anchorRef.current;
+      if (!a) return;
+      const rect = a.getBoundingClientRect();
+      const popoverWidth = 380;
+      const margin = 8;
+      // Right-align the popover to the trigger's right edge, but clamp to the viewport.
+      let left = rect.right - popoverWidth;
+      if (left < margin) left = margin;
+      if (left + popoverWidth > window.innerWidth - margin) left = window.innerWidth - margin - popoverWidth;
+      setCoords({ top: rect.bottom + 6, left });
+    }
+    updateCoords();
+    window.addEventListener('scroll', updateCoords, true);
+    window.addEventListener('resize', updateCoords);
+    return () => {
+      window.removeEventListener('scroll', updateCoords, true);
+      window.removeEventListener('resize', updateCoords);
+    };
+  }, [anchorRef]);
+
+  // Close on outside-click (excluding the popover itself + the anchor).
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      const t = e.target as Node;
+      if (popoverRef.current?.contains(t)) return;
+      if (anchorRef.current?.contains(t)) return;
+      onClose();
+    }
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [onClose, anchorRef]);
+
+  if (typeof window === 'undefined' || !coords) return null;
+
   // Default: show every variable so the user always sees the full canonical set.
   const visible = scopes && scopes.length > 0
     ? SYSTEM_MERGE_VARIABLES.filter((v) => v.usedIn.some((u) => scopes.includes(u)))
@@ -318,9 +362,11 @@ function MergeVarPickerPopover({ onPick, onClose, scopes }: {
   const orderedCats = ['contact', 'venue', 'lead', 'appointment', 'proposal', 'invoice', 'subscription', 'marketing', 'system']
     .filter((c) => grouped[c]?.length);
 
-  return (
+  const popover = (
     <div
-      className="absolute right-0 top-full z-[60] mt-1 w-[360px] rounded-xl border border-gray-200 bg-white shadow-xl"
+      ref={popoverRef}
+      style={{ position: 'fixed', top: coords.top, left: coords.left, width: 380, zIndex: 1000 }}
+      className="rounded-xl border border-gray-200 bg-white shadow-2xl"
       onClick={(e) => e.stopPropagation()}
     >
       <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
@@ -344,25 +390,28 @@ function MergeVarPickerPopover({ onPick, onClose, scopes }: {
           />
         </div>
       </div>
-      {/* IMPORTANT: max-h on the scroll container itself (not flex-1 inside flex-col)
-          — flex-1 + max-h-on-parent collapses to 0 without a definite parent height. */}
-      <div className="max-h-[340px] min-h-[120px] overflow-y-auto p-2 space-y-3">
+      <div className="max-h-[360px] min-h-[140px] overflow-y-auto overflow-x-hidden p-2 space-y-3">
         {filtered.length === 0 ? (
-          <p className="py-6 text-center text-[11px] text-gray-400">No variables match &ldquo;{query}&rdquo;</p>
+          <p className="py-6 text-center text-[11px] text-gray-400">
+            No variables match &ldquo;{query}&rdquo;
+          </p>
         ) : orderedCats.map((cat) => (
           <div key={cat}>
             <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-400 mb-1 px-1">
-              {MERGE_VAR_CATEGORY_LABELS[cat] ?? cat} <span className="font-normal text-gray-300">· {grouped[cat].length}</span>
+              {MERGE_VAR_CATEGORY_LABELS[cat] ?? cat}
+              <span className="font-normal text-gray-300"> · {grouped[cat].length}</span>
             </p>
             <div className="space-y-0.5">
               {grouped[cat].map((v) => (
-                <button key={v.key} type="button"
+                <button
+                  key={v.key}
+                  type="button"
                   onClick={() => { onPick(v.tag); }}
                   className="flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-gray-50 transition-colors"
                   title={`Example: ${v.example}`}
                 >
-                  <span className="font-mono text-[10.5px] text-gray-800">{v.tag}</span>
-                  <span className="text-[10.5px] text-gray-400 leading-tight">{v.description}</span>
+                  <span className="font-mono text-[11px] text-gray-800 break-all">{v.tag}</span>
+                  <span className="text-[10.5px] text-gray-500 leading-tight">{v.description}</span>
                 </button>
               ))}
             </div>
@@ -371,6 +420,8 @@ function MergeVarPickerPopover({ onPick, onClose, scopes }: {
       </div>
     </div>
   );
+
+  return createPortal(popover, document.body);
 }
 
 // ─── Drop indicator line ──────────────────────────────────────────────────────
@@ -714,6 +765,10 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
   // Which field a freshly-picked merge variable should be inserted into.
   // 'sms-body' for the SMS step, 'notify-subject' / 'notify-body' for the Notify Owner step.
   const [mergeTagField, setMergeTagField]   = useState<'sms-body' | 'notify-subject' | 'notify-body'>('sms-body');
+  // The button element that opened the popover, used to position it via portal.
+  const [mergeAnchor, setMergeAnchor]       = useState<HTMLElement | null>(null);
+  const mergeAnchorRef                      = useRef<HTMLElement | null>(null);
+  mergeAnchorRef.current                    = mergeAnchor;
   const [triggerLinkOpen, setTriggerLinkOpen] = useState(false);
   const smsTextareaRef                      = useRef<HTMLTextAreaElement>(null);
 
@@ -734,13 +789,15 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
     return () => window.removeEventListener('pointermove', mv);
   }, []);
 
-  // ── Close merge-tag / trigger-link dropdowns on outside click ─────────────
+  // ── Close trigger-link dropdown on outside click ──────────────────────────
+  // Note: the merge-variable picker now manages its own outside-click handling
+  // because it's rendered via a portal to document.body.
   useEffect(() => {
-    if (!mergeTagOpen && !triggerLinkOpen) return;
-    const handler = () => { setMergeTagOpen(false); setTriggerLinkOpen(false); };
+    if (!triggerLinkOpen) return;
+    const handler = () => { setTriggerLinkOpen(false); };
     document.addEventListener('click', handler);
     return () => document.removeEventListener('click', handler);
-  }, [mergeTagOpen, triggerLinkOpen]);
+  }, [triggerLinkOpen]);
 
   // ── Center canvas once the loading spinner clears ────────────────────────
   // Important: while `loading` is true the canvas isn't in the DOM (a loading
@@ -2514,17 +2571,23 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                           <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Message</p>
                           <div className="flex items-center gap-1">
                             {/* Merge tags button */}
-                            <div className="relative">
+                            <div>
                               <button
                                 type="button"
-                                title="Insert merge tag"
-                                onClick={() => { setMergeTagField('sms-body'); setMergeTagOpen((v) => !v); setTriggerLinkOpen(false); }}
+                                title="Insert merge variable"
+                                onClick={(e) => {
+                                  setMergeAnchor(e.currentTarget as HTMLElement);
+                                  setMergeTagField('sms-body');
+                                  setMergeTagOpen((v) => !v);
+                                  setTriggerLinkOpen(false);
+                                }}
                                 className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-50 transition-colors"
                               >
                                 <Tag size={11} /> Variables
                               </button>
                               {mergeTagOpen && mergeTagField === 'sms-body' && (
                                 <MergeVarPickerPopover
+                                  anchorRef={mergeAnchorRef}
                                   onPick={(tag) => { insertAtCursor(tag, lid); setMergeTagOpen(false); }}
                                   onClose={() => setMergeTagOpen(false)}
                                 />
@@ -2817,17 +2880,23 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                           <div>
                             <div className="mb-1.5 flex items-center justify-between">
                               <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Email subject</p>
-                              <div className="relative">
+                              <div>
                                 <button
                                   type="button"
                                   title="Insert merge variable"
-                                  onClick={(e) => { e.stopPropagation(); setMergeTagField('notify-subject'); setMergeTagOpen((v) => !v); }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setMergeAnchor(e.currentTarget as HTMLElement);
+                                    setMergeTagField('notify-subject');
+                                    setMergeTagOpen((v) => !v);
+                                  }}
                                   className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-50 transition-colors"
                                 >
                                   <Tag size={11} /> Variables
                                 </button>
                                 {mergeTagOpen && mergeTagField === 'notify-subject' && (
                                   <MergeVarPickerPopover
+                                    anchorRef={mergeAnchorRef}
                                     onPick={(tag) => {
                                       setSteps((prev) => prev.map((x) =>
                                         x.localId === lid && x.step_type === 'notify_owner'
@@ -2858,17 +2927,23 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                             <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                               {channel === 'sms' ? 'SMS message' : 'Message body'}
                             </p>
-                            <div className="relative">
+                            <div>
                               <button
                                 type="button"
                                 title="Insert merge variable"
-                                onClick={(e) => { e.stopPropagation(); setMergeTagField('notify-body'); setMergeTagOpen((v) => !v); }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMergeAnchor(e.currentTarget as HTMLElement);
+                                  setMergeTagField('notify-body');
+                                  setMergeTagOpen((v) => !v);
+                                }}
                                 className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-50 transition-colors"
                               >
                                 <Tag size={11} /> Variables
                               </button>
                               {mergeTagOpen && mergeTagField === 'notify-body' && (
                                 <MergeVarPickerPopover
+                                  anchorRef={mergeAnchorRef}
                                   onPick={(tag) => {
                                     setSteps((prev) => prev.map((x) =>
                                       x.localId === lid && x.step_type === 'notify_owner'
