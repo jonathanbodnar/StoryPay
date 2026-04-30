@@ -42,6 +42,10 @@ interface LogRow {
   first_name: string; last_name: string; email: string;
   step_order: number | null; step_type: string | null;
   status: string; error_text: string | null; executed_at: string;
+  /** True for rows produced by the "Send Test" buttons in the inspector. */
+  is_test: boolean;
+  /** Email or phone the test was delivered to (when is_test = true). */
+  test_recipient: string | null;
 }
 
 type RightTab = 'blocks' | 'settings' | 'history' | 'logs';
@@ -1882,10 +1886,28 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                         {logRows.map((r) => (
                           <tr key={r.id} className="hover:bg-gray-50 transition-colors">
                             <td className="px-4 py-3">
-                              <p className="font-medium text-gray-900">{r.first_name} {r.last_name}</p>
-                              <p className="text-xs text-gray-400">{r.email}</p>
+                              {r.is_test ? (
+                                <>
+                                  <p className="font-medium text-gray-900">Test send</p>
+                                  <p className="text-xs text-gray-400 break-all">{r.test_recipient || '—'}</p>
+                                </>
+                              ) : (
+                                <>
+                                  <p className="font-medium text-gray-900">{r.first_name} {r.last_name}</p>
+                                  <p className="text-xs text-gray-400">{r.email}</p>
+                                </>
+                              )}
                             </td>
-                            <td className="px-4 py-3 capitalize text-gray-700">{r.step_type ? r.step_type.replace(/_/g, ' ') : '—'}</td>
+                            <td className="px-4 py-3 text-gray-700">
+                              <span className="inline-flex items-center gap-1.5">
+                                <span className="capitalize">{r.step_type ? r.step_type.replace(/_/g, ' ') : '—'}</span>
+                                {r.is_test && (
+                                  <span className="inline-flex rounded-full bg-indigo-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-indigo-600">
+                                    Test
+                                  </span>
+                                )}
+                              </span>
+                            </td>
                             <td className="px-4 py-3 text-gray-500">{r.step_order !== null ? `Step ${r.step_order + 1}` : '—'}</td>
                             <td className="px-4 py-3">
                               <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${

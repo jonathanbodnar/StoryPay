@@ -5,6 +5,7 @@ import { sendEmail } from '@/lib/email';
 import { parseEmailDefinition } from '@/lib/marketing-email-schema';
 import { renderMarketingEmailHtml, mergeMarketingFields } from '@/lib/marketing-email-render';
 import { injectVenueDataIntoDefinition } from '@/lib/marketing-email-injection';
+import { logTestExecution } from '@/lib/workflow-execution-logs';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -121,6 +122,15 @@ export async function POST(
         ? { name: fromName || (venue?.name as string) || 'Venue', email: fromEmail }
         : { name: fromName || `${(venue?.name as string) || 'Venue'} via StoryVenue` },
     });
+    void logTestExecution({
+      automation_id: id,
+      venue_id:      venueId,
+      step_order:    stepOrder,
+      step_type:     'send_email',
+      status:        result.success ? 'success' : 'failed',
+      recipient:     toEmail.trim(),
+      error_text:    result.success ? undefined : (result.error ?? 'Send failed'),
+    });
     if (!result.success) return NextResponse.json({ error: result.error ?? 'Send failed' }, { status: 500 });
     return NextResponse.json({ sent: true, to: toEmail.trim(), mode: 'quick' });
   }
@@ -146,6 +156,15 @@ export async function POST(
     to: toEmail.trim(),
     subject: `[TEST] ${tmpl.subject as string}`,
     html,
+  });
+  void logTestExecution({
+    automation_id: id,
+    venue_id:      venueId,
+    step_order:    stepOrder,
+    step_type:     'send_email',
+    status:        result.success ? 'success' : 'failed',
+    recipient:     toEmail.trim(),
+    error_text:    result.success ? undefined : (result.error ?? 'Send failed'),
   });
 
   if (!result.success) return NextResponse.json({ error: result.error ?? 'Send failed' }, { status: 500 });

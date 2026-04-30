@@ -12,6 +12,7 @@ import { resolveCampaignRecipients } from '@/lib/marketing-email-audience';
 import { signMarketingOpenToken, signMarketingUnsubscribeToken } from '@/lib/marketing-email-tokens';
 import { addCalendarDaysYmd, resolveVenueTimezone } from '@/lib/venue-timezone';
 import { formatInTimeZone } from 'date-fns-tz';
+import { logStepExecution } from '@/lib/workflow-execution-logs';
 
 const BATCH = 25;
 
@@ -770,33 +771,8 @@ export async function runEnrollmentsNow(enrollmentIds: string[]): Promise<{ proc
   return { processed: n };
 }
 
-/** Write one execution log row — fire and forget, never throws. */
-async function logStepExecution(opts: {
-  automation_id: string;
-  enrollment_id: string;
-  venue_id: string;
-  lead_id: string;
-  step_order: number;
-  step_type: string;
-  status: 'success' | 'failed' | 'skipped';
-  error_text?: string;
-}) {
-  try {
-    await supabaseAdmin.from('marketing_automation_execution_logs').insert({
-      automation_id: opts.automation_id,
-      enrollment_id: opts.enrollment_id,
-      venue_id:      opts.venue_id,
-      lead_id:       opts.lead_id,
-      step_order:    opts.step_order,
-      step_type:     opts.step_type,
-      status:        opts.status,
-      error_text:    opts.error_text ?? null,
-      executed_at:   new Date().toISOString(),
-    });
-  } catch (e) {
-    console.error('[worker] logStepExecution failed (non-fatal):', e);
-  }
-}
+// `logStepExecution` is now provided by '@/lib/workflow-execution-logs' so the
+// "Send Test" routes can share the same writer (and the same column shape).
 
 /**
  * Result of executing one workflow step:

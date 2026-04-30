@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getVenueId } from '@/lib/auth-helpers';
 import { supabaseAdmin } from '@/lib/supabase';
 import { findOrCreateContact, getGhlToken, normalizePhone, sendSms } from '@/lib/ghl';
+import { logTestExecution } from '@/lib/workflow-execution-logs';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -93,7 +94,18 @@ export async function POST(
       firstName: 'Test',
       lastName: 'SMS',
     });
-    if (!contactId) return NextResponse.json({ error: 'Could not resolve GHL contact' }, { status: 500 });
+    if (!contactId) {
+      void logTestExecution({
+        automation_id: id,
+        venue_id:      venueId,
+        step_order:    stepOrder,
+        step_type:     'send_sms',
+        status:        'failed',
+        recipient:     rawPhone,
+        error_text:    'Could not resolve GHL contact',
+      });
+      return NextResponse.json({ error: 'Could not resolve GHL contact' }, { status: 500 });
+    }
 
     // Merge caller-supplied media urls with the saved step media urls (deduplicated)
     const effectiveMedia = Array.from(new Set([
@@ -102,8 +114,25 @@ export async function POST(
     ])).slice(0, 3);
 
     await sendSms(token, loc, contactId, preview, effectiveMedia.length ? effectiveMedia : undefined);
+    void logTestExecution({
+      automation_id: id,
+      venue_id:      venueId,
+      step_order:    stepOrder,
+      step_type:     'send_sms',
+      status:        'success',
+      recipient:     rawPhone,
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'SMS send failed';
+    void logTestExecution({
+      automation_id: id,
+      venue_id:      venueId,
+      step_order:    stepOrder,
+      step_type:     'send_sms',
+      status:        'failed',
+      recipient:     rawPhone,
+      error_text:    msg,
+    });
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 

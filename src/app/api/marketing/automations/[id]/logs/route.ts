@@ -28,17 +28,32 @@ export async function GET(
   const status = url.searchParams.get('status') ?? '';
   const limit  = Math.min(500, Math.max(1, Number(url.searchParams.get('limit') ?? 100)));
 
-  let query = supabaseAdmin
-    .from('marketing_automation_execution_logs')
-    .select('id, enrollment_id, lead_id, step_order, step_type, status, error_text, executed_at, leads(id, first_name, last_name, email, name)')
-    .eq('automation_id', id)
-    .eq('venue_id', venueId)
-    .order('executed_at', { ascending: false })
-    .limit(limit);
+  // The new `is_test` / `test_recipient` columns ship with migration 088.
+  // We try to select them; if the migration hasn't been applied yet (PostgREST
+  // throws an "undefined column" error), we transparently fall back to the
+  // pre-088 shape so the UI keeps working instead of crashing.
+  const baseColumns = 'id, enrollment_id, lead_id, step_order, step_type, status, error_text, executed_at';
+  const newColumns  = 'is_test, test_recipient';
+  const leadJoin    = 'leads(id, first_name, last_name, email, name)';
 
-  if (status && status !== 'all') query = query.eq('status', status);
+  async function runQuery(includeNew: boolean) {
+    const cols = includeNew ? `${baseColumns}, ${newColumns}, ${leadJoin}` : `${baseColumns}, ${leadJoin}`;
+    let q = supabaseAdmin
+      .from('marketing_automation_execution_logs')
+      .select(cols)
+      .eq('automation_id', id)
+      .eq('venue_id', venueId)
+      .order('executed_at', { ascending: false })
+      .limit(limit);
+    if (status && status !== 'all') q = q.eq('status', status);
+    return q;
+  }
 
-  const { data: rows, error } = await query;
+  let { data: rows, error } = await runQuery(true);
+  if (error && /column.*does not exist/i.test(error.message)) {
+    ({ data: rows, error } = await runQuery(false));
+  }
+
   if (error) {
     // If the table doesn't exist yet (migration 067 not applied) return empty
     // instead of a 500 so the UI shows the empty state rather than crashing.
@@ -49,23 +64,32 @@ export async function GET(
   }
 
   const logs = (rows ?? []).map((r) => {
-    const rawLead = r.leads as unknown;
+    const row = r as unknown as {
+      id: string; enrollment_id: string | null; lead_id: string | null;
+      step_order: number | null; step_type: string | null;
+      status: string; error_text: string | null; executed_at: string;
+      is_test?: boolean; test_recipient?: string | null;
+      leads?: unknown;
+    };
+    const rawLead = row.leads;
     const lead = (Array.isArray(rawLead) ? rawLead[0] : rawLead) as {
       id: string; first_name?: string | null; last_name?: string | null;
       email?: string | null; name?: string | null;
     } | null;
     return {
-      id:            r.id            as string,
-      enrollment_id: r.enrollment_id as string | null,
-      lead_id:       r.lead_id       as string | null,
-      first_name:  lead?.first_name || lead?.name?.split(' ')[0] || '—',
-      last_name:   lead?.last_name  || '',
-      email:       lead?.email      || '—',
-      step_order:  r.step_order  as number | null,
-      step_type:   r.step_type   as string | null,
-      status:      r.status      as string,
-      error_text:  r.error_text  as string | null,
-      executed_at: r.executed_at as string,
+      id:            row.id,
+      enrollment_id: row.enrollment_id,
+      lead_id:       row.lead_id,
+      first_name:    lead?.first_name || lead?.name?.split(' ')[0] || '—',
+      last_name:     lead?.last_name  || '',
+      email:         lead?.email      || '—',
+      step_order:    row.step_order,
+      step_type:     row.step_type,
+      status:        row.status,
+      error_text:    row.error_text,
+      executed_at:   row.executed_at,
+      is_test:       row.is_test       === true,
+      test_recipient: row.test_recipient ?? null,
     };
   });
 
