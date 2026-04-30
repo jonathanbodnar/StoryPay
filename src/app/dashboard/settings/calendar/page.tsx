@@ -1144,8 +1144,9 @@ function NotificationsTab() {
   const [expandedType, setExpandedType] = useState<string | null>(null);
   const [openChannels, setOpenChannels] = useState<Set<string>>(new Set());
   const [showTags, setShowTags] = useState(false);
-  // key = "type:channel", value = 'idle' | 'sending' | 'sent' | 'error'
+  // key = "type:channel"
   const [testState, setTestState] = useState<Record<string, 'idle' | 'sending' | 'sent' | 'error'>>({});
+  const [testError, setTestError] = useState<Record<string, string>>({});
   // key = "type:channel", value = recipient email or phone digits
   const [testRecipients, setTestRecipients] = useState<Record<string, string>>({});
 
@@ -1275,6 +1276,7 @@ function NotificationsTab() {
       : rawRecipient;
     if (!testTo || (isSms && testTo === '+1')) return; // nothing typed yet
     setTestState((s) => ({ ...s, [key]: 'sending' }));
+    setTestError((s) => ({ ...s, [key]: '' }));
     try {
       const res = await fetch('/api/calendar/notifications/test', {
         method: 'POST',
@@ -1282,11 +1284,16 @@ function NotificationsTab() {
         body: JSON.stringify({ channel, subject: row.subject, body: row.body, testTo }),
       });
       const json = await res.json() as { ok?: boolean; error?: string };
-      setTestState((s) => ({ ...s, [key]: json.ok ? 'sent' : 'error' }));
-      setTimeout(() => setTestState((s) => ({ ...s, [key]: 'idle' })), 3000);
+      if (json.ok) {
+        setTestState((s) => ({ ...s, [key]: 'sent' }));
+        setTimeout(() => setTestState((s) => ({ ...s, [key]: 'idle' })), 3000);
+      } else {
+        setTestState((s) => ({ ...s, [key]: 'error' }));
+        setTestError((s) => ({ ...s, [key]: json.error ?? 'Unknown error' }));
+      }
     } catch {
       setTestState((s) => ({ ...s, [key]: 'error' }));
-      setTimeout(() => setTestState((s) => ({ ...s, [key]: 'idle' })), 3000);
+      setTestError((s) => ({ ...s, [key]: 'Network error — please try again' }));
     }
   };
 
@@ -1579,6 +1586,13 @@ function NotificationsTab() {
                                     )}
                                   </button>
                                 </div>
+
+                                {/* Error message */}
+                                {ts === 'error' && testError[tKey] && (
+                                  <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 leading-snug">
+                                    {testError[tKey]}
+                                  </p>
+                                )}
 
                                 {/* Reset to default */}
                                 {def && (

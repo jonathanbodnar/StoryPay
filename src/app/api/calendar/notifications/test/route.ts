@@ -110,6 +110,8 @@ export async function POST(req: NextRequest) {
       // Look up the GHL contact for the supplied test phone number
       const normalizedPhone = normalizePhone(testTo) ?? testTo;
       let contactId: string | null = null;
+
+      // 1. Try phone lookup
       try {
         const search = await ghlRequest(
           `/contacts/search/duplicate?locationId=${locationId}&phone=${encodeURIComponent(normalizedPhone)}`,
@@ -117,14 +119,24 @@ export async function POST(req: NextRequest) {
           { locationId },
         );
         contactId = search?.contact?.id ?? search?.contacts?.[0]?.id ?? null;
-      } catch {
-        // lookup failed
+      } catch { /* fall through */ }
+
+      // 2. Fallback: look up by venue email in case number format differs
+      if (!contactId && venueEmail) {
+        try {
+          const search = await ghlRequest(
+            `/contacts/search/duplicate?locationId=${locationId}&email=${encodeURIComponent(venueEmail)}`,
+            ghlToken,
+            { locationId },
+          );
+          contactId = search?.contact?.id ?? search?.contacts?.[0]?.id ?? null;
+        } catch { /* fall through */ }
       }
 
       if (!contactId) {
         return NextResponse.json(
           {
-            error: `No GHL contact found for ${normalizedPhone}. Make sure this number exists as a contact in your GHL account.`,
+            error: `No GHL contact found for ${normalizedPhone}. Make sure this number is saved on a contact in your GHL account, then try again.`,
           },
           { status: 400 },
         );
