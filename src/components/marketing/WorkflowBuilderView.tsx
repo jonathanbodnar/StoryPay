@@ -295,55 +295,84 @@ const MERGE_VAR_CATEGORY_LABELS: Record<string, string> = {
   system:       'System',
 };
 
-function MergeVarPickerPopover({ anchorRef, onPick, onClose, scopes }: {
+// ─── Generic portal dropdown ──────────────────────────────────────────────────
+// Renders children via a portal to document.body, anchored under a trigger
+// button and clamped to fit inside an optional bounding rect (e.g. the right
+// rail aside). Use for any dropdown that would otherwise be clipped by an
+// overflow-hidden ancestor.
+function PortalDropdown({ anchorRef, boundsRef, onClose, children }: {
+  anchorRef: RefObject<HTMLElement | null>;
+  boundsRef?: RefObject<HTMLElement | null>;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  const [coords, setCoords] = useState<{ top: number; left: number; width: number } | null>(null);
+  const ref                 = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    function update() {
+      const a = anchorRef.current;
+      if (!a) return;
+      const rect   = a.getBoundingClientRect();
+      const bounds = boundsRef?.current?.getBoundingClientRect();
+      const margin = 8;
+      const maxWidth = bounds
+        ? Math.max(220, bounds.width - margin * 2)
+        : window.innerWidth - margin * 2;
+      const width = Math.min(380, maxWidth);
+      let left = rect.right - width;
+      const minLeft = bounds ? bounds.left + margin : margin;
+      const maxLeft = bounds ? bounds.right - margin - width : window.innerWidth - margin - width;
+      if (left < minLeft) left = minLeft;
+      if (left > maxLeft) left = maxLeft;
+      setCoords({ top: rect.bottom + 6, left, width });
+    }
+    update();
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
+    };
+  }, [anchorRef, boundsRef]);
+
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      const t = e.target as Node;
+      if (ref.current?.contains(t)) return;
+      if (anchorRef.current?.contains(t)) return;
+      onClose();
+    }
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [onClose, anchorRef]);
+
+  if (typeof window === 'undefined' || !coords) return null;
+
+  return createPortal(
+    <div
+      ref={ref}
+      style={{ position: 'fixed', top: coords.top, left: coords.left, width: coords.width, zIndex: 1000 }}
+      className="rounded-xl border border-gray-200 bg-white shadow-2xl"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {children}
+    </div>,
+    document.body,
+  );
+}
+
+function MergeVarPickerPopover({ anchorRef, boundsRef, onPick, onClose, scopes }: {
   /** Trigger button — popover anchors to its bottom-right corner. */
   anchorRef: RefObject<HTMLElement | null>;
+  /** Optional containing element — popover clamps its width and position to fit inside this rect. */
+  boundsRef?: RefObject<HTMLElement | null>;
   onPick: (tag: string) => void;
   onClose: () => void;
   /** Optional scope filter. Omit to show ALL 50 variables (recommended for workflows). */
   scopes?: Array<'calendar' | 'marketing' | 'transactional'>;
 }) {
-  const [query, setQuery]   = useState('');
-  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
-  const popoverRef          = useRef<HTMLDivElement>(null);
-
-  // Position the popover relative to the trigger button using viewport coords.
-  // We render via a portal to document.body to escape any parent overflow clipping.
-  useLayoutEffect(() => {
-    function updateCoords() {
-      const a = anchorRef.current;
-      if (!a) return;
-      const rect = a.getBoundingClientRect();
-      const popoverWidth = 380;
-      const margin = 8;
-      // Right-align the popover to the trigger's right edge, but clamp to the viewport.
-      let left = rect.right - popoverWidth;
-      if (left < margin) left = margin;
-      if (left + popoverWidth > window.innerWidth - margin) left = window.innerWidth - margin - popoverWidth;
-      setCoords({ top: rect.bottom + 6, left });
-    }
-    updateCoords();
-    window.addEventListener('scroll', updateCoords, true);
-    window.addEventListener('resize', updateCoords);
-    return () => {
-      window.removeEventListener('scroll', updateCoords, true);
-      window.removeEventListener('resize', updateCoords);
-    };
-  }, [anchorRef]);
-
-  // Close on outside-click (excluding the popover itself + the anchor).
-  useEffect(() => {
-    function onDocClick(e: MouseEvent) {
-      const t = e.target as Node;
-      if (popoverRef.current?.contains(t)) return;
-      if (anchorRef.current?.contains(t)) return;
-      onClose();
-    }
-    document.addEventListener('mousedown', onDocClick);
-    return () => document.removeEventListener('mousedown', onDocClick);
-  }, [onClose, anchorRef]);
-
-  if (typeof window === 'undefined' || !coords) return null;
+  const [query, setQuery] = useState('');
 
   // Default: show every variable so the user always sees the full canonical set.
   const visible = scopes && scopes.length > 0
@@ -362,13 +391,8 @@ function MergeVarPickerPopover({ anchorRef, onPick, onClose, scopes }: {
   const orderedCats = ['contact', 'venue', 'lead', 'appointment', 'proposal', 'invoice', 'subscription', 'marketing', 'system']
     .filter((c) => grouped[c]?.length);
 
-  const popover = (
-    <div
-      ref={popoverRef}
-      style={{ position: 'fixed', top: coords.top, left: coords.left, width: 380, zIndex: 1000 }}
-      className="rounded-xl border border-gray-200 bg-white shadow-2xl"
-      onClick={(e) => e.stopPropagation()}
-    >
+  return (
+    <PortalDropdown anchorRef={anchorRef} boundsRef={boundsRef} onClose={onClose}>
       <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
           Merge Variables · {filtered.length} of {visible.length}
@@ -418,10 +442,8 @@ function MergeVarPickerPopover({ anchorRef, onPick, onClose, scopes }: {
           </div>
         ))}
       </div>
-    </div>
+    </PortalDropdown>
   );
-
-  return createPortal(popover, document.body);
 }
 
 // ─── Drop indicator line ──────────────────────────────────────────────────────
@@ -769,6 +791,12 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
   const [mergeAnchor, setMergeAnchor]       = useState<HTMLElement | null>(null);
   const mergeAnchorRef                      = useRef<HTMLElement | null>(null);
   mergeAnchorRef.current                    = mergeAnchor;
+  // Ref to the right panel aside; popovers clamp themselves inside its bounds.
+  const rightPaneRef                        = useRef<HTMLElement | null>(null);
+  // Anchor for the trigger-link dropdown (separate from merge-var anchor).
+  const [triggerLinkAnchor, setTriggerLinkAnchor] = useState<HTMLElement | null>(null);
+  const triggerLinkAnchorRef                      = useRef<HTMLElement | null>(null);
+  triggerLinkAnchorRef.current                    = triggerLinkAnchor;
   const [triggerLinkOpen, setTriggerLinkOpen] = useState(false);
   const smsTextareaRef                      = useRef<HTMLTextAreaElement>(null);
 
@@ -789,15 +817,9 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
     return () => window.removeEventListener('pointermove', mv);
   }, []);
 
-  // ── Close trigger-link dropdown on outside click ──────────────────────────
-  // Note: the merge-variable picker now manages its own outside-click handling
-  // because it's rendered via a portal to document.body.
-  useEffect(() => {
-    if (!triggerLinkOpen) return;
-    const handler = () => { setTriggerLinkOpen(false); };
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
-  }, [triggerLinkOpen]);
+  // Both the merge-variable picker and the trigger-link dropdown now render
+  // via PortalDropdown, which handles its own outside-click logic. No shared
+  // close-on-document-click effect is needed.
 
   // ── Center canvas once the loading spinner clears ────────────────────────
   // Important: while `loading` is true the canvas isn't in the DOM (a loading
@@ -2106,6 +2128,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
 
           {/* ── Right panel ───────────────────────────────────────────────── */}
           <aside
+            ref={rightPaneRef}
             className="w-72 flex-shrink-0 bg-white flex flex-col overflow-hidden"
             style={{ boxShadow: '-12px 0 32px -8px rgba(0,0,0,0.07)' }}
             onMouseDown={(e) => e.stopPropagation()}
@@ -2588,36 +2611,56 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                               {mergeTagOpen && mergeTagField === 'sms-body' && (
                                 <MergeVarPickerPopover
                                   anchorRef={mergeAnchorRef}
+                                  boundsRef={rightPaneRef}
                                   onPick={(tag) => { insertAtCursor(tag, lid); setMergeTagOpen(false); }}
                                   onClose={() => setMergeTagOpen(false)}
                                 />
                               )}
                             </div>
                             {/* Trigger links button */}
-                            <div className="relative">
+                            <div>
                               <button
                                 type="button"
                                 title="Insert trigger link"
-                                onClick={() => { setTriggerLinkOpen((v) => !v); setMergeTagOpen(false); }}
+                                onClick={(e) => {
+                                  setTriggerLinkAnchor(e.currentTarget as HTMLElement);
+                                  setTriggerLinkOpen((v) => !v);
+                                  setMergeTagOpen(false);
+                                }}
                                 className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-50 transition-colors"
                               >
                                 <Zap size={11} /> Links
                               </button>
                               {triggerLinkOpen && (
-                                <div className="absolute right-0 top-full z-50 mt-1 w-60 rounded-xl border border-gray-200 bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
-                                  <p className="border-b border-gray-100 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Trigger Links</p>
-                                  {links.length === 0 ? (
-                                    <p className="px-3 py-3 text-[11px] text-gray-400">No trigger links created yet.</p>
-                                  ) : links.map((lnk) => (
-                                    <button key={lnk.id} type="button"
-                                      className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left hover:bg-gray-50 transition-colors"
-                                      onClick={() => { insertAtCursor(`{{trigger_link.${lnk.short_code}}}`, lid); setTriggerLinkOpen(false); }}
-                                    >
-                                      <span className="text-[12px] font-medium text-gray-800">{lnk.name}</span>
-                                      <span className="font-mono text-[10px] text-gray-400">{`{{trigger_link.${lnk.short_code}}}`}</span>
+                                <PortalDropdown
+                                  anchorRef={triggerLinkAnchorRef}
+                                  boundsRef={rightPaneRef}
+                                  onClose={() => setTriggerLinkOpen(false)}
+                                >
+                                  <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+                                      Trigger Links · {links.length}
+                                    </p>
+                                    <button type="button" onClick={() => setTriggerLinkOpen(false)} className="text-gray-400 hover:text-gray-700">
+                                      <X size={13} />
                                     </button>
-                                  ))}
-                                </div>
+                                  </div>
+                                  <div className="max-h-[300px] min-h-[80px] overflow-y-auto p-2 space-y-0.5">
+                                    {links.length === 0 ? (
+                                      <p className="px-2 py-4 text-center text-[11px] text-gray-400">
+                                        No trigger links created yet.
+                                      </p>
+                                    ) : links.map((lnk) => (
+                                      <button key={lnk.id} type="button"
+                                        className="flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-gray-50 transition-colors"
+                                        onClick={() => { insertAtCursor(`{{trigger_link.${lnk.short_code}}}`, lid); setTriggerLinkOpen(false); }}
+                                      >
+                                        <span className="text-[12px] font-medium text-gray-800">{lnk.name}</span>
+                                        <span className="font-mono text-[10px] text-gray-400 break-all">{`{{trigger_link.${lnk.short_code}}}`}</span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                </PortalDropdown>
                               )}
                             </div>
                           </div>
@@ -2897,6 +2940,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                                 {mergeTagOpen && mergeTagField === 'notify-subject' && (
                                   <MergeVarPickerPopover
                                     anchorRef={mergeAnchorRef}
+                                  boundsRef={rightPaneRef}
                                     onPick={(tag) => {
                                       setSteps((prev) => prev.map((x) =>
                                         x.localId === lid && x.step_type === 'notify_owner'
@@ -2944,6 +2988,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                               {mergeTagOpen && mergeTagField === 'notify-body' && (
                                 <MergeVarPickerPopover
                                   anchorRef={mergeAnchorRef}
+                                  boundsRef={rightPaneRef}
                                   onPick={(tag) => {
                                     setSteps((prev) => prev.map((x) =>
                                       x.localId === lid && x.step_type === 'notify_owner'
