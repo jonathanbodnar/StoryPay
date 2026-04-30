@@ -513,7 +513,6 @@ The page shows a month-by-month calendar with:
 Prospects can navigate forward and back through months. No customer information is ever shown on this page.`,
       },
       {
-      {
         id: 'cal-multi-calendar',
         title: 'Multiple calendars — create up to 5 per venue',
         tags: ['multiple calendars', 'calendars', 'calendar types', 'tour calendar', 'phone call calendar', 'calendar management', 'create calendar', 'delete calendar', 'venue calendars', 'calendar color'],
