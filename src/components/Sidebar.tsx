@@ -847,7 +847,17 @@ export default function Sidebar({
       {/* StoryPay Onboarding Modal */}
       {showOnboardingModal && mounted && createPortal(
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4">
-          <div className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
+          <div
+            className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl scrollbar-autohide"
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              el.classList.add('is-scrolling');
+              clearTimeout((el as HTMLElement & { _scrollTimer?: ReturnType<typeof setTimeout> })._scrollTimer);
+              (el as HTMLElement & { _scrollTimer?: ReturnType<typeof setTimeout> })._scrollTimer = setTimeout(() => {
+                el.classList.remove('is-scrolling');
+              }, 800);
+            }}
+          >
             <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
               <div className="flex items-center gap-2.5">
                 <Zap size={18} className="text-indigo-600" />
