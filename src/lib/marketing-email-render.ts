@@ -5,6 +5,7 @@ import {
   mergeEmailTheme,
 } from '@/lib/marketing-email-schema';
 import { parseVideoUrl } from '@/lib/video-providers';
+import { renderMergeVars } from '@/lib/merge-variables';
 
 function esc(s: string): string {
   return s
@@ -99,12 +100,7 @@ function isDarkColor(hex: string): boolean {
 export type MergeFieldRecord = Record<string, string>;
 
 export function mergeMarketingFields(template: string, vars: MergeFieldRecord): string {
-  let out = template;
-  for (const [k, v] of Object.entries(vars)) {
-    const re = new RegExp(`\\{\\{\\s*${k}\\s*\\}\\}`, 'gi');
-    out = out.replace(re, v);
-  }
-  return out;
+  return renderMergeVars(template, vars);
 }
 
 function alignStyle(a: EmailBlock['align']): string {

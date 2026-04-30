@@ -3,8 +3,38 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
-  ArrowLeft, Copy, ExternalLink, Link2, Loader2, Pencil, Plus, Trash2, X, Tags,
+  ArrowLeft, Copy, ExternalLink, Link2, Loader2, Pencil, Plus, Trash2, X, Tags, Braces,
 } from 'lucide-react';
+import { SYSTEM_MERGE_VARIABLES, type MergeVarCategory } from '@/lib/merge-variables';
+
+const CATEGORY_LABELS: Record<MergeVarCategory, string> = {
+  contact:      'Contact',
+  appointment:  'Appointment',
+  venue:        'Venue',
+  lead:         'Lead',
+  invoice:      'Invoice',
+  proposal:     'Proposal',
+  subscription: 'Subscription',
+  marketing:    'Marketing',
+  system:       'System',
+};
+
+const CATEGORY_COLORS: Record<MergeVarCategory, string> = {
+  contact:      'bg-blue-50 text-blue-700 border-blue-200',
+  appointment:  'bg-violet-50 text-violet-700 border-violet-200',
+  venue:        'bg-emerald-50 text-emerald-700 border-emerald-200',
+  lead:         'bg-pink-50 text-pink-700 border-pink-200',
+  invoice:      'bg-amber-50 text-amber-700 border-amber-200',
+  proposal:     'bg-orange-50 text-orange-700 border-orange-200',
+  subscription: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+  marketing:    'bg-rose-50 text-rose-700 border-rose-200',
+  system:       'bg-gray-50 text-gray-600 border-gray-200',
+};
+
+const CATEGORY_ORDER: MergeVarCategory[] = [
+  'contact', 'appointment', 'venue', 'lead',
+  'invoice', 'proposal', 'subscription', 'marketing', 'system',
+];
 
 const APP_ORIGIN =
   typeof window !== 'undefined'
@@ -34,6 +64,125 @@ interface MarketingTagRow {
 function shortUrl(code: string) {
   const base = APP_ORIGIN || (typeof window !== 'undefined' ? window.location.origin : '');
   return `${base}/t/${code}`;
+}
+
+function SystemVariablesSection() {
+  const [copiedTag, setCopiedTag] = useState<string | null>(null);
+  const [activeCategory, setActiveCategory] = useState<MergeVarCategory | 'all'>('all');
+
+  function copyTag(tag: string) {
+    void navigator.clipboard.writeText(tag);
+    setCopiedTag(tag);
+    setTimeout(() => setCopiedTag(null), 2000);
+  }
+
+  const visibleVars = activeCategory === 'all'
+    ? SYSTEM_MERGE_VARIABLES
+    : SYSTEM_MERGE_VARIABLES.filter((v) => v.category === activeCategory);
+
+  const groupedByCategory = CATEGORY_ORDER.reduce<Record<string, typeof SYSTEM_MERGE_VARIABLES>>((acc, cat) => {
+    const items = visibleVars.filter((v) => v.category === cat);
+    if (items.length) acc[cat] = items;
+    return acc;
+  }, {});
+
+  return (
+    <section className="mt-16">
+      <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+        <div>
+          <div className="flex items-center gap-2 text-brand-700 mb-1">
+            <Braces className="w-5 h-5" />
+            <span className="text-xs font-semibold uppercase tracking-wider">System Variables</span>
+          </div>
+          <h2 className="font-heading text-xl text-gray-900">Merge Variables</h2>
+          <p className="mt-1 text-sm text-gray-500 max-w-xl">
+            These are the system-default merge variables available across all email, SMS, and calendar templates.
+            They are <strong className="text-gray-700">read-only</strong> and cannot be deleted. Click any tag to copy it.
+          </p>
+        </div>
+      </div>
+
+      {/* Category filter pills */}
+      <div className="flex flex-wrap gap-2 mb-6">
+        <button
+          type="button"
+          onClick={() => setActiveCategory('all')}
+          className={`rounded-full px-3 py-1 text-xs font-medium border transition ${
+            activeCategory === 'all'
+              ? 'bg-brand-900 text-white border-brand-900'
+              : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+          }`}
+        >
+          All ({SYSTEM_MERGE_VARIABLES.length})
+        </button>
+        {CATEGORY_ORDER.map((cat) => {
+          const count = SYSTEM_MERGE_VARIABLES.filter((v) => v.category === cat).length;
+          return (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setActiveCategory(cat)}
+              className={`rounded-full px-3 py-1 text-xs font-medium border transition ${
+                activeCategory === cat
+                  ? 'bg-brand-900 text-white border-brand-900'
+                  : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+              }`}
+            >
+              {CATEGORY_LABELS[cat]} ({count})
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Variables grid */}
+      <div className="space-y-6">
+        {Object.entries(groupedByCategory).map(([cat, vars]) => (
+          <div key={cat}>
+            <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold border mb-3 ${CATEGORY_COLORS[cat as MergeVarCategory]}`}>
+              {CATEGORY_LABELS[cat as MergeVarCategory]}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {vars.map((v) => (
+                <button
+                  key={v.key}
+                  type="button"
+                  onClick={() => copyTag(v.tag)}
+                  title={`Click to copy ${v.tag}`}
+                  className="group relative flex flex-col gap-1 rounded-xl border border-gray-200 bg-white px-4 py-3 text-left hover:border-brand-400 hover:bg-brand-50/30 transition"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <code className="text-xs font-mono font-semibold text-brand-700 truncate">
+                      {v.tag}
+                    </code>
+                    <span className="shrink-0 text-[10px] font-medium text-gray-400 group-hover:text-brand-600 transition">
+                      {copiedTag === v.tag ? '✓ Copied' : 'Copy'}
+                    </span>
+                  </div>
+                  <p className="text-[12px] text-gray-500 leading-snug">{v.description}</p>
+                  <p className="text-[11px] text-gray-400 italic truncate">e.g. {v.example}</p>
+                  {/* "Where it works" badges */}
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {v.usedIn.map((ctx) => (
+                      <span
+                        key={ctx}
+                        className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-medium text-gray-500 uppercase tracking-wide"
+                      >
+                        {ctx}
+                      </span>
+                    ))}
+                  </div>
+                  {/* Lock badge */}
+                  <span className="absolute right-2 top-2 text-[9px] font-semibold text-gray-300 uppercase tracking-widest">
+                    system
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 export default function TriggerLinksPage() {
@@ -505,6 +654,9 @@ export default function TriggerLinksPage() {
           </div>
         </div>
       )}
+
+      {/* ── System Variables ────────────────────────────────────────────── */}
+      <SystemVariablesSection />
     </div>
   );
 }

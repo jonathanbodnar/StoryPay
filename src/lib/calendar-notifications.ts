@@ -18,6 +18,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
+import { renderMergeVars, systemDateVars } from '@/lib/merge-variables';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -29,8 +30,10 @@ export type NotifType =
   | 'follow_up';
 
 export interface CalendarNotifVars {
-  /** Contact's display name */
+  /** Contact's display name (full) */
   contact_name: string;
+  contact_first_name?: string | null;
+  contact_last_name?: string | null;
   /** Contact's email address */
   contact_email?: string | null;
   /** Contact's phone (E.164 preferred) */
@@ -44,10 +47,22 @@ export interface CalendarNotifVars {
   appointment_title: string;
   /** Human-readable start date + time, e.g. "Monday, May 5 at 10:00 AM" */
   appointment_start_time: string;
+  /** Date only, e.g. "Monday, May 5, 2026" */
+  appointment_date?: string | null;
+  /** Time only, e.g. "2:00 PM" */
+  appointment_time?: string | null;
+  /** Human-readable end date + time */
+  appointment_end_time?: string | null;
+  /** Duration string, e.g. "1 hour" or "30 minutes" */
+  appointment_duration?: string | null;
   /** Timezone label, e.g. "EST" or "America/New_York" */
   appointment_timezone?: string | null;
   /** Meeting link or physical address */
   appointment_meeting_location?: string | null;
+  /** Name of the calendar this event belongs to */
+  appointment_calendar_name?: string | null;
+  /** Appointment status */
+  appointment_status?: string | null;
 }
 
 interface TemplateRow {
@@ -60,6 +75,13 @@ interface TemplateRow {
 interface VenueRow {
   email?: string | null;
   name?: string | null;
+  owner_first_name?: string | null;
+  owner_last_name?: string | null;
+  notification_phone?: string | null;
+  location_full?: string | null;
+  location_city?: string | null;
+  location_state?: string | null;
+  brand_website?: string | null;
   ghl_access_token?: string | null;
   ghl_location_id?: string | null;
   ghl_connected?: boolean | null;
@@ -227,22 +249,54 @@ We hope it was valuable! Please don't hesitate to reach out if you have any ques
 // ── Merge-tag renderer ────────────────────────────────────────────────────────
 
 export function renderTemplate(template: string, vars: Record<string, string>): string {
-  return template.replace(/\{\{([^}]+)\}\}/g, (_, key: string) => {
-    const trimmed = key.trim();
-    return vars[trimmed] ?? '';
-  });
+  return renderMergeVars(template, vars);
 }
 
 function buildVarMap(venue: VenueRow, vars: CalendarNotifVars): Record<string, string> {
+  const ownerFirst = venue.owner_first_name || '';
+  const ownerLast  = venue.owner_last_name  || '';
+  const ownerName  = [ownerFirst, ownerLast].filter(Boolean).join(' ');
+  const venueAddr  = venue.location_full
+    || [venue.location_city, venue.location_state].filter(Boolean).join(', ')
+    || '';
+  const sysVars = systemDateVars();
   return {
-    'contact.name':                     vars.contact_name || 'Guest',
-    'contact.email':                    vars.contact_email || '',
-    'contact.phone':                    vars.contact_phone || '',
-    'appointment.title':                vars.appointment_title || 'Appointment',
-    'appointment.start_time':           vars.appointment_start_time || '',
-    'appointment.timezone':             vars.appointment_timezone || '',
-    'appointment.meeting_location':     vars.appointment_meeting_location || '',
-    'venue.name':                       venue.name || 'Us',
+    // ── Contact (canonical) ──────────────────────────────────────────────
+    'contact.first_name':              vars.contact_first_name || vars.contact_name.split(' ')[0] || '',
+    'contact.last_name':               vars.contact_last_name  || '',
+    'contact.name':                    vars.contact_name || 'Guest',
+    'contact.email':                   vars.contact_email || '',
+    'contact.phone':                   vars.contact_phone || '',
+    // ── Appointment (canonical) ──────────────────────────────────────────
+    'appointment.title':               vars.appointment_title || 'Appointment',
+    'appointment.date':                vars.appointment_date || '',
+    'appointment.time':                vars.appointment_time || '',
+    'appointment.start_time':          vars.appointment_start_time || '',
+    'appointment.end_time':            vars.appointment_end_time || '',
+    'appointment.duration':            vars.appointment_duration || '',
+    'appointment.timezone':            vars.appointment_timezone || '',
+    'appointment.meeting_location':    vars.appointment_meeting_location || '',
+    'appointment.calendar_name':       vars.appointment_calendar_name || '',
+    'appointment.status':              vars.appointment_status || '',
+    // ── Venue (canonical) ────────────────────────────────────────────────
+    'venue.name':                      venue.name || 'Us',
+    'venue.owner_name':                ownerName,
+    'venue.owner_first_name':          ownerFirst,
+    'venue.email':                     venue.email || '',
+    'venue.phone':                     venue.notification_phone || '',
+    'venue.address':                   venueAddr,
+    'venue.city':                      venue.location_city || '',
+    'venue.state':                     venue.location_state || '',
+    'venue.website':                   venue.brand_website || '',
+    // ── System (canonical) ───────────────────────────────────────────────
+    ...sysVars,
+    // ── Legacy flat aliases (backwards compat) ───────────────────────────
+    'contact_name':                    vars.contact_name || 'Guest',
+    'contact_email':                   vars.contact_email || '',
+    'contact_phone':                   vars.contact_phone || '',
+    'first_name':                      vars.contact_first_name || vars.contact_name.split(' ')[0] || '',
+    'last_name':                       vars.contact_last_name  || '',
+    'venue_name':                      venue.name || 'Us',
   };
 }
 
@@ -462,7 +516,7 @@ export async function dispatchCalendarNotification(
 
     const { data: venueRow } = await supabaseAdmin
       .from('venues')
-      .select('email,name,ghl_access_token,ghl_location_id,ghl_connected')
+      .select('email,name,owner_first_name,owner_last_name,notification_phone,location_full,location_city,location_state,brand_website,ghl_access_token,ghl_location_id,ghl_connected')
       .eq('id', venueId)
       .maybeSingle();
 
@@ -626,8 +680,10 @@ export async function buildNotifVarsForEvent(
     venue_id: string;
     title: string;
     start_at: string;
-    end_at?: string;
+    end_at?: string | null;
     customer_email?: string | null;
+    calendar_id?: string | null;
+    status?: string | null;
   },
   tz?: string,
 ): Promise<CalendarNotifVars | null> {
@@ -646,7 +702,9 @@ export async function buildNotifVarsForEvent(
     first_name?: string; last_name?: string; phone?: string; ghl_contact_id?: string;
     sms_dnd?: boolean; conversation_dnd_email?: boolean; conversation_dnd_all?: boolean;
   } | null;
-  const contactName = [c?.first_name, c?.last_name].filter(Boolean).join(' ') || customerEmail;
+  const contactFirstName = c?.first_name?.trim() || '';
+  const contactLastName  = c?.last_name?.trim()  || '';
+  const contactName = [contactFirstName, contactLastName].filter(Boolean).join(' ') || customerEmail;
 
   const resolvedTz = tz ?? 'America/New_York';
   const startDate = new Date(ev.start_at);
@@ -656,21 +714,68 @@ export async function buildNotifVarsForEvent(
     hour: 'numeric', minute: '2-digit', timeZone: resolvedTz,
   }).format(startDate);
 
+  const dateOnly = new Intl.DateTimeFormat('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: resolvedTz,
+  }).format(startDate);
+
+  const timeOnly = new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric', minute: '2-digit', timeZone: resolvedTz,
+  }).format(startDate);
+
   const tzLabel =
     new Intl.DateTimeFormat('en-US', { timeZone: resolvedTz, timeZoneName: 'short' })
       .formatToParts(startDate)
       .find((p) => p.type === 'timeZoneName')?.value ?? resolvedTz;
 
+  // End time + duration
+  let endTimeFormatted: string | null = null;
+  let durationStr: string | null = null;
+  if (ev.end_at) {
+    const endDate = new Date(ev.end_at);
+    endTimeFormatted = new Intl.DateTimeFormat('en-US', {
+      weekday: 'long', month: 'long', day: 'numeric',
+      hour: 'numeric', minute: '2-digit', timeZone: resolvedTz,
+    }).format(endDate);
+    const diffMs = endDate.getTime() - startDate.getTime();
+    if (diffMs > 0) {
+      const totalMins = Math.round(diffMs / 60000);
+      const hrs  = Math.floor(totalMins / 60);
+      const mins = totalMins % 60;
+      if (hrs > 0 && mins > 0)  durationStr = `${hrs} hour${hrs > 1 ? 's' : ''} ${mins} minute${mins > 1 ? 's' : ''}`;
+      else if (hrs > 0)         durationStr = `${hrs} hour${hrs > 1 ? 's' : ''}`;
+      else                      durationStr = `${totalMins} minute${totalMins > 1 ? 's' : ''}`;
+    }
+  }
+
+  // Calendar name lookup
+  let calendarName: string | null = null;
+  if (ev.calendar_id) {
+    const { data: cal } = await supabaseAdmin
+      .from('venue_calendars')
+      .select('name')
+      .eq('id', ev.calendar_id)
+      .maybeSingle();
+    calendarName = (cal as { name?: string } | null)?.name ?? null;
+  }
+
   return {
-    contact_name: contactName,
-    contact_email: customerEmail,
-    contact_phone: c?.phone ?? null,
-    contact_ghl_id: c?.ghl_contact_id ?? null,
-    contact_sms_dnd: c?.sms_dnd ?? false,
-    contact_email_dnd: (c?.conversation_dnd_email || c?.conversation_dnd_all) ?? false,
-    appointment_title: ev.title,
-    appointment_start_time: startFormatted,
-    appointment_timezone: tzLabel,
+    contact_name:               contactName,
+    contact_first_name:         contactFirstName || null,
+    contact_last_name:          contactLastName  || null,
+    contact_email:              customerEmail,
+    contact_phone:              c?.phone ?? null,
+    contact_ghl_id:             c?.ghl_contact_id ?? null,
+    contact_sms_dnd:            c?.sms_dnd ?? false,
+    contact_email_dnd:          (c?.conversation_dnd_email || c?.conversation_dnd_all) ?? false,
+    appointment_title:          ev.title,
+    appointment_start_time:     startFormatted,
+    appointment_date:           dateOnly,
+    appointment_time:           timeOnly,
+    appointment_end_time:       endTimeFormatted,
+    appointment_duration:       durationStr,
+    appointment_timezone:       tzLabel,
     appointment_meeting_location: null,
+    appointment_calendar_name:  calendarName,
+    appointment_status:         ev.status ?? null,
   };
 }

@@ -292,7 +292,7 @@ export async function buildMergeVars(
   const forSms = opts?.forSms === true;
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('name, location_full, location_city, location_state')
+    .select('name, location_full, location_city, location_state, owner_first_name, owner_last_name, notification_phone, brand_website')
     .eq('id', venueId)
     .maybeSingle();
   const { data: lead } = await supabaseAdmin
@@ -348,21 +348,51 @@ export async function buildMergeVars(
   const fullAddr = (venue?.location_full as string)
     || ([venue?.location_city, venue?.location_state].filter(Boolean).join(', '))
     || '';
+  const venueName   = (venue?.name as string) || 'Your venue';
+  const ownerFirst  = (venue?.owner_first_name as string | null)?.trim() || '';
+  const ownerLast   = (venue?.owner_last_name  as string | null)?.trim() || '';
+  const ownerName   = [ownerFirst, ownerLast].filter(Boolean).join(' ');
+  const now         = new Date();
+  const fullName    = [fn, ln].filter(Boolean).join(' ');
   return {
-    first_name: fn,
-    last_name: ln,
+    // ── Flat legacy keys (kept for all existing templates) ────────────────
+    first_name:         fn,
+    last_name:          ln,
     email,
-    venue_name: (venue?.name as string) || 'Your venue',
+    venue_name:         venueName,
     venue_full_address: fullAddr,
-    venue_city: (venue?.location_city as string) || '',
-    venue_state: (venue?.location_state as string) || '',
-    unsubscribe_url: unsub,
-    resubscribe_url: resub,
-    preferences_url: prefs,
-    wedding_date: wd || '',
-    wedding_date_nice: wedding_date_nice || '',
-    wedding_month: wedding_month || '',
-    guest_count: gc != null ? String(gc) : '',
+    venue_city:         (venue?.location_city as string) || '',
+    venue_state:        (venue?.location_state as string) || '',
+    unsubscribe_url:    unsub,
+    resubscribe_url:    resub,
+    preferences_url:    prefs,
+    wedding_date:       wedding_date_nice || wd || '',
+    wedding_date_nice:  wedding_date_nice || '',
+    wedding_month:      wedding_month || '',
+    guest_count:        gc != null ? String(gc) : '',
+    // ── Canonical dot-notation keys (new unified system) ─────────────────
+    'contact.first_name':        fn,
+    'contact.last_name':         ln,
+    'contact.name':              fullName || fn,
+    'contact.email':             email,
+    'contact.phone':             '',
+    'venue.name':                venueName,
+    'venue.owner_name':          ownerName,
+    'venue.owner_first_name':    ownerFirst,
+    'venue.email':               '',
+    'venue.phone':               (venue?.notification_phone as string | null) || '',
+    'venue.address':             fullAddr,
+    'venue.city':                (venue?.location_city as string) || '',
+    'venue.state':               (venue?.location_state as string) || '',
+    'venue.website':             (venue?.brand_website as string | null) || '',
+    'lead.wedding_date':         wedding_date_nice || wd || '',
+    'lead.wedding_month':        wedding_month || '',
+    'lead.guest_count':          gc != null ? String(gc) : '',
+    'marketing.unsubscribe_url': unsub,
+    'marketing.resubscribe_url': resub,
+    'marketing.preferences_url': prefs,
+    'system.date':               now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+    'system.year':               String(now.getFullYear()),
   };
 }
 

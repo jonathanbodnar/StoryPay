@@ -152,14 +152,35 @@ const NOTIF_CHANNELS: { key: string; label: string; medium: 'email' | 'sms'; rec
 ];
 
 const MERGE_TAGS = [
+  // Contact
+  { tag: '{{contact.first_name}}',        desc: "Contact's first name" },
+  { tag: '{{contact.last_name}}',         desc: "Contact's last name" },
   { tag: '{{contact.name}}',              desc: "Contact's full name" },
   { tag: '{{contact.email}}',             desc: "Contact's email" },
   { tag: '{{contact.phone}}',             desc: "Contact's phone" },
+  // Appointment
   { tag: '{{appointment.title}}',         desc: 'Appointment title' },
-  { tag: '{{appointment.start_time}}',    desc: 'Formatted start date & time' },
+  { tag: '{{appointment.date}}',          desc: 'Date only (e.g. Monday, May 5, 2026)' },
+  { tag: '{{appointment.time}}',          desc: 'Time only (e.g. 2:00 PM)' },
+  { tag: '{{appointment.start_time}}',    desc: 'Full start date & time' },
+  { tag: '{{appointment.end_time}}',      desc: 'Full end date & time' },
+  { tag: '{{appointment.duration}}',      desc: 'Duration (e.g. 1 hour)' },
   { tag: '{{appointment.timezone}}',      desc: 'Timezone abbreviation' },
   { tag: '{{appointment.meeting_location}}', desc: 'Meeting link or address' },
+  { tag: '{{appointment.calendar_name}}', desc: 'Calendar name (e.g. Tour Calendar)' },
+  // Venue
   { tag: '{{venue.name}}',                desc: 'Venue / business name' },
+  { tag: '{{venue.owner_name}}',          desc: "Owner's full name" },
+  { tag: '{{venue.owner_first_name}}',    desc: "Owner's first name" },
+  { tag: '{{venue.email}}',               desc: "Venue's contact email" },
+  { tag: '{{venue.phone}}',               desc: "Venue's phone number" },
+  { tag: '{{venue.address}}',             desc: 'Full venue address' },
+  { tag: '{{venue.city}}',               desc: 'Venue city' },
+  { tag: '{{venue.state}}',              desc: 'Venue state' },
+  { tag: '{{venue.website}}',             desc: 'Venue website URL' },
+  // System
+  { tag: '{{system.date}}',               desc: "Today's date at send time" },
+  { tag: '{{system.year}}',               desc: 'Current year' },
 ];
 
 // ── Default templates per scenario × channel ─────────────────────────────────

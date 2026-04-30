@@ -7,6 +7,7 @@
  */
 
 import { supabaseAdmin } from '@/lib/supabase';
+import { renderMergeVars, systemDateVars } from '@/lib/merge-variables';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -114,11 +115,7 @@ export function fillTemplate(
   text: string,
   vars: Record<string, string>
 ): string {
-  let out = text;
-  for (const [key, val] of Object.entries(vars)) {
-    out = out.replaceAll(`{{${key}}}`, val);
-  }
-  return out;
+  return renderMergeVars(text, { ...systemDateVars(), ...vars });
 }
 
 // ─── HTML builder ─────────────────────────────────────────────────────────────
