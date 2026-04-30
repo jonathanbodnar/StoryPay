@@ -53,11 +53,13 @@ export async function POST(req: NextRequest) {
     channel: string;
     subject?: string | null;
     body: string;
+    /** Recipient override: email address or E.164 phone (+15555555555) */
+    testTo: string;
   };
 
-  const { channel, subject, body: rawBody } = body;
-  if (!channel || !rawBody) {
-    return NextResponse.json({ error: 'channel and body are required' }, { status: 400 });
+  const { channel, subject, body: rawBody, testTo } = body;
+  if (!channel || !rawBody || !testTo) {
+    return NextResponse.json({ error: 'channel, body, and testTo are required' }, { status: 400 });
   }
 
   const renderedBody = renderTemplate(rawBody, varMap);
@@ -72,7 +74,7 @@ export async function POST(req: NextRequest) {
         : `${recipientLabel} notification preview`;
 
       await sendEmail({
-        to: venueEmail,
+        to: testTo,
         subject: `[TEST – ${recipientLabel}] ${renderedSubject}`,
         html: plainToHtml(
           `⚠️ TEST MESSAGE\n` +
@@ -84,7 +86,7 @@ export async function POST(req: NextRequest) {
         from: { name: venueName },
       });
     } else {
-      // SMS — deliver to the venue owner's GHL contact as a test
+      // SMS — send to the specified phone number via GHL
       const ghlToken = (venue as { ghl_access_token?: string | null }).ghl_access_token;
       const locationId = (venue as { ghl_location_id?: string | null }).ghl_location_id;
       const ghlConnected = (venue as { ghl_connected?: boolean | null }).ghl_connected;
@@ -96,30 +98,34 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const { ghlRequest, sendSms } = await import('@/lib/ghl') as {
+      const { ghlRequest, sendSms, normalizePhone } = await import('@/lib/ghl') as {
         ghlRequest: (path: string, token: string, opts?: Record<string, unknown>) => Promise<{
           contact?: { id?: string };
           contacts?: { id?: string }[];
         }>;
         sendSms: (token: string, locationId: string, contactId: string, message: string) => Promise<unknown>;
+        normalizePhone: (phone: string | null | undefined) => string | null;
       };
 
-      // Look up owner's GHL contact by venue email so the SMS goes to the right person
+      // Look up the GHL contact for the supplied test phone number
+      const normalizedPhone = normalizePhone(testTo) ?? testTo;
       let contactId: string | null = null;
       try {
         const search = await ghlRequest(
-          `/contacts/search/duplicate?locationId=${locationId}&email=${encodeURIComponent(venueEmail)}`,
+          `/contacts/search/duplicate?locationId=${locationId}&phone=${encodeURIComponent(normalizedPhone)}`,
           ghlToken,
           { locationId },
         );
         contactId = search?.contact?.id ?? search?.contacts?.[0]?.id ?? null;
       } catch {
-        // lookup failed — contactId stays null
+        // lookup failed
       }
 
       if (!contactId) {
         return NextResponse.json(
-          { error: 'Could not find your GHL contact to deliver the test SMS. Make sure your venue email matches a GHL contact.' },
+          {
+            error: `No GHL contact found for ${normalizedPhone}. Make sure this number exists as a contact in your GHL account.`,
+          },
           { status: 400 },
         );
       }

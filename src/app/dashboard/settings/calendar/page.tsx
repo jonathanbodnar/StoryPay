@@ -1146,6 +1146,8 @@ function NotificationsTab() {
   const [showTags, setShowTags] = useState(false);
   // key = "type:channel", value = 'idle' | 'sending' | 'sent' | 'error'
   const [testState, setTestState] = useState<Record<string, 'idle' | 'sending' | 'sent' | 'error'>>({});
+  // key = "type:channel", value = recipient email or phone digits
+  const [testRecipients, setTestRecipients] = useState<Record<string, string>>({});
 
   // Build a full default row for a given type+channel if none exists in DB
   const makeDefault = (type: string, channel: string): NotifRow => {
@@ -1265,12 +1267,19 @@ function NotificationsTab() {
     const row = getRow(type, channel);
     if (!row?.body) return;
     const key = `${type}:${channel}`;
+    const isSms = channel.startsWith('sms_');
+    const rawRecipient = (testRecipients[key] ?? '').trim();
+    // For SMS, strip non-digits and prepend +1
+    const testTo = isSms
+      ? `+1${rawRecipient.replace(/\D/g, '')}`
+      : rawRecipient;
+    if (!testTo || (isSms && testTo === '+1')) return; // nothing typed yet
     setTestState((s) => ({ ...s, [key]: 'sending' }));
     try {
       const res = await fetch('/api/calendar/notifications/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channel, subject: row.subject, body: row.body }),
+        body: JSON.stringify({ channel, subject: row.subject, body: row.body, testTo }),
       });
       const json = await res.json() as { ok?: boolean; error?: string };
       setTestState((s) => ({ ...s, [key]: json.ok ? 'sent' : 'error' }));
@@ -1508,50 +1517,84 @@ function NotificationsTab() {
                             />
                           </div>
 
-                          {/* Bottom action row: test + reset */}
-                          <div className="flex items-center justify-between pt-1">
-                            {/* Send test button */}
-                            {(() => {
-                              const tKey = `${nt.type}:${ch.key}`;
-                              const ts = testState[tKey] ?? 'idle';
-                              const isSms = ch.medium === 'sms';
-                              return (
-                                <button
-                                  type="button"
-                                  disabled={ts === 'sending' || !row.body}
-                                  onClick={() => sendTest(nt.type, ch.key)}
-                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all disabled:opacity-50 ${
-                                    ts === 'sent'
-                                      ? 'border-green-300 bg-green-50 text-green-700'
-                                      : ts === 'error'
-                                      ? 'border-red-300 bg-red-50 text-red-600'
-                                      : 'border-gray-300 bg-white text-gray-600 hover:border-gray-400 hover:text-gray-800'
-                                  }`}
-                                >
-                                  {ts === 'sending' ? (
-                                    <><Loader2 size={12} className="animate-spin" /> Sending…</>
-                                  ) : ts === 'sent' ? (
-                                    <><Check size={12} /> Test sent!</>
-                                  ) : ts === 'error' ? (
-                                    <><X size={12} /> Failed</>
+                          {/* Bottom action row: test recipient + send + reset */}
+                          {(() => {
+                            const tKey = `${nt.type}:${ch.key}`;
+                            const ts = testState[tKey] ?? 'idle';
+                            const isSms = ch.medium === 'sms';
+                            const recipientVal = testRecipients[tKey] ?? '';
+                            const hasRecipient = isSms
+                              ? recipientVal.replace(/\D/g, '').length >= 10
+                              : recipientVal.includes('@');
+                            return (
+                              <div className="pt-2 space-y-2">
+                                {/* Recipient input row */}
+                                <div className="flex items-center gap-2">
+                                  {isSms ? (
+                                    <div className="flex items-center rounded-lg border border-gray-300 overflow-hidden focus-within:ring-1 focus-within:ring-gray-800 bg-white flex-1">
+                                      <span className="px-2.5 py-2 text-sm text-gray-500 bg-gray-50 border-r border-gray-300 select-none font-mono">+1</span>
+                                      <input
+                                        type="tel"
+                                        value={recipientVal}
+                                        onChange={(e) => {
+                                          // Only allow digits, spaces, dashes, parens
+                                          const clean = e.target.value.replace(/[^\d\s\-()]/g, '');
+                                          setTestRecipients((p) => ({ ...p, [tKey]: clean }));
+                                        }}
+                                        placeholder="555 555 5555"
+                                        className="flex-1 px-2.5 py-2 text-sm focus:outline-none bg-white"
+                                      />
+                                    </div>
                                   ) : (
-                                    <>Send test {isSms ? 'SMS' : 'email'}</>
+                                    <input
+                                      type="email"
+                                      value={recipientVal}
+                                      onChange={(e) =>
+                                        setTestRecipients((p) => ({ ...p, [tKey]: e.target.value }))
+                                      }
+                                      placeholder="test@example.com"
+                                      className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-800 bg-white"
+                                    />
                                   )}
-                                </button>
-                              );
-                            })()}
+                                  <button
+                                    type="button"
+                                    disabled={ts === 'sending' || !row.body || !hasRecipient}
+                                    onClick={() => sendTest(nt.type, ch.key)}
+                                    className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium transition-all disabled:opacity-40 ${
+                                      ts === 'sent'
+                                        ? 'border-green-300 bg-green-50 text-green-700'
+                                        : ts === 'error'
+                                        ? 'border-red-300 bg-red-50 text-red-600'
+                                        : 'border-gray-300 bg-white text-gray-600 hover:border-gray-400 hover:text-gray-800'
+                                    }`}
+                                  >
+                                    {ts === 'sending' ? (
+                                      <><Loader2 size={12} className="animate-spin" /> Sending…</>
+                                    ) : ts === 'sent' ? (
+                                      <><Check size={12} /> Sent!</>
+                                    ) : ts === 'error' ? (
+                                      <><X size={12} /> Failed</>
+                                    ) : (
+                                      <>Send test {isSms ? 'SMS' : 'email'}</>
+                                    )}
+                                  </button>
+                                </div>
 
-                            {/* Reset to default */}
-                            {def ? (
-                              <button
-                                type="button"
-                                onClick={() => resetToDefault(nt.type, ch.key)}
-                                className="text-xs text-gray-500 hover:text-gray-800 underline underline-offset-2"
-                              >
-                                Reset to default
-                              </button>
-                            ) : <span />}
-                          </div>
+                                {/* Reset to default */}
+                                {def && (
+                                  <div className="flex justify-end">
+                                    <button
+                                      type="button"
+                                      onClick={() => resetToDefault(nt.type, ch.key)}
+                                      className="text-xs text-gray-500 hover:text-gray-800 underline underline-offset-2"
+                                    >
+                                      Reset to default
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
                       )}
                     </div>
