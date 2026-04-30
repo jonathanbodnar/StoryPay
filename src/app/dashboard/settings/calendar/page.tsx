@@ -361,21 +361,140 @@ const DEFAULT_CHANNEL_OFFSETS: Record<string, { d: number; h: number; m: number 
 // Default follow-up offset: 30 minutes after the event ends
 const DEFAULT_FOLLOWUP_OFFSETS: { d: number; h: number; m: number }[] = [{ d: 0, h: 0, m: 30 }];
 
-const DURATION_OPTIONS = [15, 30, 45, 60, 90, 120, 180, 240];
-const INTERVAL_OPTIONS = [15, 30, 45, 60, 90, 120];
-const NOTICE_OPTIONS = [0, 1, 2, 4, 8, 12, 24, 48, 72];
-const RANGE_OPTIONS = [7, 14, 30, 60, 90, 180, 365];
-const BUFFER_OPTIONS = [0, 5, 10, 15, 20, 30, 45, 60];
+// ── Duration input helpers ────────────────────────────────────────────────────
+
+/** Multiplier to convert from display unit → stored unit */
+function unitFactor(unit: string, storedIn: 'minutes' | 'hours' | 'days'): number {
+  if (storedIn === 'minutes') return unit === 'hours' ? 60 : 1;
+  if (storedIn === 'hours') {
+    if (unit === 'days')   return 24;
+    if (unit === 'weeks')  return 168;
+    if (unit === 'months') return 720;
+    return 1;
+  }
+  // days
+  if (unit === 'weeks')  return 7;
+  if (unit === 'months') return 30;
+  return 1;
+}
+
+function displayToStored(display: number, storedIn: 'minutes' | 'hours' | 'days', unit: string): number {
+  return Math.round(display * unitFactor(unit, storedIn));
+}
+
+function storedToDisplay(stored: number, storedIn: 'minutes' | 'hours' | 'days', unit: string): number {
+  const f = unitFactor(unit, storedIn);
+  return f === 0 ? stored : stored / f;
+}
+
+function bestUnit(stored: number, storedIn: 'minutes' | 'hours' | 'days', available: string[]): string {
+  if (stored === 0) return available[0];
+  if (storedIn === 'minutes') {
+    if (stored % 60 === 0 && available.includes('hours')) return 'hours';
+    return available.includes('min') ? 'min' : available[0];
+  }
+  if (storedIn === 'hours') {
+    if (stored % 720 === 0 && available.includes('months')) return 'months';
+    if (stored % 168 === 0 && available.includes('weeks'))  return 'weeks';
+    if (stored % 24  === 0 && available.includes('days'))   return 'days';
+    return available.includes('hours') ? 'hours' : available[0];
+  }
+  // days
+  if (stored % 30 === 0 && available.includes('months')) return 'months';
+  if (stored % 7  === 0 && available.includes('weeks'))  return 'weeks';
+  return available.includes('days') ? 'days' : available[0];
+}
+
+/** Human-readable label for a stored value */
+function storedLabel(stored: number | null | undefined, storedIn: 'minutes' | 'hours' | 'days', available: string[]): string {
+  if (stored == null) return 'Venue default';
+  if (stored === 0)   return storedIn === 'minutes' ? '0 min' : 'None';
+  const u = bestUnit(stored, storedIn, available);
+  const d = storedToDisplay(stored, storedIn, u);
+  return `${d % 1 === 0 ? d : d.toFixed(1)} ${u}`;
+}
+
+// ── DurationInput component ───────────────────────────────────────────────────
+
+function DurationInput({
+  label, tooltip, value, storedIn, units, onChange, nullable, nullLabel,
+}: {
+  label: string;
+  tooltip?: string;
+  value: number | null;
+  storedIn: 'minutes' | 'hours' | 'days';
+  units: string[];
+  onChange: (v: number | null) => void;
+  nullable?: boolean;
+  nullLabel?: string;
+}) {
+  const initUnit = value != null ? bestUnit(value, storedIn, units) : units[0];
+  const [unit, setUnit]     = useState<string>(initUnit);
+  const [numStr, setNumStr] = useState<string>(
+    value != null ? String(storedToDisplay(value, storedIn, initUnit)) : '',
+  );
+
+  // Convert numStr + unit → stored value, call onChange
+  const commit = (str: string, u: string) => {
+    const parsed = parseFloat(str);
+    if (!isNaN(parsed) && parsed >= 0) {
+      onChange(displayToStored(parsed, storedIn, u));
+    }
+  };
+
+  const handleUnitChange = (newUnit: string) => {
+    if (newUnit === '__default__') { onChange(null); setNumStr(''); return; }
+    // Keep stored value the same, re-express in new unit
+    const parsed = parseFloat(numStr);
+    if (!isNaN(parsed)) {
+      const stored = displayToStored(parsed, storedIn, unit);
+      const newDisplay = storedToDisplay(stored, storedIn, newUnit);
+      const displayStr = newDisplay % 1 === 0 ? String(newDisplay) : newDisplay.toFixed(1);
+      setNumStr(displayStr);
+    }
+    setUnit(newUnit);
+    commit(numStr, newUnit);
+  };
+
+  const handleNumChange = (str: string) => {
+    setNumStr(str);
+    commit(str, unit);
+  };
+
+  const showDefault = nullable && value === null;
+
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+        {label}
+        {tooltip && <InfoTip text={tooltip} />}
+      </label>
+      <div className="flex gap-0 rounded-lg border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-gray-900">
+        <input
+          type="number"
+          min={0}
+          step="any"
+          value={showDefault ? '' : numStr}
+          onChange={(e) => handleNumChange(e.target.value)}
+          placeholder={showDefault ? (nullLabel ?? 'Venue default') : '0'}
+          className="flex-1 min-w-0 px-3 py-2 text-sm focus:outline-none bg-white disabled:bg-gray-50"
+          disabled={showDefault}
+        />
+        <select
+          value={showDefault ? '__default__' : unit}
+          onChange={(e) => handleUnitChange(e.target.value)}
+          className="border-l border-gray-300 px-2 py-2 text-sm bg-white focus:outline-none cursor-pointer"
+        >
+          {nullable && <option value="__default__">— default —</option>}
+          {units.map((u) => <option key={u} value={u}>{u}</option>)}
+        </select>
+      </div>
+    </div>
+  );
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function timeLabel(minutes: number) {
-  if (minutes === 0) return 'None';
-  if (minutes < 60) return `${minutes}m`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m === 0 ? `${h}h` : `${h}h ${m}m`;
-}
 
 function formatTime(t: string) {
   const [h, m] = t.split(':').map(Number);
@@ -1050,86 +1169,106 @@ function BookingRulesTab() {
 
   return (
     <div className="max-w-2xl space-y-6">
-      <Card title="Booking Rules" description="Control how and when appointments can be booked.">
-        <div className="grid grid-cols-2 gap-4">
-          <SelectField
+      {/* Global default callout */}
+      <div className="flex items-start gap-3 rounded-xl bg-blue-50 border border-blue-100 px-4 py-3">
+        <Globe className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+        <div className="text-sm text-blue-800">
+          <span className="font-semibold">Global defaults</span> — these settings apply to all calendars unless a calendar has its own override (set in the Calendars tab).
+        </div>
+      </div>
+
+      <Card title="Appointment Duration &amp; Intervals" description="How long appointments are and how slots are spaced.">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <DurationInput
             label="Meeting Duration"
             tooltip="How long each appointment is."
             value={settings.meeting_duration_min ?? 60}
-            onChange={(v) => setSettings((s) => ({ ...s, meeting_duration_min: v }))}
-            options={DURATION_OPTIONS.map((v) => ({ value: v, label: timeLabel(v) }))}
+            storedIn="minutes"
+            units={['min', 'hours']}
+            onChange={(v) => setSettings((s) => ({ ...s, meeting_duration_min: v ?? 60 }))}
           />
-          <SelectField
+          <DurationInput
             label="Meeting Interval"
             tooltip="Time between available slot start times."
             value={settings.meeting_interval_min ?? 60}
-            onChange={(v) => setSettings((s) => ({ ...s, meeting_interval_min: v }))}
-            options={INTERVAL_OPTIONS.map((v) => ({ value: v, label: timeLabel(v) }))}
+            storedIn="minutes"
+            units={['min', 'hours']}
+            onChange={(v) => setSettings((s) => ({ ...s, meeting_interval_min: v ?? 60 }))}
           />
-          <SelectField
+        </div>
+      </Card>
+
+      <Card title="Scheduling Window" description="When bookings can be made and how far ahead.">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <DurationInput
             label="Minimum Scheduling Notice"
             tooltip="How far in advance an appointment must be booked."
             value={settings.min_scheduling_notice_hrs ?? 24}
-            onChange={(v) => setSettings((s) => ({ ...s, min_scheduling_notice_hrs: v }))}
-            options={NOTICE_OPTIONS.map((v) => ({ value: v, label: v === 0 ? 'None' : v < 24 ? `${v}h` : `${v / 24}d` }))}
+            storedIn="hours"
+            units={['hours', 'days', 'weeks', 'months']}
+            onChange={(v) => setSettings((s) => ({ ...s, min_scheduling_notice_hrs: v ?? 24 }))}
           />
-          <SelectField
+          <DurationInput
             label="Date Range"
             tooltip="How far ahead appointments can be booked."
             value={settings.date_range_days ?? 60}
-            onChange={(v) => setSettings((s) => ({ ...s, date_range_days: v }))}
-            options={RANGE_OPTIONS.map((v) => ({ value: v, label: v < 30 ? `${v} days` : `${v / 30} mo` }))}
-          />
-          <SelectField
-            label="Pre-buffer Time"
-            tooltip="Blocked time before each appointment."
-            value={settings.pre_buffer_min ?? 0}
-            onChange={(v) => setSettings((s) => ({ ...s, pre_buffer_min: v }))}
-            options={BUFFER_OPTIONS.map((v) => ({ value: v, label: timeLabel(v) }))}
-          />
-          <SelectField
-            label="Post-buffer Time"
-            tooltip="Blocked time after each appointment."
-            value={settings.post_buffer_min ?? 0}
-            onChange={(v) => setSettings((s) => ({ ...s, post_buffer_min: v }))}
-            options={BUFFER_OPTIONS.map((v) => ({ value: v, label: timeLabel(v) }))}
+            storedIn="days"
+            units={['days', 'weeks', 'months']}
+            onChange={(v) => setSettings((s) => ({ ...s, date_range_days: v ?? 60 }))}
           />
         </div>
+      </Card>
 
-        <div className="grid grid-cols-2 gap-4 mt-4">
+      <Card title="Buffers" description="Blocked time before and after each appointment.">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <DurationInput
+            label="Pre-buffer"
+            tooltip="Time blocked before each appointment for setup or prep."
+            value={settings.pre_buffer_min ?? 0}
+            storedIn="minutes"
+            units={['min', 'hours']}
+            onChange={(v) => setSettings((s) => ({ ...s, pre_buffer_min: v ?? 0 }))}
+          />
+          <DurationInput
+            label="Post-buffer"
+            tooltip="Time blocked after each appointment for wrap-up."
+            value={settings.post_buffer_min ?? 0}
+            storedIn="minutes"
+            units={['min', 'hours']}
+            onChange={(v) => setSettings((s) => ({ ...s, post_buffer_min: v ?? 0 }))}
+          />
+        </div>
+      </Card>
+
+      <Card title="Booking Limits" description="Cap how many appointments can be booked.">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
               Max Bookings per Day
-              <InfoTip text="Maximum appointments that can be scheduled on a single day." />
+              <InfoTip text="Maximum appointments that can be scheduled on a single day. 0 = unlimited." />
             </label>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setSettings((s) => ({ ...s, max_bookings_per_day: Math.max(1, (s.max_bookings_per_day ?? 4) - 1) }))}
-                className="w-8 h-8 rounded-lg border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-50"
-              >−</button>
-              <span className="w-8 text-center text-sm font-medium">{settings.max_bookings_per_day ?? 4}</span>
-              <button
-                onClick={() => setSettings((s) => ({ ...s, max_bookings_per_day: (s.max_bookings_per_day ?? 4) + 1 }))}
-                className="w-8 h-8 rounded-lg border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-50"
-              >+</button>
-            </div>
+            <input
+              type="number"
+              min={0}
+              value={settings.max_bookings_per_day ?? 0}
+              onChange={(e) => setSettings((s) => ({ ...s, max_bookings_per_day: Math.max(0, parseInt(e.target.value) || 0) }))}
+              placeholder="0 = unlimited"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+            />
           </div>
           <div>
-            <label className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
               Max Bookings per Slot
-              <InfoTip text="Maximum bookings allowed per time slot." />
+              <InfoTip text="Maximum simultaneous bookings at the same time. 0 = unlimited." />
             </label>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setSettings((s) => ({ ...s, max_bookings_per_slot: Math.max(1, (s.max_bookings_per_slot ?? 1) - 1) }))}
-                className="w-8 h-8 rounded-lg border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-50"
-              >−</button>
-              <span className="w-8 text-center text-sm font-medium">{settings.max_bookings_per_slot ?? 1}</span>
-              <button
-                onClick={() => setSettings((s) => ({ ...s, max_bookings_per_slot: (s.max_bookings_per_slot ?? 1) + 1 }))}
-                className="w-8 h-8 rounded-lg border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-50"
-              >+</button>
-            </div>
+            <input
+              type="number"
+              min={0}
+              value={settings.max_bookings_per_slot ?? 0}
+              onChange={(e) => setSettings((s) => ({ ...s, max_bookings_per_slot: Math.max(0, parseInt(e.target.value) || 0) }))}
+              placeholder="0 = unlimited"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+            />
           </div>
         </div>
       </Card>
@@ -1327,85 +1466,67 @@ function CalendarsTab() {
                 />
 
                 {/* Per-calendar booking rules — always visible */}
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-4">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-xs font-semibold text-gray-700">Booking Rules for this calendar</p>
-                    <p className="text-[11px] text-gray-400">Leave "Venue default" to inherit global settings.</p>
+                    <p className="text-[11px] text-gray-400">Select "— default —" to inherit global settings.</p>
                   </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      {/* Meeting Duration */}
-                      <div>
-                        <label className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Duration</label>
-                        <select
-                          value={editDuration ?? ''}
-                          onChange={(e) => setEditDuration(e.target.value === '' ? null : Number(e.target.value))}
-                          className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-800 bg-white"
-                        >
-                          <option value="">Venue default</option>
-                          {DURATION_OPTIONS.map((v) => <option key={v} value={v}>{timeLabel(v)}</option>)}
-                        </select>
-                      </div>
-                      {/* Meeting Interval */}
-                      <div>
-                        <label className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Interval</label>
-                        <select
-                          value={editInterval ?? ''}
-                          onChange={(e) => setEditInterval(e.target.value === '' ? null : Number(e.target.value))}
-                          className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-800 bg-white"
-                        >
-                          <option value="">Venue default</option>
-                          {INTERVAL_OPTIONS.map((v) => <option key={v} value={v}>{timeLabel(v)}</option>)}
-                        </select>
-                      </div>
-                      {/* Min Scheduling Notice */}
-                      <div>
-                        <label className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Min Notice</label>
-                        <select
-                          value={editNotice ?? ''}
-                          onChange={(e) => setEditNotice(e.target.value === '' ? null : Number(e.target.value))}
-                          className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-800 bg-white"
-                        >
-                          <option value="">Venue default</option>
-                          {NOTICE_OPTIONS.map((v) => <option key={v} value={v}>{v === 0 ? 'None' : v < 24 ? `${v}h` : `${v / 24}d`}</option>)}
-                        </select>
-                      </div>
-                      {/* Date Range */}
-                      <div>
-                        <label className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Date Range</label>
-                        <select
-                          value={editRange ?? ''}
-                          onChange={(e) => setEditRange(e.target.value === '' ? null : Number(e.target.value))}
-                          className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-800 bg-white"
-                        >
-                          <option value="">Venue default</option>
-                          {[7, 14, 30, 60, 90, 180, 365].map((v) => <option key={v} value={v}>{v}d</option>)}
-                        </select>
-                      </div>
-                      {/* Pre-buffer */}
-                      <div>
-                        <label className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Pre-buffer</label>
-                        <select
-                          value={editPreBuf ?? ''}
-                          onChange={(e) => setEditPreBuf(e.target.value === '' ? null : Number(e.target.value))}
-                          className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-800 bg-white"
-                        >
-                          <option value="">Venue default</option>
-                          {BUFFER_OPTIONS.map((v) => <option key={v} value={v}>{timeLabel(v)}</option>)}
-                        </select>
-                      </div>
-                      {/* Post-buffer */}
-                      <div>
-                        <label className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Post-buffer</label>
-                        <select
-                          value={editPostBuf ?? ''}
-                          onChange={(e) => setEditPostBuf(e.target.value === '' ? null : Number(e.target.value))}
-                          className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-800 bg-white"
-                        >
-                          <option value="">Venue default</option>
-                          {BUFFER_OPTIONS.map((v) => <option key={v} value={v}>{timeLabel(v)}</option>)}
-                        </select>
-                      </div>
-                    </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <DurationInput
+                      label="Duration"
+                      tooltip="How long each appointment is."
+                      value={editDuration}
+                      storedIn="minutes"
+                      units={['min', 'hours']}
+                      onChange={setEditDuration}
+                      nullable
+                    />
+                    <DurationInput
+                      label="Interval"
+                      tooltip="Time between slot start times."
+                      value={editInterval}
+                      storedIn="minutes"
+                      units={['min', 'hours']}
+                      onChange={setEditInterval}
+                      nullable
+                    />
+                    <DurationInput
+                      label="Min Notice"
+                      tooltip="How far in advance bookings must be made."
+                      value={editNotice}
+                      storedIn="hours"
+                      units={['hours', 'days', 'weeks', 'months']}
+                      onChange={setEditNotice}
+                      nullable
+                    />
+                    <DurationInput
+                      label="Date Range"
+                      tooltip="How far ahead slots are visible."
+                      value={editRange}
+                      storedIn="days"
+                      units={['days', 'weeks', 'months']}
+                      onChange={setEditRange}
+                      nullable
+                    />
+                    <DurationInput
+                      label="Pre-buffer"
+                      tooltip="Blocked time before each appointment."
+                      value={editPreBuf}
+                      storedIn="minutes"
+                      units={['min', 'hours']}
+                      onChange={setEditPreBuf}
+                      nullable
+                    />
+                    <DurationInput
+                      label="Post-buffer"
+                      tooltip="Blocked time after each appointment."
+                      value={editPostBuf}
+                      storedIn="minutes"
+                      units={['min', 'hours']}
+                      onChange={setEditPostBuf}
+                      nullable
+                    />
+                  </div>
                 </div>
 
                 <div className="flex gap-2 justify-end">
@@ -1436,12 +1557,12 @@ function CalendarsTab() {
                     {/* Show rule overrides at a glance */}
                     {cal.meeting_duration_min != null && (
                       <span className="shrink-0 text-[10px] font-medium text-violet-700 bg-violet-50 border border-violet-200 px-1.5 py-0.5 rounded">
-                        {timeLabel(cal.meeting_duration_min)} appts
+                        {storedLabel(cal.meeting_duration_min, 'minutes', ['min', 'hours'])} appts
                       </span>
                     )}
                     {cal.pre_buffer_min != null && (
                       <span className="shrink-0 text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
-                        +{cal.pre_buffer_min}m buffer
+                        {storedLabel(cal.pre_buffer_min, 'minutes', ['min', 'hours'])} buffer
                       </span>
                     )}
                   </div>
@@ -2166,33 +2287,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
   );
 }
 
-function SelectField({
-  label, tooltip, value, onChange, options,
-}: {
-  label: string;
-  tooltip?: string;
-  value: number;
-  onChange: (v: number) => void;
-  options: { value: number; label: string }[];
-}) {
-  return (
-    <div>
-      <label className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
-        {label}
-        {tooltip && <InfoTip text={tooltip} />}
-      </label>
-      <select
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
-      >
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>{o.label}</option>
-        ))}
-      </select>
-    </div>
-  );
-}
+
 
 function InfoTip({ text }: { text: string }) {
   return (
