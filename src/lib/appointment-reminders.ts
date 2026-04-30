@@ -1,7 +1,10 @@
-import { formatInTimeZone } from 'date-fns-tz';
 import { supabaseAdmin } from '@/lib/supabase';
-import { sendEmail } from '@/lib/email';
 import { resolveVenueTimezone } from '@/lib/venue-timezone';
+import {
+  dispatchCalendarNotification,
+  buildNotifVarsForEvent,
+  type NotifType,
+} from '@/lib/calendar-notifications';
 
 export type ReminderOffset = { d: number; h: number; m: number };
 
@@ -39,31 +42,48 @@ export function computeReminderSendAt(startAt: Date, o: ReminderOffset): Date {
   return new Date(startAt.getTime() - offsetToMs(o));
 }
 
+/**
+ * Sync reminder + follow-up rows for a single calendar event.
+ *
+ * Reminder rows (notification_type = 'reminder'):
+ *   send_at = start_at - offset  (one row per configured offset, indices 0–4)
+ *
+ * Follow-up row (notification_type = 'follow_up', reminder_index = 98):
+ *   send_at = end_at + 30 minutes  (only if event has an end_at)
+ */
 export async function syncAppointmentRemindersForEvent(calendarEventId: string): Promise<void> {
   const { data: ev, error: evErr } = await supabaseAdmin
     .from('calendar_events')
     .select('id, venue_id, start_at, end_at, status, customer_email, title, recurrence_rule, all_day')
     .eq('id', calendarEventId)
     .maybeSingle();
+
   if (evErr || !ev) {
     console.error('[appointment-reminders] load event', evErr);
     return;
   }
 
-  await supabaseAdmin.from('calendar_event_reminders').delete().eq('calendar_event_id', calendarEventId);
+  // Clear existing unsent reminder + follow-up rows for this event
+  await supabaseAdmin
+    .from('calendar_event_reminders')
+    .delete()
+    .eq('calendar_event_id', calendarEventId)
+    .is('sent_at', null);
 
+  // Recurring events and cancelled events don't get reminders/follow-ups
   const recurrence = (ev as { recurrence_rule?: unknown }).recurrence_rule;
   if (recurrence != null) return;
-
   if ((ev as { status?: string }).status === 'cancelled') return;
 
   const customerEmail = ((ev as { customer_email?: string | null }).customer_email || '').trim();
   if (!customerEmail) return;
 
+  const venueId = (ev as { venue_id: string }).venue_id;
+
   const { data: venue } = await supabaseAdmin
     .from('venues')
     .select('appointment_reminders_enabled, appointment_reminder_offsets, name, timezone')
-    .eq('id', (ev as { venue_id: string }).venue_id)
+    .eq('id', venueId)
     .maybeSingle();
   if (!venue) return;
 
@@ -77,6 +97,9 @@ export async function syncAppointmentRemindersForEvent(calendarEventId: string):
   const startAt = new Date(String((ev as { start_at: string }).start_at));
   if (Number.isNaN(startAt.getTime())) return;
 
+  const endAtStr = (ev as { end_at?: string | null }).end_at;
+  const endAt = endAtStr ? new Date(endAtStr) : null;
+
   const now = Date.now();
   const rows: Array<{
     calendar_event_id: string;
@@ -86,22 +109,42 @@ export async function syncAppointmentRemindersForEvent(calendarEventId: string):
     offset_hours: number;
     offset_minutes: number;
     send_at: string;
+    notification_type: string;
   }> = [];
 
+  // ── Reminder rows ─────────────────────────────────────────────────────────
   offsets.forEach((o, idx) => {
     const sendAt = computeReminderSendAt(startAt, o);
     if (sendAt.getTime() <= now) return;
     if (sendAt.getTime() >= startAt.getTime()) return;
     rows.push({
       calendar_event_id: calendarEventId,
-      venue_id: (ev as { venue_id: string }).venue_id,
+      venue_id: venueId,
       reminder_index: idx,
       offset_days: o.d,
       offset_hours: o.h,
       offset_minutes: o.m,
       send_at: sendAt.toISOString(),
+      notification_type: 'reminder',
     });
   });
+
+  // ── Follow-up row (30 min after event ends) ───────────────────────────────
+  if (endAt && !Number.isNaN(endAt.getTime())) {
+    const followUpSendAt = new Date(endAt.getTime() + 30 * 60 * 1000);
+    if (followUpSendAt.getTime() > now) {
+      rows.push({
+        calendar_event_id: calendarEventId,
+        venue_id: venueId,
+        reminder_index: 98, // reserved index for follow-up
+        offset_days: 0,
+        offset_hours: 0,
+        offset_minutes: 0,
+        send_at: followUpSendAt.toISOString(),
+        notification_type: 'follow_up',
+      });
+    }
+  }
 
   if (!rows.length) return;
 
@@ -126,82 +169,13 @@ export async function refreshAppointmentRemindersForVenue(venueId: string): Prom
   }
 }
 
-function formatOffsetLabel(o: ReminderOffset): string {
-  const parts: string[] = [];
-  if (o.d > 0) parts.push(`${o.d} day${o.d === 1 ? '' : 's'}`);
-  if (o.h > 0) parts.push(`${o.h} hour${o.h === 1 ? '' : 's'}`);
-  if (o.m > 0) parts.push(`${o.m} minute${o.m === 1 ? '' : 's'}`);
-  return parts.length ? parts.join(', ') : '0';
-}
-
-export async function sendAppointmentReminderEmail(row: {
-  id: string;
-  send_at: string;
-  offset_days: number;
-  offset_hours: number;
-  offset_minutes: number;
-  calendar_event_id: string;
-  venue_id: string;
-}): Promise<{ ok: boolean; error?: string }> {
-  const { data: ev } = await supabaseAdmin
-    .from('calendar_events')
-    .select('title, start_at, end_at, customer_email, status')
-    .eq('id', row.calendar_event_id)
-    .maybeSingle();
-  if (!ev || (ev as { status?: string }).status === 'cancelled') {
-    return { ok: false, error: 'event_gone' };
-  }
-  const to = String((ev as { customer_email?: string | null }).customer_email || '').trim();
-  if (!to) return { ok: false, error: 'no_email' };
-
-  const { data: venue } = await supabaseAdmin
-    .from('venues')
-    .select('name, timezone, brand_email, email')
-    .eq('id', row.venue_id)
-    .maybeSingle();
-  const tz = resolveVenueTimezone((venue as { timezone?: string | null } | null)?.timezone);
-  const venueName = (venue as { name?: string } | null)?.name || 'Your venue';
-  const startAt = new Date(String((ev as { start_at: string }).start_at));
-  const when = formatInTimeZone(startAt, tz, "EEEE, MMMM d, yyyy 'at' h:mm a zzz");
-  const o: ReminderOffset = {
-    d: row.offset_days,
-    h: row.offset_hours,
-    m: row.offset_minutes,
-  };
-  const title = String((ev as { title: string }).title || 'Appointment');
-  const subject = `Reminder: ${title} — ${venueName}`;
-  const html = `
-    <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:0 auto;color:#1b1b1b;line-height:1.5;">
-      <p style="margin:0 0 12px;">This is a reminder about your upcoming appointment.</p>
-      <p style="margin:0 0 8px;"><strong>${escapeHtml(title)}</strong></p>
-      <p style="margin:0 0 16px;color:#52525b;">${escapeHtml(when)}</p>
-      <p style="margin:0;font-size:13px;color:#71717a;">Sent ${escapeHtml(formatOffsetLabel(o))} before the start time.</p>
-    </div>
-  `;
-  const replyTo =
-    (venue as { brand_email?: string | null; email?: string | null })?.brand_email ||
-    (venue as { email?: string | null })?.email ||
-    undefined;
-  const r = await sendEmail({
-    to,
-    subject,
-    html,
-    replyTo,
-    from: { name: venueName },
-  });
-  return r.success ? { ok: true } : { ok: false, error: r.error };
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
 const BATCH = 40;
 
+/**
+ * Process due reminder and follow-up rows.
+ * Uses dispatchCalendarNotification with the venue's saved templates
+ * (falls back to built-in defaults when no templates are saved).
+ */
 export async function processAppointmentRemindersCron(): Promise<{
   processed: number;
   sent: number;
@@ -210,19 +184,20 @@ export async function processAppointmentRemindersCron(): Promise<{
   const now = new Date().toISOString();
   const { data: due, error } = await supabaseAdmin
     .from('calendar_event_reminders')
-    .select(
-      'id, send_at, offset_days, offset_hours, offset_minutes, calendar_event_id, venue_id',
-    )
+    .select('id, send_at, offset_days, offset_hours, offset_minutes, calendar_event_id, venue_id, notification_type')
     .is('sent_at', null)
     .lte('send_at', now)
     .order('send_at', { ascending: true })
     .limit(BATCH);
+
   if (error) {
     console.error('[cron appointment-reminders] query', error);
     return { processed: 0, sent: 0, errors: 1 };
   }
+
   let sent = 0;
   let errors = 0;
+
   for (const raw of due ?? []) {
     const row = raw as {
       id: string;
@@ -232,8 +207,12 @@ export async function processAppointmentRemindersCron(): Promise<{
       offset_minutes: number;
       calendar_event_id: string;
       venue_id: string;
+      notification_type?: string;
     };
-    const result = await sendAppointmentReminderEmail(row);
+
+    const notifType = (row.notification_type as NotifType | undefined) ?? 'reminder';
+    const result = await sendNotificationForReminder(row.calendar_event_id, row.venue_id, notifType);
+
     if (result.ok) {
       const { error: upErr } = await supabaseAdmin
         .from('calendar_event_reminders')
@@ -250,5 +229,63 @@ export async function processAppointmentRemindersCron(): Promise<{
       }
     }
   }
+
   return { processed: (due ?? []).length, sent, errors };
+}
+
+async function sendNotificationForReminder(
+  calendarEventId: string,
+  venueId: string,
+  notifType: NotifType,
+): Promise<{ ok: boolean; error?: string }> {
+  const { data: ev } = await supabaseAdmin
+    .from('calendar_events')
+    .select('id, venue_id, title, start_at, end_at, customer_email, status')
+    .eq('id', calendarEventId)
+    .maybeSingle();
+
+  if (!ev || (ev as { status?: string }).status === 'cancelled') {
+    return { ok: false, error: 'event_gone' };
+  }
+
+  const customerEmail = ((ev as { customer_email?: string | null }).customer_email || '').trim();
+  if (!customerEmail) return { ok: false, error: 'no_email' };
+
+  // Resolve venue timezone for formatted timestamps
+  const { data: calSettings } = await supabaseAdmin
+    .from('venue_calendar_settings')
+    .select('timezone')
+    .eq('venue_id', venueId)
+    .maybeSingle();
+
+  const { data: venueRow } = await supabaseAdmin
+    .from('venues')
+    .select('timezone')
+    .eq('id', venueId)
+    .maybeSingle();
+
+  const tz = resolveVenueTimezone(
+    (calSettings as { timezone?: string } | null)?.timezone ??
+    (venueRow as { timezone?: string } | null)?.timezone,
+  );
+
+  const eventForVars = {
+    id: (ev as { id: string }).id,
+    venue_id: venueId,
+    title: String((ev as { title: string }).title || 'Appointment'),
+    start_at: String((ev as { start_at: string }).start_at),
+    end_at: (ev as { end_at?: string }).end_at,
+    customer_email: customerEmail,
+  };
+
+  const notifVars = await buildNotifVarsForEvent(eventForVars, tz);
+  if (!notifVars) return { ok: false, error: 'no_email' };
+
+  try {
+    await dispatchCalendarNotification(venueId, notifType, notifVars);
+    return { ok: true };
+  } catch (e) {
+    console.error('[appointment-reminders] sendNotificationForReminder error:', e);
+    return { ok: false, error: 'dispatch_failed' };
+  }
 }
