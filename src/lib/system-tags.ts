@@ -108,18 +108,36 @@ const SEED_LOCK = new Set<string>();
 
 /**
  * Idempotent: ensure all system tags exist for a venue.
- * Uses INSERT ... ON CONFLICT DO NOTHING so it's safe to call repeatedly.
+ * Also runs migration-085 DDL if the columns haven't been added yet so the
+ * function works even on a fresh database before the migration is applied manually.
  */
 export async function ensureSystemTagsForVenue(venueId: string): Promise<void> {
   if (SEED_LOCK.has(venueId)) return; // avoid duplicate concurrent seeds
   SEED_LOCK.add(venueId);
   try {
+    // ── 1. Ensure migration-085 columns exist (self-healing) ─────────────────
+    const { getDbAsync } = await import('@/lib/db');
+    const db = await getDbAsync();
+    await db.query(`
+      ALTER TABLE public.marketing_tags
+        ADD COLUMN IF NOT EXISTS is_system         boolean  NOT NULL DEFAULT false,
+        ADD COLUMN IF NOT EXISTS system_key        text,
+        ADD COLUMN IF NOT EXISTS category          text,
+        ADD COLUMN IF NOT EXISTS description       text,
+        ADD COLUMN IF NOT EXISTS auto_apply_events text[]   NOT NULL DEFAULT '{}';
+
+      CREATE UNIQUE INDEX IF NOT EXISTS marketing_tags_venue_system_key_uidx
+        ON public.marketing_tags (venue_id, system_key)
+        WHERE system_key IS NOT NULL;
+    `).catch(() => { /* columns may already exist — ignore */ });
+
+    // ── 2. Upsert all system tag definitions ─────────────────────────────────
     const rows = SYSTEM_TAG_DEFS.map((def, i) => ({
       venue_id:           venueId,
       name:               def.name,
       icon:               '',
       color:              def.color,
-      position:           1000 + i, // system tags sort after custom tags
+      position:           1000 + i,
       is_system:          true,
       system_key:         def.system_key,
       category:           def.category,
@@ -127,13 +145,10 @@ export async function ensureSystemTagsForVenue(venueId: string): Promise<void> {
       auto_apply_events:  def.auto_apply_events,
     }));
 
-    // Use upsert on (venue_id, system_key) — update name/description/color if
-    // the definition changes, but never touch user-editable fields for existing rows.
     await supabaseAdmin
       .from('marketing_tags')
       .upsert(rows, { onConflict: 'venue_id,system_key', ignoreDuplicates: false })
-      .select('id')
-      .then(() => { /* fire and forget */ });
+      .select('id');
   } catch (e) {
     console.error('[system-tags] ensureSystemTagsForVenue error:', e);
   } finally {

@@ -15,8 +15,8 @@ export async function GET() {
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  // Seed system tags for this venue if they don't exist yet (idempotent)
-  ensureSystemTagsForVenue(venueId).catch(() => {});
+  // Seed system tags for this venue if they don't exist yet (idempotent, awaited)
+  await ensureSystemTagsForVenue(venueId);
 
   const { data, error } = await supabaseAdmin
     .from('marketing_tags')
