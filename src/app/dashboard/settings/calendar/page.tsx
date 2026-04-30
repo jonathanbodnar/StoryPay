@@ -429,59 +429,73 @@ function DurationInput({
   nullLabel?: string;
 }) {
   const initUnit = value != null ? bestUnit(value, storedIn, units) : units[0];
-  const [unit, setUnit]     = useState<string>(initUnit);
+  // `active` tracks whether the user has engaged with this field.
+  // Once active the number input and unit dropdown are live even before a
+  // number has been confirmed — this keeps the unit dropdown pinned to the
+  // selection and removes the "Venue default" placeholder immediately.
+  const [active, setActive] = useState(value !== null);
+  const [unit,   setUnit]   = useState<string>(initUnit);
   const [numStr, setNumStr] = useState<string>(
     value != null ? String(storedToDisplay(value, storedIn, initUnit)) : '',
   );
 
-  // Re-sync internal state if the external value changes (e.g. switching calendar)
+  // Re-sync when the parent value changes (e.g. switching between calendars)
   useEffect(() => {
     if (value === null) {
+      setActive(false);
       setNumStr('');
       setUnit(units[0]);
     } else {
       const u = bestUnit(value, storedIn, units);
+      setActive(true);
       setUnit(u);
       setNumStr(String(storedToDisplay(value, storedIn, u)));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
-  const commit = (str: string, u: string) => {
-    const parsed = parseFloat(str);
-    if (!isNaN(parsed) && parsed >= 0) {
-      onChange(displayToStored(parsed, storedIn, u));
-    } else if (str === '' && nullable) {
-      onChange(null);
-    }
-  };
-
   const handleUnitChange = (newUnit: string) => {
     if (newUnit === '__default__') {
+      // Revert to "Venue default" — clear everything and notify parent
       onChange(null);
+      setActive(false);
       setNumStr('');
       setUnit(units[0]);
       return;
     }
-    // Re-express any existing number in the new unit and commit
+
+    // User picked a real unit → activate immediately so the dropdown stays pinned
+    setActive(true);
+    setUnit(newUnit);
+
+    // Re-express any existing number in the new unit
     const parsed = parseFloat(numStr);
-    if (!isNaN(parsed)) {
-      const stored = displayToStored(parsed, storedIn, unit);
+    if (!isNaN(parsed) && parsed >= 0) {
+      const stored     = displayToStored(parsed, storedIn, unit);
       const newDisplay = storedToDisplay(stored, storedIn, newUnit);
       const displayStr = newDisplay % 1 === 0 ? String(newDisplay) : newDisplay.toFixed(1);
       setNumStr(displayStr);
       onChange(displayToStored(newDisplay, storedIn, newUnit));
     }
-    setUnit(newUnit);
+    // If no number yet we don't call onChange — parent keeps null until user types
   };
 
   const handleNumChange = (str: string) => {
     setNumStr(str);
-    commit(str, unit);
+    const parsed = parseFloat(str);
+    if (!isNaN(parsed) && parsed >= 0) {
+      setActive(true);
+      onChange(displayToStored(parsed, storedIn, unit));
+    } else if (str === '' && nullable) {
+      // Cleared the number → revert to default
+      onChange(null);
+      setActive(false);
+      setUnit(units[0]);
+    }
   };
 
-  // Show "default" only when nullable AND no value AND user hasn't typed anything
-  const showDefault = nullable && value === null && numStr === '';
+  // Show "default" state only when nullable AND the user has NOT activated the field
+  const showDefault = nullable && !active;
 
   return (
     <div>
