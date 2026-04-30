@@ -95,15 +95,17 @@ type StepKind =
   | 'notify_owner';
 type WaitUnit = 'minutes' | 'hours' | 'days';
 type NotifyChannel = 'email' | 'sms' | 'both';
+// `title` and `note` are optional dev-friendly labels for documenting what each step does.
+type LocalStepBase = { localId: string; title?: string; note?: string };
 type LocalStep =
-  | { localId: string; step_type: 'delay';                delay_minutes: number }
-  | { localId: string; step_type: 'send_email';            template_id: string }
-  | { localId: string; step_type: 'send_sms';              body: string; media_urls?: string[] }
-  | { localId: string; step_type: 'add_tag';               tag_ids: string[] }
-  | { localId: string; step_type: 'remove_tag';            tag_ids: string[] }
-  | { localId: string; step_type: 'change_stage';          stage_id: string }
-  | { localId: string; step_type: 'create_conversation' }
-  | { localId: string; step_type: 'notify_owner';          channel: NotifyChannel; subject: string; body: string };
+  | (LocalStepBase & { step_type: 'delay';                delay_minutes: number })
+  | (LocalStepBase & { step_type: 'send_email';            template_id: string })
+  | (LocalStepBase & { step_type: 'send_sms';              body: string; media_urls?: string[] })
+  | (LocalStepBase & { step_type: 'add_tag';               tag_ids: string[] })
+  | (LocalStepBase & { step_type: 'remove_tag';            tag_ids: string[] })
+  | (LocalStepBase & { step_type: 'change_stage';          stage_id: string })
+  | (LocalStepBase & { step_type: 'create_conversation' })
+  | (LocalStepBase & { step_type: 'notify_owner';          channel: NotifyChannel; subject: string; body: string });
 
 // triggerIdx: 0 = primary trigger, 1+ = extra triggers (extraTriggers[idx-1])
 type SelectedItem = { kind: 'trigger'; triggerIdx: number } | { kind: 'step'; localId: string } | null;
@@ -953,37 +955,40 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
       const rawSteps = (j.steps ?? []) as Array<{ step_type: string; config_json: Record<string, unknown> }>;
       setSteps(rawSteps.map((s, i) => {
         const localId = `s-${i}-${Math.random().toString(36).slice(2)}`;
+        const meta = s.config_json as { title?: string; note?: string };
+        const title = typeof meta.title === 'string' ? meta.title : undefined;
+        const note  = typeof meta.note  === 'string' ? meta.note  : undefined;
         if (s.step_type === 'delay')
-          return { localId, step_type: 'delay' as const, delay_minutes: Number((s.config_json as { delay_minutes?: number }).delay_minutes ?? 60) };
+          return { localId, title, note, step_type: 'delay' as const, delay_minutes: Number((s.config_json as { delay_minutes?: number }).delay_minutes ?? 60) };
         if (s.step_type === 'send_sms') {
           const sc = s.config_json as { body?: string; media_urls?: string[] };
-          return { localId, step_type: 'send_sms' as const, body: String(sc.body ?? DEFAULT_SMS), media_urls: sc.media_urls ?? [] };
+          return { localId, title, note, step_type: 'send_sms' as const, body: String(sc.body ?? DEFAULT_SMS), media_urls: sc.media_urls ?? [] };
         }
         if (s.step_type === 'add_tag') {
           const sc = s.config_json as { tag_ids?: string[] };
-          return { localId, step_type: 'add_tag' as const, tag_ids: sc.tag_ids ?? [] };
+          return { localId, title, note, step_type: 'add_tag' as const, tag_ids: sc.tag_ids ?? [] };
         }
         if (s.step_type === 'remove_tag') {
           const sc = s.config_json as { tag_ids?: string[] };
-          return { localId, step_type: 'remove_tag' as const, tag_ids: sc.tag_ids ?? [] };
+          return { localId, title, note, step_type: 'remove_tag' as const, tag_ids: sc.tag_ids ?? [] };
         }
         if (s.step_type === 'change_stage') {
           const sc = s.config_json as { stage_id?: string };
-          return { localId, step_type: 'change_stage' as const, stage_id: String(sc.stage_id ?? '') };
+          return { localId, title, note, step_type: 'change_stage' as const, stage_id: String(sc.stage_id ?? '') };
         }
         if (s.step_type === 'create_conversation')
-          return { localId, step_type: 'create_conversation' as const };
+          return { localId, title, note, step_type: 'create_conversation' as const };
         if (s.step_type === 'notify_owner') {
           const sc = s.config_json as { channel?: NotifyChannel; subject?: string; body?: string };
           return {
-            localId,
+            localId, title, note,
             step_type: 'notify_owner' as const,
             channel:   sc.channel === 'sms' || sc.channel === 'both' ? sc.channel : 'email',
             subject:   String(sc.subject ?? 'Workflow update for {{contact.name}}'),
             body:      String(sc.body ?? '{{contact.name}} just hit a step in the "{{system.workflow_name}}" workflow.'),
           };
         }
-        return { localId, step_type: 'send_email' as const, template_id: String((s.config_json as { template_id?: string }).template_id ?? '') };
+        return { localId, title, note, step_type: 'send_email' as const, template_id: String((s.config_json as { template_id?: string }).template_id ?? '') };
       }));
     }
     if (tagRes.ok)   { const d = await tagRes.json();  setTags(d.tags ?? []); }
@@ -1120,21 +1125,27 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
         triggerType: auto.trigger_type ?? null,
         triggerConfig: buildTriggerConfig(),
         steps: steps.map((s, i) => {
+          // Optional dev-friendly title/note metadata, persisted in config_json
+          const meta: Record<string, string> = {};
+          const cleanTitle = s.title?.trim();
+          const cleanNote  = s.note?.trim();
+          if (cleanTitle) meta.title = cleanTitle;
+          if (cleanNote)  meta.note  = cleanNote;
           if (s.step_type === 'delay')
-            return { step_order: i, step_type: 'delay' as const, config: { delay_minutes: Math.max(1, Math.min(10080, s.delay_minutes)) } };
+            return { step_order: i, step_type: 'delay' as const, config: { ...meta, delay_minutes: Math.max(1, Math.min(10080, s.delay_minutes)) } };
           if (s.step_type === 'send_sms')
-            return { step_order: i, step_type: 'send_sms' as const, config: { body: s.body.trim(), media_urls: s.media_urls ?? [] } };
+            return { step_order: i, step_type: 'send_sms' as const, config: { ...meta, body: s.body.trim(), media_urls: s.media_urls ?? [] } };
           if (s.step_type === 'add_tag')
-            return { step_order: i, step_type: 'add_tag' as const, config: { tag_ids: s.tag_ids } };
+            return { step_order: i, step_type: 'add_tag' as const, config: { ...meta, tag_ids: s.tag_ids } };
           if (s.step_type === 'remove_tag')
-            return { step_order: i, step_type: 'remove_tag' as const, config: { tag_ids: s.tag_ids } };
+            return { step_order: i, step_type: 'remove_tag' as const, config: { ...meta, tag_ids: s.tag_ids } };
           if (s.step_type === 'change_stage')
-            return { step_order: i, step_type: 'change_stage' as const, config: { stage_id: s.stage_id } };
+            return { step_order: i, step_type: 'change_stage' as const, config: { ...meta, stage_id: s.stage_id } };
           if (s.step_type === 'create_conversation')
-            return { step_order: i, step_type: 'create_conversation' as const, config: {} };
+            return { step_order: i, step_type: 'create_conversation' as const, config: { ...meta } };
           if (s.step_type === 'notify_owner')
-            return { step_order: i, step_type: 'notify_owner' as const, config: { channel: s.channel, subject: s.subject.trim(), body: s.body.trim() } };
-          return { step_order: i, step_type: 'send_email' as const, config: { template_id: s.template_id } };
+            return { step_order: i, step_type: 'notify_owner' as const, config: { ...meta, channel: s.channel, subject: s.subject.trim(), body: s.body.trim() } };
+          return { step_order: i, step_type: 'send_email' as const, config: { ...meta, template_id: s.template_id } };
         }),
       }),
     });
@@ -1938,9 +1949,22 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                                     <StepIcon size={16} className="text-gray-700" />
                                   </div>
                                   <div className="min-w-0 flex-1">
-                                    <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Step {idx + 1}</p>
-                                    <p className="mt-0.5 text-sm font-semibold text-gray-900">{meta.title}</p>
+                                    <div className="flex items-center gap-1.5">
+                                      <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Step {idx + 1}</p>
+                                      <span className="text-[10px] font-medium uppercase tracking-wider text-gray-300">·</span>
+                                      <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 truncate">{meta.title}</p>
+                                    </div>
+                                    {s.title?.trim() ? (
+                                      <p className="mt-0.5 text-sm font-semibold text-gray-900 truncate">{s.title.trim()}</p>
+                                    ) : (
+                                      <p className="mt-0.5 text-sm font-semibold text-gray-900 truncate">{meta.title}</p>
+                                    )}
                                     <p className="mt-0.5 truncate text-[11px] text-gray-500">{meta.subtitle}</p>
+                                    {s.note?.trim() && (
+                                      <p className="mt-1.5 line-clamp-2 text-[11px] italic text-gray-400 leading-snug" title={s.note.trim()}>
+                                        {s.note.trim()}
+                                      </p>
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -2316,6 +2340,50 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                     </span>
                     <button type="button" onClick={() => setSelected(null)} className="text-xs text-gray-400 hover:text-gray-700 transition-colors">Done</button>
                   </div>
+
+                  {/* ── Title + Note (label this step for easy reference) ── */}
+                  {(() => {
+                    const lid = selectedStep.localId;
+                    const updateMeta = (field: 'title' | 'note', val: string) => {
+                      setSteps((prev) => prev.map((x) =>
+                        x.localId === lid ? { ...x, [field]: val } : x,
+                      ));
+                      scheduleAutoSave();
+                    };
+                    return (
+                      <div data-no-dnd className="mb-5 space-y-2 rounded-xl border border-gray-200 bg-gray-50/60 p-3">
+                        <div>
+                          <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                            Step heading <span className="font-normal text-gray-300">— optional, shown on the canvas</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={selectedStep.title ?? ''}
+                            onChange={(e) => updateMeta('title', e.target.value)}
+                            placeholder="e.g. Welcome email · day 0"
+                            maxLength={80}
+                            className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm focus:border-gray-400 focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                            Internal note <span className="font-normal text-gray-300">— what this step does, why it exists</span>
+                          </label>
+                          <textarea
+                            value={selectedStep.note ?? ''}
+                            onChange={(e) => updateMeta('note', e.target.value)}
+                            placeholder="e.g. Sends the welcome template the moment a lead fills out the inquiry form. Halts automatically if they reply."
+                            rows={2}
+                            maxLength={400}
+                            className="w-full resize-y rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[12px] leading-relaxed focus:border-gray-400 focus:outline-none"
+                          />
+                          <p className="mt-1 text-[10px] text-gray-400">
+                            {(selectedStep.note?.length ?? 0)}/400 — only your team sees this; it never goes to the contact.
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* ── Wait step ─────────────────────────────────────── */}
                   {selectedStep.step_type === 'delay' && (() => {
