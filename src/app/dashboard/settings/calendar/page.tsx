@@ -1107,6 +1107,31 @@ function BookingRulesTab() {
 
 // ── Notifications Tab ─────────────────────────────────────────────────────────
 
+// ── Reminder offset helpers ───────────────────────────────────────────────────
+
+type OffsetUnit = 'minutes' | 'hours' | 'days';
+interface OffsetRow { value: number; unit: OffsetUnit }
+
+const DEFAULT_OFFSETS: OffsetRow[] = [
+  { value: 24, unit: 'hours' },
+  { value: 4,  unit: 'hours' },
+  { value: 1,  unit: 'hours' },
+];
+
+function dhmToOffsetRow(o: { d: number; h: number; m: number }): OffsetRow {
+  if (o.d > 0) return { value: o.d, unit: 'days' };
+  if (o.h > 0) return { value: o.h, unit: 'hours' };
+  return { value: o.m || 0, unit: 'minutes' };
+}
+
+function offsetRowToDhm(r: OffsetRow): { d: number; h: number; m: number } {
+  if (r.unit === 'days')    return { d: r.value, h: 0, m: 0 };
+  if (r.unit === 'hours')   return { d: 0, h: r.value, m: 0 };
+  return { d: 0, h: 0, m: r.value };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 function NotificationsTab() {
   const [notifs, setNotifs] = useState<NotifRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1114,6 +1139,9 @@ function NotificationsTab() {
   const [saved, setSaved] = useState(false);
   const [expandedType, setExpandedType] = useState<string | null>(null);
   const [showTags, setShowTags] = useState(false);
+
+  // Reminder timing offsets (up to 3)
+  const [reminderOffsets, setReminderOffsets] = useState<OffsetRow[]>(DEFAULT_OFFSETS);
 
   // Build a full default row for a given type+channel if none exists in DB
   const makeDefault = (type: string, channel: string): NotifRow => {
@@ -1145,10 +1173,20 @@ function NotificationsTab() {
   };
 
   useEffect(() => {
-    fetch('/api/calendar/notifications', { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((d) => {
-        setNotifs(buildFull(Array.isArray(d) ? (d as NotifRow[]) : []));
+    Promise.all([
+      fetch('/api/calendar/notifications', { cache: 'no-store' }).then((r) => r.json()),
+      fetch('/api/venues/me', { cache: 'no-store' }).then((r) => r.json()),
+    ])
+      .then(([notifData, venueData]) => {
+        setNotifs(buildFull(Array.isArray(notifData) ? (notifData as NotifRow[]) : []));
+        const raw = (venueData as { appointment_reminder_offsets?: unknown }).appointment_reminder_offsets;
+        if (Array.isArray(raw) && raw.length > 0) {
+          setReminderOffsets(
+            (raw as { d: number; h: number; m: number }[])
+              .slice(0, 3)
+              .map(dhmToOffsetRow),
+          );
+        }
         setLoading(false);
       })
       .catch(() => {
@@ -1180,14 +1218,36 @@ function NotificationsTab() {
   const getRow = (type: string, channel: string) =>
     notifs.find((r) => r.notification_type === type && r.channel === channel);
 
+  const updateOffset = (idx: number, patch: Partial<OffsetRow>) =>
+    setReminderOffsets((prev) => prev.map((o, i) => i === idx ? { ...o, ...patch } : o));
+
+  const addOffset = () => {
+    if (reminderOffsets.length >= 3) return;
+    setReminderOffsets((prev) => [...prev, { value: 1, unit: 'hours' }]);
+  };
+
+  const removeOffset = (idx: number) =>
+    setReminderOffsets((prev) => prev.filter((_, i) => i !== idx));
+
   const save = async () => {
     setSaving(true);
     try {
-      await fetch('/api/calendar/notifications', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(notifs),
-      });
+      await Promise.all([
+        fetch('/api/calendar/notifications', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(notifs),
+        }),
+        fetch('/api/venues/me', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            appointment_reminder_offsets: reminderOffsets
+              .filter((o) => o.value > 0)
+              .map(offsetRowToDhm),
+          }),
+        }),
+      ]);
       setSaved(true);
       setExpandedType(null);
       setTimeout(() => setSaved(false), 2500);
@@ -1263,6 +1323,65 @@ function NotificationsTab() {
             {/* Channel accordions — one per row, full width */}
             {isOpen && (
               <div className="border-t border-gray-100 divide-y divide-gray-100">
+
+                {/* ── Reminder timing (only for reminder scenario) ─────────── */}
+                {nt.type === 'reminder' && (
+                  <div className="px-5 py-4 bg-gray-50">
+                    <p className="text-xs font-semibold text-gray-700 mb-3">
+                      When to send reminders
+                    </p>
+                    <div className="space-y-2">
+                      {reminderOffsets.map((offset, idx) => (
+                        <div key={idx} className="flex items-center gap-3">
+                          <input
+                            type="number"
+                            min={1}
+                            max={365}
+                            value={offset.value}
+                            onChange={(e) =>
+                              updateOffset(idx, { value: Math.max(1, parseInt(e.target.value) || 1) })
+                            }
+                            className="w-20 rounded-lg border border-gray-300 px-3 py-2 text-sm text-center focus:outline-none focus:ring-1 focus:ring-gray-800"
+                          />
+                          <select
+                            value={offset.unit}
+                            onChange={(e) => updateOffset(idx, { unit: e.target.value as OffsetUnit })}
+                            className="rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-gray-800"
+                          >
+                            <option value="minutes">Minutes</option>
+                            <option value="hours">Hours</option>
+                            <option value="days">Days</option>
+                          </select>
+                          <span className="text-sm text-gray-500 flex-1">before the appointment starts</span>
+                          {reminderOffsets.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeOffset(idx)}
+                              className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Remove reminder"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {reminderOffsets.length < 3 && (
+                      <button
+                        type="button"
+                        onClick={addOffset}
+                        className="mt-3 flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 transition-colors"
+                      >
+                        <Plus size={13} />
+                        Add another reminder time
+                      </button>
+                    )}
+                    <p className="mt-3 text-[11px] text-gray-400">
+                      Up to 3 reminder times. Applies to all reminder templates below.
+                    </p>
+                  </div>
+                )}
+
                 {NOTIF_CHANNELS.map((ch) => {
                   const row = getRow(nt.type, ch.key);
                   if (!row) return null;
