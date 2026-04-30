@@ -9,6 +9,10 @@ import {
   Copy,
   Trash2,
   AlertTriangle,
+  KeyRound,
+  EyeOff,
+  X,
+  CheckCircle2,
 } from 'lucide-react';
 import { DIRECTORY_BADGE_STATUSES, directoryBadgeLabel } from '@/lib/directory-badges';
 import {
@@ -116,6 +120,15 @@ export function VenueManagementPortal({
   const [deleteTarget, setDeleteTarget] = useState<AdminVenueRow | null>(null);
   const [deleteConfirmName, setDeleteConfirmName] = useState('');
   const [deleting, setDeleting] = useState(false);
+
+  // Set-password modal
+  const [pwTarget, setPwTarget] = useState<AdminVenueRow | null>(null);
+  const [pwValue, setPwValue] = useState('');
+  const [pwConfirm, setPwConfirm] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwError, setPwError] = useState('');
+  const [pwSuccess, setPwSuccess] = useState(false);
 
   const loadPlans = useCallback(async () => {
     setPlansLoading(true);
@@ -639,6 +652,13 @@ export function VenueManagementPortal({
                           </button>
                           <button
                             type="button"
+                            onClick={() => { setPwTarget(venue); setPwValue(''); setPwConfirm(''); setPwError(''); setPwSuccess(false); setShowPw(false); }}
+                            className="inline-flex items-center justify-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-100"
+                          >
+                            <KeyRound size={12} /> Set password
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => { setDeleteTarget(venue); setDeleteConfirmName(''); }}
                             className="inline-flex items-center justify-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100"
                           >
@@ -655,6 +675,93 @@ export function VenueManagementPortal({
         </div>
       </div>
     </div>
+
+    {/* Set password modal */}
+    {pwTarget && (
+      <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 p-4" onClick={() => !pwSaving && setPwTarget(null)}>
+        <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="font-bold text-gray-900">Set Venue Password</h3>
+              <p className="text-xs text-gray-500 mt-0.5">{pwTarget.name} · {pwTarget.email}</p>
+            </div>
+            <button onClick={() => !pwSaving && setPwTarget(null)} className="text-gray-400 hover:text-gray-600">
+              <X size={18} />
+            </button>
+          </div>
+
+          {pwSuccess ? (
+            <div className="flex flex-col items-center gap-3 py-4">
+              <CheckCircle2 size={36} className="text-green-500" />
+              <p className="text-sm font-medium text-gray-800">Password updated successfully!</p>
+              <p className="text-xs text-gray-500 text-center">The venue owner can now sign in with this new password.</p>
+              <button onClick={() => setPwTarget(null)} className="mt-2 text-sm text-gray-600 hover:text-gray-900 underline">Close</button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">New password</label>
+                <div className="relative">
+                  <input
+                    type={showPw ? 'text' : 'password'}
+                    value={pwValue}
+                    onChange={(e) => setPwValue(e.target.value)}
+                    placeholder="At least 8 characters"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 pr-9 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-300"
+                  />
+                  <button type="button" onClick={() => setShowPw((v) => !v)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Confirm password</label>
+                <input
+                  type={showPw ? 'text' : 'password'}
+                  value={pwConfirm}
+                  onChange={(e) => setPwConfirm(e.target.value)}
+                  placeholder="Re-enter password"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-300"
+                />
+              </div>
+              {pwError && (
+                <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{pwError}</p>
+              )}
+              <div className="flex justify-end gap-2 pt-2">
+                <button onClick={() => setPwTarget(null)} disabled={pwSaving} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">
+                  Cancel
+                </button>
+                <button
+                  disabled={pwSaving}
+                  onClick={async () => {
+                    setPwError('');
+                    if (pwValue.length < 8) { setPwError('Password must be at least 8 characters.'); return; }
+                    if (pwValue !== pwConfirm) { setPwError('Passwords do not match.'); return; }
+                    setPwSaving(true);
+                    try {
+                      const res = await fetch(`/api/admin/venues/${pwTarget.id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ password: pwValue }),
+                      });
+                      const d = await res.json().catch(() => ({}));
+                      if (!res.ok) { setPwError((d as { error?: string }).error ?? 'Failed to update password.'); return; }
+                      setPwSuccess(true);
+                    } catch { setPwError('Network error.'); }
+                    finally { setPwSaving(false); }
+                  }}
+                  className="px-4 py-2 text-sm text-white rounded-lg hover:opacity-85 disabled:opacity-60 inline-flex items-center gap-1.5"
+                  style={{ backgroundColor: BRAND }}
+                >
+                  {pwSaving && <Loader2 size={13} className="animate-spin" />}
+                  Save password
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    )}
 
     {/* Delete confirmation modal */}
     {deleteTarget && (

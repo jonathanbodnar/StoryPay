@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { verifyAdminCookie } from '@/lib/admin-auth';
 import { isDirectoryBadgeStatus } from '@/lib/directory-badges';
+import bcrypt from 'bcryptjs';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -17,6 +18,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     directory_plan_id?: string | null;
     directory_verified_status?: string;
     directory_sponsored_status?: string;
+    password?: string;
   };
   try {
     body = await request.json();
@@ -25,6 +27,26 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
 
   const updates: Record<string, unknown> = {};
+
+  // ── Set venue password ────────────────────────────────────────────────────
+  if (typeof body.password === 'string') {
+    if (body.password.trim().length < 8) {
+      return NextResponse.json({ error: 'Password must be at least 8 characters.' }, { status: 400 });
+    }
+    updates.password_hash = await bcrypt.hash(body.password.trim(), 12);
+    // Only updating the password — skip the rest of the field validation
+    if (Object.keys(body).length === 1) {
+      const { error: upErr } = await supabaseAdmin
+        .from('venues')
+        .update(updates)
+        .eq('id', venueId);
+      if (upErr) {
+        console.error('[admin/venues PATCH] password update error:', upErr);
+        return NextResponse.json({ error: upErr.message }, { status: 500 });
+      }
+      return NextResponse.json({ ok: true });
+    }
+  }
 
   if ('directory_plan_id' in body) {
     if (body.directory_plan_id === null || body.directory_plan_id === '') {

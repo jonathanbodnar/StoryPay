@@ -161,14 +161,14 @@ function VenueLoginForm() {
     setForgotLoading(true);
     setForgotError('');
     try {
-      const res = await fetch('/api/auth/request-login', {
+      const res = await fetch('/api/auth/venue/forgot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: forgotEmail.trim() }),
       });
       if (!res.ok) {
-        const d = await res.json();
-        setForgotError(d.error || 'Something went wrong.');
+        const d = await res.json().catch(() => ({}));
+        setForgotError((d as { error?: string }).error || 'Something went wrong.');
         return;
       }
       setForgotSent(true);
@@ -185,8 +185,8 @@ function VenueLoginForm() {
         <div className="text-4xl mb-4">📬</div>
         <h2 className="text-lg font-bold text-gray-900 mb-2">Check your inbox</h2>
         <p className="text-sm text-gray-500 leading-relaxed">
-          If <span className="font-medium text-gray-700">{forgotEmail}</span> is linked to an account, we sent a login
-          link. Click it to sign in.
+          If <span className="font-medium text-gray-700">{forgotEmail}</span> is linked to an account, we sent a
+          password reset link. Click it to set a new password.
         </p>
         <button
           onClick={() => {
