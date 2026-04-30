@@ -107,21 +107,38 @@ export async function POST(req: NextRequest) {
         normalizePhone: (phone: string | null | undefined) => string | null;
       };
 
-      // Look up the GHL contact for the supplied test phone number
       const normalizedPhone = normalizePhone(testTo) ?? testTo;
+      // Strip to digits only for flexible DB matching
+      const digitsOnly = normalizedPhone.replace(/\D/g, '');
       let contactId: string | null = null;
 
-      // 1. Try phone lookup
-      try {
-        const search = await ghlRequest(
-          `/contacts/search/duplicate?locationId=${locationId}&phone=${encodeURIComponent(normalizedPhone)}`,
-          ghlToken,
-          { locationId },
-        );
-        contactId = search?.contact?.id ?? search?.contacts?.[0]?.id ?? null;
-      } catch { /* fall through */ }
+      // 1. Look up in our own database first — fastest and most reliable
+      //    Match on the last 10 digits to handle any stored format variation
+      const last10 = digitsOnly.slice(-10);
+      if (last10.length === 10) {
+        const { data: dbContact } = await supabaseAdmin
+          .from('venue_customers')
+          .select('ghl_contact_id')
+          .eq('venue_id', venueId)
+          .ilike('phone', `%${last10}`)
+          .not('ghl_contact_id', 'is', null)
+          .maybeSingle();
+        contactId = (dbContact as { ghl_contact_id?: string } | null)?.ghl_contact_id ?? null;
+      }
 
-      // 2. Fallback: look up by venue email in case number format differs
+      // 2. GHL phone search fallback
+      if (!contactId) {
+        try {
+          const search = await ghlRequest(
+            `/contacts/search/duplicate?locationId=${locationId}&phone=${encodeURIComponent(normalizedPhone)}`,
+            ghlToken,
+            { locationId },
+          );
+          contactId = search?.contact?.id ?? search?.contacts?.[0]?.id ?? null;
+        } catch { /* fall through */ }
+      }
+
+      // 3. GHL email search fallback (catches format mismatches)
       if (!contactId && venueEmail) {
         try {
           const search = await ghlRequest(
@@ -136,7 +153,7 @@ export async function POST(req: NextRequest) {
       if (!contactId) {
         return NextResponse.json(
           {
-            error: `No GHL contact found for ${normalizedPhone}. Make sure this number is saved on a contact in your GHL account, then try again.`,
+            error: `Could not find a GHL contact ID for ${normalizedPhone}. Make sure this contact exists in the SaaS with a GHL contact linked, or is searchable in GHL.`,
           },
           { status: 400 },
         );
