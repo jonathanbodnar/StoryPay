@@ -73,13 +73,24 @@ export function CoupleManagementPortal() {
   const [search, setSearch] = useState('');
   const [actionState, setActionState] = useState<{ id: string; action: string } | null>(null);
 
-  // Edit modal state
+  // Edit modal state — mirrors every field on /couple/profile
   const [editing, setEditing] = useState<AdminCoupleRow | null>(null);
   const [editTab, setEditTab] = useState<'profile' | 'email' | 'password'>('profile');
+  const [editLoadingFull, setEditLoadingFull] = useState(false);
   const [editFirstName, setEditFirstName] = useState('');
   const [editLastName, setEditLastName] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editWeddingDate, setEditWeddingDate] = useState('');
+  const [editAddress1, setEditAddress1] = useState('');
+  const [editAddress2, setEditAddress2] = useState('');
+  const [editCity, setEditCity] = useState('');
+  const [editState, setEditState] = useState('');
+  const [editPostalCode, setEditPostalCode] = useState('');
+  const [editCountry, setEditCountry] = useState('US');
+  const [editInstagram, setEditInstagram] = useState('');
+  const [editFacebook, setEditFacebook] = useState('');
+  const [editTiktok, setEditTiktok] = useState('');
+  const [editPinterest, setEditPinterest] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editPassword, setEditPassword] = useState('');
   const [editConfirmPass, setEditConfirmPass] = useState('');
@@ -130,6 +141,8 @@ export function CoupleManagementPortal() {
   function openEdit(c: AdminCoupleRow) {
     setEditing(c);
     setEditTab('profile');
+    // Hydrate immediately with what's in the list view, then fetch the
+    // full profile in the background to populate address + social fields.
     let f = c.first_name ?? '';
     let l = c.last_name ?? '';
     if (!f && !l && c.display_name) {
@@ -142,10 +155,57 @@ export function CoupleManagementPortal() {
     setEditPhone(c.phone ?? '');
     setEditWeddingDate(c.wedding_date ?? '');
     setEditEmail(c.email ?? '');
+    setEditAddress1('');
+    setEditAddress2('');
+    setEditCity(c.city ?? '');
+    setEditState(c.state ?? '');
+    setEditPostalCode('');
+    setEditCountry('US');
+    setEditInstagram('');
+    setEditFacebook('');
+    setEditTiktok('');
+    setEditPinterest('');
     setEditPassword('');
     setEditConfirmPass('');
     setEditError('');
     setEditSavedFlash('');
+
+    // Load the rest of the profile (address, social) lazily
+    void (async () => {
+      setEditLoadingFull(true);
+      try {
+        const res = await fetch(`/api/admin/couples/${c.id}`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        const full = data?.couple as Record<string, unknown> | undefined;
+        if (!full) return;
+
+        let nf = (full.first_name as string | null) ?? '';
+        let nl = (full.last_name as string | null) ?? '';
+        if (!nf && !nl && typeof full.display_name === 'string' && full.display_name) {
+          const parts = full.display_name.trim().split(/\s+/);
+          nf = parts[0] ?? '';
+          nl = parts.slice(1).join(' ');
+        }
+        setEditFirstName(nf);
+        setEditLastName(nl);
+        setEditPhone((full.phone as string | null) ?? '');
+        setEditWeddingDate((full.wedding_date as string | null) ?? '');
+        setEditEmail((full.email as string | null) ?? c.email ?? '');
+        setEditAddress1((full.address_line1 as string | null) ?? '');
+        setEditAddress2((full.address_line2 as string | null) ?? '');
+        setEditCity((full.city as string | null) ?? '');
+        setEditState((full.state as string | null) ?? '');
+        setEditPostalCode((full.postal_code as string | null) ?? '');
+        setEditCountry((full.country as string | null) ?? 'US');
+        setEditInstagram((full.instagram_url as string | null) ?? '');
+        setEditFacebook((full.facebook_url as string | null) ?? '');
+        setEditTiktok((full.tiktok_url as string | null) ?? '');
+        setEditPinterest((full.pinterest_url as string | null) ?? '');
+      } finally {
+        setEditLoadingFull(false);
+      }
+    })();
   }
 
   async function saveEdit() {
@@ -163,6 +223,16 @@ export function CoupleManagementPortal() {
         body.last_name = editLastName.trim();
         body.phone = editPhone.trim();
         body.wedding_date = editWeddingDate || null;
+        body.address_line1 = editAddress1.trim() || null;
+        body.address_line2 = editAddress2.trim() || null;
+        body.city = editCity.trim() || null;
+        body.state = editState.trim() || null;
+        body.postal_code = editPostalCode.trim() || null;
+        body.country = editCountry.trim() || null;
+        body.instagram_url = editInstagram.trim() || null;
+        body.facebook_url = editFacebook.trim() || null;
+        body.tiktok_url = editTiktok.trim() || null;
+        body.pinterest_url = editPinterest.trim() || null;
       } else if (editTab === 'email') {
         if (!editEmail.trim() || !editEmail.includes('@')) {
           setEditError('Enter a valid email');
@@ -379,7 +449,7 @@ export function CoupleManagementPortal() {
       {/* ── Edit modal ───────────────────────────────────────────────────── */}
       {editing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !editSaving && setEditing(null)}>
-          <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="relative w-full max-w-2xl rounded-2xl bg-white p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => !editSaving && setEditing(null)}
               className="absolute right-4 top-4 text-gray-400 hover:text-gray-600"
@@ -423,24 +493,87 @@ export function CoupleManagementPortal() {
             )}
 
             {editTab === 'profile' && (
-              <div className="space-y-3">
+              <div className="space-y-4">
+                {editLoadingFull && (
+                  <p className="text-[11px] text-gray-400 flex items-center gap-1.5">
+                    <Loader2 size={11} className="animate-spin" /> Loading full profile…
+                  </p>
+                )}
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">First name <span className="text-red-500">*</span></label>
+                    <label className={EDIT_LABEL}>First name <span className="text-red-500">*</span></label>
                     <input value={editFirstName} onChange={(e) => setEditFirstName(e.target.value)} className={INPUT} />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Last name <span className="text-red-500">*</span></label>
+                    <label className={EDIT_LABEL}>Last name <span className="text-red-500">*</span></label>
                     <input value={editLastName} onChange={(e) => setEditLastName(e.target.value)} className={INPUT} />
                   </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Phone <span className="text-red-500">*</span></label>
-                  <input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className={INPUT} />
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={EDIT_LABEL}>Phone <span className="text-red-500">*</span></label>
+                    <input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className={INPUT} />
+                  </div>
+                  <div>
+                    <label className={EDIT_LABEL}>Wedding date</label>
+                    <input type="date" value={editWeddingDate} onChange={(e) => setEditWeddingDate(e.target.value)} className={INPUT} />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Wedding date</label>
-                  <input type="date" value={editWeddingDate} onChange={(e) => setEditWeddingDate(e.target.value)} className={INPUT} />
+
+                <div className="pt-1">
+                  <p className="text-[10px] uppercase tracking-wider font-semibold text-gray-400 mb-2">Address</p>
+                  <div className="space-y-3">
+                    <div>
+                      <label className={EDIT_LABEL}>Address line 1</label>
+                      <input value={editAddress1} onChange={(e) => setEditAddress1(e.target.value)} className={INPUT} />
+                    </div>
+                    <div>
+                      <label className={EDIT_LABEL}>Address line 2</label>
+                      <input value={editAddress2} onChange={(e) => setEditAddress2(e.target.value)} className={INPUT} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={EDIT_LABEL}>City</label>
+                        <input value={editCity} onChange={(e) => setEditCity(e.target.value)} className={INPUT} />
+                      </div>
+                      <div>
+                        <label className={EDIT_LABEL}>State</label>
+                        <input value={editState} onChange={(e) => setEditState(e.target.value)} className={INPUT} />
+                      </div>
+                      <div>
+                        <label className={EDIT_LABEL}>Postal code</label>
+                        <input value={editPostalCode} onChange={(e) => setEditPostalCode(e.target.value)} className={INPUT} />
+                      </div>
+                      <div>
+                        <label className={EDIT_LABEL}>Country</label>
+                        <input value={editCountry} onChange={(e) => setEditCountry(e.target.value)} className={INPUT} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-1">
+                  <p className="text-[10px] uppercase tracking-wider font-semibold text-gray-400 mb-2">Social (https://)</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={EDIT_LABEL}>Instagram</label>
+                      <input type="url" value={editInstagram} onChange={(e) => setEditInstagram(e.target.value)} className={INPUT} placeholder="https://" />
+                    </div>
+                    <div>
+                      <label className={EDIT_LABEL}>Facebook</label>
+                      <input type="url" value={editFacebook} onChange={(e) => setEditFacebook(e.target.value)} className={INPUT} placeholder="https://" />
+                    </div>
+                    <div>
+                      <label className={EDIT_LABEL}>TikTok</label>
+                      <input type="url" value={editTiktok} onChange={(e) => setEditTiktok(e.target.value)} className={INPUT} placeholder="https://" />
+                    </div>
+                    <div>
+                      <label className={EDIT_LABEL}>Pinterest</label>
+                      <input type="url" value={editPinterest} onChange={(e) => setEditPinterest(e.target.value)} className={INPUT} placeholder="https://" />
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -576,3 +709,5 @@ export function CoupleManagementPortal() {
 
 const INPUT =
   'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-300 transition-colors';
+
+const EDIT_LABEL = 'block text-xs font-medium text-gray-600 mb-1';
