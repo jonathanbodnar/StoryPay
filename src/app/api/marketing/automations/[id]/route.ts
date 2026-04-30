@@ -8,7 +8,10 @@ export const runtime = 'nodejs';
 
 type StepIn = {
   step_order: number;
-  step_type: 'delay' | 'send_email' | 'send_sms' | 'add_tag' | 'remove_tag' | 'change_stage';
+  step_type:
+    | 'delay' | 'send_email' | 'send_sms'
+    | 'add_tag' | 'remove_tag' | 'change_stage'
+    | 'create_conversation' | 'notify_owner';
   config: Record<string, unknown>;
 };
 

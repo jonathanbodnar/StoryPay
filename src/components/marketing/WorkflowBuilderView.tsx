@@ -4,12 +4,18 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowLeft, CalendarHeart, CheckSquare, ChevronDown, ChevronUp,
-  ClipboardList, Clock, DollarSign, GitBranch, Image as ImageIcon, Link2,
-  Loader2, Mail, MessageSquare, Minus, Plus, Send, Smartphone, Square,
-  Tag, Trash2, Users, X, Zap,
+  ArrowLeft, Bell, CalendarHeart, Calendar as CalendarIcon, Check, CheckSquare,
+  ChevronDown, ChevronUp, ClipboardList, Clock, DollarSign, Eye, FileSignature,
+  Gift, GitBranch, Heart, Image as ImageIcon, Link2, Loader2, Mail,
+  MessageSquare, Minus, Phone, Plug, Plus, Search, Send, Shield, Smartphone,
+  Sparkles, Square, Tag, Trash2, UserPlus, Users, X, Zap,
 } from 'lucide-react';
 import { VenueMediaPickerModal } from '@/components/venue-media/VenueMediaPickerModal';
+import {
+  SMART_TRIGGERS, SMART_TRIGGER_CATEGORIES, findSmartTrigger, groupSmartTriggers,
+  type SmartTrigger, type SmartTriggerCategory,
+} from '@/lib/workflow-triggers';
+import { SYSTEM_MERGE_VARIABLES } from '@/lib/merge-variables';
 import {
   DndContext, closestCenter, PointerSensor,
   useSensor, useSensors, useDraggable, DragOverlay,
@@ -69,7 +75,7 @@ interface AutomationRow {
   trigger_type: AutomationTriggerType | null;
   trigger_config: Record<string, unknown>;
 }
-interface TagRow    { id: string; name: string }
+interface TagRow    { id: string; name: string; system_key?: string | null; category?: string | null; is_system?: boolean }
 interface StageOpt { id: string; name: string; pipelineName: string }
 interface LinkRow   { id: string; name: string; short_code: string }
 interface FormRow   { id: string; name: string; published: boolean }
@@ -83,8 +89,12 @@ interface EnrollContact {
 const DEFAULT_SMS = 'Hi {{first_name}}, a quick note from {{venue_name}}. Reply STOP to opt out.';
 const CARD_W = 240; // canvas card width in pixels
 
-type StepKind = 'delay' | 'send_email' | 'send_sms' | 'add_tag' | 'remove_tag' | 'change_stage' | 'create_conversation';
+type StepKind =
+  | 'delay' | 'send_email' | 'send_sms'
+  | 'add_tag' | 'remove_tag' | 'change_stage' | 'create_conversation'
+  | 'notify_owner';
 type WaitUnit = 'minutes' | 'hours' | 'days';
+type NotifyChannel = 'email' | 'sms' | 'both';
 type LocalStep =
   | { localId: string; step_type: 'delay';                delay_minutes: number }
   | { localId: string; step_type: 'send_email';            template_id: string }
@@ -92,7 +102,8 @@ type LocalStep =
   | { localId: string; step_type: 'add_tag';               tag_ids: string[] }
   | { localId: string; step_type: 'remove_tag';            tag_ids: string[] }
   | { localId: string; step_type: 'change_stage';          stage_id: string }
-  | { localId: string; step_type: 'create_conversation' };
+  | { localId: string; step_type: 'create_conversation' }
+  | { localId: string; step_type: 'notify_owner';          channel: NotifyChannel; subject: string; body: string };
 
 // triggerIdx: 0 = primary trigger, 1+ = extra triggers (extraTriggers[idx-1])
 type SelectedItem = { kind: 'trigger'; triggerIdx: number } | { kind: 'step'; localId: string } | null;
@@ -110,15 +121,23 @@ function displayToMinutes(value: number, unit: WaitUnit): number {
 }
 
 // ─── Step palette ─────────────────────────────────────────────────────────────
-const PALETTE: { type: StepKind; label: string; desc: string; group: 'actions' | 'contact'; Icon: React.FC<{ size?: number; className?: string }> }[] = [
-  { type: 'delay',        label: 'Wait',          desc: 'Pause for a duration',        group: 'actions',  Icon: Clock },
-  { type: 'send_email',   label: 'Send Email',    desc: 'Choose a saved template',     group: 'actions',  Icon: Mail },
-  { type: 'send_sms',     label: 'Send SMS',      desc: 'Send a text message',         group: 'actions',  Icon: Smartphone },
-  { type: 'add_tag',               label: 'Add Tag',              desc: 'Apply tags to contact',          group: 'contact',  Icon: Tag },
-  { type: 'remove_tag',            label: 'Remove Tag',           desc: 'Remove tags from contact',       group: 'contact',  Icon: Tag },
-  { type: 'change_stage',          label: 'Change Stage',         desc: 'Move contact to a stage',        group: 'contact',  Icon: GitBranch },
-  { type: 'create_conversation',   label: 'Create Conversation',  desc: 'Open a conversation thread',     group: 'contact',  Icon: MessageSquare },
+type PaletteGroup = 'timing' | 'communication' | 'contact' | 'alerts';
+const PALETTE: { type: StepKind; label: string; desc: string; group: PaletteGroup; Icon: React.FC<{ size?: number; className?: string }> }[] = [
+  { type: 'delay',                 label: 'Wait',                 desc: 'Pause for a duration',                group: 'timing',        Icon: Clock },
+  { type: 'send_email',            label: 'Send Email',           desc: 'Choose a saved template',             group: 'communication', Icon: Mail },
+  { type: 'send_sms',              label: 'Send SMS',             desc: 'Send a text message',                 group: 'communication', Icon: Smartphone },
+  { type: 'add_tag',               label: 'Add Tag',              desc: 'Apply tags to contact',               group: 'contact',       Icon: Tag },
+  { type: 'remove_tag',            label: 'Remove Tag',           desc: 'Remove tags from contact',            group: 'contact',       Icon: Tag },
+  { type: 'change_stage',          label: 'Change Stage',         desc: 'Move contact to a stage',             group: 'contact',       Icon: GitBranch },
+  { type: 'create_conversation',   label: 'Open Conversation',    desc: 'Start a conversation thread',         group: 'contact',       Icon: MessageSquare },
+  { type: 'notify_owner',          label: 'Notify Venue Owner',   desc: 'Email or SMS the owner directly',     group: 'alerts',        Icon: Bell },
 ];
+const PALETTE_GROUP_LABELS: Record<PaletteGroup, string> = {
+  timing:        'Timing',
+  communication: 'Communication',
+  contact:       'Contact Actions',
+  alerts:        'Internal Alerts',
+};
 
 const TRIGGER_OPTIONS: { value: AutomationTriggerType; label: string; Icon: React.FC<{ size?: number; className?: string }> }[] = [
   { value: 'form_submitted',        label: 'Form submitted',     Icon: ClipboardList },
@@ -260,6 +279,91 @@ function TriggerCardCanvas({
   );
 }
 
+// ─── Merge variable picker ────────────────────────────────────────────────────
+const MERGE_VAR_CATEGORY_LABELS: Record<string, string> = {
+  contact:      'Contact',
+  appointment:  'Appointment',
+  venue:        'Venue',
+  lead:         'Lead / Wedding',
+  invoice:      'Invoice',
+  proposal:     'Proposal',
+  subscription: 'Subscription',
+  marketing:    'Marketing',
+  system:       'System',
+};
+
+function MergeVarPickerPopover({ onPick, onClose, scopes = ['marketing'] }: {
+  onPick: (tag: string) => void;
+  onClose: () => void;
+  scopes?: Array<'calendar' | 'marketing' | 'transactional'>;
+}) {
+  const [query, setQuery] = useState('');
+  const visible = SYSTEM_MERGE_VARIABLES.filter((v) => v.usedIn.some((u) => scopes.includes(u)));
+  const filtered = visible.filter((v) => {
+    const q = query.toLowerCase();
+    return !q || v.key.toLowerCase().includes(q) || v.description.toLowerCase().includes(q);
+  });
+
+  const grouped: Record<string, typeof filtered> = {};
+  for (const v of filtered) {
+    if (!grouped[v.category]) grouped[v.category] = [];
+    grouped[v.category].push(v);
+  }
+  const orderedCats = ['contact', 'venue', 'lead', 'appointment', 'proposal', 'invoice', 'subscription', 'marketing', 'system']
+    .filter((c) => grouped[c]?.length);
+
+  return (
+    <div
+      className="absolute right-0 top-full z-50 mt-1 w-[340px] max-h-[400px] flex flex-col rounded-xl border border-gray-200 bg-white shadow-xl"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+          Merge Variables · {filtered.length}
+        </p>
+        <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700">
+          <X size={13} />
+        </button>
+      </div>
+      <div className="p-2 border-b border-gray-100">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+          <input
+            type="text"
+            autoFocus
+            placeholder="Search variables…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="w-full rounded-lg border border-gray-200 pl-8 pr-2 py-1.5 text-xs focus:border-gray-400 focus:outline-none"
+          />
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto p-2 space-y-3">
+        {filtered.length === 0 ? (
+          <p className="py-6 text-center text-[11px] text-gray-400">No variables match &ldquo;{query}&rdquo;</p>
+        ) : orderedCats.map((cat) => (
+          <div key={cat}>
+            <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-400 mb-1 px-1">
+              {MERGE_VAR_CATEGORY_LABELS[cat] ?? cat}
+            </p>
+            <div className="space-y-0.5">
+              {grouped[cat].map((v) => (
+                <button key={v.key} type="button"
+                  onClick={() => { onPick(v.tag); }}
+                  className="flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-gray-50 transition-colors"
+                >
+                  <span className="font-mono text-[10.5px] text-gray-700">{v.tag}</span>
+                  <span className="text-[10.5px] text-gray-400 leading-tight">{v.description}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Drop indicator line ──────────────────────────────────────────────────────
 function DropIndicator({ label }: { label: string }) {
   return (
@@ -276,72 +380,176 @@ function DropIndicator({ label }: { label: string }) {
 
 // ─── Step picker modal ────────────────────────────────────────────────────────
 function StepPickerModal({ onSelect, onClose }: { onSelect: (t: StepKind) => void; onClose: () => void }) {
-  const actionItems  = PALETTE.filter((p) => p.group === 'actions');
-  const contactItems = PALETTE.filter((p) => p.group === 'contact');
+  const groupOrder: PaletteGroup[] = ['timing', 'communication', 'contact', 'alerts'];
+  const groupHover: Record<PaletteGroup, string> = {
+    timing:        'hover:border-gray-400 hover:bg-white',
+    communication: 'hover:border-emerald-300 hover:bg-emerald-50',
+    contact:       'hover:border-blue-300 hover:bg-blue-50',
+    alerts:        'hover:border-amber-300 hover:bg-amber-50',
+  };
+  const groupIcon: Record<PaletteGroup, string> = {
+    timing:        'text-gray-500 group-hover:text-gray-900',
+    communication: 'text-emerald-500 group-hover:text-emerald-700',
+    contact:       'text-blue-500 group-hover:text-blue-700',
+    alerts:        'text-amber-500 group-hover:text-amber-700',
+  };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl p-6 w-[480px] max-w-full mx-4" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl shadow-2xl p-6 w-[560px] max-w-full mx-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
           <h3 className="text-base font-semibold text-gray-900">Add a step</h3>
-          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700"><Minus size={18} /></button>
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={18} /></button>
         </div>
-
-        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Actions</p>
-        <div className="grid grid-cols-3 gap-3 mb-5">
-          {actionItems.map(({ type, label, desc, Icon }) => (
-            <button key={type} type="button" onClick={() => onSelect(type)}
-              className="flex flex-col items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-4 text-center hover:border-gray-400 hover:bg-white transition-all group"
-            >
-              <Icon size={22} className="text-gray-500 group-hover:text-gray-900 transition-colors" />
-              <div>
-                <p className="text-xs font-semibold text-gray-900">{label}</p>
-                <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{desc}</p>
+        {groupOrder.map((g) => {
+          const items = PALETTE.filter((p) => p.group === g);
+          if (items.length === 0) return null;
+          return (
+            <div key={g} className="mb-5 last:mb-0">
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">{PALETTE_GROUP_LABELS[g]}</p>
+              <div className="grid grid-cols-3 gap-3">
+                {items.map(({ type, label, desc, Icon }) => (
+                  <button key={type} type="button" onClick={() => onSelect(type)}
+                    className={`flex flex-col items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-4 text-center transition-all group ${groupHover[g]}`}
+                  >
+                    <Icon size={22} className={`transition-colors ${groupIcon[g]}`} />
+                    <div>
+                      <p className="text-xs font-semibold text-gray-900">{label}</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{desc}</p>
+                    </div>
+                  </button>
+                ))}
               </div>
-            </button>
-          ))}
-        </div>
-
-        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Contact Actions</p>
-        <div className="grid grid-cols-3 gap-3">
-          {contactItems.map(({ type, label, desc, Icon }) => (
-            <button key={type} type="button" onClick={() => onSelect(type)}
-              className="flex flex-col items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-4 text-center hover:border-blue-300 hover:bg-blue-50 transition-all group"
-            >
-              <Icon size={22} className="text-gray-400 group-hover:text-blue-600 transition-colors" />
-              <div>
-                <p className="text-xs font-semibold text-gray-900">{label}</p>
-                <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{desc}</p>
-              </div>
-            </button>
-          ))}
-        </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function TriggerPickerModal({ onSelect, onClose }: { onSelect: (t: AutomationTriggerType) => void; onClose: () => void }) {
+// ─── Smart trigger icon resolver ──────────────────────────────────────────────
+const SMART_TRIGGER_ICON: Record<SmartTrigger['iconName'], React.FC<{ size?: number; className?: string }>> = {
+  tag:            Tag,
+  calendar:       CalendarIcon,
+  mail:           Mail,
+  sms:            Smartphone,
+  dollar:         DollarSign,
+  'file-signature': FileSignature,
+  clipboard:      ClipboardList,
+  link:           Link2,
+  'user-plus':    UserPlus,
+  gift:           Gift,
+  heart:          Heart,
+  phone:          Phone,
+  sparkles:       Sparkles,
+  send:           Send,
+  check:          Check,
+  x:              X,
+  eye:            Eye,
+  plug:           Plug,
+  shield:         Shield,
+  zap:            Zap,
+};
+
+function TriggerPickerModal({ onSelect, onClose }: { onSelect: (t: SmartTrigger) => void; onClose: () => void }) {
+  const [query, setQuery]     = useState('');
+  const [activeCat, setActiveCat] = useState<SmartTriggerCategory | 'all'>('all');
+
+  const grouped   = groupSmartTriggers(query);
+  const totalHits = SMART_TRIGGERS.filter((t) => {
+    const q = query.toLowerCase();
+    return !q || t.label.toLowerCase().includes(q) || t.description.toLowerCase().includes(q);
+  }).length;
+
+  // Categories that have matches given the current search
+  const visibleCats = SMART_TRIGGER_CATEGORIES.filter((c) => grouped[c.id].length > 0);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl p-6 w-[480px] max-w-full" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-1">
-          <h3 className="text-base font-semibold text-gray-900">Add a trigger</h3>
-          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700"><Minus size={18} /></button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div
+        className="bg-white rounded-2xl shadow-2xl flex flex-col w-[720px] max-w-full max-h-[80vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between border-b border-gray-100 px-6 py-4">
+          <div>
+            <h3 className="text-base font-semibold text-gray-900">Add a trigger</h3>
+            <p className="mt-0.5 text-[11px] text-gray-500">
+              The workflow fires when this <strong className="text-gray-700">or any other</strong> trigger matches.
+              Pick from {SMART_TRIGGERS.length} smart triggers.
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700">
+            <X size={18} />
+          </button>
         </div>
-        <p className="mb-5 text-[11px] text-gray-500">The workflow will fire when this OR any other trigger matches.</p>
-        <div className="grid grid-cols-2 gap-3">
-          {TRIGGER_OPTIONS.map(({ value, label, Icon }) => (
-            <button key={value} type="button" onClick={() => onSelect(value)}
-              className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-left hover:border-gray-400 hover:bg-white transition-all group"
-            >
-              <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-50">
-                <Icon size={16} className="text-emerald-700" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold text-gray-900">{label}</p>
-              </div>
+
+        {/* Search + category pills */}
+        <div className="px-6 py-3 border-b border-gray-100 space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            <input
+              type="text"
+              autoFocus
+              placeholder={`Search ${SMART_TRIGGERS.length} triggers…`}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="w-full rounded-xl border border-gray-200 pl-9 pr-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+            />
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <button type="button" onClick={() => setActiveCat('all')}
+              className={`rounded-full px-3 py-1 text-xs font-medium border transition ${activeCat === 'all' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
+              All <span className="opacity-60">· {totalHits}</span>
             </button>
-          ))}
+            {SMART_TRIGGER_CATEGORIES.map((c) => {
+              const n = grouped[c.id].length;
+              if (n === 0) return null;
+              return (
+                <button key={c.id} type="button" onClick={() => setActiveCat(c.id)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium border transition ${activeCat === c.id ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
+                  {c.label} <span className="opacity-60">· {n}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          {totalHits === 0 ? (
+            <div className="py-12 text-center text-sm text-gray-400">
+              No triggers match &ldquo;{query}&rdquo;.
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {visibleCats.filter((c) => activeCat === 'all' || activeCat === c.id).map((c) => (
+                <div key={c.id}>
+                  <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-semibold border ${c.color} mb-2`}>
+                    {c.label}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {grouped[c.id].map((t) => {
+                      const Icon = SMART_TRIGGER_ICON[t.iconName] ?? Zap;
+                      return (
+                        <button key={t.id} type="button" onClick={() => onSelect(t)}
+                          className="flex items-start gap-3 rounded-xl border border-gray-200 bg-white p-3 text-left hover:border-emerald-400 hover:bg-emerald-50/30 transition-all group"
+                        >
+                          <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-50 group-hover:bg-emerald-100 transition-colors">
+                            <Icon size={15} className="text-emerald-700" />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[12px] font-semibold text-gray-900">{t.label}</p>
+                            <p className="text-[11px] text-gray-500 leading-snug mt-0.5">{t.description}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -407,6 +615,11 @@ function stepMeta(s: LocalStep, templates: TemplateOpt[]): { title: string; subt
   }
   if (s.step_type === 'create_conversation') {
     return { title: 'Create Conversation', subtitle: 'Opens thread + logs messages', Icon: MessageSquare };
+  }
+  if (s.step_type === 'notify_owner') {
+    const channelLabel = s.channel === 'both' ? 'Email + SMS' : s.channel === 'email' ? 'Email only' : 'SMS only';
+    const preview = (s.subject?.trim() || s.body?.trim() || '').slice(0, 48);
+    return { title: 'Notify Venue Owner', subtitle: preview ? `${channelLabel} · ${preview}` : channelLabel, Icon: Bell };
   }
   const tpl = templates.find((t) => t.id === s.template_id);
   return { title: 'Send Email', subtitle: tpl?.name ?? 'Choose a template →', Icon: Mail };
@@ -760,6 +973,16 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
         }
         if (s.step_type === 'create_conversation')
           return { localId, step_type: 'create_conversation' as const };
+        if (s.step_type === 'notify_owner') {
+          const sc = s.config_json as { channel?: NotifyChannel; subject?: string; body?: string };
+          return {
+            localId,
+            step_type: 'notify_owner' as const,
+            channel:   sc.channel === 'sms' || sc.channel === 'both' ? sc.channel : 'email',
+            subject:   String(sc.subject ?? 'Workflow update for {{contact.name}}'),
+            body:      String(sc.body ?? '{{contact.name}} just hit a step in the "{{system.workflow_name}}" workflow.'),
+          };
+        }
         return { localId, step_type: 'send_email' as const, template_id: String((s.config_json as { template_id?: string }).template_id ?? '') };
       }));
     }
@@ -843,16 +1066,28 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
     if (type === 'proposal_paid')         return { type };
     return { type: 'form_submitted', form_ids: [] };
   }
-  function addExtraTrigger(type: AutomationTriggerType) {
+  function addExtraTrigger(type: AutomationTriggerType, systemKey?: string) {
     if (!auto) return;
+    // Resolve system_key → tag UUID if applicable
+    const preselectTagId = systemKey
+      ? tags.find((t) => t.system_key === systemKey)?.id
+      : undefined;
+
     // If there's no primary trigger yet, make this one the primary
     if (!auto.trigger_type) {
       changeTriggerType(type);
+      if (type === 'tag_added' && preselectTagId) setSelTags([preselectTagId]);
       setSelected({ kind: 'trigger', triggerIdx: 0 });
       return;
     }
-    setExtraTriggers((prev) => [...prev, defaultExtraSpec(type)]);
+    const spec = defaultExtraSpec(type);
+    if (type === 'tag_added' && preselectTagId) spec.tag_ids = [preselectTagId];
+    setExtraTriggers((prev) => [...prev, spec]);
     setSelected({ kind: 'trigger', triggerIdx: extraTriggers.length + 1 });
+  }
+  // Smart-trigger picker handler
+  function handleSmartTriggerPick(t: SmartTrigger) {
+    addExtraTrigger(t.type, t.system_key);
   }
   function removeExtraTrigger(idx: number) {
     setExtraTriggers((prev) => prev.filter((_, i) => i !== idx));
@@ -897,6 +1132,8 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
             return { step_order: i, step_type: 'change_stage' as const, config: { stage_id: s.stage_id } };
           if (s.step_type === 'create_conversation')
             return { step_order: i, step_type: 'create_conversation' as const, config: {} };
+          if (s.step_type === 'notify_owner')
+            return { step_order: i, step_type: 'notify_owner' as const, config: { channel: s.channel, subject: s.subject.trim(), body: s.body.trim() } };
           return { step_order: i, step_type: 'send_email' as const, config: { template_id: s.template_id } };
         }),
       }),
@@ -964,6 +1201,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
       : kind === 'remove_tag'        ? { localId, step_type: 'remove_tag',          tag_ids: [] }
       : kind === 'change_stage'      ? { localId, step_type: 'change_stage',        stage_id: '' }
       : kind === 'create_conversation' ? { localId, step_type: 'create_conversation' }
+      : kind === 'notify_owner'      ? { localId, step_type: 'notify_owner',        channel: 'email', subject: 'Workflow update for {{contact.name}}', body: 'Hey,\n\n{{contact.name}} just hit a step in the "{{system.workflow_name}}" workflow.\n\nContact: {{contact.email}} {{contact.phone}}' }
       :                                { localId, step_type: 'send_email',          template_id: templates[0]?.id ?? '' };
     setSteps((prev) => { const c = [...prev]; c.splice(insertIdx, 0, step); return c; });
     setSelected({ kind: 'step', localId });
@@ -2070,6 +2308,10 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                       {selectedStep.step_type === 'send_email' ? 'send email'
                         : selectedStep.step_type === 'send_sms' ? 'send sms'
                         : selectedStep.step_type === 'create_conversation' ? 'create conversation'
+                        : selectedStep.step_type === 'notify_owner' ? 'notify owner'
+                        : selectedStep.step_type === 'add_tag' ? 'add tag'
+                        : selectedStep.step_type === 'remove_tag' ? 'remove tag'
+                        : selectedStep.step_type === 'change_stage' ? 'change stage'
                         : 'wait'}
                     </span>
                     <button type="button" onClick={() => setSelected(null)} className="text-xs text-gray-400 hover:text-gray-700 transition-colors">Done</button>
@@ -2204,24 +2446,11 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                                 <Tag size={11} /> Tags
                               </button>
                               {mergeTagOpen && (
-                                <div className="absolute right-0 top-full z-50 mt-1 w-52 rounded-xl border border-gray-200 bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
-                                  <p className="border-b border-gray-100 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Merge Tags</p>
-                                  {[
-                                    { label: 'First name', code: '{{first_name}}' },
-                                    { label: 'Last name',  code: '{{last_name}}'  },
-                                    { label: 'Venue name', code: '{{venue_name}}' },
-                                    { label: 'Wedding date', code: '{{wedding_date}}' },
-                                    { label: 'Unsubscribe URL', code: '{{unsubscribe_url}}' },
-                                  ].map(({ label, code }) => (
-                                    <button key={code} type="button"
-                                      className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left hover:bg-gray-50 transition-colors"
-                                      onClick={() => { insertAtCursor(code, lid); setMergeTagOpen(false); }}
-                                    >
-                                      <span className="text-[12px] font-medium text-gray-800">{label}</span>
-                                      <span className="font-mono text-[10px] text-gray-400">{code}</span>
-                                    </button>
-                                  ))}
-                                </div>
+                                <MergeVarPickerPopover
+                                  scopes={['marketing']}
+                                  onPick={(tag) => { insertAtCursor(tag, lid); setMergeTagOpen(false); }}
+                                  onClose={() => setMergeTagOpen(false)}
+                                />
                               )}
                             </div>
                             {/* Trigger links button */}
@@ -2462,6 +2691,106 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                     </div>
                   )}
 
+                  {/* ── Notify Venue Owner step ──────────────────────── */}
+                  {selectedStep.step_type === 'notify_owner' && (() => {
+                    const lid = selectedStep.localId;
+                    const channel = selectedStep.channel;
+                    const subject = selectedStep.subject;
+                    const body    = selectedStep.body;
+                    const updateField = <K extends 'channel' | 'subject' | 'body'>(field: K, val: NotifyChannel | string) => {
+                      setSteps((prev) => prev.map((x) =>
+                        x.localId === lid && x.step_type === 'notify_owner'
+                          ? { ...x, [field]: val }
+                          : x,
+                      ));
+                      scheduleAutoSave();
+                    };
+                    return (
+                      <div data-no-dnd className="space-y-3">
+                        {/* Info banner */}
+                        <div className="rounded-xl border border-amber-100 bg-amber-50 p-3">
+                          <div className="flex items-start gap-2">
+                            <Bell size={13} className="mt-0.5 shrink-0 text-amber-500" />
+                            <div className="text-[11px] text-amber-800 leading-relaxed">
+                              Sends a notification to the venue owner. Uses the venue&apos;s primary email and notification phone.
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Channel selector */}
+                        <div>
+                          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Channel</p>
+                          <div className="grid grid-cols-3 gap-1.5">
+                            {([
+                              { id: 'email', label: 'Email',     Icon: Mail },
+                              { id: 'sms',   label: 'SMS',       Icon: Smartphone },
+                              { id: 'both',  label: 'Email + SMS', Icon: Bell },
+                            ] as const).map(({ id, label, Icon }) => (
+                              <button key={id} type="button" onClick={() => updateField('channel', id)}
+                                className={`flex items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-[11px] font-medium transition ${channel === id ? 'border-amber-400 bg-amber-50 text-amber-800' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}
+                              >
+                                <Icon size={12} />{label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Subject — only for email/both */}
+                        {(channel === 'email' || channel === 'both') && (
+                          <div>
+                            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Email subject</p>
+                            <input
+                              type="text"
+                              value={subject}
+                              onChange={(e) => updateField('subject', e.target.value)}
+                              placeholder="Workflow update for {{contact.name}}"
+                              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
+                            />
+                          </div>
+                        )}
+
+                        {/* Body */}
+                        <div>
+                          <div className="mb-1.5 flex items-center justify-between">
+                            <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                              {channel === 'sms' ? 'SMS message' : 'Message body'}
+                            </p>
+                            <div className="relative">
+                              <button
+                                type="button"
+                                title="Insert merge variable"
+                                onClick={(e) => { e.stopPropagation(); setMergeTagOpen((v) => !v); }}
+                                className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-50 transition-colors"
+                              >
+                                <Tag size={11} /> Variables
+                              </button>
+                              {mergeTagOpen && (
+                                <MergeVarPickerPopover
+                                  scopes={['marketing', 'transactional']}
+                                  onPick={(tag) => {
+                                    setSteps((prev) => prev.map((x) =>
+                                      x.localId === lid && x.step_type === 'notify_owner'
+                                        ? { ...x, body: x.body + tag }
+                                        : x,
+                                    ));
+                                    scheduleAutoSave();
+                                    setMergeTagOpen(false);
+                                  }}
+                                  onClose={() => setMergeTagOpen(false)}
+                                />
+                              )}
+                            </div>
+                          </div>
+                          <textarea
+                            className="min-h-[110px] w-full resize-y rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
+                            value={body}
+                            onChange={(e) => updateField('body', e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   <div className="mt-6 border-t border-gray-100 pt-4">
                     <button type="button" onClick={() => removeStep(selectedStep.localId)}
                       className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-red-100 py-2 text-xs font-semibold text-red-500 hover:bg-red-50 transition-colors"
@@ -2475,39 +2804,36 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                 /* ── Blocks + Triggers palette ───────────────────────── */
                 <div className="p-4 space-y-6">
 
-                  {/* Action blocks */}
-                  <div>
-                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Actions</p>
-                    <p className="mb-3 text-[11px] text-gray-400 leading-relaxed">Drag onto the canvas, or click + to insert.</p>
-                    <div className="flex flex-col gap-2">
-                      {PALETTE.filter((p) => p.group === 'actions').map((item) => <PaletteCard key={item.type} {...item} />)}
-                    </div>
-                  </div>
-
-                  {/* Contact action blocks */}
-                  <div>
-                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Contact Actions</p>
-                    <p className="mb-3 text-[11px] text-gray-400 leading-relaxed">Modify the contact mid-workflow.</p>
-                    <div className="flex flex-col gap-2">
-                      {PALETTE.filter((p) => p.group === 'contact').map((item) => <PaletteCard key={item.type} {...item} />)}
-                    </div>
-                  </div>
-
-                  {/* Trigger types for reference */}
-                  <div>
-                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Triggers &amp; Conditions</p>
-                    <p className="mb-3 text-[11px] text-gray-400 leading-relaxed">Add extra triggers via the trigger row at the top of the canvas.</p>
-                    <div className="flex flex-col gap-2">
-                      {TRIGGER_OPTIONS.map(({ value, label, Icon }) => (
-                        <div key={value} className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-3.5 py-3 select-none">
-                          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-50">
-                            <Icon size={15} className="text-emerald-700" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-semibold text-gray-800">{label}</p>
-                          </div>
+                  {/* Action blocks — categorized */}
+                  {(['timing', 'communication', 'contact', 'alerts'] as PaletteGroup[]).map((g) => {
+                    const items = PALETTE.filter((p) => p.group === g);
+                    if (items.length === 0) return null;
+                    return (
+                      <div key={g}>
+                        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">{PALETTE_GROUP_LABELS[g]}</p>
+                        <div className="flex flex-col gap-2">
+                          {items.map((item) => <PaletteCard key={item.type} {...item} />)}
                         </div>
-                      ))}
+                      </div>
+                    );
+                  })}
+
+                  {/* Trigger types for reference — abbreviated catalog */}
+                  <div>
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Smart Triggers</p>
+                    <p className="mb-3 text-[11px] text-gray-400 leading-relaxed">
+                      <strong className="text-gray-600">{SMART_TRIGGERS.length} triggers</strong> across {SMART_TRIGGER_CATEGORIES.length} categories. Add via the &ldquo;+&rdquo; on the trigger row.
+                    </p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {SMART_TRIGGER_CATEGORIES.filter((c) => c.id !== 'native').map((c) => {
+                        const n = SMART_TRIGGERS.filter((t) => t.category === c.id).length;
+                        return (
+                          <div key={c.id} className={`flex items-center justify-between rounded-md border px-2 py-1 text-[10.5px] font-medium ${c.color}`}>
+                            <span>{c.label}</span>
+                            <span className="opacity-70">{n}</span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -2563,7 +2889,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
       {/* ── Trigger picker modal — for adding additional OR-triggers ──────── */}
       {triggerPickerOpen && (
         <TriggerPickerModal
-          onSelect={(type) => { addExtraTrigger(type); setTriggerPickerOpen(false); }}
+          onSelect={(t) => { handleSmartTriggerPick(t); setTriggerPickerOpen(false); }}
           onClose={() => setTriggerPickerOpen(false)}
         />
       )}

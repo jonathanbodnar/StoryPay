@@ -926,6 +926,111 @@ async function processOneEnrollment(en: {
     return done ? 'completed' : 'advanced';
   }
 
+  // ── notify_owner: send email and/or SMS to the venue owner ───────────────
+  if (step.step_type === 'notify_owner') {
+    const cfg = step.config_json as { channel?: 'email' | 'sms' | 'both'; subject?: string; body?: string };
+    const channel = cfg.channel ?? 'email';
+    const rawSubject = String(cfg.subject ?? '').trim();
+    const rawBody    = String(cfg.body ?? '').trim();
+    if (!rawBody && channel !== 'email') {
+      void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'notify_owner', status: 'failed', error_text: 'empty_body' });
+      const nextIdx = idx + 1;
+      await supabaseAdmin.from('marketing_automation_enrollments').update({ current_step_index: nextIdx, next_run_at: new Date().toISOString() }).eq('id', en.id);
+      return 'advanced';
+    }
+
+    // Load venue + lead for merge variables
+    const [{ data: venue }, { data: autoRow }] = await Promise.all([
+      supabaseAdmin
+        .from('venues')
+        .select('email,name,owner_first_name,owner_last_name,notification_phone,ghl_access_token,ghl_location_id,ghl_connected,location_full,location_city,location_state,brand_website')
+        .eq('id', en.venue_id)
+        .maybeSingle(),
+      supabaseAdmin
+        .from('marketing_automations')
+        .select('name')
+        .eq('id', en.automation_id)
+        .maybeSingle(),
+    ]);
+    const appOrigin = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
+    const vars = await buildMergeVars(en.venue_id, en.lead_id, appOrigin, { forSms: channel === 'sms' });
+    const workflowName = (autoRow as { name?: string } | null)?.name?.trim() || 'a workflow';
+    const ownerVars: MergeFieldRecord = {
+      ...(vars ?? {}),
+      'system.workflow_name': workflowName,
+      'venue.email':          (venue?.email as string | null) || '',
+      'venue.phone':          (venue?.notification_phone as string | null) || '',
+    };
+    const subject = rawSubject ? mergeMarketingFields(rawSubject, ownerVars) : `Workflow update: ${workflowName}`;
+    const body    = rawBody    ? mergeMarketingFields(rawBody,    ownerVars) : `${workflowName} fired for a contact.`;
+
+    let emailOk = true;
+    let smsOk   = true;
+    let skipped = '';
+
+    // Email branch
+    if ((channel === 'email' || channel === 'both')) {
+      const ownerEmail = (venue?.email as string | null)?.trim();
+      if (!ownerEmail) {
+        emailOk = channel === 'email' ? false : true; // for 'both' allow SMS to still try
+        skipped = ownerEmail ? skipped : 'no_owner_email';
+      } else {
+        try {
+          const html = `<div style="font-family:system-ui,sans-serif;font-size:14px;line-height:1.6;color:#111;white-space:pre-wrap;">${body.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`;
+          await sendEmail({ to: ownerEmail, subject, html });
+        } catch (e) {
+          emailOk = false;
+          console.error('[worker] notify_owner email failed:', e);
+        }
+      }
+    }
+
+    // SMS branch — only via GHL (legacy messaging) for now
+    if ((channel === 'sms' || channel === 'both')) {
+      const ownerPhone = (venue?.notification_phone as string | null)?.trim();
+      const ghlToken = getGhlToken({ ghl_access_token: (venue?.ghl_access_token as string | null) ?? null });
+      const locId    = (venue?.ghl_location_id as string | null) || '';
+      if (!ownerPhone || !ghlToken || !locId) {
+        smsOk = channel === 'sms' ? false : true;
+        if (!ownerPhone) skipped = 'no_owner_phone';
+        else if (!ghlToken || !locId) skipped = 'legacy_messaging_not_connected';
+      } else {
+        try {
+          const norm = normalizePhone(ownerPhone) || ownerPhone;
+          const ownerEmail = (venue?.email as string | null) || undefined;
+          const contact = await findOrCreateContact(ghlToken, locId, { phone: norm, email: ownerEmail, firstName: 'Owner' }).catch(() => null);
+          const contactId = (contact as { id?: string } | null)?.id;
+          if (contactId) {
+            await sendSms(ghlToken, locId, contactId, body);
+          } else {
+            smsOk = channel === 'sms' ? false : true;
+            skipped = skipped || 'could_not_resolve_owner_contact';
+          }
+        } catch (e) {
+          smsOk = false;
+          console.error('[worker] notify_owner SMS failed:', e);
+        }
+      }
+    }
+
+    const allOk    = emailOk && smsOk;
+    const anyOk    = emailOk || smsOk;
+    const status: 'success' | 'failed' | 'skipped' = allOk ? 'success' : (anyOk ? 'success' : 'skipped');
+    void logStepExecution({
+      automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id,
+      step_order: idx, step_type: 'notify_owner', status,
+      error_text: status === 'success' ? undefined : (skipped || 'send_failed'),
+    });
+
+    const nextIdx = idx + 1;
+    const done = nextIdx >= sorted.length;
+    await supabaseAdmin.from('marketing_automation_enrollments').update(
+      done ? { status: 'completed', current_step_index: nextIdx, completed_at: new Date().toISOString(), next_run_at: new Date().toISOString() }
+           : { current_step_index: nextIdx, next_run_at: new Date().toISOString() },
+    ).eq('id', en.id);
+    return done ? 'completed' : 'advanced';
+  }
+
   // ── create_conversation: open/find a conversation thread and stamp it ─────
   if (step.step_type === 'create_conversation') {
     // Fetch the workflow name for the system message
