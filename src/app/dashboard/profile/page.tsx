@@ -98,18 +98,16 @@ export default function ProfilePage() {
   const [memberForm, setMemberForm] = useState({ first_name: '', last_name: '', email: '' });
 
   // Email change state
-  const [emailForm, setEmailForm]           = useState({ new_email: '', current_password_for_email: '' });
+  const [emailForm, setEmailForm]           = useState({ new_email: '' });
   const [emailSaving, setEmailSaving]       = useState(false);
   const [emailSaved, setEmailSaved]         = useState(false);
   const [emailError, setEmailError]         = useState('');
-  const [showEmailPass, setShowEmailPass]   = useState(false);
 
   // Password change state
-  const [passForm, setPassForm]             = useState({ current_password: '', new_password: '', confirm_password: '' });
+  const [passForm, setPassForm]             = useState({ new_password: '', confirm_password: '' });
   const [passSaving, setPassSaving]         = useState(false);
   const [passSaved, setPassSaved]           = useState(false);
   const [passError, setPassError]           = useState('');
-  const [showCurPass, setShowCurPass]       = useState(false);
   const [showNewPass, setShowNewPass]       = useState(false);
   const [showConfPass, setShowConfPass]     = useState(false);
 
@@ -200,7 +198,7 @@ export default function ProfilePage() {
       // Update local state so the header reflects the new email
       setOwnerForm((f) => ({ ...f, email: data.email ?? f.email }));
       setProfile((p) => p ? { ...p, email: data.email ?? (p as OwnerProfile).email } as Profile : p);
-      setEmailForm({ new_email: '', current_password_for_email: '' });
+      setEmailForm({ new_email: '' });
       setEmailSaved(true);
       setTimeout(() => setEmailSaved(false), 4000);
     } catch { setEmailError('Network error — please try again'); }
@@ -218,7 +216,7 @@ export default function ProfilePage() {
       });
       const data = await res.json() as { ok?: boolean; error?: string };
       if (!res.ok) { setPassError(data.error ?? 'Failed to update password'); return; }
-      setPassForm({ current_password: '', new_password: '', confirm_password: '' });
+      setPassForm({ new_password: '', confirm_password: '' });
       setPassSaved(true);
       setTimeout(() => setPassSaved(false), 4000);
     } catch { setPassError('Network error — please try again'); }
@@ -487,25 +485,6 @@ export default function ProfilePage() {
                   required
                 />
               </div>
-              <div>
-                <label className={LABEL}>Confirm with Current Password</label>
-                <div className="relative">
-                  <input
-                    type={showEmailPass ? 'text' : 'password'}
-                    value={emailForm.current_password_for_email}
-                    onChange={(e) => setEmailForm((f) => ({ ...f, current_password_for_email: e.target.value }))}
-                    placeholder="Your current password"
-                    className={INPUT + ' pr-10'}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowEmailPass((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    {showEmailPass ? <EyeOff size={14} /> : <Eye size={14} />}
-                  </button>
-                </div>
-              </div>
               {emailError && (
                 <div className="flex items-center gap-2 rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
                   <AlertCircle size={13} /> {emailError}
@@ -518,8 +497,8 @@ export default function ProfilePage() {
               )}
               <button
                 type="submit"
-                disabled={emailSaving || !emailForm.new_email}
-                className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 transition-opacity"
+                disabled={emailSaving}
+                className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white hover:opacity-85 transition-opacity"
                 style={{ backgroundColor: '#1b1b1b' }}
               >
                 {emailSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
@@ -535,21 +514,6 @@ export default function ProfilePage() {
               <h3 className="text-sm font-semibold text-gray-800">Change Password</h3>
             </div>
             <form onSubmit={(e) => void updatePassword(e)} className="space-y-3 max-w-md">
-              <div>
-                <label className={LABEL}>Current Password</label>
-                <div className="relative">
-                  <input
-                    type={showCurPass ? 'text' : 'password'}
-                    value={passForm.current_password}
-                    onChange={(e) => setPassForm((f) => ({ ...f, current_password: e.target.value }))}
-                    placeholder="Enter current password"
-                    className={INPUT + ' pr-10'}
-                  />
-                  <button type="button" onClick={() => setShowCurPass((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                    {showCurPass ? <EyeOff size={14} /> : <Eye size={14} />}
-                  </button>
-                </div>
-              </div>
               <div>
                 <label className={LABEL}>New Password</label>
                 <div className="relative">
@@ -596,13 +560,8 @@ export default function ProfilePage() {
               )}
               <button
                 type="submit"
-                disabled={
-                  passSaving ||
-                  !passForm.new_password ||
-                  passForm.new_password.length < 8 ||
-                  passForm.new_password !== passForm.confirm_password
-                }
-                className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 transition-opacity"
+                disabled={passSaving}
+                className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white hover:opacity-85 transition-opacity"
                 style={{ backgroundColor: '#1b1b1b' }}
               >
                 {passSaving ? <Loader2 size={13} className="animate-spin" /> : <KeyRound size={13} />}
