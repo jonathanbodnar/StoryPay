@@ -434,26 +434,45 @@ function DurationInput({
     value != null ? String(storedToDisplay(value, storedIn, initUnit)) : '',
   );
 
-  // Convert numStr + unit → stored value, call onChange
+  // Re-sync internal state if the external value changes (e.g. switching calendar)
+  useEffect(() => {
+    if (value === null) {
+      setNumStr('');
+      setUnit(units[0]);
+    } else {
+      const u = bestUnit(value, storedIn, units);
+      setUnit(u);
+      setNumStr(String(storedToDisplay(value, storedIn, u)));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
   const commit = (str: string, u: string) => {
     const parsed = parseFloat(str);
     if (!isNaN(parsed) && parsed >= 0) {
       onChange(displayToStored(parsed, storedIn, u));
+    } else if (str === '' && nullable) {
+      onChange(null);
     }
   };
 
   const handleUnitChange = (newUnit: string) => {
-    if (newUnit === '__default__') { onChange(null); setNumStr(''); return; }
-    // Keep stored value the same, re-express in new unit
+    if (newUnit === '__default__') {
+      onChange(null);
+      setNumStr('');
+      setUnit(units[0]);
+      return;
+    }
+    // Re-express any existing number in the new unit and commit
     const parsed = parseFloat(numStr);
     if (!isNaN(parsed)) {
       const stored = displayToStored(parsed, storedIn, unit);
       const newDisplay = storedToDisplay(stored, storedIn, newUnit);
       const displayStr = newDisplay % 1 === 0 ? String(newDisplay) : newDisplay.toFixed(1);
       setNumStr(displayStr);
+      onChange(displayToStored(newDisplay, storedIn, newUnit));
     }
     setUnit(newUnit);
-    commit(numStr, newUnit);
   };
 
   const handleNumChange = (str: string) => {
@@ -461,7 +480,8 @@ function DurationInput({
     commit(str, unit);
   };
 
-  const showDefault = nullable && value === null;
+  // Show "default" only when nullable AND no value AND user hasn't typed anything
+  const showDefault = nullable && value === null && numStr === '';
 
   return (
     <div>
@@ -474,11 +494,10 @@ function DurationInput({
           type="number"
           min={0}
           step="any"
-          value={showDefault ? '' : numStr}
+          value={numStr}
           onChange={(e) => handleNumChange(e.target.value)}
           placeholder={showDefault ? (nullLabel ?? 'Venue default') : '0'}
-          className="flex-1 min-w-0 px-3 py-2 text-sm focus:outline-none bg-white disabled:bg-gray-50"
-          disabled={showDefault}
+          className="flex-1 min-w-0 px-3 py-2 text-sm focus:outline-none bg-white"
         />
         <select
           value={showDefault ? '__default__' : unit}

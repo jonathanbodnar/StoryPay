@@ -187,9 +187,9 @@ function SystemVariablesBody() {
         <strong className="text-gray-700">Read-only</strong> — click any tag to copy it.
       </p>
 
-      {/* Search + category filters */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-5">
-        <div className="relative flex-1">
+      {/* Search row + category filters */}
+      <div className="space-y-3 mb-5">
+        <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
           <input
             type="text"
@@ -335,9 +335,9 @@ function TagsBody({
         <strong className="text-gray-700">cannot be deleted</strong>. Create custom tags for anything else.
       </p>
 
-      {/* Controls row */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-5">
-        <div className="relative flex-1">
+      {/* Controls — search row on top, filters + new tag below */}
+      <div className="space-y-3 mb-5">
+        <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
           <input
             type="text"
@@ -347,31 +347,33 @@ function TagsBody({
             className="w-full rounded-xl border border-gray-200 pl-9 pr-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
           />
         </div>
-        <div className="flex flex-wrap gap-1.5 items-center">
-          <button type="button" onClick={() => setActiveCategory('all')}
-            className={`rounded-full px-3 py-1 text-xs font-medium border transition ${activeCategory === 'all' ? 'bg-brand-900 text-white border-brand-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
-            All
+        <div className="flex items-start gap-3">
+          <div className="flex flex-wrap gap-1.5 items-center flex-1 min-w-0">
+            <button type="button" onClick={() => setActiveCategory('all')}
+              className={`rounded-full px-3 py-1 text-xs font-medium border transition ${activeCategory === 'all' ? 'bg-brand-900 text-white border-brand-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
+              All
+            </button>
+            {systemCategories.map((cat) => (
+              <button key={cat} type="button" onClick={() => setActiveCategory('system-cat-' + cat)}
+                className={`rounded-full px-3 py-1 text-xs font-medium border transition ${activeCategory === 'system-cat-' + cat ? 'bg-brand-900 text-white border-brand-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
+                {cat}
+              </button>
+            ))}
+            {customTags.length > 0 && (
+              <button type="button" onClick={() => setActiveCategory('custom')}
+                className={`rounded-full px-3 py-1 text-xs font-medium border transition ${activeCategory === 'custom' ? 'bg-brand-900 text-white border-brand-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
+                Custom
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onCreateTag}
+            className="inline-flex items-center gap-2 rounded-xl bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800 shrink-0"
+          >
+            <Plus className="h-4 w-4" /> New tag
           </button>
-          {systemCategories.map((cat) => (
-            <button key={cat} type="button" onClick={() => setActiveCategory('system-cat-' + cat)}
-              className={`rounded-full px-3 py-1 text-xs font-medium border transition ${activeCategory === 'system-cat-' + cat ? 'bg-brand-900 text-white border-brand-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
-              {cat}
-            </button>
-          ))}
-          {customTags.length > 0 && (
-            <button type="button" onClick={() => setActiveCategory('custom')}
-              className={`rounded-full px-3 py-1 text-xs font-medium border transition ${activeCategory === 'custom' ? 'bg-brand-900 text-white border-brand-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
-              Custom
-            </button>
-          )}
         </div>
-        <button
-          type="button"
-          onClick={onCreateTag}
-          className="inline-flex items-center gap-2 rounded-xl bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800 shrink-0"
-        >
-          <Plus className="h-4 w-4" /> New tag
-        </button>
       </div>
 
       {/* Custom tags (always on top when visible) */}
