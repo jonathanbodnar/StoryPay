@@ -20,12 +20,18 @@ export async function POST(request: Request) {
   let valid = false;
 
   if (body.email !== undefined || body.password !== undefined) {
-    // New email + password flow
-    const emailMatch    = adminEmail    && body.email?.trim().toLowerCase() === adminEmail.toLowerCase();
-    const passwordMatch = adminPassword && body.password === adminPassword;
-    valid = !!(emailMatch && passwordMatch);
+    if (adminEmail && adminPassword) {
+      // Full email + password auth (both env vars set)
+      const emailMatch    = body.email?.trim().toLowerCase() === adminEmail.toLowerCase();
+      const passwordMatch = body.password === adminPassword;
+      valid = emailMatch && passwordMatch;
+    } else if (adminSecret) {
+      // Legacy fallback: ADMIN_SECRET used as the password
+      // (ADMIN_EMAIL / ADMIN_PASSWORD not configured yet)
+      valid = body.password === adminSecret;
+    }
   } else if (body.secret !== undefined) {
-    // Legacy single-secret fallback
+    // Old single-secret flow (backward compat)
     valid = !!(adminSecret && body.secret === adminSecret);
   }
 
