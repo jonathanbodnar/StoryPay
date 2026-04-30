@@ -54,6 +54,19 @@ export async function POST(request: NextRequest) {
   const name = body.name?.trim();
   if (!name) return NextResponse.json({ error: 'Name is required' }, { status: 400 });
 
+  // Enforce 3-calendar maximum per venue
+  const { count, error: countErr } = await supabaseAdmin
+    .from('venue_calendars')
+    .select('id', { count: 'exact', head: true })
+    .eq('venue_id', venueId);
+  if (countErr) return NextResponse.json({ error: countErr.message }, { status: 500 });
+  if ((count ?? 0) >= 3) {
+    return NextResponse.json(
+      { error: 'You can have a maximum of 3 calendars. Delete one before creating another.' },
+      { status: 400 },
+    );
+  }
+
   // If setting as default, clear existing default first
   if (body.is_default) {
     await supabaseAdmin

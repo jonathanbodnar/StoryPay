@@ -34,8 +34,16 @@ export async function GET(request: NextRequest) {
 
 /**
  * PUT /api/calendar/notifications
- * Upsert notification templates. Accepts an optional `calendar_id` field on
- * each row so per-calendar templates can be saved alongside the defaults.
+ * Save notification templates for a given calendar scope.
+ *
+ * Venue-wide rows (calendar_id = null):
+ *   Upsert against vcn_default_uidx (venue_id, notification_type, channel)
+ *   WHERE calendar_id IS NULL.
+ *
+ * Per-calendar rows (calendar_id set):
+ *   DELETE all existing rows for that calendar, then INSERT fresh.
+ *   This completely avoids conflict-key complexity and guarantees the saved
+ *   state exactly matches what the UI sent — nothing leaks into other calendars.
  */
 export async function PUT(req: NextRequest) {
   const venueId = await getVenueId();
@@ -61,36 +69,35 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: 'Expected array' }, { status: 400 });
   }
 
-  // Group rows by calendar_id so we can upsert each group with the correct
-  // conflict key (which depends on whether calendar_id is set or not).
-  const withCal = rows.filter((r) => r.calendar_id);
+  const toRecord = (r: (typeof rows)[0], calId: string | null) => ({
+    venue_id:           venueId,
+    notification_type:  r.notification_type,
+    channel:            r.channel,
+    enabled:            r.enabled,
+    notify_contact:     r.notify_contact,
+    notify_assigned:    r.notify_assigned,
+    notify_guests:      r.notify_guests ?? false,
+    additional_emails:  r.additional_emails ?? [],
+    additional_phones:  r.additional_phones ?? [],
+    subject:            r.subject ?? null,
+    body:               r.body ?? null,
+    offset_minutes:     r.offset_minutes ?? null,
+    reminder_offsets:   r.reminder_offsets ?? null,
+    calendar_id:        calId,
+    updated_at:         new Date().toISOString(),
+  });
+
+  const withCal    = rows.filter((r) => r.calendar_id);
   const withoutCal = rows.filter((r) => !r.calendar_id);
-
-  const toUpsert = (subset: typeof rows) =>
-    subset.map((r) => ({
-      venue_id: venueId,
-      notification_type: r.notification_type,
-      channel: r.channel,
-      enabled: r.enabled,
-      notify_contact: r.notify_contact,
-      notify_assigned: r.notify_assigned,
-      notify_guests: r.notify_guests ?? false,
-      additional_emails: r.additional_emails ?? [],
-      additional_phones: r.additional_phones ?? [],
-      subject: r.subject ?? null,
-      body: r.body ?? null,
-      offset_minutes: r.offset_minutes ?? null,
-      reminder_offsets: r.reminder_offsets ?? null,
-      calendar_id: r.calendar_id ?? null,
-      updated_at: new Date().toISOString(),
-    }));
-
   let allData: unknown[] = [];
 
+  // ── Venue-wide defaults (calendar_id IS NULL) ─────────────────────────────
   if (withoutCal.length) {
     const { data, error } = await supabaseAdmin
       .from('venue_calendar_notifications')
-      .upsert(toUpsert(withoutCal), { onConflict: 'venue_id,notification_type,channel' })
+      .upsert(withoutCal.map((r) => toRecord(r, null)), {
+        onConflict: 'venue_id,notification_type,channel',
+      })
       .select()
       .order('notification_type')
       .order('channel');
@@ -98,22 +105,33 @@ export async function PUT(req: NextRequest) {
     allData = [...allData, ...(data ?? [])];
   }
 
+  // ── Per-calendar rows: DELETE then INSERT (guarantees isolation) ──────────
   if (withCal.length) {
-    const { data, error } = await supabaseAdmin
-      .from('venue_calendar_notifications')
-      .upsert(toUpsert(withCal), { onConflict: 'venue_id,notification_type,channel,calendar_id' })
-      .select()
-      .order('notification_type')
-      .order('channel');
-    if (error) {
-      // Conflict key mismatch (migration not yet applied) — fall back to channel-only conflict
-      const { data: fb, error: fbErr } = await supabaseAdmin
+    // Group by calendar_id so each calendar is handled atomically
+    const byCalendar = new Map<string, typeof withCal>();
+    for (const row of withCal) {
+      const calId = row.calendar_id!;
+      if (!byCalendar.has(calId)) byCalendar.set(calId, []);
+      byCalendar.get(calId)!.push(row);
+    }
+
+    for (const [calId, calRows] of byCalendar) {
+      // Delete all existing rows for this specific calendar (only this calendar)
+      const { error: delErr } = await supabaseAdmin
         .from('venue_calendar_notifications')
-        .upsert(toUpsert(withCal), { onConflict: 'venue_id,notification_type,channel' })
-        .select();
-      if (fbErr) return NextResponse.json({ error: fbErr.message }, { status: 500 });
-      allData = [...allData, ...(fb ?? [])];
-    } else {
+        .delete()
+        .eq('venue_id', venueId)
+        .eq('calendar_id', calId);
+      if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
+
+      // Insert the full set the UI sent for this calendar
+      const { data, error: insErr } = await supabaseAdmin
+        .from('venue_calendar_notifications')
+        .insert(calRows.map((r) => toRecord(r, calId)))
+        .select()
+        .order('notification_type')
+        .order('channel');
+      if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
       allData = [...allData, ...(data ?? [])];
     }
   }

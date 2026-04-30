@@ -1354,8 +1354,12 @@ function CalendarsTab() {
         ))}
       </div>
 
-      {/* Create new calendar */}
-      {showCreate ? (
+      {/* Create new calendar — hidden when at the 3-calendar limit */}
+      {calendars.length >= 3 ? (
+        <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-700">
+          <strong>Maximum 3 calendars reached.</strong> Delete an existing calendar to create a new one.
+        </div>
+      ) : showCreate ? (
         <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-4 space-y-3">
           <p className="text-xs font-semibold text-gray-700">New Calendar</p>
           <div className="flex items-center gap-3">
@@ -1404,12 +1408,12 @@ function CalendarsTab() {
           onClick={() => setShowCreate(true)}
           className="flex items-center gap-2 rounded-xl border border-dashed border-gray-300 px-4 py-3 text-sm text-gray-500 hover:border-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-colors w-full"
         >
-          <Plus size={14} /> Add calendar
+          <Plus size={14} /> Add calendar <span className="ml-auto text-[11px] text-gray-400">{calendars.length}/3</span>
         </button>
       )}
 
       <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-700">
-        <strong>How it works:</strong> All calendars share one calendar view and are color-coded. Each calendar can have its own notification templates — go to the <strong>Notifications</strong> tab and select a calendar from the dropdown to configure its templates.
+        <strong>How it works:</strong> All calendars share one calendar view and are color-coded. Each calendar can have its own notification templates — go to the <strong>Notifications</strong> tab and select a calendar from the dropdown to configure its templates. Maximum 3 calendars per venue.
       </div>
     </div>
   );
