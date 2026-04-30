@@ -1144,6 +1144,8 @@ function NotificationsTab() {
   const [expandedType, setExpandedType] = useState<string | null>(null);
   const [openChannels, setOpenChannels] = useState<Set<string>>(new Set());
   const [showTags, setShowTags] = useState(false);
+  // key = "type:channel", value = 'idle' | 'sending' | 'sent' | 'error'
+  const [testState, setTestState] = useState<Record<string, 'idle' | 'sending' | 'sent' | 'error'>>({});
 
   // Build a full default row for a given type+channel if none exists in DB
   const makeDefault = (type: string, channel: string): NotifRow => {
@@ -1255,6 +1257,28 @@ function NotificationsTab() {
     updateRow(type, chKey, 'enabled', v);
     // Auto-open the editor when enabling
     if (v) setOpenChannels((prev) => new Set([...prev, `${type}:${chKey}`]));
+  };
+
+  // ── Send test ─────────────────────────────────────────────────────────────────
+
+  const sendTest = async (type: string, channel: string) => {
+    const row = getRow(type, channel);
+    if (!row?.body) return;
+    const key = `${type}:${channel}`;
+    setTestState((s) => ({ ...s, [key]: 'sending' }));
+    try {
+      const res = await fetch('/api/calendar/notifications/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel, subject: row.subject, body: row.body }),
+      });
+      const json = await res.json() as { ok?: boolean; error?: string };
+      setTestState((s) => ({ ...s, [key]: json.ok ? 'sent' : 'error' }));
+      setTimeout(() => setTestState((s) => ({ ...s, [key]: 'idle' })), 3000);
+    } catch {
+      setTestState((s) => ({ ...s, [key]: 'error' }));
+      setTimeout(() => setTestState((s) => ({ ...s, [key]: 'idle' })), 3000);
+    }
   };
 
   // ── Save ──────────────────────────────────────────────────────────────────────
@@ -1484,9 +1508,41 @@ function NotificationsTab() {
                             />
                           </div>
 
-                          {/* Reset to default */}
-                          {def && (
-                            <div className="flex justify-end">
+                          {/* Bottom action row: test + reset */}
+                          <div className="flex items-center justify-between pt-1">
+                            {/* Send test button */}
+                            {(() => {
+                              const tKey = `${nt.type}:${ch.key}`;
+                              const ts = testState[tKey] ?? 'idle';
+                              const isSms = ch.medium === 'sms';
+                              return (
+                                <button
+                                  type="button"
+                                  disabled={ts === 'sending' || !row.body}
+                                  onClick={() => sendTest(nt.type, ch.key)}
+                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all disabled:opacity-50 ${
+                                    ts === 'sent'
+                                      ? 'border-green-300 bg-green-50 text-green-700'
+                                      : ts === 'error'
+                                      ? 'border-red-300 bg-red-50 text-red-600'
+                                      : 'border-gray-300 bg-white text-gray-600 hover:border-gray-400 hover:text-gray-800'
+                                  }`}
+                                >
+                                  {ts === 'sending' ? (
+                                    <><Loader2 size={12} className="animate-spin" /> Sending…</>
+                                  ) : ts === 'sent' ? (
+                                    <><Check size={12} /> Test sent!</>
+                                  ) : ts === 'error' ? (
+                                    <><X size={12} /> Failed</>
+                                  ) : (
+                                    <>Send test {isSms ? 'SMS' : 'email'}</>
+                                  )}
+                                </button>
+                              );
+                            })()}
+
+                            {/* Reset to default */}
+                            {def ? (
                               <button
                                 type="button"
                                 onClick={() => resetToDefault(nt.type, ch.key)}
@@ -1494,8 +1550,8 @@ function NotificationsTab() {
                               >
                                 Reset to default
                               </button>
-                            </div>
-                          )}
+                            ) : <span />}
+                          </div>
                         </div>
                       )}
                     </div>

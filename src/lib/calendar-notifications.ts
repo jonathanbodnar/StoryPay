@@ -245,7 +245,7 @@ function buildVarMap(venue: VenueRow, vars: CalendarNotifVars): Record<string, s
 
 // ── HTML wrapper for plain-text email bodies ──────────────────────────────────
 
-function plainToHtml(text: string, venueName: string): string {
+export function plainToHtml(text: string, venueName: string): string {
   const escaped = text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
