@@ -8,6 +8,7 @@ import {
   type RecurrenceRule,
 } from '@/lib/recurrence';
 import { syncAppointmentRemindersForEvent } from '@/lib/appointment-reminders';
+import { dispatchCalendarNotification, type CalendarNotifVars } from '@/lib/calendar-notifications';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -232,6 +233,51 @@ export async function POST(request: NextRequest) {
   }
 
   void syncAppointmentRemindersForEvent(String((row as { id: string }).id));
+
+  // Fire booked_confirmed notification (fire-and-forget)
+  if ((status ?? 'confirmed') === 'confirmed' && customer_email) {
+    void (async () => {
+      try {
+        const { data: contact } = await supabaseAdmin
+          .from('venue_customers')
+          .select('first_name,last_name,phone,ghl_contact_id')
+          .eq('venue_id', venueId)
+          .ilike('email', customer_email as string)
+          .maybeSingle();
+
+        const { data: calSettings } = await supabaseAdmin
+          .from('venue_calendar_settings')
+          .select('timezone')
+          .eq('venue_id', venueId)
+          .maybeSingle();
+
+        const tz = (calSettings as { timezone?: string } | null)?.timezone ?? 'America/New_York';
+        const startFormatted = new Intl.DateTimeFormat('en-US', {
+          weekday: 'long', month: 'long', day: 'numeric',
+          hour: 'numeric', minute: '2-digit', timeZone: tz,
+        }).format(new Date(start_at as string));
+        const tzLabel = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'short' })
+          .formatToParts(new Date()).find((p) => p.type === 'timeZoneName')?.value ?? tz;
+
+        const c = contact as { first_name?: string; last_name?: string; phone?: string; ghl_contact_id?: string } | null;
+        const contactName = [c?.first_name, c?.last_name].filter(Boolean).join(' ') || (customer_email as string);
+
+        const vars: CalendarNotifVars = {
+          contact_name: contactName,
+          contact_email: customer_email as string,
+          contact_phone: c?.phone ?? null,
+          contact_ghl_id: c?.ghl_contact_id ?? null,
+          appointment_title: (title as string).trim(),
+          appointment_start_time: startFormatted,
+          appointment_timezone: tzLabel,
+          appointment_meeting_location: null,
+        };
+        await dispatchCalendarNotification(venueId, 'booked_confirmed', vars);
+      } catch (e) {
+        console.error('[calendar POST] notification dispatch error:', e);
+      }
+    })();
+  }
 
   return NextResponse.json(flattenRow(row as Parameters<typeof flattenRow>[0]), { status: 201 });
 }

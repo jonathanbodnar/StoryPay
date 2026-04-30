@@ -59,6 +59,7 @@ interface GoogleCal {
 
 interface NotifRow {
   notification_type: string;
+  /** channel is now one of: email_owner | email_contact | sms_owner | sms_contact */
   channel: string;
   enabled: boolean;
   notify_contact: boolean;
@@ -133,15 +134,198 @@ function tzLabel(tz: string): string {
 }
 
 const NOTIF_TYPES = [
-  { type: 'booked_unconfirmed', label: 'Appointment Booked (Unconfirmed)', desc: 'Notifies when an appointment is booked with an unconfirmed status.' },
-  { type: 'booked_confirmed', label: 'Appointment Booked (Confirmed)', desc: 'Notifies when an appointment is successfully confirmed.' },
-  { type: 'cancellation', label: 'Cancellation', desc: 'Alerts when an appointment is canceled.' },
-  { type: 'reschedule', label: 'Reschedule', desc: 'Notifies when an appointment is rescheduled.' },
-  { type: 'reminder', label: 'Reminder', desc: 'Sends a reminder before the appointment.' },
-  { type: 'follow_up', label: 'Follow-Up', desc: 'Sends a follow-up message after the appointment is completed.' },
+  { type: 'booked_confirmed', label: 'Appointment Booked (Confirmed)', desc: 'Sent when an appointment is successfully confirmed.' },
+  { type: 'cancellation',     label: 'Cancellation',                   desc: 'Sent when an appointment is cancelled.' },
+  { type: 'reschedule',       label: 'Reschedule',                     desc: 'Sent when an appointment is rescheduled.' },
+  { type: 'reminder',         label: 'Reminder',                       desc: 'Sent before the appointment as a reminder.' },
+  { type: 'follow_up',        label: 'Follow-Up',                      desc: 'Sent after the appointment is completed.' },
 ];
 
-const CHANNELS = ['email', 'sms', 'in_app'] as const;
+/** Ordered list of per-recipient template channels */
+const NOTIF_CHANNELS: { key: string; label: string; medium: 'email' | 'sms'; recipient: 'owner' | 'contact' }[] = [
+  { key: 'email_owner',   label: 'Email → Venue Owner', medium: 'email', recipient: 'owner' },
+  { key: 'email_contact', label: 'Email → Contact',     medium: 'email', recipient: 'contact' },
+  { key: 'sms_owner',     label: 'SMS → Venue Owner',   medium: 'sms',   recipient: 'owner' },
+  { key: 'sms_contact',   label: 'SMS → Contact',       medium: 'sms',   recipient: 'contact' },
+];
+
+const MERGE_TAGS = [
+  { tag: '{{contact.name}}',              desc: "Contact's full name" },
+  { tag: '{{contact.email}}',             desc: "Contact's email" },
+  { tag: '{{contact.phone}}',             desc: "Contact's phone" },
+  { tag: '{{appointment.title}}',         desc: 'Appointment title' },
+  { tag: '{{appointment.start_time}}',    desc: 'Formatted start date & time' },
+  { tag: '{{appointment.timezone}}',      desc: 'Timezone abbreviation' },
+  { tag: '{{appointment.meeting_location}}', desc: 'Meeting link or address' },
+  { tag: '{{venue.name}}',                desc: 'Venue / business name' },
+];
+
+// ── Default templates per scenario × channel ─────────────────────────────────
+const NOTIF_DEFAULTS: Record<string, Record<string, { subject?: string; body: string }>> = {
+  booked_confirmed: {
+    email_owner: {
+      subject: 'New Booking: {{appointment.title}} with {{contact.name}}',
+      body: `Hi,
+
+A new appointment has been confirmed.
+
+Contact: {{contact.name}} ({{contact.email}})
+Phone: {{contact.phone}}
+Title: {{appointment.title}}
+Date & Time: {{appointment.start_time}} ({{appointment.timezone}})
+Location: {{appointment.meeting_location}}
+
+— {{venue.name}}`,
+    },
+    email_contact: {
+      subject: 'Confirmed! Your {{appointment.title}} on {{appointment.start_time}} ({{appointment.timezone}})',
+      body: `Hi {{contact.name}},
+
+Your appointment has been confirmed. Here are the details of your upcoming appointment:
+
+Appointment Title: {{appointment.title}}
+Date and Time: {{appointment.start_time}} ({{appointment.timezone}})
+Meeting Link / Location: {{appointment.meeting_location}}
+
+We look forward to connecting with you!
+
+{{venue.name}}`,
+    },
+    sms_owner: {
+      body: `New booking: {{appointment.title}} with {{contact.name}} on {{appointment.start_time}} ({{appointment.timezone}}).`,
+    },
+    sms_contact: {
+      body: `Hi {{contact.name}}, your appointment "{{appointment.title}}" is confirmed for {{appointment.start_time}} ({{appointment.timezone}}). Location: {{appointment.meeting_location}}`,
+    },
+  },
+  cancellation: {
+    email_owner: {
+      subject: 'Cancelled: {{appointment.title}} with {{contact.name}}',
+      body: `Hi,
+
+The following appointment has been cancelled:
+
+Contact: {{contact.name}} ({{contact.email}})
+Title: {{appointment.title}}
+Date: {{appointment.start_time}} ({{appointment.timezone}})
+
+— {{venue.name}}`,
+    },
+    email_contact: {
+      subject: 'Your Appointment Has Been Cancelled',
+      body: `Hi {{contact.name}},
+
+Your appointment "{{appointment.title}}" scheduled for {{appointment.start_time}} ({{appointment.timezone}}) has been cancelled.
+
+If you have any questions or would like to reschedule, please don't hesitate to reach out.
+
+{{venue.name}}`,
+    },
+    sms_owner: {
+      body: `Cancelled: {{appointment.title}} with {{contact.name}} (was {{appointment.start_time}}).`,
+    },
+    sms_contact: {
+      body: `Hi {{contact.name}}, your appointment "{{appointment.title}}" on {{appointment.start_time}} has been cancelled. Contact us to reschedule.`,
+    },
+  },
+  reschedule: {
+    email_owner: {
+      subject: 'Rescheduled: {{appointment.title}} with {{contact.name}}',
+      body: `Hi,
+
+An appointment has been rescheduled:
+
+Contact: {{contact.name}} ({{contact.email}})
+Title: {{appointment.title}}
+New Date & Time: {{appointment.start_time}} ({{appointment.timezone}})
+Location: {{appointment.meeting_location}}
+
+— {{venue.name}}`,
+    },
+    email_contact: {
+      subject: 'Your Appointment Has Been Rescheduled',
+      body: `Hi {{contact.name}},
+
+Your appointment "{{appointment.title}}" has been rescheduled to:
+
+Date & Time: {{appointment.start_time}} ({{appointment.timezone}})
+Location: {{appointment.meeting_location}}
+
+{{venue.name}}`,
+    },
+    sms_owner: {
+      body: `Rescheduled: {{appointment.title}} with {{contact.name}} → {{appointment.start_time}} ({{appointment.timezone}}).`,
+    },
+    sms_contact: {
+      body: `Hi {{contact.name}}, your appointment "{{appointment.title}}" has been rescheduled to {{appointment.start_time}} ({{appointment.timezone}}). Location: {{appointment.meeting_location}}`,
+    },
+  },
+  reminder: {
+    email_owner: {
+      subject: 'Upcoming Appointment: {{appointment.title}} with {{contact.name}}',
+      body: `Hi,
+
+Reminder: you have an upcoming appointment.
+
+Contact: {{contact.name}} ({{contact.email}})
+Title: {{appointment.title}}
+Date & Time: {{appointment.start_time}} ({{appointment.timezone}})
+Location: {{appointment.meeting_location}}
+
+— {{venue.name}}`,
+    },
+    email_contact: {
+      subject: 'Reminder: Your Appointment — {{appointment.title}}',
+      body: `Hi {{contact.name}},
+
+This is a reminder for your upcoming appointment:
+
+Appointment Title: {{appointment.title}}
+Date and Time: {{appointment.start_time}} ({{appointment.timezone}})
+Meeting Link / Location: {{appointment.meeting_location}}
+
+We look forward to speaking with you!
+
+{{venue.name}}`,
+    },
+    sms_owner: {
+      body: `Reminder: {{appointment.title}} with {{contact.name}} on {{appointment.start_time}} ({{appointment.timezone}}).`,
+    },
+    sms_contact: {
+      body: `Hi {{contact.name}}, reminder: "{{appointment.title}}" is on {{appointment.start_time}} ({{appointment.timezone}}). Location: {{appointment.meeting_location}}`,
+    },
+  },
+  follow_up: {
+    email_owner: {
+      subject: 'Follow-Up: {{appointment.title}} with {{contact.name}} completed',
+      body: `Hi,
+
+The following appointment has been completed:
+
+Contact: {{contact.name}} ({{contact.email}})
+Title: {{appointment.title}}
+Date: {{appointment.start_time}} ({{appointment.timezone}})
+
+— {{venue.name}}`,
+    },
+    email_contact: {
+      subject: 'Thank You — {{appointment.title}}',
+      body: `Hi {{contact.name}},
+
+Thank you for your appointment "{{appointment.title}}" on {{appointment.start_time}}.
+
+We hope it was valuable! Please don't hesitate to reach out if you have any questions or would like to book another appointment.
+
+{{venue.name}}`,
+    },
+    sms_owner: {
+      body: `Completed: {{appointment.title}} with {{contact.name}} on {{appointment.start_time}}.`,
+    },
+    sms_contact: {
+      body: `Hi {{contact.name}}, thanks for your appointment "{{appointment.title}}"! Feel free to reach out with any questions. — {{venue.name}}`,
+    },
+  },
+};
 
 const DURATION_OPTIONS = [15, 30, 45, 60, 90, 120, 180, 240];
 const INTERVAL_OPTIONS = [15, 30, 45, 60, 90, 120];
@@ -928,159 +1112,252 @@ function NotificationsTab() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [expandedType, setExpandedType] = useState<string | null>(null);
+  const [showTags, setShowTags] = useState(false);
+
+  // Build a full default row for a given type+channel if none exists in DB
+  const makeDefault = (type: string, channel: string): NotifRow => {
+    const def = NOTIF_DEFAULTS[type]?.[channel];
+    return {
+      notification_type: type,
+      channel,
+      enabled: false,
+      notify_contact: channel.includes('contact'),
+      notify_assigned: false,
+      notify_guests: false,
+      subject: def?.subject ?? null,
+      body: def?.body ?? '',
+    };
+  };
+
+  // Merge DB rows over defaults so every type×channel is always represented
+  const buildFull = (dbRows: NotifRow[]): NotifRow[] => {
+    const result: NotifRow[] = [];
+    for (const nt of NOTIF_TYPES) {
+      for (const ch of NOTIF_CHANNELS) {
+        const existing = dbRows.find(
+          (r) => r.notification_type === nt.type && r.channel === ch.key,
+        );
+        result.push(existing ?? makeDefault(nt.type, ch.key));
+      }
+    }
+    return result;
+  };
 
   useEffect(() => {
-    fetch('/api/calendar/notifications')
+    fetch('/api/calendar/notifications', { cache: 'no-store' })
       .then((r) => r.json())
-      .then((d) => { if (Array.isArray(d)) setNotifs(d); setLoading(false); });
+      .then((d) => {
+        setNotifs(buildFull(Array.isArray(d) ? (d as NotifRow[]) : []));
+        setLoading(false);
+      })
+      .catch(() => {
+        setNotifs(buildFull([]));
+        setLoading(false);
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const updateNotif = (type: string, channel: string, field: keyof NotifRow, value: unknown) => {
-    setNotifs((rows) => rows.map((r) =>
-      r.notification_type === type && r.channel === channel ? { ...r, [field]: value } : r
-    ));
+  const updateRow = (type: string, channel: string, field: keyof NotifRow, value: unknown) =>
+    setNotifs((rows) =>
+      rows.map((r) =>
+        r.notification_type === type && r.channel === channel ? { ...r, [field]: value } : r,
+      ),
+    );
+
+  const resetToDefault = (type: string, channel: string) => {
+    const def = NOTIF_DEFAULTS[type]?.[channel];
+    if (!def) return;
+    setNotifs((rows) =>
+      rows.map((r) =>
+        r.notification_type === type && r.channel === channel
+          ? { ...r, subject: def.subject ?? null, body: def.body }
+          : r,
+      ),
+    );
   };
+
+  const getRow = (type: string, channel: string) =>
+    notifs.find((r) => r.notification_type === type && r.channel === channel);
 
   const save = async () => {
     setSaving(true);
-    await fetch('/api/calendar/notifications', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(notifs),
-    });
-    setSaving(false);
-    setSaved(true);
-    setEditingKey(null);
-    setTimeout(() => setSaved(false), 2000);
+    try {
+      await fetch('/api/calendar/notifications', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(notifs),
+      });
+      setSaved(true);
+      setExpandedType(null);
+      setTimeout(() => setSaved(false), 2500);
+    } finally {
+      setSaving(false);
+    }
   };
-
-  const getNotif = (type: string, channel: string) =>
-    notifs.find((n) => n.notification_type === type && n.channel === channel);
 
   if (loading) return <LoadingCard />;
 
   return (
     <div className="max-w-3xl space-y-4">
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-sm text-gray-600">
-          Configure how you send booking notifications via email, SMS, and in-app alerts.
-        </p>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-1">
+        <div>
+          <p className="text-sm text-gray-600">
+            Set up email and SMS templates for each booking event. Each scenario has
+            separate templates for the venue owner and the contact/lead.
+          </p>
+        </div>
         <SaveButton saving={saving} saved={saved} onClick={save} />
       </div>
 
+      {/* Merge tags reference */}
+      <div className="rounded-xl border border-gray-200 bg-gray-50 overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setShowTags((v) => !v)}
+          className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+        >
+          <span className="flex items-center gap-2">
+            <Info size={14} className="text-gray-400" />
+            Available merge tags
+          </span>
+          <ChevronRight size={14} className={`text-gray-400 transition-transform ${showTags ? 'rotate-90' : ''}`} />
+        </button>
+        {showTags && (
+          <div className="px-4 pb-4 grid grid-cols-2 gap-2 border-t border-gray-200">
+            {MERGE_TAGS.map(({ tag, desc }) => (
+              <div key={tag} className="flex items-start gap-2 py-1">
+                <code className="shrink-0 bg-white border border-gray-200 text-[11px] font-mono px-1.5 py-0.5 rounded text-gray-800">{tag}</code>
+                <span className="text-[11px] text-gray-500 pt-0.5">{desc}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Notification type cards */}
       {NOTIF_TYPES.map((nt) => {
-        const channels = CHANNELS.filter((ch) => getNotif(nt.type, ch) !== undefined);
-        const activeChannels = channels.filter((ch) => getNotif(nt.type, ch)?.enabled);
+        const isOpen = expandedType === nt.type;
+        const activeCount = NOTIF_CHANNELS.filter((ch) => getRow(nt.type, ch.key)?.enabled).length;
 
         return (
           <div key={nt.type} className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4">
+            {/* Card header */}
+            <button
+              type="button"
+              onClick={() => setExpandedType(isOpen ? null : nt.type)}
+              className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors text-left"
+            >
               <div className="flex items-center gap-3">
-                <Bell size={16} className="text-gray-400" />
+                <Bell size={15} className="text-gray-400 shrink-0" />
                 <div>
-                  <p className="text-sm font-medium text-gray-900">{nt.label}</p>
+                  <p className="text-sm font-semibold text-gray-900">{nt.label}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{nt.desc}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                {CHANNELS.map((ch) => {
-                  const n = getNotif(nt.type, ch);
-                  if (!n) return null;
-                  return (
-                    <span
-                      key={ch}
-                      className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${
-                        n.enabled
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-gray-100 text-gray-400'
-                      }`}
-                    >
-                      {ch === 'in_app' ? 'In-app' : ch.toUpperCase()}
-                    </span>
-                  );
-                })}
-                <button
-                  onClick={() => setEditingKey(editingKey === nt.type ? null : nt.type)}
-                  className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600"
-                >
-                  <Edit3 size={14} />
-                </button>
+              <div className="flex items-center gap-2.5 ml-4">
+                {activeCount > 0 && (
+                  <span className="text-[11px] font-medium text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
+                    {activeCount} active
+                  </span>
+                )}
+                <Edit3 size={14} className="text-gray-400" />
               </div>
-            </div>
+            </button>
 
-            {editingKey === nt.type && (
-              <div className="border-t border-gray-100 px-5 py-4 bg-gray-50 space-y-4">
-                {CHANNELS.map((ch) => {
-                  const n = getNotif(nt.type, ch);
-                  if (!n) return null;
+            {/* Expanded editor */}
+            {isOpen && (
+              <div className="border-t border-gray-100 bg-gray-50 px-5 py-5 space-y-6">
+                {/* Two columns: Email | SMS */}
+                {(['email', 'sms'] as const).map((medium) => {
+                  const mediumChannels = NOTIF_CHANNELS.filter((c) => c.medium === medium);
                   return (
-                    <div key={ch} className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-gray-900 capitalize">
-                          {ch === 'in_app' ? 'In-App' : ch.toUpperCase()}
-                        </p>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <Toggle
-                            checked={n.enabled}
-                            onChange={(v) => updateNotif(nt.type, ch, 'enabled', v)}
-                          />
-                          <span className="text-xs text-gray-500">{n.enabled ? 'Enabled' : 'Disabled'}</span>
-                        </label>
-                      </div>
+                    <div key={medium}>
+                      <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-3">
+                        {medium === 'email' ? '📧 Email Notifications' : '📱 SMS Notifications'}
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {mediumChannels.map((ch) => {
+                          const row = getRow(nt.type, ch.key);
+                          if (!row) return null;
+                          const def = NOTIF_DEFAULTS[nt.type]?.[ch.key];
+                          const smsLen = medium === 'sms' ? (row.body ?? '').length : 0;
 
-                      {n.enabled && (
-                        <div className="space-y-2 pl-2 border-l-2 border-gray-200">
-                          <div>
-                            <p className="text-xs font-medium text-gray-600 mb-1">Who should receive this?</p>
-                            <div className="flex flex-wrap gap-3">
-                              {(['notify_contact', 'notify_assigned', 'notify_guests'] as const).map((f) => (
-                                <label key={f} className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-700">
-                                  <input
-                                    type="checkbox"
-                                    checked={n[f]}
-                                    onChange={(e) => updateNotif(nt.type, ch, f, e.target.checked)}
-                                    className="w-3.5 h-3.5 rounded"
+                          return (
+                            <div
+                              key={ch.key}
+                              className="rounded-xl border border-gray-200 bg-white p-4 space-y-3"
+                            >
+                              {/* Template header */}
+                              <div className="flex items-center justify-between">
+                                <p className="text-xs font-semibold text-gray-800">
+                                  {ch.recipient === 'owner' ? '🏢 To Venue Owner' : '👤 To Contact'}
+                                </p>
+                                <label className="flex items-center gap-1.5 cursor-pointer">
+                                  <Toggle
+                                    checked={row.enabled}
+                                    onChange={(v) => updateRow(nt.type, ch.key, 'enabled', v)}
                                   />
-                                  {f === 'notify_contact' ? 'Contact' : f === 'notify_assigned' ? 'Assigned User' : 'Guests'}
+                                  <span className={`text-[11px] font-medium ${row.enabled ? 'text-green-600' : 'text-gray-400'}`}>
+                                    {row.enabled ? 'On' : 'Off'}
+                                  </span>
                                 </label>
-                              ))}
-                            </div>
-                          </div>
+                              </div>
 
-                          {ch === 'email' && (
-                            <div>
-                              <label className="text-xs text-gray-600 block mb-1">Subject</label>
-                              <input
-                                type="text"
-                                value={n.subject ?? ''}
-                                onChange={(e) => updateNotif(nt.type, ch, 'subject', e.target.value)}
-                                className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-900"
-                                placeholder="Email subject…"
-                              />
-                            </div>
-                          )}
+                              {row.enabled && (
+                                <div className="space-y-2">
+                                  {/* Subject (email only) */}
+                                  {medium === 'email' && (
+                                    <div>
+                                      <label className="block text-[11px] font-medium text-gray-500 mb-1">
+                                        Subject <span className="text-red-400">*</span>
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={row.subject ?? ''}
+                                        onChange={(e) => updateRow(nt.type, ch.key, 'subject', e.target.value)}
+                                        placeholder={def?.subject ?? 'Email subject…'}
+                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-gray-800"
+                                      />
+                                    </div>
+                                  )}
 
-                          <div>
-                            <label className="text-xs text-gray-600 block mb-1">
-                              {ch === 'email' ? 'Email Body' : ch === 'sms' ? 'SMS Message' : 'In-App Message'}
-                            </label>
-                            <textarea
-                              value={n.body ?? ''}
-                              onChange={(e) => updateNotif(nt.type, ch, 'body', e.target.value)}
-                              rows={3}
-                              className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 resize-none"
-                              placeholder="Use {{contact.name}}, {{appointment.start_time}}, {{venue.name}}…"
-                            />
-                            <p className="text-xs text-gray-400 mt-1">
-                              Variables: <code className="bg-gray-100 px-1 rounded">{'{{contact.name}}'}</code>{' '}
-                              <code className="bg-gray-100 px-1 rounded">{'{{appointment.start_time}}'}</code>{' '}
-                              <code className="bg-gray-100 px-1 rounded">{'{{venue.name}}'}</code>{' '}
-                              <code className="bg-gray-100 px-1 rounded">{'{{appointment.timezone}}'}</code>
-                            </p>
-                          </div>
-                        </div>
-                      )}
+                                  {/* Body */}
+                                  <div>
+                                    <label className="block text-[11px] font-medium text-gray-500 mb-1">
+                                      {medium === 'email' ? 'Email body' : 'SMS message'}
+                                      {medium === 'sms' && (
+                                        <span className={`ml-2 ${smsLen > 160 ? 'text-red-500' : 'text-gray-400'}`}>
+                                          {smsLen}/160
+                                        </span>
+                                      )}
+                                    </label>
+                                    <textarea
+                                      value={row.body ?? ''}
+                                      onChange={(e) => updateRow(nt.type, ch.key, 'body', e.target.value)}
+                                      rows={medium === 'email' ? 7 : 3}
+                                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-gray-800 resize-y font-mono"
+                                      placeholder={def?.body ?? 'Enter message…'}
+                                    />
+                                  </div>
+
+                                  {/* Reset to default */}
+                                  {def && (
+                                    <button
+                                      type="button"
+                                      onClick={() => resetToDefault(nt.type, ch.key)}
+                                      className="text-[11px] text-blue-600 hover:text-blue-800 underline"
+                                    >
+                                      Reset to default
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   );
                 })}
@@ -1089,6 +1366,10 @@ function NotificationsTab() {
           </div>
         );
       })}
+
+      <div className="flex justify-end pt-2">
+        <SaveButton saving={saving} saved={saved} onClick={save} />
+      </div>
     </div>
   );
 }
