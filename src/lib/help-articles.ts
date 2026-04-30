@@ -43,7 +43,7 @@ The main areas:
 - Leads — Kanban/list pipeline for inquiries; editable stages and pipelines
 - Reports — financial exports (owners and admins)
 - Payments flyout — new proposal/invoice, proposals list, templates, installments, subscriptions, transactions
-- Marketing flyout — analytics, lead capture forms, email tools, trigger links & tags
+- Marketing flyout — analytics, lead capture forms, email tools, Trigger Links, Tags & Variables (system tags + canonical merge variables + trigger links)
 - Help Center — searchable docs and Ask AI–style help
 - Settings flyout — general, branding, email templates, integrations, team, notifications
 
@@ -403,8 +403,11 @@ Control how bookings work:
 - Pre-buffer / Post-buffer — blocked time before and after each appointment for prep or debrief
 - Max bookings per day / slot
 
+Calendars tab
+Create and manage up to 5 named calendars (e.g. "Tour Calendar", "Phone Call Calendar"). Each calendar can have its own color, description, and — optionally — its own booking rules that override the venue-wide defaults. All calendars share the same unified calendar view; only their notification templates and booking rules differ. The default calendar cannot be deleted.
+
 Notifications tab
-Manage email and SMS notification templates for all appointment lifecycle events (confirmation, cancellation, reschedule, reminder, follow-up). See the Calendar Appointment Notifications articles for full details.`,
+Manage email and SMS notification templates for all appointment lifecycle events (confirmation, cancellation, reschedule, reminder, follow-up). Each calendar can have its own notification set — see the Calendar Appointment Notifications articles for full details.`,
       },
       {
         id: 'cal-settings-google-sync',
@@ -488,7 +491,10 @@ Post-buffer
 Blocks time AFTER each appointment for debrief, cleanup, or travel. A 60-minute post-buffer means the next available slot starts 60 minutes after the previous booking ends.
 
 Max Bookings per Day / per Slot
-Caps on how many bookings are accepted. "Per slot" caps simultaneous bookings at the same time; "per day" caps the total for a calendar day. Leave at 0 for no limit.`,
+Caps on how many bookings are accepted. "Per slot" caps simultaneous bookings at the same time; "per day" caps the total for a calendar day. Leave at 0 for no limit.
+
+Per-calendar overrides
+Each individual calendar can override any of the rules above. Go to Settings → Calendar → Calendars tab → click a calendar → expand "Customize Booking Rules". Any field left at "Venue default" inherits the setting from this global Booking Rules tab. This means a 15-minute phone-call calendar and a 60-minute tour calendar can coexist without either compromising the other.`,
       },
       {
         id: 'cal-availability',
@@ -507,6 +513,124 @@ The page shows a month-by-month calendar with:
 Prospects can navigate forward and back through months. No customer information is ever shown on this page.`,
       },
       {
+      {
+        id: 'cal-multi-calendar',
+        title: 'Multiple calendars — create up to 5 per venue',
+        tags: ['multiple calendars', 'calendars', 'calendar types', 'tour calendar', 'phone call calendar', 'calendar management', 'create calendar', 'delete calendar', 'venue calendars', 'calendar color'],
+        body: `StoryVenue supports up to 5 named calendars per venue — for example, a "Tour Calendar", "Phone Call Calendar", and "Consultation Calendar". All calendars display together in the single unified calendar view; each one is color-coded so events are visually distinct at a glance.
+
+Where to manage calendars
+Settings → Calendar → Calendars tab.
+
+Creating a calendar
+1. Click "+ Add Calendar" (disabled once you've reached the 5-calendar limit).
+2. Enter a name (e.g. "Tour Calendar") and pick a color.
+3. Optionally add a description and customize booking rules for that calendar (see Per-Calendar Booking Rules).
+4. Click Save.
+
+What makes each calendar independent
+- Color — events on the unified view are colored by calendar.
+- Notification templates — each calendar can have its own confirmation, cancellation, reschedule, reminder, and follow-up templates. See "Calendar appointment notifications — overview" and select the calendar in the Notifications tab dropdown.
+- Booking rules — each calendar can override duration, interval, minimum notice, date range, and buffers independently.
+
+The default calendar
+Every venue has one default calendar created automatically. It cannot be deleted. You can rename it and change its color.
+
+Deleting a calendar
+Click the trash icon on a calendar row in Settings → Calendar → Calendars. The default calendar has no delete option. Deleting a calendar removes its notification settings; existing events on that calendar are not deleted.
+
+On the calendar page
+Events show with a colored left border matching their calendar. If you create multiple calendars, the event creation modal lets you pick which calendar the event belongs to.`,
+      },
+      {
+        id: 'cal-per-calendar-rules',
+        title: 'Per-calendar booking rules — overrides per calendar type',
+        tags: ['per calendar booking rules', 'booking rules override', 'calendar duration', 'calendar interval', 'custom booking', 'tour duration', 'phone call duration', 'calendar settings', 'override venue defaults'],
+        body: `Every calendar can have its own booking rules that override the venue-wide defaults set in Settings → Calendar → Booking Rules. This means a phone-call calendar can use 15-minute slots while a tour calendar uses 60-minute slots — with no conflict.
+
+How to set per-calendar rules
+1. Go to Settings → Calendar → Calendars tab.
+2. Click the pencil (edit) icon on a calendar row.
+3. Expand the "Customize Booking Rules" section.
+4. For each rule, choose a specific value OR leave it at "Venue default" to inherit from the global Booking Rules tab.
+
+Rules you can override per calendar
+- Meeting Duration — how long each appointment is (15 – 240 min)
+- Meeting Interval — how far apart slot start times are
+- Minimum Scheduling Notice — how far ahead a booking must be made
+- Date Range — how many days into the future slots appear
+- Pre-buffer — blocked time before each appointment
+- Post-buffer — blocked time after each appointment
+
+How inheritance works
+Any field set to "Venue default" uses the value from Settings → Calendar → Booking Rules. Override only what differs for that calendar — everything else flows through automatically.
+
+The public slots API respects per-calendar rules
+When a calendar ID is included in the booking widget URL (or Calendly-style booking link), the slots engine applies that calendar's specific rules. If no calendar ID is specified, venue-wide defaults apply.`,
+      },
+      {
+        id: 'cal-ai-search',
+        title: 'AI calendar search & Q&A',
+        tags: ['ai calendar', 'calendar ai', 'calendar search', 'ask ai calendar', 'sparkles', 'search events', 'calendar summary', 'upcoming events', 'calendar assistant', 'ai search'],
+        body: `The calendar page has a built-in AI assistant that can answer natural-language questions about your upcoming events and give you instant summaries.
+
+How to open it
+Click the "Search & Ask AI" button (sparkle icon) in the calendar page header. A panel slides out from the right side.
+
+Searching
+Type a question or keyword in the input field and press Enter (or click Search). Quick-suggest prompts appear below the field to get you started — click one to auto-fill the query.
+
+Example questions you can ask
+- "What events do I have next week?"
+- "How many tours are scheduled in June?"
+- "Show me all confirmed appointments"
+- "Do I have anything booked on May 15?"
+- "What are the notes on the Johnson tour?"
+- "Any cancellations in the last 30 days?"
+
+What you see in the results
+- AI Summary — a plain-language answer from the AI using your actual event data (past 30 days + next 90 days).
+- Matching Events — a list of events whose title, contact email, calendar, space, notes, type, or status matched your keyword. Click any event in the list to open its full detail modal without closing the panel.
+
+How it works
+The AI has access to up to 200 of your events (past 30 days and next 90 days). It knows each event's title, type, status, start date, contact email, calendar name, space name, and notes. It answers based only on what's in your data — it won't make up events that don't exist.
+
+If there's no AI answer
+The panel still shows keyword-matched events even if the AI component is unavailable. You can always use the keyword results to find what you need.`,
+      },
+      {
+        id: 'cal-event-actions',
+        title: 'Cancelling, confirming, and rescheduling events',
+        tags: ['cancel event', 'confirm event', 'cancellation', 'reschedule event', 'event status', 'delete event', 'cancelled appointment', 'confirmed appointment', 'appointment actions', 'status dropdown'],
+        body: `From the event detail modal (click any event on the calendar), you have full control over the event's status — and the notification system responds automatically.
+
+Status actions inside the modal
+Open an event → the Status dropdown (top of modal) lets you change between:
+- Confirmed — the appointment is locked in. If changed from another status, the "Appointment Confirmed" notification fires.
+- Cancelled — marks the event as cancelled. The "Cancellation" notification fires automatically to all enabled channels (email/SMS to venue owner and contact).
+- Pending — tentative, no automatic notification.
+
+Deleting an event
+Click the trash icon inside the event detail modal (or use the delete option from the event context menu on the calendar). Deleting an event also triggers the Cancellation notification, so the contact is always informed.
+
+Rescheduling
+Change the start or end date/time of an existing event and save. This triggers the "Reschedule" notification automatically.
+
+The "Confirm" and "Cancel" buttons
+In the event modal footer, quick action buttons let you confirm or cancel in one click without navigating through the status dropdown — useful for rapid triage of a busy calendar.
+
+Follow-up timing
+The Follow-Up notification fires a configurable time after the event ends. Set the delay in Settings → Calendar → Notifications → Follow-Up → expand a channel → "When to send" — choose minutes, hours, or days. Each of the four channels (Email → Owner, Email → Contact, SMS → Owner, SMS → Contact) can have a different follow-up delay.
+
+Notifications fired per action
+- Confirmed (new event): Appointment Booked (Confirmed) fires.
+- Status → Confirmed: Appointment Confirmed notification fires.
+- Status → Cancelled or event deleted: Cancellation notification fires.
+- Start/end time changed: Reschedule notification fires.
+- Reminder timing reached: Reminder fires (queued at event creation).
+- After event ends: Follow-Up fires.`,
+      },
+      {
         id: 'cal-notification-overview',
         title: 'Calendar appointment notifications — overview',
         tags: ['calendar', 'notifications', 'email', 'sms', 'appointment', 'confirmation', 'reminder', 'cancellation', 'reschedule', 'follow up', 'automatic', 'templates'],
@@ -519,7 +643,10 @@ The five notification scenarios
 2. Cancellation — fires when you change an event's status to Cancelled.
 3. Reschedule — fires when you change an event's start or end time.
 4. Reminder — fires before the appointment starts. Timing is fully configurable per channel.
-5. Follow-Up — fires 30 minutes after the event ends.
+5. Follow-Up — fires after the event ends. The timing is fully customizable: go to Settings → Calendar → Notifications → Follow-Up → any channel and set the delay in minutes, hours, or days after the event ends.
+
+Multi-calendar support
+If you have multiple calendars (see the Multiple Calendars article), each calendar can have its own independent set of notification templates. Select a calendar from the dropdown at the top of the Notifications tab to switch between calendar-specific settings and the venue-wide defaults.
 
 The four channels per scenario
 Each scenario has four channels, each independently toggled on or off:
@@ -1445,6 +1572,39 @@ Each file shows:
 
 Files are stored securely and are only accessible to your team. Delete a file by clicking the trash icon on its row.`,
       },
+      {
+        id: 'cust-dnd',
+        title: 'Do Not Disturb (DND) — Legacy messaging sync',
+        tags: ['dnd', 'do not disturb', 'opt out', 'compliance', 'sms opt out', 'legacy dnd', 'block messages', 'unsubscribe', 'channel dnd', 'messaging compliance'],
+        body: `The Do Not Disturb (DND) section appears at the bottom of every contact's profile page and in the profile drawer (accessible from Conversations). It lets you see and control which messaging channels are blocked for that contact.
+
+Where to find it
+- Contact profile page (Contacts → click a name → scroll to the bottom)
+- Profile drawer (Conversations → open a thread → click Profile → scroll to bottom)
+
+The DND channels
+For accounts connected to StoryVenue Legacy messaging, you can control DND per channel:
+- All — master switch that blocks every channel
+- Email — blocks outbound email to this contact
+- Text / SMS — blocks outbound SMS
+- Calls & Voicemail
+- Google Business Profile (GBP)
+- Inbound Calls & SMS — blocks inbound notifications as well
+
+Enabling any DND channel
+Toggle the switch on for the channel you want to block. The change is saved locally and synced to your StoryVenue Legacy sub-account automatically. If the sync fails (e.g. due to a temporary connection issue), a warning appears and the setting retries on the next contact refresh.
+
+Compliance enforcement
+This is a critical compliance feature. When SMS DND is enabled for a contact, StoryVenue will block all outbound SMS to that number — even if a notification template or workflow would otherwise send one. The contact will not receive the message. This applies to calendar reminder SMS, confirmation SMS, and any workflow SMS steps.
+
+Legacy messaging vs. SaaS-only accounts
+DND is currently available for venues using StoryVenue Legacy messaging. Venues on the native SaaS-only plan will have their own DND solution in a future release.
+
+System tags auto-applied on DND changes
+When you enable SMS DND: the "sms_opted_out" tag is added to the contact.
+When you enable DND All: the "do_not_contact" and "legacy_dnd_active" tags are added.
+These tags can be used in workflows to trigger follow-up sequences or remove the contact from campaigns.`,
+      },
     ],
   },
   {
@@ -2147,6 +2307,135 @@ Behind the scenes
 
 Tip — keep your first sequence short and useful (3-5 emails over 14 days), make sure the first email arrives within minutes of the form submission, and trust the reply-halt to do its job. The fastest follow-up wins.`,
       },
+      {
+        id: 'mkt-trigger-tags-vars',
+        title: 'Trigger Links, Tags & Variables — page overview',
+        tags: ['trigger links', 'tags', 'variables', 'merge variables', 'system tags', 'marketing automation', 'triggers and tags', 'tag page', 'variable page'],
+        body: `Marketing → Trigger Links, Tags & Variables is the central hub for three powerful automation tools: trigger links, lead tags, and merge variables.
+
+The page has three accordion sections — each can be expanded or collapsed independently:
+
+1. Trigger Links
+Create trackable links that fire a workflow, add a tag, or change a lead stage when clicked. Each trigger link generates a unique URL you can embed in emails or SMS messages. When a recipient clicks it, the configured action fires instantly.
+
+2. Lead Tags (accordion)
+Click "Lead Tags" to expand the tags panel. You'll see two groups:
+- System tags — 65 predefined non-deletable tags that are auto-applied by the platform (e.g. "Appointment Booked", "Invoice Sent", "Deposit Paid"). These have a lock icon and cannot be deleted. Many are applied automatically as contacts move through workflows.
+- Custom tags — tags you've created yourself. These can be edited and deleted. Click "+ New Tag" to create one.
+
+Use the search bar at the top of the tags panel to filter by name. Filter buttons let you narrow by category (Lifecycle, Payments, Marketing, Calendar, etc.).
+
+3. Merge Variables (accordion)
+Click "Merge Variables" to expand the variables panel. All 50 system merge variables are listed here, organized by category. These are read-only — you cannot create or delete variables, only use them in your templates.
+
+Use the search bar to find a variable by name or key. Category filter buttons let you browse by Contact, Venue, Appointment, Proposal, System, and more.`,
+      },
+      {
+        id: 'mkt-system-tags',
+        title: 'System default tags — auto-applied and non-deletable',
+        tags: ['system tags', 'default tags', 'auto-apply', 'non-deletable', 'lock icon', 'tags', 'lifecycle tags', 'appointment tags', 'payment tags', 'marketing tags', 'workflow tags'],
+        body: `StoryVenue includes 65 system default tags that are pre-seeded for every venue. These tags power automation, segmentation, and workflow triggers throughout the platform.
+
+What makes system tags special
+- Non-deletable — system tags have a lock icon and cannot be removed. They will always exist in your venue.
+- Auto-applied — many system tags are applied automatically when certain events happen (e.g. "appointment_booked" is added when a calendar event is created; "deposit_paid" is added when a deposit payment is received). You don't have to do anything.
+- Searchable — find them in the Tags accordion on Marketing → Trigger Links, Tags & Variables.
+
+Tag categories and examples
+Lifecycle (lead journey):
+- new_lead, inquiry_received, form_submitted, contacted, tour_scheduled, proposal_sent, closed_won, closed_lost, not_interested
+
+Calendar & Appointments:
+- appointment_booked, appointment_confirmed, appointment_cancelled, appointment_rescheduled, tour_complete, call_scheduled
+
+Payments & Proposals:
+- deposit_paid, paid_in_full, invoice_sent, payment_overdue, payment_failed, refund_issued
+
+Marketing & Engagement:
+- email_opened, email_clicked, link_clicked, campaign_unsubscribed, sms_opted_out, do_not_contact
+
+Communications:
+- contacted_by_email, contacted_by_sms, reply_received, sequence_completed, sequence_halted
+
+Follow-up & Nurture:
+- follow_up_needed, follow_up_sent, no_response_7d, no_response_14d, no_response_30d
+
+Qualification:
+- high_value_lead, warm_lead, cold_lead, budget_confirmed, date_confirmed
+
+Legacy Integration:
+- legacy_synced, legacy_dnd_active
+
+Using tags in workflows
+In Marketing → Workflows, you can use "Tag added" as a workflow trigger — so when "deposit_paid" is auto-applied, a thank-you email workflow can fire automatically.
+
+Custom tags
+You can still create custom tags for venue-specific needs (e.g. "VIP Client", "Referred by Smith Wedding"). Custom tags appear below system tags in the panel and can be edited or deleted.`,
+      },
+      {
+        id: 'mkt-system-vars',
+        title: 'System merge variables — 50 canonical variables',
+        tags: ['merge variables', 'system variables', 'canonical variables', 'placeholders', 'template variables', 'contact variables', 'venue variables', 'appointment variables', 'proposal variables', 'dynamic content'],
+        body: `StoryVenue has 50 canonical system merge variables that work consistently across every template type — email templates, calendar notifications, marketing emails, SMS messages, and workflows. All variables use dot-notation (e.g. {{contact.name}}).
+
+Where to find them
+Marketing → Trigger Links, Tags & Variables → expand the "Merge Variables" accordion. Search by name or filter by category.
+
+Contact variables
+{{contact.name}} — full name
+{{contact.first_name}} — first name only
+{{contact.last_name}} — last name only
+{{contact.email}} — email address
+{{contact.phone}} — phone number
+{{contact.address}} — full street address
+{{contact.city}} — city
+{{contact.state}} — state / province
+{{contact.zip}} — ZIP / postal code
+{{contact.partner_name}} — partner/second contact name
+{{contact.wedding_date}} — wedding date (formatted)
+{{contact.ceremony_type}} — ceremony type
+{{contact.guest_count}} — guest count
+{{contact.referral_source}} — how they found you
+
+Venue variables
+{{venue.name}} — your venue / business name
+{{venue.address}} — venue address
+{{venue.city}} — venue city
+{{venue.state}} — venue state
+{{venue.zip}} — venue ZIP
+{{venue.phone}} — venue phone
+{{venue.email}} — venue contact email
+{{venue.website}} — venue website URL
+{{venue.owner_name}} — venue owner's name
+{{venue.logo_url}} — venue logo URL
+
+Appointment variables (calendar notifications only)
+{{appointment.title}} — event title
+{{appointment.type}} — event type (e.g. Tour, Call)
+{{appointment.start_time}} — formatted start date & time
+{{appointment.end_time}} — formatted end time
+{{appointment.timezone}} — timezone abbreviation (e.g. EST)
+{{appointment.meeting_location}} — meeting link or address
+{{appointment.notes}} — event notes
+{{appointment.calendar_name}} — which calendar the event belongs to
+{{appointment.space_name}} — venue space assigned
+
+Proposal & payment variables
+{{proposal.title}} — proposal title
+{{proposal.amount}} — total proposal amount
+{{proposal.deposit_amount}} — deposit amount
+{{proposal.balance_due}} — remaining balance
+{{proposal.due_date}} — next payment due date
+{{proposal.status}} — proposal status
+
+System variables (auto-injected)
+{{system.date}} — today's date (formatted)
+{{system.year}} — current year (e.g. 2026)
+{{system.unsubscribe_url}} — one-click unsubscribe link (auto-added to marketing emails)
+
+Backwards compatibility
+Older variable names like {{contact_name}}, {{customer_name}}, {{organization}}, {{appointment_title}}, etc. still work everywhere — they are automatically mapped to the canonical equivalents. You do not need to update existing templates unless you want to migrate to the new naming convention.`,
+      },
     ],
   },
   {
@@ -2202,7 +2491,10 @@ Common variables:
 
 The variable list is shown on the right side of each template editor. Click a variable pill to copy it, then paste it anywhere in the subject, heading, or body.
 
-Preview your template using the Preview button — it shows a sample email with dummy data filled in.`,
+Preview your template using the Preview button — it shows a sample email with dummy data filled in.
+
+Canonical system variables
+StoryVenue uses a unified, dot-notation variable system sitewide. The same variables work across calendar notifications, marketing emails, email templates, and workflows. See Marketing → Trigger Links, Tags & Variables → Merge Variables accordion for the full list of all 50 canonical variables.`,
       },
     ],
   },
@@ -2578,8 +2870,10 @@ Reminder not arriving
 3. Is the reminder channel enabled? Each of the four reminder channels (Email→Owner, Email→Contact, SMS→Owner, SMS→Contact) can be on or off independently.
 
 Follow-up not arriving
-- Follow-ups fire 30 minutes after the event's end time. If the event has no end time, no follow-up is queued.
+- Follow-up timing is fully configurable: Settings → Calendar → Notifications → Follow-Up → any channel → "When to send" (choose minutes, hours, or days after the event ends).
+- If the event has no end time, no follow-up is queued.
 - Make sure the follow_up scenario channels are toggled On.
+- Follow-up queue rows are created when an event is saved. If you change the timing, re-save the event to regenerate the queue row.
 
 Test before going live
 Use the "Send test email" / "Send test SMS" button inside each channel editor to verify delivery before relying on automatic dispatch.`,
@@ -2673,6 +2967,8 @@ You can ask questions like:
 - "What is the None stage on leads?"
 - On Leads: "What's my total pipeline value?", "Which leads have wedding dates in June?", "Explain weighted vs open pipeline"
 - "What is the Media library?" or "How do I reuse photos in my emails and forms?"
+- "What system tags are available?" or "How do merge variables work?"
+- On the Calendar page: use the "Search & Ask AI" button (sparkle icon) for calendar-specific AI search — ask "What tours do I have next week?" or "Any cancellations this month?"
 
 Ask AI answers in plain language. It uses your real account data to give accurate, personalised answers. If AI gives a stale answer, refresh the page to reset the context.`,
       },
@@ -2729,13 +3025,13 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard': ['dash-kpis', 'dash-chart', 'gs-onboarding', 'gs-sidebar-chrome'],
 
   // Contacts
-  '/dashboard/contacts': ['cust-add', 'cust-search', 'cust-profile', 'cust-pipeline', 'cust-tasks', 'cust-documents'],
+  '/dashboard/contacts': ['cust-add', 'cust-search', 'cust-profile', 'cust-pipeline', 'cust-tasks', 'cust-documents', 'cust-dnd'],
 
   // Conversations (unified inbox)
   '/dashboard/conversations': ['conversations-overview', 'conversations-inbound', 'cust-profile', 'gs-overview'],
 
   // Calendar
-  '/dashboard/calendar': ['cal-overview', 'cal-add-event', 'cal-spaces', 'cal-conflicts', 'cal-multi-day', 'cal-recurring'],
+  '/dashboard/calendar': ['cal-overview', 'cal-add-event', 'cal-ai-search', 'cal-multi-calendar', 'cal-event-actions', 'cal-spaces', 'cal-conflicts', 'cal-multi-day', 'cal-recurring'],
 
   // Venue listing (directory + reviews + analytics)
   '/dashboard/listing/media': ['listing-media-library', 'listing-photos', 'listing-overview', 'brand-setup'],
@@ -2756,6 +3052,7 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/marketing/email/automations':['me-workflows', 'me-templates-vs-campaigns', 'me-builder', 'me-blocks', 'me-compliance', 'me-preview-test'],
   '/dashboard/marketing/email/preferences':['me-compliance', 'me-overview'],
   '/dashboard/marketing/email':            ['me-overview', 'me-builder', 'me-blocks', 'me-segments', 'me-templates-vs-campaigns', 'me-compliance'],
+  '/dashboard/marketing/trigger-links':    ['mkt-trigger-tags-vars', 'mkt-system-tags', 'mkt-system-vars', 'me-workflows', 'me-overview'],
   '/dashboard/marketing/form-builder':     ['me-form-builder', 'me-workflows', 'listing-media-library', 'leads-overview', 'gs-overview'],
   '/dashboard/marketing/workflows':        ['me-workflows', 'me-form-builder', 'me-templates-vs-campaigns', 'me-compliance', 'me-overview'],
 
@@ -2781,6 +3078,7 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   // Settings
   '/dashboard/settings/branding':        ['brand-setup', 'brand-colors-saved', 'brand-social-networks', 'listing-media-library', 'me-block-social', 'me-block-address'],
   '/dashboard/settings/email-templates': ['email-types', 'email-variables', 'me-overview'],
+  '/dashboard/settings/calendar':        ['cal-settings-overview', 'cal-multi-calendar', 'cal-per-calendar-rules', 'cal-notification-overview', 'cal-notification-reminders', 'cal-settings-booking-rules', 'cal-settings-google-sync'],
   '/dashboard/settings/integrations':    ['int-calendly', 'int-google-cal', 'int-quickbooks', 'int-freshbooks'],
   '/dashboard/settings/team':            ['team-invite', 'team-roles'],
   '/dashboard/settings/notifications':   ['notif-settings', 'sms-notifications'],
