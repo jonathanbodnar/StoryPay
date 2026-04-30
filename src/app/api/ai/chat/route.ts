@@ -17,6 +17,14 @@ StoryVenue is an all-in-one platform for wedding venues to manage proposals, inv
 - Calendar: Book and track all venue events (tours, weddings, receptions, tastings, meetings, rehearsals, holds, blocked dates). Syncs with Calendly, Google Calendar, Outlook, and Apple Calendar. Event chips take their color from the assigned **venue space** (the old per-event-type color legend was removed). The New/Edit Event modal supports **inline Space management** (add/edit/remove without leaving the form), a **contact search** field that attaches the event to a venue customer, and an **Assigned team member** picker when team members are present.
 - Venue listing (sidebar flyout, Store icon): **Dashboard** — edit how the venue appears on storyvenue.com (description, slug, capacity, publish toggle); autosaves. **Photos** — cover + gallery for the directory listing (upload directly or pick from Media). **Analytics** — (1) GA4 Measurement ID for full Google Analytics integration; (2) **Real-time visitor map** — interactive Leaflet world map showing live and recent visitors to your listing with pulsing markers, hover tooltips (city/region), and zoom controls. **Reviews** — (1) StoryVenue reviews: star ratings and testimonials; statuses published / pending / hidden; published reviews feed the public directory via API and embed; (2) **Google Reviews tab**: connect your Google Business Profile via auto-search or by pasting a Google Maps link to display your Google reviews on your storyvenue.com listing. Paths: /dashboard/listing, /dashboard/listing/media, /dashboard/listing/images, /dashboard/listing/analytics, /dashboard/listing/reviews.
 - Leads: Kanban and list views for inquiries — same configurable sales pipelines and stages as contact profiles. Includes pipeline intelligence (open pipeline vs weighted forecast, rough referral/directory revenue vs listing spend), per-lead opportunity value on cards, assignable owners, marketing tags, trigger links, an audit trail (stage/value/owner changes and logged calls), and mobile-friendly actions (drag cards, log call, quick note). **Every contact shows up in the pipeline**: the server reconciles leads and venue_customers on load so any contact with a real email has a lead snapped to its contact-profile pipeline/stage (contact stage is the source of truth), and broken references heal to the default pipeline's first stage instead of disappearing. The **+ Add Lead** modal includes a **Space** picker with inline add/edit/remove (same UX as the calendar event modal). Pipeline stage colors use a popover color picker with a **hex code** input, the native color wheel, and preset swatches.
+  **Lead card quick actions** — each Kanban card shows a row of icon buttons for the most common actions without opening the drawer:
+  - **Call** — log a call directly from the card (opens the quick log-call input).
+  - **SMS** — opens a quick SMS composer to the contact's phone via GHL.
+  - **Email** — opens a quick email composer to the contact.
+  - **Notes** — add a quick note attached to the lead.
+  - **Tags** — manage marketing tags on the lead.
+  - **Calendar** — schedule an appointment for this contact directly from the card (opens the New Event modal pre-filled with their info).
+  These buttons appear on hover so the card stays compact; tap on mobile to reveal them.
 - Reports: 7 downloadable financial reports (CSV, Excel, PDF). Owners and admins only.
 - Payments (sidebar flyout): New, Proposals, Proposal Templates, Installments, Subscriptions, Transactions.
 - Marketing (sidebar flyout): Analytics, Emails (campaigns), Audiences, Forms, Workflows, Trigger links & tags. All three email surfaces (Templates / Campaigns / Automations) use the Flodesk-style drag-and-drop builder — see "Marketing email builder" section below.
@@ -73,9 +81,18 @@ StoryVenue is an all-in-one platform for wedding venues to manage proposals, inv
 - Database: venue_media_assets table (migration 030, expanded by 062 for files + 25 MB cap + display_name + soft-delete column, and by 063 for source_bucket so logo uploads can live alongside library files). Files stored in Supabase Storage: brand logos in bucket venue-assets (path venue-logos/{venueId}/...), everything else in venue-images (path {venueId}/media/...).
 
 ## Conversations (inbox)
-- List threads with contact names; open thread to load messages.
-- Composer: toggle **Team only** vs **Email contact** before sending; @mentions only on team notes.
-- Requires conversation tables applied in Supabase (022); service role on server.
+- Path: /dashboard/conversations — unified inbox showing all threads by contact.
+- Thread list: each row shows the contact name, last message preview, timestamp, and the contact's **current pipeline stage** as a colored pill so you know where they are in your funnel at a glance.
+- Open a thread to load the message history. **Mark read/unread**, **pin**, **star**, or **delete** a thread using the action icons that appear on hover or in the thread header.
+- Composer: toggle **Team only** (internal note) vs **Email contact** (outbound email) before sending. @mentions work inside team notes to notify a specific teammate.
+- **Contact profile drawer**: click the Profile button inside any open conversation thread to slide in the full contact profile from the right side — without leaving Conversations. The drawer has all the same tabs as the standalone contact profile (Overview, Notes, Activity, Payments, Tasks, Documents, Schedule). This lets you book a call, log a note, or review payment history while reading the thread.
+- **Schedule tab in profile drawer**: lets you book a new appointment for the contact directly from inside the conversation, without navigating away.
+- **Team filter tab**: filter the thread list to only show threads where a specific team member is involved.
+- **Team directory card**: compact team directory visible inside the conversations view — see who's online / available at a glance.
+- Replies: two-way by design. Outbound email goes through Resend; the per-thread Reply-To address is on the inbound subdomain (e.g. inbound.storyvenue.com) so when the contact replies to the email it arrives back in the same thread automatically. Outbound SMS goes through the connected GHL A2P number; inbound SMS from the contact is threaded by phone number via GHL webhook.
+- Auto-refresh: threads poll for new inbound SMS messages every 5 seconds so the conversation stays live without a manual reload.
+- Reply-halt automation: if a contact replies to a drip automation email, that enrollment is automatically halted so a human can take over the conversation. The venue owner gets a notification email.
+- Requires conversation tables applied (migration 022) and SUPABASE_SERVICE_ROLE_KEY set.
 
 ## Calendar
 - Go to Calendar in the sidebar.
@@ -87,8 +104,39 @@ StoryVenue is an all-in-one platform for wedding venues to manage proposals, inv
 - iCal sync: subscribe from Google Calendar, Outlook, or Apple Calendar using the iCal URL in Settings → Integrations.
 - Calendly sync: connect Calendly in Settings → Integrations — new bookings appear on the calendar automatically.
 - Public availability page: shareable link showing open/booked dates with no customer info exposed — find it in Settings → Integrations.
-- Calendar Settings: go to Settings → Calendar for timezone, meeting duration, buffer times, availability, booking rules, Google Calendar sync, and Notifications (email/SMS templates per scenario).
+- **Google Calendar events display**: when Google Calendar is connected in Calendar Settings → Connections, events from your Google Calendar appear directly on the StoryVenue calendar as read-only chips, so you can see everything in one place. They do not create StoryVenue records — they're a visual overlay.
+- **Conflict blocking**: in Calendar Settings → Connections, you can select which Google Calendars block your available booking slots. When a conflict calendar has an event, that time window becomes unavailable on your public booking page.
+- Calendar Settings: go to Settings → Calendar for full configuration across 5 tabs (General, Connections, Availability, Booking Rules, Notifications). See the Calendar Settings section below for details.
 - Automatic notifications fire when events are created (confirmation), cancelled, rescheduled, or nearing start (reminder) and after completion (follow-up). See the Calendar Notification System section for full details.
+
+## Calendar Settings (Settings → Calendar)
+Five tabs covering every aspect of how your calendar works:
+
+### General tab
+- **Timezone** — the timezone used for all appointment display and availability slots.
+- **Privacy** — "Hide event details" toggle: when on, synced calendar events don't expose client names to people viewing your calendar.
+
+### Connections tab (Google Calendar two-way sync)
+- Connect your Google account via OAuth to enable two-way sync.
+- Once connected, your Google Calendar appears in a dropdown; pick which calendar new StoryVenue events are written to (Linked Calendar).
+- **Conflict Calendars** — check any of your Google Calendars to block those time windows from appearing as available on your public booking page. Personal appointments, team events, or any other calendar can be added as a conflict source.
+- Google Calendar events from connected/conflict calendars appear as read-only chips on the StoryVenue calendar view so you see your full schedule in one place.
+- Disconnect at any time — StoryVenue events already on Google are not deleted.
+
+### Availability tab
+- **Weekly Working Hours** — toggle each day on/off and set start/end times. These are the hours that appear as available on your public booking page.
+- **Date Specific Hours** — add overrides for individual dates: block a day entirely (unavailable) or set custom hours for holidays, special events, etc. Each override can have an optional label (e.g. "Staff retreat").
+
+### Booking Rules tab
+- **Meeting Duration** — default length for bookable appointments (15 / 30 / 45 / 60 / 90 / 120 / 180 / 240 min).
+- **Meeting Interval** — spacing between slot start times (e.g. 30 min = slots at :00 and :30).
+- **Minimum Scheduling Notice** — how far ahead a booking must be made (0 hr to 72 hr). Prevents last-minute bookings.
+- **Date Range** — how far into the future slots are shown (7 / 14 / 30 / 60 / 90 / 180 / 365 days).
+- **Pre-buffer / Post-buffer** — blocks time before and after each appointment so you have prep/debrief time. Buffers don't show as bookable slots.
+- **Max Bookings per Day / per Slot** — caps on simultaneous or daily bookings.
+
+### Notifications tab
+- Configure email and SMS templates for every appointment scenario. See the full Calendar Notification System section for details.
 
 ## Contact profiles (CRM)
 - Go to Contacts → click a contact name to open their full profile.
@@ -380,6 +428,39 @@ Setup checklist for a venue building their first speed-to-lead funnel:
 - 6 steps: Branding, Email Templates, First Template, First Proposal, Send Proposal, Invite Team Member.
 - To restart: Settings → General → Restart Setup Guide.
 
+## Authentication (Login / Signup)
+- StoryVenue uses **email + password** authentication for venue owners, team members, and couples. There are no magic links or code-based logins.
+- Venue owners sign up at app.storyvenue.com/signup with business name, email, and password.
+- Team members accept email invites and set their own password on first login.
+- Forgot password: click "Forgot password?" on the login page → enter your email → receive a reset link → set a new password.
+- Venue owners can update their **email address** and **password** at any time from their profile — click the avatar/name in the sidebar → My Profile → update and save.
+- The current password is **not** required to update email or password — just enter and save the new value.
+- GHL / StoryVenue Legacy integration: if a venue has a connected GHL sub-account, their GHL contacts can be synced (Settings → Integrations → "Sync from StoryVenue Legacy"). This is separate from authentication.
+
+## Venue Owner Profile (My Profile)
+- Access: click your name/avatar in the sidebar or bottom-left → My Profile.
+- Update your **first name**, **last name**, **email address**, and **password** from this page.
+- No current-password re-entry required — enter the new value and save.
+- Profile changes take effect immediately. If you update your email, use the new address on next login.
+
+## Couples Portal (Client Accounts)
+- Couples (clients) can create their own account on StoryVenue to view their proposals, invoices, and documents.
+- Couple accounts are separate from venue team members — they only see their own records.
+- **Couple signup**: couples sign up with first name, last name, email, and phone. They're signed in automatically after signup — no "check your email" step.
+- **Couple login**: app.storyvenue.com/couple/login — email + password.
+- **Forgot password**: couples use the same forgot-password flow — enter email → reset link → new password.
+- **Couple profile**: couples can update their first name, last name, and phone from their profile page after login.
+- **Super admin couples portal**: the admin dashboard has a Couples tab where admins can view, search, edit, and manage all couple accounts across all venues.
+
+## StoryPay™ (Payment Processing Tier)
+- StoryPay™ is the payment processing tier within StoryVenue, powered by LunarPay (Fortis).
+- Venues must **apply for StoryPay™** and complete merchant onboarding before they can accept payments (proposals/invoices with payment enabled).
+- Until StoryPay™ is active, certain features are gated — a banner in Settings reminds owners to apply.
+- **Apply**: Settings → StoryPay or click the "Apply for StoryPay™" prompt that appears in payment-related areas.
+- The onboarding wizard collects business information, owner details, and banking info for Fortis processing. Card numbers from customers go directly to Fortis (PCI SAQ-A compliant — StoryVenue never stores raw card numbers).
+- Once approved: proposals and invoices can accept credit card payments, installments, and subscriptions online.
+- If payment processing shows as unavailable: check that your LunarPay/Fortis onboarding is complete. Contact support if you believe it should be active.
+
 ## SMS Notifications
 - SMS is sent automatically when proposals and invoices are created (if customer has a phone number).
 - Phone numbers must be in US format — auto-formatted to E.164.
@@ -497,8 +578,19 @@ When an event is created or updated, StoryVenue automatically schedules one remi
 - My Google Business Profile isn't showing up in the search results. What do I do? Service-area businesses (no physical storefront) cannot be found via Google's text search API. Use the "Paste a Google Maps link" fallback: copy the URL from your Google Maps listing and paste it. If that still fails, use Google's Place ID Finder tool (linked in the fallback UI) and paste the Place ID directly.
 - How do I see real-time visitors on my listing? Venue listing → Analytics → scroll to "Live visitor map." The interactive world map shows live visitors (pulsing red, last 90 seconds) and recent visitors (indigo, last 30 minutes) with city-level detail. Use + / − to zoom.
 - Why don't reviews show on storyvenue.com? The live directory page may be a separate site — paste the iframe from the Reviews page, or consume GET /api/public/venues/<slug>. Ensure migration 024 (and optionally 025) is applied on Supabase. For Google reviews to appear on storyvenue.com, you must connect your Google Business Profile on the Reviews → Google tab.
-- What is Conversations? Sidebar → Conversations — team-only notes vs emails to contacts, per thread.
+- What is Conversations? Sidebar → Conversations — unified inbox with team notes, outbound emails, and two-way SMS threads. See pipeline stage of each contact directly in the thread list. Click the Profile button inside a thread to open the contact's full profile in a slide-over without leaving the page.
 - Why do I see an error about conversations migration? Apply 022_conversations.sql in Supabase and set SUPABASE_SERVICE_ROLE_KEY on the host.
+- How do I update my email or password? Click your name/avatar in the sidebar → My Profile. Enter your new email or password and save. No current-password re-entry required.
+- How does client / couple login work? Couples use app.storyvenue.com/couple/login with the email and password they set at signup. They can view their proposals and documents.
+- How do I apply for StoryPay™? Settings → StoryPay (or click the "Apply for StoryPay™" prompt). Complete the LunarPay/Fortis merchant onboarding wizard to activate payment processing.
+- How do I connect Google Calendar for two-way sync? Settings → Calendar → Connections tab → connect your Google account. Pick which calendar to write new events to, and select any personal/team calendars to use as conflict blockers.
+- How do I set my available hours for bookings? Settings → Calendar → Availability tab. Toggle each weekday on/off and set start/end times. Add date-specific overrides for holidays or special days.
+- How do I set minimum notice for bookings? Settings → Calendar → Booking Rules → Minimum Scheduling Notice. Set to 0 for same-day, up to 72 hours.
+- How do I add a time buffer between appointments? Settings → Calendar → Booking Rules → Pre-buffer and Post-buffer. These block the calendar before/after each booking so you have prep or debrief time.
+- Why do I see Google Calendar events on my StoryVenue calendar? If you've connected Google Calendar (Settings → Calendar → Connections), your Google events display as read-only chips on the StoryVenue calendar for full-schedule visibility.
+- How do I call or text a lead without opening their full profile? From the Kanban board, hover the lead card — action buttons (Call, SMS, Email, Notes, Tags, Calendar) appear at the bottom of the card for quick access.
+- How do I book an appointment from a lead card? Hover the lead card on the Kanban board → click the Calendar icon → the New Event modal opens pre-filled with the contact's info.
+- How do I schedule an appointment from inside a conversation thread? Open the conversation thread → click the Profile button to open the contact's slide-over profile → go to the Schedule tab → book the appointment there.
 - What's the difference between Email Templates, Campaigns, and Automations? Templates are reusable starting designs (never sent). Campaigns are one-off broadcasts (Design → Recipients → Review). Automations are multi-step drip sequences triggered by an event (new lead, tag added, etc.) where each step has its own delay. All three use the same Flodesk-style builder.
 - How do I add a block to my email? Open any template/campaign/automation step → drag any tile from the right-panel block palette onto the canvas. A blue drop indicator shows where it will land. You can drop at any position including the very last slot.
 - Why couldn't I drop a new block at the bottom of the email? That was a bug — it's been fixed. Dropping at the last position now works. If it still misbehaves, hard-refresh.

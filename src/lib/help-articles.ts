@@ -378,6 +378,119 @@ Use Sync Now to import all upcoming Calendly events at any time (useful after fi
 To disconnect, click Disconnect on the Calendly card. Your existing calendar events are not deleted.`,
       },
       {
+        id: 'cal-settings-overview',
+        title: 'Calendar Settings — overview of all tabs',
+        tags: ['calendar settings', 'settings', 'availability', 'booking rules', 'google calendar', 'connections', 'notifications', 'timezone'],
+        body: `Settings → Calendar opens a five-tab configuration hub for everything related to how your calendar works and what happens when appointments are booked.
+
+General tab
+Set your calendar timezone (used for all slot display and availability hours) and a privacy option to hide client names from synced calendar events.
+
+Connections tab
+Connect your Google account for two-way sync:
+- Link a specific Google Calendar to receive new StoryVenue events
+- Choose Conflict Calendars — any Google Calendar whose events should block your availability (personal events, team meetings, etc.)
+- Google Calendar events from connected/conflict calendars show as read-only chips on your StoryVenue calendar so your full schedule is visible in one place
+
+Availability tab
+Set your weekly working hours (which days and times show as bookable) and add date-specific overrides — block a day entirely or set custom hours for a holiday or special event.
+
+Booking Rules tab
+Control how bookings work:
+- Meeting Duration and Interval — how long each slot is and how far apart they start
+- Minimum Scheduling Notice — how far ahead someone must book (0 – 72 hours)
+- Date Range — how far out slots are visible to bookers
+- Pre-buffer / Post-buffer — blocked time before and after each appointment for prep or debrief
+- Max bookings per day / slot
+
+Notifications tab
+Manage email and SMS notification templates for all appointment lifecycle events (confirmation, cancellation, reschedule, reminder, follow-up). See the Calendar Appointment Notifications articles for full details.`,
+      },
+      {
+        id: 'cal-settings-google-sync',
+        title: 'Connecting Google Calendar for two-way sync',
+        tags: ['google calendar', 'two way sync', 'connections', 'conflict calendar', 'block availability', 'google events', 'google account'],
+        body: `Settings → Calendar → Connections lets you connect your Google account for a two-way sync between StoryVenue and Google Calendar.
+
+Connecting your Google account
+1. Go to Settings → Calendar → Connections tab
+2. Click "Connect Google Calendar"
+3. Sign in with your Google account and grant the requested permissions
+4. Once connected, your Google Calendars appear in a dropdown — pick the one where new StoryVenue events should be written (Linked Calendar)
+
+After connecting
+- New StoryVenue events are automatically added to your selected Google Calendar
+- When you update or cancel a StoryVenue event, it updates in Google Calendar as well
+- Google Calendar events appear as read-only chips on your StoryVenue calendar view — you see your full personal and professional schedule in one place
+
+Conflict Calendars
+In the Connections tab, check any Google Calendars whose events should block your availability:
+- When that calendar has an event at a given time, that slot becomes unavailable on your public booking page
+- Use this for personal appointments, team-wide meetings, or any calendar you don't want double-booked over
+
+Disconnecting
+Click Disconnect in the Connections tab. StoryVenue events already written to Google Calendar are not automatically deleted.
+
+If the connection stops working
+Google OAuth tokens expire. Return to Settings → Calendar → Connections and reconnect. This is usually required after a Google account password change or permission revocation.`,
+      },
+      {
+        id: 'cal-settings-availability',
+        title: 'Setting your weekly availability and date overrides',
+        tags: ['availability', 'working hours', 'schedule', 'days off', 'hours', 'holiday', 'override', 'blocked date'],
+        body: `Settings → Calendar → Availability controls which days and hours appear as bookable on your public scheduling page.
+
+Weekly working hours
+- Toggle each day of the week on or off
+- For enabled days, set a Start Time and End Time
+- These become the bookable windows for that day every week
+
+Example setup: Monday–Friday 9 AM – 5 PM, Saturday 10 AM – 2 PM, Sunday off.
+
+Date-specific overrides
+Add overrides for individual dates that differ from your weekly pattern:
+- Block a day entirely (mark as unavailable) — useful for holidays, travel, staff events
+- Set custom hours for a specific date — e.g. only 11 AM – 1 PM on a particular Friday
+- Add an optional label like "Venue closed" or "Staff retreat" to remember why
+
+To add an override:
+1. Click "+ Add date override"
+2. Pick the date
+3. Choose "Unavailable all day" OR set custom start/end times
+4. Add a label (optional) → Save
+
+Overrides stack on top of your weekly hours — a day marked unavailable will show no slots even if the weekly schedule has that day enabled.
+
+Changes take effect immediately for all future booking requests.`,
+      },
+      {
+        id: 'cal-settings-booking-rules',
+        title: 'Booking rules — duration, notice, buffers, and limits',
+        tags: ['booking rules', 'meeting duration', 'notice', 'buffer', 'min notice', 'max bookings', 'slot interval', 'date range'],
+        body: `Settings → Calendar → Booking Rules defines how appointment slots are structured and constrained for online bookings.
+
+Meeting Duration
+The default length of a bookable appointment. Options: 15, 30, 45, 60, 90, 120, 180, or 240 minutes. This is the block of time reserved when someone books.
+
+Meeting Interval
+How far apart slot start times are. If duration is 60 min and interval is 30 min, slots start at :00 and :30 — the second person can book starting half-way through the previous slot window. Use this to offer more time options without enabling true overlap.
+
+Minimum Scheduling Notice
+How far in advance a booking must be made. Set to 0 to allow same-day bookings, or up to 72 hours to require at least 3 days' notice. Any slots within this window are hidden from the booker.
+
+Date Range
+How many days into the future slots are visible. Options: 7, 14, 30, 60, 90, 180, or 365 days. Keeps bookers from scheduling a year in advance if your schedule changes frequently.
+
+Pre-buffer
+Blocks time BEFORE each appointment. For example, a 30-minute pre-buffer means no other slot can end within 30 minutes of your next booking — giving you prep time.
+
+Post-buffer
+Blocks time AFTER each appointment for debrief, cleanup, or travel. A 60-minute post-buffer means the next available slot starts 60 minutes after the previous booking ends.
+
+Max Bookings per Day / per Slot
+Caps on how many bookings are accepted. "Per slot" caps simultaneous bookings at the same time; "per day" caps the total for a calendar day. Leave at 0 for no limit.`,
+      },
+      {
         id: 'cal-availability',
         title: 'Public availability page',
         tags: ['availability', 'public', 'share', 'open dates', 'prospects', 'widget'],
@@ -493,6 +606,46 @@ If the test fails
     iconName: 'MessageCircle',
     color: '#0d9488',
     articles: [
+      {
+        id: 'conversations-profile-drawer',
+        title: 'Opening a contact profile from inside a conversation',
+        tags: ['conversations', 'contact profile', 'profile drawer', 'slide over', 'schedule', 'booking', 'contact details'],
+        body: `You can view a contact's full profile — and book an appointment for them — without ever leaving the Conversations inbox.
+
+How to open the profile drawer
+1. Open a conversation thread (Conversations → pick a contact from the list).
+2. Click the Profile button in the thread header (top-right area of the open thread).
+3. The contact's full profile slides in from the right side of the screen.
+
+What's inside the drawer
+The drawer has all the same tabs as the standalone contact profile page:
+- Overview — name, email, phone, pipeline stage, wedding details
+- Notes — add or view notes for this contact
+- Activity — full timeline of stage changes, calls logged, and messages
+- Payments — any proposals or invoices linked to this contact
+- Tasks — to-do items for this contact
+- Documents — uploaded contracts and files
+- Schedule — book a new appointment for this contact
+
+Booking from the Schedule tab
+Click the Schedule tab inside the drawer → click "Book appointment" → the New Event modal opens with the contact pre-filled. Save the event and it appears on your calendar immediately.
+
+You can dismiss the drawer by clicking anywhere outside it or pressing Escape. It does not close your active thread.`,
+      },
+      {
+        id: 'conversations-stage-badge',
+        title: 'Pipeline stage badge in the conversations thread list',
+        tags: ['conversations', 'pipeline', 'stage', 'badge', 'funnel', 'lead status'],
+        body: `The thread list in Conversations shows a small colored stage pill next to each contact's name — the same stage pill you see on the Kanban board and in the contact profile.
+
+What it tells you
+The stage badge shows where the contact currently sits in your sales pipeline without leaving the inbox. If they've been moved from "Inquiry" to "Proposal Sent," the badge updates automatically the next time the thread list loads.
+
+Why it matters
+When you're working through your inbox, you can immediately spot which threads belong to hot leads (e.g. "Proposal Sent") vs. earlier-stage inquiries — and prioritize who to follow up with first.
+
+Clicking the thread still opens the conversation normally. To change the stage, open the contact profile (Profile button in the thread) → Overview tab → click a stage pill.`,
+      },
       {
         id: 'conversations-overview',
         title: 'Conversations — team notes vs email to contact',
@@ -1005,6 +1158,29 @@ Quick actions
 - Create customer (saves this lead as a customer in your CRM)
 - Schedule appointment (see next article)
 - Delete — removes the lead permanently (requires confirmation). Deleting a lead also removes the matching contact record.`,
+      },
+      {
+        id: 'leads-card-actions',
+        title: 'Lead card quick action buttons',
+        tags: ['lead card', 'quick actions', 'call', 'sms', 'email', 'notes', 'tags', 'calendar', 'kanban card'],
+        body: `Every lead card on the Kanban board has a row of quick action buttons that let you take common actions without opening the full lead drawer.
+
+How to access card actions
+On desktop: hover over any lead card — the action buttons appear at the bottom of the card.
+On mobile: tap the card once to reveal the action bar.
+
+Available actions
+- Call — opens the quick log-a-call input to record a phone conversation on this lead
+- SMS — opens a quick SMS composer to text the contact via your connected GHL number
+- Email — opens a quick email composer to send a message to the contact
+- Notes — opens a quick note input so you can jot something without opening the drawer
+- Tags — manage the contact's marketing tags directly from the card
+- Calendar — opens the New Event modal with this contact pre-filled so you can book an appointment instantly
+
+Why use card actions?
+When you're scanning the Kanban board and need to take a quick action on several leads in a row, these buttons save you from opening and closing the full drawer for each one. They're designed for speed when you're in a workflow.
+
+The full lead drawer (click the card title or name) still gives you access to everything — notes history, audit trail, full edit fields, and linked proposals.`,
       },
       {
         id: 'leads-schedule-appointment',
@@ -2058,11 +2234,14 @@ To disconnect: click Disconnect on the Calendly card.`,
       },
       {
         id: 'int-google-cal',
-        title: 'Google Calendar, Outlook & Apple Calendar sync',
+        title: 'Google Calendar, Outlook & Apple Calendar sync (iCal)',
         tags: ['google calendar', 'outlook', 'apple calendar', 'ical', 'sync', 'subscribe', 'phone calendar'],
-        body: `Sync your StoryVenue calendar to any calendar app using an iCal subscription feed. This is one-way: StoryVenue events appear in your calendar app. Events added in Google/Outlook do not flow back into StoryVenue.
+        body: `There are two ways to sync StoryVenue with Google Calendar. The iCal method (described here) is a one-way read-only feed for any calendar app. For full two-way Google Calendar sync (including seeing your Google events inside StoryVenue and blocking availability), see Settings → Calendar → Connections — that is a separate, more powerful integration.
 
+iCal subscription feed (one-way, works with Google, Outlook, and Apple Calendar)
 Find your iCal URL: Settings → Integrations → Google Calendar / Outlook & Apple Calendar card.
+
+This is one-way: StoryVenue events appear in your calendar app. Events added in Google/Outlook do not flow back into StoryVenue.
 
 Google Calendar:
 1. Open Google Calendar on desktop
@@ -2079,7 +2258,10 @@ Apple Calendar (Mac):
 
 iPhone: Settings → Calendar → Accounts → Add Account → Other → Add Subscribed Calendar.
 
-Updates may take up to 24 hours depending on the calendar app.`,
+Updates may take up to 24 hours depending on the calendar app.
+
+For two-way sync (Google Calendar only)
+If you want StoryVenue events written to Google Calendar AND Google events visible inside StoryVenue, go to Settings → Calendar → Connections and connect your Google account there. See the "Connecting Google Calendar for two-way sync" article for details.`,
       },
       {
         id: 'int-quickbooks',
@@ -2105,6 +2287,122 @@ To disconnect: click Disconnect. Your existing QuickBooks data is not deleted.`,
 You'll be redirected to FreshBooks to authorise access. After approving, the card shows Connected.
 
 Invoices and charges sync to FreshBooks automatically. Use Sync Now for a manual sync. Disconnect at any time from the same page.`,
+      },
+    ],
+  },
+  {
+    id: 'account',
+    label: 'Account & Login',
+    iconName: 'UserCircle',
+    color: '#6366f1',
+    articles: [
+      {
+        id: 'account-login',
+        title: 'Logging in and resetting your password',
+        tags: ['login', 'sign in', 'password', 'forgot password', 'reset', 'email password', 'authentication'],
+        body: `StoryVenue uses email and password to sign in. There are no magic links or one-time codes.
+
+Logging in
+Go to app.storyvenue.com/login. Enter your email address and password, then click Sign In.
+
+Forgot your password?
+1. Click "Forgot password?" on the login page
+2. Enter your registered email address
+3. Check your inbox for a password reset link
+4. Click the link and set a new password
+
+The reset link expires after a short period. If it has expired, go through the forgot-password flow again.
+
+First-time team member login
+If you received an invitation email, click Accept Invitation in the email. You'll be prompted to set your password on first login.
+
+If you're locked out
+Make sure you're using the email address the account was created with. Check spam/junk for the reset email. If you still can't access the account, contact StoryVenue support.`,
+      },
+      {
+        id: 'account-update-profile',
+        title: 'Updating your email or password',
+        tags: ['update email', 'change email', 'change password', 'update password', 'my profile', 'account settings'],
+        body: `You can update your email address and password at any time from your profile page.
+
+How to update
+1. Click your name or avatar in the sidebar (bottom-left area)
+2. Click "My Profile"
+3. Update your first name, last name, email address, or password
+4. Click Save
+
+Important notes
+- No current password re-entry is required — just enter the new value and save
+- If you change your email address, use the new address the next time you log in
+- Password changes take effect immediately — you stay logged in on your current device
+
+Team members can also update their own profile (name and email) the same way. Changing a team member's email does not affect their role or permissions.`,
+      },
+      {
+        id: 'account-couples-portal',
+        title: 'Couples portal — client account access',
+        tags: ['couples', 'client login', 'couple account', 'couple portal', 'client portal', 'client access', 'couple signup'],
+        body: `Couples (your clients) can create their own StoryVenue account to view their proposals, invoices, and documents — no need to forward emails or log in as a team member.
+
+Couple signup
+Couples sign up at app.storyvenue.com/couple/signup with:
+- First name and last name
+- Email address
+- Phone number
+- Password
+
+After signing up they are logged in automatically — no "check your email" step.
+
+Couple login
+app.storyvenue.com/couple/login — email and password.
+
+Forgot password
+Same as venue owners: click "Forgot password?" → receive a reset email → set a new password.
+
+What couples can see
+After logging in, couples see only their own records — the proposals and documents sent to them from your venue. They cannot see other contacts, your full calendar, or any internal data.
+
+Updating couple profile
+Couples can update their first name, last name, and phone by clicking their name in the header after logging in.
+
+Admin management
+Super admins can view, search, and manage all couple accounts from the admin Couples tab.`,
+      },
+    ],
+  },
+  {
+    id: 'storypay',
+    label: 'StoryPay™',
+    iconName: 'CreditCard',
+    color: '#10b981',
+    articles: [
+      {
+        id: 'storypay-overview',
+        title: 'What is StoryPay™ and how do I apply?',
+        tags: ['storypay', 'payment processing', 'lunarpay', 'fortis', 'apply', 'merchant', 'onboarding', 'payments', 'accept payments'],
+        body: `StoryPay™ is the payment processing layer inside StoryVenue, powered by LunarPay (Fortis). It enables you to accept credit card payments, installment plans, and subscriptions for your proposals and invoices.
+
+Do I need StoryPay™?
+To collect online payments from clients (proposals/invoices with payment enabled), you must apply for StoryPay™ and complete merchant onboarding. Until then, the proposals and invoices you send won't have an active payment button for your clients.
+
+Applying for StoryPay™
+1. Go to Settings → StoryPay (or click the "Apply for StoryPay™" prompt that appears in payment areas)
+2. The LunarPay onboarding wizard walks you through:
+   - Business information (legal name, address, industry)
+   - Owner details (name, date of birth, SSN last 4)
+   - Banking details (where payments are deposited)
+3. Submit for review. Fortis processes the application — approval typically takes 1–3 business days.
+
+Once approved
+- The StoryPay™ banner disappears from Settings
+- Proposals and invoices can accept live credit card payments
+- Funds are deposited into the bank account you provided
+
+Security note
+Card numbers from clients go directly to Fortis servers — StoryVenue never sees or stores raw card data. The integration is PCI SAQ-A compliant.
+
+If payments are showing as unavailable
+Check that your LunarPay/Fortis onboarding status shows as approved in Settings → StoryPay. If you believe it should be active, contact StoryVenue support with your business name and application date.`,
       },
     ],
   },
