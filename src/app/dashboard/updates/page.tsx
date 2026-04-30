@@ -253,22 +253,25 @@ function FeatureRequestsTab() {
  }
 
  async function handleVote(req: FeatureRequest) {
- // useRef-based lock is synchronous — prevents double-fire even before React
- // re-renders with the updated votingId state.
  if (votingInFlight.current.has(req.id)) return;
  votingInFlight.current.add(req.id);
  setVotingId(req.id);
  try {
- const res = await fetch(`/api/feature-requests/${req.id}/vote`, { method: 'POST' });
- if (!res.ok) return;
- const { voted, vote_count } = await res.json() as { voted: boolean; vote_count: number };
- setRequests(prev =>
- [...prev.map(r => r.id === req.id ? { ...r, has_voted: voted, vote_count } : r)]
- .sort((a, b) => b.vote_count - a.vote_count)
- );
+   const res = await fetch(`/api/feature-requests/${req.id}/vote`, { method: 'POST' });
+   const data = await res.json() as { voted?: boolean; vote_count?: number; error?: string };
+   if (!res.ok) {
+     setError(data.error ?? 'Failed to record vote. Please try again.');
+     return;
+   }
+   setRequests(prev =>
+     [...prev.map(r => r.id === req.id ? { ...r, has_voted: data.voted ?? false, vote_count: data.vote_count ?? r.vote_count } : r)]
+     .sort((a, b) => b.vote_count - a.vote_count)
+   );
+ } catch {
+   setError('Network error — please try again.');
  } finally {
- votingInFlight.current.delete(req.id);
- setVotingId(null);
+   votingInFlight.current.delete(req.id);
+   setVotingId(null);
  }
  }
 
