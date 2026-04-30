@@ -118,6 +118,8 @@ export async function GET(req: NextRequest) {
   if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
     return NextResponse.json({ error: 'date param (YYYY-MM-DD) required' }, { status: 400 });
   }
+  // Optional: override rules with a specific calendar's settings
+  const calendarId = searchParams.get('calendar_id');
 
   type CalSettings = {
     timezone?: string;
@@ -132,21 +134,47 @@ export async function GET(req: NextRequest) {
     google_linked_calendar_id?: string | null;
   };
 
-  // Fetch settings (including Google tokens)
-  const { data: settings } = await supabaseAdmin
-    .from('venue_calendar_settings')
-    .select(
-      'timezone, meeting_duration_min, meeting_interval_min, pre_buffer_min, post_buffer_min, ' +
-      'google_connected, google_access_token, google_refresh_token, google_token_expiry, google_linked_calendar_id',
-    )
-    .eq('venue_id', venueId)
-    .maybeSingle() as unknown as { data: CalSettings | null };
+  type CalendarOverride = {
+    meeting_duration_min?:      number | null;
+    meeting_interval_min?:      number | null;
+    pre_buffer_min?:            number | null;
+    post_buffer_min?:           number | null;
+    min_scheduling_notice_hrs?: number | null;
+    date_range_days?:           number | null;
+    max_bookings_per_day?:      number | null;
+    max_bookings_per_slot?:     number | null;
+  };
+
+  // Fetch venue-wide settings (including Google tokens)
+  const [{ data: settings }, calOverrideResult] = await Promise.all([
+    supabaseAdmin
+      .from('venue_calendar_settings')
+      .select(
+        'timezone, meeting_duration_min, meeting_interval_min, pre_buffer_min, post_buffer_min, ' +
+        'google_connected, google_access_token, google_refresh_token, google_token_expiry, google_linked_calendar_id',
+      )
+      .eq('venue_id', venueId)
+      .maybeSingle() as unknown as Promise<{ data: CalSettings | null }>,
+
+    // Fetch per-calendar overrides if a calendar_id was passed
+    calendarId
+      ? supabaseAdmin
+          .from('venue_calendars')
+          .select('meeting_duration_min, meeting_interval_min, pre_buffer_min, post_buffer_min, min_scheduling_notice_hrs, date_range_days, max_bookings_per_day, max_bookings_per_slot')
+          .eq('id', calendarId)
+          .eq('venue_id', venueId)
+          .maybeSingle() as unknown as Promise<{ data: CalendarOverride | null }>
+      : Promise.resolve({ data: null as CalendarOverride | null }),
+  ]);
+
+  const calOverride = calOverrideResult.data;
 
   const tz = settings?.timezone ?? 'America/New_York';
-  const duration = settings?.meeting_duration_min ?? 60;
-  const interval = settings?.meeting_interval_min ?? 60;
-  const preBuffer = settings?.pre_buffer_min ?? 0;
-  const postBuffer = settings?.post_buffer_min ?? 0;
+  // Per-calendar rules override venue-wide defaults when non-null
+  const duration   = calOverride?.meeting_duration_min      ?? settings?.meeting_duration_min ?? 60;
+  const interval   = calOverride?.meeting_interval_min      ?? settings?.meeting_interval_min ?? 60;
+  const preBuffer  = calOverride?.pre_buffer_min             ?? settings?.pre_buffer_min       ?? 0;
+  const postBuffer = calOverride?.post_buffer_min            ?? settings?.post_buffer_min      ?? 0;
 
   const date = new Date(dateStr + 'T00:00:00');
   const dayOfWeek = date.getDay(); // 0=Sun

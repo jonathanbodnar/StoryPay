@@ -14,6 +14,15 @@ export type VenueCalendar = {
   is_default: boolean;
   sort_order: number;
   created_at: string;
+  // Per-calendar booking rule overrides (null = use venue-wide default)
+  meeting_duration_min:      number | null;
+  meeting_interval_min:      number | null;
+  min_scheduling_notice_hrs: number | null;
+  date_range_days:           number | null;
+  pre_buffer_min:            number | null;
+  post_buffer_min:           number | null;
+  max_bookings_per_day:      number | null;
+  max_bookings_per_slot:     number | null;
 };
 
 /** GET /api/venue-calendars — list all calendars for the authenticated venue */
@@ -49,20 +58,28 @@ export async function POST(request: NextRequest) {
     color?: string;
     description?: string;
     is_default?: boolean;
+    meeting_duration_min?:      number | null;
+    meeting_interval_min?:      number | null;
+    min_scheduling_notice_hrs?: number | null;
+    date_range_days?:           number | null;
+    pre_buffer_min?:            number | null;
+    post_buffer_min?:           number | null;
+    max_bookings_per_day?:      number | null;
+    max_bookings_per_slot?:     number | null;
   };
 
   const name = body.name?.trim();
   if (!name) return NextResponse.json({ error: 'Name is required' }, { status: 400 });
 
-  // Enforce 3-calendar maximum per venue
+  // Enforce 5-calendar maximum per venue
   const { count, error: countErr } = await supabaseAdmin
     .from('venue_calendars')
     .select('id', { count: 'exact', head: true })
     .eq('venue_id', venueId);
   if (countErr) return NextResponse.json({ error: countErr.message }, { status: 500 });
-  if ((count ?? 0) >= 3) {
+  if ((count ?? 0) >= 5) {
     return NextResponse.json(
-      { error: 'You can have a maximum of 3 calendars. Delete one before creating another.' },
+      { error: 'You can have a maximum of 5 calendars. Delete one before creating another.' },
       { status: 400 },
     );
   }
@@ -85,6 +102,14 @@ export async function POST(request: NextRequest) {
       description: body.description?.trim() || null,
       is_default: body.is_default ?? false,
       sort_order: 0,
+      meeting_duration_min:      body.meeting_duration_min      ?? null,
+      meeting_interval_min:      body.meeting_interval_min      ?? null,
+      min_scheduling_notice_hrs: body.min_scheduling_notice_hrs ?? null,
+      date_range_days:           body.date_range_days           ?? null,
+      pre_buffer_min:            body.pre_buffer_min            ?? null,
+      post_buffer_min:           body.post_buffer_min           ?? null,
+      max_bookings_per_day:      body.max_bookings_per_day      ?? null,
+      max_bookings_per_slot:     body.max_bookings_per_slot     ?? null,
     })
     .select()
     .maybeSingle();

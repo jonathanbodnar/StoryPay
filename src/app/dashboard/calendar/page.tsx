@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
   ChevronLeft, ChevronRight, Plus, X, Loader2, Calendar,
   AlertTriangle, ExternalLink, Info, Repeat,
-  Search, Pencil, Trash2, Check, User, Settings,
+  Search, Pencil, Trash2, Check, User, Settings, Sparkles,
 } from 'lucide-react';
 import { describeRule, type RecurrenceRule } from '@/lib/recurrence';
 import { toTitleCase } from '@/lib/utils';
@@ -278,6 +278,15 @@ export default function CalendarPage() {
   const [manageSpaces, setManageSpaces]     = useState(false);
   const [newSpaceName, setNewSpaceName]     = useState('');
   const [newSpaceColor, setNewSpaceColor]   = useState('#6366f1');
+
+  // AI / search panel
+  const [aiPanelOpen,    setAiPanelOpen]    = useState(false);
+  const [aiQuery,        setAiQuery]        = useState('');
+  const [aiSearching,    setAiSearching]    = useState(false);
+  const [aiAnswer,       setAiAnswer]       = useState<string | null>(null);
+  const [aiEvents,       setAiEvents]       = useState<CalEvent[]>([]);
+  const [aiRan,          setAiRan]          = useState(false);
+  const aiInputRef = useRef<HTMLInputElement>(null);
   const [editingSpaceId, setEditingSpaceId] = useState<string | null>(null);
   const [editSpaceDraft, setEditSpaceDraft] = useState<{ name: string; color: string }>({ name: '', color: '#6366f1' });
   const [spaceBusy, setSpaceBusy]           = useState(false);
@@ -849,6 +858,39 @@ export default function CalendarPage() {
   }
 
 
+  // ── AI / keyword search ───────────────────────────────────────────────────
+  async function runAiSearch() {
+    if (!aiQuery.trim()) return;
+    setAiSearching(true);
+    setAiRan(true);
+    setAiAnswer(null);
+    setAiEvents([]);
+    try {
+      const res = await fetch('/api/calendar/ai-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: aiQuery.trim() }),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        setAiAnswer(d.answer ?? null);
+        setAiEvents(d.events ?? []);
+      }
+    } catch {
+      // silently ignore
+    }
+    setAiSearching(false);
+  }
+
+  function openAiPanel() {
+    setAiPanelOpen(true);
+    setAiQuery('');
+    setAiAnswer(null);
+    setAiEvents([]);
+    setAiRan(false);
+    setTimeout(() => aiInputRef.current?.focus(), 80);
+  }
+
   // ── Derived counts ────────────────────────────────────────────────────────
   const visibleCount  = events.filter(e => activeSpaceFilter === 'all' || e.space_id === activeSpaceFilter).length;
   const weddingCount  = events.filter(e => e.event_type === 'wedding' && (activeSpaceFilter === 'all' || e.space_id === activeSpaceFilter)).length;
@@ -987,6 +1029,13 @@ export default function CalendarPage() {
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={openAiPanel}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+              title="AI Calendar Search"
+            >
+              <Sparkles size={15} className="text-violet-500" /> Search &amp; Ask AI
+            </button>
             <Link
               href="/dashboard/settings/calendar"
               className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
@@ -1839,6 +1888,173 @@ export default function CalendarPage() {
                     </button>
                   </div>
                 </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── AI Calendar Search Panel ── */}
+      {aiPanelOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/30"
+            onClick={() => setAiPanelOpen(false)}
+          />
+          {/* Panel */}
+          <div className="relative w-full max-w-md bg-white shadow-2xl flex flex-col h-full overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-gray-200 shrink-0">
+              <div className="flex items-center gap-2">
+                <Sparkles size={18} className="text-violet-500" />
+                <div>
+                  <p className="font-semibold text-sm text-gray-900">Calendar Search</p>
+                  <p className="text-[11px] text-gray-400">Ask questions or search events</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setAiPanelOpen(false)}
+                className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Search input */}
+            <div className="px-5 py-4 border-b border-gray-100 shrink-0">
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  <input
+                    ref={aiInputRef}
+                    type="text"
+                    placeholder={`"How many tours this month?" or "Jennifer Smith"`}
+                    value={aiQuery}
+                    onChange={(e) => setAiQuery(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void runAiSearch(); } }}
+                    className="w-full rounded-xl border border-gray-200 pl-9 pr-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none"
+                  />
+                </div>
+                <button
+                  onClick={() => void runAiSearch()}
+                  disabled={aiSearching || !aiQuery.trim()}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-brand-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-800 disabled:opacity-40 shrink-0"
+                >
+                  {aiSearching ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                  Ask
+                </button>
+              </div>
+
+              {/* Quick-suggest prompts */}
+              {!aiRan && (
+                <div className="flex flex-wrap gap-1.5 mt-3">
+                  {[
+                    'What\'s happening this week?',
+                    'How many tours are scheduled?',
+                    'Any events this weekend?',
+                    'Who has an appointment tomorrow?',
+                    'Upcoming weddings',
+                  ].map((prompt) => (
+                    <button
+                      key={prompt}
+                      type="button"
+                      onClick={() => { setAiQuery(prompt); void runAiSearch(); }}
+                      className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] text-gray-600 hover:border-gray-400 hover:bg-white transition"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Results */}
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+              {aiSearching && (
+                <div className="flex flex-col items-center justify-center py-12 gap-3 text-gray-400">
+                  <Loader2 size={24} className="animate-spin text-violet-400" />
+                  <p className="text-sm">Searching your calendar…</p>
+                </div>
+              )}
+
+              {!aiSearching && aiRan && (
+                <>
+                  {/* AI Answer */}
+                  {aiAnswer && (
+                    <div className="rounded-xl border border-violet-200 bg-violet-50 p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Sparkles size={13} className="text-violet-500 shrink-0" />
+                        <span className="text-[11px] font-semibold uppercase tracking-wider text-violet-600">AI Summary</span>
+                      </div>
+                      <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{aiAnswer}</p>
+                    </div>
+                  )}
+
+                  {/* Matching events */}
+                  {aiEvents.length > 0 ? (
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-2">
+                        Matching Events ({aiEvents.length})
+                      </p>
+                      <div className="space-y-2">
+                        {aiEvents.map((e) => {
+                          const cal = venueCalendars.find((c) => c.id === e.calendar_id);
+                          const color = cal?.color ?? evtColor(e);
+                          return (
+                            <button
+                              key={e.id}
+                              type="button"
+                              onClick={() => { setSelectedEvent(e); setAiPanelOpen(false); }}
+                              className="w-full text-left rounded-xl border border-gray-200 bg-white px-4 py-3 hover:border-gray-300 hover:bg-gray-50/60 transition"
+                            >
+                              <div className="flex items-start gap-2.5">
+                                <div
+                                  className="mt-0.5 w-2.5 h-2.5 rounded-full shrink-0"
+                                  style={{ backgroundColor: color }}
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-medium text-gray-900 truncate">{e.title}</p>
+                                  <p className="text-[11px] text-gray-500 mt-0.5">
+                                    {new Date(e.start_at).toLocaleDateString('en-US', {
+                                      weekday: 'short', month: 'short', day: 'numeric',
+                                      timeZone: venueTz,
+                                    })}
+                                    {!e.all_day && ` · ${fmtTime(e.start_at, venueTz)}`}
+                                  </p>
+                                  {e.customer_email && (
+                                    <p className="text-[11px] text-gray-400 truncate">{e.customer_email}</p>
+                                  )}
+                                </div>
+                                <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                                  e.status === 'confirmed' ? 'bg-green-50 text-green-700' :
+                                  e.status === 'cancelled' ? 'bg-red-50 text-red-600' :
+                                  'bg-gray-100 text-gray-500'
+                                }`}>{e.status}</span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    !aiAnswer && (
+                      <div className="text-center py-10 text-gray-400">
+                        <Calendar size={28} className="mx-auto mb-2 opacity-40" />
+                        <p className="text-sm">No matching events found.</p>
+                      </div>
+                    )
+                  )}
+                </>
+              )}
+
+              {/* Empty state before search */}
+              {!aiRan && !aiSearching && (
+                <div className="text-center py-12 text-gray-400">
+                  <Sparkles size={28} className="mx-auto mb-2 opacity-40 text-violet-300" />
+                  <p className="text-sm font-medium text-gray-500">Ask anything about your calendar</p>
+                  <p className="text-xs mt-1">Try a question or search by contact name, event type, or date range.</p>
+                </div>
               )}
             </div>
           </div>

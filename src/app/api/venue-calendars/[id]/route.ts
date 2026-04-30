@@ -20,13 +20,29 @@ export async function PUT(
     description?: string;
     is_default?: boolean;
     sort_order?: number;
+    meeting_duration_min?:      number | null;
+    meeting_interval_min?:      number | null;
+    min_scheduling_notice_hrs?: number | null;
+    date_range_days?:           number | null;
+    pre_buffer_min?:            number | null;
+    post_buffer_min?:           number | null;
+    max_bookings_per_day?:      number | null;
+    max_bookings_per_slot?:     number | null;
   };
 
   const updates: Record<string, unknown> = {};
-  if ('name'        in body) updates.name        = body.name?.trim();
-  if ('color'       in body) updates.color       = body.color;
-  if ('description' in body) updates.description = body.description?.trim() || null;
-  if ('sort_order'  in body) updates.sort_order  = body.sort_order;
+  if ('name'                     in body) updates.name                     = body.name?.trim();
+  if ('color'                    in body) updates.color                    = body.color;
+  if ('description'              in body) updates.description              = body.description?.trim() || null;
+  if ('sort_order'               in body) updates.sort_order               = body.sort_order;
+  if ('meeting_duration_min'     in body) updates.meeting_duration_min     = body.meeting_duration_min;
+  if ('meeting_interval_min'     in body) updates.meeting_interval_min     = body.meeting_interval_min;
+  if ('min_scheduling_notice_hrs'in body) updates.min_scheduling_notice_hrs= body.min_scheduling_notice_hrs;
+  if ('date_range_days'          in body) updates.date_range_days          = body.date_range_days;
+  if ('pre_buffer_min'           in body) updates.pre_buffer_min           = body.pre_buffer_min;
+  if ('post_buffer_min'          in body) updates.post_buffer_min          = body.post_buffer_min;
+  if ('max_bookings_per_day'     in body) updates.max_bookings_per_day     = body.max_bookings_per_day;
+  if ('max_bookings_per_slot'    in body) updates.max_bookings_per_slot    = body.max_bookings_per_slot;
 
   if ('is_default' in body && body.is_default) {
     // Clear existing default for this venue first

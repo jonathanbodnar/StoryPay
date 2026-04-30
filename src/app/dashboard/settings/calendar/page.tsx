@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Clock, Globe, Link2, CalendarDays, Bell, Settings2,
-  ChevronRight, CheckCircle2, XCircle, RefreshCw, Plus,
+  ChevronRight, ChevronDown, CheckCircle2, XCircle, RefreshCw, Plus,
   Trash2, Edit3, Info, Check, X, AlertTriangle, Loader2, Save, Layers,
 } from 'lucide-react';
 
@@ -1149,6 +1149,15 @@ interface VenueCalendar {
   color: string;
   description: string | null;
   is_default: boolean;
+  // Per-calendar booking rule overrides (null = use venue-wide default)
+  meeting_duration_min?:      number | null;
+  meeting_interval_min?:      number | null;
+  min_scheduling_notice_hrs?: number | null;
+  date_range_days?:           number | null;
+  pre_buffer_min?:            number | null;
+  post_buffer_min?:           number | null;
+  max_bookings_per_day?:      number | null;
+  max_bookings_per_slot?:     number | null;
   sort_order: number;
 }
 
@@ -1176,6 +1185,14 @@ function CalendarsTab() {
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState('');
   const [editDesc, setEditDesc] = useState('');
+  const [showEditRules, setShowEditRules] = useState(false);
+  // Per-calendar booking rules in edit form (null = use venue default)
+  const [editDuration, setEditDuration]   = useState<number | null>(null);
+  const [editInterval, setEditInterval]   = useState<number | null>(null);
+  const [editNotice,   setEditNotice]     = useState<number | null>(null);
+  const [editRange,    setEditRange]      = useState<number | null>(null);
+  const [editPreBuf,   setEditPreBuf]     = useState<number | null>(null);
+  const [editPostBuf,  setEditPostBuf]    = useState<number | null>(null);
 
   useEffect(() => {
     fetch('/api/venue-calendars')
@@ -1189,6 +1206,13 @@ function CalendarsTab() {
     setEditName(cal.name);
     setEditColor(cal.color);
     setEditDesc(cal.description ?? '');
+    setShowEditRules(false);
+    setEditDuration(cal.meeting_duration_min      ?? null);
+    setEditInterval(cal.meeting_interval_min      ?? null);
+    setEditNotice  (cal.min_scheduling_notice_hrs ?? null);
+    setEditRange   (cal.date_range_days           ?? null);
+    setEditPreBuf  (cal.pre_buffer_min            ?? null);
+    setEditPostBuf (cal.post_buffer_min           ?? null);
   };
 
   const saveEdit = async (id: string) => {
@@ -1197,7 +1221,15 @@ function CalendarsTab() {
     const res = await fetch(`/api/venue-calendars/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: editName, color: editColor, description: editDesc }),
+      body: JSON.stringify({
+        name: editName, color: editColor, description: editDesc,
+        meeting_duration_min:      editDuration,
+        meeting_interval_min:      editInterval,
+        min_scheduling_notice_hrs: editNotice,
+        date_range_days:           editRange,
+        pre_buffer_min:            editPreBuf,
+        post_buffer_min:           editPostBuf,
+      }),
     });
     const data = await res.json() as VenueCalendar & { error?: string };
     if (data.error) { setError(data.error); } else {
@@ -1253,7 +1285,7 @@ function CalendarsTab() {
   return (
     <div className="max-w-2xl space-y-4">
       <p className="text-sm text-gray-500">
-        Create multiple calendars (e.g. "Tour Calendar", "Phone Calls") to organize events and give each its own notification templates. All calendars appear on one unified view.
+        Create up to 5 calendars (e.g. "Tour Calendar", "Phone Call", "Tasting") each with its own booking rules and notification templates. All appear on one unified calendar view.
       </p>
 
       {error && (
@@ -1294,6 +1326,97 @@ function CalendarsTab() {
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-800"
                   placeholder="Description (optional)"
                 />
+
+                {/* Per-calendar booking rules (expandable) */}
+                <button
+                  type="button"
+                  onClick={() => setShowEditRules((v) => !v)}
+                  className="flex items-center gap-1.5 text-xs font-medium text-brand-700 hover:text-brand-900"
+                >
+                  <ChevronDown size={13} className={`transition-transform ${showEditRules ? 'rotate-180' : ''}`} />
+                  {showEditRules ? 'Hide' : 'Customize'} Booking Rules for this calendar
+                </button>
+
+                {showEditRules && (
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
+                    <p className="text-xs text-gray-500">Override the venue-wide defaults just for this calendar. Leave a field as "Venue default" to inherit the global setting.</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Meeting Duration */}
+                      <div>
+                        <label className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Duration</label>
+                        <select
+                          value={editDuration ?? ''}
+                          onChange={(e) => setEditDuration(e.target.value === '' ? null : Number(e.target.value))}
+                          className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-800 bg-white"
+                        >
+                          <option value="">Venue default</option>
+                          {DURATION_OPTIONS.map((v) => <option key={v} value={v}>{timeLabel(v)}</option>)}
+                        </select>
+                      </div>
+                      {/* Meeting Interval */}
+                      <div>
+                        <label className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Interval</label>
+                        <select
+                          value={editInterval ?? ''}
+                          onChange={(e) => setEditInterval(e.target.value === '' ? null : Number(e.target.value))}
+                          className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-800 bg-white"
+                        >
+                          <option value="">Venue default</option>
+                          {INTERVAL_OPTIONS.map((v) => <option key={v} value={v}>{timeLabel(v)}</option>)}
+                        </select>
+                      </div>
+                      {/* Min Scheduling Notice */}
+                      <div>
+                        <label className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Min Notice</label>
+                        <select
+                          value={editNotice ?? ''}
+                          onChange={(e) => setEditNotice(e.target.value === '' ? null : Number(e.target.value))}
+                          className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-800 bg-white"
+                        >
+                          <option value="">Venue default</option>
+                          {NOTICE_OPTIONS.map((v) => <option key={v} value={v}>{v === 0 ? 'None' : v < 24 ? `${v}h` : `${v / 24}d`}</option>)}
+                        </select>
+                      </div>
+                      {/* Date Range */}
+                      <div>
+                        <label className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Date Range</label>
+                        <select
+                          value={editRange ?? ''}
+                          onChange={(e) => setEditRange(e.target.value === '' ? null : Number(e.target.value))}
+                          className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-800 bg-white"
+                        >
+                          <option value="">Venue default</option>
+                          {[7, 14, 30, 60, 90, 180, 365].map((v) => <option key={v} value={v}>{v}d</option>)}
+                        </select>
+                      </div>
+                      {/* Pre-buffer */}
+                      <div>
+                        <label className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Pre-buffer</label>
+                        <select
+                          value={editPreBuf ?? ''}
+                          onChange={(e) => setEditPreBuf(e.target.value === '' ? null : Number(e.target.value))}
+                          className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-800 bg-white"
+                        >
+                          <option value="">Venue default</option>
+                          {BUFFER_OPTIONS.map((v) => <option key={v} value={v}>{timeLabel(v)}</option>)}
+                        </select>
+                      </div>
+                      {/* Post-buffer */}
+                      <div>
+                        <label className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Post-buffer</label>
+                        <select
+                          value={editPostBuf ?? ''}
+                          onChange={(e) => setEditPostBuf(e.target.value === '' ? null : Number(e.target.value))}
+                          className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-800 bg-white"
+                        >
+                          <option value="">Venue default</option>
+                          {BUFFER_OPTIONS.map((v) => <option key={v} value={v}>{timeLabel(v)}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex gap-2 justify-end">
                   <button onClick={() => setEditId(null)} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
                   <button
@@ -1312,11 +1435,22 @@ function CalendarsTab() {
               <div className="flex items-center gap-3 px-4 py-3">
                 <div className="w-3.5 h-3.5 rounded-full shrink-0" style={{ backgroundColor: cal.color }} />
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm font-semibold text-gray-900 truncate">{cal.name}</p>
                     {cal.is_default && (
                       <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
                         Default
+                      </span>
+                    )}
+                    {/* Show rule overrides at a glance */}
+                    {cal.meeting_duration_min != null && (
+                      <span className="shrink-0 text-[10px] font-medium text-violet-700 bg-violet-50 border border-violet-200 px-1.5 py-0.5 rounded">
+                        {timeLabel(cal.meeting_duration_min)} appts
+                      </span>
+                    )}
+                    {cal.pre_buffer_min != null && (
+                      <span className="shrink-0 text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                        +{cal.pre_buffer_min}m buffer
                       </span>
                     )}
                   </div>
@@ -1354,10 +1488,10 @@ function CalendarsTab() {
         ))}
       </div>
 
-      {/* Create new calendar — hidden when at the 3-calendar limit */}
-      {calendars.length >= 3 ? (
+      {/* Create new calendar — hidden when at the 5-calendar limit */}
+      {calendars.length >= 5 ? (
         <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-700">
-          <strong>Maximum 3 calendars reached.</strong> Delete an existing calendar to create a new one.
+          <strong>Maximum 5 calendars reached.</strong> Delete an existing calendar to create a new one.
         </div>
       ) : showCreate ? (
         <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-4 space-y-3">
@@ -1408,7 +1542,7 @@ function CalendarsTab() {
           onClick={() => setShowCreate(true)}
           className="flex items-center gap-2 rounded-xl border border-dashed border-gray-300 px-4 py-3 text-sm text-gray-500 hover:border-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-colors w-full"
         >
-          <Plus size={14} /> Add calendar <span className="ml-auto text-[11px] text-gray-400">{calendars.length}/3</span>
+          <Plus size={14} /> Add calendar <span className="ml-auto text-[11px] text-gray-400">{calendars.length}/5</span>
         </button>
       )}
 
