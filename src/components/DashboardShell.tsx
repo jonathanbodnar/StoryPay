@@ -119,8 +119,8 @@ export default function DashboardShell({
             </div>
           ) : null}
 
-          {/* StoryPay not active banner — shown on all /dashboard/settings pages */}
-          {isOnSettings && paymentsActive === false ? (
+          {/* StoryPay not active banner — shown only on the main /dashboard/settings page */}
+          {pathname === '/dashboard/settings' && paymentsActive === false ? (
             <div className="mb-5 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3.5 text-sm text-red-900">
               <span className="mt-0.5 shrink-0 text-red-500">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
