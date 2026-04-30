@@ -87,6 +87,8 @@ StoryVenue is an all-in-one platform for wedding venues to manage proposals, inv
 - iCal sync: subscribe from Google Calendar, Outlook, or Apple Calendar using the iCal URL in Settings → Integrations.
 - Calendly sync: connect Calendly in Settings → Integrations — new bookings appear on the calendar automatically.
 - Public availability page: shareable link showing open/booked dates with no customer info exposed — find it in Settings → Integrations.
+- Calendar Settings: go to Settings → Calendar for timezone, meeting duration, buffer times, availability, booking rules, Google Calendar sync, and Notifications (email/SMS templates per scenario).
+- Automatic notifications fire when events are created (confirmation), cancelled, rescheduled, or nearing start (reminder) and after completion (follow-up). See the Calendar Notification System section for full details.
 
 ## Contact profiles (CRM)
 - Go to Contacts → click a contact name to open their full profile.
@@ -382,6 +384,67 @@ Setup checklist for a venue building their first speed-to-lead funnel:
 - SMS is sent automatically when proposals and invoices are created (if customer has a phone number).
 - Phone numbers must be in US format — auto-formatted to E.164.
 - SMS routes through your GHL sub-account's A2P approved phone number.
+
+## Calendar Notification System
+StoryVenue sends automatic email and SMS notifications for every stage of a calendar appointment lifecycle. All templates are fully editable and each channel can be independently enabled or disabled.
+
+### Notification Scenarios
+Five scenarios fire automatically:
+1. **Appointment Booked (Confirmed)** — fires immediately when a new confirmed event is created.
+2. **Cancellation** — fires when an event's status is changed to Cancelled.
+3. **Reschedule** — fires when an event's start or end time is changed.
+4. **Reminder** — fires X time before the appointment starts (per-channel timing, see below).
+5. **Follow-Up** — fires 30 minutes after the event's end time.
+
+### Per-Recipient Channels
+Every scenario has four independent channels — each can be toggled on or off and has its own subject line and message body:
+- **Email → Venue Owner** — email to the venue's registered email address
+- **Email → Contact** — email to the booked contact/lead
+- **SMS → Venue Owner** — SMS via GHL to the venue owner
+- **SMS → Contact** — SMS via GHL to the contact
+
+### Editing Templates
+Go to Settings → Calendar → Notifications tab.
+- Click a scenario (e.g. "Reminder") to expand it.
+- Click any channel row (e.g. "Email → Contact") to expand the editor — the chevron on the left opens/closes; the toggle on the right enables/disables that channel independently.
+- Edit the Subject (email only) and message body.
+- Use merge tags like {{contact.name}}, {{appointment.title}}, {{appointment.start_time}}, {{appointment.timezone}}, {{appointment.meeting_location}}, {{venue.name}}, {{contact.email}}, {{contact.phone}}.
+- Click "Reset to default" to restore the built-in template.
+- Click "Save Changes" to persist all edits.
+
+### Sending a Test
+Each channel editor has a "Send test email" or "Send test SMS" button at the bottom:
+- For email: enter any email address and click Send test email — a preview with sample values is delivered.
+- For SMS: type a 10-digit US phone number (the +1 prefix is locked in). The test goes to the GHL contact matching that number. The phone must belong to a contact that exists in the SaaS database or GHL.
+- All test messages include a "[TEST]" prefix and are sent to the address you enter, not to any real contacts.
+
+### Per-Channel Reminder Timing
+Reminders are the only scenario with configurable timing — and timing is set independently per channel. Inside the "Reminder" scenario, open any channel (e.g. "SMS → Contact") and you will see a "When to send" section:
+- Add up to 3 send times per channel (e.g. 1 day before, 1 hour before, 10 minutes before).
+- Each channel can have completely different timing — e.g. Email → Contact gets reminders at 1 day + 1 hour + 10 min, while SMS → Owner only gets 1 hour before.
+- Default timing: email channels = 1 day + 1 hour + 10 min before; SMS channels = 1 hour + 10 min before.
+- Save Changes applies the timing along with all other template edits.
+
+### How Reminders Are Queued
+When an event is created or updated, StoryVenue automatically schedules one reminder queue row per enabled channel per timing offset. Each row is tagged with the channel it targets. A background cron job checks every few minutes and fires each row at the right time, dispatching only the channel that row is for. Follow-ups are always queued for 30 minutes after the event ends and fire all enabled follow_up channels at once.
+
+### Merge Tags Reference
+| Tag | Value |
+|-----|-------|
+| {{contact.name}} | Contact's full name |
+| {{contact.email}} | Contact's email |
+| {{contact.phone}} | Contact's phone |
+| {{appointment.title}} | Appointment/event title |
+| {{appointment.start_time}} | Formatted start date & time |
+| {{appointment.timezone}} | Timezone abbreviation (e.g. EST) |
+| {{appointment.meeting_location}} | Meeting link or physical address |
+| {{venue.name}} | Venue / business name |
+
+### Troubleshooting
+- Email not sending: confirm the channel is toggled On and the venue has an email address on file.
+- SMS not sending: confirm GHL is connected (Settings → Integrations) and the contact has a valid phone number in the SaaS database.
+- Reminders not arriving: check that the event has a contact email attached and that the reminder offsets are in the future relative to the event start time.
+- Test SMS failing: the phone number must match an existing contact in the SaaS database or in GHL.
 
 ## Refunds
 - Go to Transactions → Charges → find the charge → click Refund.
@@ -699,7 +762,7 @@ ${leadsContext ? '\n' + leadsContext + '\n' : ''}
 - Keep headings as plain text with a colon, e.g. "How to Access Reports:"
 - When directing the user to a specific page, include ONE navigation link using ONLY this format: [Button Label](/dashboard/path)
   Examples: [Open Branding Settings](/dashboard/settings/branding) [Manage Social Networks](/dashboard/settings/branding#social-networks) [View Proposals](/dashboard/payments/proposals) [Go to Reports](/dashboard/reports) [Manage Contacts](/dashboard/contacts) [View Transactions](/dashboard/transactions) [Open Calendar](/dashboard/calendar) [Open Integrations](/dashboard/settings/integrations) [Marketing analytics](/dashboard/marketing/analytics) [Email Templates](/dashboard/marketing/email/templates) [Email Campaigns](/dashboard/marketing/email/campaigns) [Email Automations](/dashboard/marketing/email/automations) [Audiences](/dashboard/marketing/email/audiences) [Trigger links](/dashboard/marketing/trigger-links) [Lead Capture Forms](/dashboard/marketing/form-builder) [Media](/dashboard/media) [Listing photos](/dashboard/listing/images)
-- Only link to real dashboard paths. Valid paths: /dashboard, /dashboard/calendar, /dashboard/contacts, /dashboard/conversations, /dashboard/leads, /dashboard/media, /dashboard/listing, /dashboard/listing/images, /dashboard/listing/analytics, /dashboard/listing/reviews, /dashboard/marketing/analytics, /dashboard/marketing/email/templates, /dashboard/marketing/email/campaigns, /dashboard/marketing/email/automations, /dashboard/marketing/email/audiences, /dashboard/marketing/email/preferences, /dashboard/marketing/workflows, /dashboard/marketing/trigger-links, /dashboard/marketing/form-builder, /dashboard/payments/proposals, /dashboard/payments/new, /dashboard/transactions, /dashboard/reports, /dashboard/settings, /dashboard/settings/branding, /dashboard/settings/branding#social-networks, /dashboard/settings/integrations, /dashboard/settings/team, /dashboard/settings/notifications, /dashboard/settings/email-templates, /dashboard/help
+- Only link to real dashboard paths. Valid paths: /dashboard, /dashboard/calendar, /dashboard/contacts, /dashboard/conversations, /dashboard/leads, /dashboard/media, /dashboard/listing, /dashboard/listing/images, /dashboard/listing/analytics, /dashboard/listing/reviews, /dashboard/marketing/analytics, /dashboard/marketing/email/templates, /dashboard/marketing/email/campaigns, /dashboard/marketing/email/automations, /dashboard/marketing/email/audiences, /dashboard/marketing/email/preferences, /dashboard/marketing/workflows, /dashboard/marketing/trigger-links, /dashboard/marketing/form-builder, /dashboard/payments/proposals, /dashboard/payments/new, /dashboard/transactions, /dashboard/reports, /dashboard/settings, /dashboard/settings/branding, /dashboard/settings/branding#social-networks, /dashboard/settings/integrations, /dashboard/settings/team, /dashboard/settings/notifications, /dashboard/settings/email-templates, /dashboard/settings/calendar, /dashboard/settings/calendar?tab=notifications, /dashboard/help
 - Place the link on its own line at the end of the relevant sentence or step, not inline mid-sentence
 
 === TONE ===

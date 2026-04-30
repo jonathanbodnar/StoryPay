@@ -393,6 +393,98 @@ The page shows a month-by-month calendar with:
 
 Prospects can navigate forward and back through months. No customer information is ever shown on this page.`,
       },
+      {
+        id: 'cal-notification-overview',
+        title: 'Calendar appointment notifications — overview',
+        tags: ['calendar', 'notifications', 'email', 'sms', 'appointment', 'confirmation', 'reminder', 'cancellation', 'reschedule', 'follow up', 'automatic', 'templates'],
+        body: `StoryVenue automatically sends email and SMS notifications when appointments are created, changed, or approaching. Every scenario and every channel is independently configurable.
+
+Go to Settings → Calendar → Notifications tab to manage everything.
+
+The five notification scenarios
+1. Appointment Booked (Confirmed) — fires immediately when you create a confirmed calendar event.
+2. Cancellation — fires when you change an event's status to Cancelled.
+3. Reschedule — fires when you change an event's start or end time.
+4. Reminder — fires before the appointment starts. Timing is fully configurable per channel.
+5. Follow-Up — fires 30 minutes after the event ends.
+
+The four channels per scenario
+Each scenario has four channels, each independently toggled on or off:
+- Email → Venue Owner — email to your venue's registered address
+- Email → Contact — email to the booked contact/lead
+- SMS → Venue Owner — SMS via GHL to you
+- SMS → Contact — SMS via GHL to the contact
+
+The channel editor
+Click a scenario accordion to expand it. Inside you'll see the four channel rows. Click a channel row (or its chevron) to open the editor. The toggle on the right enables or disables that channel without losing your template.
+
+Merge tags let you personalize every message:
+- {{contact.name}} — contact's full name
+- {{contact.email}} — contact's email
+- {{contact.phone}} — contact's phone
+- {{appointment.title}} — event title
+- {{appointment.start_time}} — formatted date and time
+- {{appointment.timezone}} — timezone abbreviation (e.g. EST)
+- {{appointment.meeting_location}} — meeting link or address
+- {{venue.name}} — your venue/business name
+
+Click "Available merge tags" at the top of the Notifications tab to see the full reference list.
+
+After editing, click Save Changes at the bottom. All templates and reminder timing are saved together.`,
+      },
+      {
+        id: 'cal-notification-reminders',
+        title: 'Configuring reminder timing per channel',
+        tags: ['reminder', 'reminder timing', 'when to send', 'hours before', 'days before', 'minutes before', 'schedule', 'per channel', 'email reminder', 'sms reminder'],
+        body: `Reminders are the only notification scenario where you control when each message is sent — and you can set completely different timing for each of the four channels.
+
+Where to find it
+Settings → Calendar → Notifications tab → click "Reminder" to expand → click any channel row (e.g. "SMS → Contact") → the "When to send" section appears at the top of the editor.
+
+How timing works
+- Each channel can have up to 3 send times.
+- Enter a number and choose Minutes, Hours, or Days before the appointment starts.
+- Example: Email → Contact could have 1 Day, 1 Hour, and 10 Minutes; SMS → Owner could have just 1 Hour.
+- The send button stays disabled until the channel is added to the queue when the event is created or updated.
+
+Default timing (applied automatically until you change it)
+- Email → Owner: 1 day + 1 hour + 10 minutes before
+- Email → Contact: 1 day + 1 hour + 10 minutes before
+- SMS → Owner: 1 hour + 10 minutes before
+- SMS → Contact: 1 hour + 10 minutes before
+
+To add a send time: click "+ Add time" below the existing rows (up to 3 per channel).
+To remove a send time: click the trash icon on that row (at least 1 row must remain).
+
+Important: reminder rows are queued when an event is saved. If you change timing after an event is already booked, the existing queue rows are updated automatically for any upcoming (unsent) reminders.`,
+      },
+      {
+        id: 'cal-notification-test',
+        title: 'Sending a test notification',
+        tags: ['test', 'send test', 'test email', 'test sms', 'preview', 'notification test', 'sample'],
+        body: `Every channel editor has a built-in test sender so you can verify your template looks right before it reaches a real contact.
+
+How to send a test
+1. Settings → Calendar → Notifications tab → expand a scenario → expand a channel.
+2. At the bottom of the editor you'll see a recipient field and a "Send test email" or "Send test SMS" button.
+3. For email channels: type any email address and click Send test email. The button is disabled until an "@" is entered.
+4. For SMS channels: type a 10-digit US phone number — the +1 country code is locked in and cannot be removed. Click Send test SMS. The button is disabled until 10 digits are entered.
+5. The test fires immediately using your current template with sample placeholder values.
+
+What the test sends
+- All merge tags are replaced with realistic sample data (e.g. contact name = "Alex Johnson", appointment = "Strategy Call" on "Thursday, May 1 at 10:00 AM EST").
+- A "[TEST – Owner]" or "[TEST – Contact]" prefix is added to the subject/message so you know it's a test.
+- Email tests go to the address you type. SMS tests go to the GHL contact whose phone number matches what you entered.
+
+SMS test requirements
+- The phone number you enter must belong to a contact that exists in the SaaS (or in GHL).
+- StoryVenue looks up the contact in your database first (by the last 10 digits of the number), then falls back to a GHL search by phone, then GHL search by your venue email.
+- If no matching contact is found, a red error message appears below the input explaining what to check.
+
+If the test fails
+- For email: check that your venue has a "From" domain configured via Resend and that the target email address is valid.
+- For SMS: make sure GHL is connected (Settings → Integrations) and the phone number matches an existing contact in the SaaS or GHL.`,
+      },
     ],
   },
   {
@@ -2125,6 +2217,74 @@ If SMS is not sending, check:
 - Is messaging connected? (Settings → General → Messaging should show "Connected")
 
 Note: SMS uses your GHL sub-account's verified A2P phone number automatically — no manual configuration needed once messaging is connected.`,
+      },
+      {
+        id: 'notif-calendar-templates',
+        title: 'Calendar appointment email & SMS templates',
+        tags: ['calendar', 'appointment', 'notification', 'template', 'email template', 'sms template', 'merge tags', 'confirmation', 'reminder', 'cancellation', 'reschedule', 'follow up', 'venue owner', 'contact'],
+        body: `Every calendar notification has four independently editable templates — one per channel. Manage them at Settings → Calendar → Notifications.
+
+The four channels
+- Email → Venue Owner: email sent to your venue's registered email address
+- Email → Contact: email sent to the booked contact/lead
+- SMS → Venue Owner: SMS delivered via GHL to your number
+- SMS → Contact: SMS delivered via GHL to the contact's number
+
+Each channel can be toggled on or off independently. Turning a channel off removes it from automatic dispatch without deleting your template.
+
+Editing a template
+1. Go to Settings → Calendar → Notifications.
+2. Click a scenario (e.g. "Appointment Booked (Confirmed)") to expand it.
+3. Click the channel row (e.g. "Email → Contact") — the chevron expands the editor.
+4. Edit the Subject (email channels only) and message body.
+5. Use merge tags anywhere in subject or body — they are replaced with real values at send time.
+6. Click Save Changes.
+
+Available merge tags
+{{contact.name}} — contact's full name
+{{contact.email}} — contact's email address
+{{contact.phone}} — contact's phone number
+{{appointment.title}} — the event title
+{{appointment.start_time}} — formatted date and time (e.g. Monday, May 5 at 2:00 PM)
+{{appointment.timezone}} — timezone abbreviation (e.g. EST)
+{{appointment.meeting_location}} — meeting link or physical address
+{{venue.name}} — your venue/business name
+
+Resetting a template
+Click "Reset to default" at the bottom of any channel editor to restore the built-in default template for that channel. This does not affect other channels.
+
+SMS character count
+SMS editors show a character counter (e.g. "114 / 160 chars"). Standard SMS segments are 160 characters. Messages over 160 chars are still sent but may count as 2 segments in your GHL account.`,
+      },
+      {
+        id: 'notif-calendar-troubleshoot',
+        title: 'Troubleshooting calendar notifications not sending',
+        tags: ['notifications not sending', 'email not received', 'sms not received', 'reminder not sent', 'confirmation not sent', 'notification troubleshoot', 'debug notifications'],
+        body: `If a calendar notification or reminder isn't arriving, work through these checks.
+
+Email not arriving
+1. Is the channel toggled On? Settings → Calendar → Notifications → expand the scenario → check the toggle on that channel row.
+2. Does the event have a contact with an email address? Email → Contact only fires if the event is linked to a contact that has an email on file.
+3. Is the venue email configured? Email → Owner needs a valid email in your venue profile (Settings → General).
+4. Check spam/junk folders — transactional emails from Resend can land there for first-time recipients.
+
+SMS not arriving
+1. Is GHL connected? Settings → Integrations → Messaging/GHL should show "Connected".
+2. Does the contact have a valid US phone number in the SaaS database?
+3. Is the SMS channel toggled On for that scenario?
+4. Is your GHL A2P number approved? A2P rejection blocks all outgoing SMS.
+
+Reminder not arriving
+1. Was the event created after you saved your reminder settings? Reminder queue rows are created at event save time. Events booked before you set up reminders won't have queue rows — re-save the event to regenerate them.
+2. Is the reminder offset in the future? A reminder set for "10 minutes before" that has already passed won't fire.
+3. Is the reminder channel enabled? Each of the four reminder channels (Email→Owner, Email→Contact, SMS→Owner, SMS→Contact) can be on or off independently.
+
+Follow-up not arriving
+- Follow-ups fire 30 minutes after the event's end time. If the event has no end time, no follow-up is queued.
+- Make sure the follow_up scenario channels are toggled On.
+
+Test before going live
+Use the "Send test email" / "Send test SMS" button inside each channel editor to verify delivery before relying on automatic dispatch.`,
       },
     ],
   },
