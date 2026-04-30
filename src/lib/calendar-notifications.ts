@@ -362,8 +362,11 @@ async function dispatchSms(
 // ── Main dispatch ─────────────────────────────────────────────────────────────
 
 /**
- * Look up templates for `type` in the venue's settings and fire all enabled
- * channels. Falls back to built-in defaults for venues with no saved templates.
+ * Look up templates for `type` in the venue's settings and fire enabled channels.
+ *
+ * @param onlyChannel - When provided, only that specific channel is dispatched.
+ *   Use this for per-channel reminder rows so each fires independently.
+ *   When omitted, all enabled channels are dispatched (e.g. booked_confirmed).
  *
  * Safe to call fire-and-forget — errors are logged, not thrown.
  */
@@ -371,6 +374,7 @@ export async function dispatchCalendarNotification(
   venueId: string,
   type: NotifType,
   vars: CalendarNotifVars,
+  onlyChannel?: string,
 ): Promise<void> {
   try {
     const [{ data: templateRows }, { data: venueRow }] = await Promise.all([
@@ -390,8 +394,6 @@ export async function dispatchCalendarNotification(
     const venue = venueRow as VenueRow;
     const rows = (templateRows ?? []) as TemplateRow[];
 
-    // Only the new per-recipient channel keys should be checked.
-    // Old 'email'/'sms' rows (from pre-078 seed) are ignored here.
     const perRecipientRows = rows.filter((r) =>
       ['email_owner', 'email_contact', 'sms_owner', 'sms_contact'].includes(r.channel),
     );
@@ -400,80 +402,91 @@ export async function dispatchCalendarNotification(
     const varMap = buildVarMap(venue, vars);
     const venueName = venue.name || 'Us';
 
+    // Helper: skip this channel if onlyChannel is specified and doesn't match
+    const shouldSend = (channel: string) => !onlyChannel || onlyChannel === channel;
+
     // ── email_owner ───────────────────────────────────────────────────────────
-    const eoTpl = resolveTemplate(type, 'email_owner', perRecipientRows, hasAnyDbRows);
-    if (eoTpl?.enabled && eoTpl.body && venue.email) {
-      const subject = eoTpl.subject
-        ? renderTemplate(eoTpl.subject, varMap)
-        : `Notification: ${vars.appointment_title}`;
-      const body = renderTemplate(eoTpl.body, varMap);
-      await sendEmail({
-        to: venue.email,
-        subject,
-        html: plainToHtml(body, venueName),
-        from: { name: venueName },
-      }).catch((e) => console.error('[calendar-notifications] email_owner send error:', e));
+    if (shouldSend('email_owner')) {
+      const eoTpl = resolveTemplate(type, 'email_owner', perRecipientRows, hasAnyDbRows);
+      if (eoTpl?.enabled && eoTpl.body && venue.email) {
+        const subject = eoTpl.subject
+          ? renderTemplate(eoTpl.subject, varMap)
+          : `Notification: ${vars.appointment_title}`;
+        const body = renderTemplate(eoTpl.body, varMap);
+        await sendEmail({
+          to: venue.email,
+          subject,
+          html: plainToHtml(body, venueName),
+          from: { name: venueName },
+        }).catch((e) => console.error('[calendar-notifications] email_owner send error:', e));
+      }
     }
 
     // ── email_contact ─────────────────────────────────────────────────────────
-    const ecTpl = resolveTemplate(type, 'email_contact', perRecipientRows, hasAnyDbRows);
-    if (ecTpl?.enabled && ecTpl.body && vars.contact_email) {
-      const subject = ecTpl.subject
-        ? renderTemplate(ecTpl.subject, varMap)
-        : `Notification: ${vars.appointment_title}`;
-      const body = renderTemplate(ecTpl.body, varMap);
-      await sendEmail({
-        to: vars.contact_email,
-        subject,
-        html: plainToHtml(body, venueName),
-        from: { name: venueName },
-      }).catch((e) => console.error('[calendar-notifications] email_contact send error:', e));
+    if (shouldSend('email_contact')) {
+      const ecTpl = resolveTemplate(type, 'email_contact', perRecipientRows, hasAnyDbRows);
+      if (ecTpl?.enabled && ecTpl.body && vars.contact_email) {
+        const subject = ecTpl.subject
+          ? renderTemplate(ecTpl.subject, varMap)
+          : `Notification: ${vars.appointment_title}`;
+        const body = renderTemplate(ecTpl.body, varMap);
+        await sendEmail({
+          to: vars.contact_email,
+          subject,
+          html: plainToHtml(body, venueName),
+          from: { name: venueName },
+        }).catch((e) => console.error('[calendar-notifications] email_contact send error:', e));
+      }
     }
 
     // ── sms_contact ───────────────────────────────────────────────────────────
-    const scTpl = resolveTemplate(type, 'sms_contact', perRecipientRows, hasAnyDbRows);
-    if (
-      scTpl?.enabled &&
-      scTpl.body &&
-      venue.ghl_connected &&
-      venue.ghl_access_token &&
-      venue.ghl_location_id
-    ) {
-      const message = renderTemplate(scTpl.body, varMap);
-      await dispatchSms(
-        venue.ghl_access_token,
-        venue.ghl_location_id,
-        vars.contact_ghl_id,
-        vars.contact_phone,
-        vars.contact_email,   // email fallback for GHL contact lookup
-        message,
-      );
+    if (shouldSend('sms_contact')) {
+      const scTpl = resolveTemplate(type, 'sms_contact', perRecipientRows, hasAnyDbRows);
+      if (
+        scTpl?.enabled &&
+        scTpl.body &&
+        venue.ghl_connected &&
+        venue.ghl_access_token &&
+        venue.ghl_location_id
+      ) {
+        const message = renderTemplate(scTpl.body, varMap);
+        await dispatchSms(
+          venue.ghl_access_token,
+          venue.ghl_location_id,
+          vars.contact_ghl_id,
+          vars.contact_phone,
+          vars.contact_email,
+          message,
+        );
+      }
     }
 
     // ── sms_owner ─────────────────────────────────────────────────────────────
-    // Owner SMS is off by default. When enabled, we look up the owner's GHL
-    // contact by the venue's email address.
-    const soTpl = resolveTemplate(type, 'sms_owner', perRecipientRows, hasAnyDbRows);
-    if (
-      soTpl?.enabled &&
-      soTpl.body &&
-      venue.ghl_connected &&
-      venue.ghl_access_token &&
-      venue.ghl_location_id &&
-      venue.email
-    ) {
-      const message = renderTemplate(soTpl.body, varMap);
-      await dispatchSms(
-        venue.ghl_access_token,
-        venue.ghl_location_id,
-        null,         // no stored GHL contact ID for the owner
-        null,         // no owner phone stored
-        venue.email,  // look up owner by their venue email
-        message,
-      );
+    if (shouldSend('sms_owner')) {
+      const soTpl = resolveTemplate(type, 'sms_owner', perRecipientRows, hasAnyDbRows);
+      if (
+        soTpl?.enabled &&
+        soTpl.body &&
+        venue.ghl_connected &&
+        venue.ghl_access_token &&
+        venue.ghl_location_id &&
+        venue.email
+      ) {
+        const message = renderTemplate(soTpl.body, varMap);
+        await dispatchSms(
+          venue.ghl_access_token,
+          venue.ghl_location_id,
+          null,
+          null,
+          venue.email,
+          message,
+        );
+      }
     }
 
-    console.log(`[calendar-notifications] dispatched ${type} for venue ${venueId}`);
+    console.log(
+      `[calendar-notifications] dispatched ${type}${onlyChannel ? ` [${onlyChannel}]` : ''} for venue ${venueId}`,
+    );
   } catch (e) {
     console.error('[calendar-notifications] dispatchCalendarNotification error:', e);
   }

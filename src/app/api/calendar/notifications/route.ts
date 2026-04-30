@@ -33,6 +33,7 @@ export async function PUT(req: NextRequest) {
     subject?: string;
     body?: string;
     offset_minutes?: number;
+    reminder_offsets?: { d: number; h: number; m: number }[] | null;
   }> = await req.json();
 
   if (!Array.isArray(rows)) {
@@ -52,6 +53,7 @@ export async function PUT(req: NextRequest) {
     subject: r.subject ?? null,
     body: r.body ?? null,
     offset_minutes: r.offset_minutes ?? null,
+    reminder_offsets: r.reminder_offsets ?? null,
     updated_at: new Date().toISOString(),
   }));
 

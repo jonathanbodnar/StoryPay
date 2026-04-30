@@ -42,14 +42,23 @@ export function computeReminderSendAt(startAt: Date, o: ReminderOffset): Date {
   return new Date(startAt.getTime() - offsetToMs(o));
 }
 
+/** Default per-channel reminder offsets (mirrors the UI constant) */
+const DEFAULT_CHANNEL_OFFSETS: Record<string, ReminderOffset[]> = {
+  email_owner:   [{ d: 1, h: 0, m: 0 }, { d: 0, h: 1, m: 0 }, { d: 0, h: 0, m: 10 }],
+  email_contact: [{ d: 1, h: 0, m: 0 }, { d: 0, h: 1, m: 0 }, { d: 0, h: 0, m: 10 }],
+  sms_owner:     [{ d: 0, h: 1, m: 0 }, { d: 0, h: 0, m: 10 }],
+  sms_contact:   [{ d: 0, h: 1, m: 0 }, { d: 0, h: 0, m: 10 }],
+};
+
 /**
- * Sync reminder + follow-up rows for a single calendar event.
+ * Sync reminder + follow-up queue rows for a single calendar event.
  *
  * Reminder rows (notification_type = 'reminder'):
- *   send_at = start_at - offset  (one row per configured offset, indices 0–4)
+ *   One row per (enabled channel × offset), tagged with the channel name.
+ *   send_at = start_at − offset
  *
  * Follow-up row (notification_type = 'follow_up', reminder_index = 98):
- *   send_at = end_at + 30 minutes  (only if event has an end_at)
+ *   send_at = end_at + 30 minutes  (channel = null — fires all enabled channels at once)
  */
 export async function syncAppointmentRemindersForEvent(calendarEventId: string): Promise<void> {
   const { data: ev, error: evErr } = await supabaseAdmin
@@ -70,7 +79,6 @@ export async function syncAppointmentRemindersForEvent(calendarEventId: string):
     .eq('calendar_event_id', calendarEventId)
     .is('sent_at', null);
 
-  // Recurring events and cancelled events don't get reminders/follow-ups
   const recurrence = (ev as { recurrence_rule?: unknown }).recurrence_rule;
   if (recurrence != null) return;
   if ((ev as { status?: string }).status === 'cancelled') return;
@@ -80,28 +88,23 @@ export async function syncAppointmentRemindersForEvent(calendarEventId: string):
 
   const venueId = (ev as { venue_id: string }).venue_id;
 
+  // Check venue-level reminders kill-switch
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('appointment_reminders_enabled, appointment_reminder_offsets, name, timezone')
+    .select('appointment_reminders_enabled, appointment_reminder_offsets')
     .eq('id', venueId)
     .maybeSingle();
   if (!venue) return;
+  if ((venue as { appointment_reminders_enabled?: boolean }).appointment_reminders_enabled === false) return;
 
-  if ((venue as { appointment_reminders_enabled?: boolean }).appointment_reminders_enabled === false) {
-    return;
-  }
-
-  const offsets = normalizeReminderOffsets(
-    (venue as { appointment_reminder_offsets?: unknown }).appointment_reminder_offsets,
-  );
   const startAt = new Date(String((ev as { start_at: string }).start_at));
   if (Number.isNaN(startAt.getTime())) return;
 
   const endAtStr = (ev as { end_at?: string | null }).end_at;
   const endAt = endAtStr ? new Date(endAtStr) : null;
-
   const now = Date.now();
-  const rows: Array<{
+
+  type ReminderInsertRow = {
     calendar_event_id: string;
     venue_id: string;
     reminder_index: number;
@@ -110,38 +113,88 @@ export async function syncAppointmentRemindersForEvent(calendarEventId: string):
     offset_minutes: number;
     send_at: string;
     notification_type: string;
-  }> = [];
+    channel?: string | null;
+  };
 
-  // ── Reminder rows ─────────────────────────────────────────────────────────
-  offsets.forEach((o, idx) => {
-    const sendAt = computeReminderSendAt(startAt, o);
-    if (sendAt.getTime() <= now) return;
-    if (sendAt.getTime() >= startAt.getTime()) return;
-    rows.push({
-      calendar_event_id: calendarEventId,
-      venue_id: venueId,
-      reminder_index: idx,
-      offset_days: o.d,
-      offset_hours: o.h,
-      offset_minutes: o.m,
-      send_at: sendAt.toISOString(),
-      notification_type: 'reminder',
+  const rows: ReminderInsertRow[] = [];
+
+  // ── Per-channel reminder rows ─────────────────────────────────────────────
+  // Prefer per-channel notification template rows (migration 079).
+  // Fall back to venue-level offsets when no rows are found.
+  const { data: notifRows } = await supabaseAdmin
+    .from('venue_calendar_notifications')
+    .select('channel, enabled, reminder_offsets')
+    .eq('venue_id', venueId)
+    .eq('notification_type', 'reminder')
+    .eq('enabled', true);
+
+  const enabledChannels = (notifRows ?? []) as Array<{
+    channel: string;
+    enabled: boolean;
+    reminder_offsets?: ReminderOffset[] | null;
+  }>;
+
+  if (enabledChannels.length > 0) {
+    for (const ch of enabledChannels) {
+      const rawOffsets =
+        ch.reminder_offsets ??
+        DEFAULT_CHANNEL_OFFSETS[ch.channel] ??
+        DEFAULT_APPOINTMENT_REMINDER_OFFSETS;
+      const offsets = normalizeReminderOffsets(rawOffsets);
+      offsets.forEach((o, idx) => {
+        const sendAt = computeReminderSendAt(startAt, o);
+        if (sendAt.getTime() <= now) return;
+        if (sendAt.getTime() >= startAt.getTime()) return;
+        rows.push({
+          calendar_event_id: calendarEventId,
+          venue_id: venueId,
+          reminder_index: idx,
+          offset_days: o.d,
+          offset_hours: o.h,
+          offset_minutes: o.m,
+          send_at: sendAt.toISOString(),
+          notification_type: 'reminder',
+          channel: ch.channel,
+        });
+      });
+    }
+  } else {
+    // Legacy fallback: no per-channel notification rows configured — use venue offsets
+    const offsets = normalizeReminderOffsets(
+      (venue as { appointment_reminder_offsets?: unknown }).appointment_reminder_offsets,
+    );
+    offsets.forEach((o, idx) => {
+      const sendAt = computeReminderSendAt(startAt, o);
+      if (sendAt.getTime() <= now) return;
+      if (sendAt.getTime() >= startAt.getTime()) return;
+      rows.push({
+        calendar_event_id: calendarEventId,
+        venue_id: venueId,
+        reminder_index: idx,
+        offset_days: o.d,
+        offset_hours: o.h,
+        offset_minutes: o.m,
+        send_at: sendAt.toISOString(),
+        notification_type: 'reminder',
+        channel: null, // legacy: fires all enabled channels at once
+      });
     });
-  });
+  }
 
-  // ── Follow-up row (30 min after event ends) ───────────────────────────────
+  // ── Follow-up row (30 min after event ends, fires all enabled follow_up channels) ─
   if (endAt && !Number.isNaN(endAt.getTime())) {
     const followUpSendAt = new Date(endAt.getTime() + 30 * 60 * 1000);
     if (followUpSendAt.getTime() > now) {
       rows.push({
         calendar_event_id: calendarEventId,
         venue_id: venueId,
-        reminder_index: 98, // reserved index for follow-up
+        reminder_index: 98,
         offset_days: 0,
         offset_hours: 0,
         offset_minutes: 0,
         send_at: followUpSendAt.toISOString(),
         notification_type: 'follow_up',
+        channel: null,
       });
     }
   }
@@ -150,12 +203,17 @@ export async function syncAppointmentRemindersForEvent(calendarEventId: string):
 
   const { error: insErr } = await supabaseAdmin.from('calendar_event_reminders').insert(rows);
   if (insErr) {
-    // Migration 078 may not be applied yet — notification_type column may not exist.
-    // Retry without it so reminder scheduling still works on older schemas.
-    if (insErr.message?.toLowerCase().includes('notification_type')) {
+    // Migrations 078/079 may not have run — strip new columns and retry.
+    if (
+      insErr.message?.toLowerCase().includes('notification_type') ||
+      insErr.message?.toLowerCase().includes('channel')
+    ) {
+      // Legacy: deduplicate by reminder_index (take first) for the old unique index
+      const seen = new Set<number>();
       const legacyRows = rows
-        .filter((r) => r.notification_type === 'reminder') // skip follow-ups on legacy schema
-        .map(({ notification_type: _nt, ...r }) => r);
+        .filter((r) => r.notification_type === 'reminder')
+        .filter((r) => { if (seen.has(r.reminder_index)) return false; seen.add(r.reminder_index); return true; })
+        .map(({ notification_type: _nt, channel: _ch, ...r }) => r);
       if (legacyRows.length) {
         const { error: retryErr } = await supabaseAdmin
           .from('calendar_event_reminders')
@@ -198,19 +256,23 @@ export async function processAppointmentRemindersCron(): Promise<{
   errors: number;
 }> {
   const now = new Date().toISOString();
+
+  // Attempt to read notification_type and channel (migration 078+079).
+  // Fall back to legacy columns if either is missing.
   const { data: due, error } = await supabaseAdmin
     .from('calendar_event_reminders')
-    .select('id, send_at, offset_days, offset_hours, offset_minutes, calendar_event_id, venue_id, notification_type')
+    .select('id, send_at, offset_days, offset_hours, offset_minutes, calendar_event_id, venue_id, notification_type, channel')
     .is('sent_at', null)
     .lte('send_at', now)
     .order('send_at', { ascending: true })
     .limit(BATCH);
 
-  // If migration 078 hasn't run, notification_type column won't exist — fall back
-  // to selecting without it and treat everything as 'reminder'.
   let dueRows = due;
-  if (error?.message?.toLowerCase().includes('notification_type')) {
-    console.warn('[cron appointment-reminders] notification_type column missing, running legacy query');
+  if (
+    error?.message?.toLowerCase().includes('notification_type') ||
+    error?.message?.toLowerCase().includes('channel')
+  ) {
+    console.warn('[cron appointment-reminders] notification_type/channel column missing, running legacy query');
     const legacy = await supabaseAdmin
       .from('calendar_event_reminders')
       .select('id, send_at, offset_days, offset_hours, offset_minutes, calendar_event_id, venue_id')
@@ -222,7 +284,7 @@ export async function processAppointmentRemindersCron(): Promise<{
       console.error('[cron appointment-reminders] legacy query', legacy.error);
       return { processed: 0, sent: 0, errors: 1 };
     }
-    dueRows = legacy.data;
+    dueRows = legacy.data as typeof dueRows;
   } else if (error) {
     console.error('[cron appointment-reminders] query', error);
     return { processed: 0, sent: 0, errors: 1 };
@@ -240,11 +302,20 @@ export async function processAppointmentRemindersCron(): Promise<{
       offset_minutes: number;
       calendar_event_id: string;
       venue_id: string;
-      notification_type?: string;
+      notification_type?: string | null;
+      channel?: string | null;
     };
 
-    const notifType = (row.notification_type as NotifType | undefined) ?? 'reminder';
-    const result = await sendNotificationForReminder(row.calendar_event_id, row.venue_id, notifType);
+    const notifType = (row.notification_type as NotifType | undefined | null) ?? 'reminder';
+    // When channel is set, dispatch only that channel; otherwise fire all (legacy / follow_up)
+    const onlyChannel = row.channel ?? undefined;
+
+    const result = await sendNotificationForReminder(
+      row.calendar_event_id,
+      row.venue_id,
+      notifType,
+      onlyChannel,
+    );
 
     if (result.ok) {
       const { error: upErr } = await supabaseAdmin
@@ -263,13 +334,14 @@ export async function processAppointmentRemindersCron(): Promise<{
     }
   }
 
-  return { processed: (due ?? []).length, sent, errors };
+  return { processed: (dueRows ?? []).length, sent, errors };
 }
 
 async function sendNotificationForReminder(
   calendarEventId: string,
   venueId: string,
   notifType: NotifType,
+  onlyChannel?: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const { data: ev } = await supabaseAdmin
     .from('calendar_events')
@@ -315,7 +387,7 @@ async function sendNotificationForReminder(
   if (!notifVars) return { ok: false, error: 'no_email' };
 
   try {
-    await dispatchCalendarNotification(venueId, notifType, notifVars);
+    await dispatchCalendarNotification(venueId, notifType, notifVars, onlyChannel);
     return { ok: true };
   } catch (e) {
     console.error('[appointment-reminders] sendNotificationForReminder error:', e);

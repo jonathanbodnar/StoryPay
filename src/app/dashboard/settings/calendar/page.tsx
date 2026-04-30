@@ -68,6 +68,8 @@ interface NotifRow {
   subject?: string | null;
   body?: string | null;
   offset_minutes?: number | null;
+  /** Per-channel reminder offsets — only meaningful for notification_type = 'reminder' */
+  reminder_offsets?: { d: number; h: number; m: number }[] | null;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -325,6 +327,14 @@ We hope it was valuable! Please don't hesitate to reach out if you have any ques
       body: `Hi {{contact.name}}, thanks for your appointment "{{appointment.title}}"! Feel free to reach out with any questions. — {{venue.name}}`,
     },
   },
+};
+
+/** Default per-channel reminder offsets (used when no DB value is saved yet) */
+const DEFAULT_CHANNEL_OFFSETS: Record<string, { d: number; h: number; m: number }[]> = {
+  email_owner:   [{ d: 1, h: 0, m: 0 }, { d: 0, h: 1, m: 0 }, { d: 0, h: 0, m: 10 }],
+  email_contact: [{ d: 1, h: 0, m: 0 }, { d: 0, h: 1, m: 0 }, { d: 0, h: 0, m: 10 }],
+  sms_owner:     [{ d: 0, h: 1, m: 0 }, { d: 0, h: 0, m: 10 }],
+  sms_contact:   [{ d: 0, h: 1, m: 0 }, { d: 0, h: 0, m: 10 }],
 };
 
 const DURATION_OPTIONS = [15, 30, 45, 60, 90, 120, 180, 240];
@@ -1112,12 +1122,6 @@ function BookingRulesTab() {
 type OffsetUnit = 'minutes' | 'hours' | 'days';
 interface OffsetRow { value: number; unit: OffsetUnit }
 
-const DEFAULT_OFFSETS: OffsetRow[] = [
-  { value: 24, unit: 'hours' },
-  { value: 4,  unit: 'hours' },
-  { value: 1,  unit: 'hours' },
-];
-
 function dhmToOffsetRow(o: { d: number; h: number; m: number }): OffsetRow {
   if (o.d > 0) return { value: o.d, unit: 'days' };
   if (o.h > 0) return { value: o.h, unit: 'hours' };
@@ -1125,8 +1129,8 @@ function dhmToOffsetRow(o: { d: number; h: number; m: number }): OffsetRow {
 }
 
 function offsetRowToDhm(r: OffsetRow): { d: number; h: number; m: number } {
-  if (r.unit === 'days')    return { d: r.value, h: 0, m: 0 };
-  if (r.unit === 'hours')   return { d: 0, h: r.value, m: 0 };
+  if (r.unit === 'days')  return { d: r.value, h: 0, m: 0 };
+  if (r.unit === 'hours') return { d: 0, h: r.value, m: 0 };
   return { d: 0, h: 0, m: r.value };
 }
 
@@ -1138,10 +1142,8 @@ function NotificationsTab() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [expandedType, setExpandedType] = useState<string | null>(null);
+  const [openChannels, setOpenChannels] = useState<Set<string>>(new Set());
   const [showTags, setShowTags] = useState(false);
-
-  // Reminder timing offsets (up to 3)
-  const [reminderOffsets, setReminderOffsets] = useState<OffsetRow[]>(DEFAULT_OFFSETS);
 
   // Build a full default row for a given type+channel if none exists in DB
   const makeDefault = (type: string, channel: string): NotifRow => {
@@ -1155,6 +1157,9 @@ function NotificationsTab() {
       notify_guests: false,
       subject: def?.subject ?? null,
       body: def?.body ?? '',
+      reminder_offsets: type === 'reminder'
+        ? (DEFAULT_CHANNEL_OFFSETS[channel] ?? null)
+        : null,
     };
   };
 
@@ -1166,6 +1171,10 @@ function NotificationsTab() {
         const existing = dbRows.find(
           (r) => r.notification_type === nt.type && r.channel === ch.key,
         );
+        // Backfill reminder_offsets if DB row is missing them
+        if (existing && existing.notification_type === 'reminder' && !existing.reminder_offsets) {
+          existing.reminder_offsets = DEFAULT_CHANNEL_OFFSETS[ch.key] ?? null;
+        }
         result.push(existing ?? makeDefault(nt.type, ch.key));
       }
     }
@@ -1173,20 +1182,10 @@ function NotificationsTab() {
   };
 
   useEffect(() => {
-    Promise.all([
-      fetch('/api/calendar/notifications', { cache: 'no-store' }).then((r) => r.json()),
-      fetch('/api/venues/me', { cache: 'no-store' }).then((r) => r.json()),
-    ])
-      .then(([notifData, venueData]) => {
-        setNotifs(buildFull(Array.isArray(notifData) ? (notifData as NotifRow[]) : []));
-        const raw = (venueData as { appointment_reminder_offsets?: unknown }).appointment_reminder_offsets;
-        if (Array.isArray(raw) && raw.length > 0) {
-          setReminderOffsets(
-            (raw as { d: number; h: number; m: number }[])
-              .slice(0, 3)
-              .map(dhmToOffsetRow),
-          );
-        }
+    fetch('/api/calendar/notifications', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((data) => {
+        setNotifs(buildFull(Array.isArray(data) ? (data as NotifRow[]) : []));
         setLoading(false);
       })
       .catch(() => {
@@ -1203,6 +1202,9 @@ function NotificationsTab() {
       ),
     );
 
+  const getRow = (type: string, channel: string) =>
+    notifs.find((r) => r.notification_type === type && r.channel === channel);
+
   const resetToDefault = (type: string, channel: string) => {
     const def = NOTIF_DEFAULTS[type]?.[channel];
     if (!def) return;
@@ -1215,39 +1217,56 @@ function NotificationsTab() {
     );
   };
 
-  const getRow = (type: string, channel: string) =>
-    notifs.find((r) => r.notification_type === type && r.channel === channel);
+  // ── Per-channel reminder offset helpers ──────────────────────────────────────
 
-  const updateOffset = (idx: number, patch: Partial<OffsetRow>) =>
-    setReminderOffsets((prev) => prev.map((o, i) => i === idx ? { ...o, ...patch } : o));
-
-  const addOffset = () => {
-    if (reminderOffsets.length >= 3) return;
-    setReminderOffsets((prev) => [...prev, { value: 1, unit: 'hours' }]);
+  const getChannelOffsets = (type: string, channel: string): OffsetRow[] => {
+    const row = getRow(type, channel);
+    const raw = row?.reminder_offsets ?? DEFAULT_CHANNEL_OFFSETS[channel] ?? [{ d: 0, h: 1, m: 0 }];
+    return raw.map(dhmToOffsetRow);
   };
 
-  const removeOffset = (idx: number) =>
-    setReminderOffsets((prev) => prev.filter((_, i) => i !== idx));
+  const updateChannelOffset = (type: string, channel: string, idx: number, patch: Partial<OffsetRow>) => {
+    const offsets = getChannelOffsets(type, channel);
+    const updated = offsets.map((o, i) => i === idx ? { ...o, ...patch } : o);
+    updateRow(type, channel, 'reminder_offsets', updated.map(offsetRowToDhm));
+  };
+
+  const addChannelOffset = (type: string, channel: string) => {
+    const offsets = getChannelOffsets(type, channel);
+    if (offsets.length >= 3) return;
+    updateRow(type, channel, 'reminder_offsets', [...offsets, { value: 1, unit: 'hours' as OffsetUnit }].map(offsetRowToDhm));
+  };
+
+  const removeChannelOffset = (type: string, channel: string, idx: number) => {
+    const offsets = getChannelOffsets(type, channel);
+    updateRow(type, channel, 'reminder_offsets', offsets.filter((_, i) => i !== idx).map(offsetRowToDhm));
+  };
+
+  // ── Channel expand/collapse ───────────────────────────────────────────────────
+
+  const toggleChannel = (key: string) =>
+    setOpenChannels((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+
+  const handleToggleEnabled = (type: string, chKey: string, v: boolean) => {
+    updateRow(type, chKey, 'enabled', v);
+    // Auto-open the editor when enabling
+    if (v) setOpenChannels((prev) => new Set([...prev, `${type}:${chKey}`]));
+  };
+
+  // ── Save ──────────────────────────────────────────────────────────────────────
 
   const save = async () => {
     setSaving(true);
     try {
-      await Promise.all([
-        fetch('/api/calendar/notifications', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(notifs),
-        }),
-        fetch('/api/venues/me', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            appointment_reminder_offsets: reminderOffsets
-              .filter((o) => o.value > 0)
-              .map(offsetRowToDhm),
-          }),
-        }),
-      ]);
+      await fetch('/api/calendar/notifications', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(notifs),
+      });
       setSaved(true);
       setExpandedType(null);
       setTimeout(() => setSaved(false), 2500);
@@ -1260,9 +1279,8 @@ function NotificationsTab() {
 
   return (
     <div className="max-w-3xl space-y-3">
-      {/* Header */}
       <p className="text-sm text-gray-500 mb-2">
-        Configure email and SMS templates per scenario. Each channel can be individually enabled and customised.
+        Configure email and SMS templates per scenario. Each channel has independent settings and, for reminders, its own send schedule.
       </p>
 
       {/* Merge tags reference */}
@@ -1297,7 +1315,7 @@ function NotificationsTab() {
 
         return (
           <div key={nt.type} className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-            {/* Scenario header — click to open/close */}
+            {/* Scenario header */}
             <button
               type="button"
               onClick={() => setExpandedType(isOpen ? null : nt.type)}
@@ -1317,95 +1335,47 @@ function NotificationsTab() {
               </div>
             </button>
 
-            {/* Channel accordions — one per row, full width */}
+            {/* Channel rows */}
             {isOpen && (
               <div className="border-t border-gray-100 divide-y divide-gray-100">
-
-                {/* ── Reminder timing (only for reminder scenario) ─────────── */}
-                {nt.type === 'reminder' && (
-                  <div className="px-5 py-4 bg-gray-50">
-                    <p className="text-xs font-semibold text-gray-700 mb-3">
-                      When to send reminders
-                    </p>
-                    <div className="space-y-2">
-                      {reminderOffsets.map((offset, idx) => (
-                        <div key={idx} className="flex items-center gap-3">
-                          <input
-                            type="number"
-                            min={1}
-                            max={365}
-                            value={offset.value}
-                            onChange={(e) =>
-                              updateOffset(idx, { value: Math.max(1, parseInt(e.target.value) || 1) })
-                            }
-                            className="w-20 rounded-lg border border-gray-300 px-3 py-2 text-sm text-center focus:outline-none focus:ring-1 focus:ring-gray-800"
-                          />
-                          <select
-                            value={offset.unit}
-                            onChange={(e) => updateOffset(idx, { unit: e.target.value as OffsetUnit })}
-                            className="rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-gray-800"
-                          >
-                            <option value="minutes">Minutes</option>
-                            <option value="hours">Hours</option>
-                            <option value="days">Days</option>
-                          </select>
-                          <span className="text-sm text-gray-500 flex-1">before the appointment starts</span>
-                          {reminderOffsets.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => removeOffset(idx)}
-                              className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Remove reminder"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    {reminderOffsets.length < 3 && (
-                      <button
-                        type="button"
-                        onClick={addOffset}
-                        className="mt-3 flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 transition-colors"
-                      >
-                        <Plus size={13} />
-                        Add another reminder time
-                      </button>
-                    )}
-                    <p className="mt-3 text-[11px] text-gray-400">
-                      Up to 3 reminder times. Applies to all reminder templates below.
-                    </p>
-                  </div>
-                )}
-
                 {NOTIF_CHANNELS.map((ch) => {
                   const row = getRow(nt.type, ch.key);
                   if (!row) return null;
                   const def = NOTIF_DEFAULTS[nt.type]?.[ch.key];
                   const isEmail = ch.medium === 'email';
                   const smsLen = !isEmail ? (row.body ?? '').length : 0;
-                  const channelKey = `${nt.type}:${ch.key}`;
-                  const isChOpen = row.enabled; // channel body visible when enabled
+                  const chStateKey = `${nt.type}:${ch.key}`;
+                  const isChOpen = openChannels.has(chStateKey);
+                  const isReminder = nt.type === 'reminder';
+                  const channelOffsets = isReminder ? getChannelOffsets(nt.type, ch.key) : [];
 
                   return (
                     <div key={ch.key} className="bg-white">
-                      {/* Channel row header */}
-                      <div className="flex items-center justify-between px-5 py-3">
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs font-medium text-gray-700 w-44">
-                            {ch.label}
-                          </span>
+                      {/* Channel header — click chevron area to expand editor */}
+                      <div
+                        className="flex items-center justify-between px-5 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
+                        onClick={() => toggleChannel(chStateKey)}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <ChevronRight
+                            size={13}
+                            className={`text-gray-400 transition-transform shrink-0 ${isChOpen ? 'rotate-90' : ''}`}
+                          />
+                          <span className="text-xs font-medium text-gray-700">{ch.label}</span>
                           {row.enabled && (
                             <span className="text-[10px] font-semibold uppercase tracking-wider text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded">
                               Active
                             </span>
                           )}
                         </div>
-                        <label className="flex items-center gap-2 cursor-pointer">
+                        {/* Toggle: stop propagation so clicking it doesn't toggle accordion */}
+                        <label
+                          className="flex items-center gap-2 cursor-pointer"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <Toggle
                             checked={row.enabled}
-                            onChange={(v) => updateRow(nt.type, ch.key, 'enabled', v)}
+                            onChange={(v) => handleToggleEnabled(nt.type, ch.key, v)}
                           />
                           <span className={`text-xs font-medium ${row.enabled ? 'text-gray-700' : 'text-gray-400'}`}>
                             {row.enabled ? 'On' : 'Off'}
@@ -1413,12 +1383,73 @@ function NotificationsTab() {
                         </label>
                       </div>
 
-                      {/* Template editor — shown when enabled */}
+                      {/* Editor panel — open when chevron clicked (independent of toggle) */}
                       {isChOpen && (
-                        <div className="px-5 pb-5 space-y-3 bg-gray-50 border-t border-gray-100" key={channelKey}>
-                          {/* Subject line (email only) */}
-                          {isEmail && (
+                        <div className="px-5 pb-5 bg-gray-50 border-t border-gray-100 space-y-4">
+
+                          {/* ── Reminder timing (reminder scenario only) ────── */}
+                          {isReminder && (
                             <div className="pt-4">
+                              <p className="text-xs font-semibold text-gray-700 mb-2">
+                                When to send — {ch.label}
+                              </p>
+                              <div className="space-y-2">
+                                {channelOffsets.map((offset, idx) => (
+                                  <div key={idx} className="flex items-center gap-2.5">
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      max={365}
+                                      value={offset.value}
+                                      onChange={(e) =>
+                                        updateChannelOffset(nt.type, ch.key, idx, {
+                                          value: Math.max(1, parseInt(e.target.value) || 1),
+                                        })
+                                      }
+                                      className="w-20 rounded-lg border border-gray-300 px-3 py-2 text-sm text-center focus:outline-none focus:ring-1 focus:ring-gray-800"
+                                    />
+                                    <select
+                                      value={offset.unit}
+                                      onChange={(e) =>
+                                        updateChannelOffset(nt.type, ch.key, idx, {
+                                          unit: e.target.value as OffsetUnit,
+                                        })
+                                      }
+                                      className="rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-gray-800"
+                                    >
+                                      <option value="minutes">Minutes</option>
+                                      <option value="hours">Hours</option>
+                                      <option value="days">Days</option>
+                                    </select>
+                                    <span className="text-sm text-gray-500 flex-1">before</span>
+                                    {channelOffsets.length > 1 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => removeChannelOffset(nt.type, ch.key, idx)}
+                                        className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                      >
+                                        <Trash2 size={13} />
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                              {channelOffsets.length < 3 && (
+                                <button
+                                  type="button"
+                                  onClick={() => addChannelOffset(nt.type, ch.key)}
+                                  className="mt-2 flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 transition-colors"
+                                >
+                                  <Plus size={12} /> Add time
+                                </button>
+                              )}
+                              <p className="mt-2 text-[11px] text-gray-400">Up to 3 send times per channel.</p>
+                            </div>
+                          )}
+
+                          {/* Subject (email only) */}
+                          {isEmail && (
+                            <div className={isReminder ? '' : 'pt-4'}>
                               <label className="block text-xs font-medium text-gray-600 mb-1.5">
                                 Subject <span className="text-red-400">*</span>
                               </label>
@@ -1433,7 +1464,7 @@ function NotificationsTab() {
                           )}
 
                           {/* Message body */}
-                          <div className={isEmail ? '' : 'pt-4'}>
+                          <div className={isEmail || isReminder ? '' : 'pt-4'}>
                             <div className="flex items-center justify-between mb-1.5">
                               <label className="text-xs font-medium text-gray-600">
                                 {isEmail ? 'Email body' : 'SMS message'}
