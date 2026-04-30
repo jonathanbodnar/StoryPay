@@ -5,6 +5,7 @@ import { ensureDefaultPipeline, legacyStatusForStageName } from '@/lib/pipelines
 import { reconcileLeadsForKanban } from '@/lib/leads-reconcile';
 import { fetchTagsForLeadIds, leadRowWithTags, setLeadTagIds } from '@/lib/lead-tags';
 import { fetchOpenDuplicateMatchesForLeads, recordDuplicateCandidatesForNewLead } from '@/lib/lead-duplicates';
+import { applySystemTags, ensureSystemTagsForVenue } from '@/lib/system-tags';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -637,6 +638,11 @@ export async function POST(request: NextRequest) {
       body.tagIds.filter((x): x is string => typeof x === 'string'),
     );
   }
+
+  // Auto-apply system tags for new lead (fire-and-forget)
+  ensureSystemTagsForVenue(venueId)
+    .then(() => applySystemTags(venueId, newId, ['new_lead', 'inquiry_received', 'form_submitted']))
+    .catch(() => {});
 
   const dupMap = await fetchOpenDuplicateMatchesForLeads(venueId, [newId]);
   const withTags = await leadRowWithTags(venueId, data as Record<string, unknown>);

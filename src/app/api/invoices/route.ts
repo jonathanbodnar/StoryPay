@@ -6,6 +6,7 @@ import { findOrCreateContact, sendSms, sendEmail as ghlSendEmail, normalizePhone
 import { generateToken } from '@/lib/utils';
 import { sendEmail as directSendEmail } from '@/lib/email';
 import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
+import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
 import {
   normalizeLineItemsFromRequest,
   validateCouponForProposal,
@@ -265,6 +266,13 @@ export async function POST(request: NextRequest) {
       });
       console.log('[invoice] Email result:', JSON.stringify(emailResult));
     }
+  }
+
+  // Auto-apply invoice_sent tag if not a draft
+  if (!asDraft && customerEmail) {
+    ensureSystemTagsForVenue(venueId)
+      .then(() => applySystemTagByEmail(venueId, customerEmail, 'invoice_sent'))
+      .catch(() => {});
   }
 
   return NextResponse.json(proposal, { status: 201 });

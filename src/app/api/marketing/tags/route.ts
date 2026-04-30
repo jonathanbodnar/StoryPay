@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { ensureSystemTagsForVenue } from '@/lib/system-tags';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -14,10 +15,14 @@ export async function GET() {
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  // Seed system tags for this venue if they don't exist yet (idempotent)
+  ensureSystemTagsForVenue(venueId).catch(() => {});
+
   const { data, error } = await supabaseAdmin
     .from('marketing_tags')
-    .select('id, name, icon, color, position, created_at, updated_at')
+    .select('id, name, icon, color, position, is_system, system_key, category, description, auto_apply_events, created_at, updated_at')
     .eq('venue_id', venueId)
+    .order('is_system', { ascending: true })   // custom tags first
     .order('position', { ascending: true })
     .order('name', { ascending: true });
 

@@ -16,6 +16,7 @@ import {
   type GhlDndChannelSetting,
   type GhlInboundDndSettings,
 } from '@/lib/ghl';
+import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -101,7 +102,7 @@ export async function PUT(
   const [{ data: vc }, { data: venue }] = await Promise.all([
     supabaseAdmin
       .from('venue_customers')
-      .select('id, ghl_contact_id, ghl_dnd_settings, ghl_inbound_dnd_settings, sms_dnd')
+      .select('id, email, ghl_contact_id, ghl_dnd_settings, ghl_inbound_dnd_settings, sms_dnd')
       .eq('venue_id', venueId)
       .eq('id', id)
       .maybeSingle(),
@@ -204,6 +205,18 @@ export async function PUT(
         });
       }
     }
+  }
+
+  // Auto-apply system tags when DND is enabled
+  const contactEmail = (vc as { email?: string | null } | null)?.email;
+  if (contactEmail) {
+    const smsDndActive = (newDndSettings as GhlDndSettings)?.SMS?.status === 'active';
+    const allDndActive = (newDndSettings as GhlDndSettings)?.Email?.status === 'active' && smsDndActive;
+    ensureSystemTagsForVenue(venueId).then(() => {
+      if (smsDndActive) applySystemTagByEmail(venueId, contactEmail, 'sms_opted_out').catch(() => {});
+      if (allDndActive) applySystemTagByEmail(venueId, contactEmail, 'ghl_dnd_active').catch(() => {});
+      if (allDndActive) applySystemTagByEmail(venueId, contactEmail, 'do_not_contact').catch(() => {});
+    }).catch(() => {});
   }
 
   return NextResponse.json({

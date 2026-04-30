@@ -6,6 +6,7 @@ import { sendSms, sendEmail, findOrCreateContact, normalizePhone, getGhlToken } 
 import { generateToken } from '@/lib/utils';
 import { sendEmail as directSendEmail } from '@/lib/email';
 import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
+import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
 import {
   normalizeLineItemsFromRequest,
   validateCouponForProposal,
@@ -352,6 +353,13 @@ export async function POST(request: NextRequest) {
         }),
       });
     }
+  }
+
+  // Auto-apply proposal_sent tag
+  if (customerEmail) {
+    ensureSystemTagsForVenue(venueId)
+      .then(() => applySystemTagByEmail(venueId, customerEmail, 'proposal_sent'))
+      .catch(() => {});
   }
 
   return NextResponse.json(proposal, { status: 201 });

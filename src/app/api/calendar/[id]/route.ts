@@ -5,6 +5,7 @@ import { normalizeRule } from '@/lib/recurrence';
 import { syncAppointmentRemindersForEvent } from '@/lib/appointment-reminders';
 import { dispatchCalendarNotification, buildNotifVarsForEvent } from '@/lib/calendar-notifications';
 import { pushEventUpdateToGoogle, pushEventDeleteToGoogle } from '@/lib/google-calendar-push';
+import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -253,6 +254,19 @@ export async function PATCH(
             );
           }
         }
+
+        // Auto-apply system tags for status change events
+        if (customerEmail) {
+          await ensureSystemTagsForVenue(venueId);
+          if (isCancelled) {
+            applySystemTagByEmail(venueId, customerEmail, 'appointment_cancelled').catch(() => {});
+          } else if (updates.status === 'confirmed') {
+            applySystemTagByEmail(venueId, customerEmail, 'appointment_confirmed').catch(() => {});
+          }
+          if (isRescheduled) {
+            applySystemTagByEmail(venueId, customerEmail, 'appointment_rescheduled').catch(() => {});
+          }
+        }
       } catch (e) {
         console.error('[calendar PATCH] post-update side-effects error:', e);
       }
@@ -341,6 +355,10 @@ export async function DELETE(
         if (vars) {
           await dispatchCalendarNotification(venueId, 'cancellation', vars, undefined, null);
         }
+
+        // Auto-apply cancelled tag
+        await ensureSystemTagsForVenue(venueId);
+        applySystemTagByEmail(venueId, customerEmail, 'appointment_cancelled').catch(() => {});
       }
     } catch (e) {
       console.error('[calendar DELETE] post-delete side-effects error:', e);

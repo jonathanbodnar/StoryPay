@@ -5,6 +5,7 @@ import { sendEmail as directSendEmail } from '@/lib/email';
 import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
 import { syncPaymentRemindersForProposal } from '@/lib/payment-reminders';
 import { onMarketingProposalPaid } from '@/lib/marketing-email-worker';
+import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
 
 function applyFee(cents: number, ratePercent: number): number {
   if (ratePercent <= 0) return cents;
@@ -167,6 +168,21 @@ export async function POST(
 
     void syncPaymentRemindersForProposal(proposal.id);
     void onMarketingProposalPaid(proposal.venue_id as string, proposal.customer_email as string | null);
+
+    // Auto-apply payment system tags
+    if (proposal.venue_id && proposal.customer_email) {
+      const vId = proposal.venue_id as string;
+      const cEmail = proposal.customer_email as string;
+      const isFullPayment = proposal.payment_type === 'full';
+      ensureSystemTagsForVenue(vId).then(() => {
+        applySystemTagByEmail(vId, cEmail, 'deposit_paid').catch(() => {});
+        if (isFullPayment) {
+          applySystemTagByEmail(vId, cEmail, 'paid_in_full').catch(() => {});
+          applySystemTagByEmail(vId, cEmail, 'closed_won').catch(() => {});
+          applySystemTagByEmail(vId, cEmail, 'date_confirmed').catch(() => {});
+        }
+      }).catch(() => {});
+    }
 
     console.log('[verify-payment] Proposal updated:', JSON.stringify(updateData));
 

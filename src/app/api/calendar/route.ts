@@ -10,6 +10,7 @@ import {
 import { syncAppointmentRemindersForEvent } from '@/lib/appointment-reminders';
 import { dispatchCalendarNotification, buildNotifVarsForEvent } from '@/lib/calendar-notifications';
 import { pushEventCreateToGoogle } from '@/lib/google-calendar-push';
+import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -275,6 +276,30 @@ export async function POST(request: NextRequest) {
           tz ?? undefined,
         );
         if (vars) await dispatchCalendarNotification(venueId, 'booked_confirmed', vars, undefined, (calendar_id as string | null) ?? null);
+      }
+
+      // Auto-apply system tags based on calendar type
+      if (customer_email) {
+        const email = customer_email as string;
+        await ensureSystemTagsForVenue(venueId);
+
+        // Always tag as appointment booked
+        applySystemTagByEmail(venueId, email, 'appointment_booked').catch(() => {});
+
+        // Detect calendar type from calendar name for specific tags
+        if (calendar_id) {
+          const { data: cal } = await supabaseAdmin.from('venue_calendars').select('name').eq('id', calendar_id as string).maybeSingle();
+          const calName = ((cal as { name?: string } | null)?.name ?? '').toLowerCase();
+          if (calName.includes('tour')) {
+            applySystemTagByEmail(venueId, email, 'tour_scheduled').catch(() => {});
+          } else if (calName.includes('call') || calName.includes('phone')) {
+            applySystemTagByEmail(venueId, email, 'call_scheduled').catch(() => {});
+          }
+        }
+
+        if ((status ?? 'confirmed') === 'confirmed') {
+          applySystemTagByEmail(venueId, email, 'appointment_confirmed').catch(() => {});
+        }
       }
     } catch (e) {
       console.error('[calendar POST] post-insert side-effects error:', e);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { verifyMarketingUnsubscribeToken } from '@/lib/marketing-email-tokens';
+import { applySystemTag, ensureSystemTagsForVenue } from '@/lib/system-tags';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -36,6 +37,11 @@ export async function GET(request: NextRequest) {
     .eq('id', parsed.leadId)
     .eq('venue_id', parsed.venueId);
   if (optErr) console.error('[unsubscribe] opt_in', optErr);
+
+  // Auto-apply unsubscribed system tags (fire-and-forget)
+  ensureSystemTagsForVenue(parsed.venueId)
+    .then(() => applySystemTag(parsed.venueId, parsed.leadId, 'campaign_unsubscribed'))
+    .catch(() => {});
 
   const appOrigin = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') || '';
   const resub = `${appOrigin}/api/public/marketing/resubscribe?token=${encodeURIComponent(token)}`;

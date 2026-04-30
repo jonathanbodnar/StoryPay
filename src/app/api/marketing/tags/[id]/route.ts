@@ -60,6 +60,22 @@ export async function DELETE(
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { id } = await context.params;
 
+  // Check if this is a system tag — system tags cannot be deleted
+  const { data: tag } = await supabaseAdmin
+    .from('marketing_tags')
+    .select('id, is_system')
+    .eq('id', id)
+    .eq('venue_id', venueId)
+    .maybeSingle();
+
+  if (!tag) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if ((tag as { is_system?: boolean }).is_system) {
+    return NextResponse.json(
+      { error: 'System tags cannot be deleted.' },
+      { status: 403 },
+    );
+  }
+
   const { data, error } = await supabaseAdmin
     .from('marketing_tags')
     .delete()
