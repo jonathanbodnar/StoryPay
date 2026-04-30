@@ -67,6 +67,8 @@ const paymentsItems: NavItem[] = [
   { label: 'Installments', href: '/dashboard/payments/installments', icon: Calendar, navId: 'nav_payments_installments' },
   { label: 'Subscriptions', href: '/dashboard/payments/subscriptions', icon: RefreshCw, navId: 'nav_payments_subscriptions' },
   { label: 'Transactions', href: '/dashboard/transactions', icon: CreditCard, navId: 'nav_transactions' },
+  { label: 'Email Templates', href: '/dashboard/settings/email-templates', icon: Mail, navId: 'nav_settings_email_templates' },
+  { label: 'Notifications', href: '/dashboard/settings/notifications', icon: Bell, navId: 'nav_settings_notifications' },
 ];
 
 const marketingItems: NavItem[] = [
@@ -81,11 +83,9 @@ const marketingItems: NavItem[] = [
 const settingsItems: NavItem[] = [
   { label: 'General', href: '/dashboard/settings', icon: Settings, navId: 'nav_settings_general' },
   { label: 'Branding', href: '/dashboard/settings/branding', icon: Palette, navId: 'nav_settings_branding' },
-  { label: 'Email Templates', href: '/dashboard/settings/email-templates', icon: Mail, navId: 'nav_settings_email_templates' },
   { label: 'Calendar', href: '/dashboard/settings/calendar', icon: Calendar, navId: 'nav_settings_calendar' },
   { label: 'Integrations', href: '/dashboard/settings/integrations', icon: Link2, navId: 'nav_settings_integrations' },
   { label: 'Team', href: '/dashboard/settings/team', icon: UsersRound, navId: 'nav_settings_team' },
-  { label: 'Notifications', href: '/dashboard/settings/notifications', icon: Bell, navId: 'nav_settings_notifications' },
 ];
 
 const listingItems: NavItem[] = [
@@ -194,12 +194,21 @@ export default function Sidebar({
     return () => window.removeEventListener('storypay:open-onboarding', handler);
   }, []);
 
-  const isOnSettings = pathname.startsWith('/dashboard/settings');
+  // Email Templates + Notifications live under /dashboard/settings/* but
+  // belong to the Payments menu group (they're payment-related templates and
+  // notifications). Treat their paths as payments-active, not settings-active.
+  const paymentSettingsPaths = [
+    '/dashboard/settings/email-templates',
+    '/dashboard/settings/notifications',
+  ];
+  const isOnPaymentSettings = paymentSettingsPaths.some((p) => pathname.startsWith(p));
+  const isOnSettings = pathname.startsWith('/dashboard/settings') && !isOnPaymentSettings;
   const isOnMarketing = pathname.startsWith('/dashboard/marketing');
   const isOnPayments = pathname.startsWith('/dashboard/payments')
     || pathname.startsWith('/dashboard/transactions')
     || pathname.startsWith('/dashboard/invoices')
-    || pathname.startsWith('/dashboard/proposals');
+    || pathname.startsWith('/dashboard/proposals')
+    || isOnPaymentSettings;
 
   type OpenGroup = 'payments' | 'settings' | 'marketing' | 'listing' | null;
   const initialGroup: OpenGroup = isOnListing

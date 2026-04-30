@@ -50,6 +50,13 @@ const SAMPLE_VARS: Record<string, Record<string, string>> = {
     amount:        '$4,500.00',
     reason:        'Insufficient funds',
   },
+  payment_reminder: {
+    organization:  '{{organization}}',
+    customer_name: 'Jane Smith',
+    amount:        '$1,500.00',
+    due_date:      'June 15, 2026 at 12:00 PM',
+    offset_label:  '3 days',
+  },
 };
 
 export async function POST(

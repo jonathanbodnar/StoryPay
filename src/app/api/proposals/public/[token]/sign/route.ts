@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { syncPaymentRemindersForProposal } from '@/lib/payment-reminders';
+import { notifyOwner, formatAmount } from '@/lib/owner-notifications';
 
 export async function POST(
   request: Request,
@@ -15,7 +16,7 @@ export async function POST(
 
   const { data: proposal, error } = await supabaseAdmin
     .from('proposals')
-    .select('id, status')
+    .select('id, status, venue_id, customer_name, price')
     .eq('public_token', token)
     .single();
 
@@ -41,6 +42,20 @@ export async function POST(
   }
 
   void syncPaymentRemindersForProposal(proposal.id);
+
+  // Notify the venue owner that a proposal was signed (gated by toggles).
+  if (proposal.venue_id) {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.storypay.io';
+    void notifyOwner({
+      venueId: proposal.venue_id as string,
+      scenario: 'proposal_signed',
+      vars: {
+        customer_name: (proposal.customer_name as string | null) || 'Customer',
+        amount:        formatAmount(proposal.price as number | null),
+      },
+      actionUrl: `${appUrl}/dashboard/payments/proposals`,
+    });
+  }
 
   return NextResponse.json({ success: true });
 }

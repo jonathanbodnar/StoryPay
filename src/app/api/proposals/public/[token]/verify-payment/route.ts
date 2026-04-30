@@ -6,6 +6,7 @@ import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email
 import { syncPaymentRemindersForProposal } from '@/lib/payment-reminders';
 import { onMarketingProposalPaid } from '@/lib/marketing-email-worker';
 import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
+import { notifyOwner, formatAmount, HIGH_VALUE_THRESHOLD_CENTS } from '@/lib/owner-notifications';
 
 function applyFee(cents: number, ratePercent: number): number {
   if (ratePercent <= 0) return cents;
@@ -71,6 +72,17 @@ export async function POST(
     console.log('[verify-payment] Checkout session response:', JSON.stringify(session, null, 2));
 
     if (session.status !== 'completed') {
+      // Notify the venue owner that a payment attempt failed (gated by toggles).
+      void notifyOwner({
+        venueId: proposal.venue_id as string,
+        scenario: 'payment_failed',
+        vars: {
+          customer_name: proposal.customer_name || 'Customer',
+          amount:        formatAmount(proposal.price),
+          reason:        String(session.status || 'unknown'),
+        },
+        actionUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://www.storypay.io'}/dashboard/transactions`,
+      });
       return NextResponse.json(
         { error: 'Payment not completed', status: session.status },
         { status: 400 }
@@ -233,6 +245,61 @@ export async function POST(
       }
     } catch (emailErr) {
       console.error('[verify-payment] Failed to send receipt email:', emailErr);
+    }
+
+    // ── Owner-side notifications (email + SMS), gated by /dashboard/settings/notifications toggles
+    try {
+      const { data: fp } = await supabaseAdmin
+        .from('proposals')
+        .select('customer_name, price, public_token')
+        .eq('id', proposal.id)
+        .single();
+      const amountCents  = Number(fp?.price ?? 0);
+      const customerName = (fp?.customer_name as string | null) || 'Customer';
+      const appUrl       = process.env.NEXT_PUBLIC_APP_URL || 'https://www.storypay.io';
+      const dashUrl      = `${appUrl}/dashboard/transactions`;
+
+      // 1. Subscription created
+      if (proposal.payment_type === 'subscription' && proposal.payment_config) {
+        const cfg = proposal.payment_config as SubscriptionConfig;
+        void notifyOwner({
+          venueId: proposal.venue_id as string,
+          scenario: 'subscription_created',
+          vars: {
+            customer_name: customerName,
+            amount:        formatAmount(cfg.amount),
+            frequency:     String(cfg.frequency || ''),
+          },
+          actionUrl: dashUrl,
+        });
+      }
+
+      // 2. Payment received (always for full / installment first payment / subscription start)
+      void notifyOwner({
+        venueId: proposal.venue_id as string,
+        scenario: 'payment_received',
+        vars: {
+          customer_name: customerName,
+          amount:        formatAmount(amountCents),
+        },
+        actionUrl:    dashUrl,
+        alsoHighValue: amountCents >= HIGH_VALUE_THRESHOLD_CENTS,
+      });
+
+      // 3. Separate high-value SMS scenario (gated by sms_high_value_payment)
+      if (amountCents >= HIGH_VALUE_THRESHOLD_CENTS) {
+        void notifyOwner({
+          venueId: proposal.venue_id as string,
+          scenario: 'high_value_payment',
+          vars: {
+            customer_name: customerName,
+            amount:        formatAmount(amountCents),
+          },
+          actionUrl: dashUrl,
+        });
+      }
+    } catch (notifyErr) {
+      console.error('[verify-payment] Failed to notify owner:', notifyErr);
     }
 
     return NextResponse.json({ success: true });

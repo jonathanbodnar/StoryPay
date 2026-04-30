@@ -92,6 +92,18 @@ export const DEFAULT_TEMPLATES: Record<string, {
       button_text: 'Update Payment Method',
     },
   },
+  payment_reminder: {
+    label: 'Payment Reminder',
+    description: 'Reminder sent before each installment due date',
+    icon: 'Bell',
+    variables: ['{{organization}}', '{{customer_name}}', '{{amount}}', '{{due_date}}', '{{offset_label}}'],
+    defaults: {
+      subject: 'Payment reminder: {{amount}} due {{due_date}} - {{organization}}',
+      heading: 'Upcoming payment reminder',
+      body: 'Hi {{customer_name}},\n\nThis is a friendly reminder about an upcoming payment to {{organization}}.\n\nAmount due: {{amount}}\nDue: {{due_date}}\n\nReminder sent {{offset_label}} before the due date.',
+      button_text: 'View & Pay',
+    },
+  },
 };
 
 async function getVenueId() {

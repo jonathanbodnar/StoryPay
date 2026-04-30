@@ -7,6 +7,7 @@ import {
   computeReminderSendAt,
   normalizeReminderOffsets,
 } from '@/lib/appointment-reminders';
+import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
 
 export const DEFAULT_PAYMENT_REMINDER_OFFSETS: ReminderOffset[] = [
   { d: 3, h: 0, m: 0 },
@@ -21,14 +22,6 @@ export function normalizePaymentReminderOffsets(raw: unknown): ReminderOffset[] 
   if (!Array.isArray(raw) || raw.length === 0) return [...DEFAULT_PAYMENT_REMINDER_OFFSETS];
   const n = normalizeReminderOffsets(raw.slice(0, MAX_PAYMENT_REMINDER_SLOTS));
   return n.length ? n.slice(0, MAX_PAYMENT_REMINDER_SLOTS) : [...DEFAULT_PAYMENT_REMINDER_OFFSETS];
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }
 
 function formatOffsetLabel(o: ReminderOffset): string {
@@ -198,7 +191,7 @@ export async function sendPaymentDueReminderEmail(row: {
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('name, timezone, brand_email, email')
+    .select('name, timezone, brand_email, email, brand_color, brand_logo_url')
     .eq('id', row.venue_id)
     .maybeSingle();
 
@@ -218,21 +211,35 @@ export async function sendPaymentDueReminderEmail(row: {
         )
       : '';
 
-  const subject = `Payment reminder${amountStr ? `: ${amountStr}` : ''} — ${venueName}`;
   const token = String((proposal as { public_token?: string }).public_token || '');
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.storypay.io';
   const payLink = token ? `${appUrl}/proposal/${token}` : appUrl;
 
-  const html = `
-    <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:0 auto;color:#1b1b1b;line-height:1.5;">
-      <p style="margin:0 0 12px;">This is a friendly reminder about an upcoming payment on your plan.</p>
-      ${amountStr ? `<p style="margin:0 0 8px;font-size:18px;font-weight:700;">Amount due: ${escapeHtml(amountStr)}</p>` : ''}
-      <p style="margin:0 0 8px;"><strong>Due</strong></p>
-      <p style="margin:0 0 16px;color:#52525b;">${escapeHtml(when)}</p>
-      <p style="margin:0 0 20px;font-size:13px;color:#71717a;">Reminder sent ${escapeHtml(formatOffsetLabel(o))} before the due time.</p>
-      <p style="margin:0 0 8px;"><a href="${escapeHtml(payLink)}" style="display:inline-block;background:#1b1b1b;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:600;">View proposal &amp; pay</a></p>
-    </div>
-  `;
+  // Load the venue's branded `payment_reminder` email template (or fall back
+  // to the canonical defaults defined in `src/lib/email-templates.ts`).
+  // If the venue has explicitly disabled this template, skip the send.
+  const tmpl = await getVenueEmailTemplate(row.venue_id, 'payment_reminder');
+  if (!tmpl) {
+    return { ok: false, error: 'template_disabled' };
+  }
+  const customerName = String((proposal as { customer_name?: string | null }).customer_name || 'there');
+  const vars: Record<string, string> = {
+    organization:  venueName,
+    customer_name: customerName,
+    amount:        amountStr || '$0.00',
+    due_date:      when,
+    offset_label:  formatOffsetLabel(o),
+  };
+
+  const subject = fillTemplate(tmpl.subject, vars);
+  const html = buildEmailHtml({
+    template:   tmpl,
+    vars,
+    actionUrl:  payLink,
+    brandColor: (venue as { brand_color?: string | null } | null)?.brand_color || '#1b1b1b',
+    logoUrl:    (venue as { brand_logo_url?: string | null } | null)?.brand_logo_url || undefined,
+    venueName,
+  });
 
   const replyTo =
     (venue as { brand_email?: string | null; email?: string | null })?.brand_email ||

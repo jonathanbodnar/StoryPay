@@ -73,6 +73,13 @@ const DEFAULTS: Record<string, Omit<EmailTemplateRow, 'type' | 'enabled'>> = {
     button_text: 'Update Payment Method',
     footer:      null,
   },
+  payment_reminder: {
+    subject:     'Payment reminder: {{amount}} due {{due_date}} — {{organization}}',
+    heading:     'Upcoming payment reminder',
+    body:        'Hi {{customer_name}},\n\nThis is a friendly reminder about an upcoming payment to {{organization}}.\n\nAmount due: {{amount}}\nDue: {{due_date}}\n\nReminder sent {{offset_label}} before the due date.',
+    button_text: 'View & Pay',
+    footer:      null,
+  },
 };
 
 // ─── Loader ───────────────────────────────────────────────────────────────────
