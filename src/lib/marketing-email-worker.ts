@@ -584,6 +584,73 @@ async function sendAutomationSmsToLead(
   return { ok: true, mergedBody };
 }
 
+/**
+ * Send a "quick compose" email — used by workflow send_email steps in quick
+ * mode. Renders subject + body inline (merge vars resolved) and wraps the body
+ * in a minimal HTML shell so newlines render correctly across email clients.
+ */
+async function sendQuickEmailToLead(
+  venueId: string,
+  leadId: string,
+  spec: {
+    subject: string; body: string; preheader?: string;
+    from_name?: string; from_email?: string;
+    cc?: string; bcc?: string;
+  },
+): Promise<{ ok: boolean; error?: string; mergedSubject?: string }> {
+  const appOrigin = process.env.NEXT_PUBLIC_APP_URL || 'https://storyvenue.com';
+  const vars = await buildMergeVars(venueId, leadId, appOrigin);
+  if (!vars) return { ok: false, error: 'opt_out' };
+  if (!vars.email) return { ok: false, error: 'No email' };
+  const { data: sup } = await supabaseAdmin
+    .from('marketing_email_suppressions')
+    .select('lead_id')
+    .eq('venue_id', venueId)
+    .eq('lead_id', leadId)
+    .maybeSingle();
+  if (sup) return { ok: false, error: 'suppressed' };
+
+  const mergedSubject   = mergeMarketingFields(spec.subject, vars);
+  const mergedPreheader = mergeMarketingFields(spec.preheader ?? '', vars);
+  const mergedBody      = mergeMarketingFields(spec.body, vars);
+  const mergedFromName  = mergeMarketingFields(spec.from_name  ?? '', vars).trim();
+  const mergedFromEmail = mergeMarketingFields(spec.from_email ?? '', vars).trim();
+  const mergedCc        = mergeMarketingFields(spec.cc  ?? '', vars).trim();
+  const mergedBcc       = mergeMarketingFields(spec.bcc ?? '', vars).trim();
+
+  const escapeHtml = (s: string) => s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+  // If body contains HTML tags, treat as HTML; otherwise convert plain text
+  // (newlines → <br>, paragraphs preserved) to a simple wrapped HTML doc.
+  const looksLikeHtml = /<\/?[a-z][\s\S]*?>/i.test(mergedBody);
+  const bodyHtml = looksLikeHtml
+    ? mergedBody
+    : escapeHtml(mergedBody).replace(/\n/g, '<br>');
+  const preheaderComment = mergedPreheader.trim()
+    ? `<!-- preheader: ${mergedPreheader.replace(/<!--/g, '').slice(0, 200)} -->\n`
+    : '';
+  const html = `${preheaderComment}<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(mergedSubject)}</title></head><body style="margin:0;padding:0;background:#f6f7f9;font-family:Helvetica,Arial,sans-serif;color:#1f2937;line-height:1.55;"><div style="max-width:600px;margin:0 auto;padding:24px;background:#ffffff;">${bodyHtml}</div></body></html>`;
+
+  const { data: venue } = await supabaseAdmin.from('venues').select('name').eq('id', venueId).maybeSingle();
+  const fromName = mergedFromName || `${(venue?.name as string) || 'Venue'} via StoryVenue`;
+
+  const r = await sendEmail({
+    to: vars.email,
+    subject: mergedSubject || '(no subject)',
+    html,
+    from: mergedFromEmail
+      ? { name: fromName, email: mergedFromEmail }
+      : { name: fromName },
+    cc:  mergedCc  ? mergedCc.split(/[,\s;]+/).filter(Boolean)  : undefined,
+    bcc: mergedBcc ? mergedBcc.split(/[,\s;]+/).filter(Boolean) : undefined,
+  });
+  return r.success ? { ok: true, mergedSubject } : { ok: false, error: r.error };
+}
+
 async function sendTemplateToLead(
   venueId: string,
   leadId: string,
@@ -782,29 +849,52 @@ async function processOneEnrollment(en: {
     return 'delayed';
   }
   if (step.step_type === 'send_email') {
-    const templateId = String((step.config_json as { template_id?: string }).template_id || '');
-    if (!templateId) {
-      await supabaseAdmin
-        .from('marketing_automation_enrollments')
-        .update({ status: 'failed', last_error: 'Missing template_id' })
-        .eq('id', en.id);
-      return 'failed';
+    const cfg = step.config_json as {
+      mode?: string; template_id?: string;
+      from_name?: string; from_email?: string; cc?: string; bcc?: string;
+      subject?: string; preheader?: string; body?: string;
+      track_clicks?: boolean;
+    };
+    const mode = cfg.mode === 'template' ? 'template' : (cfg.mode === 'quick' ? 'quick' : 'template');
+
+    let send: { ok: boolean; error?: string; mergedSubject?: string };
+    if (mode === 'quick') {
+      // ── Quick compose: render subject/body inline with merge vars ───────
+      send = await sendQuickEmailToLead(en.venue_id, en.lead_id, {
+        subject:    String(cfg.subject ?? ''),
+        body:       String(cfg.body ?? ''),
+        preheader:  typeof cfg.preheader  === 'string' ? cfg.preheader  : undefined,
+        from_name:  typeof cfg.from_name  === 'string' ? cfg.from_name  : undefined,
+        from_email: typeof cfg.from_email === 'string' ? cfg.from_email : undefined,
+        cc:         typeof cfg.cc         === 'string' ? cfg.cc         : undefined,
+        bcc:        typeof cfg.bcc        === 'string' ? cfg.bcc        : undefined,
+      });
+    } else {
+      // ── Template mode: existing path ──────────────────────────────────────
+      const templateId = String(cfg.template_id || '');
+      if (!templateId) {
+        await supabaseAdmin
+          .from('marketing_automation_enrollments')
+          .update({ status: 'failed', last_error: 'Missing template_id' })
+          .eq('id', en.id);
+        return 'failed';
+      }
+      const { data: tmpl } = await supabaseAdmin
+        .from('marketing_email_templates')
+        .select('subject, preheader, definition_json')
+        .eq('id', templateId)
+        .eq('venue_id', en.venue_id)
+        .maybeSingle();
+      if (!tmpl) {
+        await supabaseAdmin
+          .from('marketing_automation_enrollments')
+          .update({ status: 'failed', last_error: 'Template not found' })
+          .eq('id', en.id);
+        return 'failed';
+      }
+      const def = parseEmailDefinition(tmpl.definition_json);
+      send = await sendTemplateToLead(en.venue_id, en.lead_id, def, tmpl.subject as string, tmpl.preheader as string, undefined);
     }
-    const { data: tmpl } = await supabaseAdmin
-      .from('marketing_email_templates')
-      .select('subject, preheader, definition_json')
-      .eq('id', templateId)
-      .eq('venue_id', en.venue_id)
-      .maybeSingle();
-    if (!tmpl) {
-      await supabaseAdmin
-        .from('marketing_automation_enrollments')
-        .update({ status: 'failed', last_error: 'Template not found' })
-        .eq('id', en.id);
-      return 'failed';
-    }
-    const def = parseEmailDefinition(tmpl.definition_json);
-    const send = await sendTemplateToLead(en.venue_id, en.lead_id, def, tmpl.subject as string, tmpl.preheader as string, undefined);
     // 'suppressed' = unsubscribed, 'opt_out' = marketing_email_opt_in is false.
     // Both are soft skips — advance to the next step rather than failing the enrollment.
     const emailSkipped = send.error === 'suppressed' || send.error === 'opt_out';

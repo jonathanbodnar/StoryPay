@@ -100,7 +100,21 @@ type NotifyChannel = 'email' | 'sms' | 'both';
 type LocalStepBase = { localId: string; title?: string; note?: string };
 type LocalStep =
   | (LocalStepBase & { step_type: 'delay';                delay_minutes: number })
-  | (LocalStepBase & { step_type: 'send_email';            template_id: string })
+  | (LocalStepBase & {
+      step_type: 'send_email';
+      /** 'quick' = inline compose, 'template' = use saved template. */
+      mode: 'quick' | 'template';
+      template_id: string;
+      from_name?: string;
+      from_email?: string;
+      cc?: string;
+      bcc?: string;
+      subject: string;
+      preheader?: string;
+      /** Plain-text or simple HTML body (used in quick mode). */
+      body: string;
+      track_clicks?: boolean;
+    })
   | (LocalStepBase & { step_type: 'send_sms';              body: string; media_urls?: string[] })
   | (LocalStepBase & { step_type: 'add_tag';               tag_ids: string[] })
   | (LocalStepBase & { step_type: 'remove_tag';            tag_ids: string[] })
@@ -703,6 +717,13 @@ function stepMeta(s: LocalStep, templates: TemplateOpt[]): { title: string; subt
     const preview = (s.subject?.trim() || s.body?.trim() || '').slice(0, 48);
     return { title: 'Notify Venue Owner', subtitle: preview ? `${channelLabel} · ${preview}` : channelLabel, Icon: Bell };
   }
+  // send_email: subtitle differs by mode
+  if (s.mode === 'quick') {
+    const subj = (s.subject ?? '').trim();
+    const preview = subj || (s.body ?? '').trim();
+    const sub = preview ? preview.slice(0, 52) + (preview.length > 52 ? '…' : '') : 'Quick compose →';
+    return { title: 'Send Email', subtitle: sub, Icon: Mail };
+  }
   const tpl = templates.find((t) => t.id === s.template_id);
   return { title: 'Send Email', subtitle: tpl?.name ?? 'Choose a template →', Icon: Mail };
 }
@@ -786,7 +807,16 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
   const [mergeTagOpen, setMergeTagOpen]     = useState(false);
   // Which field a freshly-picked merge variable should be inserted into.
   // 'sms-body' for the SMS step, 'notify-subject' / 'notify-body' for the Notify Owner step.
-  const [mergeTagField, setMergeTagField]   = useState<'sms-body' | 'notify-subject' | 'notify-body'>('sms-body');
+  const [mergeTagField, setMergeTagField]   = useState<
+    | 'sms-body' | 'notify-subject' | 'notify-body'
+    | 'email-from-name' | 'email-from-email' | 'email-cc' | 'email-bcc'
+    | 'email-subject' | 'email-preheader' | 'email-body'
+  >('sms-body');
+  // Refs to email step inputs so the merge-var picker can splice tags at the
+  // current caret position. Keys correspond to mergeTagField values.
+  const emailFieldRefs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>({});
+  // Per-step toggle for showing the optional Cc / Bcc fields in the email editor.
+  const [emailExtra, setEmailExtra] = useState<Record<string, { cc?: boolean; bcc?: boolean }>>({});
   // The button element that opened the popover, used to position it via portal.
   const [mergeAnchor, setMergeAnchor]       = useState<HTMLElement | null>(null);
   const mergeAnchorRef                      = useRef<HTMLElement | null>(null);
@@ -1077,7 +1107,31 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
             body:      String(sc.body ?? '{{contact.name}} just hit a step in the "{{system.workflow_name}}" workflow.'),
           };
         }
-        return { localId, title, note, step_type: 'send_email' as const, template_id: String((s.config_json as { template_id?: string }).template_id ?? '') };
+        if (s.step_type === 'send_email') {
+          const ec = s.config_json as {
+            mode?: string; template_id?: string;
+            from_name?: string; from_email?: string;
+            cc?: string; bcc?: string;
+            subject?: string; preheader?: string; body?: string;
+            track_clicks?: boolean;
+          };
+          const mode = ec.mode === 'template' ? 'template' as const : 'quick' as const;
+          return {
+            localId, title, note, step_type: 'send_email' as const,
+            mode,
+            template_id: String(ec.template_id ?? ''),
+            from_name:   typeof ec.from_name   === 'string' ? ec.from_name   : '',
+            from_email:  typeof ec.from_email  === 'string' ? ec.from_email  : '',
+            cc:          typeof ec.cc          === 'string' ? ec.cc          : '',
+            bcc:         typeof ec.bcc         === 'string' ? ec.bcc         : '',
+            subject:     typeof ec.subject     === 'string' ? ec.subject     : '',
+            preheader:   typeof ec.preheader   === 'string' ? ec.preheader   : '',
+            body:        typeof ec.body        === 'string' ? ec.body        : '',
+            track_clicks: ec.track_clicks !== false,
+          };
+        }
+        return { localId, title, note, step_type: 'send_email' as const, mode: 'quick' as const,
+                 template_id: '', subject: '', body: '' };
       }));
     }
     if (tagRes.ok)   { const d = await tagRes.json();  setTags(d.tags ?? []); }
@@ -1234,7 +1288,22 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
             return { step_order: i, step_type: 'create_conversation' as const, config: { ...meta } };
           if (s.step_type === 'notify_owner')
             return { step_order: i, step_type: 'notify_owner' as const, config: { ...meta, channel: s.channel, subject: s.subject.trim(), body: s.body.trim() } };
-          return { step_order: i, step_type: 'send_email' as const, config: { ...meta, template_id: s.template_id } };
+          return {
+            step_order: i, step_type: 'send_email' as const,
+            config: {
+              ...meta,
+              mode:         s.mode,
+              template_id:  s.template_id,
+              from_name:    (s.from_name   ?? '').trim(),
+              from_email:   (s.from_email  ?? '').trim(),
+              cc:           (s.cc          ?? '').trim(),
+              bcc:          (s.bcc         ?? '').trim(),
+              subject:      (s.subject     ?? '').trim(),
+              preheader:    (s.preheader   ?? '').trim(),
+              body:         s.body         ?? '',
+              track_clicks: s.track_clicks !== false,
+            },
+          };
         }),
       }),
     });
@@ -1302,7 +1371,11 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
       : kind === 'change_stage'      ? { localId, step_type: 'change_stage',        stage_id: '' }
       : kind === 'create_conversation' ? { localId, step_type: 'create_conversation' }
       : kind === 'notify_owner'      ? { localId, step_type: 'notify_owner',        channel: 'email', subject: 'Workflow update for {{contact.name}}', body: 'Hey,\n\n{{contact.name}} just hit a step in the "{{system.workflow_name}}" workflow.\n\nContact: {{contact.email}} {{contact.phone}}' }
-      :                                { localId, step_type: 'send_email',          template_id: templates[0]?.id ?? '' };
+      :                                { localId, step_type: 'send_email',          mode: 'quick', template_id: '',
+                                          subject: 'Hello {{contact.first_name}}',
+                                          preheader: '',
+                                          body: 'Hi {{contact.first_name}},\n\n[Write your message here]\n\nThanks,\n{{venue.name}}',
+                                          track_clicks: true };
     setSteps((prev) => { const c = [...prev]; c.splice(insertIdx, 0, step); return c; });
     setSelected({ kind: 'step', localId });
     scheduleAutoSave();
@@ -1431,6 +1504,39 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
     requestAnimationFrame(() => {
       ta.focus();
       ta.setSelectionRange(start + text.length, start + text.length);
+    });
+  }
+
+  // ── Insert a merge tag into the active email-step input/textarea at the ───
+  // current cursor position, then update the corresponding step field.
+  function insertIntoEmailField(
+    fieldKey: 'from_name' | 'from_email' | 'cc' | 'bcc' | 'subject' | 'preheader' | 'body',
+    text: string,
+    lid: string,
+  ) {
+    const refKey = `email-${fieldKey === 'from_name' ? 'from-name' : fieldKey === 'from_email' ? 'from-email' : fieldKey}`;
+    const el = emailFieldRefs.current[refKey];
+    if (!el) {
+      // Fallback: append to the end of the field if we don't have a live ref.
+      setSteps((prev) => prev.map((x) => {
+        if (x.localId !== lid || x.step_type !== 'send_email') return x;
+        const cur = String((x as { [k: string]: unknown })[fieldKey] ?? '');
+        return { ...x, [fieldKey]: cur + text } as LocalStep;
+      }));
+      scheduleAutoSave();
+      return;
+    }
+    const start = el.selectionStart ?? el.value.length;
+    const end   = el.selectionEnd   ?? el.value.length;
+    const newVal = el.value.slice(0, start) + text + el.value.slice(end);
+    setSteps((prev) => prev.map((x) => {
+      if (x.localId !== lid || x.step_type !== 'send_email') return x;
+      return { ...x, [fieldKey]: newVal } as LocalStep;
+    }));
+    scheduleAutoSave();
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(start + text.length, start + text.length);
     });
   }
 
@@ -2534,28 +2640,330 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
 
                   {/* ── Send Email step ───────────────────────────────── */}
                   {selectedStep.step_type === 'send_email' && (() => {
-                    const stepOrder = steps.findIndex((s) => s.localId === selectedStep.localId);
-                    return (
-                      <div>
-                        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Template</p>
-                        {templates.length === 0 ? (
-                          <p className="text-[11px] text-gray-500">No templates. <Link href="/dashboard/marketing/email/templates" className="text-brand-600 hover:underline">Create one →</Link></p>
-                        ) : (
-                          <select
-                            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
-                            value={selectedStep.template_id}
-                            onChange={(e) => {
-                              const v = e.target.value; const lid = selectedStep.localId;
-                              setSteps((prev) => prev.map((x) => x.localId === lid && x.step_type === 'send_email' ? { ...x, template_id: v } : x));
-                              scheduleAutoSave();
-                            }}
-                          >
-                            <option value="">Choose a template</option>
-                            {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                          </select>
-                        )}
-                        <p className="mt-2 text-[11px] text-gray-400">Unsubscribe and bounce suppression applied automatically.</p>
+                    const lid       = selectedStep.localId;
+                    const stepOrder = steps.findIndex((s) => s.localId === lid);
+                    const mode      = selectedStep.mode ?? 'quick';
+                    const showCc    = (selectedStep.cc  ?? '').length > 0 || emailExtra[lid]?.cc  === true;
+                    const showBcc   = (selectedStep.bcc ?? '').length > 0 || emailExtra[lid]?.bcc === true;
+                    const charCount = (selectedStep.body ?? '').length;
 
+                    type EmailFieldKey = 'mode' | 'template_id' | 'from_name' | 'from_email' | 'cc' | 'bcc' | 'subject' | 'preheader' | 'body' | 'track_clicks';
+                    function setField<V>(field: EmailFieldKey, value: V) {
+                      setSteps((prev) => prev.map((x) => x.localId === lid && x.step_type === 'send_email' ? ({ ...x, [field]: value } as LocalStep) : x));
+                      scheduleAutoSave();
+                    }
+
+                    function VarIconButton({ field }: {
+                      field: 'email-from-name' | 'email-from-email' | 'email-cc' | 'email-bcc' | 'email-subject' | 'email-preheader';
+                    }) {
+                      return (
+                        <button
+                          type="button"
+                          title="Insert merge variable"
+                          onClick={(e) => {
+                            setMergeAnchor(e.currentTarget as HTMLElement);
+                            setMergeTagField(field);
+                            setMergeTagOpen(true);
+                            setTriggerLinkOpen(false);
+                          }}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                        >
+                          <Tag size={13} />
+                        </button>
+                      );
+                    }
+
+                    return (
+                      <div data-no-dnd>
+                        {/* ── Mode tabs ────────────────────────────── */}
+                        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Create email</p>
+                        <div className="grid grid-cols-2 gap-2 mb-4">
+                          <button
+                            type="button"
+                            onClick={() => setField('mode', 'quick')}
+                            className={`rounded-xl border px-3 py-2 text-left transition-colors ${
+                              mode === 'quick'
+                                ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-200'
+                                : 'border-gray-200 bg-white hover:bg-gray-50'
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 text-[12px] font-semibold text-gray-800">
+                              <span className={`relative inline-block w-3 h-3 rounded-full border ${mode === 'quick' ? 'border-brand-500 bg-brand-500' : 'border-gray-300'}`}>
+                                {mode === 'quick' && <span className="absolute inset-[3px] rounded-full bg-white" />}
+                              </span>
+                              Quick compose
+                            </div>
+                            <p className="mt-0.5 text-[10.5px] text-gray-500 leading-tight">Write a simple email inline.</p>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setField('mode', 'template')}
+                            className={`rounded-xl border px-3 py-2 text-left transition-colors ${
+                              mode === 'template'
+                                ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-200'
+                                : 'border-gray-200 bg-white hover:bg-gray-50'
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 text-[12px] font-semibold text-gray-800">
+                              <span className={`relative inline-block w-3 h-3 rounded-full border ${mode === 'template' ? 'border-brand-500 bg-brand-500' : 'border-gray-300'}`}>
+                                {mode === 'template' && <span className="absolute inset-[3px] rounded-full bg-white" />}
+                              </span>
+                              Use template
+                            </div>
+                            <p className="mt-0.5 text-[10.5px] text-gray-500 leading-tight">Pick a saved Smart Builder template.</p>
+                          </button>
+                        </div>
+
+                        {mode === 'template' ? (
+                          <>
+                            {/* ── Template select ───────────────── */}
+                            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Template</p>
+                            {templates.length === 0 ? (
+                              <p className="text-[11px] text-gray-500">
+                                No templates yet.{' '}
+                                <Link href="/dashboard/marketing/email/templates" target="_blank" className="text-brand-600 hover:underline">
+                                  Create one in Smart Builder →
+                                </Link>
+                              </p>
+                            ) : (
+                              <select
+                                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
+                                value={selectedStep.template_id}
+                                onChange={(e) => setField('template_id', e.target.value)}
+                              >
+                                <option value="">Choose a template</option>
+                                {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                              </select>
+                            )}
+                            <p className="mt-2 text-[11px] text-gray-400">
+                              <Link href="/dashboard/marketing/email/templates" target="_blank" className="text-brand-600 hover:underline">
+                                + New template in Smart Builder
+                              </Link>
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            {/* ── Sender ──────────────────────────── */}
+                            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Sender</p>
+
+                            <label className="block text-[11px] text-gray-600 mb-1">From name</label>
+                            <div className="relative">
+                              <input
+                                ref={(el) => { emailFieldRefs.current['email-from-name'] = el; }}
+                                type="text"
+                                placeholder="From name"
+                                className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-3 pr-9 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
+                                value={selectedStep.from_name ?? ''}
+                                onChange={(e) => setField('from_name', e.target.value)}
+                              />
+                              <VarIconButton field="email-from-name" />
+                            </div>
+                            {mergeTagOpen && mergeTagField === 'email-from-name' && (
+                              <MergeVarPickerPopover
+                                anchorRef={mergeAnchorRef}
+                                boundsRef={rightPaneRef}
+                                onPick={(tag) => { insertIntoEmailField('from_name', tag, lid); setMergeTagOpen(false); }}
+                                onClose={() => setMergeTagOpen(false)}
+                              />
+                            )}
+
+                            <label className="mt-2 block text-[11px] text-gray-600 mb-1">From email</label>
+                            <div className="relative">
+                              <input
+                                ref={(el) => { emailFieldRefs.current['email-from-email'] = el; }}
+                                type="text"
+                                placeholder="From email"
+                                className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-3 pr-9 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
+                                value={selectedStep.from_email ?? ''}
+                                onChange={(e) => setField('from_email', e.target.value)}
+                              />
+                              <VarIconButton field="email-from-email" />
+                            </div>
+                            {mergeTagOpen && mergeTagField === 'email-from-email' && (
+                              <MergeVarPickerPopover
+                                anchorRef={mergeAnchorRef}
+                                boundsRef={rightPaneRef}
+                                onPick={(tag) => { insertIntoEmailField('from_email', tag, lid); setMergeTagOpen(false); }}
+                                onClose={() => setMergeTagOpen(false)}
+                              />
+                            )}
+                            <p className="mt-1 text-[10.5px] text-gray-400">If From Name and From Email are empty, the email is sent using your venue defaults.</p>
+
+                            {/* ── Cc / Bcc toggles ──────────────── */}
+                            <div className="mt-3 flex items-center gap-1.5">
+                              {!showCc && (
+                                <button
+                                  type="button"
+                                  onClick={() => setEmailExtra((p) => ({ ...p, [lid]: { ...p[lid], cc: true } }))}
+                                  className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-700 hover:bg-gray-50 transition-colors"
+                                >
+                                  + Cc
+                                </button>
+                              )}
+                              {!showBcc && (
+                                <button
+                                  type="button"
+                                  onClick={() => setEmailExtra((p) => ({ ...p, [lid]: { ...p[lid], bcc: true } }))}
+                                  className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-700 hover:bg-gray-50 transition-colors"
+                                >
+                                  + Bcc
+                                </button>
+                              )}
+                            </div>
+
+                            {showCc && (
+                              <>
+                                <label className="mt-3 block text-[11px] text-gray-600 mb-1">Cc</label>
+                                <div className="relative">
+                                  <input
+                                    ref={(el) => { emailFieldRefs.current['email-cc'] = el; }}
+                                    type="text"
+                                    placeholder="comma,separated@emails.com"
+                                    className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-3 pr-9 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
+                                    value={selectedStep.cc ?? ''}
+                                    onChange={(e) => setField('cc', e.target.value)}
+                                  />
+                                  <VarIconButton field="email-cc" />
+                                </div>
+                                {mergeTagOpen && mergeTagField === 'email-cc' && (
+                                  <MergeVarPickerPopover
+                                    anchorRef={mergeAnchorRef}
+                                    boundsRef={rightPaneRef}
+                                    onPick={(tag) => { insertIntoEmailField('cc', tag, lid); setMergeTagOpen(false); }}
+                                    onClose={() => setMergeTagOpen(false)}
+                                  />
+                                )}
+                              </>
+                            )}
+                            {showBcc && (
+                              <>
+                                <label className="mt-3 block text-[11px] text-gray-600 mb-1">Bcc</label>
+                                <div className="relative">
+                                  <input
+                                    ref={(el) => { emailFieldRefs.current['email-bcc'] = el; }}
+                                    type="text"
+                                    placeholder="comma,separated@emails.com"
+                                    className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-3 pr-9 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
+                                    value={selectedStep.bcc ?? ''}
+                                    onChange={(e) => setField('bcc', e.target.value)}
+                                  />
+                                  <VarIconButton field="email-bcc" />
+                                </div>
+                                {mergeTagOpen && mergeTagField === 'email-bcc' && (
+                                  <MergeVarPickerPopover
+                                    anchorRef={mergeAnchorRef}
+                                    boundsRef={rightPaneRef}
+                                    onPick={(tag) => { insertIntoEmailField('bcc', tag, lid); setMergeTagOpen(false); }}
+                                    onClose={() => setMergeTagOpen(false)}
+                                  />
+                                )}
+                              </>
+                            )}
+
+                            {/* ── Subject ──────────────────────── */}
+                            <p className="mt-4 mb-1 text-[11px] font-semibold text-gray-700">
+                              Subject <span className="text-red-500">*</span>
+                            </p>
+                            <div className="relative">
+                              <input
+                                ref={(el) => { emailFieldRefs.current['email-subject'] = el; }}
+                                type="text"
+                                placeholder="Hello {{contact.first_name}}"
+                                className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-3 pr-9 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
+                                value={selectedStep.subject ?? ''}
+                                onChange={(e) => setField('subject', e.target.value)}
+                              />
+                              <VarIconButton field="email-subject" />
+                            </div>
+                            {mergeTagOpen && mergeTagField === 'email-subject' && (
+                              <MergeVarPickerPopover
+                                anchorRef={mergeAnchorRef}
+                                boundsRef={rightPaneRef}
+                                onPick={(tag) => { insertIntoEmailField('subject', tag, lid); setMergeTagOpen(false); }}
+                                onClose={() => setMergeTagOpen(false)}
+                              />
+                            )}
+
+                            {/* ── Preheader ──────────────────────── */}
+                            <p className="mt-3 mb-1 text-[11px] font-semibold text-gray-700">Pre-header (preview text)</p>
+                            <div className="relative">
+                              <input
+                                ref={(el) => { emailFieldRefs.current['email-preheader'] = el; }}
+                                type="text"
+                                placeholder="(Optional)"
+                                className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-3 pr-9 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
+                                value={selectedStep.preheader ?? ''}
+                                onChange={(e) => setField('preheader', e.target.value)}
+                              />
+                              <VarIconButton field="email-preheader" />
+                            </div>
+                            {mergeTagOpen && mergeTagField === 'email-preheader' && (
+                              <MergeVarPickerPopover
+                                anchorRef={mergeAnchorRef}
+                                boundsRef={rightPaneRef}
+                                onPick={(tag) => { insertIntoEmailField('preheader', tag, lid); setMergeTagOpen(false); }}
+                                onClose={() => setMergeTagOpen(false)}
+                              />
+                            )}
+                            <p className="mt-1 text-[10.5px] text-gray-400">Used as preview text in some inboxes.</p>
+
+                            {/* ── Body ───────────────────────────── */}
+                            <div className="mt-4 mb-2 flex items-center justify-between">
+                              <p className="text-[11px] font-semibold text-gray-700">
+                                Message <span className="text-red-500">*</span>
+                              </p>
+                              <button
+                                type="button"
+                                title="Insert merge variable"
+                                onClick={(e) => {
+                                  setMergeAnchor(e.currentTarget as HTMLElement);
+                                  setMergeTagField('email-body');
+                                  setMergeTagOpen(true);
+                                  setTriggerLinkOpen(false);
+                                }}
+                                className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-50 transition-colors"
+                              >
+                                <Tag size={11} /> Variables
+                              </button>
+                            </div>
+                            {mergeTagOpen && mergeTagField === 'email-body' && (
+                              <MergeVarPickerPopover
+                                anchorRef={mergeAnchorRef}
+                                boundsRef={rightPaneRef}
+                                onPick={(tag) => { insertIntoEmailField('body', tag, lid); setMergeTagOpen(false); }}
+                                onClose={() => setMergeTagOpen(false)}
+                              />
+                            )}
+                            <textarea
+                              ref={(el) => { emailFieldRefs.current['email-body'] = el; }}
+                              placeholder="Hi {{contact.first_name}},&#10;&#10;Write your message here..."
+                              className="min-h-[180px] w-full resize-y rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
+                              value={selectedStep.body ?? ''}
+                              onChange={(e) => setField('body', e.target.value)}
+                            />
+                            <p className="mt-1 text-right text-[10.5px] text-gray-400">{charCount} characters</p>
+                          </>
+                        )}
+
+                        {/* ── Settings ───────────────────────────── */}
+                        <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3">
+                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500">Additional settings</p>
+                          <label className="flex items-start gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="mt-0.5"
+                              checked={selectedStep.track_clicks !== false}
+                              onChange={(e) => setField('track_clicks', e.target.checked)}
+                            />
+                            <span>
+                              <span className="block text-[12px] font-medium text-gray-800">Track clicks</span>
+                              <span className="block text-[10.5px] text-gray-500 leading-tight">See which links subscribers click.</span>
+                            </span>
+                          </label>
+                          <p className="mt-2 text-[10.5px] text-gray-400">Unsubscribe links and bounce suppression are always applied.</p>
+                        </div>
+
+                        {/* ── Send test ──────────────────────────── */}
                         <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-3">
                           <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Send test</p>
                           <input type="email" placeholder="your@email.com"
