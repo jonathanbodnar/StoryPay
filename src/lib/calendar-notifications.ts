@@ -298,6 +298,11 @@ function resolveTemplate(
 
 // ── SMS helper ────────────────────────────────────────────────────────────────
 
+/**
+ * Dispatch an SMS via GHL.
+ * Returns `true` if the SMS was handed off to GHL, `false` on any failure.
+ * Never throws — errors are logged, callers check the return value.
+ */
 async function dispatchSms(
   token: string,
   locationId: string,
@@ -305,8 +310,11 @@ async function dispatchSms(
   phone: string | null | undefined,
   email: string | null | undefined,
   message: string,
-): Promise<void> {
-  if (!token || !locationId) return;
+): Promise<boolean> {
+  if (!token || !locationId) {
+    console.warn('[calendar-notifications] dispatchSms: missing token or locationId');
+    return false;
+  }
 
   try {
     const { sendSms, ghlRequest, normalizePhone } = await import('@/lib/ghl') as {
@@ -352,14 +360,58 @@ async function dispatchSms(
     }
 
     if (!contactId) {
-      console.warn('[calendar-notifications] Could not resolve GHL contact for SMS — phone:', phone, 'email:', email);
-      return;
+      console.warn('[calendar-notifications] dispatchSms: could not resolve GHL contact — phone:', phone, 'email:', email);
+      return false;
     }
 
     await sendSms(token, locationId, contactId, message);
+    return true;
   } catch (e) {
-    console.error('[calendar-notifications] SMS dispatch error:', e);
+    console.error('[calendar-notifications] dispatchSms error:', e);
+    return false;
   }
+}
+
+/**
+ * Resolve a fresh GHL access token for a venue, refreshing via OAuth if needed.
+ * Falls back to the stored token if refresh fails so we always have something to try.
+ */
+async function resolveVenueGhlToken(venueId: string, storedToken: string): Promise<string> {
+  try {
+    const { supabaseAdmin: sba } = await import('@/lib/supabase');
+    const { data: v } = await sba
+      .from('venues')
+      .select('ghl_refresh_token, ghl_token_expires_at')
+      .eq('id', venueId)
+      .maybeSingle();
+
+    const expiresAt = (v as { ghl_token_expires_at?: string | null } | null)?.ghl_token_expires_at;
+    const refreshToken = (v as { ghl_refresh_token?: string | null } | null)?.ghl_refresh_token;
+
+    const isExpiredOrSoon = !expiresAt || new Date(expiresAt).getTime() < Date.now() + 5 * 60 * 1000;
+
+    if (isExpiredOrSoon && refreshToken) {
+      const { refreshAccessToken } = await import('@/lib/ghl') as {
+        refreshAccessToken: (rt: string) => Promise<{ access_token: string; expires_in?: number }>;
+      };
+      const result = await refreshAccessToken(refreshToken);
+      const newToken = result.access_token;
+      const newExpiry = result.expires_in
+        ? new Date(Date.now() + result.expires_in * 1000).toISOString()
+        : null;
+
+      // Persist the refreshed token back to the DB
+      const updateData: Record<string, string | null> = { ghl_access_token: newToken };
+      if (newExpiry) updateData.ghl_token_expires_at = newExpiry;
+      await sba.from('venues').update(updateData).eq('id', venueId);
+
+      console.log('[calendar-notifications] refreshed GHL token for venue', venueId);
+      return newToken;
+    }
+  } catch (e) {
+    console.warn('[calendar-notifications] token refresh failed, using stored token:', e);
+  }
+  return storedToken;
 }
 
 // ── Main dispatch ─────────────────────────────────────────────────────────────
@@ -393,6 +445,12 @@ export async function dispatchCalendarNotification(
         .maybeSingle(),
     ]);
 
+    // Resolve a potentially-refreshed GHL token before any SMS dispatch
+    let ghlToken = (venueRow as VenueRow | null)?.ghl_access_token ?? null;
+    if (ghlToken && (venueRow as VenueRow | null)?.ghl_location_id) {
+      ghlToken = await resolveVenueGhlToken(venueId, ghlToken);
+    }
+
     if (!venueRow) return;
     const venue = venueRow as VenueRow;
     const rows = (templateRows ?? []) as TemplateRow[];
@@ -407,6 +465,16 @@ export async function dispatchCalendarNotification(
 
     // Helper: skip this channel if onlyChannel is specified and doesn't match
     const shouldSend = (channel: string) => !onlyChannel || onlyChannel === channel;
+
+    // Use the refreshed GHL token (resolved above) or fall back to stored
+    const effectiveGhlToken = ghlToken ?? venue.ghl_access_token ?? null;
+
+    // Track whether an SMS dispatch was attempted and whether it succeeded.
+    // When onlyChannel targets an SMS channel, a failure will be surfaced to
+    // the caller (processAppointmentRemindersCron) so the row is not marked
+    // sent_at and will be retried on the next cron tick.
+    let smsAttempted = false;
+    let smsOk = false;
 
     // ── email_owner ───────────────────────────────────────────────────────────
     if (shouldSend('email_owner')) {
@@ -450,22 +518,31 @@ export async function dispatchCalendarNotification(
     if (shouldSend('sms_contact')) {
       if (vars.contact_sms_dnd) {
         console.log(`[calendar-notifications] sms_contact BLOCKED — SMS DND active for ${vars.contact_email}`);
+        // DND counts as "ok" — the message was intentionally suppressed, not a failure
+        smsAttempted = true;
+        smsOk = true;
       } else if (
         venue.ghl_connected &&
-        venue.ghl_access_token &&
+        effectiveGhlToken &&
         venue.ghl_location_id
       ) {
         const scTpl = resolveTemplate(type, 'sms_contact', perRecipientRows, hasAnyDbRows);
         if (scTpl?.enabled && scTpl.body) {
           const message = renderTemplate(scTpl.body, varMap);
-          await dispatchSms(
-            venue.ghl_access_token,
+          smsAttempted = true;
+          smsOk = await dispatchSms(
+            effectiveGhlToken,
             venue.ghl_location_id,
             vars.contact_ghl_id,
             vars.contact_phone,
             vars.contact_email,
             message,
           );
+          if (!smsOk) {
+            console.error(
+              `[calendar-notifications] sms_contact dispatch failed for ${type} — venue ${venueId}, contact ${vars.contact_email}`,
+            );
+          }
         }
       }
     }
@@ -477,26 +554,41 @@ export async function dispatchCalendarNotification(
         soTpl?.enabled &&
         soTpl.body &&
         venue.ghl_connected &&
-        venue.ghl_access_token &&
+        effectiveGhlToken &&
         venue.ghl_location_id &&
         venue.email
       ) {
         const message = renderTemplate(soTpl.body, varMap);
-        await dispatchSms(
-          venue.ghl_access_token,
+        smsAttempted = true;
+        const ownerOk = await dispatchSms(
+          effectiveGhlToken,
           venue.ghl_location_id,
           null,
           null,
           venue.email,
           message,
         );
+        // For sms_owner, record success only when it's the targeted channel
+        if (onlyChannel === 'sms_owner') smsOk = ownerOk;
       }
     }
 
     console.log(
       `[calendar-notifications] dispatched ${type}${onlyChannel ? ` [${onlyChannel}]` : ''} for venue ${venueId}`,
     );
+
+    // When the cron targets a specific SMS channel, surface failures so the
+    // reminder row is NOT marked sent_at and can be retried next tick.
+    const isSmsOnlyChannel = onlyChannel === 'sms_contact' || onlyChannel === 'sms_owner';
+    if (isSmsOnlyChannel && smsAttempted && !smsOk) {
+      throw new Error(`sms_dispatch_failed:${onlyChannel}`);
+    }
   } catch (e) {
+    // Re-throw SMS dispatch failures so the cron caller can handle retry.
+    // Swallow everything else to keep this fire-and-forget safe.
+    if (e instanceof Error && e.message.startsWith('sms_dispatch_failed:')) {
+      throw e;
+    }
     console.error('[calendar-notifications] dispatchCalendarNotification error:', e);
   }
 }

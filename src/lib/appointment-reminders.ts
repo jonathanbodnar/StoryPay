@@ -327,7 +327,22 @@ export async function processAppointmentRemindersCron(): Promise<{
       else errors++;
     } else {
       if (result.error === 'event_gone' || result.error === 'no_email') {
+        // Event gone or no contact email — no point retrying, delete.
         await supabaseAdmin.from('calendar_event_reminders').delete().eq('id', row.id);
+      } else if (result.error === 'sms_dispatch_failed') {
+        // SMS delivery failed (GHL error, bad token, etc.).
+        // If the reminder's send_at is older than 3 hours, it's too stale to
+        // retry — delete it to prevent an infinite retry loop.
+        const sendAtMs = new Date(row.send_at).getTime();
+        const THREE_HOURS = 3 * 60 * 60 * 1000;
+        if (Date.now() - sendAtMs > THREE_HOURS) {
+          console.warn('[cron appointment-reminders] stale SMS reminder, removing:', row.id);
+          await supabaseAdmin.from('calendar_event_reminders').delete().eq('id', row.id);
+        } else {
+          // Leave the row unsent — cron will retry on the next tick.
+          console.warn('[cron appointment-reminders] SMS dispatch failed, will retry:', row.id);
+          errors++;
+        }
       } else {
         errors++;
       }
@@ -390,6 +405,12 @@ async function sendNotificationForReminder(
     await dispatchCalendarNotification(venueId, notifType, notifVars, onlyChannel);
     return { ok: true };
   } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.startsWith('sms_dispatch_failed:')) {
+      // SMS-specific failure — surface it so the cron can retry the row.
+      console.warn('[appointment-reminders] SMS dispatch failed for reminder:', calendarEventId, msg);
+      return { ok: false, error: 'sms_dispatch_failed' };
+    }
     console.error('[appointment-reminders] sendNotificationForReminder error:', e);
     return { ok: false, error: 'dispatch_failed' };
   }
