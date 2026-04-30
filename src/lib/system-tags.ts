@@ -118,7 +118,7 @@ export async function ensureSystemTagsForVenue(venueId: string): Promise<void> {
     // ── 1. Ensure migration-085 columns exist (self-healing) ─────────────────
     const { getDbAsync } = await import('@/lib/db');
     const db = await getDbAsync();
-    await db.query(`
+    await db.unsafe(`
       ALTER TABLE public.marketing_tags
         ADD COLUMN IF NOT EXISTS is_system         boolean  NOT NULL DEFAULT false,
         ADD COLUMN IF NOT EXISTS system_key        text,

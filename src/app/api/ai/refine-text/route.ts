@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { cookies } from 'next/headers';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const c = await cookies();
   if (!c.get('venue_id')?.value) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

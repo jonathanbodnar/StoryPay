@@ -1344,7 +1344,6 @@ function CalendarsTab() {
     setEditName(cal.name);
     setEditColor(cal.color);
     setEditDesc(cal.description ?? '');
-    setShowEditRules(true);
     setEditDuration(cal.meeting_duration_min      ?? null);
     setEditInterval(cal.meeting_interval_min      ?? null);
     setEditNotice  (cal.min_scheduling_notice_hrs ?? null);
