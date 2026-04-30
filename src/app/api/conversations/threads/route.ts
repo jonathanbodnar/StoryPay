@@ -32,13 +32,17 @@ async function fetchThreadsListManual(venueId: string) {
 
   const byCustomer = new Map<
     string,
-    { first_name?: string; last_name?: string; customer_email?: string; phone?: string | null }
+    {
+      first_name?: string; last_name?: string; customer_email?: string; phone?: string | null;
+      sms_dnd?: boolean; conversation_dnd_all?: boolean; conversation_dnd_email?: boolean;
+      conversation_dnd_calls?: boolean; conversation_dnd_inbound_sms?: boolean;
+    }
   >();
 
   if (customerIds.length > 0) {
     const { data: contacts, error: cErr } = await supabaseAdmin
       .from('venue_customers')
-      .select('id, first_name, last_name, customer_email, phone')
+      .select('id, first_name, last_name, customer_email, phone, sms_dnd, conversation_dnd_all, conversation_dnd_email, conversation_dnd_calls, conversation_dnd_inbound_sms')
       .eq('venue_id', venueId)
       .in('id', customerIds);
 
@@ -46,23 +50,27 @@ async function fetchThreadsListManual(venueId: string) {
 
     for (const c of contacts ?? []) {
       const row = c as {
-        id: string;
-        first_name?: string;
-        last_name?: string;
-        customer_email?: string;
-        phone?: string | null;
+        id: string; first_name?: string; last_name?: string; customer_email?: string; phone?: string | null;
+        sms_dnd?: boolean; conversation_dnd_all?: boolean; conversation_dnd_email?: boolean;
+        conversation_dnd_calls?: boolean; conversation_dnd_inbound_sms?: boolean;
       };
       byCustomer.set(row.id, {
         first_name: row.first_name,
         last_name: row.last_name,
         customer_email: row.customer_email,
         phone: row.phone,
+        sms_dnd: row.sms_dnd ?? false,
+        conversation_dnd_all: row.conversation_dnd_all ?? false,
+        conversation_dnd_email: row.conversation_dnd_email ?? false,
+        conversation_dnd_calls: row.conversation_dnd_calls ?? false,
+        conversation_dnd_inbound_sms: row.conversation_dnd_inbound_sms ?? false,
       });
     }
   }
 
   const mapped = (rows ?? []).map((r) => {
     const vc = byCustomer.get(r.venue_customer_id as string);
+    const anyDnd = !!(vc?.sms_dnd || vc?.conversation_dnd_all || vc?.conversation_dnd_email || vc?.conversation_dnd_calls);
     return {
       thread_id: r.id,
       venue_id: r.venue_id,
@@ -77,6 +85,10 @@ async function fetchThreadsListManual(venueId: string) {
       contact_email: vc?.customer_email ?? '',
       contact_phone: vc?.phone ?? null,
       external_reply_channel: (r as { external_reply_channel?: string }).external_reply_channel ?? 'email',
+      // DND flags forwarded to thread list for badge display
+      contact_dnd_any: anyDnd,
+      contact_dnd_sms: vc?.sms_dnd ?? false,
+      contact_dnd_email: vc?.conversation_dnd_email ?? false,
     };
   });
 

@@ -8,6 +8,7 @@ import {
 } from '@/lib/ghl-sms-conversations';
 import { applySmsDndForVenueCustomer, isSmsOptOutKeyword } from '@/lib/sms-compliance';
 import { syncSingleGhlContact } from '@/lib/ghl-contacts-sync';
+import { ghlDndToConversationFlags } from '@/app/api/venue-customers/[id]/dnd/route';
 
 export async function POST(request: NextRequest) {
   try {
@@ -121,11 +122,22 @@ export async function POST(request: NextRequest) {
               };
               if (dndSettings) update.ghl_dnd_settings = dndSettings;
               if (inboundDndSettings) update.ghl_inbound_dnd_settings = inboundDndSettings;
-              // Only set sms_dnd to true from webhook; never auto-clear it (manual clear required)
-              if (smsDnd && !vc.sms_dnd) {
-                update.sms_dnd = true;
-                update.sms_dnd_at = nowIso;
-                update.sms_dnd_source = 'ghl_webhook';
+              // Bridge GHL DND → flat boolean enforcement columns
+              if (dndSettings || inboundDndSettings) {
+                const flags = ghlDndToConversationFlags(
+                  dndSettings as Parameters<typeof ghlDndToConversationFlags>[0],
+                  inboundDndSettings as Parameters<typeof ghlDndToConversationFlags>[1],
+                );
+                update.conversation_dnd_email = flags.conversation_dnd_email;
+                update.conversation_dnd_calls = flags.conversation_dnd_calls;
+                update.conversation_dnd_inbound_sms = flags.conversation_dnd_inbound_sms;
+                update.conversation_dnd_all = flags.conversation_dnd_all;
+                // sms_dnd: only set to true; never auto-clear from webhook
+                if (flags.sms_dnd && !vc.sms_dnd) {
+                  update.sms_dnd = true;
+                  update.sms_dnd_at = nowIso;
+                  update.sms_dnd_source = 'ghl_webhook';
+                }
               }
 
               await supabaseAdmin

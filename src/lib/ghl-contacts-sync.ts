@@ -13,6 +13,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase';
 import { getGhlToken, ghlRequest, normalizePhone, refreshAccessToken } from '@/lib/ghl';
+import { ghlDndToConversationFlags } from '@/app/api/venue-customers/[id]/dnd/route';
 
 const PLACEHOLDER_EMAIL_DOMAIN = 'ghl-import.storyvenue.placeholder';
 const PAGE_SIZE = 100;
@@ -176,14 +177,21 @@ async function upsertContact(venueId: string, c: GhlContact): Promise<UpsertResu
       if (email && email !== existing.customer_email) {
         update.customer_email = email;
       }
-      // Sync GHL DND settings
-      if (ghlDndSettings !== null) update.ghl_dnd_settings = ghlDndSettings;
-      if (ghlInboundDndSettings !== null) update.ghl_inbound_dnd_settings = ghlInboundDndSettings;
-      // Mirror SMS DND into our own sms_dnd flag (only set to true from GHL; don't clear manual overrides)
-      if (smsDndFromGhl) {
-        update.sms_dnd = true;
-        update.sms_dnd_source = 'ghl_sync';
-        update.sms_dnd_at = nowIso;
+      // Sync GHL DND settings — also bridge into flat enforcement columns
+      if (ghlDndSettings !== null || ghlInboundDndSettings !== null) {
+        if (ghlDndSettings !== null) update.ghl_dnd_settings = ghlDndSettings;
+        if (ghlInboundDndSettings !== null) update.ghl_inbound_dnd_settings = ghlInboundDndSettings;
+        const flags = ghlDndToConversationFlags(ghlDndSettings, ghlInboundDndSettings);
+        update.conversation_dnd_email = flags.conversation_dnd_email;
+        update.conversation_dnd_calls = flags.conversation_dnd_calls;
+        update.conversation_dnd_inbound_sms = flags.conversation_dnd_inbound_sms;
+        update.conversation_dnd_all = flags.conversation_dnd_all;
+        // sms_dnd: only set to true from GHL; never auto-clear (manual clear required)
+        if (flags.sms_dnd) {
+          update.sms_dnd = true;
+          update.sms_dnd_source = 'ghl_sync';
+          update.sms_dnd_at = nowIso;
+        }
       }
       const { error } = await supabaseAdmin
         .from('venue_customers')
@@ -215,12 +223,19 @@ async function upsertContact(venueId: string, c: GhlContact): Promise<UpsertResu
         ghl_synced_at : nowIso,
         updated_at    : nowIso,
       };
-      if (ghlDndSettings !== null) linkUpdate.ghl_dnd_settings = ghlDndSettings;
-      if (ghlInboundDndSettings !== null) linkUpdate.ghl_inbound_dnd_settings = ghlInboundDndSettings;
-      if (smsDndFromGhl) {
-        linkUpdate.sms_dnd = true;
-        linkUpdate.sms_dnd_source = 'ghl_sync';
-        linkUpdate.sms_dnd_at = nowIso;
+      if (ghlDndSettings !== null || ghlInboundDndSettings !== null) {
+        if (ghlDndSettings !== null) linkUpdate.ghl_dnd_settings = ghlDndSettings;
+        if (ghlInboundDndSettings !== null) linkUpdate.ghl_inbound_dnd_settings = ghlInboundDndSettings;
+        const flags = ghlDndToConversationFlags(ghlDndSettings, ghlInboundDndSettings);
+        linkUpdate.conversation_dnd_email = flags.conversation_dnd_email;
+        linkUpdate.conversation_dnd_calls = flags.conversation_dnd_calls;
+        linkUpdate.conversation_dnd_inbound_sms = flags.conversation_dnd_inbound_sms;
+        linkUpdate.conversation_dnd_all = flags.conversation_dnd_all;
+        if (flags.sms_dnd) {
+          linkUpdate.sms_dnd = true;
+          linkUpdate.sms_dnd_source = 'ghl_sync';
+          linkUpdate.sms_dnd_at = nowIso;
+        }
       }
       const { error } = await supabaseAdmin
         .from('venue_customers')
@@ -245,12 +260,19 @@ async function upsertContact(venueId: string, c: GhlContact): Promise<UpsertResu
     phone         : phone || null,
     ghl_synced_at : nowIso,
   };
-  if (ghlDndSettings !== null) insertRow.ghl_dnd_settings = ghlDndSettings;
-  if (ghlInboundDndSettings !== null) insertRow.ghl_inbound_dnd_settings = ghlInboundDndSettings;
-  if (smsDndFromGhl) {
-    insertRow.sms_dnd = true;
-    insertRow.sms_dnd_source = 'ghl_sync';
-    insertRow.sms_dnd_at = nowIso;
+  if (ghlDndSettings !== null || ghlInboundDndSettings !== null) {
+    if (ghlDndSettings !== null) insertRow.ghl_dnd_settings = ghlDndSettings;
+    if (ghlInboundDndSettings !== null) insertRow.ghl_inbound_dnd_settings = ghlInboundDndSettings;
+    const flags = ghlDndToConversationFlags(ghlDndSettings, ghlInboundDndSettings);
+    insertRow.conversation_dnd_email = flags.conversation_dnd_email;
+    insertRow.conversation_dnd_calls = flags.conversation_dnd_calls;
+    insertRow.conversation_dnd_inbound_sms = flags.conversation_dnd_inbound_sms;
+    insertRow.conversation_dnd_all = flags.conversation_dnd_all;
+    if (flags.sms_dnd) {
+      insertRow.sms_dnd = true;
+      insertRow.sms_dnd_source = 'ghl_sync';
+      insertRow.sms_dnd_at = nowIso;
+    }
   }
   const { error } = await supabaseAdmin
     .from('venue_customers')

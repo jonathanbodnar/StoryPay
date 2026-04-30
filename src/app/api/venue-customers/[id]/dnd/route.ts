@@ -23,6 +23,35 @@ export const runtime = 'nodejs';
 const GHL_DND_CHANNELS = ['Call', 'Email', 'SMS', 'WhatsApp', 'GMB', 'FB'] as const;
 type GhlDndChannel = (typeof GHL_DND_CHANNELS)[number];
 
+/**
+ * Derive the flat conversation_dnd_* boolean columns from GHL DND objects.
+ * Accepts a permissive shape so it can be shared across modules with slightly
+ * different local type aliases for the GHL DND objects.
+ */
+export function ghlDndToConversationFlags(
+  dndSettings: Record<string, { status?: string } | null | undefined> | null | undefined,
+  inboundDndSettings: { all?: { status?: string } | null } | null | undefined,
+): {
+  sms_dnd: boolean;
+  conversation_dnd_email: boolean;
+  conversation_dnd_calls: boolean;
+  conversation_dnd_inbound_sms: boolean;
+  conversation_dnd_all: boolean;
+} {
+  const emailDnd   = dndSettings?.['Email']?.status === 'active';
+  const smsDnd     = dndSettings?.['SMS']?.status   === 'active';
+  const callDnd    = dndSettings?.['Call']?.status  === 'active';
+  const inboundDnd = inboundDndSettings?.all?.status === 'active';
+  const allDnd     = emailDnd && smsDnd && callDnd && inboundDnd;
+  return {
+    sms_dnd: smsDnd,
+    conversation_dnd_email: emailDnd,
+    conversation_dnd_calls: callDnd,
+    conversation_dnd_inbound_sms: inboundDnd,
+    conversation_dnd_all: allDnd,
+  };
+}
+
 function makeChannelSetting(active: boolean): GhlDndChannelSetting {
   return { status: active ? 'active' : 'inactive' };
 }
@@ -119,22 +148,27 @@ export async function PUT(
     return NextResponse.json({ error: 'channels or dndSettings required' }, { status: 400 });
   }
 
-  // Derive our own sms_dnd flag
-  const smsDnd = newDndSettings.SMS?.status === 'active';
   const nowIso = new Date().toISOString();
 
-  // 1. Persist to our DB first
+  // 1. Persist to our DB — both ghl_dnd_settings JSONB AND the flat boolean columns
+  //    that all enforcement layers (messages route, calendar-notifications, reminders) read.
+  const flags = ghlDndToConversationFlags(
+    newDndSettings as Record<string, { status?: string } | null | undefined>,
+    newInboundDndSettings,
+  );
   const dbUpdate: Record<string, unknown> = {
     ghl_dnd_settings: newDndSettings,
     ghl_inbound_dnd_settings: newInboundDndSettings ?? null,
+    // Flat enforcement columns (always overwrite from GHL state)
+    sms_dnd: flags.sms_dnd,
+    sms_dnd_at: flags.sms_dnd ? nowIso : null,
+    sms_dnd_source: flags.sms_dnd ? 'manual' : null,
+    conversation_dnd_email: flags.conversation_dnd_email,
+    conversation_dnd_calls: flags.conversation_dnd_calls,
+    conversation_dnd_inbound_sms: flags.conversation_dnd_inbound_sms,
+    conversation_dnd_all: flags.conversation_dnd_all,
     updated_at: nowIso,
   };
-  // Only update sms_dnd if the DND state actually changed
-  if (smsDnd !== (vc.sms_dnd ?? false)) {
-    dbUpdate.sms_dnd = smsDnd;
-    dbUpdate.sms_dnd_at = smsDnd ? nowIso : null;
-    dbUpdate.sms_dnd_source = smsDnd ? 'manual' : null;
-  }
 
   const { error: dbErr } = await supabaseAdmin
     .from('venue_customers')

@@ -37,6 +37,9 @@ export interface CalendarNotifVars {
   contact_phone?: string | null;
   /** GHL contact ID (used for SMS routing) */
   contact_ghl_id?: string | null;
+  /** DND flags — when true, outbound messages to the contact are blocked */
+  contact_sms_dnd?: boolean;
+  contact_email_dnd?: boolean;
   /** Appointment / calendar event title */
   appointment_title: string;
   /** Human-readable start date + time, e.g. "Monday, May 5 at 10:00 AM" */
@@ -424,40 +427,46 @@ export async function dispatchCalendarNotification(
 
     // ── email_contact ─────────────────────────────────────────────────────────
     if (shouldSend('email_contact')) {
-      const ecTpl = resolveTemplate(type, 'email_contact', perRecipientRows, hasAnyDbRows);
-      if (ecTpl?.enabled && ecTpl.body && vars.contact_email) {
-        const subject = ecTpl.subject
-          ? renderTemplate(ecTpl.subject, varMap)
-          : `Notification: ${vars.appointment_title}`;
-        const body = renderTemplate(ecTpl.body, varMap);
-        await sendEmail({
-          to: vars.contact_email,
-          subject,
-          html: plainToHtml(body, venueName),
-          from: { name: venueName },
-        }).catch((e) => console.error('[calendar-notifications] email_contact send error:', e));
+      if (vars.contact_email_dnd) {
+        console.log(`[calendar-notifications] email_contact BLOCKED — email DND active for ${vars.contact_email}`);
+      } else {
+        const ecTpl = resolveTemplate(type, 'email_contact', perRecipientRows, hasAnyDbRows);
+        if (ecTpl?.enabled && ecTpl.body && vars.contact_email) {
+          const subject = ecTpl.subject
+            ? renderTemplate(ecTpl.subject, varMap)
+            : `Notification: ${vars.appointment_title}`;
+          const body = renderTemplate(ecTpl.body, varMap);
+          await sendEmail({
+            to: vars.contact_email,
+            subject,
+            html: plainToHtml(body, venueName),
+            from: { name: venueName },
+          }).catch((e) => console.error('[calendar-notifications] email_contact send error:', e));
+        }
       }
     }
 
     // ── sms_contact ───────────────────────────────────────────────────────────
     if (shouldSend('sms_contact')) {
-      const scTpl = resolveTemplate(type, 'sms_contact', perRecipientRows, hasAnyDbRows);
-      if (
-        scTpl?.enabled &&
-        scTpl.body &&
+      if (vars.contact_sms_dnd) {
+        console.log(`[calendar-notifications] sms_contact BLOCKED — SMS DND active for ${vars.contact_email}`);
+      } else if (
         venue.ghl_connected &&
         venue.ghl_access_token &&
         venue.ghl_location_id
       ) {
-        const message = renderTemplate(scTpl.body, varMap);
-        await dispatchSms(
-          venue.ghl_access_token,
-          venue.ghl_location_id,
-          vars.contact_ghl_id,
-          vars.contact_phone,
-          vars.contact_email,
-          message,
-        );
+        const scTpl = resolveTemplate(type, 'sms_contact', perRecipientRows, hasAnyDbRows);
+        if (scTpl?.enabled && scTpl.body) {
+          const message = renderTemplate(scTpl.body, varMap);
+          await dispatchSms(
+            venue.ghl_access_token,
+            venue.ghl_location_id,
+            vars.contact_ghl_id,
+            vars.contact_phone,
+            vars.contact_email,
+            message,
+          );
+        }
       }
     }
 
@@ -512,15 +521,18 @@ export async function buildNotifVarsForEvent(
   const customerEmail = ev.customer_email?.trim();
   if (!customerEmail) return null;
 
-  // Look up contact info
+  // Look up contact info (include DND flags so callers can gate sends)
   const { data: contact } = await supabaseAdmin
     .from('venue_customers')
-    .select('first_name,last_name,phone,ghl_contact_id')
+    .select('first_name,last_name,phone,ghl_contact_id,sms_dnd,conversation_dnd_email,conversation_dnd_all')
     .eq('venue_id', ev.venue_id)
-    .ilike('email', customerEmail)
+    .ilike('customer_email', customerEmail)
     .maybeSingle();
 
-  const c = contact as { first_name?: string; last_name?: string; phone?: string; ghl_contact_id?: string } | null;
+  const c = contact as {
+    first_name?: string; last_name?: string; phone?: string; ghl_contact_id?: string;
+    sms_dnd?: boolean; conversation_dnd_email?: boolean; conversation_dnd_all?: boolean;
+  } | null;
   const contactName = [c?.first_name, c?.last_name].filter(Boolean).join(' ') || customerEmail;
 
   const resolvedTz = tz ?? 'America/New_York';
@@ -541,6 +553,8 @@ export async function buildNotifVarsForEvent(
     contact_email: customerEmail,
     contact_phone: c?.phone ?? null,
     contact_ghl_id: c?.ghl_contact_id ?? null,
+    contact_sms_dnd: c?.sms_dnd ?? false,
+    contact_email_dnd: (c?.conversation_dnd_email || c?.conversation_dnd_all) ?? false,
     appointment_title: ev.title,
     appointment_start_time: startFormatted,
     appointment_timezone: tzLabel,
