@@ -43,7 +43,7 @@ The main areas:
 - Leads — Kanban/list pipeline for inquiries; editable stages and pipelines
 - Reports — financial exports (owners and admins)
 - Payments flyout — new proposal/invoice, proposals list, templates, installments, subscriptions, transactions
-- Marketing flyout — analytics, lead capture forms, email tools, Trigger Links, Tags & Variables (system tags + canonical merge variables + trigger links)
+- Marketing flyout — analytics, lead capture forms, email tools, Workflows (visual automation builder with 60+ smart triggers, 50 canonical merge variables, 8 step types incl. Notify Venue Owner), Trigger Links, Tags & Variables (system tags + canonical merge variables + trigger links)
 - Help Center — searchable docs and Ask AI–style help
 - Settings flyout — general, branding, email templates, integrations, team, notifications
 
@@ -2261,21 +2261,44 @@ The public submission endpoint and the existing embed code are unchanged — the
       },
       {
         id: 'me-workflows',
-        title: 'Workflows — automated speed-to-lead funnels (email, SMS soon)',
-        tags: ['workflow', 'workflows', 'automation', 'speed to lead', 'follow up', 'sequence', 'drip', 'funnel', 'auto-reply', 'reply halt', 'form submitted', 'trigger', 'cron'],
-        body: `Marketing → Workflows is the visual builder for automated follow-up sequences. It's how venues turn a form submission into a multi-step drip funnel that runs by itself — the "speed-to-lead" engine.
+        title: 'Workflows — visual automation builder with 60+ smart triggers and 50 merge variables',
+        tags: ['workflow', 'workflows', 'automation', 'speed to lead', 'follow up', 'sequence', 'drip', 'funnel', 'auto-reply', 'reply halt', 'form submitted', 'trigger', 'cron', 'smart triggers', 'merge variables', 'notify owner', 'notify venue owner', 'system tags'],
+        body: `Marketing → Workflows is the visual builder for fully automated, multi-step contact journeys. It powers everything from the first auto-reply to long-term anniversary touches — and as of the April 2026 update, it has tight, two-way integration with the platform's 65 sitewide system tags and 50 canonical merge variables.
 
 What you can build today
-- Trigger: Form submitted (a lead capture form), Tag added, Stage changed, Trigger link clicked, After wedding date, or Proposal paid.
-- Steps (in any order, as many as you want): Wait (delay), Send email, Send SMS.
-- Status: Draft (does nothing), Active (enrolls and runs), Paused (existing enrollments freeze, no new ones).
 
-Every workflow has its own canvas. The trigger card sits at the top, then each step is its own card connected by dashed "+" buttons that let you insert Wait / Send email / Send SMS at any position. The Settings tab is where you set status and trigger configuration (which forms / tags / stages / etc.).
+Smart Triggers (60+ across 10 categories)
+The trigger picker lets you start a workflow on virtually any contact event. Triggers are organized into categories:
+- Lead Lifecycle: New lead, Inquiry received, Lead qualified / unqualified, In negotiation, Closed won / lost, Follow-up needed.
+- Booking: Appointment booked, Tour scheduled / completed / no-show / cancelled, Phone call scheduled / completed, Appointment confirmed / cancelled / rescheduled.
+- Proposal: Proposal sent / viewed / signed / expired, Contract signed.
+- Payments: Invoice sent / viewed, Deposit paid, Paid in full, Payment plan active, Payment failed, Refunded, Past due.
+- Marketing: Email opened, Link clicked, Campaign enrolled / completed / unsubscribed, SMS opted in / out, Re-engaged.
+- Communication: Contact replied, Hot lead, Cold lead, Do-not-contact set, VIP flagged.
+- Forms: Any form submitted, Intake completed, Questionnaire completed.
+- Event / Wedding: After wedding date (with day-offset), Date confirmed, Date held, Within 30 days of event, Within 7 days of event, Event passed, Year-1 anniversary.
+- Integration: Legacy contact synced, Legacy DND active.
+- Other / Native: Custom tag added, Pipeline stage changed, Trigger link clicked, Proposal paid.
+
+Most smart triggers resolve under the hood to a "tag added" trigger pre-configured with the matching system tag — so picking "When deposit is paid" just listens for the deposit_paid system tag, which the platform applies automatically the moment a deposit clears. You can mix multiple triggers on the same workflow (OR-style) by clicking the "+" on the trigger row.
+
+Steps (drag-and-drop palette, four categories)
+- Timing: Wait (minutes / hours / days)
+- Communication: Send Email (saved templates), Send SMS (with merge variable picker, character / segment counter, and trigger-link inserter)
+- Contact Actions: Add Tag, Remove Tag, Change Pipeline Stage, Open Conversation thread
+- Internal Alerts: Notify Venue Owner — sends an email and/or SMS to the venue's primary email and notification phone (uses StoryVenue Legacy messaging for SMS). The body and subject support the full merge-variable system, so you can do things like: subject = "[Hot Lead] {{contact.name}} just signed the proposal", body = "Phone: {{contact.phone}}, wedding date: {{lead.wedding_date}}".
+
+Merge Variables (50, used everywhere)
+Every step that takes free-form text — Send SMS, Notify Venue Owner — has a "Variables" button next to the editor. Click it to open a categorized, searchable popover with all 50 canonical variables ({{contact.first_name}}, {{venue.name}}, {{appointment.start_time}}, {{lead.wedding_date}}, {{marketing.unsubscribe_url}}, etc.) grouped by Contact / Venue / Lead / Appointment / Proposal / Invoice / Subscription / Marketing / System. Click any variable to insert it at the cursor.
+
+Status: Draft (does nothing), Active (enrolls and runs), Paused (existing enrollments freeze, no new ones).
+
+Every workflow has its own canvas. The trigger card sits at the top, then each step is its own card connected by dashed "+" buttons that let you insert any step at any position. Categorized side palette (Timing / Communication / Contact / Internal Alerts) lists every available step with hover-themed colors.
 
 Building a "form-to-funnel" sequence (the most common use case)
 1. Marketing → Forms → make sure your inquiry form is published and configured to route into a pipeline stage. The form must include an Email field — the email is what enrolls the lead in the workflow.
-2. Marketing → Workflows → New workflow → trigger = "Form submitted (lead-capture form)". Pick the form(s) to listen to (or leave empty to enroll on any form).
-3. On the canvas, click "+" to add Wait → Send email steps. Example: Send email (welcome) → Wait 2 days → Send email (case study) → Wait 3 days → Send email (testimonials) — repeat for as long as you want the drip to run.
+2. Marketing → Workflows → New workflow → trigger picker → search "form" or pick the Forms category → "Any form submitted". Pick the form(s) to listen to (or leave empty to enroll on any form).
+3. On the canvas, click "+" to add steps. Example: Send email (welcome) → Wait 2 days → Send SMS "Hi {{contact.first_name}}, just checking in!" → Wait 3 days → Notify Venue Owner "Lead {{contact.name}} hasn't responded — time to reach out" → Send email (testimonials).
 4. Set the workflow Status to Active and click Save.
 5. Submit the form yourself to test. The contact is dropped into the sequence within ~1 minute.
 

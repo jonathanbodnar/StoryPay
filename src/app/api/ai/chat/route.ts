@@ -360,25 +360,41 @@ Recommended evergreen audiences for most venues: "Active leads, no proposal", "B
 - Deleting a form: from the Forms list page click the trash icon next to the pencil, OR open a form → Settings modal → Delete form. Both routes confirm and remove the form (deletes its definition + suppresses leads from old embeds).
 - Public submission endpoint and embed continue to work unchanged — the rebuild was visual + UX only; API contracts and the form definition JSON shape are backward compatible.
 
-## Workflows (visual automation builder — speed-to-lead funnels)
-StoryVenue ships a visual workflow builder at Marketing → Workflows (/dashboard/marketing/workflows). It's how venues build automated follow-up sequences end-to-end without leaving the platform — the "speed-to-lead" engine.
+## Workflows (visual automation builder — fully integrated with system tags + 50 merge variables)
+StoryVenue ships a visual workflow builder at Marketing → Workflows (/dashboard/marketing/workflows). It's how venues build automated, multi-step contact journeys end-to-end without leaving the platform.
 
 What a workflow is:
-- A trigger (one of the types below) plus a linear sequence of steps (Wait, Send email, Send SMS).
+- One or more triggers (any-match / OR-style — when ANY trigger fires, the contact is enrolled) plus a linear sequence of steps (Wait, Send Email, Send SMS, Add Tag, Remove Tag, Change Stage, Open Conversation, Notify Venue Owner).
 - Each workflow has a status: Draft (does not enroll new leads), Active (enrolls and runs), or Paused (existing enrollments freeze in place; no new ones).
-- Enrolled leads run through the steps on the cron (1-minute resolution). Sends respect every existing suppression: marketing email opt-out, hard-bounced addresses, and SMS DND.
+- Enrolled leads run through the steps on the cron (1-minute resolution). Sends respect every existing suppression: marketing email opt-out, hard-bounced addresses, SMS DND, and the global Do-Not-Contact tag.
 
-Trigger types (set at create time, fixed after — duplicate the workflow to change trigger):
-- Form submitted — fires when a lead-capture form is submitted. Pick specific forms in the Settings tab, or leave empty to enroll on **any** form. Lead must include an email address. This is the primary speed-to-lead funnel: someone fills out your inquiry form → they're immediately dropped into the drip.
-- Tag added — fires when one of the chosen marketing tags is added to a lead (empty = any tag).
-- Stage changed — fires when a lead enters one of the chosen pipeline stages.
-- Trigger link click — fires when a lead clicks one of the chosen trigger links.
-- After wedding date — fires N days after a lead's wedding date in venue timezone (great for thank-you / review-request sequences).
-- Proposal paid — fires when a lead's proposal is marked paid.
+Smart Triggers (60+ across 10 categories — picker is searchable + categorized):
+- **Lead Lifecycle**: New lead, Inquiry received, Lead qualified / unqualified, In negotiation, Closed won / lost, Follow-up needed.
+- **Booking**: Appointment booked, Tour scheduled / completed / no-show / cancelled, Phone call scheduled / completed, Appointment confirmed / cancelled / rescheduled.
+- **Proposal**: Proposal sent / viewed / signed / expired, Contract signed.
+- **Payments**: Invoice sent / viewed, Deposit paid, Paid in full, Payment plan active, Payment failed, Refunded, Past due.
+- **Marketing**: Email opened, Link clicked, Campaign enrolled / completed / unsubscribed, SMS opted in / out, Re-engaged.
+- **Communication**: Contact replied, Hot lead, Cold lead, Do-not-contact set, VIP flagged.
+- **Forms**: Any form submitted, Intake completed, Questionnaire completed.
+- **Event / Wedding**: After wedding date (with day-offset), Date confirmed / held, Within 30 / 7 days of event, Event passed, Year-1 anniversary.
+- **Integration**: Legacy contact synced, Legacy DND active.
+- **Other / Native**: Custom tag added, Pipeline stage changed, Trigger link clicked, Proposal paid.
+
+Most smart triggers resolve to a "tag added" trigger pre-configured with a system tag (e.g. picking "Deposit paid" listens for the deposit_paid system tag, which the platform applies automatically the moment a deposit clears). Tag-based triggers will fire for both auto-applied system tags and any custom tag you create.
+
+Step types (categorized palette: Timing / Communication / Contact / Internal Alerts):
+- **Wait** — pause for minutes / hours / days (1 minute to 7 days).
+- **Send Email** — pick any saved Marketing Email Template. Templates render the full canonical merge-variable set, plus per-recipient unsubscribe footer.
+- **Send SMS** — free-form body with a "Variables" button that opens a categorized, searchable popover of all 50 system merge variables (Contact / Venue / Lead / Appointment / Proposal / Invoice / Subscription / Marketing / System). Click any variable to insert at cursor. Trigger-link inserter, character / segment counter, MMS media picker, and per-step Test SMS are also available.
+- **Add Tag** / **Remove Tag** — apply or remove one or more marketing tags (system or custom).
+- **Change Stage** — move the contact into a pipeline stage.
+- **Open Conversation** — find or create a Conversations thread for the contact and stamp a system message; subsequent SMS / email steps auto-log to the same thread.
+- **Notify Venue Owner** — sends an internal alert (email and/or SMS) to the venue's primary email and notification phone. Subject + body support full merge variables. SMS path uses StoryVenue Legacy messaging (works for any GHL-connected venue). Perfect for "{{contact.name}} just signed!" or "Hot lead {{contact.first_name}} viewed the proposal — call them" alerts.
 
 The builder UI:
-- Builder tab — visual canvas with a gridded background (matches the Workflows brand). Top card is the trigger (icon + label + subtitle that summarizes its current configuration). Below: each step renders as its own card with a colored top bar (Wait = slate, Email = sky, SMS = emerald). Use the dashed "+" connector between cards to insert Wait / Send email / Send SMS at any position.
-- Settings tab — workflow Status, fixed Trigger type display, and Trigger configuration (the lists of tags / stages / forms / etc. depending on trigger). Delete workflow lives here too.
+- Builder tab — visual canvas with a gridded background. Top row holds the trigger card(s) — click "+" on the trigger row to add additional OR-style triggers from the searchable smart-trigger picker. Each step renders below as its own card. Use the dashed "+" connector between cards to insert any step type at any position.
+- Settings tab — workflow Status, Trigger configuration (lists of tags / stages / forms / etc.), and Delete workflow.
+- Right rail — categorized palette (Timing / Communication / Contact / Internal Alerts) with drag-and-drop. Plus a "Smart Triggers" reference panel showing how many triggers exist in each category.
 - Top bar: editable workflow name, status pill, Save button (saves name + status + trigger config + all steps in one PATCH).
 
 Reply-halt + owner notification (the "if they reply, sequence ends + notify the team" piece):
@@ -388,7 +404,7 @@ Reply-halt + owner notification (the "if they reply, sequence ends + notify the 
 
 Database (no need to expose this to end-users, but useful for "how does it work?" questions):
 - marketing_automations — workflow row (name, status, trigger_type, trigger_config jsonb).
-- marketing_automation_steps — ordered steps (step_type: delay / send_email / send_sms, config_json).
+- marketing_automation_steps — ordered steps (step_type: delay / send_email / send_sms / add_tag / remove_tag / change_stage / create_conversation / notify_owner, config_json).
 - marketing_automation_enrollments — one row per (workflow, lead). Status enum: active, completed, cancelled, failed, halted_by_reply (the reply-halt status added in migration 064). Updated by the cron worker.
 - Cron: /api/cron/marketing-email runs every minute when MARKETING_CRON_ENABLED=1. It picks up enrollments whose next_run_at <= now and advances them one step.
 
