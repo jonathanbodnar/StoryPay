@@ -375,6 +375,62 @@ export async function findOrCreateContact(
   return contactId;
 }
 
+// ── DND types ─────────────────────────────────────────────────────────────────
+
+export interface GhlDndChannelSetting {
+  status: 'active' | 'inactive' | string;
+  message?: string;
+  code?: string;
+}
+
+/** Outbound DND — one entry per channel. "active" = DND on (contact blocked). */
+export interface GhlDndSettings {
+  Call?: GhlDndChannelSetting;
+  Email?: GhlDndChannelSetting;
+  SMS?: GhlDndChannelSetting;
+  WhatsApp?: GhlDndChannelSetting;
+  GMB?: GhlDndChannelSetting;
+  FB?: GhlDndChannelSetting;
+}
+
+/** Inbound DND — controls whether the contact can initiate contact. */
+export interface GhlInboundDndSettings {
+  all?: GhlDndChannelSetting;
+}
+
+/**
+ * Push DND changes for a single contact to GHL.
+ *
+ * Pass the full desired state of `dndSettings` and/or `inboundDndSettings`.
+ * The master `dnd` flag is derived automatically: true when ANY outbound channel is "active".
+ */
+export async function updateGhlContactDnd(
+  accessToken: string,
+  locationId: string,
+  contactId: string,
+  dndSettings: GhlDndSettings,
+  inboundDndSettings?: GhlInboundDndSettings,
+): Promise<void> {
+  const token = await resolveLocationToken(accessToken, locationId);
+
+  // Derive the master dnd flag: true when any outbound channel has status "active"
+  const dndMaster = Object.values(dndSettings).some(
+    (ch) => (ch as GhlDndChannelSetting | undefined)?.status === 'active'
+  );
+
+  const body: Record<string, unknown> = {
+    dnd: dndMaster,
+    dndSettings,
+  };
+  if (inboundDndSettings) body.inboundDndSettings = inboundDndSettings;
+
+  await ghlRequest(`/contacts/${encodeURIComponent(contactId)}`, token, {
+    method: 'PUT',
+    body,
+    locationId,
+  });
+}
+
 export function getOAuthUrl(clientId: string, redirectUri: string, state: string) {
   const params = new URLSearchParams({
     response_type: 'code',

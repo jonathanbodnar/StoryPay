@@ -20,6 +20,22 @@ const MAX_PAGES = 200; // safety cap = 20 000 contacts per run
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
+type GhlDndChannelStatus = 'active' | 'inactive' | string;
+
+interface GhlDndChannelEntry {
+  status?: GhlDndChannelStatus;
+  message?: string;
+  code?: string;
+}
+
+/** GHL per-channel outbound DND settings (keys are capitalised: Call, Email, SMS, GMB, WhatsApp, FB) */
+type GhlDndSettings = Partial<Record<'Call' | 'Email' | 'SMS' | 'WhatsApp' | 'GMB' | 'FB', GhlDndChannelEntry>>;
+
+/** GHL inbound DND settings */
+interface GhlInboundDndSettings {
+  all?: GhlDndChannelEntry;
+}
+
 interface GhlContact {
   id: string;
   email?: string | null;
@@ -31,6 +47,12 @@ interface GhlContact {
   source?: string | null;
   dateAdded?: string | null;
   dateUpdated?: string | null;
+  /** Master DND flag — true when any outbound channel is blocked */
+  dnd?: boolean | null;
+  /** Per-channel outbound DND */
+  dndSettings?: GhlDndSettings | null;
+  /** Inbound DND (Inbound Calls and SMS) */
+  inboundDndSettings?: GhlInboundDndSettings | null;
 }
 
 interface SyncCounts {
@@ -127,6 +149,11 @@ async function upsertContact(venueId: string, c: GhlContact): Promise<UpsertResu
   // Build a friendly name fallback when first/last are blank.
   const fallbackFirst = firstName || (c.contactName?.split(' ')[0] ?? '') || 'Contact';
 
+  // DND — derive our sms_dnd flag from GHL's SMS channel status
+  const smsDndFromGhl = c.dndSettings?.SMS?.status === 'active' || c.dnd === true;
+  const ghlDndSettings = c.dndSettings ?? null;
+  const ghlInboundDndSettings = c.inboundDndSettings ?? null;
+
   // 1. Match by ghl_contact_id (idempotent re-sync) ───────────────────────────
   {
     const { data: existing } = await supabaseAdmin
@@ -148,6 +175,15 @@ async function upsertContact(venueId: string, c: GhlContact): Promise<UpsertResu
       // what we have stored (and not just a placeholder we generated).
       if (email && email !== existing.customer_email) {
         update.customer_email = email;
+      }
+      // Sync GHL DND settings
+      if (ghlDndSettings !== null) update.ghl_dnd_settings = ghlDndSettings;
+      if (ghlInboundDndSettings !== null) update.ghl_inbound_dnd_settings = ghlInboundDndSettings;
+      // Mirror SMS DND into our own sms_dnd flag (only set to true from GHL; don't clear manual overrides)
+      if (smsDndFromGhl) {
+        update.sms_dnd = true;
+        update.sms_dnd_source = 'ghl_sync';
+        update.sms_dnd_at = nowIso;
       }
       const { error } = await supabaseAdmin
         .from('venue_customers')
@@ -171,16 +207,24 @@ async function upsertContact(venueId: string, c: GhlContact): Promise<UpsertResu
       .maybeSingle();
 
     if (byEmail?.id) {
+      const linkUpdate: Record<string, unknown> = {
+        ghl_contact_id: c.id,
+        first_name    : firstName || undefined,
+        last_name     : lastName  || undefined,
+        phone         : phone     || undefined,
+        ghl_synced_at : nowIso,
+        updated_at    : nowIso,
+      };
+      if (ghlDndSettings !== null) linkUpdate.ghl_dnd_settings = ghlDndSettings;
+      if (ghlInboundDndSettings !== null) linkUpdate.ghl_inbound_dnd_settings = ghlInboundDndSettings;
+      if (smsDndFromGhl) {
+        linkUpdate.sms_dnd = true;
+        linkUpdate.sms_dnd_source = 'ghl_sync';
+        linkUpdate.sms_dnd_at = nowIso;
+      }
       const { error } = await supabaseAdmin
         .from('venue_customers')
-        .update({
-          ghl_contact_id: c.id,
-          first_name    : firstName || undefined,
-          last_name     : lastName  || undefined,
-          phone         : phone     || undefined,
-          ghl_synced_at : nowIso,
-          updated_at    : nowIso,
-        })
+        .update(linkUpdate)
         .eq('id', byEmail.id);
       if (error) {
         console.error('[ghl-contacts-sync] link by email', error);
@@ -192,17 +236,25 @@ async function upsertContact(venueId: string, c: GhlContact): Promise<UpsertResu
 
   // 3. Insert a brand-new customer ────────────────────────────────────────────
   const insertEmail = email || `ghl.${c.id}@${PLACEHOLDER_EMAIL_DOMAIN}`;
+  const insertRow: Record<string, unknown> = {
+    venue_id      : venueId,
+    ghl_contact_id: c.id,
+    customer_email: insertEmail,
+    first_name    : fallbackFirst,
+    last_name     : lastName,
+    phone         : phone || null,
+    ghl_synced_at : nowIso,
+  };
+  if (ghlDndSettings !== null) insertRow.ghl_dnd_settings = ghlDndSettings;
+  if (ghlInboundDndSettings !== null) insertRow.ghl_inbound_dnd_settings = ghlInboundDndSettings;
+  if (smsDndFromGhl) {
+    insertRow.sms_dnd = true;
+    insertRow.sms_dnd_source = 'ghl_sync';
+    insertRow.sms_dnd_at = nowIso;
+  }
   const { error } = await supabaseAdmin
     .from('venue_customers')
-    .insert({
-      venue_id      : venueId,
-      ghl_contact_id: c.id,
-      customer_email: insertEmail,
-      first_name    : fallbackFirst,
-      last_name     : lastName,
-      phone         : phone || null,
-      ghl_synced_at : nowIso,
-    });
+    .insert(insertRow);
 
   if (error) {
     // 23505 = unique violation; race condition with a parallel job — fall back to update.

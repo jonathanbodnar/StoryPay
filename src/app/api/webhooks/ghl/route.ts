@@ -81,6 +81,67 @@ export async function POST(request: NextRequest) {
         break;
       }
 
+      case 'ContactDndUpdate': {
+        // GHL fires this whenever a contact's DND field changes.
+        // Payload shape: { type, locationId, id/contactId, dnd, dndSettings, inboundDndSettings }
+        const data = payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)
+          ? (payload.data as Record<string, unknown>)
+          : payload;
+        const locationId = (payload.locationId ?? (data as Record<string, unknown>)?.locationId) as string | undefined;
+        const contactId  = (payload.contactId ?? payload.id ?? (data as Record<string, unknown>)?.id ?? (data as Record<string, unknown>)?.contactId) as string | undefined;
+        const dndSettings = (payload.dndSettings ?? (data as Record<string, unknown>)?.dndSettings) as Record<string, unknown> | undefined;
+        const inboundDndSettings = (payload.inboundDndSettings ?? (data as Record<string, unknown>)?.inboundDndSettings) as Record<string, unknown> | undefined;
+
+        if (locationId && contactId) {
+          void (async () => {
+            try {
+              // Find the venue by locationId
+              const { data: venue } = await supabaseAdmin
+                .from('venues')
+                .select('id')
+                .eq('ghl_location_id', locationId)
+                .maybeSingle();
+              if (!venue?.id) return;
+
+              // Find the venue_customer by ghl_contact_id
+              const { data: vc } = await supabaseAdmin
+                .from('venue_customers')
+                .select('id, sms_dnd')
+                .eq('venue_id', venue.id)
+                .eq('ghl_contact_id', contactId)
+                .maybeSingle();
+              if (!vc?.id) return;
+
+              const nowIso = new Date().toISOString();
+              const smsDnd = (dndSettings as { SMS?: { status?: string } } | undefined)?.SMS?.status === 'active';
+
+              const update: Record<string, unknown> = {
+                updated_at: nowIso,
+                ghl_synced_at: nowIso,
+              };
+              if (dndSettings) update.ghl_dnd_settings = dndSettings;
+              if (inboundDndSettings) update.ghl_inbound_dnd_settings = inboundDndSettings;
+              // Only set sms_dnd to true from webhook; never auto-clear it (manual clear required)
+              if (smsDnd && !vc.sms_dnd) {
+                update.sms_dnd = true;
+                update.sms_dnd_at = nowIso;
+                update.sms_dnd_source = 'ghl_webhook';
+              }
+
+              await supabaseAdmin
+                .from('venue_customers')
+                .update(update)
+                .eq('id', vc.id);
+
+              console.log('[ghl webhook] ContactDndUpdate synced for contact', contactId);
+            } catch (err) {
+              console.error('[ghl webhook] ContactDndUpdate sync failed:', err);
+            }
+          })();
+        }
+        break;
+      }
+
       case 'AppInstall': {
         const data = payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)
           ? (payload.data as Record<string, unknown>)
