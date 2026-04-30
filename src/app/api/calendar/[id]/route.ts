@@ -267,25 +267,28 @@ export async function DELETE(
   const { id: rawId } = await params;
   const id = parentIdOf(rawId);
 
-  // Fetch the Google linkage BEFORE deleting so we can push the deletion to
-  // Google after the local row is gone. Wrapped in a try/no-op so legacy DBs
-  // without the google_event_id column still work.
-  let googleLink: { google_event_id: string | null; google_calendar_id: string | null } | null = null;
+  // Fetch the event details + Google linkage BEFORE deleting so we can:
+  //   1. Push the deletion to Google after the local row is gone.
+  //   2. Fire a cancellation notification to the contact.
+  type ExistingRow = {
+    google_event_id?: string | null;
+    google_calendar_id?: string | null;
+    customer_email?: string | null;
+    title?: string | null;
+    start_at?: string | null;
+    end_at?: string | null;
+  };
+  let existingEvent: ExistingRow | null = null;
   try {
-    const { data: existing } = await supabaseAdmin
+    const { data } = await supabaseAdmin
       .from('calendar_events')
-      .select('google_event_id, google_calendar_id')
+      .select('google_event_id, google_calendar_id, customer_email, title, start_at, end_at')
       .eq('id', id)
       .eq('venue_id', venueId)
       .maybeSingle();
-    if (existing) {
-      googleLink = {
-        google_event_id: (existing as { google_event_id?: string | null }).google_event_id ?? null,
-        google_calendar_id: (existing as { google_calendar_id?: string | null }).google_calendar_id ?? null,
-      };
-    }
+    existingEvent = (data as ExistingRow | null) ?? null;
   } catch {
-    // Column missing — migration not applied yet. Just skip Google sync.
+    // Column missing — migration not applied yet. Just skip Google sync and notifications.
   }
 
   const { error } = await supabaseAdmin
@@ -299,10 +302,46 @@ export async function DELETE(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Push the delete to Google (fire-and-forget — local delete already succeeded)
-  if (googleLink?.google_event_id) {
-    void pushEventDeleteToGoogle(venueId, googleLink);
-  }
+  // Fire post-delete side-effects (fire-and-forget — local delete already succeeded)
+  void (async () => {
+    try {
+      // Push the delete to Google
+      if (existingEvent?.google_event_id) {
+        await pushEventDeleteToGoogle(venueId, {
+          google_event_id: existingEvent.google_event_id ?? null,
+          google_calendar_id: existingEvent.google_calendar_id ?? null,
+        });
+      }
+
+      // Dispatch cancellation notification to the contact
+      const customerEmail = existingEvent?.customer_email?.trim();
+      if (customerEmail && existingEvent?.start_at) {
+        const { data: calSettings } = await supabaseAdmin
+          .from('venue_calendar_settings')
+          .select('timezone')
+          .eq('venue_id', venueId)
+          .maybeSingle();
+        const tz = (calSettings as { timezone?: string } | null)?.timezone ?? undefined;
+
+        const vars = await buildNotifVarsForEvent(
+          {
+            id,
+            venue_id: venueId,
+            title: existingEvent.title ?? 'Appointment',
+            start_at: existingEvent.start_at,
+            end_at: existingEvent.end_at ?? undefined,
+            customer_email: customerEmail,
+          },
+          tz,
+        );
+        if (vars) {
+          await dispatchCalendarNotification(venueId, 'cancellation', vars);
+        }
+      }
+    } catch (e) {
+      console.error('[calendar DELETE] post-delete side-effects error:', e);
+    }
+  })();
 
   return NextResponse.json({ success: true });
 }

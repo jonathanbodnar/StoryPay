@@ -246,6 +246,7 @@ export default function CalendarPage() {
   // Detail modal
   const [selectedEvent, setSelectedEvent] = useState<CalEvent | null>(null);
   const [deleting,      setDeleting]      = useState(false);
+  const [statusChanging, setStatusChanging] = useState(false);
   const [selectedEventContactId, setSelectedEventContactId] = useState<string | null>(null);
 
   // Team members for the "assigned to" selector in the event modal
@@ -709,14 +710,26 @@ export default function CalendarPage() {
   async function handleDelete(id: string) {
     setDeleting(true);
     await fetch(`/api/calendar/${id}`, { method: 'DELETE' });
-    // Occurrences share a parent_id; stripping by parent_id removes the
-    // whole series in one pass, and also handles the non-recurring case
-    // because we set parent_id === id for those in the API.
     const gone = events.find(e => e.id === id);
     const parent = gone?.parent_id ?? id;
     setEvents(prev => prev.filter(e => e.id !== id && e.parent_id !== parent));
     setSelectedEvent(null);
     setDeleting(false);
+  }
+
+  async function handleStatusChange(id: string, newStatus: string) {
+    setStatusChanging(true);
+    const res = await fetch(`/api/calendar/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus }),
+    });
+    if (res.ok) {
+      const updated = await res.json() as CalEvent;
+      setEvents(prev => prev.map(e => e.id === id ? { ...e, status: newStatus } : e));
+      setSelectedEvent(prev => prev ? { ...updated, status: newStatus } : prev);
+    }
+    setStatusChanging(false);
   }
 
   function openNewEvent(dateStr?: string, time?: string) {
@@ -1698,9 +1711,8 @@ export default function CalendarPage() {
                 </div>
               )}
             </div>
-            <div className="flex justify-between items-center mt-5 gap-3">
+            <div className="mt-5 space-y-2">
               {selectedEvent.source === 'google' ? (
-                // Google events: open in Google Calendar, no edit/delete here
                 <a
                   href={selectedEvent.html_link ?? 'https://calendar.google.com'}
                   target="_blank"
@@ -1710,24 +1722,52 @@ export default function CalendarPage() {
                 </a>
               ) : (
                 <>
-                  <button
-                    onClick={() => openEditEvent(selectedEvent)}
-                    className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (selectedEvent.recurrence_rule) {
-                        const ok = window.confirm('This is a repeating event. Deleting it will remove every occurrence in the series. Continue?');
-                        if (!ok) return;
-                      }
-                      handleDelete(selectedEvent.id);
-                    }}
-                    disabled={deleting}
-                    className="flex items-center gap-1.5 rounded-xl border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
-                    {deleting && <Loader2 size={13} className="animate-spin" />}
-                    {selectedEvent.recurrence_rule ? 'Delete Series' : 'Delete Event'}
-                  </button>
+                  {/* Status quick-actions row */}
+                  <div className="flex items-center gap-2">
+                    {selectedEvent.status !== 'confirmed' && (
+                      <button
+                        onClick={() => handleStatusChange(selectedEvent.id, 'confirmed')}
+                        disabled={statusChanging}
+                        className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-green-300 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700 hover:bg-green-100 transition-colors disabled:opacity-50">
+                        {statusChanging ? <Loader2 size={12} className="animate-spin" /> : null}
+                        Confirm Event
+                      </button>
+                    )}
+                    {selectedEvent.status !== 'cancelled' && (
+                      <button
+                        onClick={() => {
+                          if (window.confirm('Cancel this event? A cancellation notification will be sent to the contact.')) {
+                            handleStatusChange(selectedEvent.id, 'cancelled');
+                          }
+                        }}
+                        disabled={statusChanging}
+                        className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-50">
+                        {statusChanging ? <Loader2 size={12} className="animate-spin" /> : null}
+                        Cancel Event
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Edit + Delete row */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => openEditEvent(selectedEvent)}
+                      className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => {
+                        const msg = selectedEvent.recurrence_rule
+                          ? 'This is a repeating event. Deleting it will remove every occurrence in the series. A cancellation notification will be sent. Continue?'
+                          : 'Delete this event? A cancellation notification will be sent to the contact.';
+                        if (window.confirm(msg)) handleDelete(selectedEvent.id);
+                      }}
+                      disabled={deleting}
+                      className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
+                      {deleting && <Loader2 size={13} className="animate-spin" />}
+                      {selectedEvent.recurrence_rule ? 'Delete Series' : 'Delete Event'}
+                    </button>
+                  </div>
                 </>
               )}
             </div>

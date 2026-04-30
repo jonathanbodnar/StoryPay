@@ -337,6 +337,9 @@ const DEFAULT_CHANNEL_OFFSETS: Record<string, { d: number; h: number; m: number 
   sms_contact:   [{ d: 0, h: 1, m: 0 }, { d: 0, h: 0, m: 10 }],
 };
 
+// Default follow-up offset: 30 minutes after the event ends
+const DEFAULT_FOLLOWUP_OFFSETS: { d: number; h: number; m: number }[] = [{ d: 0, h: 0, m: 30 }];
+
 const DURATION_OPTIONS = [15, 30, 45, 60, 90, 120, 180, 240];
 const INTERVAL_OPTIONS = [15, 30, 45, 60, 90, 120];
 const NOTICE_OPTIONS = [0, 1, 2, 4, 8, 12, 24, 48, 72];
@@ -1153,6 +1156,9 @@ function NotificationsTab() {
   // Build a full default row for a given type+channel if none exists in DB
   const makeDefault = (type: string, channel: string): NotifRow => {
     const def = NOTIF_DEFAULTS[type]?.[channel];
+    let offsets: { d: number; h: number; m: number }[] | null = null;
+    if (type === 'reminder') offsets = DEFAULT_CHANNEL_OFFSETS[channel] ?? null;
+    if (type === 'follow_up') offsets = DEFAULT_FOLLOWUP_OFFSETS;
     return {
       notification_type: type,
       channel,
@@ -1162,9 +1168,7 @@ function NotificationsTab() {
       notify_guests: false,
       subject: def?.subject ?? null,
       body: def?.body ?? '',
-      reminder_offsets: type === 'reminder'
-        ? (DEFAULT_CHANNEL_OFFSETS[channel] ?? null)
-        : null,
+      reminder_offsets: offsets,
     };
   };
 
@@ -1179,6 +1183,9 @@ function NotificationsTab() {
         // Backfill reminder_offsets if DB row is missing them
         if (existing && existing.notification_type === 'reminder' && !existing.reminder_offsets) {
           existing.reminder_offsets = DEFAULT_CHANNEL_OFFSETS[ch.key] ?? null;
+        }
+        if (existing && existing.notification_type === 'follow_up' && !existing.reminder_offsets) {
+          existing.reminder_offsets = DEFAULT_FOLLOWUP_OFFSETS;
         }
         result.push(existing ?? makeDefault(nt.type, ch.key));
       }
@@ -1226,7 +1233,10 @@ function NotificationsTab() {
 
   const getChannelOffsets = (type: string, channel: string): OffsetRow[] => {
     const row = getRow(type, channel);
-    const raw = row?.reminder_offsets ?? DEFAULT_CHANNEL_OFFSETS[channel] ?? [{ d: 0, h: 1, m: 0 }];
+    const fallback = type === 'follow_up'
+      ? DEFAULT_FOLLOWUP_OFFSETS
+      : (DEFAULT_CHANNEL_OFFSETS[channel] ?? [{ d: 0, h: 1, m: 0 }]);
+    const raw = row?.reminder_offsets ?? fallback;
     return raw.map(dhmToOffsetRow);
   };
 
@@ -1387,7 +1397,8 @@ function NotificationsTab() {
                   const chStateKey = `${nt.type}:${ch.key}`;
                   const isChOpen = openChannels.has(chStateKey);
                   const isReminder = nt.type === 'reminder';
-                  const channelOffsets = isReminder ? getChannelOffsets(nt.type, ch.key) : [];
+                  const isFollowUp = nt.type === 'follow_up';
+                  const channelOffsets = (isReminder || isFollowUp) ? getChannelOffsets(nt.type, ch.key) : [];
 
                   return (
                     <div key={ch.key} className="bg-white">
@@ -1427,11 +1438,11 @@ function NotificationsTab() {
                       {isChOpen && (
                         <div className="px-5 pb-5 bg-gray-50 border-t border-gray-100 space-y-4">
 
-                          {/* ── Reminder timing (reminder scenario only) ────── */}
-                          {isReminder && (
+                          {/* ── Timing (reminder = before event, follow_up = after event) ── */}
+                          {(isReminder || isFollowUp) && (
                             <div className="pt-4">
                               <p className="text-xs font-semibold text-gray-700 mb-2">
-                                When to send — {ch.label}
+                                {isFollowUp ? `Send follow-up — ${ch.label}` : `When to send — ${ch.label}`}
                               </p>
                               <div className="space-y-2">
                                 {channelOffsets.map((offset, idx) => (
@@ -1461,7 +1472,9 @@ function NotificationsTab() {
                                       <option value="hours">Hours</option>
                                       <option value="days">Days</option>
                                     </select>
-                                    <span className="text-sm text-gray-500 flex-1">before</span>
+                                    <span className="text-sm text-gray-500 flex-1">
+                                      {isFollowUp ? 'after event ends' : 'before'}
+                                    </span>
                                     {channelOffsets.length > 1 && (
                                       <button
                                         type="button"
@@ -1483,13 +1496,17 @@ function NotificationsTab() {
                                   <Plus size={12} /> Add time
                                 </button>
                               )}
-                              <p className="mt-2 text-[11px] text-gray-400">Up to 3 send times per channel.</p>
+                              <p className="mt-2 text-[11px] text-gray-400">
+                                {isFollowUp
+                                  ? 'Up to 3 follow-up times per channel, each counted after the event ends.'
+                                  : 'Up to 3 send times per channel.'}
+                              </p>
                             </div>
                           )}
 
                           {/* Subject (email only) */}
                           {isEmail && (
-                            <div className={isReminder ? '' : 'pt-4'}>
+                            <div className={(isReminder || isFollowUp) ? '' : 'pt-4'}>
                               <label className="block text-xs font-medium text-gray-600 mb-1.5">
                                 Subject <span className="text-red-400">*</span>
                               </label>
@@ -1504,7 +1521,7 @@ function NotificationsTab() {
                           )}
 
                           {/* Message body */}
-                          <div className={isEmail || isReminder ? '' : 'pt-4'}>
+                          <div className={isEmail || isReminder || isFollowUp ? '' : 'pt-4'}>
                             <div className="flex items-center justify-between mb-1.5">
                               <label className="text-xs font-medium text-gray-600">
                                 {isEmail ? 'Email body' : 'SMS message'}

@@ -50,6 +50,14 @@ const DEFAULT_CHANNEL_OFFSETS: Record<string, ReminderOffset[]> = {
   sms_contact:   [{ d: 0, h: 1, m: 0 }, { d: 0, h: 0, m: 10 }],
 };
 
+/** Default follow-up offset: 30 minutes after event ends */
+const DEFAULT_FOLLOWUP_OFFSET: ReminderOffset = { d: 0, h: 0, m: 30 };
+
+/** send_at = end_at + offset (for follow-up rows) */
+function computeFollowUpSendAt(endAt: Date, o: ReminderOffset): Date {
+  return new Date(endAt.getTime() + offsetToMs(o));
+}
+
 /**
  * Sync reminder + follow-up queue rows for a single calendar event.
  *
@@ -181,21 +189,60 @@ export async function syncAppointmentRemindersForEvent(calendarEventId: string):
     });
   }
 
-  // ── Follow-up row (30 min after event ends, fires all enabled follow_up channels) ─
+  // ── Per-channel follow-up rows (configurable timing after event ends) ────────
+  // Each enabled follow_up channel fires independently at its own configured time.
+  // Falls back to a single 30-min all-channels row when no per-channel rows exist.
   if (endAt && !Number.isNaN(endAt.getTime())) {
-    const followUpSendAt = new Date(endAt.getTime() + 30 * 60 * 1000);
-    if (followUpSendAt.getTime() > now) {
-      rows.push({
-        calendar_event_id: calendarEventId,
-        venue_id: venueId,
-        reminder_index: 98,
-        offset_days: 0,
-        offset_hours: 0,
-        offset_minutes: 0,
-        send_at: followUpSendAt.toISOString(),
-        notification_type: 'follow_up',
-        channel: null,
-      });
+    const { data: followUpNotifRows } = await supabaseAdmin
+      .from('venue_calendar_notifications')
+      .select('channel, enabled, reminder_offsets')
+      .eq('venue_id', venueId)
+      .eq('notification_type', 'follow_up')
+      .eq('enabled', true);
+
+    const enabledFollowUpChannels = (followUpNotifRows ?? []) as Array<{
+      channel: string;
+      enabled: boolean;
+      reminder_offsets?: ReminderOffset[] | null;
+    }>;
+
+    if (enabledFollowUpChannels.length > 0) {
+      // Per-channel follow-up rows — each channel at its configured timing
+      for (const ch of enabledFollowUpChannels) {
+        const rawOffsets = ch.reminder_offsets ?? [DEFAULT_FOLLOWUP_OFFSET];
+        const offsets = normalizeReminderOffsets(rawOffsets.length ? rawOffsets : [DEFAULT_FOLLOWUP_OFFSET]);
+        offsets.forEach((o, idx) => {
+          const sendAt = computeFollowUpSendAt(endAt, o);
+          if (sendAt.getTime() <= now) return;
+          rows.push({
+            calendar_event_id: calendarEventId,
+            venue_id: venueId,
+            reminder_index: idx,
+            offset_days: o.d,
+            offset_hours: o.h,
+            offset_minutes: o.m,
+            send_at: sendAt.toISOString(),
+            notification_type: 'follow_up',
+            channel: ch.channel,
+          });
+        });
+      }
+    } else {
+      // Legacy / no follow_up rows configured: single 30-min all-channels row
+      const followUpSendAt = computeFollowUpSendAt(endAt, DEFAULT_FOLLOWUP_OFFSET);
+      if (followUpSendAt.getTime() > now) {
+        rows.push({
+          calendar_event_id: calendarEventId,
+          venue_id: venueId,
+          reminder_index: 98,
+          offset_days: 0,
+          offset_hours: 0,
+          offset_minutes: 30,
+          send_at: followUpSendAt.toISOString(),
+          notification_type: 'follow_up',
+          channel: null,
+        });
+      }
     }
   }
 
