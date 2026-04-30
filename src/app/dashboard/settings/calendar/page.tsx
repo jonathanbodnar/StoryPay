@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Clock, Globe, Link2, CalendarDays, Bell, Settings2,
   ChevronRight, CheckCircle2, XCircle, RefreshCw, Plus,
-  Trash2, Edit3, Info, Check, X, AlertTriangle, Loader2, Save,
+  Trash2, Edit3, Info, Check, X, AlertTriangle, Loader2, Save, Layers,
 } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -383,6 +383,7 @@ export default function CalendarSettingsPage() {
     { id: 'connections', label: 'Connections', icon: Link2 },
     { id: 'availability', label: 'Availability', icon: CalendarDays },
     { id: 'booking-rules', label: 'Booking Rules', icon: Clock },
+    { id: 'calendars', label: 'Calendars', icon: Layers },
     { id: 'notifications', label: 'Notifications', icon: Bell },
   ];
 
@@ -421,6 +422,7 @@ export default function CalendarSettingsPage() {
       {activeTab === 'connections' && <ConnectionsTab />}
       {activeTab === 'availability' && <AvailabilityTab />}
       {activeTab === 'booking-rules' && <BookingRulesTab />}
+      {activeTab === 'calendars' && <CalendarsTab />}
       {activeTab === 'notifications' && <NotificationsTab />}
     </div>
   );
@@ -1118,6 +1120,280 @@ function BookingRulesTab() {
   );
 }
 
+// ── Calendars Tab ─────────────────────────────────────────────────────────────
+
+interface VenueCalendar {
+  id: string;
+  name: string;
+  color: string;
+  description: string | null;
+  is_default: boolean;
+  sort_order: number;
+}
+
+const CALENDAR_COLORS = [
+  '#1b1b1b', '#ef4444', '#f97316', '#eab308', '#22c55e',
+  '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#6b7280',
+];
+
+function CalendarsTab() {
+  const [calendars, setCalendars] = useState<VenueCalendar[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [error, setError] = useState('');
+
+  // New calendar form
+  const [newName, setNewName] = useState('');
+  const [newColor, setNewColor] = useState('#1b1b1b');
+  const [newDesc, setNewDesc] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+
+  // Edit form
+  const [editName, setEditName] = useState('');
+  const [editColor, setEditColor] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+
+  useEffect(() => {
+    fetch('/api/venue-calendars')
+      .then((r) => r.json())
+      .then((d) => { setCalendars(Array.isArray(d) ? d : []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const startEdit = (cal: VenueCalendar) => {
+    setEditId(cal.id);
+    setEditName(cal.name);
+    setEditColor(cal.color);
+    setEditDesc(cal.description ?? '');
+  };
+
+  const saveEdit = async (id: string) => {
+    setSaving(id);
+    setError('');
+    const res = await fetch(`/api/venue-calendars/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: editName, color: editColor, description: editDesc }),
+    });
+    const data = await res.json() as VenueCalendar & { error?: string };
+    if (data.error) { setError(data.error); } else {
+      setCalendars((prev) => prev.map((c) => c.id === id ? data : c));
+      setEditId(null);
+    }
+    setSaving(null);
+  };
+
+  const setDefault = async (id: string) => {
+    setSaving(id);
+    await fetch(`/api/venue-calendars/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_default: true }),
+    });
+    setCalendars((prev) => prev.map((c) => ({ ...c, is_default: c.id === id })));
+    setSaving(null);
+  };
+
+  const deleteCalendar = async (id: string) => {
+    if (!window.confirm('Delete this calendar? Events will be moved to the default calendar.')) return;
+    setDeleting(id);
+    setError('');
+    const res = await fetch(`/api/venue-calendars/${id}`, { method: 'DELETE' });
+    const data = await res.json() as { success?: boolean; error?: string };
+    if (data.error) { setError(data.error); } else {
+      setCalendars((prev) => prev.filter((c) => c.id !== id));
+    }
+    setDeleting(null);
+  };
+
+  const createCalendar = async () => {
+    if (!newName.trim()) return;
+    setCreating(true);
+    setError('');
+    const res = await fetch('/api/venue-calendars', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newName.trim(), color: newColor, description: newDesc.trim() || null }),
+    });
+    const data = await res.json() as VenueCalendar & { error?: string };
+    if (data.error) { setError(data.error); } else {
+      setCalendars((prev) => [...prev, data]);
+      setNewName(''); setNewColor('#1b1b1b'); setNewDesc('');
+      setShowCreate(false);
+    }
+    setCreating(false);
+  };
+
+  if (loading) return <LoadingCard />;
+
+  return (
+    <div className="max-w-2xl space-y-4">
+      <p className="text-sm text-gray-500">
+        Create multiple calendars (e.g. "Tour Calendar", "Phone Calls") to organize events and give each its own notification templates. All calendars appear on one unified view.
+      </p>
+
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+      )}
+
+      {/* Calendar list */}
+      <div className="space-y-2">
+        {calendars.map((cal) => (
+          <div key={cal.id} className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+            {editId === cal.id ? (
+              /* Edit mode */
+              <div className="p-4 space-y-3">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-800"
+                    placeholder="Calendar name"
+                  />
+                  <div className="flex gap-1.5 flex-wrap">
+                    {CALENDAR_COLORS.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setEditColor(c)}
+                        className={`w-6 h-6 rounded-full transition-all ${editColor === c ? 'ring-2 ring-offset-1 ring-gray-800 scale-110' : ''}`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <input
+                  type="text"
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-800"
+                  placeholder="Description (optional)"
+                />
+                <div className="flex gap-2 justify-end">
+                  <button onClick={() => setEditId(null)} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
+                  <button
+                    onClick={() => saveEdit(cal.id)}
+                    disabled={saving === cal.id || !editName.trim()}
+                    className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                    style={{ backgroundColor: '#1b1b1b' }}
+                  >
+                    {saving === cal.id ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                    Save
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* Display mode */
+              <div className="flex items-center gap-3 px-4 py-3">
+                <div className="w-3.5 h-3.5 rounded-full shrink-0" style={{ backgroundColor: cal.color }} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{cal.name}</p>
+                    {cal.is_default && (
+                      <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
+                        Default
+                      </span>
+                    )}
+                  </div>
+                  {cal.description && <p className="text-xs text-gray-500 mt-0.5 truncate">{cal.description}</p>}
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {!cal.is_default && (
+                    <button
+                      onClick={() => setDefault(cal.id)}
+                      disabled={saving === cal.id}
+                      className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      Set default
+                    </button>
+                  )}
+                  <button
+                    onClick={() => startEdit(cal)}
+                    className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <Edit3 size={13} />
+                  </button>
+                  {calendars.length > 1 && (
+                    <button
+                      onClick={() => deleteCalendar(cal.id)}
+                      disabled={deleting === cal.id}
+                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {deleting === cal.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Create new calendar */}
+      {showCreate ? (
+        <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-4 space-y-3">
+          <p className="text-xs font-semibold text-gray-700">New Calendar</p>
+          <div className="flex items-center gap-3">
+            <input
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-800"
+              placeholder="Calendar name (e.g. Tour Calendar)"
+              autoFocus
+            />
+            <div className="flex gap-1.5 flex-wrap">
+              {CALENDAR_COLORS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setNewColor(c)}
+                  className={`w-6 h-6 rounded-full transition-all ${newColor === c ? 'ring-2 ring-offset-1 ring-gray-800 scale-110' : ''}`}
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+            </div>
+          </div>
+          <input
+            type="text"
+            value={newDesc}
+            onChange={(e) => setNewDesc(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-800"
+            placeholder="Description (optional)"
+          />
+          <div className="flex gap-2 justify-end">
+            <button onClick={() => { setShowCreate(false); setNewName(''); setNewColor('#1b1b1b'); setNewDesc(''); }} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
+            <button
+              onClick={createCalendar}
+              disabled={creating || !newName.trim()}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+              style={{ backgroundColor: '#1b1b1b' }}
+            >
+              {creating ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+              Create Calendar
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => setShowCreate(true)}
+          className="flex items-center gap-2 rounded-xl border border-dashed border-gray-300 px-4 py-3 text-sm text-gray-500 hover:border-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-colors w-full"
+        >
+          <Plus size={14} /> Add calendar
+        </button>
+      )}
+
+      <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-700">
+        <strong>How it works:</strong> All calendars share one calendar view and are color-coded. Each calendar can have its own notification templates — go to the <strong>Notifications</strong> tab and select a calendar from the dropdown to configure its templates.
+      </div>
+    </div>
+  );
+}
+
 // ── Notifications Tab ─────────────────────────────────────────────────────────
 
 // ── Reminder offset helpers ───────────────────────────────────────────────────
@@ -1152,6 +1428,10 @@ function NotificationsTab() {
   const [testError, setTestError] = useState<Record<string, string>>({});
   // key = "type:channel", value = recipient email or phone digits
   const [testRecipients, setTestRecipients] = useState<Record<string, string>>({});
+
+  // Per-calendar template support
+  const [calendars, setCalendars] = useState<VenueCalendar[]>([]);
+  const [selectedCalendarId, setSelectedCalendarId] = useState<string | null>(null);
 
   // Build a full default row for a given type+channel if none exists in DB
   const makeDefault = (type: string, channel: string): NotifRow => {
@@ -1193,11 +1473,26 @@ function NotificationsTab() {
     return result;
   };
 
+  // Load calendars list once on mount
   useEffect(() => {
-    fetch('/api/calendar/notifications', { cache: 'no-store' })
+    fetch('/api/venue-calendars')
+      .then((r) => r.json())
+      .then((d) => setCalendars(Array.isArray(d) ? d : []))
+      .catch(() => {});
+  }, []);
+
+  // Load notification templates whenever the selected calendar changes
+  useEffect(() => {
+    setLoading(true);
+    const url = selectedCalendarId
+      ? `/api/calendar/notifications?calendar_id=${selectedCalendarId}`
+      : '/api/calendar/notifications';
+    fetch(url, { cache: 'no-store' })
       .then((r) => r.json())
       .then((data) => {
         setNotifs(buildFull(Array.isArray(data) ? (data as NotifRow[]) : []));
+        setExpandedType(null);
+        setOpenChannels(new Set());
         setLoading(false);
       })
       .catch(() => {
@@ -1205,7 +1500,7 @@ function NotificationsTab() {
         setLoading(false);
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [selectedCalendarId]);
 
   const updateRow = (type: string, channel: string, field: keyof NotifRow, value: unknown) =>
     setNotifs((rows) =>
@@ -1312,10 +1607,12 @@ function NotificationsTab() {
   const save = async () => {
     setSaving(true);
     try {
+      // Tag each row with the currently selected calendar_id (null = venue-wide default)
+      const payload = notifs.map((r) => ({ ...r, calendar_id: selectedCalendarId ?? null }));
       await fetch('/api/calendar/notifications', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(notifs),
+        body: JSON.stringify(payload),
       });
       setSaved(true);
       setExpandedType(null);
@@ -1327,8 +1624,53 @@ function NotificationsTab() {
 
   if (loading) return <LoadingCard />;
 
+  const selectedCalendar = calendars.find((c) => c.id === selectedCalendarId) ?? null;
+
   return (
     <div className="max-w-3xl space-y-3">
+      {/* Calendar picker — only shown when venue has multiple calendars */}
+      {calendars.length > 0 && (
+        <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 flex items-center gap-3">
+          <Layers size={14} className="text-gray-400 shrink-0" />
+          <div className="flex-1">
+            <p className="text-xs font-semibold text-gray-700 mb-1">Editing templates for</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setSelectedCalendarId(null)}
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                  selectedCalendarId === null
+                    ? 'bg-gray-900 text-white'
+                    : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                All Calendars (Default)
+              </button>
+              {calendars.map((cal) => (
+                <button
+                  key={cal.id}
+                  onClick={() => setSelectedCalendarId(cal.id)}
+                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                    selectedCalendarId === cal.id
+                      ? 'text-white'
+                      : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+                  }`}
+                  style={selectedCalendarId === cal.id ? { backgroundColor: cal.color } : {}}
+                >
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: selectedCalendarId === cal.id ? 'white' : cal.color }} />
+                  {cal.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedCalendar && (
+        <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-2.5 text-xs text-amber-700">
+          Editing templates for <strong>{selectedCalendar.name}</strong>. These override the "All Calendars" defaults for events in this calendar. Leave a channel template body empty to inherit the default.
+        </div>
+      )}
+
       <p className="text-sm text-gray-500 mb-2">
         Configure email and SMS templates per scenario. Each channel has independent settings and, for reminders, its own send schedule.
       </p>

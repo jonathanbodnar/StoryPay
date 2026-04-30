@@ -430,20 +430,41 @@ export async function dispatchCalendarNotification(
   type: NotifType,
   vars: CalendarNotifVars,
   onlyChannel?: string,
+  calendarId?: string | null,
 ): Promise<void> {
   try {
-    const [{ data: templateRows }, { data: venueRow }] = await Promise.all([
-      supabaseAdmin
+    // Load templates: prefer calendar-specific rows, fall back to venue-wide defaults.
+    // Two-query strategy: first try with calendar_id filter, then fall back if empty.
+    let templateRows: TemplateRow[] | null = null;
+
+    if (calendarId) {
+      const { data: calRows } = await supabaseAdmin
         .from('venue_calendar_notifications')
         .select('channel,enabled,subject,body')
         .eq('venue_id', venueId)
-        .eq('notification_type', type),
-      supabaseAdmin
-        .from('venues')
-        .select('email,name,ghl_access_token,ghl_location_id,ghl_connected')
-        .eq('id', venueId)
-        .maybeSingle(),
-    ]);
+        .eq('notification_type', type)
+        .eq('calendar_id', calendarId);
+      if (calRows && calRows.length > 0) {
+        templateRows = calRows as TemplateRow[];
+      }
+    }
+
+    // Fall back to venue-wide defaults when no calendar-specific templates exist
+    if (!templateRows) {
+      const { data: defaultRows } = await supabaseAdmin
+        .from('venue_calendar_notifications')
+        .select('channel,enabled,subject,body')
+        .eq('venue_id', venueId)
+        .eq('notification_type', type)
+        .is('calendar_id', null);
+      templateRows = (defaultRows ?? []) as TemplateRow[];
+    }
+
+    const { data: venueRow } = await supabaseAdmin
+      .from('venues')
+      .select('email,name,ghl_access_token,ghl_location_id,ghl_connected')
+      .eq('id', venueId)
+      .maybeSingle();
 
     // Resolve a potentially-refreshed GHL token before any SMS dispatch
     let ghlToken = (venueRow as VenueRow | null)?.ghl_access_token ?? null;

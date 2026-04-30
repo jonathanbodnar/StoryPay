@@ -66,6 +66,16 @@ interface CalEvent {
   read_only?: boolean;
   google_calendar_name?: string;
   html_link?: string;
+  // Multi-calendar fields
+  calendar_id?: string | null;
+  calendar_color?: string | null;
+}
+
+interface VenueCalendarLite {
+  id: string;
+  name: string;
+  color: string;
+  is_default: boolean;
 }
 
 function teamMemberLabel(m: { name?: string | null; first_name?: string | null; last_name?: string | null; email?: string | null }) {
@@ -172,7 +182,9 @@ function fmtHour(h: number) {
 
 // Event color helper
 function evtColor(evt: CalEvent) {
-  if (evt.source === 'google') return '#4285F4'; // Google Blue for Google Calendar events
+  if (evt.source === 'google') return '#4285F4';
+  // Calendar color takes highest priority when set
+  if (evt.calendar_color) return evt.calendar_color;
   const typeColor = EVENT_COLORS[evt.event_type as keyof typeof EVENT_COLORS];
   return evt.venue_spaces?.color ?? typeColor ?? '#6b7280';
 }
@@ -184,6 +196,7 @@ const emptyForm = () => ({
   title: '', event_type: 'wedding', status: 'confirmed',
   space_id: '', customer_email: '',
   assigned_team_member_id: '',
+  calendar_id: '' as string,
   // start & end dates — end defaults to start for single-day events
   date: '', end_date: '',
   start_time: '10:00', end_time: '18:00', all_day: false, notes: '',
@@ -227,6 +240,9 @@ export default function CalendarPage() {
 
   const [venueTz, setVenueTz] = useState(DEFAULT_VENUE_TIMEZONE);
   const [venueLoaded, setVenueLoaded] = useState(false);
+
+  // Venue calendars (multi-calendar support)
+  const [venueCalendars, setVenueCalendars] = useState<VenueCalendarLite[]>([]);
 
   // Event modal (create + edit share the same form). When editingId is set,
   // the modal is in "Edit" mode and the save handler PATCHes instead of POSTs.
@@ -326,15 +342,28 @@ export default function CalendarPage() {
       from = toDate(`${ymdStart}T00:00:00`, { timeZone: tz }).toISOString();
       to = toDate(`${ymdEnd}T23:59:59.999`, { timeZone: tz }).toISOString();
     }
-    const [evRes, spRes, gRes] = await Promise.all([
+    const [evRes, spRes, gRes, calRes] = await Promise.all([
       fetch(`/api/calendar?from=${from}&to=${to}`),
       fetch('/api/spaces'),
       fetch(`/api/calendar/google/events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
+      fetch('/api/venue-calendars'),
     ]);
     const localEvents: CalEvent[] = evRes.ok ? await evRes.json() : [];
     const googleEvents: CalEvent[] = gRes.ok ? await gRes.json() : [];
+
+    // Build a calendar color map so we can apply colors to events
+    const vcals: VenueCalendarLite[] = calRes.ok ? await calRes.json() : [];
+    setVenueCalendars(vcals);
+    const calColorMap = Object.fromEntries(vcals.map((c) => [c.id, c.color]));
+
+    // Enrich local events with their calendar color
+    const enriched = localEvents.map((e) => ({
+      ...e,
+      calendar_color: e.calendar_id ? (calColorMap[e.calendar_id] ?? null) : null,
+    }));
+
     // Merge: local events take precedence; Google events are appended
-    setEvents([...localEvents, ...googleEvents]);
+    setEvents([...enriched, ...googleEvents]);
     if (spRes.ok) setSpaces(await spRes.json());
     setLoading(false);
   }, [year, month, view, anchorDate, venueTz]);
@@ -656,6 +685,7 @@ export default function CalendarPage() {
       title: form.title, event_type: form.event_type, status: form.status,
       space_id: form.space_id || null, customer_email: form.customer_email || null,
       assigned_team_member_id: form.assigned_team_member_id || null,
+      calendar_id: form.calendar_id || null,
       start_at: startLocal.toISOString(), end_at: endLocal.toISOString(), all_day: form.all_day,
       notes: form.notes || null, override_conflict: override,
       recurrence_rule,
@@ -800,6 +830,7 @@ export default function CalendarPage() {
       repeat_end:      (rule?.until ? 'on' : rule?.count ? 'after' : 'never') as RepeatEnd,
       repeat_until:    rule?.until ?? '',
       repeat_count:    rule?.count ?? 10,
+      calendar_id:     e.calendar_id ?? '',
     });
     // Edit always targets the parent row — occurrence ids contain an `@`.
     const parentId = e.id.includes('@') ? e.id.split('@')[0] : e.id;
@@ -995,6 +1026,19 @@ export default function CalendarPage() {
           </div>
         </div>
 
+
+        {/* Calendar legend — shown when venue has 2+ calendars */}
+        {venueCalendars.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 mb-3" data-noprint="">
+            {venueCalendars.map((cal) => (
+              <span key={cal.id} className="flex items-center gap-1.5 text-xs text-gray-600 bg-white border border-gray-200 rounded-full px-2.5 py-1">
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cal.color }} />
+                {cal.name}
+                {cal.is_default && <span className="text-[10px] text-gray-400">(default)</span>}
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* ── MONTH VIEW ── */}
         {view === 'month' && (
@@ -1192,6 +1236,23 @@ export default function CalendarPage() {
                   </select>
                 </div>
               </div>
+
+              {/* ── Calendar picker (only shown when venue has multiple calendars) ── */}
+              {venueCalendars.length > 0 && (
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Calendar</label>
+                  <select
+                    value={form.calendar_id}
+                    onChange={(e) => setForm((p) => ({ ...p, calendar_id: e.target.value }))}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-700 focus:border-gray-400 focus:outline-none"
+                  >
+                    <option value="">Default calendar</option>
+                    {venueCalendars.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               {/* ── Space selector + inline manage panel ─────────────── */}
               <div>
                 <div className="flex items-center justify-between mb-1">
@@ -1684,6 +1745,15 @@ export default function CalendarPage() {
                 </p>
               )}
               {selectedEvent.venue_spaces && <p><span className="text-gray-400">Space:</span> {selectedEvent.venue_spaces.name}</p>}
+              {selectedEvent.calendar_id && (() => {
+                const cal = venueCalendars.find((c) => c.id === selectedEvent.calendar_id);
+                return cal ? (
+                  <p className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cal.color }} />
+                    <span className="text-gray-400">Calendar:</span> {cal.name}
+                  </p>
+                ) : null;
+              })()}
               {selectedEvent.venue_team_members && (
                 <p><span className="text-gray-400">Assigned to:</span> {teamMemberLabel(selectedEvent.venue_team_members)}</p>
               )}

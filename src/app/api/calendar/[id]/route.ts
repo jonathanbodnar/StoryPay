@@ -47,7 +47,7 @@ export async function PATCH(
   const {
     space_id, customer_email, title, event_type, status,
     start_at, end_at, all_day, notes, override_conflict,
-    recurrence_rule, assigned_team_member_id,
+    recurrence_rule, assigned_team_member_id, calendar_id,
   } = body;
   // Silence unused warnings — assigned_team_member_id is referenced via the
   // `in body` check below so we just discard the destructured value here.
@@ -106,6 +106,7 @@ export async function PATCH(
   if ('assigned_team_member_id' in body) {
     updates.assigned_team_member_id = body.assigned_team_member_id || null;
   }
+  if ('calendar_id'       in body) updates.calendar_id       = calendar_id || null;
   if ('recurrence_rule'   in body) {
     // `null` explicitly clears the rule; anything else must normalize cleanly.
     if (recurrence_rule === null) {
@@ -242,10 +243,13 @@ export async function PATCH(
             tz ?? undefined,
           );
           if (vars) {
+            const evCalId = (eventRow.calendar_id as string | null) ?? null;
             await dispatchCalendarNotification(
               venueId,
               isCancelled ? 'cancellation' : 'reschedule',
               vars,
+              undefined,
+              evCalId,
             );
           }
         }
@@ -335,7 +339,7 @@ export async function DELETE(
           tz,
         );
         if (vars) {
-          await dispatchCalendarNotification(venueId, 'cancellation', vars);
+          await dispatchCalendarNotification(venueId, 'cancellation', vars, undefined, null);
         }
       }
     } catch (e) {

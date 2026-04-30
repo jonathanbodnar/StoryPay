@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
   const {
     space_id, customer_email, title, event_type, status,
     start_at, end_at, all_day, proposal_id, notes, override_conflict,
-    recurrence_rule, assigned_team_member_id,
+    recurrence_rule, assigned_team_member_id, calendar_id,
   } = body;
 
   if (!title?.trim()) return NextResponse.json({ error: 'Title is required' }, { status: 400 });
@@ -197,6 +197,7 @@ export async function POST(request: NextRequest) {
     notes:             notes || null,
     override_conflict: override_conflict ?? false,
     recurrence_rule:   rule,
+    calendar_id:       calendar_id || null,
   };
   if (assigned_team_member_id !== undefined) {
     insertPayload.assigned_team_member_id = assigned_team_member_id || null;
@@ -273,7 +274,7 @@ export async function POST(request: NextRequest) {
           { id: eventId, venue_id: venueId, title: (title as string).trim(), start_at: start_at as string, end_at: end_at as string, customer_email: customer_email as string },
           tz ?? undefined,
         );
-        if (vars) await dispatchCalendarNotification(venueId, 'booked_confirmed', vars);
+        if (vars) await dispatchCalendarNotification(venueId, 'booked_confirmed', vars, undefined, (calendar_id as string | null) ?? null);
       }
     } catch (e) {
       console.error('[calendar POST] post-insert side-effects error:', e);

@@ -407,7 +407,7 @@ async function sendNotificationForReminder(
 ): Promise<{ ok: boolean; error?: string }> {
   const { data: ev } = await supabaseAdmin
     .from('calendar_events')
-    .select('id, venue_id, title, start_at, end_at, customer_email, status')
+    .select('id, venue_id, title, start_at, end_at, customer_email, status, calendar_id')
     .eq('id', calendarEventId)
     .maybeSingle();
 
@@ -448,8 +448,10 @@ async function sendNotificationForReminder(
   const notifVars = await buildNotifVarsForEvent(eventForVars, tz);
   if (!notifVars) return { ok: false, error: 'no_email' };
 
+  const calendarId = (ev as { calendar_id?: string | null }).calendar_id ?? null;
+
   try {
-    await dispatchCalendarNotification(venueId, notifType, notifVars, onlyChannel);
+    await dispatchCalendarNotification(venueId, notifType, notifVars, onlyChannel, calendarId);
     return { ok: true };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
