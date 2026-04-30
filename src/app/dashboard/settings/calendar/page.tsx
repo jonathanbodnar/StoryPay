@@ -1261,12 +1261,9 @@ function NotificationsTab() {
   return (
     <div className="max-w-3xl space-y-3">
       {/* Header */}
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-sm text-gray-500">
-          Configure email and SMS templates per scenario. Each channel can be individually enabled and customised.
-        </p>
-        <SaveButton saving={saving} saved={saved} onClick={save} />
-      </div>
+      <p className="text-sm text-gray-500 mb-2">
+        Configure email and SMS templates per scenario. Each channel can be individually enabled and customised.
+      </p>
 
       {/* Merge tags reference */}
       <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
