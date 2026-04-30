@@ -13,8 +13,8 @@ import { supabaseAdmin } from '@/lib/supabase';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const AGENCY_KEY = process.env.LUNARPAY_AGENCY_KEY ?? '';
-const LP_BASE    = 'https://app.lunarpay.com';
+const AGENCY_KEY = process.env.LUNARPAY_AGENCY_KEY ?? process.env.LP_AGENCY_KEY ?? '';
+const LP_BASE    = process.env.LP_BASE_URL ?? 'https://app.lunarpay.com';
 
 async function getVenueId(): Promise<string | null> {
   const c = await cookies();
