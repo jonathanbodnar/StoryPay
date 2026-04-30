@@ -1185,7 +1185,6 @@ function CalendarsTab() {
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState('');
   const [editDesc, setEditDesc] = useState('');
-  const [showEditRules, setShowEditRules] = useState(false);
   // Per-calendar booking rules in edit form (null = use venue default)
   const [editDuration, setEditDuration]   = useState<number | null>(null);
   const [editInterval, setEditInterval]   = useState<number | null>(null);
@@ -1206,7 +1205,7 @@ function CalendarsTab() {
     setEditName(cal.name);
     setEditColor(cal.color);
     setEditDesc(cal.description ?? '');
-    setShowEditRules(false);
+    setShowEditRules(true);
     setEditDuration(cal.meeting_duration_min      ?? null);
     setEditInterval(cal.meeting_interval_min      ?? null);
     setEditNotice  (cal.min_scheduling_notice_hrs ?? null);
@@ -1327,19 +1326,12 @@ function CalendarsTab() {
                   placeholder="Description (optional)"
                 />
 
-                {/* Per-calendar booking rules (expandable) */}
-                <button
-                  type="button"
-                  onClick={() => setShowEditRules((v) => !v)}
-                  className="flex items-center gap-1.5 text-xs font-medium text-brand-700 hover:text-brand-900"
-                >
-                  <ChevronDown size={13} className={`transition-transform ${showEditRules ? 'rotate-180' : ''}`} />
-                  {showEditRules ? 'Hide' : 'Customize'} Booking Rules for this calendar
-                </button>
-
-                {showEditRules && (
-                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
-                    <p className="text-xs text-gray-500">Override the venue-wide defaults just for this calendar. Leave a field as "Venue default" to inherit the global setting.</p>
+                {/* Per-calendar booking rules — always visible */}
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold text-gray-700">Booking Rules for this calendar</p>
+                    <p className="text-[11px] text-gray-400">Leave "Venue default" to inherit global settings.</p>
+                  </div>
                     <div className="grid grid-cols-2 gap-3">
                       {/* Meeting Duration */}
                       <div>
@@ -1414,8 +1406,7 @@ function CalendarsTab() {
                         </select>
                       </div>
                     </div>
-                  </div>
-                )}
+                </div>
 
                 <div className="flex gap-2 justify-end">
                   <button onClick={() => setEditId(null)} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">Cancel</button>

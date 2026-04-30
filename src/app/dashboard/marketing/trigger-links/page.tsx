@@ -244,26 +244,28 @@ function SystemVariablesBody() {
                     type="button"
                     onClick={() => copyTag(v.tag)}
                     title={`Click to copy ${v.tag}`}
-                    className="group relative flex flex-col gap-1 rounded-xl border border-gray-200 bg-white px-4 py-3 text-left hover:border-brand-400 hover:bg-brand-50/30 transition"
+                    className="group flex flex-col gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-3 text-left hover:border-brand-400 hover:bg-brand-50/30 transition"
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <code className="text-xs font-mono font-semibold text-brand-700 truncate">{v.tag}</code>
-                      <span className="shrink-0 text-[10px] font-medium text-gray-400 group-hover:text-brand-600 transition">
-                        {copiedTag === v.tag ? '✓ Copied' : 'Copy'}
+                    <div className="flex items-start justify-between gap-2">
+                      <code className="text-xs font-mono font-semibold text-brand-700 leading-tight break-all">{v.tag}</code>
+                      <span className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border transition ${
+                        copiedTag === v.tag
+                          ? 'bg-green-50 text-green-700 border-green-200'
+                          : 'bg-gray-50 text-gray-400 border-gray-200 group-hover:bg-brand-50 group-hover:text-brand-600 group-hover:border-brand-200'
+                      }`}>
+                        <Copy className="w-2.5 h-2.5" />
+                        {copiedTag === v.tag ? 'Copied' : 'Copy'}
                       </span>
                     </div>
-                    <p className="text-[12px] text-gray-500 leading-snug">{v.description}</p>
+                    <p className="text-[12px] text-gray-600 leading-snug">{v.description}</p>
                     <p className="text-[11px] text-gray-400 italic truncate">e.g. {v.example}</p>
-                    <div className="flex flex-wrap gap-1 mt-1">
+                    <div className="flex flex-wrap gap-1 mt-0.5">
                       {v.usedIn.map((ctx) => (
                         <span key={ctx} className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-medium text-gray-500 uppercase tracking-wide">
                           {ctx}
                         </span>
                       ))}
                     </div>
-                    <span className="absolute right-2 top-2 text-[9px] font-semibold text-gray-300 uppercase tracking-widest">
-                      system
-                    </span>
                   </button>
                 ))}
               </div>
@@ -413,7 +415,7 @@ function TagsBody({
         </p>
       )}
 
-      {/* System tags grouped by category */}
+      {/* System tags grouped by category — card grid matching variables layout */}
       {(activeCategory === 'all' || activeCategory.startsWith('system-cat-')) && (
         <>
           {filteredSystem.length === 0 && search ? (
@@ -425,32 +427,40 @@ function TagsBody({
                   <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold border mb-3 ${TAG_CATEGORY_COLORS[cat] ?? 'bg-gray-50 text-gray-600 border-gray-200'}`}>
                     {cat}
                   </div>
-                  <div className="rounded-xl border border-gray-200 overflow-hidden">
-                    {rows.map((row, i) => (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {rows.map((row) => (
                       <div
                         key={row.id}
-                        className={`flex items-center justify-between gap-4 px-4 py-3 hover:bg-gray-50/60 ${i < rows.length - 1 ? 'border-b border-gray-100' : ''}`}
+                        className="flex flex-col gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-3"
                       >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          {row.color && (
-                            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: row.color }} />
-                          )}
-                          <div className="min-w-0">
-                            <div className="font-medium text-sm text-gray-900 truncate">{row.name}</div>
-                            {row.description && (
-                              <div className="text-[11px] text-gray-400 truncate leading-tight">{row.description}</div>
+                        {/* Tag name row */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {row.color && (
+                              <span className="w-2.5 h-2.5 rounded-full shrink-0 mt-0.5" style={{ backgroundColor: row.color }} />
                             )}
+                            <span className="text-sm font-semibold text-gray-900 leading-tight truncate">{row.name}</span>
                           </div>
+                          <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-gray-100 border border-gray-200 px-2 py-0.5 text-[10px] font-semibold text-gray-500">
+                            <Lock className="w-2.5 h-2.5" /> System
+                          </span>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
+                        {/* Description */}
+                        {row.description && (
+                          <p className="text-[12px] text-gray-500 leading-snug">{row.description}</p>
+                        )}
+                        {/* System key pill + auto-apply badge */}
+                        <div className="flex flex-wrap gap-1 mt-0.5">
+                          {row.system_key && (
+                            <code className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-mono text-gray-500">
+                              {row.system_key}
+                            </code>
+                          )}
                           {row.auto_apply_events?.length > 0 && (
-                            <span className="hidden sm:inline-flex rounded-full bg-green-50 border border-green-200 px-2 py-0.5 text-[9px] font-semibold text-green-700 uppercase tracking-wide whitespace-nowrap">
+                            <span className="rounded-full bg-green-50 border border-green-200 px-1.5 py-0.5 text-[9px] font-semibold text-green-700 uppercase tracking-wide">
                               Auto-applied
                             </span>
                           )}
-                          <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[9px] font-semibold text-gray-500 uppercase tracking-wide">
-                            <Lock className="w-2.5 h-2.5" /> System
-                          </span>
                         </div>
                       </div>
                     ))}
