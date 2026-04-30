@@ -1342,6 +1342,8 @@ function CalendarsTab() {
   const startEdit = (cal: VenueCalendar) => {
     setEditId(cal.id);
     setEditName(cal.name);
+    // eslint-disable-next-line no-unused-expressions
+    void cal;
     setEditColor(cal.color);
     setEditDesc(cal.description ?? '');
     setEditDuration(cal.meeting_duration_min      ?? null);
