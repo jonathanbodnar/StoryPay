@@ -119,6 +119,6 @@ export async function POST(request: NextRequest) {
     imported,
     skippedInvalid: errors.length,
     errors: errors.slice(0, 50),
-    note: 'Rows are saved to StoryVenue contacts. LunarPay / GHL are not bulk-synced from this import.',
+    note: 'Rows are saved to StoryVenue contacts. LunarPay / Legacy messaging are not bulk-synced from this import.',
   });
 }

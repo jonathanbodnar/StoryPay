@@ -49,7 +49,7 @@ export async function GET() {
     'Partner First Name', 'Partner Last Name',
     'Wedding/Event Date', 'Guest Count', 'Ceremony Type',
     'Pipeline Stage', 'Referral Source',
-    'GHL Contact ID', 'LunarPay Customer ID', 'Created At', 'Updated At',
+    'Legacy Contact ID', 'LunarPay Customer ID', 'Created At', 'Updated At',
   ];
 
   const lines: string[] = [headers.join(',')];

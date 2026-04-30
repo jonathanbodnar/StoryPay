@@ -1468,7 +1468,7 @@ export default function CustomerDetailPage() {
                 </div>
               </div>
 
-              <p className="mt-3 text-xs text-gray-400">Synced with GHL · checking a box blocks outbound messages on that channel</p>
+              <p className="mt-3 text-xs text-gray-400">StoryVenue Legacy sync · checking a box blocks outbound messages on that channel</p>
             </div>
           ) : venueCustomer?.sms_dnd ? (
             <div className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-5 lg:col-span-2">

@@ -342,7 +342,7 @@ export async function POST(
         return NextResponse.json(
           {
             error:
-              'Connect Go High Level messaging for this venue (Settings → Integrations) to send SMS from Conversations.',
+              'Connect Legacy messaging for this venue (Settings → Integrations) to send SMS from Conversations.',
           },
           { status: 400 },
         );
@@ -350,7 +350,7 @@ export async function POST(
 
       const ghlToken = getGhlToken(vrow as { ghl_access_token?: string | null });
       if (!ghlToken) {
-        return NextResponse.json({ error: 'GHL credentials are not configured for this venue.' }, { status: 400 });
+        return NextResponse.json({ error: 'Legacy messaging credentials are not configured for this venue.' }, { status: 400 });
       }
 
       const phoneE164 = normalizePhone((contact as { phone?: string | null } | null)?.phone ?? null);
@@ -381,7 +381,7 @@ export async function POST(
             .eq('venue_id', venueId);
         }
         if (!contactId) {
-          throw new Error('Could not resolve Go High Level contact for this phone number.');
+          throw new Error('Could not resolve Legacy messaging contact for this phone number.');
         }
         let smsBody = rawBody;
         if (triggerLinkId) {

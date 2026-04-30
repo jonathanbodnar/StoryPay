@@ -323,7 +323,7 @@ export function VenueManagementPortal({
           }}
           className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50"
         >
-          {copiedGhl ? 'Copied GHL login URL' : 'Copy universal GHL login URL'}
+          {copiedGhl ? 'Copied Legacy login URL' : 'Copy Legacy login URL'}
         </button>
       </div>
 
@@ -380,7 +380,7 @@ export function VenueManagementPortal({
               />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">GHL location ID</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Legacy sub-account ID</label>
               <input
                 value={formData.ghlLocationId}
                 onChange={(e) => setFormData({ ...formData, ghlLocationId: e.target.value })}
@@ -410,7 +410,7 @@ export function VenueManagementPortal({
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Venue name, email, phone, slug, GHL ID…"
+                placeholder="Venue name, email, phone, slug, Legacy ID…"
                 className="w-full rounded-xl border border-gray-200 pl-9 pr-3 py-2 text-sm"
               />
             </div>

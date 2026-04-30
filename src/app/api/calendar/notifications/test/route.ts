@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
 
       if (!ghlConnected || !ghlToken || !locationId) {
         return NextResponse.json(
-          { error: 'GHL is not connected — SMS tests require a connected GHL account.' },
+          { error: 'Legacy messaging is not connected — SMS tests require a connected Legacy messaging account.' },
           { status: 400 },
         );
       }
@@ -153,7 +153,7 @@ export async function POST(req: NextRequest) {
       if (!contactId) {
         return NextResponse.json(
           {
-            error: `Could not find a GHL contact ID for ${normalizedPhone}. Make sure this contact exists in the SaaS with a GHL contact linked, or is searchable in GHL.`,
+            error: `Could not find a Legacy contact for ${normalizedPhone}. Make sure this contact exists in the SaaS with a Legacy contact linked.`,
           },
           { status: 400 },
         );

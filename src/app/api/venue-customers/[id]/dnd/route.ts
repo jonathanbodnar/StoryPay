@@ -114,7 +114,7 @@ export async function PUT(
   ]);
 
   if (!vc) return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
-  if (!venue?.ghl_connected) return NextResponse.json({ error: 'GHL not connected' }, { status: 400 });
+  if (!venue?.ghl_connected) return NextResponse.json({ error: 'Legacy messaging not connected' }, { status: 400 });
 
   // Build the new dndSettings from the `channels` shorthand if provided
   let newDndSettings: GhlDndSettings;
@@ -199,7 +199,7 @@ export async function PUT(
         console.error('[dnd PUT] GHL push failed (local DB updated):', ghlErr);
         return NextResponse.json({
           success: true,
-          warning: 'Saved locally but could not push to GHL. It will sync on next contact refresh.',
+          warning: 'Saved locally but could not sync to Legacy messaging. It will sync on next contact refresh.',
           dndSettings: newDndSettings,
           inboundDndSettings: newInboundDndSettings,
         });

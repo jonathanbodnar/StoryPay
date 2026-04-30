@@ -525,8 +525,8 @@ The four channels per scenario
 Each scenario has four channels, each independently toggled on or off:
 - Email → Venue Owner — email to your venue's registered address
 - Email → Contact — email to the booked contact/lead
-- SMS → Venue Owner — SMS via GHL to you
-- SMS → Contact — SMS via GHL to the contact
+- SMS → Venue Owner — SMS via StoryVenue Legacy to you
+- SMS → Contact — SMS via StoryVenue Legacy to the contact
 
 The channel editor
 Click a scenario accordion to expand it. Inside you'll see the four channel rows. Click a channel row (or its chevron) to open the editor. The toggle on the right enables or disables that channel without losing your template.
@@ -587,16 +587,16 @@ How to send a test
 What the test sends
 - All merge tags are replaced with realistic sample data (e.g. contact name = "Alex Johnson", appointment = "Strategy Call" on "Thursday, May 1 at 10:00 AM EST").
 - A "[TEST – Owner]" or "[TEST – Contact]" prefix is added to the subject/message so you know it's a test.
-- Email tests go to the address you type. SMS tests go to the GHL contact whose phone number matches what you entered.
+- Email tests go to the address you type. SMS tests go to the Legacy contact whose phone number matches what you entered.
 
 SMS test requirements
-- The phone number you enter must belong to a contact that exists in the SaaS (or in GHL).
-- StoryVenue looks up the contact in your database first (by the last 10 digits of the number), then falls back to a GHL search by phone, then GHL search by your venue email.
+- The phone number you enter must belong to a contact that exists in the SaaS or Legacy messaging.
+- StoryVenue looks up the contact in your database first (by the last 10 digits of the number), then falls back to a Legacy messaging search by phone, then by your venue email.
 - If no matching contact is found, a red error message appears below the input explaining what to check.
 
 If the test fails
 - For email: check that your venue has a "From" domain configured via Resend and that the target email address is valid.
-- For SMS: make sure GHL is connected (Settings → Integrations) and the phone number matches an existing contact in the SaaS or GHL.`,
+- For SMS: make sure Legacy messaging is connected (Settings → Integrations) and the phone number matches an existing contact.`,
       },
     ],
   },
@@ -654,7 +654,7 @@ Clicking the thread still opens the conversation normally. To change the stage, 
 
 Pick a thread on the left to open it. The message composer at the bottom has three tabs — choose before typing:
 
-- SMS — texts the contact via your connected Go High Level line. No @mentions. A character/segment counter shows in the toolbar.
+- SMS — texts the contact via your connected Legacy messaging line. No @mentions. A character/segment counter shows in the toolbar.
 - Email — sends an email to the contact's address from their profile. You can add a subject line, and the message is styled as a clean email in the thread.
 - Team only — internal notes visible only to your team. Use @mentions to notify teammates.
 
@@ -663,7 +663,7 @@ The composer starts small and expands as you type. Icons for emoji, file attachm
 Tips:
 - Use Team only for logistics and staff coordination.
 - Use SMS or Email when the couple should receive the message.
-- If something fails to send, check that the contact has an email address (for Email) or a valid phone number (for SMS) and that your GHL integration is connected.`,
+- If something fails to send, check that the contact has an email address (for Email) or a valid phone number (for SMS) and that your Legacy messaging integration is connected.`,
       },
       {
         id: 'conversations-inbound',
@@ -676,13 +676,13 @@ Email replies (Resend inbound)
 - Resend receives the message through the \`email.received\` webhook wired at \`/api/webhooks/inbound-email\`, verifies the signed token, and appends the reply to the same thread. Quoted history is stripped so you only see what they typed.
 - What you need in your workspace: a Resend inbound domain (MX records added in DNS), the \`email.received\` webhook pointed at \`<your-host>/api/webhooks/inbound-email\`, and the environment variables \`RESEND_API_KEY\`, \`CONVERSATIONS_INBOUND_DOMAIN\`, \`CONVERSATIONS_INBOUND_SECRET\` set on the host. (Optional \`INBOUND_EMAIL_WEBHOOK_TOKEN\` lets you reject unknown callers.)
 
-SMS replies (GHL inbound)
-- Outbound SMS goes through your connected GoHighLevel sub-account's A2P-approved number. Inbound replies hit GHL first, which posts them to StoryVenue's inbound SMS webhook, and the message is attached to the matching thread by phone number.
-- Troubleshooting: if SMS replies aren't appearing, confirm the contact's phone is on file in E.164 format, that the GHL integration still shows "Connected" in Settings → Integrations, and that the GHL webhook/private integration that posts inbound SMS to StoryVenue is live.
+SMS replies (Legacy inbound)
+- Outbound SMS goes through your connected StoryVenue Legacy account's A2P-approved number. Inbound replies are forwarded to StoryVenue's inbound SMS webhook, and the message is attached to the matching thread by phone number.
+- Troubleshooting: if SMS replies aren't appearing, confirm the contact's phone is on file in E.164 format, that Legacy messaging still shows "Connected" in Settings → Integrations.
 
 If a reply doesn't show up
 - For email: check that DNS MX records are still valid, the Resend inbound webhook is \`Active\`, and your Railway (or other host) logs show the \`/api/webhooks/inbound-email\` route receiving the event. "Address not found" bounces usually mean the reply-to domain isn't set up on Resend yet.
-- For SMS: GHL must be connected and the sending number must match the contact. Messages to numbers not linked to any contact are dropped silently.`,
+- For SMS: Legacy messaging must be connected and the sending number must match the contact. Messages to numbers not linked to any contact are dropped silently.`,
       },
     ],
   },
@@ -1171,7 +1171,7 @@ On mobile: tap the card once to reveal the action bar.
 
 Available actions
 - Call — opens the quick log-a-call input to record a phone conversation on this lead
-- SMS — opens a quick SMS composer to text the contact via your connected GHL number
+- SMS — opens a quick SMS composer to text the contact via your connected Legacy messaging number
 - Email — opens a quick email composer to send a message to the contact
 - Notes — opens a quick note input so you can jot something without opening the drawer
 - Tags — manage the contact's marketing tags directly from the card
@@ -1348,7 +1348,7 @@ Results are paginated (20 per page). Use the Previous / Next buttons at the bott
         id: 'cust-profile',
         title: 'Contact profile — overview and tabs',
         tags: ['contact profile', 'crm', 'profile', 'tabs', 'overview', 'history', 'edit note', 'edit notes', 'new proposal', 'new invoice'],
-        body: `Click a contact's name to open their full profile. Contacts you see on this list come from three sources — storyvenue.com signups, LunarPay integration, and GoHighLevel imports — all unified into one record per person. The profile has six tabs:
+        body: `Click a contact's name to open their full profile. Contacts you see on this list come from three sources — storyvenue.com signups, LunarPay integration, and Legacy imports — all unified into one record per person. The profile has six tabs:
 
 Overview
 - Edit contact info inline (name, email, phone, address)
@@ -2507,14 +2507,14 @@ Toggle each switch on or off, then click Save. Changes take effect immediately.`
 For SMS to work:
 1. The customer must have a phone number entered when creating the proposal or invoice.
 2. Phone numbers are automatically formatted to US E.164 format (+1XXXXXXXXXX). Enter numbers in any format — StoryVenue handles the rest.
-3. Your account's GHL (Go High Level) sub-account must be connected. SMS routes through your A2P-approved phone number.
+3. Your StoryVenue Legacy messaging account must be connected. SMS routes through your A2P-approved phone number.
 
 If SMS is not sending, check:
 - Is the customer's phone number entered?
 - Is the phone number a valid US number?
 - Is messaging connected? (Settings → General → Messaging should show "Connected")
 
-Note: SMS uses your GHL sub-account's verified A2P phone number automatically — no manual configuration needed once messaging is connected.`,
+Note: SMS uses your StoryVenue Legacy account's verified A2P phone number automatically — no manual configuration needed once messaging is connected.`,
       },
       {
         id: 'notif-calendar-templates',
@@ -2525,8 +2525,8 @@ Note: SMS uses your GHL sub-account's verified A2P phone number automatically �
 The four channels
 - Email → Venue Owner: email sent to your venue's registered email address
 - Email → Contact: email sent to the booked contact/lead
-- SMS → Venue Owner: SMS delivered via GHL to your number
-- SMS → Contact: SMS delivered via GHL to the contact's number
+- SMS → Venue Owner: SMS delivered via StoryVenue Legacy to your number
+- SMS → Contact: SMS delivered via StoryVenue Legacy to the contact's number
 
 Each channel can be toggled on or off independently. Turning a channel off removes it from automatic dispatch without deleting your template.
 
@@ -2552,7 +2552,7 @@ Resetting a template
 Click "Reset to default" at the bottom of any channel editor to restore the built-in default template for that channel. This does not affect other channels.
 
 SMS character count
-SMS editors show a character counter (e.g. "114 / 160 chars"). Standard SMS segments are 160 characters. Messages over 160 chars are still sent but may count as 2 segments in your GHL account.`,
+SMS editors show a character counter (e.g. "114 / 160 chars"). Standard SMS segments are 160 characters. Messages over 160 chars are still sent but may count as 2 segments in your Legacy messaging account.`,
       },
       {
         id: 'notif-calendar-troubleshoot',
@@ -2567,10 +2567,10 @@ Email not arriving
 4. Check spam/junk folders — transactional emails from Resend can land there for first-time recipients.
 
 SMS not arriving
-1. Is GHL connected? Settings → Integrations → Messaging/GHL should show "Connected".
+1. Is Legacy messaging connected? Settings → Integrations → Messaging should show "Connected".
 2. Does the contact have a valid US phone number in the SaaS database?
 3. Is the SMS channel toggled On for that scenario?
-4. Is your GHL A2P number approved? A2P rejection blocks all outgoing SMS.
+4. Is your A2P number approved? A2P rejection blocks all outgoing SMS.
 
 Reminder not arriving
 1. Was the event created after you saved your reminder settings? Reminder queue rows are created at event save time. Events booked before you set up reminders won't have queue rows — re-save the event to regenerate them.

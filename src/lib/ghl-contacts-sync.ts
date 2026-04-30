@@ -318,12 +318,12 @@ export async function syncGhlContactsForVenue(venueId: string): Promise<SyncCoun
   const venue = venueRaw as VenueRow;
 
   if (!venue.ghl_location_id) {
-    throw new Error('venue is not connected to a GHL location');
+    throw new Error('venue is not connected to a Legacy messaging location');
   }
 
   let token = await getWorkingToken(venue);
   if (!token) {
-    throw new Error('no GHL token available (no per-venue OAuth and no agency key)');
+    throw new Error('no Legacy messaging token available (no per-venue OAuth and no agency key)');
   }
 
   let startAfter: string | null   = null;

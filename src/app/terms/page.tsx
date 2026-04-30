@@ -107,7 +107,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-lg font-bold text-gray-900 mb-3">8. SMS Messaging</h2>
-            <p>StoryVenue may send SMS messages to your customers using your connected GHL (Go High Level) account and A2P-registered phone number. You are responsible for ensuring you have proper consent from your customers to receive SMS communications as required by applicable law (including TCPA).</p>
+            <p>StoryVenue may send SMS messages to your customers using your connected StoryVenue Legacy account and A2P-registered phone number. You are responsible for ensuring you have proper consent from your customers to receive SMS communications as required by applicable law (including TCPA).</p>
           </section>
 
           <section>

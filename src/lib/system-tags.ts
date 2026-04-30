@@ -97,9 +97,9 @@ export const SYSTEM_TAG_DEFS: SystemTagDef[] = [
   { system_key: 'google_lead',        name: 'Google Lead',         category: 'Referral',        description: 'Lead came from Google or GMB',                                     auto_apply_events: [],                              color: '#0f766e' },
   { system_key: 'social_media_lead',  name: 'Social Media Lead',   category: 'Referral',        description: 'Lead came from Instagram, TikTok, or other social',               auto_apply_events: [],                              color: '#0e7490' },
   { system_key: 'website_lead',       name: 'Website Lead',        category: 'Referral',        description: "Lead came from the venue's own website form",                      auto_apply_events: [],                              color: '#1d4ed8' },
-  // ── GHL / Integration ───────────────────────────────────────────────────────
-  { system_key: 'ghl_synced',         name: 'GHL Synced',          category: 'Integration',     description: 'Contact has been successfully synced to GHL',                      auto_apply_events: ['ghl.contact_synced'],          color: '#0ea5e9' },
-  { system_key: 'ghl_dnd_active',     name: 'GHL DND Active',      category: 'Integration',     description: 'GHL Do Not Disturb flag is active on any channel',                 auto_apply_events: ['ghl.dnd_active'],              color: '#dc2626' },
+  // ── Legacy Integration ───────────────────────────────────────────────────────
+  { system_key: 'ghl_synced',         name: 'Legacy Synced',       category: 'Integration',     description: 'Contact has been successfully synced to Legacy messaging',          auto_apply_events: ['ghl.contact_synced'],          color: '#0ea5e9' },
+  { system_key: 'ghl_dnd_active',     name: 'Legacy DND Active',   category: 'Integration',     description: 'Legacy messaging Do Not Disturb flag is active on any channel',     auto_apply_events: ['ghl.dnd_active'],              color: '#dc2626' },
 ];
 
 // ── Utility functions ─────────────────────────────────────────────────────────
