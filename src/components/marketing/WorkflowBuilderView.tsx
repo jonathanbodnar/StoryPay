@@ -294,13 +294,17 @@ const MERGE_VAR_CATEGORY_LABELS: Record<string, string> = {
   system:       'System',
 };
 
-function MergeVarPickerPopover({ onPick, onClose, scopes = ['marketing'] }: {
+function MergeVarPickerPopover({ onPick, onClose, scopes }: {
   onPick: (tag: string) => void;
   onClose: () => void;
+  /** Optional scope filter. Omit to show ALL 50 variables (recommended for workflows). */
   scopes?: Array<'calendar' | 'marketing' | 'transactional'>;
 }) {
   const [query, setQuery] = useState('');
-  const visible = SYSTEM_MERGE_VARIABLES.filter((v) => v.usedIn.some((u) => scopes.includes(u)));
+  // Default: show every variable so the user always sees the full canonical set.
+  const visible = scopes && scopes.length > 0
+    ? SYSTEM_MERGE_VARIABLES.filter((v) => v.usedIn.some((u) => scopes.includes(u)))
+    : SYSTEM_MERGE_VARIABLES;
   const filtered = visible.filter((v) => {
     const q = query.toLowerCase();
     return !q || v.key.toLowerCase().includes(q) || v.description.toLowerCase().includes(q);
@@ -316,12 +320,12 @@ function MergeVarPickerPopover({ onPick, onClose, scopes = ['marketing'] }: {
 
   return (
     <div
-      className="absolute right-0 top-full z-50 mt-1 w-[340px] max-h-[400px] flex flex-col rounded-xl border border-gray-200 bg-white shadow-xl"
+      className="absolute right-0 top-full z-[60] mt-1 w-[360px] rounded-xl border border-gray-200 bg-white shadow-xl"
       onClick={(e) => e.stopPropagation()}
     >
       <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
-          Merge Variables · {filtered.length}
+          Merge Variables · {filtered.length} of {visible.length}
         </p>
         <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700">
           <X size={13} />
@@ -340,21 +344,24 @@ function MergeVarPickerPopover({ onPick, onClose, scopes = ['marketing'] }: {
           />
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto p-2 space-y-3">
+      {/* IMPORTANT: max-h on the scroll container itself (not flex-1 inside flex-col)
+          — flex-1 + max-h-on-parent collapses to 0 without a definite parent height. */}
+      <div className="max-h-[340px] min-h-[120px] overflow-y-auto p-2 space-y-3">
         {filtered.length === 0 ? (
           <p className="py-6 text-center text-[11px] text-gray-400">No variables match &ldquo;{query}&rdquo;</p>
         ) : orderedCats.map((cat) => (
           <div key={cat}>
             <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-400 mb-1 px-1">
-              {MERGE_VAR_CATEGORY_LABELS[cat] ?? cat}
+              {MERGE_VAR_CATEGORY_LABELS[cat] ?? cat} <span className="font-normal text-gray-300">· {grouped[cat].length}</span>
             </p>
             <div className="space-y-0.5">
               {grouped[cat].map((v) => (
                 <button key={v.key} type="button"
                   onClick={() => { onPick(v.tag); }}
                   className="flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-gray-50 transition-colors"
+                  title={`Example: ${v.example}`}
                 >
-                  <span className="font-mono text-[10.5px] text-gray-700">{v.tag}</span>
+                  <span className="font-mono text-[10.5px] text-gray-800">{v.tag}</span>
                   <span className="text-[10.5px] text-gray-400 leading-tight">{v.description}</span>
                 </button>
               ))}
@@ -704,6 +711,9 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
   const [testSmsResult, setTestSmsResult]   = useState<string | null>(null);
   const [smsMediaPickerOpen, setSmsMediaPickerOpen] = useState(false);
   const [mergeTagOpen, setMergeTagOpen]     = useState(false);
+  // Which field a freshly-picked merge variable should be inserted into.
+  // 'sms-body' for the SMS step, 'notify-subject' / 'notify-body' for the Notify Owner step.
+  const [mergeTagField, setMergeTagField]   = useState<'sms-body' | 'notify-subject' | 'notify-body'>('sms-body');
   const [triggerLinkOpen, setTriggerLinkOpen] = useState(false);
   const smsTextareaRef                      = useRef<HTMLTextAreaElement>(null);
 
@@ -2508,14 +2518,13 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                               <button
                                 type="button"
                                 title="Insert merge tag"
-                                onClick={() => { setMergeTagOpen((v) => !v); setTriggerLinkOpen(false); }}
+                                onClick={() => { setMergeTagField('sms-body'); setMergeTagOpen((v) => !v); setTriggerLinkOpen(false); }}
                                 className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-50 transition-colors"
                               >
-                                <Tag size={11} /> Tags
+                                <Tag size={11} /> Variables
                               </button>
-                              {mergeTagOpen && (
+                              {mergeTagOpen && mergeTagField === 'sms-body' && (
                                 <MergeVarPickerPopover
-                                  scopes={['marketing']}
                                   onPick={(tag) => { insertAtCursor(tag, lid); setMergeTagOpen(false); }}
                                   onClose={() => setMergeTagOpen(false)}
                                 />
@@ -2806,7 +2815,33 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                         {/* Subject — only for email/both */}
                         {(channel === 'email' || channel === 'both') && (
                           <div>
-                            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Email subject</p>
+                            <div className="mb-1.5 flex items-center justify-between">
+                              <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Email subject</p>
+                              <div className="relative">
+                                <button
+                                  type="button"
+                                  title="Insert merge variable"
+                                  onClick={(e) => { e.stopPropagation(); setMergeTagField('notify-subject'); setMergeTagOpen((v) => !v); }}
+                                  className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-50 transition-colors"
+                                >
+                                  <Tag size={11} /> Variables
+                                </button>
+                                {mergeTagOpen && mergeTagField === 'notify-subject' && (
+                                  <MergeVarPickerPopover
+                                    onPick={(tag) => {
+                                      setSteps((prev) => prev.map((x) =>
+                                        x.localId === lid && x.step_type === 'notify_owner'
+                                          ? { ...x, subject: x.subject + tag }
+                                          : x,
+                                      ));
+                                      scheduleAutoSave();
+                                      setMergeTagOpen(false);
+                                    }}
+                                    onClose={() => setMergeTagOpen(false)}
+                                  />
+                                )}
+                              </div>
+                            </div>
                             <input
                               type="text"
                               value={subject}
@@ -2827,14 +2862,13 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                               <button
                                 type="button"
                                 title="Insert merge variable"
-                                onClick={(e) => { e.stopPropagation(); setMergeTagOpen((v) => !v); }}
+                                onClick={(e) => { e.stopPropagation(); setMergeTagField('notify-body'); setMergeTagOpen((v) => !v); }}
                                 className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-50 transition-colors"
                               >
                                 <Tag size={11} /> Variables
                               </button>
-                              {mergeTagOpen && (
+                              {mergeTagOpen && mergeTagField === 'notify-body' && (
                                 <MergeVarPickerPopover
-                                  scopes={['marketing', 'transactional']}
                                   onPick={(tag) => {
                                     setSteps((prev) => prev.map((x) =>
                                       x.localId === lid && x.step_type === 'notify_owner'
