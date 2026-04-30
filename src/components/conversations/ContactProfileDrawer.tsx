@@ -769,120 +769,6 @@ export default function ContactProfileDrawer({ venueCustomerId, onClose, initial
               {activeTab === 'overview' && (
                 <div className="space-y-5">
 
-                  {/* ── Do Not Disturb card ── */}
-                  {(() => {
-                    const anyActive = vc.conversation_dnd_all || vc.sms_dnd || vc.conversation_dnd_email || vc.conversation_dnd_calls;
-                    return (
-                      <div className={classNames(
-                        'overflow-hidden rounded-xl border',
-                        anyActive ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-white',
-                      )}>
-                        {/* Header */}
-                        <div className={classNames(
-                          'flex items-center justify-between border-b px-4 py-3',
-                          anyActive ? 'border-red-200' : 'border-gray-100',
-                        )}>
-                          <div className="flex items-center gap-2">
-                            <Smartphone size={14} className={anyActive ? 'text-red-600' : 'text-gray-400'} />
-                            <span className={classNames('text-xs font-semibold uppercase tracking-wide', anyActive ? 'text-red-700' : 'text-gray-500')}>
-                              Do Not Disturb
-                            </span>
-                            {anyActive && (
-                              <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white">Active</span>
-                            )}
-                          </div>
-                          {dndSaving && <Loader2 size={13} className="animate-spin text-gray-400" />}
-                        </div>
-
-                        {/* DND All Channels */}
-                        <label className="flex cursor-pointer items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 hover:bg-gray-50/60">
-                          <span className="text-sm font-medium text-gray-800">DND All Channels</span>
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 rounded border-gray-300 accent-gray-900"
-                            checked={!!vc.conversation_dnd_all}
-                            disabled={dndSaving}
-                            onChange={(e) => {
-                              const on = e.target.checked;
-                              void saveDnd({
-                                conversation_dnd_all: on,
-                                conversation_dnd_email: on,
-                                sms_dnd: on,
-                                conversation_dnd_inbound_sms: on,
-                                ...(on ? {} : { conversation_dnd_calls: false }),
-                              });
-                            }}
-                          />
-                        </label>
-
-                        {/* OR divider */}
-                        <div className="flex items-center gap-3 px-4 py-1.5">
-                          <div className="flex-1 border-t border-gray-100" />
-                          <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400">or</span>
-                          <div className="flex-1 border-t border-gray-100" />
-                        </div>
-
-                        {/* Per-channel rows */}
-                        <div className="divide-y divide-gray-100">
-                          <label className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 hover:bg-gray-50/60">
-                            <span className="flex items-center gap-2.5 text-sm text-gray-700">
-                              <Mail size={15} className="shrink-0 text-gray-400" /> Email
-                            </span>
-                            <input type="checkbox" className="h-4 w-4 rounded border-gray-300 accent-gray-900" checked={!!vc.conversation_dnd_email} disabled={dndSaving} onChange={(e) => void saveDnd({ conversation_dnd_email: e.target.checked })} />
-                          </label>
-                          <label className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 hover:bg-gray-50/60">
-                            <span className="flex items-center gap-2.5 text-sm text-gray-700">
-                              <MessageCircle size={15} className="shrink-0 text-gray-400" /> Text Messages
-                            </span>
-                            <input type="checkbox" className="h-4 w-4 rounded border-gray-300 accent-gray-900" checked={!!vc.sms_dnd} disabled={dndSaving} onChange={(e) => void saveDnd({ sms_dnd: e.target.checked })} />
-                          </label>
-                          <label className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 hover:bg-gray-50/60">
-                            <span className="flex items-center gap-2.5 text-sm text-gray-700">
-                              <Phone size={15} className="shrink-0 text-gray-400" /> Calls &amp; voicemail
-                            </span>
-                            <input type="checkbox" className="h-4 w-4 rounded border-gray-300 accent-gray-900" checked={!!vc.conversation_dnd_calls} disabled={dndSaving} onChange={(e) => void saveDnd({ conversation_dnd_calls: e.target.checked })} />
-                          </label>
-                          {venueGhlConnected && (
-                            <label className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 hover:bg-gray-50/60">
-                              <span className="flex items-center gap-2.5 text-sm text-gray-700">
-                                <span className="flex h-[15px] w-[15px] shrink-0 items-center justify-center text-gray-400 text-base leading-none">⊞</span> GBP
-                              </span>
-                              <input type="checkbox" className="h-4 w-4 rounded border-gray-300 accent-gray-900"
-                                checked={vc.ghl_dnd_settings?.['GMB']?.status === 'active'}
-                                disabled={dndSaving}
-                                onChange={async (e) => {
-                                  setDndSaving(true);
-                                  try {
-                                    await fetch(`/api/venue-customers/${venueCustomerId}/dnd`, {
-                                      method: 'PUT',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({ channels: { GMB: e.target.checked } }),
-                                    });
-                                    // Re-fetch to get updated ghl_dnd_settings
-                                    const r = await fetch(`/api/venue-customers/${venueCustomerId}`, { cache: 'no-store' });
-                                    if (r.ok) setVc(await r.json() as VenueCustomer);
-                                  } finally { setDndSaving(false); }
-                                }}
-                              />
-                            </label>
-                          )}
-                          <label className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 hover:bg-gray-50/60">
-                            <span className="flex items-center gap-2.5 text-sm text-gray-700">
-                              <span className="shrink-0 text-gray-400 text-base leading-none">↙</span>
-                              Inbound Calls and SMS
-                              <span title="STOP keyword auto-enables this" className="text-gray-400"><Info size={13} /></span>
-                            </span>
-                            <input type="checkbox" className="h-4 w-4 shrink-0 rounded border-gray-300 accent-gray-900" checked={!!vc.conversation_dnd_inbound_sms} disabled={dndSaving} onChange={(e) => void saveDnd({ conversation_dnd_inbound_sms: e.target.checked })} />
-                          </label>
-                        </div>
-
-                        <p className="border-t border-gray-100 px-4 py-2 text-[10px] text-gray-400">
-                          Enabled channels block outbound messages · STOP replies auto-enable Text Messages DND
-                        </p>
-                      </div>
-                    );
-                  })()}
-
                   {/* Contact info */}
                   <div className="rounded-xl border border-gray-200 bg-white p-4">
                     <div className="flex items-center justify-between mb-3">
@@ -993,6 +879,89 @@ export default function ContactProfileDrawer({ venueCustomerId, onClose, initial
                       </div>
                     ) : <p className="text-xs text-gray-400">No event details yet.</p>}
                   </div>
+
+                  {/* ── Do Not Disturb card (last section) ── */}
+                  {(() => {
+                    const anyActive = vc.conversation_dnd_all || vc.sms_dnd || vc.conversation_dnd_email || vc.conversation_dnd_calls;
+                    return (
+                      <div className={classNames(
+                        'overflow-hidden rounded-xl border',
+                        anyActive ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-white',
+                      )}>
+                        <div className={classNames(
+                          'flex items-center justify-between border-b px-4 py-3',
+                          anyActive ? 'border-red-200' : 'border-gray-100',
+                        )}>
+                          <div className="flex items-center gap-2">
+                            <Smartphone size={14} className={anyActive ? 'text-red-600' : 'text-gray-400'} />
+                            <span className={classNames('text-xs font-semibold uppercase tracking-wide', anyActive ? 'text-red-700' : 'text-gray-500')}>
+                              Do Not Disturb
+                            </span>
+                            {anyActive && (
+                              <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white">Active</span>
+                            )}
+                          </div>
+                          {dndSaving && <Loader2 size={13} className="animate-spin text-gray-400" />}
+                        </div>
+
+                        <label className="flex cursor-pointer items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 hover:bg-gray-50/60">
+                          <span className="text-sm font-medium text-gray-800">DND All Channels</span>
+                          <input type="checkbox" className="h-4 w-4 rounded border-gray-300 accent-gray-900" checked={!!vc.conversation_dnd_all} disabled={dndSaving}
+                            onChange={(e) => { const on = e.target.checked; void saveDnd({ conversation_dnd_all: on, conversation_dnd_email: on, sms_dnd: on, conversation_dnd_inbound_sms: on, ...(on ? {} : { conversation_dnd_calls: false }) }); }} />
+                        </label>
+
+                        <div className="flex items-center gap-3 px-4 py-1.5">
+                          <div className="flex-1 border-t border-gray-100" />
+                          <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400">or</span>
+                          <div className="flex-1 border-t border-gray-100" />
+                        </div>
+
+                        <div className="divide-y divide-gray-100">
+                          <label className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 hover:bg-gray-50/60">
+                            <span className="flex items-center gap-2.5 text-sm text-gray-700"><Mail size={15} className="shrink-0 text-gray-400" /> Email</span>
+                            <input type="checkbox" className="h-4 w-4 rounded border-gray-300 accent-gray-900" checked={!!vc.conversation_dnd_email} disabled={dndSaving} onChange={(e) => void saveDnd({ conversation_dnd_email: e.target.checked })} />
+                          </label>
+                          <label className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 hover:bg-gray-50/60">
+                            <span className="flex items-center gap-2.5 text-sm text-gray-700"><MessageCircle size={15} className="shrink-0 text-gray-400" /> Text Messages</span>
+                            <input type="checkbox" className="h-4 w-4 rounded border-gray-300 accent-gray-900" checked={!!vc.sms_dnd} disabled={dndSaving} onChange={(e) => void saveDnd({ sms_dnd: e.target.checked })} />
+                          </label>
+                          <label className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 hover:bg-gray-50/60">
+                            <span className="flex items-center gap-2.5 text-sm text-gray-700"><Phone size={15} className="shrink-0 text-gray-400" /> Calls &amp; voicemail</span>
+                            <input type="checkbox" className="h-4 w-4 rounded border-gray-300 accent-gray-900" checked={!!vc.conversation_dnd_calls} disabled={dndSaving} onChange={(e) => void saveDnd({ conversation_dnd_calls: e.target.checked })} />
+                          </label>
+                          {venueGhlConnected && (
+                            <label className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 hover:bg-gray-50/60">
+                              <span className="flex items-center gap-2.5 text-sm text-gray-700">
+                                <span className="flex h-[15px] w-[15px] shrink-0 items-center justify-center text-gray-400 text-base leading-none">⊞</span> GBP
+                              </span>
+                              <input type="checkbox" className="h-4 w-4 rounded border-gray-300 accent-gray-900"
+                                checked={vc.ghl_dnd_settings?.['GMB']?.status === 'active'} disabled={dndSaving}
+                                onChange={async (e) => {
+                                  setDndSaving(true);
+                                  try {
+                                    await fetch(`/api/venue-customers/${venueCustomerId}/dnd`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channels: { GMB: e.target.checked } }) });
+                                    const r = await fetch(`/api/venue-customers/${venueCustomerId}`, { cache: 'no-store' });
+                                    if (r.ok) setVc(await r.json() as VenueCustomer);
+                                  } finally { setDndSaving(false); }
+                                }} />
+                            </label>
+                          )}
+                          <label className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 hover:bg-gray-50/60">
+                            <span className="flex items-center gap-2.5 text-sm text-gray-700">
+                              <span className="shrink-0 text-gray-400 text-base leading-none">↙</span>
+                              Inbound Calls and SMS
+                              <span title="STOP keyword auto-enables this" className="text-gray-400"><Info size={13} /></span>
+                            </span>
+                            <input type="checkbox" className="h-4 w-4 shrink-0 rounded border-gray-300 accent-gray-900" checked={!!vc.conversation_dnd_inbound_sms} disabled={dndSaving} onChange={(e) => void saveDnd({ conversation_dnd_inbound_sms: e.target.checked })} />
+                          </label>
+                        </div>
+
+                        <p className="border-t border-gray-100 px-4 py-2 text-[10px] text-gray-400">
+                          Enabled channels block outbound messages · STOP replies auto-enable Text Messages DND
+                        </p>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 

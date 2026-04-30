@@ -1132,144 +1132,6 @@ export default function CustomerDetailPage() {
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-          {/* ── GHL DND Panel (full per-channel, for GHL-connected venues) ── */}
-          {venueGhlConnected && venueCustomer?.ghl_contact_id ? (
-            <div className="rounded-2xl border border-gray-200 bg-white p-5 lg:col-span-2">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <Smartphone size={15} className="text-gray-500" />
-                  <h2 className="font-heading text-base text-gray-900">Do Not Disturb</h2>
-                </div>
-                {savingDnd && <Loader2 size={14} className="animate-spin text-gray-400" />}
-              </div>
-
-              {dndError && (
-                <p className="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{dndError}</p>
-              )}
-
-              <div className="divide-y divide-gray-100">
-                {/* DND All Channels */}
-                <label className="flex items-center justify-between py-3 cursor-pointer select-none">
-                  <span className="text-sm font-medium text-gray-900">DND All Channels</span>
-                  <input
-                    type="checkbox"
-                    disabled={savingDnd}
-                    checked={isAllDndActive()}
-                    onChange={(e) => void saveDndChannel({ all: e.target.checked })}
-                    className="h-4 w-4 rounded border-gray-300 accent-gray-900 disabled:opacity-50"
-                  />
-                </label>
-
-                <div className="py-2">
-                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">OR</p>
-                  <div className="divide-y divide-gray-100">
-                    {([
-                      { key: 'Email' as const, label: 'Email' },
-                      { key: 'SMS'   as const, label: 'Text Messages' },
-                      { key: 'Call'  as const, label: 'Calls & voicemail' },
-                      { key: 'GMB'   as const, label: 'GBP' },
-                    ] as const).map(({ key, label }) => (
-                      <label key={key} className="flex items-center justify-between py-2.5 cursor-pointer select-none">
-                        <span className="text-sm text-gray-700">{label}</span>
-                        <input
-                          type="checkbox"
-                          disabled={savingDnd}
-                          checked={isDndActive(key)}
-                          onChange={(e) => void saveDndChannel({ [key]: e.target.checked })}
-                          className="h-4 w-4 rounded border-gray-300 accent-gray-900 disabled:opacity-50"
-                        />
-                      </label>
-                    ))}
-
-                    {/* Inbound Calls and SMS */}
-                    <label className="flex items-center justify-between py-2.5 cursor-pointer select-none">
-                      <span className="flex items-center gap-1.5 text-sm text-gray-700">
-                        Inbound Calls and SMS
-                        <span className="text-gray-400" title="Prevents this contact from reaching you via inbound calls or SMS">
-                          <Info size={12} />
-                        </span>
-                      </span>
-                      <input
-                        type="checkbox"
-                        disabled={savingDnd}
-                        checked={isInboundDndActive()}
-                        onChange={(e) => {
-                          const active = e.target.checked;
-                          setInboundDndSettings({ all: { status: active ? 'active' : 'inactive' } });
-                          void (async () => {
-                            if (!venueCustomer?.id) return;
-                            setSavingDnd(true);
-                            setDndError('');
-                            try {
-                              const res = await fetch(`/api/venue-customers/${venueCustomer.id}/dnd`, {
-                                method: 'PUT',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                  dndSettings: dndSettings ?? {},
-                                  inboundDndSettings: { all: { status: active ? 'active' : 'inactive' } },
-                                }),
-                              });
-                              const data = await res.json() as { dndSettings?: GhlDndSettings; inboundDndSettings?: GhlInboundDndSettings; error?: string };
-                              if (!res.ok) { setDndError(data.error || 'Failed'); return; }
-                              if (data.dndSettings) setDndSettings(data.dndSettings);
-                              if (data.inboundDndSettings) setInboundDndSettings(data.inboundDndSettings);
-                            } finally {
-                              setSavingDnd(false);
-                            }
-                          })();
-                        }}
-                        className="h-4 w-4 rounded border-gray-300 accent-gray-900 disabled:opacity-50"
-                      />
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              <p className="mt-3 text-xs text-gray-400">
-                Synced with GHL · checking a box blocks outbound messages on that channel
-              </p>
-            </div>
-          ) : venueCustomer?.sms_dnd ? (
-            /* ── Legacy SMS DND banner (non-GHL venues) ── */
-            <div className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-5 lg:col-span-2">
-              <div className="flex items-start gap-3">
-                <Smartphone size={20} className="mt-0.5 shrink-0 text-amber-700" />
-                <div>
-                  <p className="font-medium text-amber-950">SMS marketing paused (DND)</p>
-                  <p className="mt-1 text-sm text-amber-900/90">
-                    This contact opted out of automated SMS (for example by replying STOP). Automated SMS workflows
-                    will not message them until you turn this off.
-                  </p>
-                  {venueCustomer.sms_dnd_at ? (
-                    <p className="mt-2 text-xs text-amber-800/80">
-                      Since {formatDateTime(venueCustomer.sms_dnd_at)}
-                      {venueCustomer.sms_dnd_source === 'inbound_stop_keyword'
-                        ? ' · from their message'
-                        : venueCustomer.sms_dnd_source === 'manual'
-                          ? ' · set manually'
-                          : venueCustomer.sms_dnd_source
-                            ? ` · ${venueCustomer.sms_dnd_source}`
-                            : ''}
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-              <div>
-                <button
-                  type="button"
-                  disabled={clearingSmsDnd}
-                  onClick={() => void clearSmsDndPreference()}
-                  className="rounded-lg bg-amber-900 px-4 py-2 text-sm font-medium text-white hover:bg-amber-950 disabled:opacity-50"
-                >
-                  {clearingSmsDnd ? 'Updating…' : 'Allow SMS again'}
-                </button>
-                <p className="mt-2 text-xs text-amber-800/80">
-                  Only use if they have agreed to receive texts again (written consent recommended).
-                </p>
-              </div>
-            </div>
-          ) : null}
-
           {/* Contact info (read-only display — edit via modal above) */}
           <div className="rounded-2xl border border-gray-200 bg-white p-5">
             <div className="flex items-center justify-between mb-4">
@@ -1538,6 +1400,99 @@ export default function CustomerDetailPage() {
               </div>
             )}
           </div>
+
+          {/* ── Do Not Disturb (last section) ── */}
+          {venueGhlConnected && venueCustomer?.ghl_contact_id ? (
+            <div className="rounded-2xl border border-gray-200 bg-white p-5 lg:col-span-2">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Smartphone size={15} className="text-gray-500" />
+                  <h2 className="font-heading text-base text-gray-900">Do Not Disturb</h2>
+                </div>
+                {savingDnd && <Loader2 size={14} className="animate-spin text-gray-400" />}
+              </div>
+
+              {dndError && (
+                <p className="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{dndError}</p>
+              )}
+
+              <div className="divide-y divide-gray-100">
+                <label className="flex items-center justify-between py-3 cursor-pointer select-none">
+                  <span className="text-sm font-medium text-gray-900">DND All Channels</span>
+                  <input type="checkbox" disabled={savingDnd} checked={isAllDndActive()} onChange={(e) => void saveDndChannel({ all: e.target.checked })} className="h-4 w-4 rounded border-gray-300 accent-gray-900 disabled:opacity-50" />
+                </label>
+
+                <div className="py-2">
+                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">OR</p>
+                  <div className="divide-y divide-gray-100">
+                    {([
+                      { key: 'Email' as const, label: 'Email' },
+                      { key: 'SMS'   as const, label: 'Text Messages' },
+                      { key: 'Call'  as const, label: 'Calls & voicemail' },
+                      { key: 'GMB'   as const, label: 'GBP' },
+                    ] as const).map(({ key, label }) => (
+                      <label key={key} className="flex items-center justify-between py-2.5 cursor-pointer select-none">
+                        <span className="text-sm text-gray-700">{label}</span>
+                        <input type="checkbox" disabled={savingDnd} checked={isDndActive(key)} onChange={(e) => void saveDndChannel({ [key]: e.target.checked })} className="h-4 w-4 rounded border-gray-300 accent-gray-900 disabled:opacity-50" />
+                      </label>
+                    ))}
+
+                    <label className="flex items-center justify-between py-2.5 cursor-pointer select-none">
+                      <span className="flex items-center gap-1.5 text-sm text-gray-700">
+                        Inbound Calls and SMS
+                        <span className="text-gray-400" title="Prevents this contact from reaching you via inbound calls or SMS"><Info size={12} /></span>
+                      </span>
+                      <input type="checkbox" disabled={savingDnd} checked={isInboundDndActive()}
+                        onChange={(e) => {
+                          const active = e.target.checked;
+                          setInboundDndSettings({ all: { status: active ? 'active' : 'inactive' } });
+                          void (async () => {
+                            if (!venueCustomer?.id) return;
+                            setSavingDnd(true); setDndError('');
+                            try {
+                              const res = await fetch(`/api/venue-customers/${venueCustomer.id}/dnd`, {
+                                method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ dndSettings: dndSettings ?? {}, inboundDndSettings: { all: { status: active ? 'active' : 'inactive' } } }),
+                              });
+                              const data = await res.json() as { dndSettings?: GhlDndSettings; inboundDndSettings?: GhlInboundDndSettings; error?: string };
+                              if (!res.ok) { setDndError(data.error || 'Failed'); return; }
+                              if (data.dndSettings) setDndSettings(data.dndSettings);
+                              if (data.inboundDndSettings) setInboundDndSettings(data.inboundDndSettings);
+                            } finally { setSavingDnd(false); }
+                          })();
+                        }}
+                        className="h-4 w-4 rounded border-gray-300 accent-gray-900 disabled:opacity-50"
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <p className="mt-3 text-xs text-gray-400">Synced with GHL · checking a box blocks outbound messages on that channel</p>
+            </div>
+          ) : venueCustomer?.sms_dnd ? (
+            <div className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-5 lg:col-span-2">
+              <div className="flex items-start gap-3">
+                <Smartphone size={20} className="mt-0.5 shrink-0 text-amber-700" />
+                <div>
+                  <p className="font-medium text-amber-950">SMS marketing paused (DND)</p>
+                  <p className="mt-1 text-sm text-amber-900/90">This contact opted out of automated SMS (for example by replying STOP). Automated SMS workflows will not message them until you turn this off.</p>
+                  {venueCustomer.sms_dnd_at ? (
+                    <p className="mt-2 text-xs text-amber-800/80">
+                      Since {formatDateTime(venueCustomer.sms_dnd_at)}
+                      {venueCustomer.sms_dnd_source === 'inbound_stop_keyword' ? ' · from their message' : venueCustomer.sms_dnd_source === 'manual' ? ' · set manually' : venueCustomer.sms_dnd_source ? ` · ${venueCustomer.sms_dnd_source}` : ''}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+              <div>
+                <button type="button" disabled={clearingSmsDnd} onClick={() => void clearSmsDndPreference()} className="rounded-lg bg-amber-900 px-4 py-2 text-sm font-medium text-white hover:bg-amber-950 disabled:opacity-50">
+                  {clearingSmsDnd ? 'Updating…' : 'Allow SMS again'}
+                </button>
+                <p className="mt-2 text-xs text-amber-800/80">Only use if they have agreed to receive texts again (written consent recommended).</p>
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
 
