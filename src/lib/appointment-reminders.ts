@@ -149,7 +149,23 @@ export async function syncAppointmentRemindersForEvent(calendarEventId: string):
   if (!rows.length) return;
 
   const { error: insErr } = await supabaseAdmin.from('calendar_event_reminders').insert(rows);
-  if (insErr) console.error('[appointment-reminders] insert', insErr);
+  if (insErr) {
+    // Migration 078 may not be applied yet — notification_type column may not exist.
+    // Retry without it so reminder scheduling still works on older schemas.
+    if (insErr.message?.toLowerCase().includes('notification_type')) {
+      const legacyRows = rows
+        .filter((r) => r.notification_type === 'reminder') // skip follow-ups on legacy schema
+        .map(({ notification_type: _nt, ...r }) => r);
+      if (legacyRows.length) {
+        const { error: retryErr } = await supabaseAdmin
+          .from('calendar_event_reminders')
+          .insert(legacyRows);
+        if (retryErr) console.error('[appointment-reminders] insert legacy retry', retryErr);
+      }
+    } else {
+      console.error('[appointment-reminders] insert', insErr);
+    }
+  }
 }
 
 export async function refreshAppointmentRemindersForVenue(venueId: string): Promise<void> {
@@ -190,7 +206,24 @@ export async function processAppointmentRemindersCron(): Promise<{
     .order('send_at', { ascending: true })
     .limit(BATCH);
 
-  if (error) {
+  // If migration 078 hasn't run, notification_type column won't exist — fall back
+  // to selecting without it and treat everything as 'reminder'.
+  let dueRows = due;
+  if (error?.message?.toLowerCase().includes('notification_type')) {
+    console.warn('[cron appointment-reminders] notification_type column missing, running legacy query');
+    const legacy = await supabaseAdmin
+      .from('calendar_event_reminders')
+      .select('id, send_at, offset_days, offset_hours, offset_minutes, calendar_event_id, venue_id')
+      .is('sent_at', null)
+      .lte('send_at', now)
+      .order('send_at', { ascending: true })
+      .limit(BATCH);
+    if (legacy.error) {
+      console.error('[cron appointment-reminders] legacy query', legacy.error);
+      return { processed: 0, sent: 0, errors: 1 };
+    }
+    dueRows = legacy.data;
+  } else if (error) {
     console.error('[cron appointment-reminders] query', error);
     return { processed: 0, sent: 0, errors: 1 };
   }
@@ -198,7 +231,7 @@ export async function processAppointmentRemindersCron(): Promise<{
   let sent = 0;
   let errors = 0;
 
-  for (const raw of due ?? []) {
+  for (const raw of dueRows ?? []) {
     const row = raw as {
       id: string;
       send_at: string;

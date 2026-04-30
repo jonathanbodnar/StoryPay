@@ -300,20 +300,21 @@ async function dispatchSms(
   locationId: string,
   ghlContactId: string | null | undefined,
   phone: string | null | undefined,
+  email: string | null | undefined,
   message: string,
 ): Promise<void> {
   if (!token || !locationId) return;
 
   try {
-    // Dynamically import to avoid pulling GHL deps into edge bundles
     const { sendSms, ghlRequest, normalizePhone } = await import('@/lib/ghl') as {
       sendSms: (token: string, locationId: string, contactId: string, message: string) => Promise<unknown>;
-      ghlRequest: (path: string, token: string, opts?: Record<string, unknown>) => Promise<{ contact?: { id?: string } }>;
-      normalizePhone: (phone: string | null) => string | null;
+      ghlRequest: (path: string, token: string, opts?: Record<string, unknown>) => Promise<{ contact?: { id?: string }; contacts?: { id?: string }[] }>;
+      normalizePhone: (phone: string | null | undefined) => string | null;
     };
 
     let contactId = ghlContactId || null;
 
+    // 1. Try phone lookup
     if (!contactId && phone) {
       try {
         const norm = normalizePhone(phone) || phone;
@@ -324,11 +325,34 @@ async function dispatchSms(
         );
         contactId = search?.contact?.id ?? null;
       } catch {
-        // If lookup fails, skip SMS silently
+        // phone lookup failed, fall through to email lookup
       }
     }
 
-    if (!contactId) return;
+    // 2. Try email lookup if phone didn't resolve
+    if (!contactId && email) {
+      try {
+        const search = await ghlRequest(
+          `/contacts/search/duplicate?locationId=${locationId}&email=${encodeURIComponent(email)}`,
+          token,
+          { locationId },
+        );
+        contactId = search?.contact?.id ?? null;
+
+        // Some GHL accounts return contacts[] not contact{}
+        if (!contactId && Array.isArray(search?.contacts)) {
+          contactId = search.contacts[0]?.id ?? null;
+        }
+      } catch {
+        // email lookup failed too
+      }
+    }
+
+    if (!contactId) {
+      console.warn('[calendar-notifications] Could not resolve GHL contact for SMS — phone:', phone, 'email:', email);
+      return;
+    }
+
     await sendSms(token, locationId, contactId, message);
   } catch (e) {
     console.error('[calendar-notifications] SMS dispatch error:', e);
@@ -421,18 +445,32 @@ export async function dispatchCalendarNotification(
         venue.ghl_location_id,
         vars.contact_ghl_id,
         vars.contact_phone,
+        vars.contact_email,   // email fallback for GHL contact lookup
         message,
       );
     }
 
     // ── sms_owner ─────────────────────────────────────────────────────────────
-    // Venue owner SMS is intentionally off by default (most prefer email).
-    // When a venue enables it, they need their own GHL contact ID stored.
-    // Logged here for visibility; will be wired when owner_phone is available.
+    // Owner SMS is off by default. When enabled, we look up the owner's GHL
+    // contact by the venue's email address.
     const soTpl = resolveTemplate(type, 'sms_owner', perRecipientRows, hasAnyDbRows);
-    if (soTpl?.enabled && soTpl.body) {
+    if (
+      soTpl?.enabled &&
+      soTpl.body &&
+      venue.ghl_connected &&
+      venue.ghl_access_token &&
+      venue.ghl_location_id &&
+      venue.email
+    ) {
       const message = renderTemplate(soTpl.body, varMap);
-      console.log('[calendar-notifications] sms_owner enabled but owner GHL contact not yet wired. Preview:', message.slice(0, 80));
+      await dispatchSms(
+        venue.ghl_access_token,
+        venue.ghl_location_id,
+        null,         // no stored GHL contact ID for the owner
+        null,         // no owner phone stored
+        venue.email,  // look up owner by their venue email
+        message,
+      );
     }
 
     console.log(`[calendar-notifications] dispatched ${type} for venue ${venueId}`);
