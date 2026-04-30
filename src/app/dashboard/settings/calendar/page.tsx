@@ -1199,165 +1199,158 @@ function NotificationsTab() {
   if (loading) return <LoadingCard />;
 
   return (
-    <div className="max-w-3xl space-y-4">
+    <div className="max-w-3xl space-y-3">
       {/* Header */}
-      <div className="flex items-center justify-between mb-1">
-        <div>
-          <p className="text-sm text-gray-600">
-            Set up email and SMS templates for each booking event. Each scenario has
-            separate templates for the venue owner and the contact/lead.
-          </p>
-        </div>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-sm text-gray-500">
+          Configure email and SMS templates per scenario. Each channel can be individually enabled and customised.
+        </p>
         <SaveButton saving={saving} saved={saved} onClick={save} />
       </div>
 
       {/* Merge tags reference */}
-      <div className="rounded-xl border border-gray-200 bg-gray-50 overflow-hidden">
+      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
         <button
           type="button"
           onClick={() => setShowTags((v) => !v)}
-          className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+          className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
         >
-          <span className="flex items-center gap-2">
-            <Info size={14} className="text-gray-400" />
+          <span className="flex items-center gap-2 text-xs text-gray-600 font-medium">
+            <Info size={13} className="text-gray-400" />
             Available merge tags
           </span>
-          <ChevronRight size={14} className={`text-gray-400 transition-transform ${showTags ? 'rotate-90' : ''}`} />
+          <ChevronRight size={13} className={`text-gray-400 transition-transform ${showTags ? 'rotate-90' : ''}`} />
         </button>
         {showTags && (
-          <div className="px-4 pb-4 grid grid-cols-2 gap-2 border-t border-gray-200">
+          <div className="px-4 pb-4 grid grid-cols-2 gap-x-6 gap-y-1.5 border-t border-gray-100">
             {MERGE_TAGS.map(({ tag, desc }) => (
-              <div key={tag} className="flex items-start gap-2 py-1">
-                <code className="shrink-0 bg-white border border-gray-200 text-[11px] font-mono px-1.5 py-0.5 rounded text-gray-800">{tag}</code>
-                <span className="text-[11px] text-gray-500 pt-0.5">{desc}</span>
+              <div key={tag} className="flex items-center gap-2 py-0.5">
+                <code className="shrink-0 bg-gray-50 border border-gray-200 text-[11px] font-mono px-1.5 py-0.5 rounded text-gray-800">{tag}</code>
+                <span className="text-[11px] text-gray-400">{desc}</span>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* Notification type cards */}
+      {/* Notification scenario accordions */}
       {NOTIF_TYPES.map((nt) => {
         const isOpen = expandedType === nt.type;
         const activeCount = NOTIF_CHANNELS.filter((ch) => getRow(nt.type, ch.key)?.enabled).length;
 
         return (
           <div key={nt.type} className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-            {/* Card header */}
+            {/* Scenario header — click to open/close */}
             <button
               type="button"
               onClick={() => setExpandedType(isOpen ? null : nt.type)}
               className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors text-left"
             >
-              <div className="flex items-center gap-3">
-                <Bell size={15} className="text-gray-400 shrink-0" />
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">{nt.label}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{nt.desc}</p>
-                </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-900">{nt.label}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{nt.desc}</p>
               </div>
-              <div className="flex items-center gap-2.5 ml-4">
+              <div className="flex items-center gap-2.5 ml-4 shrink-0">
                 {activeCount > 0 && (
                   <span className="text-[11px] font-medium text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
                     {activeCount} active
                   </span>
                 )}
-                <Edit3 size={14} className="text-gray-400" />
+                <ChevronRight size={14} className={`text-gray-400 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
               </div>
             </button>
 
-            {/* Expanded editor */}
+            {/* Channel accordions — one per row, full width */}
             {isOpen && (
-              <div className="border-t border-gray-100 bg-gray-50 px-5 py-5 space-y-6">
-                {/* Two columns: Email | SMS */}
-                {(['email', 'sms'] as const).map((medium) => {
-                  const mediumChannels = NOTIF_CHANNELS.filter((c) => c.medium === medium);
+              <div className="border-t border-gray-100 divide-y divide-gray-100">
+                {NOTIF_CHANNELS.map((ch) => {
+                  const row = getRow(nt.type, ch.key);
+                  if (!row) return null;
+                  const def = NOTIF_DEFAULTS[nt.type]?.[ch.key];
+                  const isEmail = ch.medium === 'email';
+                  const smsLen = !isEmail ? (row.body ?? '').length : 0;
+                  const channelKey = `${nt.type}:${ch.key}`;
+                  const isChOpen = row.enabled; // channel body visible when enabled
+
                   return (
-                    <div key={medium}>
-                      <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-3">
-                        {medium === 'email' ? '📧 Email Notifications' : '📱 SMS Notifications'}
-                      </p>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {mediumChannels.map((ch) => {
-                          const row = getRow(nt.type, ch.key);
-                          if (!row) return null;
-                          const def = NOTIF_DEFAULTS[nt.type]?.[ch.key];
-                          const smsLen = medium === 'sms' ? (row.body ?? '').length : 0;
+                    <div key={ch.key} className="bg-white">
+                      {/* Channel row header */}
+                      <div className="flex items-center justify-between px-5 py-3">
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs font-medium text-gray-700 w-44">
+                            {ch.label}
+                          </span>
+                          {row.enabled && (
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded">
+                              Active
+                            </span>
+                          )}
+                        </div>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <Toggle
+                            checked={row.enabled}
+                            onChange={(v) => updateRow(nt.type, ch.key, 'enabled', v)}
+                          />
+                          <span className={`text-xs font-medium ${row.enabled ? 'text-gray-700' : 'text-gray-400'}`}>
+                            {row.enabled ? 'On' : 'Off'}
+                          </span>
+                        </label>
+                      </div>
 
-                          return (
-                            <div
-                              key={ch.key}
-                              className="rounded-xl border border-gray-200 bg-white p-4 space-y-3"
-                            >
-                              {/* Template header */}
-                              <div className="flex items-center justify-between">
-                                <p className="text-xs font-semibold text-gray-800">
-                                  {ch.recipient === 'owner' ? '🏢 To Venue Owner' : '👤 To Contact'}
-                                </p>
-                                <label className="flex items-center gap-1.5 cursor-pointer">
-                                  <Toggle
-                                    checked={row.enabled}
-                                    onChange={(v) => updateRow(nt.type, ch.key, 'enabled', v)}
-                                  />
-                                  <span className={`text-[11px] font-medium ${row.enabled ? 'text-green-600' : 'text-gray-400'}`}>
-                                    {row.enabled ? 'On' : 'Off'}
-                                  </span>
-                                </label>
-                              </div>
+                      {/* Template editor — shown when enabled */}
+                      {isChOpen && (
+                        <div className="px-5 pb-5 space-y-3 bg-gray-50 border-t border-gray-100" key={channelKey}>
+                          {/* Subject line (email only) */}
+                          {isEmail && (
+                            <div className="pt-4">
+                              <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                                Subject <span className="text-red-400">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={row.subject ?? ''}
+                                onChange={(e) => updateRow(nt.type, ch.key, 'subject', e.target.value)}
+                                placeholder={def?.subject ?? 'Email subject line…'}
+                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-800"
+                              />
+                            </div>
+                          )}
 
-                              {row.enabled && (
-                                <div className="space-y-2">
-                                  {/* Subject (email only) */}
-                                  {medium === 'email' && (
-                                    <div>
-                                      <label className="block text-[11px] font-medium text-gray-500 mb-1">
-                                        Subject <span className="text-red-400">*</span>
-                                      </label>
-                                      <input
-                                        type="text"
-                                        value={row.subject ?? ''}
-                                        onChange={(e) => updateRow(nt.type, ch.key, 'subject', e.target.value)}
-                                        placeholder={def?.subject ?? 'Email subject…'}
-                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-gray-800"
-                                      />
-                                    </div>
-                                  )}
-
-                                  {/* Body */}
-                                  <div>
-                                    <label className="block text-[11px] font-medium text-gray-500 mb-1">
-                                      {medium === 'email' ? 'Email body' : 'SMS message'}
-                                      {medium === 'sms' && (
-                                        <span className={`ml-2 ${smsLen > 160 ? 'text-red-500' : 'text-gray-400'}`}>
-                                          {smsLen}/160
-                                        </span>
-                                      )}
-                                    </label>
-                                    <textarea
-                                      value={row.body ?? ''}
-                                      onChange={(e) => updateRow(nt.type, ch.key, 'body', e.target.value)}
-                                      rows={medium === 'email' ? 7 : 3}
-                                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-gray-800 resize-y font-mono"
-                                      placeholder={def?.body ?? 'Enter message…'}
-                                    />
-                                  </div>
-
-                                  {/* Reset to default */}
-                                  {def && (
-                                    <button
-                                      type="button"
-                                      onClick={() => resetToDefault(nt.type, ch.key)}
-                                      className="text-[11px] text-blue-600 hover:text-blue-800 underline"
-                                    >
-                                      Reset to default
-                                    </button>
-                                  )}
-                                </div>
+                          {/* Message body */}
+                          <div className={isEmail ? '' : 'pt-4'}>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <label className="text-xs font-medium text-gray-600">
+                                {isEmail ? 'Email body' : 'SMS message'}
+                              </label>
+                              {!isEmail && (
+                                <span className={`text-[11px] font-medium ${smsLen > 160 ? 'text-red-500' : 'text-gray-400'}`}>
+                                  {smsLen} / 160 chars
+                                </span>
                               )}
                             </div>
-                          );
-                        })}
-                      </div>
+                            <textarea
+                              value={row.body ?? ''}
+                              onChange={(e) => updateRow(nt.type, ch.key, 'body', e.target.value)}
+                              rows={isEmail ? 9 : 4}
+                              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-gray-800 resize-y font-mono"
+                              placeholder={def?.body ?? 'Enter message…'}
+                            />
+                          </div>
+
+                          {/* Reset to default */}
+                          {def && (
+                            <div className="flex justify-end">
+                              <button
+                                type="button"
+                                onClick={() => resetToDefault(nt.type, ch.key)}
+                                className="text-xs text-gray-500 hover:text-gray-800 underline underline-offset-2"
+                              >
+                                Reset to default
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
