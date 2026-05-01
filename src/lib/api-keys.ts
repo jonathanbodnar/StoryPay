@@ -87,22 +87,23 @@ export async function createApiKey(
   return { plaintext, row: data as ApiKeyRow };
 }
 
-/** List the venue's keys. Plaintext is never returned. */
+/** List only active (non-revoked) keys for a venue. Plaintext is never returned. */
 export async function listApiKeys(venueId: string): Promise<ApiKeyRow[]> {
   const { data, error } = await supabaseAdmin
     .from('venue_api_keys')
     .select('*')
     .eq('venue_id', venueId)
+    .is('revoked_at', null)
     .order('created_at', { ascending: false });
   if (error) throw error;
   return (data || []) as ApiKeyRow[];
 }
 
-/** Revoke (soft-delete) a key. Future requests with it will 401. */
+/** Permanently delete a key. The row is gone immediately — no recovery. */
 export async function revokeApiKey(venueId: string, id: string): Promise<void> {
   const { error } = await supabaseAdmin
     .from('venue_api_keys')
-    .update({ revoked_at: new Date().toISOString() })
+    .delete()
     .eq('venue_id', venueId)
     .eq('id', id);
   if (error) throw error;

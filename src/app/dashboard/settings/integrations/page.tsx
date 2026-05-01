@@ -87,11 +87,12 @@ export default function IntegrationsPage() {
   }
 
   async function revokeKey(id: string) {
-    if (!confirm('Revoke this key? Anything using it will immediately stop working.')) return;
+    if (!confirm('Delete this key permanently? Anything using it will immediately stop working and cannot be recovered.')) return;
     setRevokingId(id);
     try {
       await fetch(`/api/integrations/api-keys/${id}`, { method: 'DELETE' });
-      void load();
+      // Remove instantly from local state — no need to reload from server.
+      setKeys((prev) => prev.filter((k) => k.id !== id));
     } finally {
       setRevokingId(null);
     }

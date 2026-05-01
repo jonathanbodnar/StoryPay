@@ -17,8 +17,7 @@ export async function GET() {
         scopes: r.scopes,
         last_used_at: r.last_used_at,
         created_at: r.created_at,
-        revoked_at: r.revoked_at,
-        active: !r.revoked_at,
+        active: true,
       })),
     });
   } catch (err) {
