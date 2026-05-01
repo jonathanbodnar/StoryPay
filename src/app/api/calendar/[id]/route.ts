@@ -6,6 +6,7 @@ import { syncAppointmentRemindersForEvent } from '@/lib/appointment-reminders';
 import { dispatchCalendarNotification, buildNotifVarsForEvent } from '@/lib/calendar-notifications';
 import { pushEventUpdateToGoogle, pushEventDeleteToGoogle } from '@/lib/google-calendar-push';
 import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
+import { dispatchIntegrationEvent } from '@/lib/integration-events';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -255,6 +256,16 @@ export async function PATCH(
           }
         }
 
+        // Fan out to Zapier / external integrations
+        if (isCancelled) {
+          void dispatchIntegrationEvent(venueId, 'appointment.cancelled', {
+            appointment: {
+              id,
+              customer_email: customerEmail || '',
+            },
+          });
+        }
+
         // Auto-apply system tags for status change events
         if (customerEmail) {
           await ensureSystemTagsForVenue(venueId);
@@ -355,6 +366,16 @@ export async function DELETE(
         if (vars) {
           await dispatchCalendarNotification(venueId, 'cancellation', vars, undefined, null);
         }
+
+        // Fan out to Zapier / external integrations
+        void dispatchIntegrationEvent(venueId, 'appointment.cancelled', {
+          appointment: {
+            id,
+            customer_email: customerEmail,
+            title: existingEvent?.title ?? null,
+            start_at: existingEvent?.start_at ?? null,
+          },
+        });
 
         // Auto-apply cancelled tag
         await ensureSystemTagsForVenue(venueId);

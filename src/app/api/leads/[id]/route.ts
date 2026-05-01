@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { legacyStatusForStageName } from '@/lib/pipelines';
 import { leadRowWithTags, setLeadTagIds } from '@/lib/lead-tags';
 import { onMarketingStageChanged, onMarketingTagAdded } from '@/lib/marketing-email-worker';
+import { dispatchIntegrationEvent } from '@/lib/integration-events';
 import { syncVenueCustomerFromLeadRow } from '@/lib/venue-customer-pipeline-sync';
 import { getSessionUser } from '@/lib/session';
 import { insertLeadActivity } from '@/lib/lead-activity';
@@ -286,7 +287,15 @@ export async function PATCH(
   if (hasTagPatch) {
     const arr = Array.isArray(body.tagIds) ? body.tagIds.filter((x): x is string => typeof x === 'string') : [];
     const added = arr.filter((tid) => !previousTagIds.has(tid));
-    if (added.length) void onMarketingTagAdded(venueId, id, added);
+    if (added.length) {
+      void onMarketingTagAdded(venueId, id, added);
+      for (const tagId of added) {
+        void dispatchIntegrationEvent(venueId, 'tag.added', {
+          lead_id: id,
+          tag: { id: tagId },
+        });
+      }
+    }
   }
 
   const lr = leadRow as { email: string | null; pipeline_id: string | null; stage_id: string | null };

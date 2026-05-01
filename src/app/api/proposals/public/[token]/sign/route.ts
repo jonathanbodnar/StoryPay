@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { syncPaymentRemindersForProposal } from '@/lib/payment-reminders';
 import { notifyOwner, formatAmount } from '@/lib/owner-notifications';
+import { dispatchIntegrationEvent } from '@/lib/integration-events';
 
 export async function POST(
   request: Request,
@@ -16,7 +17,7 @@ export async function POST(
 
   const { data: proposal, error } = await supabaseAdmin
     .from('proposals')
-    .select('id, status, venue_id, customer_name, price')
+    .select('id, status, venue_id, customer_name, customer_email, customer_phone, price, payment_type')
     .eq('public_token', token)
     .single();
 
@@ -54,6 +55,20 @@ export async function POST(
         amount:        formatAmount(proposal.price as number | null),
       },
       actionUrl: `${appUrl}/dashboard/payments/proposals`,
+    });
+
+    // Fan out to Zapier / external integrations
+    void dispatchIntegrationEvent(proposal.venue_id as string, 'proposal.signed', {
+      proposal: {
+        id: proposal.id,
+        customer_name: (proposal.customer_name as string | null) || '',
+        customer_email: (proposal.customer_email as string | null) || '',
+        customer_phone: (proposal.customer_phone as string | null) || '',
+        price_cents: (proposal.price as number | null) ?? 0,
+        price_dollars: formatAmount(proposal.price as number | null),
+        payment_type: (proposal.payment_type as string | null) || 'full',
+        signed_at: new Date().toISOString(),
+      },
     });
   }
 

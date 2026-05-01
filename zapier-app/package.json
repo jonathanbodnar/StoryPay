@@ -1,0 +1,24 @@
+{
+  "name": "storyvenue-zapier",
+  "version": "1.0.0",
+  "description": "StoryVenue's official Zapier integration. Triggers, creates, and searches for the StoryVenue platform — connect your wedding-venue CRM to 6,000+ apps.",
+  "main": "index.js",
+  "private": true,
+  "scripts": {
+    "test": "jest --testTimeout 10000",
+    "validate": "zapier validate",
+    "build": "zapier build",
+    "push": "zapier push",
+    "logs": "zapier logs --type=console --limit=20"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "dependencies": {
+    "zapier-platform-core": "^16.0.0"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0"
+  }
+}

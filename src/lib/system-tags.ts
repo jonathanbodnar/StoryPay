@@ -7,6 +7,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase';
 import { onMarketingTagAdded } from '@/lib/marketing-email-worker';
+import { dispatchIntegrationEvent } from '@/lib/integration-events';
 
 // ── Canonical tag definitions ─────────────────────────────────────────────────
 
@@ -212,8 +213,12 @@ export async function applySystemTag(
     }
 
     if (!error) {
-      // Tag was newly added — fire workflow trigger
+      // Tag was newly added — fire workflow trigger and external integration event
       await onMarketingTagAdded(venueId, leadId, [tagId]);
+      void dispatchIntegrationEvent(venueId, 'tag.added', {
+        lead_id: leadId,
+        tag: { id: tagId, system_key: systemKey },
+      });
     }
   } catch (e) {
     console.error(`[system-tags] applySystemTag(${systemKey}) exception:`, e);

@@ -5,6 +5,7 @@ import { sendEmail } from '@/lib/email';
 import { recordDuplicateCandidatesForNewLead } from '@/lib/lead-duplicates';
 import { ensureDefaultPipeline, legacyStatusForStageName } from '@/lib/pipelines';
 import { onMarketingFormSubmitted } from '@/lib/marketing-email-worker';
+import { dispatchIntegrationEvent } from '@/lib/integration-events';
 import { syncVenueCustomerFromLeadRow } from '@/lib/venue-customer-pipeline-sync';
 
 export const dynamic = 'force-dynamic';
@@ -227,6 +228,20 @@ export async function POST(request: NextRequest) {
   if (!(venue as { is_demo?: boolean }).is_demo) {
     void recordDuplicateCandidatesForNewLead(venue.id, lr.id, lr.email, lr.phone, lr.created_at);
   }
+
+  // Fan out to Zapier / external integrations subscribed to lead.created
+  void dispatchIntegrationEvent(venue.id, 'lead.created', {
+    lead: {
+      id: lr.id,
+      first_name: firstName || '',
+      last_name: lastName || '',
+      full_name: [firstName, lastName].filter(Boolean).join(' ').trim() || lr.email,
+      email: lr.email,
+      phone: phone || '',
+      source: 'directory',
+      created_at: lr.created_at,
+    },
+  });
 
   // Upsert a venue_customers row so the lead is immediately visible on the
   // Contacts page and the contact profile inquiry fields are auto-populated.

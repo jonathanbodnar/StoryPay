@@ -6,6 +6,7 @@ import { reconcileLeadsForKanban } from '@/lib/leads-reconcile';
 import { fetchTagsForLeadIds, leadRowWithTags, setLeadTagIds } from '@/lib/lead-tags';
 import { fetchOpenDuplicateMatchesForLeads, recordDuplicateCandidatesForNewLead } from '@/lib/lead-duplicates';
 import { applySystemTags, ensureSystemTagsForVenue } from '@/lib/system-tags';
+import { dispatchIntegrationEvent } from '@/lib/integration-events';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -643,6 +644,25 @@ export async function POST(request: NextRequest) {
   ensureSystemTagsForVenue(venueId)
     .then(() => applySystemTags(venueId, newId, ['new_lead', 'inquiry_received', 'form_submitted']))
     .catch(() => {});
+
+  // Fan out to Zapier / external integrations subscribed to lead.created
+  void dispatchIntegrationEvent(venueId, 'lead.created', {
+    lead: {
+      id: newId,
+      first_name: (data as LeadRow).first_name || '',
+      last_name: (data as LeadRow).last_name || '',
+      full_name: (data as LeadRow).name || '',
+      email: (data as LeadRow).email,
+      phone: (data as LeadRow).phone || '',
+      wedding_date: (data as LeadRow).wedding_date,
+      guest_count: (data as LeadRow).guest_count,
+      booking_timeline: (data as LeadRow).booking_timeline,
+      message: (data as LeadRow).message,
+      status: (data as LeadRow).status,
+      source: (data as LeadRow).source,
+      created_at: (data as LeadRow).created_at,
+    },
+  });
 
   const dupMap = await fetchOpenDuplicateMatchesForLeads(venueId, [newId]);
   const withTags = await leadRowWithTags(venueId, data as Record<string, unknown>);

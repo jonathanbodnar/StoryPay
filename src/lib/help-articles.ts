@@ -2527,6 +2527,65 @@ StoryVenue uses a unified, dot-notation variable system sitewide. The same varia
     color: '#6366f1',
     articles: [
       {
+        id: 'int-zapier',
+        title: 'Connecting Zapier (and other apps via the public API)',
+        tags: ['zapier', 'api', 'integration', 'webhook', 'rest hooks', 'automation', 'connect'],
+        body: `StoryVenue ships with an official Zapier integration plus a public REST API at /api/v1. Use Zapier to connect to 6,000+ apps without writing code, or hit the API directly from your own backend.
+
+What you can do with Zapier
+Triggers (Zapier listens — instant via webhooks, with polling fallback):
+- New Lead — fires the moment a lead arrives (form, directory, manual, API)
+- New Contact — fires when a contact is added or upserted
+- Tag Added to Contact — fires whenever a tag is applied (manual or automatic)
+- Proposal Signed — fires when a customer e-signs
+- Payment Received — fires when a deposit, full payment, or installment is captured
+- Appointment Booked — fires when a tour, call, or other event is scheduled
+- Appointment Cancelled — fires when an event is cancelled or deleted
+
+Actions (Zapier writes into StoryVenue):
+- Create or Update Contact (matched by email)
+- Create Lead
+- Add Tag to Contact — IMPORTANT: this fires any Workflow triggered by tag_added, so you can use a Zap to drop someone into an automation
+- Send SMS (via your messaging integration)
+- Send Email (transactional, via Resend)
+- Find Contact by Email (search/upsert pattern)
+
+Connecting Zapier
+1. In StoryVenue: Settings → Integrations → click Generate API key
+2. Copy the secret (it's shown only once — looks like sv_live_…)
+3. Open the StoryVenue Zap or accept your private invite link in Zapier
+4. When Zapier asks for an API key, paste the value you copied
+5. Pick a trigger and connect it to any other app
+
+Managing API keys
+- Settings → Integrations lists every active key with its prefix, creation date, and last-used time
+- Revoke a key any time — anything using it stops working immediately (returns 401)
+- You can have multiple active keys (one per integration is recommended)
+
+Using the API directly
+Send Authorization: Bearer sv_live_… on every request to https://app.storyvenue.com/api/v1.
+
+Quick tour:
+- GET /api/v1/me — auth test, returns the venue
+- GET /api/v1/contacts?limit=50 — list contacts (also supports ?email=)
+- POST /api/v1/contacts — create or upsert a contact
+- POST /api/v1/leads — create a new lead
+- POST /api/v1/tags/apply { email, tag_name } — apply a tag (creates the tag if needed; fires Workflows)
+- POST /api/v1/sms/send { to, message } — send a text
+- POST /api/v1/email/send { to, subject, body_html } — send an email
+- GET  /api/v1/leads/recent — polling source for "New Lead"
+- GET  /api/v1/proposals/recent?status=signed — polling source for "Proposal Signed"
+- GET  /api/v1/payments/recent — polling source for "Payment Received"
+- POST /api/v1/webhooks { event, target_url } — subscribe to instant events
+- DELETE /api/v1/webhooks/:id — unsubscribe
+
+Security
+- API keys are stored hashed (SHA-256) — only the prefix is visible after creation
+- Webhook subscriptions auto-disable after 5 consecutive delivery failures
+- All traffic is HTTPS only
+- Each key is venue-scoped — there is no cross-tenant access`,
+      },
+      {
         id: 'int-calendly',
         title: 'Connecting Calendly',
         tags: ['calendly', 'booking', 'sync', 'tour booking', 'integration', 'connect'],

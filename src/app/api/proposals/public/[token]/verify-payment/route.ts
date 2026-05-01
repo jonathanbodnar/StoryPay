@@ -7,6 +7,7 @@ import { syncPaymentRemindersForProposal } from '@/lib/payment-reminders';
 import { onMarketingProposalPaid } from '@/lib/marketing-email-worker';
 import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
 import { notifyOwner, formatAmount, HIGH_VALUE_THRESHOLD_CENTS } from '@/lib/owner-notifications';
+import { dispatchIntegrationEvent } from '@/lib/integration-events';
 
 function applyFee(cents: number, ratePercent: number): number {
   if (ratePercent <= 0) return cents;
@@ -42,7 +43,7 @@ export async function POST(
   const { data: proposal, error } = await supabaseAdmin
     .from('proposals')
     .select(
-      'id, venue_id, status, payment_type, payment_config, customer_name, customer_email, customer_lunarpay_id, price',
+      'id, venue_id, status, payment_type, payment_config, customer_name, customer_email, customer_phone, customer_lunarpay_id, price',
     )
     .eq('public_token', token)
     .single();
@@ -194,6 +195,22 @@ export async function POST(
           applySystemTagByEmail(vId, cEmail, 'date_confirmed').catch(() => {});
         }
       }).catch(() => {});
+    }
+
+    // Fan out to Zapier / external integrations subscribed to payment.received
+    if (proposal.venue_id) {
+      void dispatchIntegrationEvent(proposal.venue_id as string, 'payment.received', {
+        payment: {
+          proposal_id: proposal.id,
+          customer_name: (proposal.customer_name as string | null) || '',
+          customer_email: (proposal.customer_email as string | null) || '',
+          customer_phone: (proposal.customer_phone as string | null) || '',
+          amount_cents: (proposal.price as number | null) ?? 0,
+          amount_dollars: formatAmount(proposal.price as number | null),
+          payment_type: (proposal.payment_type as string | null) || 'full',
+          paid_at: new Date().toISOString(),
+        },
+      });
     }
 
     console.log('[verify-payment] Proposal updated:', JSON.stringify(updateData));

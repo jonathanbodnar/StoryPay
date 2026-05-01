@@ -161,6 +161,17 @@ Five tabs covering every aspect of how your calendar works:
 
 ## Integrations
 
+### Zapier + public REST API
+- StoryVenue has a private/unlisted Zapier app that connects to 6,000+ other apps.
+- Triggers (instant via REST Hooks, polling fallback): New Lead, New Contact, Tag Added, Proposal Signed, Payment Received, Appointment Booked, Appointment Cancelled.
+- Actions: Create or Update Contact, Create Lead, Add Tag (fires Workflows!), Send SMS, Send Email, Find Contact by Email.
+- To connect: Settings → Integrations → "Generate API key" → copy the sv_live_… secret → paste into Zapier.
+- API keys are SHA-256 hashed; the plaintext is only shown once at creation.
+- Direct API: Authorization: Bearer sv_live_… on requests to /api/v1/*.
+- Key endpoints: GET /api/v1/me, GET/POST /api/v1/contacts, POST /api/v1/leads, POST /api/v1/tags/apply, POST /api/v1/sms/send, POST /api/v1/email/send, GET /api/v1/{leads,contacts,proposals,payments,appointments}/recent (for polling), POST/DELETE /api/v1/webhooks (REST Hooks).
+- Webhook subscriptions auto-disable after 5 consecutive delivery failures; venues can manage active keys and revoke any time from the Integrations page.
+- Common Zapier patterns: "When a new lead arrives, send a Slack message"; "When a proposal is signed, add a row to a Google Sheet and post in Slack"; "When a payment is received over $X, post in Slack"; "When tag X is added, send a Mailchimp transactional"; "When a Typeform is submitted, create a StoryVenue lead and apply tag VIP".
+
 ### Calendly
 - Connect at Settings → Integrations → Calendly → Connect.
 - Requires a Personal Access Token from calendly.com/integrations/api_webhooks.

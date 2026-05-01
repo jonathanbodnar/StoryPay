@@ -11,6 +11,7 @@ import { syncAppointmentRemindersForEvent } from '@/lib/appointment-reminders';
 import { dispatchCalendarNotification, buildNotifVarsForEvent } from '@/lib/calendar-notifications';
 import { pushEventCreateToGoogle } from '@/lib/google-calendar-push';
 import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
+import { dispatchIntegrationEvent } from '@/lib/integration-events';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -277,6 +278,19 @@ export async function POST(request: NextRequest) {
         );
         if (vars) await dispatchCalendarNotification(venueId, 'booked_confirmed', vars, undefined, (calendar_id as string | null) ?? null);
       }
+
+      // Fan out to Zapier / external integrations subscribed to appointment.booked
+      void dispatchIntegrationEvent(venueId, 'appointment.booked', {
+        appointment: {
+          id: eventId,
+          title: (title as string).trim(),
+          start_at: start_at as string,
+          end_at: end_at as string,
+          customer_email: (customer_email as string | null) || '',
+          calendar_id: (calendar_id as string | null) || null,
+          status: (status as string | null) || 'confirmed',
+        },
+      });
 
       // Auto-apply system tags based on calendar type
       if (customer_email) {
