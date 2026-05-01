@@ -8,9 +8,11 @@ import {
   CheckCircle2,
   CreditCard,
   Loader2,
+  Lock,
   Receipt,
   ShieldCheck,
   X,
+  AlertTriangle,
 } from 'lucide-react';
 
 const BRAND = '#1b1b1b';
@@ -88,6 +90,24 @@ function humaniseEventType(t: string): string {
   return t.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+/** Translate raw API errors into something a venue owner can understand. */
+function friendlyError(raw: string): string {
+  const lower = raw.toLowerCase();
+  if (
+    lower.includes('lp_sk_') ||
+    lower.includes('invalid or missing secret api key') ||
+    lower.includes('not configured') ||
+    lower.includes('lunarpay api error 401') ||
+    lower.includes('lunarpay api error 403')
+  ) {
+    return 'Billing isn\'t fully configured on the server yet. Please contact support — we\'ll get this resolved quickly.';
+  }
+  if (lower.includes('lunarpay api error 5')) {
+    return 'LunarPay is temporarily unavailable. Please try again in a moment.';
+  }
+  return raw;
+}
+
 export default function DirectoryBillingPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -106,7 +126,7 @@ export default function DirectoryBillingPage() {
       const res = await fetch('/api/venue-billing');
       if (!res.ok) {
         const d = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(d.error || 'Could not load billing');
+        setError(friendlyError(d.error || 'Could not load billing'));
         return;
       }
       setSummary((await res.json()) as BillingSummary);
@@ -144,7 +164,7 @@ export default function DirectoryBillingPage() {
           await load();
         }
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Verification failed');
+        if (!cancelled) setError(friendlyError(e instanceof Error ? e.message : 'Verification failed'));
       } finally {
         if (!cancelled) setBusy(null);
       }
@@ -177,7 +197,39 @@ export default function DirectoryBillingPage() {
       setInfo('Plan updated.');
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Plan change failed');
+      setError(friendlyError(e instanceof Error ? e.message : 'Plan change failed'));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function resumeCheckout() {
+    setBusy('resume');
+    setError('');
+    try {
+      const res = await fetch('/api/venue-billing/resume-checkout', { method: 'POST' });
+      const d = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (!res.ok) throw new Error(d.error || 'Could not resume checkout');
+      if (d.url) window.location.href = d.url;
+    } catch (e) {
+      setError(friendlyError(e instanceof Error ? e.message : 'Could not resume checkout'));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function cancelPending() {
+    setBusy('cancel_pending');
+    setError('');
+    setInfo('');
+    try {
+      const res = await fetch('/api/venue-billing/cancel-pending', { method: 'POST' });
+      const d = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(d.error || 'Could not cancel pending upgrade');
+      setInfo('Pending upgrade cancelled.');
+      await load();
+    } catch (e) {
+      setError(friendlyError(e instanceof Error ? e.message : 'Could not cancel pending upgrade'));
     } finally {
       setBusy(null);
     }
@@ -192,7 +244,7 @@ export default function DirectoryBillingPage() {
       if (!res.ok) throw new Error(d.error || 'Could not start payment update');
       if (d.url) window.location.href = d.url;
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not start payment update');
+      setError(friendlyError(e instanceof Error ? e.message : 'Could not start payment update'));
     } finally {
       setBusy(null);
     }
@@ -210,7 +262,7 @@ export default function DirectoryBillingPage() {
       setInfo('Subscription canceled. You can resubscribe anytime.');
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Cancel failed');
+      setError(friendlyError(e instanceof Error ? e.message : 'Cancel failed'));
     } finally {
       setBusy(null);
     }
@@ -245,23 +297,25 @@ export default function DirectoryBillingPage() {
   const status = summary.subscription_status;
   const isActive = status === 'active' || status === 'trialing';
   const isPastDue = status === 'past_due';
+  const isPending = status === 'pending';
   const confirmTarget = confirmPlanId ? plans.find((p) => p.id === confirmPlanId) : null;
 
   return (
-    <div className="max-w-5xl space-y-8">
+    <div className="max-w-5xl space-y-6">
       <div>
         <h1 className="font-heading text-2xl text-gray-900 flex items-center gap-2">
           <CreditCard size={22} className="text-gray-700" /> Plans &amp; billing
         </h1>
         <p className="mt-1 text-sm text-gray-500">
-          Manage your StoryVenue directory plan, update your card on file, and review past invoices.
+          Manage your StoryVenue plan, update your card on file, and review past invoices.
           Billing is handled securely by LunarPay.
         </p>
       </div>
 
       {error ? (
-        <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
+        <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-start gap-2">
+          <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
+          <span>{error}</span>
         </div>
       ) : null}
       {info ? (
@@ -276,8 +330,50 @@ export default function DirectoryBillingPage() {
       ) : null}
       {!summary.billing_configured ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          LunarPay platform billing isn&apos;t configured on the server yet. Plan switches that require
-          payment will fail until an admin sets <code>STORYPAY_PLATFORM_LUNARPAY_SECRET_KEY</code>.
+          Billing isn&apos;t fully set up on our end yet. Please reach out to support and we&apos;ll get
+          you sorted right away.
+        </div>
+      ) : null}
+
+      {/* Pending recovery banner — when a plan is selected but checkout never completed */}
+      {isPending && currentPlan && (currentPlan.price_monthly_cents ?? 0) > 0 ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+          <div className="flex items-start gap-3">
+            <AlertTriangle size={18} className="flex-shrink-0 text-amber-600 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="font-semibold text-amber-900">Complete your upgrade to {currentPlan.name}</h3>
+              <p className="mt-1 text-sm text-amber-800">
+                You started upgrading to <strong>{currentPlan.name}</strong> ({formatCents(currentPlan.price_monthly_cents)}/mo)
+                but didn&apos;t finish entering your card. Resume secure checkout to activate the plan, or cancel
+                this upgrade and stay on your current plan.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void resumeCheckout()}
+                  disabled={busy === 'resume'}
+                  className="inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                  style={{ backgroundColor: BRAND }}
+                >
+                  {busy === 'resume' ? (
+                    <Loader2 size={12} className="animate-spin" />
+                  ) : (
+                    <Lock size={12} />
+                  )}
+                  Resume secure checkout
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void cancelPending()}
+                  disabled={busy === 'cancel_pending'}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-white px-3.5 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+                >
+                  {busy === 'cancel_pending' ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
+                  Cancel upgrade
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -380,10 +476,10 @@ export default function DirectoryBillingPage() {
             </div>
           ) : (
             <p className="text-sm text-gray-500">
-              No card on file. Switch to a paid plan to add a payment method.
+              No card on file. {currentCents > 0 ? 'Resume checkout to add one.' : 'Switch to a paid plan to add a payment method.'}
             </p>
           )}
-          {currentCents > 0 ? (
+          {currentCents > 0 && summary.payment_method ? (
             <button
               type="button"
               disabled={busy === 'update_pm'}
@@ -396,7 +492,7 @@ export default function DirectoryBillingPage() {
               ) : (
                 <CreditCard size={12} />
               )}
-              {summary.payment_method ? 'Update payment method' : 'Add payment method'}
+              Update payment method
             </button>
           ) : null}
         </div>
@@ -420,7 +516,8 @@ export default function DirectoryBillingPage() {
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {plans.map((plan) => {
-              const isCurrent = currentPlan?.id === plan.id;
+              const isCurrent = currentPlan?.id === plan.id && (isActive || isPastDue);
+              const isPendingThis = currentPlan?.id === plan.id && isPending;
               const cents = plan.price_monthly_cents ?? 0;
               const isUpgrade = cents > currentCents;
               return (
@@ -478,10 +575,14 @@ export default function DirectoryBillingPage() {
                       <span className="inline-flex w-full justify-center items-center gap-1 rounded-xl bg-white/10 px-3 py-2 text-xs font-semibold">
                         <Check size={12} /> Current plan
                       </span>
+                    ) : isPendingThis ? (
+                      <span className="inline-flex w-full justify-center items-center gap-1 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+                        <AlertTriangle size={12} /> Complete checkout above
+                      </span>
                     ) : (
                       <button
                         type="button"
-                        disabled={busy === `change:${plan.id}`}
+                        disabled={busy === `change:${plan.id}` || isPending}
                         onClick={() => setConfirmPlanId(plan.id)}
                         className="inline-flex w-full justify-center items-center gap-1 rounded-xl px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
                         style={{ backgroundColor: BRAND }}
@@ -570,31 +671,12 @@ export default function DirectoryBillingPage() {
       </section>
 
       {confirmTarget ? (
-        <ConfirmDialog
-          title={`Switch to ${confirmTarget.name}?`}
-          body={
-            (confirmTarget.price_monthly_cents ?? 0) === 0 ? (
-              <>
-                You&apos;ll be moved to the <strong>{confirmTarget.name}</strong> plan immediately.
-                Any active paid subscription will be canceled with LunarPay. You can upgrade again at
-                any time.
-              </>
-            ) : currentCents > 0 ? (
-              <>
-                Your monthly charge will change to{' '}
-                <strong>{formatCents(confirmTarget.price_monthly_cents)}</strong>. LunarPay updates the
-                subscription amount, so the next bill uses the new price.
-              </>
-            ) : (
-              <>
-                You&apos;ll be sent to LunarPay to add a card and start your{' '}
-                <strong>{confirmTarget.name}</strong> subscription at{' '}
-                <strong>{formatCents(confirmTarget.price_monthly_cents)}</strong> / month.
-              </>
-            )
-          }
-          confirmLabel="Switch plan"
-          confirmBusy={busy === `change:${confirmTarget.id}`}
+        <UpgradePlanModal
+          plan={confirmTarget}
+          currentPlan={currentPlan}
+          currentCents={currentCents}
+          paymentMethod={summary.payment_method}
+          busy={busy === `change:${confirmTarget.id}`}
           onCancel={() => setConfirmPlanId(null)}
           onConfirm={() => void changePlan(confirmTarget.id)}
         />
@@ -602,7 +684,7 @@ export default function DirectoryBillingPage() {
 
       {confirmCancel ? (
         <ConfirmDialog
-          title="Cancel your StoryVenue directory subscription?"
+          title="Cancel your StoryVenue subscription?"
           body={
             <>
               Your paid plan will end and your venue will drop back to the free tier. Billing stops
@@ -616,6 +698,160 @@ export default function DirectoryBillingPage() {
           onConfirm={() => void cancelSubscription()}
         />
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * Polished plan-change modal. Shows the target plan summary, what's changing,
+ * and a clear "Continue to secure checkout" CTA when a redirect is needed.
+ * If the user already has a card on file, the change happens in-place via the
+ * subscription PATCH endpoint — no redirect.
+ */
+function UpgradePlanModal({
+  plan,
+  currentPlan,
+  currentCents,
+  paymentMethod,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  plan: Plan;
+  currentPlan: Plan | null;
+  currentCents: number;
+  paymentMethod: PaymentMethod;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const planCents = plan.price_monthly_cents ?? 0;
+  const isFree = planCents === 0;
+  const isDowngradeToFree = isFree && currentCents > 0;
+  const hasActivePaid = Boolean(paymentMethod) && currentCents > 0;
+  const willCharge = !isFree && !hasActivePaid; // first paid signup → checkout redirect
+  const willPatch = !isFree && hasActivePaid;   // already paying → patch the LunarPay subscription
+  const nextBillEstimate = useMemo(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + 1);
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={busy ? undefined : onCancel} />
+      <div className="absolute inset-0 flex items-center justify-center p-4">
+        <div className="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-2xl overflow-hidden">
+          <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ backgroundColor: BRAND }}>
+                {isDowngradeToFree ? (
+                  <ArrowUpRight size={18} className="text-white rotate-180" />
+                ) : (
+                  <ArrowUpRight size={18} className="text-white" />
+                )}
+              </div>
+              <div className="flex-1">
+                <h3 className="font-heading text-lg text-gray-900">
+                  {isDowngradeToFree
+                    ? `Switch to ${plan.name}`
+                    : willPatch
+                      ? `Upgrade to ${plan.name}`
+                      : `Subscribe to ${plan.name}`}
+                </h3>
+                <p className="mt-0.5 text-sm text-gray-500">
+                  {currentPlan ? `Currently on ${currentPlan.name}` : 'No plan currently assigned'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="px-6 py-5 space-y-4">
+            {/* Plan summary card */}
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <div className="flex items-baseline justify-between">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    {plan.name}
+                  </div>
+                  {plan.description ? (
+                    <p className="mt-0.5 text-xs text-gray-600">{plan.description}</p>
+                  ) : null}
+                </div>
+                <div className="text-right">
+                  <div className="font-bold text-gray-900">
+                    {isFree ? 'Free' : formatCents(planCents)}
+                  </div>
+                  {!isFree ? <div className="text-[11px] text-gray-500">per month</div> : null}
+                </div>
+              </div>
+            </div>
+
+            {/* What happens next */}
+            {isDowngradeToFree ? (
+              <div className="rounded-xl border border-amber-100 bg-amber-50 p-4 text-sm text-amber-900">
+                <p>
+                  You&apos;ll be moved to the <strong>{plan.name}</strong> plan immediately. Your
+                  current paid subscription will be canceled with LunarPay and you won&apos;t be
+                  charged again.
+                </p>
+              </div>
+            ) : willPatch ? (
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-900 space-y-1">
+                <p>
+                  Your monthly charge will change to <strong>{formatCents(planCents)}</strong> on the
+                  card ending in <strong>•••• {paymentMethod?.last4 || '––––'}</strong>.
+                </p>
+                <p className="text-xs">Next bill estimate: {nextBillEstimate}</p>
+              </div>
+            ) : willCharge ? (
+              <div className="space-y-2">
+                <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-700">
+                  <p>
+                    You&apos;ll be sent to <strong>LunarPay&apos;s secure checkout</strong> to enter
+                    your card details. Your subscription activates the moment payment succeeds.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <Lock size={11} />
+                  <span>Payments are PCI-compliant. We never see or store your card number.</span>
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="px-6 pb-6 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={busy}
+              className="rounded-xl border border-gray-200 px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              Keep current plan
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onConfirm}
+              className="inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold text-white disabled:opacity-50"
+              style={{ backgroundColor: BRAND }}
+            >
+              {busy ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : willCharge ? (
+                <Lock size={12} />
+              ) : (
+                <Check size={12} />
+              )}
+              {willCharge
+                ? 'Continue to secure checkout'
+                : isDowngradeToFree
+                  ? 'Switch to free'
+                  : 'Confirm change'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

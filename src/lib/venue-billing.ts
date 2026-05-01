@@ -362,13 +362,12 @@ export async function changeVenuePlan(
     return { kind: 'switched', plan_id: target.id };
   }
 
-  // No active subscription — need a checkout. Pre-assign the new plan so the
-  // existing verify flow picks up the right price after checkout completes.
-  await supabaseAdmin
-    .from('venues')
-    .update({ directory_plan_id: target.id, directory_subscription_status: 'pending' })
-    .eq('id', venueId);
-
+  // No active subscription — need a checkout.
+  //
+  // IMPORTANT: create the LunarPay checkout session FIRST. Only mark the venue
+  // as `pending` once we have a valid URL to send them to. This way a config
+  // failure (bad API key, network blip, etc.) leaves the DB clean instead of
+  // stranding the venue in a pending-but-no-checkout state.
   const secret = requirePlatformLunarPaySecretKey();
   const amountDollars = newCents / 100;
   const checkoutData: Record<string, unknown> = {
@@ -392,7 +391,75 @@ export async function changeVenuePlan(
   const session = (result as { data?: { url?: string }; url?: string }).data || result;
   const url = (session as { url?: string }).url;
   if (!url) throw new Error('LunarPay did not return a checkout URL');
+
+  // Checkout URL secured — now safe to pre-assign the plan + pending status.
+  await supabaseAdmin
+    .from('venues')
+    .update({ directory_plan_id: target.id, directory_subscription_status: 'pending' })
+    .eq('id', venueId);
+
   return { kind: 'checkout_required', url, plan_id: target.id };
+}
+
+/**
+ * Re-create a checkout session for a venue that's stuck in `pending` status
+ * (e.g. closed the LunarPay tab, bad network, server hiccup mid-flow). Uses
+ * the venue's currently-assigned directory_plan_id rather than asking the
+ * caller for one — that's the plan we previously marked as pending.
+ */
+export async function resumePendingCheckout(venueId: string): Promise<{ url: string }> {
+  const ctx = await loadVenueDirectoryPlanContext(venueId);
+  if (!ctx) throw new Error('Venue not found');
+  if (!ctx.plan) throw new Error('No directory plan assigned to resume.');
+  const cents = ctx.plan.price_monthly_cents ?? 0;
+  if (cents <= 0) {
+    throw new Error('Free plans do not require checkout.');
+  }
+  const secret = requirePlatformLunarPaySecretKey();
+  const checkoutData: Record<string, unknown> = {
+    amount: cents / 100,
+    description: `StoryVenue directory — ${ctx.plan.name} (monthly)`,
+    customer_email: ctx.venue.email || undefined,
+    customer_name: ctx.venue.name,
+    success_url: `${APP_URL}/dashboard/directory-billing`,
+    cancel_url: `${APP_URL}/dashboard/directory-billing`,
+    save_payment_method: true,
+    metadata: {
+      [STORYPAY_PLATFORM_DIRECTORY_META_KEY]: '1',
+      venue_id: venueId,
+      directory_plan_id: ctx.plan.id,
+    },
+  };
+  if (ctx.venue.platform_lunarpay_customer_id) {
+    checkoutData.customer_id = ctx.venue.platform_lunarpay_customer_id;
+  }
+  const result = await createCheckoutSession(secret, checkoutData);
+  const session = (result as { data?: { url?: string }; url?: string }).data || result;
+  const url = (session as { url?: string }).url;
+  if (!url) throw new Error('LunarPay did not return a checkout URL');
+  return { url };
+}
+
+/**
+ * Abort a pending upgrade — clears the venue's pending status and unassigns
+ * the in-flight plan so they can pick a different one (or stay free).
+ */
+export async function cancelPendingUpgrade(venueId: string): Promise<void> {
+  const { data } = await supabaseAdmin
+    .from('venues')
+    .select('directory_subscription_status')
+    .eq('id', venueId)
+    .maybeSingle();
+  const status = (data?.directory_subscription_status as string | null) || 'none';
+  if (status !== 'pending') return; // no-op if not pending
+
+  await supabaseAdmin
+    .from('venues')
+    .update({
+      directory_plan_id: null,
+      directory_subscription_status: 'none',
+    })
+    .eq('id', venueId);
 }
 
 // ── Cancel subscription ────────────────────────────────────────────────────
