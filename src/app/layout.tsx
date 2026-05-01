@@ -111,7 +111,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   };
 
   return (
-    <html lang="en">
+    // Apply the next/font CSS variable to <html> so --font-open-sans is
+    // available on every element (including ::before / ::after pseudo-elements
+    // and form controls that reset their inherited font). This guarantees
+    // Open Sans is the default everywhere.
+    <html lang="en" className={openSans.variable}>
       <head>
         {/* Explicit favicon links override platform defaults (e.g. Railway) that ignore metadata alone */}
         <link rel="icon" href="/storyvenue-sidebar-mark.png" type="image/png" sizes="any" />
@@ -121,7 +125,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareSchema) }} />
       </head>
-      <body className={`${openSans.variable} antialiased bg-white text-gray-900`}>{children}</body>
+      <body className="antialiased bg-white text-gray-900">{children}</body>
     </html>
   );
 }

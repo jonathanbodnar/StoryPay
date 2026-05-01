@@ -26,10 +26,18 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Open Sans is set on body and cascades to all children naturally.
-   Avoid !important here so inline `font-family` styles can override per-element
-   (used by the email/forms builder for per-block typography). */
+/* Open Sans is the canonical sitewide font. The next/font CSS variable
+   --font-open-sans is set on the <html> element so it's available everywhere.
+   We avoid !important so inline `font-family` styles can still override
+   per-element (used by the email/forms builder for per-block typography
+   like Playfair Display etc.). */
 *, *::before, *::after {
+  font-family: var(--font-body);
+}
+
+/* Form controls reset their inherited font in every browser; force them back
+   to Open Sans so dropdowns, buttons, and inputs match the rest of the UI. */
+button, input, select, textarea, optgroup {
   font-family: var(--font-body);
 }
 
