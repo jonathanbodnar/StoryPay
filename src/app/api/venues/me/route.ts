@@ -109,6 +109,7 @@ export async function PATCH(request: Request) {
     appointment_reminder_offsets: true,
     payment_reminders_enabled: true,
     payment_reminder_offsets: true,
+    accept_ach: true,  // toggle for ACH (bank account / eCheck) on hosted checkout
   };
   const updates: Record<string, unknown> = {};
 
@@ -215,6 +216,7 @@ export async function PATCH(request: Request) {
       'brand_tagline', 'brand_website', 'brand_email', 'brand_phone',
       'brand_address', 'brand_city', 'brand_state', 'brand_zip', 'brand_footer_note', 'monthly_booking_goal',
       'listing_marketing_monthly_spend', 'timezone', 'appointment_reminders_enabled', 'appointment_reminder_offsets',
+      'accept_ach',
       'payment_reminders_enabled', 'payment_reminder_offsets'];
     for (const k of knownCols) {
       if (k in updates) safeUpdates[k] = updates[k];

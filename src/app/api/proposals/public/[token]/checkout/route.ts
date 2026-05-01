@@ -46,7 +46,7 @@ export async function POST(
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('name, lunarpay_secret_key, service_fee_rate')
+    .select('name, lunarpay_secret_key, service_fee_rate, accept_ach')
     .eq('id', proposal.venue_id)
     .single();
 
@@ -56,6 +56,12 @@ export async function POST(
 
   const feeRate = Number(venue.service_fee_rate ?? 0);
   const addFee = feeRate > 0;
+  // Default to BOTH cc + ach if the venue hasn't explicitly disabled ACH.
+  // LunarPay only renders the ACH tab on the hosted page when the venue's
+  // Fortis account also has ACH enabled during onboarding, so this is safe
+  // even for venues that haven't completed ACH onboarding yet.
+  const acceptAch = (venue as { accept_ach?: boolean | null }).accept_ach !== false;
+  const paymentMethods: string[] = acceptAch ? ['cc', 'ach'] : ['cc'];
 
   try {
     let chargeAmountCents = proposal.price;
@@ -88,6 +94,10 @@ export async function POST(
       customer_name: proposal.customer_name,
       success_url: `${APP_URL}/proposal/${token}/success`,
       cancel_url: `${APP_URL}/proposal/${token}`,
+      payment_methods: paymentMethods,
+      // Stamp the proposal_id on the LunarPay session so we can match
+      // post-settlement webhooks back to the originating proposal.
+      metadata: { proposal_id: proposal.id, public_token: token },
     };
 
     if (hasFuturePayments) {
@@ -98,7 +108,7 @@ export async function POST(
       checkoutData.customer_id = proposal.customer_lunarpay_id;
     }
 
-    console.log('[checkout] feeRate:', feeRate, '% originalCents:', chargeAmountCents, 'finalCents:', finalCents);
+    console.log('[checkout] feeRate:', feeRate, '% originalCents:', chargeAmountCents, 'finalCents:', finalCents, 'paymentMethods:', paymentMethods);
     console.log('[checkout] Creating checkout session:', JSON.stringify(checkoutData));
 
     const result = await createCheckoutSession(venue.lunarpay_secret_key, checkoutData);

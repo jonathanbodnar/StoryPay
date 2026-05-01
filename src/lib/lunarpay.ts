@@ -176,6 +176,11 @@ export function createCheckoutSession(
     'amount', 'description', 'success_url', 'cancel_url',
     'customer_email', 'customer_name', 'customer_id',
     'save_payment_method', 'metadata',
+    // payment_methods controls which tabs appear on the LunarPay hosted page:
+    //   ["cc"]          → credit/debit card only
+    //   ["ach"]         → bank account / eCheck only
+    //   ["cc","ach"]    → both (LunarPay default if omitted)
+    'payment_methods',
   ];
 
   for (const field of allowedFields) {

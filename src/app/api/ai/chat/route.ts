@@ -489,6 +489,14 @@ Setup checklist for a venue building their first speed-to-lead funnel:
 - Once approved: proposals and invoices can accept credit card payments, installments, and subscriptions online.
 - If payment processing shows as unavailable: check that your LunarPay/Fortis onboarding is complete. Contact support if you believe it should be active.
 
+### ACH (Bank Transfer / eCheck) — accepted alongside cards
+- The LunarPay-hosted checkout supports both credit/debit card AND ACH (bank account / eCheck). Customers see two tabs and pick the one they prefer.
+- ACH is **enabled by default** for new venues. Toggle it on/off at Settings → Customer Payment Methods.
+- Cards: clear instantly. ACH: returns "submitted" immediately, settles in 3–5 business days. The customer-facing success page tells them this; the proposal/invoice in StoryVenue is marked "paid" as soon as bank info is authorized.
+- ACH only appears on checkout if BOTH (a) the venue's StoryVenue toggle is ON AND (b) their LunarPay/Fortis merchant account also has ACH enabled. If you need Fortis to add ACH to an existing account, contact LunarPay support.
+- Use cases: lower fees on big deposits, alternative for customers who don't use cards, fewer card declines.
+- ACH refunds work the same as card refunds (each leg takes 3–5 business days to settle).
+
 ## SMS Notifications
 - SMS is sent automatically when proposals and invoices are created (if customer has a phone number).
 - Phone numbers must be in US format — auto-formatted to E.164.

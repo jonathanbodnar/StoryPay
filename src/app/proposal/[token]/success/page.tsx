@@ -10,6 +10,7 @@ export default function ProposalSuccessPage() {
   const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying');
   const [error, setError] = useState<string | null>(null);
   const [proposalId, setProposalId] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<'cc' | 'ach' | 'unknown'>('unknown');
 
   useEffect(() => {
     const sessionId = searchParams.get('session_id');
@@ -39,6 +40,7 @@ export default function ProposalSuccessPage() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Verification failed');
         setStatus('success');
+        if (data.payment_method) setPaymentMethod(data.payment_method);
 
         const proposalRes = await fetch(`/api/proposals/public/${token}`);
         if (proposalRes.ok) {
@@ -98,10 +100,20 @@ export default function ProposalSuccessPage() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Payment Complete!</h1>
-        <p className="text-gray-500 text-sm mb-8">
-          Your payment has been processed successfully. Thank you!
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">
+          {paymentMethod === 'ach' ? 'Bank Payment Submitted!' : 'Payment Complete!'}
+        </h1>
+        <p className="text-gray-500 text-sm mb-2">
+          {paymentMethod === 'ach'
+            ? 'Your bank transfer has been submitted and will settle in 3–5 business days. We&apos;ll email you once it clears.'
+            : 'Your payment has been processed successfully. Thank you!'}
         </p>
+        {paymentMethod === 'ach' && (
+          <p className="text-xs text-gray-400 mb-6">
+            Bank transfers typically clear within 3–5 business days. No further action needed on your end.
+          </p>
+        )}
+        {paymentMethod !== 'ach' && <div className="mb-8" />}
         {proposalId && (
           <button
             onClick={() => router.push(`/invoice/${proposalId}`)}

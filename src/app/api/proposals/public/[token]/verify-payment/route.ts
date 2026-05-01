@@ -319,7 +319,18 @@ export async function POST(
       console.error('[verify-payment] Failed to notify owner:', notifyErr);
     }
 
-    return NextResponse.json({ success: true });
+    // Surface the payment method (cc / ach) so the success page can show
+    // the right copy ("Payment received" vs "Bank payment processing").
+    const paymentMethodKind: 'cc' | 'ach' | 'unknown' =
+      (session.payment_method as string)?.toLowerCase() === 'ach' ||
+      (session.paymentMethod as string)?.toLowerCase() === 'ach'
+        ? 'ach'
+        : (session.payment_method as string)?.toLowerCase() === 'cc' ||
+          (session.paymentMethod as string)?.toLowerCase() === 'cc'
+          ? 'cc'
+          : 'unknown';
+
+    return NextResponse.json({ success: true, payment_method: paymentMethodKind });
   } catch (err) {
     console.error('[verify-payment] Error:', err);
     return NextResponse.json(

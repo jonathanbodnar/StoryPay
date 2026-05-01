@@ -16,6 +16,7 @@ import {
  Users,
  Download,
  AlertCircle,
+ Landmark,
 } from 'lucide-react';
 
 interface VenueInfo {
@@ -34,6 +35,7 @@ interface VenueInfo {
  legacy_location_id?: string | null;
  lunarpay_merchant_id: number | null;
  service_fee_rate: number;
+ accept_ach: boolean | null;
  brand_logo_url: string | null;
  brand_tagline: string | null;
  brand_website: string | null;
@@ -55,6 +57,8 @@ export default function SettingsPage() {
  const [feeSaving, setFeeSaving] = useState(false);
  const [feeSaved, setFeeSaved] = useState(false);
  const [feeInput, setFeeInput] = useState('2.75');
+ const [achSaving, setAchSaving] = useState(false);
+ const [achSaved, setAchSaved] = useState(false);
  const [brandSaving, setBrandSaving] = useState(false);
  const [brandSaved, setBrandSaved] = useState(false);
  const [logoUploading, setLogoUploading] = useState(false);
@@ -281,6 +285,24 @@ export default function SettingsPage() {
  }
  };
 
+ const toggleAcceptAch = async (next: boolean) => {
+ setAchSaving(true);
+ try {
+ const res = await fetch('/api/venues/me', {
+ method: 'PATCH',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({ accept_ach: next }),
+ });
+ if (res.ok) {
+ setVenue((prev) => prev ? { ...prev, accept_ach: next } : prev);
+ setAchSaved(true);
+ setTimeout(() => setAchSaved(false), 2500);
+ }
+ } finally {
+ setAchSaving(false);
+ }
+ };
+
  return (
  <div>
  <div className="mb-8">
@@ -300,6 +322,70 @@ export default function SettingsPage() {
  <LunarPayOnboarding onActivated={() => void loadVenue()} />
  </div>
  </section>
+
+ {/* Customer Payment Methods (ACH / eCheck toggle) */}
+ {isActive && (
+ <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+ <div className="flex items-center gap-3 border-b border-gray-200 px-6 py-4">
+ <Landmark size={18} className="text-gray-400" />
+ <h2 className="font-heading text-base font-semibold text-gray-900">Customer Payment Methods</h2>
+ </div>
+ <div className="px-6 py-6 space-y-5">
+ {/* Card (always on) */}
+ <div className="flex items-start justify-between gap-4">
+ <div className="flex items-start gap-3">
+ <CreditCard size={18} className="mt-0.5 text-gray-400" />
+ <div>
+ <p className="text-sm font-medium text-gray-900">Credit & Debit Cards</p>
+ <p className="mt-0.5 text-xs text-gray-500">Always enabled. Funds settle to your account in 1–2 business days.</p>
+ </div>
+ </div>
+ <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+ <CheckCircle2 size={12} /> Always on
+ </span>
+ </div>
+
+ {/* ACH toggle */}
+ <div className="flex items-start justify-between gap-4 border-t border-gray-100 pt-5">
+ <div className="flex items-start gap-3">
+ <Landmark size={18} className="mt-0.5 text-gray-400" />
+ <div>
+ <p className="text-sm font-medium text-gray-900">ACH / Bank Transfer (eCheck)</p>
+ <p className="mt-0.5 text-xs text-gray-500">
+ Customers pay directly from a bank account using their routing & account numbers. Funds settle in 3–5 business days. No card processing fees from the customer&apos;s side.
+ </p>
+ <p className="mt-1 text-[11px] text-gray-400">
+ Note: ACH only appears at checkout if your LunarPay/Fortis merchant account also has ACH enabled. If you need it activated, contact LunarPay support.
+ </p>
+ </div>
+ </div>
+ <button
+ type="button"
+ disabled={achSaving}
+ onClick={() => toggleAcceptAch(venue.accept_ach === false ? true : false)}
+ className={[
+ 'shrink-0 relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50',
+ venue.accept_ach !== false ? 'bg-emerald-500' : 'bg-gray-200',
+ ].join(' ')}
+ aria-label="Toggle ACH"
+ >
+ <span
+ className={[
+ 'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
+ venue.accept_ach !== false ? 'translate-x-6' : 'translate-x-1',
+ ].join(' ')}
+ />
+ </button>
+ </div>
+
+ {achSaved && (
+ <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-600">
+ <Check size={12} /> Saved
+ </div>
+ )}
+ </div>
+ </section>
+ )}
 
  {/* ── Setup Guide (owners only, desktop only) ── */}
  {isOwner && <section className="hidden md:block rounded-2xl border border-gray-200 bg-white overflow-hidden">

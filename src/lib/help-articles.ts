@@ -2781,6 +2781,47 @@ Card numbers from clients go directly to Fortis servers — StoryVenue never see
 If payments are showing as unavailable
 Check that your LunarPay/Fortis onboarding status shows as approved in Settings → StoryPay. If you believe it should be active, contact StoryVenue support with your business name and application date.`,
       },
+      {
+        id: 'storypay-ach',
+        title: 'Accepting ACH (bank transfer / eCheck) payments',
+        tags: ['storypay', 'ach', 'echeck', 'bank transfer', 'bank account', 'payment methods', 'lunarpay', 'fortis'],
+        body: `StoryPay supports ACH (electronic check / bank transfer) payments alongside credit & debit cards. Customers can pay directly from their bank account using their routing and account numbers — no card needed.
+
+Why offer ACH
+- Lower processing fees compared to cards (especially on large amounts)
+- No card-decline risk for high-ticket bookings
+- Some clients prefer paying directly from their bank, especially for deposits and large balances
+
+Where ACH appears
+When ACH is enabled, the LunarPay-hosted checkout page that opens when a customer clicks "Pay" on a proposal or invoice shows two tabs:
+- Card (credit / debit)
+- Bank account (eCheck)
+
+The customer picks the tab they prefer. ACH can be used for one-time payments, installment plans, and recurring subscriptions — exactly the same as cards.
+
+Settlement timing
+- Cards: clear instantly (status flips to "paid" immediately)
+- ACH: returns "submitted" right away, but takes 3–5 business days to fully settle. The customer-facing success page tells them this. The proposal/invoice in your dashboard is marked paid as soon as the customer confirms the bank info, since they've authorized the transfer.
+
+Enabling ACH on your venue
+1. Go to Settings → Customer Payment Methods (visible once your StoryPay onboarding is approved)
+2. Toggle "ACH / Bank Transfer (eCheck)" ON (enabled by default for new venues)
+3. Save — change takes effect on the next proposal/invoice your customer opens
+
+Important — ACH must be enabled on your Fortis merchant account too
+Even if you turn the toggle ON in StoryVenue, ACH only appears on checkout if your underlying LunarPay/Fortis merchant account also has ACH activated. Most onboarding flows include both card and ACH, but if ACH didn't get included on your application, contact LunarPay support to have it added. Until then the ACH tab simply won't appear and only the card tab is shown.
+
+Disabling ACH
+Same place — Settings → Customer Payment Methods — flip the toggle OFF. Your future checkout pages will show card only. Cards are always on.
+
+Refunds
+ACH refunds work the same as card refunds, but each leg takes 3–5 business days to settle. From the StoryVenue dashboard you click "Refund" exactly the same way regardless of payment method.
+
+Common questions
+- Can I require ACH only? Not currently — cards are always offered. If you turn ACH on, both methods appear and the customer chooses.
+- What if an ACH transfer fails (insufficient funds, closed account)? You'll receive a webhook notification from LunarPay. The proposal will need to be marked unpaid manually until the customer pays again. (Card fallback is recommended for time-sensitive deposits.)
+- Are there extra fees? Check your LunarPay dashboard for ACH transaction pricing — typically a flat fee per transaction (vs. a percentage), making it cheaper for amounts above a few hundred dollars.`,
+      },
     ],
   },
   {
