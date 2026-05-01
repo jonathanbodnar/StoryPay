@@ -1,0 +1,40 @@
+# Cloudflare edge cache rules — served alongside the Railway origin.
+# Cloudflare reads this file when using Cloudflare Pages; when deployed on
+# Railway with Cloudflare as a proxy, configure equivalent Cache Rules in the
+# Cloudflare dashboard (Cache > Rules) using the patterns below.
+
+# ── Immutable static assets (hashed filenames — safe forever) ──────────────
+/_next/static/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# ── Public assets in /public (logos, icons, etc.) ──────────────────────────
+/*.png
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+/*.jpg
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+/*.jpeg
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+/*.webp
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+/*.svg
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+/*.ico
+  Cache-Control: public, max-age=86400
+
+# ── Fonts (if ever self-hosted) ─────────────────────────────────────────────
+/*.woff2
+  Cache-Control: public, max-age=31536000, immutable
+/*.woff
+  Cache-Control: public, max-age=31536000, immutable
+
+# ── Public venue directory API (unauthenticated, can be edge-cached) ────────
+/api/public/*
+  Cache-Control: public, s-maxage=60, stale-while-revalidate=300
+
+# ── All authenticated API routes — must NOT be cached at CDN ────────────────
+/api/*
+  Cache-Control: private, no-store
+
+# ── Dashboard pages — authenticated, never cache at CDN ─────────────────────
+/dashboard/*
+  Cache-Control: private, no-store, no-cache

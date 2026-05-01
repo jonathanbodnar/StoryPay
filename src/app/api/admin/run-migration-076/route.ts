@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { getDbAsync } from '@/lib/db';
 import { verifyAdminCookie } from '@/lib/admin-auth';

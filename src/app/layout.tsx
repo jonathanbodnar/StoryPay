@@ -1,6 +1,24 @@
 import type { Metadata } from 'next';
+import { Open_Sans, Playfair_Display } from 'next/font/google';
 import './globals.css';
 import { getPageSeo } from '@/lib/page-seo';
+
+// Self-hosted via next/font — eliminates the render-blocking Google Fonts request.
+// Next.js downloads these at build time, hosts them on the same origin, and injects
+// a non-blocking <link rel="preload"> automatically.
+const openSans = Open_Sans({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700'],
+  variable: '--font-open-sans',
+  display: 'swap',
+});
+
+const playfairDisplay = Playfair_Display({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-playfair',
+  display: 'swap',
+});
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
 
@@ -112,7 +130,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareSchema) }} />
       </head>
-      <body className="antialiased bg-white text-gray-900">{children}</body>
+      <body className={`${openSans.variable} ${playfairDisplay.variable} antialiased bg-white text-gray-900`}>{children}</body>
     </html>
   );
 }

@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPublicVenueBySlug } from '@/lib/public-venue-directory';
 
-export const dynamic = 'force-dynamic';
+// This is a public, unauthenticated GET — allow CDN (Cloudflare) to cache it.
+export const revalidate = 60; // ISR: refresh the cached response every 60 s
 export const runtime = 'nodejs';
+
+const CACHE_TTL = 'public, s-maxage=60, stale-while-revalidate=300';
 
 function corsHeaders() {
   const origin = process.env.PUBLIC_DIRECTORY_ORIGIN || '*';
@@ -10,6 +13,7 @@ function corsHeaders() {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
+    'Cache-Control': CACHE_TTL,
   };
 }
 
