@@ -165,7 +165,8 @@ Five tabs covering every aspect of how your calendar works:
 - StoryVenue has a private/unlisted Zapier app that connects to 6,000+ other apps.
 - Triggers (instant via REST Hooks, polling fallback): New Lead, New Contact, Tag Added, Proposal Signed, Payment Received, Appointment Booked, Appointment Cancelled.
 - Actions: Create or Update Contact, Create Lead, Add Tag (fires Workflows!), Send SMS, Send Email, Find Contact by Email.
-- To connect: Settings → Integrations → "Generate API key" → copy the sv_live_… secret → paste into Zapier.
+- To connect: Settings → Integrations → "Generate API key" → copy the sv_live_… secret → click "Connect with Zapier" (which opens the public invite link https://zapier.com/developer/public-invite/241169/4cb250d00c7d98a07f4e8d9a2a6adc8c/) → accept the app → paste the API key when Zapier asks.
+- Self-serve invite: anyone with the public invite link above can add the StoryVenue Zapier app to their Zapier account without us manually inviting them. The app does NOT appear in Zapier's public marketplace yet — the invite link is the only entry point.
 - API keys are SHA-256 hashed; the plaintext is only shown once at creation.
 - Direct API: Authorization: Bearer sv_live_… on requests to /api/v1/*.
 - Key endpoints: GET /api/v1/me, GET/POST /api/v1/contacts, POST /api/v1/leads, POST /api/v1/tags/apply, POST /api/v1/sms/send, POST /api/v1/email/send, GET /api/v1/{leads,contacts,proposals,payments,appointments}/recent (for polling), POST/DELETE /api/v1/webhooks (REST Hooks).

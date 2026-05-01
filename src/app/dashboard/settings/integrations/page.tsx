@@ -27,9 +27,12 @@ interface ApiKey {
   active: boolean;
 }
 
+// Public invite URL for the StoryVenue private Zapier integration.
+// Anyone who clicks this can self-onboard to the integration without us
+// having to manually `zapier users:add <email>` for each person.
 const ZAPIER_INVITE_URL =
   process.env.NEXT_PUBLIC_ZAPIER_INVITE_URL ||
-  'https://zapier.com/developer/public-invite/';
+  'https://zapier.com/developer/public-invite/241169/4cb250d00c7d98a07f4e8d9a2a6adc8c/';
 
 export default function IntegrationsPage() {
   const [keys, setKeys] = useState<ApiKey[]>([]);

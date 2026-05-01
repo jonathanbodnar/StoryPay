@@ -2553,9 +2553,13 @@ Actions (Zapier writes into StoryVenue):
 Connecting Zapier
 1. In StoryVenue: Settings → Integrations → click Generate API key
 2. Copy the secret (it's shown only once — looks like sv_live_…)
-3. Open the StoryVenue Zap or accept your private invite link in Zapier
-4. When Zapier asks for an API key, paste the value you copied
-5. Pick a trigger and connect it to any other app
+3. Click the "Connect with Zapier" button on the same page (or open the StoryVenue invite link directly: https://zapier.com/developer/public-invite/241169/4cb250d00c7d98a07f4e8d9a2a6adc8c/)
+4. Sign into Zapier (if needed) and accept the StoryVenue private app — it now appears in your Zap editor permanently
+5. When Zapier asks for an API key, paste the sv_live_… value you copied
+6. Pick a trigger and connect it to any other app
+
+Important — public marketplace vs private invite
+StoryVenue's Zapier integration is currently distributed as a private app. That means it does not yet appear in Zapier's public app directory (zapier.com/apps). The only way to use it is via the invite link above (or via an admin-issued invite to your specific email). The integration is fully production-grade — every trigger, action, and search works exactly the same as a public app.
 
 Managing API keys
 - Settings → Integrations lists every active key with its prefix, creation date, and last-used time
