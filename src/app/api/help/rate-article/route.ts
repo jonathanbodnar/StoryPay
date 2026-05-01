@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import OpenAI from 'openai';
+import { getDeepSeekClient, DEEPSEEK_MODEL } from '@/lib/ai-client';
 import { getArticleById } from '@/lib/help-articles';
 
 export async function POST(request: NextRequest) {
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Check if this article has crossed the threshold for an AI rewrite (2+ thumbs-down)
-  if (rating === 'down' && process.env.OPENAI_API_KEY) {
+  if (rating === 'down' && process.env.DEEPSEEK_API_KEY) {
     const { count } = await supabaseAdmin
       .from('article_ratings')
       .select('*', { count: 'exact', head: true })
@@ -57,10 +57,10 @@ export async function POST(request: NextRequest) {
 }
 
 async function rewriteArticle(articleId: string, title: string, body: string) {
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const deepseek = getDeepSeekClient();
 
-  const completion = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
+  const completion = await deepseek.chat.completions.create({
+    model: DEEPSEEK_MODEL,
     messages: [
       {
         role: 'system',

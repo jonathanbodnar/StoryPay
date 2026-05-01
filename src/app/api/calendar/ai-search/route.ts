@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
-import OpenAI from 'openai';
+import { getDeepSeekClient, DEEPSEEK_MODEL } from '@/lib/ai-client';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -131,13 +131,12 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
   const tz = (calSettings as { timezone?: string } | null)?.timezone ?? 'America/New_York';
 
-  // ── AI answer via OpenAI ──────────────────────────────────────────────────
+  // ── AI answer via DeepSeek ────────────────────────────────────────────────
   let answer: string | null = null;
 
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (apiKey) {
+  if (process.env.DEEPSEEK_API_KEY) {
     try {
-      const openai = new OpenAI({ apiKey });
+      const deepseek = getDeepSeekClient();
       const todayStr = new Date().toLocaleDateString('en-US', {
         timeZone: tz, weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
       });
@@ -153,8 +152,8 @@ Always be accurate — only state facts visible in the event data.
 CALENDAR EVENTS (next 90 days + past 30 days):
 ${eventsContext}`;
 
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+      const response = await deepseek.chat.completions.create({
+        model: DEEPSEEK_MODEL,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: query },
@@ -165,7 +164,7 @@ ${eventsContext}`;
 
       answer = response.choices[0]?.message?.content?.trim() ?? null;
     } catch (err) {
-      console.error('[calendar/ai-search] OpenAI error:', err);
+      console.error('[calendar/ai-search] DeepSeek error:', err);
       // Fall through — return keyword results without AI answer
     }
   }

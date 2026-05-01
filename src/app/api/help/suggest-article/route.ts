@@ -1,14 +1,14 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import OpenAI from 'openai';
+import { getDeepSeekClient, DEEPSEEK_MODEL } from '@/lib/ai-client';
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
   const venueId = cookieStore.get('venue_id')?.value;
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  if (!process.env.OPENAI_API_KEY) {
+  if (!process.env.DEEPSEEK_API_KEY) {
     return NextResponse.json({ error: 'AI not configured.' }, { status: 503 });
   }
 
@@ -25,11 +25,11 @@ export async function POST(request: NextRequest) {
     .map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content}`)
     .join('\n\n');
 
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const deepseek = getDeepSeekClient();
 
   try {
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+    const completion = await deepseek.chat.completions.create({
+      model: DEEPSEEK_MODEL,
       messages: [
         {
           role: 'system',

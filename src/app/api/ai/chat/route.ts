@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import OpenAI from 'openai';
+import { getDeepSeekClient, DEEPSEEK_MODEL } from '@/lib/ai-client';
 
 const PLATFORM_DOCS = `
 # StoryVenue Platform Documentation
@@ -662,7 +662,7 @@ export async function POST(request: NextRequest) {
   const venueId = cookieStore.get('venue_id')?.value;
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  if (!process.env.OPENAI_API_KEY) {
+  if (!process.env.DEEPSEEK_API_KEY) {
     return NextResponse.json({ error: 'AI not configured.' }, { status: 503 });
   }
 
@@ -888,28 +888,23 @@ ${leadsContext ? '\n' + leadsContext + '\n' : ''}
 === TONE ===
 Friendly, professional, calm, helpful, clear. Not robotic. Not salesy.`;
 
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-  // Check if any message contains an image (vision request)
-  const hasImage = messages.some((m: { role: string; content: unknown }) =>
-    Array.isArray(m.content) && m.content.some((c: { type: string }) => c.type === 'image_url')
-  );
+  const deepseek = getDeepSeekClient();
 
   try {
-    const completion = await openai.chat.completions.create({
-      model: hasImage ? 'gpt-4o' : 'gpt-4o-mini', // use gpt-4o for vision
+    const completion = await deepseek.chat.completions.create({
+      model: DEEPSEEK_MODEL,
       messages: [
         { role: 'system', content: systemPrompt },
         ...messages.slice(-20),
       ],
-      max_tokens: hasImage ? 800 : 600,
+      max_tokens: 600,
       temperature: 0.5,
     });
 
     const reply = completion.choices[0]?.message?.content || 'Sorry, I could not generate a response. Please try again.';
     return NextResponse.json({ reply });
   } catch (err) {
-    console.error('[ai/chat] error:', err);
+    console.error('[ai/chat] DeepSeek error:', err);
     return NextResponse.json({ error: 'AI request failed. Please try again.' }, { status: 500 });
   }
 }

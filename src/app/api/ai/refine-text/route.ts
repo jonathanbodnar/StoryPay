@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import OpenAI from 'openai';
+import { getDeepSeekClient, DEEPSEEK_MODEL } from '@/lib/ai-client';
 import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const deepseek = getDeepSeekClient();
   const c = await cookies();
   if (!c.get('venue_id')?.value) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -18,8 +18,8 @@ export async function POST(req: NextRequest) {
     ? ` This is variation #${variation + 1} — use noticeably different phrasing than a typical first attempt.`
     : '';
 
-  const completion = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
+  const completion = await deepseek.chat.completions.create({
+    model: DEEPSEEK_MODEL,
     messages: [
       {
         role: 'system',

@@ -1,15 +1,15 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { getVenueFromSession } from '@/lib/session';
-import OpenAI from 'openai';
+import { getDeepSeekClient, DEEPSEEK_MODEL } from '@/lib/ai-client';
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
   const venueId = cookieStore.get('venue_id')?.value;
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  if (!process.env.OPENAI_API_KEY) {
-    return NextResponse.json({ error: 'OpenAI not configured. Add OPENAI_API_KEY to your environment variables.' }, { status: 503 });
+  if (!process.env.DEEPSEEK_API_KEY) {
+    return NextResponse.json({ error: 'AI not configured. Add DEEPSEEK_API_KEY to your environment variables.' }, { status: 503 });
   }
 
   const venue = await getVenueFromSession();
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Client name is required' }, { status: 400 });
   }
 
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const deepseek = getDeepSeekClient();
 
   const prompt = `You are an expert wedding venue coordinator writing a professional proposal for a client. Generate a complete, elegant wedding venue proposal in HTML format.
 
@@ -71,8 +71,8 @@ FORMAT RULES:
 - Include the venue name ${venueName} throughout naturally`;
 
   try {
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+    const completion = await deepseek.chat.completions.create({
+      model: DEEPSEEK_MODEL,
       messages: [
         {
           role: 'system',
@@ -90,7 +90,7 @@ FORMAT RULES:
     const html = completion.choices[0]?.message?.content || '';
     return NextResponse.json({ html });
   } catch (err) {
-    console.error('[ai/proposal] OpenAI error:', err);
+    console.error('[ai/proposal] DeepSeek error:', err);
     return NextResponse.json({ error: 'AI generation failed. Please try again.' }, { status: 500 });
   }
 }
