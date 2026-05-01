@@ -11,7 +11,7 @@ import {
   Check, BarChart2, ExternalLink, ChevronRight, Search, RefreshCw,
   LayoutDashboard, Menu, Lightbulb, BookOpen, Star, Globe, Layers,
   Repeat, Wallet, BadgeCheck, Sparkles, CalendarDays, Eye, EyeOff,
-  Settings, Database, CheckCircle2, AlertCircle, Heart,
+  Settings, Database, CheckCircle2, AlertCircle, Heart, CreditCard,
 } from 'lucide-react';
 import {
   VenueManagementPortal,
@@ -20,6 +20,7 @@ import {
 import { CoupleManagementPortal } from '@/components/admin/CoupleManagementPortal';
 import { DirectoryPlansAdminPanel } from '@/components/admin/DirectoryPlansAdminPanel';
 import { DirectoryBadgesAdminPanel } from '@/components/admin/DirectoryBadgesAdminPanel';
+import { SubscriptionsAdminPanel } from '@/components/admin/SubscriptionsAdminPanel';
 
 // Lazy-load the WYSIWYG editor so it doesn't affect admin initial load
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
@@ -38,6 +39,7 @@ type AdminTabKey =
   | 'dashboard'
   | 'venues'
   | 'couples'
+  | 'subscriptions'
   | 'directory-plans'
   | 'directory-badges'
   | 'announcements'
@@ -55,6 +57,7 @@ const ADMIN_TAB_KEYS: ReadonlySet<string> = new Set<AdminTabKey>([
   'dashboard',
   'venues',
   'couples',
+  'subscriptions',
   'directory-plans',
   'directory-badges',
   'announcements',
@@ -489,6 +492,7 @@ const ADMIN_NAV_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { key: 'venues', label: 'Venue management', icon: Building2 },
   { key: 'couples', label: 'Couples', icon: Heart },
+  { key: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
   { key: 'directory-badges', label: 'Verified & Sponsored', icon: BadgeCheck },
   { key: 'directory-plans', label: 'Directory plans', icon: Layers },
   { key: 'blog', label: 'Blog Posts', icon: BookOpen },
@@ -1697,6 +1701,8 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
             onRefresh={fetchVenues}
           />
         )}
+
+        {activeTab === 'subscriptions' && <SubscriptionsAdminPanel />}
 
         {activeTab === 'directory-plans' && <DirectoryPlansAdminPanel />}
 

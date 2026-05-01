@@ -1,13 +1,18 @@
 /**
  * POST /api/webhooks/lunarpay
  *
- * Receives merchant.approved / merchant.denied events from LunarPay.
- * On approval: stores the merchant's lp_sk_ and lp_pk_ keys and marks
- * the venue as active so payments can begin immediately.
+ * Two responsibilities:
+ *  1. Per-venue merchant onboarding: merchant.approved / merchant.denied events
+ *     persist the venue's lp_sk_ / lp_pk_ keys so they can accept payments.
+ *  2. Platform SaaS billing: subscription/charge events for venues subscribed
+ *     to a directory plan are forwarded to handleLunarPayWebhookForPlatformLedger,
+ *     which inserts cash events and flips directory_subscription_status to
+ *     past_due/canceled when LunarPay reports failures or cancellations.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase';
+import { handleLunarPayWebhookForPlatformLedger } from '@/lib/platform-directory-billing';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -87,6 +92,18 @@ export async function POST(request: NextRequest) {
         .from('venues')
         .update({ onboarding_status: `denied_${onboarding.status.toLowerCase()}` })
         .eq('id', venueId);
+    }
+  }
+
+  // Forward all non-merchant events to the platform SaaS ledger handler so
+  // subscription cycles, payment failures, and cancellations from LunarPay
+  // update the venue's billing status + insert cash events automatically.
+  // Best-effort: never let a ledger error block the 200 we owe LunarPay.
+  if (!event.startsWith('merchant.')) {
+    try {
+      await handleLunarPayWebhookForPlatformLedger(payload as unknown as Record<string, unknown>);
+    } catch (err) {
+      console.error('[webhooks/lunarpay] platform ledger error', err);
     }
   }
 

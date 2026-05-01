@@ -86,6 +86,7 @@ const settingsItems: NavItem[] = [
   { label: 'Calendar', href: '/dashboard/settings/calendar', icon: Calendar, navId: 'nav_settings_calendar' },
   { label: 'Integrations', href: '/dashboard/settings/integrations', icon: Link2, navId: 'nav_settings_integrations' },
   { label: 'Team', href: '/dashboard/settings/team', icon: UsersRound, navId: 'nav_settings_team' },
+  { label: 'Billing', href: '/dashboard/directory-billing', icon: CreditCard, navId: 'nav_settings_billing' },
 ];
 
 const listingItems: NavItem[] = [
@@ -202,7 +203,11 @@ export default function Sidebar({
     '/dashboard/settings/notifications',
   ];
   const isOnPaymentSettings = paymentSettingsPaths.some((p) => pathname.startsWith(p));
-  const isOnSettings = pathname.startsWith('/dashboard/settings') && !isOnPaymentSettings;
+  // /dashboard/directory-billing is the SaaS plan & billing page. It also has a
+  // legacy entry under "Venue listing" but its canonical home is Settings → Billing.
+  const isOnSettingsBilling = pathname.startsWith('/dashboard/directory-billing');
+  const isOnSettings =
+    (pathname.startsWith('/dashboard/settings') && !isOnPaymentSettings) || isOnSettingsBilling;
   const isOnMarketing = pathname.startsWith('/dashboard/marketing');
   const isOnPayments = pathname.startsWith('/dashboard/payments')
     || pathname.startsWith('/dashboard/transactions')
