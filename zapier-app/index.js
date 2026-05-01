@@ -14,6 +14,18 @@ const paymentReceived = require('./triggers/payment_received');
 const appointmentBooked = require('./triggers/appointment_booked');
 const tagAdded = require('./triggers/tag_added');
 
+// Hidden helper trigger — populates the tag dropdown in the "Add Tag" action
+const listTagsTrigger = {
+  key: 'list_tags',
+  noun: 'Tag',
+  display: { label: 'List Tags', description: 'Internal — populates the tag dropdown.', hidden: true },
+  operation: {
+    perform: (z) =>
+      z.request({ url: '{{process.env.API_BASE}}/api/v1/tags' }).then((r) => r.data.tags || []),
+    sample: { id: 'tag_1', name: 'VIP' },
+  },
+};
+
 // Actions (Creates)
 const createContact = require('./creates/create_contact');
 const createLead = require('./creates/create_lead');
@@ -43,8 +55,7 @@ module.exports = {
     [paymentReceived.key]: paymentReceived,
     [appointmentBooked.key]: appointmentBooked,
     [tagAdded.key]: tagAdded,
-    // Hidden helper trigger that populates the tag dropdown
-    [addTag.dynamicTagsTrigger.key]: addTag.dynamicTagsTrigger,
+    [listTagsTrigger.key]: listTagsTrigger,
   },
 
   creates: {

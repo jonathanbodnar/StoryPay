@@ -44,15 +44,3 @@ module.exports = {
     sample: { success: true, lead_id: '00000000-0000-0000-0000-000000000000', tag: { id: '...', name: 'VIP' } },
   },
 };
-
-// Hidden trigger used to populate the dropdown above.
-module.exports.dynamicTagsTrigger = {
-  key: 'list_tags',
-  noun: 'Tag',
-  display: {
-    label: 'List Tags',
-    description: 'Internal — populates the tag dropdown.',
-    hidden: true,
-  },
-  operation: { perform: listTags, sample: { id: 'tag_1', name: 'VIP' } },
-};

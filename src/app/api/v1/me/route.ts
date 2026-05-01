@@ -22,7 +22,18 @@ export async function GET(request: NextRequest) {
     .eq('id', auth.venueId)
     .maybeSingle();
   if (error || !data) {
-    return NextResponse.json({ error: 'venue_not_found' }, { status: 404, headers: CORS_HEADERS });
+    return NextResponse.json(
+      {
+        error: 'venue_not_found',
+        debug: {
+          venue_id_from_key: auth.venueId,
+          query_error: error?.message ?? null,
+          query_code: (error as { code?: string } | null)?.code ?? null,
+          query_details: (error as { details?: string } | null)?.details ?? null,
+        },
+      },
+      { status: 404, headers: CORS_HEADERS },
+    );
   }
 
   return NextResponse.json(
