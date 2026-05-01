@@ -111,7 +111,7 @@ export function ListingLeadModal({ venueName, venueId, venueSlug, apiBase, confi
               >
                 <X size={18} />
               </button>
-              <h2 className="text-lg font-bold text-gray-900" style={{ fontFamily: "'Playfair Display', Georgia, serif" }}>
+              <h2 className="text-lg font-bold text-gray-900">
                 Get Pricing &amp; Check Availability
               </h2>
               <p className="mt-0.5 text-sm text-gray-500">{venueName}</p>
@@ -124,7 +124,7 @@ export function ListingLeadModal({ venueName, venueId, venueSlug, apiBase, confi
                   <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} width={28} height={28}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                   </div>
-                  <h3 className="text-xl font-bold text-gray-900" style={{ fontFamily: "'Playfair Display', Georgia, serif" }}>
+                  <h3 className="text-xl font-bold text-gray-900">
                     You&apos;re all set!
                   </h3>
                   <p className="mt-2 text-sm text-gray-500">

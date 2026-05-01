@@ -43,7 +43,7 @@ export function VenueMapEmbed({
     <section className="space-y-3">
       <h2
         className="text-xl text-gray-900"
-        style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
+        style={{ fontFamily: "'Open Sans', -apple-system, sans-serif" }}
       >
         Location
       </h2>
@@ -102,7 +102,7 @@ export function VenueSocialRow({ social }: { social: PublicVenueSocialLinks }) {
     <section className="space-y-3">
       <h2
         className="text-xl text-gray-900"
-        style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
+        style={{ fontFamily: "'Open Sans', -apple-system, sans-serif" }}
       >
         Connect
       </h2>
@@ -162,7 +162,7 @@ export function VenueFaqSection({ items }: { items: PublicVenueFaqItem[] }) {
     <section className="space-y-4">
       <h2
         className="text-xl text-gray-900"
-        style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
+        style={{ fontFamily: "'Open Sans', -apple-system, sans-serif" }}
       >
         FAQ
       </h2>

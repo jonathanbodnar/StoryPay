@@ -389,7 +389,7 @@ export default function LandingPage() {
           {/* Headline */}
           <h1
             className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-5 sm:mb-6 leading-tight"
-            style={{ fontFamily: "'Playfair Display', serif", fontWeight: 400 }}
+            style={{ fontFamily: "'Open Sans', -apple-system, sans-serif", fontWeight: 400 }}
           >
             Introducing StoryVenue<sup className="text-[0.2em] align-super font-normal tracking-normal">TM</sup>
           </h1>
@@ -536,7 +536,7 @@ export default function LandingPage() {
           <div className="text-center mb-10">
             <h2
               className="text-3xl sm:text-4xl font-bold text-gray-900 mb-3"
-              style={{ fontFamily: "'Playfair Display', serif", fontWeight: 400 }}
+              style={{ fontFamily: "'Open Sans', -apple-system, sans-serif", fontWeight: 400 }}
             >
               Frequently asked questions
             </h2>

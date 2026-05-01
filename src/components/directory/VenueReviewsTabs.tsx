@@ -124,7 +124,7 @@ function ReviewCardStory({
             {r.title && (
               <h3
                 className="mt-2 text-lg text-gray-900"
-                style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
+                style={{ fontFamily: "'Open Sans', -apple-system, sans-serif" }}
               >
                 {r.title}
               </h3>
@@ -304,7 +304,7 @@ export function VenueReviewsTabs({
         <div>
           <h2
             className="text-xl font-semibold tracking-tight text-gray-900 sm:text-2xl"
-            style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
+            style={{ fontFamily: "'Open Sans', -apple-system, sans-serif" }}
           >
             Reviews
           </h2>
@@ -314,7 +314,7 @@ export function VenueReviewsTabs({
           <div className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50/80 px-4 py-3">
             <span
               className="text-3xl tabular-nums text-gray-900"
-              style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
+              style={{ fontFamily: "'Open Sans', -apple-system, sans-serif" }}
             >
               {storyRounded}
             </span>

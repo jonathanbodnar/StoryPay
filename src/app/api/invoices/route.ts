@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
 
   const invoiceContent = `
     <div style="font-family: 'Open Sans', Arial, sans-serif;">
-      <h2 style="font-family: 'Playfair Display', Georgia, serif; font-size: 22px; font-weight: 400; color: #111827; margin: 0 0 20px;">Invoice</h2>
+      <h2 style="font-family: 'Open Sans', -apple-system, sans-serif; font-size: 22px; font-weight: 600; color: #111827; margin: 0 0 20px;">Invoice</h2>
       <table style="width: 100%; border-collapse: collapse; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
         <thead>
           <tr style="background-color: #f9fafb;">
@@ -209,7 +209,7 @@ export async function POST(request: NextRequest) {
             html: `
               <div style="font-family: 'Open Sans', Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                 <div style="background-color: #1b1b1b; padding: 24px 32px; border-radius: 12px 12px 0 0;">
-                  <h1 style="color: white; font-family: 'Playfair Display', Georgia, serif; font-size: 24px; margin: 0; font-weight: 300;">Invoice from ${venue.name}</h1>
+                  <h1 style="color: white; font-family: 'Open Sans', -apple-system, sans-serif; font-size: 24px; margin: 0; font-weight: 400;">Invoice from ${venue.name}</h1>
                 </div>
                 <div style="background-color: #ffffff; padding: 32px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
                   <p style="color: #374151; font-size: 15px; line-height: 1.6;">

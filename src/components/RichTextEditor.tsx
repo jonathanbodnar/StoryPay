@@ -552,7 +552,7 @@ export default function RichTextEditor({
         <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Open+Sans:wght@300;400;600;700&family=Lato:wght@300;400;700&family=Montserrat:wght@300;400;600;700&family=Raleway:wght@300;400;600;700&family=Merriweather:wght@300;400;700&family=Cormorant+Garamond:wght@300;400;600;700&family=EB+Garamond:wght@400;600&family=Libre+Baskerville:wght@400;700&family=Roboto:wght@300;400;700&family=Inter:wght@300;400;600;700&family=Nunito:wght@300;400;600;700&family=Poppins:wght@300;400;600;700&family=Dancing+Script:wght@400;600;700&family=Great+Vibes&family=Pacifico&family=Courier+Prime:wght@400;700&display=swap" />
         <div className="w-full px-6 sm:px-10 py-8">
           <style>{`
-            .tiptap-editor h1 { font-size: 2rem; font-weight: 700; margin-bottom: 0.75rem; font-family: 'Playfair Display', Georgia, serif; }
+            .tiptap-editor h1 { font-size: 2rem; font-weight: 700; margin-bottom: 0.75rem; font-family: 'Open Sans', -apple-system, sans-serif; }
             .tiptap-editor h2 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.6rem; }
             .tiptap-editor h3 { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; }
             .tiptap-editor h4 { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.4rem; }

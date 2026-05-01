@@ -85,7 +85,7 @@ export default async function PublicVenuePage({ params }: { params: Promise<{ sl
               <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
                 <h1
                   className="text-3xl font-semibold text-white sm:text-4xl"
-                  style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
+                  style={{ fontFamily: "'Open Sans', -apple-system, sans-serif" }}
                 >
                   {venue.name}
                 </h1>
@@ -109,7 +109,7 @@ export default async function PublicVenuePage({ params }: { params: Promise<{ sl
             <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
               <h1
                 className="text-3xl font-semibold text-gray-900 sm:text-4xl"
-                style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
+                style={{ fontFamily: "'Open Sans', -apple-system, sans-serif" }}
               >
                 {venue.name}
               </h1>
