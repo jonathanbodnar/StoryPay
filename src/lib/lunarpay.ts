@@ -172,15 +172,14 @@ export function createCheckoutSession(
 ) {
   const body: Record<string, unknown> = {};
 
+  // Only the fields documented in the LunarPay hosted-checkout API spec.
+  // Do NOT add customer_id or save_payment_method — they are not checkout
+  // session fields (they belong to direct charge / payment-method endpoints)
+  // and LunarPay returns 500 if it receives unknown fields.
   const allowedFields = [
     'amount', 'description', 'success_url', 'cancel_url',
-    'customer_email', 'customer_name', 'customer_id',
-    'save_payment_method', 'metadata',
-    // payment_methods controls which tabs appear on the LunarPay hosted page:
-    //   ["cc"]          → credit/debit card only
-    //   ["ach"]         → bank account / eCheck only
-    //   ["cc","ach"]    → both (LunarPay default if omitted)
-    'payment_methods',
+    'customer_email', 'customer_name',
+    'payment_methods', 'metadata', 'expires_in',
   ];
 
   for (const field of allowedFields) {
