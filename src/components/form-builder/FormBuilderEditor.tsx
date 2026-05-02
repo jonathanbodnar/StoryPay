@@ -2727,18 +2727,16 @@ export function FormBuilderEditor({
               palette or the active block's inspector. */}
           <aside
             className="w-80 flex-shrink-0 flex flex-col overflow-hidden"
-            style={{ background: '#f4f4f5', position: 'relative' }}
+            style={{ background: '#f4f4f5', padding: '12px 0 12px 16px' }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div aria-hidden style={{
-              position: 'absolute', top: 0, left: 0, bottom: 0, width: 6,
-              background: 'linear-gradient(to right, rgba(0,0,0,0.08) 0%, transparent 100%)',
-              pointerEvents: 'none', zIndex: 10,
-            }} />
             <div
               className="fb-scroll-pane flex-1 overflow-y-auto"
               style={
                 {
+                  background: '#ffffff',
+                  borderTopLeftRadius: 12,
+                  borderBottomLeftRadius: 12,
                   overscrollBehavior: 'contain',
                   scrollbarWidth: 'none',
                   msOverflowStyle: 'none',
