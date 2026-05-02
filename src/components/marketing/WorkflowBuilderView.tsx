@@ -104,7 +104,10 @@ const WORKFLOW_TEXTAREA =
 const WORKFLOW_SELECT =
   'w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:bg-white focus:outline-none transition-colors appearance-none pr-9';
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function SectionLabel({ children, palette }: { children: React.ReactNode; palette?: boolean }) {
+  if (palette) {
+    return <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">{children}</p>;
+  }
   return <p className="text-sm font-semibold text-gray-700 mb-1.5">{children}</p>;
 }
 
@@ -2290,7 +2293,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                       the connector line, making it look like the line ends at END. */}
                   <div style={{
                     position: 'absolute', top: '50%', left: 0, right: 0, bottom: '-9999px',
-                    background: '#f4f4f5', zIndex: -1,
+                    background: '#ffffff', zIndex: -1,
                   }} />
                 </div>
 
@@ -2301,8 +2304,8 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
           {/* ── Right panel ───────────────────────────────────────────────── */}
           <aside
             ref={rightPaneRef}
-            className="w-80 flex-shrink-0 bg-white flex flex-col overflow-hidden border-l border-gray-100"
-            style={{ boxShadow: '-12px 0 32px -8px rgba(0,0,0,0.04)' }}
+            className="w-80 flex-shrink-0 bg-white flex flex-col overflow-hidden"
+            style={{ boxShadow: '-12px 0 32px -8px rgba(0,0,0,0.07)' }}
             onMouseDown={(e) => e.stopPropagation()}
           >
             <div
@@ -3548,14 +3551,12 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
 
               ) : (
                 /* ── Blocks + Triggers palette ───────────────────────── */
-                <div className="p-5 text-[13px] text-gray-900">
-                  {/* Header — match the email/form builder palette tone */}
-                  <div className="mb-5">
-                    <p className="text-sm font-semibold text-gray-900">Add to workflow</p>
-                    <p className="mt-1 text-[11.5px] text-gray-500 leading-relaxed">
-                      Drag any step onto the canvas, or click the <span className="font-mono">+</span> on a step row.
-                    </p>
-                  </div>
+                <div className="p-4 text-[13px] text-gray-900">
+                  {/* Header — identical to the email builder "BLOCKS" label */}
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Blocks</p>
+                  <p className="mb-4 text-[11px] text-gray-400 leading-relaxed">
+                    Drag a block onto the canvas, or click the <strong className="text-gray-600">+</strong> on a step row to add it.
+                  </p>
 
                   <div className="space-y-6">
                     {/* Action blocks — categorized */}
@@ -3564,7 +3565,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                       if (items.length === 0) return null;
                       return (
                         <div key={g}>
-                          <SectionLabel>{PALETTE_GROUP_LABELS[g]}</SectionLabel>
+                          <SectionLabel palette>{PALETTE_GROUP_LABELS[g]}</SectionLabel>
                           <div className="flex flex-col gap-2">
                             {items.map((item) => <PaletteCard key={item.type} {...item} />)}
                           </div>
