@@ -19,9 +19,11 @@ import {
   Package,
   UserCircle,
   Zap,
+  Lock,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
 import LunarPayOnboarding from '@/components/settings/LunarPayOnboarding';
+import { LockedFeatureModal } from '@/components/LockedFeatureView';
 
 interface Venue { id: string; name: string; ghl_location_id: string; }
 type UserRole = 'owner' | 'admin' | 'member';
@@ -112,6 +114,12 @@ export default function Sidebar({
   const isOwner = role === 'owner';
   const isAdmin = role === 'owner' || role === 'admin';
   const pathname = usePathname();
+  /**
+   * Plan-level access check. Returns true when the current plan grants this
+   * nav id (or when there is no plan at all — legacy_full). Locked items
+   * still render in the sidebar; this just controls whether the click
+   * navigates or opens the upgrade modal.
+   */
   const navOk = (navId: string) => allowedNavIds === null || allowedNavIds.includes(navId);
   const isOnListing = pathname.startsWith('/dashboard/listing');
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -122,6 +130,8 @@ export default function Sidebar({
   const [updatesUnread, setUpdatesUnread] = useState(0);
   const [paymentsActive, setPaymentsActive] = useState<boolean | null>(null); // null = loading
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
+  /** Locked-feature upgrade modal (opened when a locked menu item is clicked). */
+  const [lockedItem, setLockedItem] = useState<NavItem | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -325,17 +335,86 @@ export default function Sidebar({
   const groupBtnStyle = (active: boolean): React.CSSProperties =>
     active ? { backgroundColor: '#1b1b1b', color: '#ffffff' } : {};
 
+  // Role-based visibility (these items are completely hidden from members,
+  // not just locked — different concern from plan gating).
   const settingsFiltered = settingsItems.filter((sub) => {
-    if (!navOk(sub.navId)) return false;
     if (!isOwner && sub.label === 'General') return false;
     if (!isOwner && sub.label === 'Team') return false;
     if (!isOwner && sub.label === 'Integrations') return false;
     return true;
   });
 
-  const listingFiltered = listingItems.filter((sub) => navOk(sub.navId));
-  const paymentsFiltered = paymentsItems.filter((sub) => navOk(sub.navId));
-  const marketingFiltered = marketingItems.filter((sub) => navOk(sub.navId));
+  // Plan gating no longer hides items — locked entries render greyed-out
+  // with a lock icon and open the upgrade modal on click.
+  const listingFiltered = listingItems;
+  const paymentsFiltered = paymentsItems;
+  const marketingFiltered = marketingItems;
+
+  /**
+   * Renders a sub-menu item (Listing → Pricing Guide, Payments → Coupons,
+   * etc) with a normal Link when accessible, or a greyed-out lock-styled
+   * button when the plan does not include this nav id. Locked clicks open
+   * the shared upgrade modal instead of navigating. Used by both the
+   * expanded group lists and the collapsed-sidebar flyout panels.
+   */
+  function SubNavLink({
+    sub,
+    active,
+    onClickAfter,
+    flyoutVariant = false,
+  }: {
+    sub: NavItem;
+    active: boolean;
+    onClickAfter?: () => void;
+    flyoutVariant?: boolean;
+  }) {
+    const SubIcon = sub.icon;
+    const locked = !navOk(sub.navId);
+
+    const cls = flyoutVariant
+      ? `flex items-center gap-2 px-3 py-2 text-sm ${
+          active && !locked
+            ? 'font-semibold text-gray-900 bg-gray-50'
+            : locked
+              ? 'text-gray-400 cursor-pointer hover:bg-gray-50'
+              : 'text-gray-600 hover:bg-gray-50'
+        }`
+      : `${subItem(active && !locked)} ${locked ? 'opacity-60 hover:text-gray-400' : ''}`;
+
+    if (locked) {
+      return (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setLockedItem(sub);
+            onClickAfter?.();
+          }}
+          title={`${sub.label} (locked — upgrade to access)`}
+          aria-disabled
+          className={`${cls} w-full text-left`}
+          style={!flyoutVariant ? subItemStyle(false) : undefined}
+        >
+          <SubIcon size={14} />
+          <span className="flex-1">{sub.label}</span>
+          <Lock size={11} className="text-gray-400" />
+        </button>
+      );
+    }
+
+    return (
+      <Link
+        href={sub.href}
+        className={cls}
+        style={!flyoutVariant ? subItemStyle(active) : undefined}
+        onClick={onClickAfter}
+      >
+        <SubIcon size={14} />
+        <span>{sub.label}</span>
+      </Link>
+    );
+  }
 
   const NavContent = ({ rail, onCloseMobile }: { rail: boolean; onCloseMobile?: () => void }) => (
     <div className="flex flex-col h-full">
@@ -390,13 +469,13 @@ export default function Sidebar({
 
       <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {menuItems.filter((item) => {
-          if (!navOk(item.navId)) return false;
+          // Role-based filters still hide entries entirely — admin-only
+          // pages are not "locked", they simply don't apply to members.
           if (!isAdmin && item.label === 'Reports') return false;
           if (!isAdmin && item.label === "What's New") return false;
           return true;
         }).map((item) => {
           const Icon = item.icon;
-          const active = isActive(item.href);
           const isAI = item.label === 'Ask AI' || item.label === 'Support';
           const isHelpCenter = item.label === 'Help Center';
           const isConversations = item.href === '/dashboard/conversations';
@@ -409,29 +488,43 @@ export default function Sidebar({
               ? updatesUnread
               : 0;
           const showBadge = showConvBadge || showUpdatesBadge;
+          const locked = !navOk(item.navId);
+          // Locked items can't be active; their grey style overrides the
+          // selected highlight even on the route they "would" match.
+          const active = !locked && isActive(item.href);
           return (
             <Link
               key={item.label}
-              href={isAI ? '#' : isHelpCenter ? '/dashboard/help?reset=1' : item.href}
+              href={locked ? '#' : isAI ? '#' : isHelpCenter ? '/dashboard/help?reset=1' : item.href}
               onClick={
-                isAI
+                locked
                   ? (e) => {
-                    e.preventDefault();
-                    window.dispatchEvent(new Event('open-ask-ai'));
-                    onCloseMobile?.();
-                  }
-                  : () => onCloseMobile?.()
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setLockedItem(item);
+                    }
+                  : isAI
+                    ? (e) => {
+                      e.preventDefault();
+                      window.dispatchEvent(new Event('open-ask-ai'));
+                      onCloseMobile?.();
+                    }
+                    : () => onCloseMobile?.()
               }
               title={
-                rail
-                  ? showBadge
-                    ? `${item.label} (${badgeCount} unread)`
-                    : item.label
-                  : undefined
+                locked
+                  ? `${item.label} (locked — upgrade to access)`
+                  : rail
+                    ? showBadge
+                      ? `${item.label} (${badgeCount} unread)`
+                      : item.label
+                    : undefined
               }
+              aria-disabled={locked}
               className={classNames(
                 navItem(active && !isAI, rail),
                 !rail && (isConversations || isUpdates) ? 'w-full' : '',
+                locked ? 'opacity-50 hover:bg-transparent hover:text-gray-400 cursor-pointer' : '',
               )}
               style={navItemStyle(active && !isAI)}
             >
@@ -444,7 +537,9 @@ export default function Sidebar({
               {!rail && (
                 <>
                   <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                  {showBadge ? (
+                  {locked ? (
+                    <Lock size={12} className="ml-auto shrink-0 text-gray-400" />
+                  ) : showBadge ? (
                     <span className="ml-auto shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold leading-none text-white tabular-nums">
                       {badgeCount > 99 ? '99+' : badgeCount}
                     </span>
@@ -488,16 +583,9 @@ export default function Sidebar({
               </button>
               {listingOpen && (
                 <div className="mt-0.5 ml-2 pl-2 space-y-0.5 py-0.5">
-                  {listingFiltered.map((sub) => {
-                    const SubIcon = sub.icon;
-                    const active = listingSubActive(sub.href);
-                    return (
-                      <Link key={sub.label} href={sub.href} className={subItem(active)} style={subItemStyle(active)}>
-                        <SubIcon size={14} />
-                        <span>{sub.label}</span>
-                      </Link>
-                    );
-                  })}
+                  {listingFiltered.map((sub) => (
+                    <SubNavLink key={sub.label} sub={sub} active={listingSubActive(sub.href)} />
+                  ))}
                 </div>
               )}
             </>
@@ -549,16 +637,9 @@ export default function Sidebar({
                       <span className="truncate">Apply for StoryPay™</span>
                     </button>
                   )}
-                  {paymentsFiltered.map((sub) => {
-                    const SubIcon = sub.icon;
-                    const active = isSubActive(sub.href);
-                    return (
-                      <Link key={sub.label} href={sub.href} className={subItem(active)} style={subItemStyle(active)}>
-                        <SubIcon size={14} />
-                        <span>{sub.label}</span>
-                      </Link>
-                    );
-                  })}
+                  {paymentsFiltered.map((sub) => (
+                    <SubNavLink key={sub.label} sub={sub} active={isSubActive(sub.href)} />
+                  ))}
                 </div>
               )}
             </>
@@ -599,16 +680,9 @@ export default function Sidebar({
                 </button>
                 {marketingOpen && (
                   <div className="mt-0.5 ml-2 pl-2 space-y-0.5 py-0.5">
-                    {marketingFiltered.map((sub) => {
-                      const SubIcon = sub.icon;
-                      const active = isSubActive(sub.href);
-                      return (
-                        <Link key={sub.label} href={sub.href} className={subItem(active)} style={subItemStyle(active)}>
-                          <SubIcon size={14} />
-                          <span>{sub.label}</span>
-                        </Link>
-                      );
-                    })}
+                    {marketingFiltered.map((sub) => (
+                      <SubNavLink key={sub.label} sub={sub} active={isSubActive(sub.href)} />
+                    ))}
                   </div>
                 )}
               </>
@@ -649,16 +723,9 @@ export default function Sidebar({
                 </button>
                 {settingsOpen && (
                   <div className="mt-0.5 ml-2 pl-2 space-y-0.5 py-0.5">
-                    {settingsFiltered.map((sub) => {
-                        const SubIcon = sub.icon;
-                        const active = pathname === sub.href;
-                        return (
-                          <Link key={sub.label} href={sub.href} className={subItem(active)} style={subItemStyle(active)}>
-                            <SubIcon size={14} />
-                            <span>{sub.label}</span>
-                          </Link>
-                        );
-                      })}
+                    {settingsFiltered.map((sub) => (
+                      <SubNavLink key={sub.label} sub={sub} active={pathname === sub.href} />
+                    ))}
                   </div>
                 )}
               </>
@@ -724,7 +791,6 @@ export default function Sidebar({
         role="menu"
       >
         {items.map((sub) => {
-          const SubIcon = sub.icon;
           const active =
             group === 'settings'
               ? pathname === sub.href
@@ -732,18 +798,16 @@ export default function Sidebar({
                 ? listingSubActive(sub.href)
                 : isSubActive(sub.href);
           return (
-            <Link
+            <SubNavLink
               key={sub.label}
-              href={sub.href}
-              className={`flex items-center gap-2 px-3 py-2 text-sm ${active ? 'font-semibold text-gray-900 bg-gray-50' : 'text-gray-600 hover:bg-gray-50'}`}
-              onClick={() => {
+              sub={sub}
+              active={active}
+              flyoutVariant
+              onClickAfter={() => {
                 setFlyout(null);
                 setFlyoutPos(null);
               }}
-            >
-              <SubIcon size={14} />
-              {sub.label}
-            </Link>
+            />
           );
         })}
       </div>
@@ -837,27 +901,29 @@ export default function Sidebar({
                 <span className="truncate">Apply for StoryPay™</span>
               </button>
             )}
-            {paymentsFiltered.map((sub) => {
-              const SubIcon = sub.icon;
-              const active = isSubActive(sub.href);
-              return (
-                <Link
-                  key={sub.label}
-                  href={sub.href}
-                  className={`flex items-center gap-2 px-3 py-2 text-sm ${active ? 'font-semibold text-gray-900 bg-gray-50' : 'text-gray-600 hover:bg-gray-50'}`}
-                  onClick={() => { setFlyout(null); setFlyoutPos(null); }}
-                >
-                  <SubIcon size={14} />
-                  {sub.label}
-                </Link>
-              );
-            })}
+            {paymentsFiltered.map((sub) => (
+              <SubNavLink
+                key={sub.label}
+                sub={sub}
+                active={isSubActive(sub.href)}
+                flyoutVariant
+                onClickAfter={() => { setFlyout(null); setFlyoutPos(null); }}
+              />
+            ))}
           </div>
         );
         return mounted ? createPortal(node, document.body) : null;
       })()}
       {flyoutPanel(marketingFiltered, 'marketing')}
       {flyoutPanel(settingsFiltered, 'settings')}
+
+      {/* Locked-feature upgrade modal — opens when a member clicks a
+          greyed-out menu entry their plan does not include. */}
+      <LockedFeatureModal
+        open={lockedItem !== null}
+        onClose={() => setLockedItem(null)}
+        featureName={lockedItem?.label}
+      />
 
       {/* StoryPay Onboarding Modal */}
       {showOnboardingModal && mounted && createPortal(
