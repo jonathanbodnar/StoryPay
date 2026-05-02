@@ -1626,24 +1626,13 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
         style={{
           position: 'fixed', top: 0,
           left: 'var(--sidebar-w, 216px)', right: 0, zIndex: 20,
-          // Dual-tone header matching Flodesk: white on left/center, gray on
-          // the right 320px (where the sidebar lives below). Sharp transition
-          // creates a continuous gray L-shape from top-right down through sidebar.
-          background:
-            'linear-gradient(to right, #ffffff 0%, #ffffff calc(100% - 320px), #f4f4f5 calc(100% - 320px), #f4f4f5 100%)',
+          background: '#ffffff',
           boxShadow: '0 1px 18px rgba(0,0,0,0.05)',
           transition: 'left 200ms ease-out',
         }}
       >
-        {/* Edge shadow at the white→gray transition (320px from right edge)
-            so it matches the sidebar's left-edge shadow below it. */}
-        <div aria-hidden style={{
-          position: 'absolute', top: 0, bottom: 0, right: 320, width: 6,
-          background: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.08) 100%)',
-          pointerEvents: 'none', zIndex: 1,
-        }} />
         {/* Top row: back · tabs · name/status/save */}
-        <div className="relative flex items-center px-6" style={{ height: 52, zIndex: 2 }}>
+        <div className="flex items-center px-6" style={{ height: 52 }}>
           {/* Back */}
           <div className="flex items-center flex-shrink-0 w-24">
             <Link href="/dashboard/marketing/workflows"
