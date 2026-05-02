@@ -125,7 +125,29 @@ export async function POST(req: NextRequest) {
 
   const subId = ctx.venue.directory_subscription_external_id;
   const status = ctx.venue.directory_subscription_status;
-  const hasActiveSub = Boolean(subId && (status === 'active' || status === 'trialing' || status === 'past_due'));
+  // A LunarPay sub is only "real" with an external id; trialing venues don't
+  // have one yet (they activate when card is added at trial end).
+  const hasActiveSub = Boolean(subId && (status === 'active' || status === 'past_due'));
+  const isTrialing = status === 'trialing';
+
+  // ── Trial case ──────────────────────────────────────────────────────────
+  // During an active trial we just persist the addon flags — nothing to bill.
+  // The first charge (computed from plan + active addons at that moment) fires
+  // when the venue adds a card and the LunarPay sub is created with
+  // startOn = trial_ends_at.
+  if (isTrialing) {
+    await applyAddonFlagsAndStatus(venueId, currentPlan?.id ?? null, {
+      verified: nextVerified,
+      sponsored: nextSponsored,
+      prevVerifiedStatus: String((addonRow as { directory_verified_status?: string }).directory_verified_status ?? 'none'),
+      prevSponsoredStatus: String((addonRow as { directory_sponsored_status?: string }).directory_sponsored_status ?? 'none'),
+    });
+    return NextResponse.json({
+      kind: 'switched',
+      total_cents: nextCharge.total_cents,
+      trialing: true,
+    });
+  }
 
   // ── Flow 2: NO subscription yet, but addons now create a non-zero total ─
   // The owner needs to enter a card. We don't write the addon flags yet —

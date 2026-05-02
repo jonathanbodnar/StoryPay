@@ -26,6 +26,16 @@ import {
   type ChargeBreakdown,
   type EffectiveAddons,
 } from './directory-addons';
+import {
+  computeTrialEnd,
+  coerceTrialUnit,
+  daysRemainingInTrial,
+  deriveTrialStatus,
+  planHasTrial,
+  readPlanTrialConfig,
+  type PlanTrialConfig,
+  type VenueTrialState,
+} from './directory-trial';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.storypay.io';
 
@@ -38,6 +48,8 @@ export type DirectoryPlanCatalogEntry = {
   is_default: boolean;
   sort_order: number;
   feature_flags: Record<string, unknown>;
+  trial_period_value: number;
+  trial_period_unit: PlanTrialConfig['trial_period_unit'];
 };
 
 export type VenueBillingPaymentMethod = {
@@ -92,6 +104,15 @@ export type VenueBillingSummary = {
   plan_addon_inclusion: Record<string, { verified: boolean; sponsored: boolean }>;
   /** Static add-on prices in cents, exposed so the page never has to import constants. */
   addon_prices: { verified_cents: number; sponsored_cents: number };
+  /** Trial state snapshot for the current venue (if any). */
+  trial: {
+    status: 'none' | 'active' | 'forever' | 'expired';
+    started_at: string | null;
+    ends_at: string | null;
+    is_forever: boolean;
+    days_remaining: number | null; // null when status is none
+    plan_id: string | null;
+  };
 };
 
 function mapPlanRow(row: Record<string, unknown>): DirectoryPlanCatalogEntry {
@@ -108,17 +129,38 @@ function mapPlanRow(row: Record<string, unknown>): DirectoryPlanCatalogEntry {
       (row.feature_flags && typeof row.feature_flags === 'object' && !Array.isArray(row.feature_flags)
         ? (row.feature_flags as Record<string, unknown>)
         : {}) ?? {},
+    trial_period_value:
+      typeof row.trial_period_value === 'number' ? (row.trial_period_value as number) : 0,
+    trial_period_unit: coerceTrialUnit(row.trial_period_unit as string | null),
   };
 }
 
 export async function listDirectoryPlanCatalog(): Promise<DirectoryPlanCatalogEntry[]> {
-  const { data } = await supabaseAdmin
+  const baseColumns =
+    'id, name, slug, description, price_monthly_cents, is_default, sort_order, feature_flags';
+  const fullColumns = `${baseColumns}, trial_period_value, trial_period_unit`;
+
+  let rows: Record<string, unknown>[] | null = null;
+  const full = await supabaseAdmin
     .from('directory_plans')
-    .select('id, name, slug, description, price_monthly_cents, is_default, sort_order, feature_flags')
+    .select(fullColumns)
     .order('price_monthly_cents', { ascending: true, nullsFirst: true })
     .order('sort_order', { ascending: true })
     .order('name', { ascending: true });
-  return (data ?? []).map(mapPlanRow);
+  if (full.error && /trial_period_(value|unit)/.test(full.error.message)) {
+    // Pre-migration fallback: re-query without trial columns so the page still loads.
+    const slim = await supabaseAdmin
+      .from('directory_plans')
+      .select(baseColumns)
+      .order('price_monthly_cents', { ascending: true, nullsFirst: true })
+      .order('sort_order', { ascending: true })
+      .order('name', { ascending: true });
+    rows = (slim.data ?? null) as unknown as Record<string, unknown>[] | null;
+  } else {
+    rows = (full.data ?? null) as unknown as Record<string, unknown>[] | null;
+  }
+
+  return (rows ?? []).map((r) => mapPlanRow(r));
 }
 
 function asRecord(v: unknown): Record<string, unknown> | null {
@@ -238,22 +280,55 @@ export async function loadVenueBillingSummary(venueId: string): Promise<VenueBil
     ? plans.find((p) => p.id === ctx.plan!.id) || mapPlanRow(ctx.plan as unknown as Record<string, unknown>)
     : null;
 
-  // Pull stored addon flags. Resilient to the column not existing yet —
-  // mirrors how pricing-guide handles its schema-not-yet-applied case.
+  // Pull stored addon flags + trial state. Resilient to columns not existing
+  // yet — mirrors how pricing-guide handles its schema-not-yet-applied case.
   let addonVerifiedUser = false;
   let addonSponsoredUser = false;
+  let trialState: VenueTrialState = {
+    directory_trial_started_at: null,
+    directory_trial_ends_at: null,
+    directory_trial_is_forever: false,
+    directory_trial_plan_id: null,
+    directory_trial_consumed: false,
+  };
   try {
     const { data: addonRow } = await supabaseAdmin
       .from('venues')
-      .select('directory_addon_verified, directory_addon_sponsored')
+      .select(
+        'directory_addon_verified, directory_addon_sponsored, directory_trial_started_at, directory_trial_ends_at, directory_trial_is_forever, directory_trial_plan_id, directory_trial_consumed',
+      )
       .eq('id', venueId)
       .maybeSingle();
     if (addonRow) {
-      addonVerifiedUser = Boolean((addonRow as { directory_addon_verified?: boolean }).directory_addon_verified);
-      addonSponsoredUser = Boolean((addonRow as { directory_addon_sponsored?: boolean }).directory_addon_sponsored);
+      const r = addonRow as Record<string, unknown>;
+      addonVerifiedUser = Boolean(r.directory_addon_verified);
+      addonSponsoredUser = Boolean(r.directory_addon_sponsored);
+      trialState = {
+        directory_trial_started_at: (r.directory_trial_started_at as string | null) ?? null,
+        directory_trial_ends_at: (r.directory_trial_ends_at as string | null) ?? null,
+        directory_trial_is_forever: Boolean(r.directory_trial_is_forever),
+        directory_trial_plan_id: (r.directory_trial_plan_id as string | null) ?? null,
+        directory_trial_consumed: Boolean(r.directory_trial_consumed),
+      };
     }
   } catch {
-    // 42P01 / column missing — treat as unset until migration 092 runs.
+    // Schema not yet applied — treat as unset until migrations 092/093 run.
+  }
+  // Pre-migration fallback for venues where addon columns exist but trial doesn't.
+  if (!trialState.directory_trial_started_at && !trialState.directory_trial_ends_at) {
+    try {
+      const { data: addonOnly } = await supabaseAdmin
+        .from('venues')
+        .select('directory_addon_verified, directory_addon_sponsored')
+        .eq('id', venueId)
+        .maybeSingle();
+      if (addonOnly) {
+        addonVerifiedUser = Boolean((addonOnly as { directory_addon_verified?: boolean }).directory_addon_verified);
+        addonSponsoredUser = Boolean((addonOnly as { directory_addon_sponsored?: boolean }).directory_addon_sponsored);
+      }
+    } catch {
+      // ignore
+    }
   }
 
   const addons = resolveEffectiveAddons({
@@ -287,6 +362,14 @@ export async function loadVenueBillingSummary(venueId: string): Promise<VenueBil
     };
   }
 
+  const trialStatus = deriveTrialStatus(trialState);
+  const daysRemaining =
+    trialStatus === 'active'
+      ? daysRemainingInTrial(trialState)
+      : trialStatus === 'forever'
+        ? Infinity
+        : null;
+
   return {
     venue: {
       id: ctx?.venue.id || venueId,
@@ -306,6 +389,15 @@ export async function loadVenueBillingSummary(venueId: string): Promise<VenueBil
     addon_prices: {
       verified_cents: VERIFIED_PRICE_CENTS,
       sponsored_cents: SPONSORED_PRICE_CENTS,
+    },
+    trial: {
+      status: trialStatus,
+      started_at: trialState.directory_trial_started_at,
+      ends_at: trialState.directory_trial_ends_at,
+      is_forever: trialState.directory_trial_is_forever,
+      // Infinity → null so JSON serialization doesn't blow up
+      days_remaining: daysRemaining === Infinity ? null : daysRemaining,
+      plan_id: trialState.directory_trial_plan_id,
     },
   };
 }
@@ -343,41 +435,71 @@ export async function changeVenuePlan(
   const ctx = await loadVenueDirectoryPlanContext(venueId);
   if (!ctx) throw new Error('Venue not found');
 
-  const { data: targetRow } = await supabaseAdmin
+  // Try with trial fields first; fall back if migration 093 hasn't run.
+  let targetRow: Record<string, unknown> | null = null;
+  const fullSelect = 'id, name, price_monthly_cents, fortis_merchant_id, feature_flags, trial_period_value, trial_period_unit';
+  const slimSelect = 'id, name, price_monthly_cents, fortis_merchant_id, feature_flags';
+  const fullResp = await supabaseAdmin
     .from('directory_plans')
-    .select('id, name, price_monthly_cents, fortis_merchant_id, feature_flags')
+    .select(fullSelect)
     .eq('id', targetPlanId)
     .maybeSingle();
+  if (fullResp.error && /trial_period_(value|unit)/.test(fullResp.error.message)) {
+    const slimResp = await supabaseAdmin
+      .from('directory_plans')
+      .select(slimSelect)
+      .eq('id', targetPlanId)
+      .maybeSingle();
+    targetRow = (slimResp.data ?? null) as unknown as Record<string, unknown> | null;
+  } else {
+    targetRow = (fullResp.data ?? null) as unknown as Record<string, unknown> | null;
+  }
   if (!targetRow) throw new Error('Plan not found');
 
-  const target = targetRow as VenuePlanRow['plan'];
+  const target = targetRow as unknown as VenuePlanRow['plan'];
   if (!target) throw new Error('Plan not found');
   // The wider plan row used by the addon math helper. The DB query above
   // selected feature_flags, so we know the shape — cast through unknown.
   const targetForMath = targetRow as unknown as DirectoryPlanCatalogEntry;
+  const targetTrialConfig = readPlanTrialConfig(targetRow);
 
   if (ctx.venue.directory_plan_id === target.id) {
     return { kind: 'switched', plan_id: target.id };
   }
 
-  // Pull existing addon flags so the recalculated subscription amount stays
-  // in sync with what the venue has subscribed to. Defensive in case the
-  // migration hasn't run yet.
+  // Pull existing addon flags + trial state so the recalculated subscription
+  // amount stays in sync. Defensive in case migrations 092/093 haven't run.
   let addonVerifiedUser = false;
   let addonSponsoredUser = false;
+  let trialConsumed = false;
+  let activeTrialEndsAt: Date | null = null;
+  let activeTrialIsForever = false;
   try {
-    const { data: addonRow } = await supabaseAdmin
+    const { data: row } = await supabaseAdmin
       .from('venues')
-      .select('directory_addon_verified, directory_addon_sponsored')
+      .select(
+        'directory_addon_verified, directory_addon_sponsored, directory_trial_consumed, directory_trial_ends_at, directory_trial_is_forever',
+      )
       .eq('id', venueId)
       .maybeSingle();
-    if (addonRow) {
-      addonVerifiedUser = Boolean((addonRow as { directory_addon_verified?: boolean }).directory_addon_verified);
-      addonSponsoredUser = Boolean((addonRow as { directory_addon_sponsored?: boolean }).directory_addon_sponsored);
+    if (row) {
+      const r = row as Record<string, unknown>;
+      addonVerifiedUser = Boolean(r.directory_addon_verified);
+      addonSponsoredUser = Boolean(r.directory_addon_sponsored);
+      trialConsumed = Boolean(r.directory_trial_consumed);
+      activeTrialIsForever = Boolean(r.directory_trial_is_forever);
+      const endsRaw = r.directory_trial_ends_at as string | null | undefined;
+      if (endsRaw) {
+        const d = new Date(endsRaw);
+        if (!Number.isNaN(d.getTime())) activeTrialEndsAt = d;
+      }
     }
   } catch {
-    // schema not applied yet
+    // pre-migration — trial fields treated as unset
   }
+  const now = new Date();
+  const trialIsActive =
+    activeTrialIsForever || (activeTrialEndsAt !== null && activeTrialEndsAt.getTime() > now.getTime());
 
   const allPlans = await listDirectoryPlanCatalog();
   const currentForMath = ctx.plan
@@ -469,6 +591,71 @@ export async function changeVenuePlan(
         previous_amount_cents: currentCents,
         new_amount_cents: newCents,
         subscription_id: subId,
+      },
+    );
+    return { kind: 'switched', plan_id: target.id };
+  }
+
+  // ── Trial grant ────────────────────────────────────────────────────────
+  // Venue is moving to a paid plan, has no active LunarPay subscription, and
+  // the target plan offers a trial. If they haven't consumed their trial yet,
+  // grant it: snapshot the trial duration onto the venue, set status to
+  // 'trialing', and SKIP checkout. They use the plan free until trial ends —
+  // at which point they need to add a card (handled by /api/venue-billing/
+  // start-trial-payment or the LunarPay-checkout flow on demand).
+  //
+  // If trial is currently active (e.g. user upgrades from one trial-eligible
+  // plan to another within the trial window), preserve the existing trial
+  // end date — they don't get a fresh trial, just a different plan.
+  const grantingFreshTrial = !trialConsumed && planHasTrial(targetTrialConfig);
+  const stillInActiveTrial = trialIsActive;
+  if (!hasActiveSub && (grantingFreshTrial || stillInActiveTrial)) {
+    let endsAt: Date | null = activeTrialEndsAt;
+    let forever = activeTrialIsForever;
+    let startedAt: string | null = null;
+    if (grantingFreshTrial) {
+      const t = computeTrialEnd(targetTrialConfig, now);
+      endsAt = t.endsAt;
+      forever = t.forever;
+      startedAt = now.toISOString();
+    }
+
+    const update: Record<string, unknown> = {
+      directory_plan_id: target.id,
+      directory_subscription_status: 'trialing',
+      directory_subscription_external_id: null,
+    };
+    if (grantingFreshTrial) {
+      update.directory_trial_started_at = startedAt;
+      update.directory_trial_ends_at = endsAt ? endsAt.toISOString() : null;
+      update.directory_trial_is_forever = forever;
+      update.directory_trial_plan_id = target.id;
+      update.directory_trial_consumed = true;
+    }
+
+    let upd = await supabaseAdmin.from('venues').update(update).eq('id', venueId);
+    // Pre-migration safety net.
+    if (upd.error && /directory_trial_/.test(upd.error.message)) {
+      const slim: Record<string, unknown> = {
+        directory_plan_id: target.id,
+        directory_subscription_status: 'trialing',
+        directory_subscription_external_id: null,
+      };
+      upd = await supabaseAdmin.from('venues').update(slim).eq('id', venueId);
+    }
+
+    await recordBillingEvent(
+      venueId,
+      target.id,
+      0,
+      grantingFreshTrial ? 'trial_started' : 'plan_change_during_trial',
+      `trial:${target.id}:${venueId}:${Date.now()}`,
+      {
+        previous_plan_id: ctx.plan?.id || null,
+        new_plan_id: target.id,
+        trial_ends_at: endsAt ? endsAt.toISOString() : null,
+        trial_forever: forever,
+        plan_target_amount_cents: newCents,
       },
     );
     return { kind: 'switched', plan_id: target.id };

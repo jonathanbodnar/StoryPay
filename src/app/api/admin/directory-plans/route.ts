@@ -4,6 +4,7 @@ import { verifyAdminCookie } from '@/lib/admin-auth';
 import { isPlatformFortisMerchantConfigured } from '@/lib/platform-billing';
 import { defaultNavPermissionsAllTrue } from '@/lib/directory-nav-registry';
 import { buildPlanNavPayloadFromEditor } from '@/lib/directory-plans-venue';
+import { coerceTrialUnit } from '@/lib/directory-trial';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -49,6 +50,8 @@ export async function POST(request: NextRequest) {
     fortis_merchant_id?: string | null;
     feature_flags?: Record<string, boolean>;
     nav_permissions?: Record<string, boolean>;
+    trial_period_value?: number | null;
+    trial_period_unit?: string | null;
   };
   try {
     body = await request.json();
@@ -77,26 +80,50 @@ export async function POST(request: NextRequest) {
     await supabaseAdmin.from('directory_plans').update({ is_default: false });
   }
 
-  const { data, error } = await supabaseAdmin
+  const trialUnit = coerceTrialUnit(body.trial_period_unit ?? null);
+  const trialValue =
+    typeof body.trial_period_value === 'number' && body.trial_period_value >= 0
+      ? Math.floor(body.trial_period_value)
+      : 0;
+
+  const insertPayload: Record<string, unknown> = {
+    name,
+    slug,
+    description: body.description?.trim() || null,
+    sort_order: typeof body.sort_order === 'number' ? body.sort_order : 0,
+    is_default: body.is_default === true,
+    price_monthly_cents:
+      typeof body.price_monthly_cents === 'number' && body.price_monthly_cents >= 0
+        ? Math.round(body.price_monthly_cents)
+        : null,
+    stripe_price_id: body.stripe_price_id?.trim() || null,
+    fortis_merchant_id: body.fortis_merchant_id?.trim() || null,
+    nav_permissions,
+    feature_flags,
+    trial_period_value: trialValue,
+    trial_period_unit: trialUnit,
+    updated_at: new Date().toISOString(),
+  };
+
+  let { data, error } = await supabaseAdmin
     .from('directory_plans')
-    .insert({
-      name,
-      slug,
-      description: body.description?.trim() || null,
-      sort_order: typeof body.sort_order === 'number' ? body.sort_order : 0,
-      is_default: body.is_default === true,
-      price_monthly_cents:
-        typeof body.price_monthly_cents === 'number' && body.price_monthly_cents >= 0
-          ? Math.round(body.price_monthly_cents)
-          : null,
-      stripe_price_id: body.stripe_price_id?.trim() || null,
-      fortis_merchant_id: body.fortis_merchant_id?.trim() || null,
-      nav_permissions,
-      feature_flags,
-      updated_at: new Date().toISOString(),
-    })
+    .insert(insertPayload)
     .select('*')
     .single();
+
+  // Migration 093 not yet applied — retry without trial columns so admins can
+  // still create plans before running the migration.
+  if (error && /trial_period_(value|unit)/.test(error.message)) {
+    delete insertPayload.trial_period_value;
+    delete insertPayload.trial_period_unit;
+    const retry = await supabaseAdmin
+      .from('directory_plans')
+      .insert(insertPayload)
+      .select('*')
+      .single();
+    data = retry.data;
+    error = retry.error;
+  }
 
   if (error) {
     if (/duplicate|unique/i.test(error.message)) {

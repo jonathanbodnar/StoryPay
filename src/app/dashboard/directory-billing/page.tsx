@@ -29,6 +29,17 @@ type Plan = {
   is_default: boolean;
   sort_order: number;
   feature_flags: Record<string, unknown>;
+  trial_period_value?: number;
+  trial_period_unit?: 'none' | 'days' | 'weeks' | 'months' | 'years' | 'forever' | string;
+};
+
+type TrialState = {
+  status: 'none' | 'active' | 'forever' | 'expired';
+  started_at: string | null;
+  ends_at: string | null;
+  is_forever: boolean;
+  days_remaining: number | null;
+  plan_id: string | null;
 };
 
 type PaymentMethod = {
@@ -91,7 +102,24 @@ type BillingSummary = {
   charge: ChargeBreakdown;
   plan_addon_inclusion: Record<string, { verified: boolean; sponsored: boolean }>;
   addon_prices: { verified_cents: number; sponsored_cents: number };
+  trial: TrialState;
 };
+
+function formatTrialDuration(p: Pick<Plan, 'trial_period_value' | 'trial_period_unit'>): string {
+  const unit = (p.trial_period_unit as string | undefined) || 'none';
+  if (unit === 'none') return '';
+  if (unit === 'forever') return 'Free forever';
+  const v = typeof p.trial_period_value === 'number' ? p.trial_period_value : 0;
+  if (v <= 0) return '';
+  return `${v}-${unit.replace(/s$/, '')} free trial`;
+}
+
+function planHasTrial(p: Pick<Plan, 'trial_period_value' | 'trial_period_unit'>): boolean {
+  const unit = (p.trial_period_unit as string | undefined) || 'none';
+  if (unit === 'none') return false;
+  if (unit === 'forever') return true;
+  return (typeof p.trial_period_value === 'number' ? p.trial_period_value : 0) > 0;
+}
 
 function formatCents(cents: number | null | undefined): string {
   const value = (cents ?? 0) / 100;
@@ -167,16 +195,27 @@ export default function DirectoryBillingPage() {
     if (!sessionId) return;
     const paymentUpdate = searchParams.get('payment_update') === '1';
     const addonFlow = searchParams.get('addons') === '1';
+    const startPaidFlow = searchParams.get('start_paid') === '1';
     let cancelled = false;
     (async () => {
-      setBusy(addonFlow ? 'verify_addons' : paymentUpdate ? 'verify_payment_update' : 'verify_checkout');
+      setBusy(
+        startPaidFlow
+          ? 'verify_start_paid'
+          : addonFlow
+            ? 'verify_addons'
+            : paymentUpdate
+              ? 'verify_payment_update'
+              : 'verify_checkout',
+      );
       setError('');
       try {
-        const endpoint = addonFlow
-          ? '/api/venue-billing/addons/verify'
-          : paymentUpdate
-            ? '/api/venue-billing/update-payment'
-            : '/api/directory-platform/verify';
+        const endpoint = startPaidFlow
+          ? '/api/venue-billing/start-paid/verify'
+          : addonFlow
+            ? '/api/venue-billing/addons/verify'
+            : paymentUpdate
+              ? '/api/venue-billing/update-payment'
+              : '/api/directory-platform/verify';
         const res = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -186,11 +225,13 @@ export default function DirectoryBillingPage() {
         if (!res.ok) throw new Error(d.error || 'Verification failed');
         if (!cancelled) {
           setInfo(
-            addonFlow
-              ? 'Add-on subscription activated — your monthly bill is now updated.'
-              : paymentUpdate
-                ? 'Payment method updated.'
-                : 'Subscription activated.',
+            startPaidFlow
+              ? 'Card on file — your subscription will start when your trial ends.'
+              : addonFlow
+                ? 'Add-on subscription activated — your monthly bill is now updated.'
+                : paymentUpdate
+                  ? 'Payment method updated.'
+                  : 'Subscription activated.',
           );
           router.replace('/dashboard/directory-billing');
           await load();
@@ -277,6 +318,21 @@ export default function DirectoryBillingPage() {
       if (d.url) window.location.href = d.url;
     } catch (e) {
       setError(friendlyError(e instanceof Error ? e.message : 'Could not start payment update'));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function startPaid() {
+    setBusy('start_paid');
+    setError('');
+    try {
+      const res = await fetch('/api/venue-billing/start-paid', { method: 'POST' });
+      const d = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (!res.ok) throw new Error(d.error || 'Could not start paid checkout');
+      if (d.url) window.location.href = d.url;
+    } catch (e) {
+      setError(friendlyError(e instanceof Error ? e.message : 'Could not start paid checkout'));
     } finally {
       setBusy(null);
     }
@@ -389,7 +445,7 @@ export default function DirectoryBillingPage() {
           <CheckCircle2 size={16} /> {info}
         </div>
       ) : null}
-      {busy === 'verify_checkout' || busy === 'verify_payment_update' || busy === 'verify_addons' ? (
+      {busy === 'verify_checkout' || busy === 'verify_payment_update' || busy === 'verify_addons' || busy === 'verify_start_paid' ? (
         <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600 flex items-center gap-2">
           <Loader2 size={14} className="animate-spin" /> Confirming with LunarPay…
         </div>
@@ -399,6 +455,23 @@ export default function DirectoryBillingPage() {
           Billing isn&apos;t fully set up on our end yet. Please reach out to support and we&apos;ll get
           you sorted right away.
         </div>
+      ) : null}
+
+      {/* Trial banner — active or expired trial gets a prominent CTA */}
+      {summary.trial.status === 'active' || summary.trial.status === 'forever' ? (
+        <TrialActiveBanner
+          trial={summary.trial}
+          chargeTotalCents={summary.charge.total_cents}
+          hasPaymentMethod={Boolean(summary.payment_method)}
+          busy={busy}
+          onAddCard={() => void startPaid()}
+        />
+      ) : summary.trial.status === 'expired' && (currentPlan?.price_monthly_cents ?? 0) > 0 ? (
+        <TrialExpiredBanner
+          chargeTotalCents={summary.charge.total_cents}
+          busy={busy}
+          onAddCard={() => void startPaid()}
+        />
       ) : null}
 
       {/* Pending recovery banner — when a plan is selected but checkout never completed */}
@@ -658,6 +731,18 @@ export default function DirectoryBillingPage() {
                     ) : null}
                   </div>
 
+                  {/* Trial badge — shown when this plan offers a trial */}
+                  {planHasTrial(plan) ? (
+                    <div className={`inline-flex items-center gap-1 self-start rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                      isCurrent
+                        ? 'bg-violet-400/20 text-violet-100'
+                        : 'bg-violet-50 text-violet-700 border border-violet-100'
+                    }`}>
+                      <Sparkles size={11} />
+                      {formatTrialDuration(plan)}
+                    </div>
+                  ) : null}
+
                   {/* What this plan bundles for free */}
                   <div className="space-y-1.5">
                     <div className={`text-[11px] font-semibold uppercase tracking-wide ${isCurrent ? 'text-gray-300' : 'text-gray-500'}`}>
@@ -718,7 +803,13 @@ export default function DirectoryBillingPage() {
                         ) : (
                           <ArrowUpRight size={12} />
                         )}
-                        {cents === 0 ? 'Switch to free' : isUpgrade ? 'Upgrade' : 'Switch plan'}
+                        {cents === 0
+                          ? 'Switch to free'
+                          : planHasTrial(plan) && summary.trial.status === 'none' && !summary.subscription
+                            ? 'Start free trial'
+                            : isUpgrade
+                              ? 'Upgrade'
+                              : 'Switch plan'}
                       </button>
                     )}
                   </div>
@@ -807,6 +898,8 @@ export default function DirectoryBillingPage() {
           addons={summary.addons}
           addonPrices={summary.addon_prices}
           paymentMethod={summary.payment_method}
+          trial={summary.trial}
+          subscriptionExists={Boolean(summary.subscription)}
           busy={busy === `change:${confirmTarget.id}`}
           onCancel={() => setConfirmPlanId(null)}
           onConfirm={() => void changePlan(confirmTarget.id)}
@@ -829,6 +922,111 @@ export default function DirectoryBillingPage() {
           onConfirm={() => void cancelSubscription()}
         />
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * Banner shown when the venue is in an active trial OR on a perpetual
+ * "free forever" trial. Counts down the days and prompts the venue to add
+ * a card so billing can pick up automatically when the trial ends.
+ */
+function TrialActiveBanner({
+  trial,
+  chargeTotalCents,
+  hasPaymentMethod,
+  busy,
+  onAddCard,
+}: {
+  trial: TrialState;
+  chargeTotalCents: number;
+  hasPaymentMethod: boolean;
+  busy: string | null;
+  onAddCard: () => void;
+}) {
+  const isForever = trial.status === 'forever';
+  const daysLeft = trial.days_remaining ?? 0;
+  const endsLabel = trial.ends_at
+    ? new Date(trial.ends_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+    : null;
+  return (
+    <div className="rounded-2xl border border-violet-200 bg-gradient-to-r from-violet-50 to-fuchsia-50 p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white shadow-md">
+            <Sparkles size={18} />
+          </div>
+          <div>
+            <h3 className="font-heading text-base text-gray-900">
+              {isForever ? 'Free forever' : `Free trial · ${daysLeft} day${daysLeft === 1 ? '' : 's'} left`}
+            </h3>
+            <p className="mt-0.5 text-sm text-gray-700">
+              {isForever ? (
+                <>You&apos;re on a perpetual free trial. No charges, no expiration.</>
+              ) : (
+                <>
+                  Your trial ends {endsLabel ? <strong>{endsLabel}</strong> : 'soon'}. After that you&apos;ll be charged{' '}
+                  <strong>{formatCents(chargeTotalCents)}/mo</strong>
+                  {hasPaymentMethod ? ' on the card on file.' : '. Add a card now to keep using StoryVenue.'}
+                </>
+              )}
+            </p>
+          </div>
+        </div>
+        {!isForever && !hasPaymentMethod ? (
+          <button
+            type="button"
+            onClick={onAddCard}
+            disabled={busy === 'start_paid'}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gray-900 px-4 py-2 text-xs font-semibold text-white hover:bg-gray-800 disabled:opacity-60"
+          >
+            {busy === 'start_paid' ? <Loader2 size={12} className="animate-spin" /> : <Lock size={12} />}
+            Add card now
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Banner shown after a trial ended without a card on file. The venue is
+ * gated to free until they add a payment method (or they downgrade to free).
+ */
+function TrialExpiredBanner({
+  chargeTotalCents,
+  busy,
+  onAddCard,
+}: {
+  chargeTotalCents: number;
+  busy: string | null;
+  onAddCard: () => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white">
+            <AlertTriangle size={18} />
+          </div>
+          <div>
+            <h3 className="font-heading text-base text-amber-900">Your free trial has ended</h3>
+            <p className="mt-0.5 text-sm text-amber-800">
+              Add a card to keep your current plan and add-ons. You&apos;ll be charged{' '}
+              <strong>{formatCents(chargeTotalCents)}/mo</strong>, starting today.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onAddCard}
+          disabled={busy === 'start_paid'}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gray-900 px-4 py-2 text-xs font-semibold text-white hover:bg-gray-800 disabled:opacity-60"
+        >
+          {busy === 'start_paid' ? <Loader2 size={12} className="animate-spin" /> : <Lock size={12} />}
+          Add card &amp; keep plan
+        </button>
+      </div>
     </div>
   );
 }
@@ -1084,6 +1282,8 @@ function UpgradePlanModal({
   addons,
   addonPrices,
   paymentMethod,
+  trial,
+  subscriptionExists,
   busy,
   onCancel,
   onConfirm,
@@ -1095,6 +1295,8 @@ function UpgradePlanModal({
   addons: Addons;
   addonPrices: { verified_cents: number; sponsored_cents: number };
   paymentMethod: PaymentMethod;
+  trial: TrialState;
+  subscriptionExists: boolean;
   busy: boolean;
   onCancel: () => void;
   onConfirm: () => void;
@@ -1107,14 +1309,22 @@ function UpgradePlanModal({
 
   const isFree = newTotalCents === 0;
   const isDowngradeToFree = isFree && currentTotalCents > 0;
-  const hasActivePaid = Boolean(paymentMethod) && currentTotalCents > 0;
-  const willCharge = !isFree && !hasActivePaid; // first paid signup → checkout redirect
+  const hasActivePaid = Boolean(paymentMethod) && currentTotalCents > 0 && subscriptionExists;
+  // Trial path: target plan offers a trial, no existing subscription, and the
+  // venue hasn't already consumed a trial (status === 'none' or 'active').
+  const eligibleForTrial =
+    !subscriptionExists &&
+    planHasTrial(plan) &&
+    (trial.status === 'none' || trial.status === 'active' || trial.status === 'forever');
+  const willStartTrial = !isFree && eligibleForTrial;
+  const willCharge = !isFree && !hasActivePaid && !willStartTrial; // first paid signup → checkout redirect
   const willPatch = !isFree && hasActivePaid;   // already paying → patch the LunarPay subscription
   const nextBillEstimate = useMemo(() => {
     const d = new Date();
     d.setMonth(d.getMonth() + 1);
     return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   }, []);
+  const trialDuration = formatTrialDuration(plan);
 
   return (
     <div className="fixed inset-0 z-50">
@@ -1198,7 +1408,19 @@ function UpgradePlanModal({
             </div>
 
             {/* What happens next */}
-            {isDowngradeToFree ? (
+            {willStartTrial ? (
+              <div className="rounded-xl border border-violet-100 bg-violet-50 p-4 text-sm text-violet-900 space-y-1">
+                <p className="font-semibold flex items-center gap-1.5">
+                  <Sparkles size={14} /> Start your {trialDuration || 'free trial'}
+                </p>
+                <p className="text-xs">
+                  You won&apos;t be charged today. Your trial unlocks <strong>{plan.name}</strong>{' '}
+                  immediately. {plan.trial_period_unit === 'forever'
+                    ? 'No future charges — ever.'
+                    : <>Your first <strong>{formatCents(newTotalCents)}/mo</strong> charge fires when the trial ends — you can add a card any time before then.</>}
+                </p>
+              </div>
+            ) : isDowngradeToFree ? (
               <div className="rounded-xl border border-amber-100 bg-amber-50 p-4 text-sm text-amber-900">
                 <p>
                   You&apos;ll be moved to the <strong>{plan.name}</strong> plan immediately. Your
@@ -1253,11 +1475,13 @@ function UpgradePlanModal({
               ) : (
                 <Check size={12} />
               )}
-              {willCharge
-                ? 'Continue to secure checkout'
-                : isDowngradeToFree
-                  ? 'Switch to free'
-                  : 'Confirm change'}
+              {willStartTrial
+                ? 'Start free trial'
+                : willCharge
+                  ? 'Continue to secure checkout'
+                  : isDowngradeToFree
+                    ? 'Switch to free'
+                    : 'Confirm change'}
             </button>
           </div>
         </div>

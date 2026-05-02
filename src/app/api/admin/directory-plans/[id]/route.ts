@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { verifyAdminCookie } from '@/lib/admin-auth';
 import { buildPlanNavPayloadFromEditor } from '@/lib/directory-plans-venue';
+import { coerceTrialUnit } from '@/lib/directory-trial';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -57,6 +58,18 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         ? null
         : String(body.fortis_merchant_id).trim();
   }
+  if (body.trial_period_value !== undefined) {
+    const v = Number(body.trial_period_value);
+    if (Number.isFinite(v) && v >= 0) {
+      updates.trial_period_value = Math.floor(v);
+    } else {
+      return NextResponse.json({ error: 'Invalid trial_period_value' }, { status: 400 });
+    }
+  }
+  if (body.trial_period_unit !== undefined) {
+    updates.trial_period_unit = coerceTrialUnit(body.trial_period_unit as string | null);
+  }
+
   if (
     body.nav_permissions !== undefined &&
     typeof body.nav_permissions === 'object' &&
@@ -75,12 +88,27 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     return NextResponse.json({ error: 'No valid fields' }, { status: 400 });
   }
 
-  const { data, error } = await supabaseAdmin
+  let { data, error } = await supabaseAdmin
     .from('directory_plans')
     .update(updates)
     .eq('id', id)
     .select('*')
     .single();
+
+  // Schema-not-yet-applied path: drop trial columns and retry so admins can
+  // still edit other fields before running migration 093.
+  if (error && /trial_period_(value|unit)/.test(error.message)) {
+    delete (updates as Record<string, unknown>).trial_period_value;
+    delete (updates as Record<string, unknown>).trial_period_unit;
+    const retry = await supabaseAdmin
+      .from('directory_plans')
+      .update(updates)
+      .eq('id', id)
+      .select('*')
+      .single();
+    data = retry.data;
+    error = retry.error;
+  }
 
   if (error) {
     if (/duplicate|unique/i.test(error.message)) {

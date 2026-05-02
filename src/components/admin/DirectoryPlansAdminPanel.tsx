@@ -35,7 +35,28 @@ type PlanRow = {
   fortis_merchant_id?: string | null;
   feature_flags: Record<string, boolean>;
   nav_permissions?: Record<string, boolean> | null;
+  trial_period_value?: number | null;
+  trial_period_unit?: 'none' | 'days' | 'weeks' | 'months' | 'years' | 'forever' | string | null;
 };
+
+type TrialUnit = 'none' | 'days' | 'weeks' | 'months' | 'years' | 'forever';
+const TRIAL_UNIT_OPTIONS: { value: TrialUnit; label: string }[] = [
+  { value: 'none', label: 'No trial' },
+  { value: 'days', label: 'Days' },
+  { value: 'weeks', label: 'Weeks' },
+  { value: 'months', label: 'Months' },
+  { value: 'years', label: 'Years' },
+  { value: 'forever', label: 'Forever (free)' },
+];
+
+function trialDescription(unit: TrialUnit | string | null | undefined, value: number | null | undefined): string {
+  const u = (unit as TrialUnit) || 'none';
+  if (u === 'none') return 'No trial — billed immediately';
+  if (u === 'forever') return 'Perpetual free trial — never auto-billed';
+  const v = typeof value === 'number' ? value : 0;
+  if (v <= 0) return 'No trial — billed immediately';
+  return `${v}-${u.replace(/s$/, '')} free trial — first charge after trial ends`;
+}
 
 export function DirectoryPlansAdminPanel() {
   const [plans, setPlans] = useState<PlanRow[]>([]);
@@ -55,6 +76,8 @@ export function DirectoryPlansAdminPanel() {
     price_monthly_cents: '' as string,
     fortis_merchant_id: '',
     is_default: false,
+    trial_period_value: '14' as string,
+    trial_period_unit: 'none' as TrialUnit,
   });
   const [planSaving, setPlanSaving] = useState(false);
   const [newPlanOpen, setNewPlanOpen] = useState(false);
@@ -70,6 +93,8 @@ export function DirectoryPlansAdminPanel() {
     price_monthly_cents: '' as string,
     fortis_merchant_id: '',
     is_default: false,
+    trial_period_value: '0' as string,
+    trial_period_unit: 'none' as TrialUnit,
   });
 
   const load = useCallback(async () => {
@@ -151,6 +176,10 @@ export function DirectoryPlansAdminPanel() {
           fortis_merchant_id: planForm.fortis_merchant_id.trim() || null,
           nav_permissions,
           feature_flags,
+          trial_period_value: planForm.trial_period_unit === 'none' || planForm.trial_period_unit === 'forever'
+            ? 0
+            : Math.max(0, parseInt(planForm.trial_period_value, 10) || 0),
+          trial_period_unit: planForm.trial_period_unit,
         }),
       });
       if (!res.ok) {
@@ -166,6 +195,8 @@ export function DirectoryPlansAdminPanel() {
         price_monthly_cents: '',
         fortis_merchant_id: '',
         is_default: false,
+        trial_period_value: '14',
+        trial_period_unit: 'none',
       });
       setNewPlanOpen(false);
       await load();
@@ -177,6 +208,7 @@ export function DirectoryPlansAdminPanel() {
   function startEdit(p: PlanRow) {
     setEditingId(p.id);
     setEditNav(mergeNavPermissionsForEditor(p.nav_permissions, p.feature_flags));
+    const unit = (p.trial_period_unit as TrialUnit) || 'none';
     setEditMeta({
       name: p.name,
       slug: p.slug,
@@ -185,6 +217,10 @@ export function DirectoryPlansAdminPanel() {
       price_monthly_cents: p.price_monthly_cents != null ? (p.price_monthly_cents / 100).toFixed(2) : '',
       fortis_merchant_id: p.fortis_merchant_id?.trim() || '',
       is_default: p.is_default,
+      trial_period_value: typeof p.trial_period_value === 'number' && p.trial_period_value > 0
+        ? String(p.trial_period_value)
+        : '0',
+      trial_period_unit: unit,
     });
   }
 
@@ -215,6 +251,10 @@ export function DirectoryPlansAdminPanel() {
           : null,
         fortis_merchant_id: editMeta.fortis_merchant_id.trim() || null,
         nav_permissions,
+        trial_period_value: editMeta.trial_period_unit === 'none' || editMeta.trial_period_unit === 'forever'
+          ? 0
+          : Math.max(0, parseInt(editMeta.trial_period_value, 10) || 0),
+        trial_period_unit: editMeta.trial_period_unit,
       }),
     });
     if (!res.ok) {
@@ -254,6 +294,8 @@ export function DirectoryPlansAdminPanel() {
           fortis_merchant_id: p.fortis_merchant_id?.trim() || null,
           nav_permissions,
           feature_flags,
+          trial_period_value: typeof p.trial_period_value === 'number' ? p.trial_period_value : 0,
+          trial_period_unit: (p.trial_period_unit as TrialUnit) || 'none',
         }),
       });
       if (!res.ok) {
@@ -446,6 +488,42 @@ export function DirectoryPlansAdminPanel() {
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 font-mono text-xs"
                 />
               </div>
+
+              {/* Trial period — only applies to NEW signups when changed. */}
+              <div className="md:col-span-2 rounded-lg border border-gray-100 bg-gray-50 p-3">
+                <label className="block text-xs font-semibold text-gray-700 mb-2">Free trial</label>
+                <div className="flex flex-wrap items-end gap-2">
+                  <div>
+                    <label className="block text-[10px] font-medium text-gray-500 uppercase mb-0.5">Length</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      disabled={planForm.trial_period_unit === 'none' || planForm.trial_period_unit === 'forever'}
+                      value={planForm.trial_period_value}
+                      onChange={(e) => setPlanForm({ ...planForm, trial_period_value: e.target.value })}
+                      className="w-24 rounded-lg border border-gray-200 px-2 py-1.5 text-sm disabled:bg-gray-100 disabled:text-gray-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-medium text-gray-500 uppercase mb-0.5">Unit</label>
+                    <select
+                      value={planForm.trial_period_unit}
+                      onChange={(e) => setPlanForm({ ...planForm, trial_period_unit: e.target.value as TrialUnit })}
+                      className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm bg-white"
+                    >
+                      {TRIAL_UNIT_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <p className="mt-2 text-[11px] text-gray-500">
+                  {trialDescription(planForm.trial_period_unit, parseInt(planForm.trial_period_value, 10))}
+                  {' · '}
+                  Changes only affect future signups. Existing trials keep their original duration.
+                </p>
+              </div>
               <div className="md:col-span-2 flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -536,6 +614,41 @@ export function DirectoryPlansAdminPanel() {
                       Default
                     </label>
                   </div>
+                  {/* Trial period editor — applies to NEW signups only */}
+                  <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+                    <label className="block text-xs font-semibold text-gray-700 mb-2">Free trial</label>
+                    <div className="flex flex-wrap items-end gap-2">
+                      <div>
+                        <label className="block text-[10px] font-medium text-gray-500 uppercase mb-0.5">Length</label>
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          disabled={editMeta.trial_period_unit === 'none' || editMeta.trial_period_unit === 'forever'}
+                          value={editMeta.trial_period_value}
+                          onChange={(e) => setEditMeta({ ...editMeta, trial_period_value: e.target.value })}
+                          className="w-20 rounded border border-gray-200 px-2 py-1 text-sm disabled:bg-gray-100 disabled:text-gray-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-medium text-gray-500 uppercase mb-0.5">Unit</label>
+                        <select
+                          value={editMeta.trial_period_unit}
+                          onChange={(e) => setEditMeta({ ...editMeta, trial_period_unit: e.target.value as TrialUnit })}
+                          className="rounded border border-gray-200 px-2 py-1 text-sm bg-white"
+                        >
+                          {TRIAL_UNIT_OPTIONS.map((o) => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <p className="mt-2 text-[11px] text-gray-500">
+                      {trialDescription(editMeta.trial_period_unit, parseInt(editMeta.trial_period_value, 10))}
+                      {' · '}
+                      Affects new signups only. Existing trials keep their original duration.
+                    </p>
+                  </div>
                   <div className="border border-gray-100 rounded-xl p-3 space-y-4 max-h-[min(70vh,520px)] overflow-y-auto">
                     <p className="text-xs text-gray-500">
                       Toggle any screen; submenu sections only appear in the venue sidebar if at least one child is
@@ -609,11 +722,20 @@ export function DirectoryPlansAdminPanel() {
                         ? <span className="font-mono text-gray-700">{p.fortis_merchant_id.trim()}</span>
                         : <span className="text-gray-400">env default</span>}
                     </p>
-                    {p.is_default ? (
-                      <span className="inline-block mt-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
-                        Default
-                      </span>
-                    ) : null}
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      {p.is_default ? (
+                        <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                          Default
+                        </span>
+                      ) : null}
+                      {p.trial_period_unit && p.trial_period_unit !== 'none' ? (
+                        <span className="text-[10px] font-semibold text-violet-700 bg-violet-50 px-2 py-0.5 rounded-full">
+                          {p.trial_period_unit === 'forever'
+                            ? 'Free forever'
+                            : `${p.trial_period_value || 0}-${(p.trial_period_unit as string).replace(/s$/, '')} trial`}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                   <div className="flex gap-1">
                     <button
