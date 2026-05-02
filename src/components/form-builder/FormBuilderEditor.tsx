@@ -2495,14 +2495,15 @@ export function FormBuilderEditor({
 
       {/* ─── Top header — fixed across viewport ──────────────────────────── */}
       <header
-        className="flex items-center bg-white px-6 py-3"
+        className="flex items-center px-6 py-3"
         style={
           {
             position: 'fixed',
             top: 0,
             left: 'var(--sidebar-w, 216px)',
             right: 0,
-            zIndex: 20,
+            zIndex: 30,
+            background: '#ffffff',
             boxShadow: '0 1px 18px rgba(0,0,0,0.05)',
             transition: 'left 200ms ease-out',
           } as CSSProperties
