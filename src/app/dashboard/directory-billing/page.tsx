@@ -743,22 +743,32 @@ export default function DirectoryBillingPage() {
                     </div>
                   ) : null}
 
-                  {/* What this plan bundles for free */}
+                  {/* Add-ons — interactive: live-toggle the venue's add-on
+                      state from any plan card. Plan-bundled add-ons render
+                      as locked "Included" pills. */}
                   <div className="space-y-1.5">
                     <div className={`text-[11px] font-semibold uppercase tracking-wide ${isCurrent ? 'text-gray-300' : 'text-gray-500'}`}>
-                      Add-ons included
+                      Add-ons
                     </div>
-                    <PlanIncludedRow
+                    <PlanAddonToggle
                       label="Verified Listing"
-                      value="$19/mo"
+                      priceCents={summary.addon_prices.verified_cents}
                       included={inclusion.verified}
+                      userOn={summary.addons.verifiedUser}
+                      busy={busy === 'addon:verified'}
                       isCurrent={isCurrent}
+                      tone="emerald"
+                      onToggle={() => void toggleAddon('verified')}
                     />
-                    <PlanIncludedRow
+                    <PlanAddonToggle
                       label="Sponsored Listing"
-                      value="$99/mo"
+                      priceCents={summary.addon_prices.sponsored_cents}
                       included={inclusion.sponsored}
+                      userOn={summary.addons.sponsoredUser}
+                      busy={busy === 'addon:sponsored'}
                       isCurrent={isCurrent}
+                      tone="violet"
+                      onToggle={() => void toggleAddon('sponsored')}
                     />
                   </div>
 
@@ -901,6 +911,8 @@ export default function DirectoryBillingPage() {
           trial={summary.trial}
           subscriptionExists={Boolean(summary.subscription)}
           busy={busy === `change:${confirmTarget.id}`}
+          addonBusy={busy?.startsWith('addon:') ? (busy.split(':')[1] as 'verified' | 'sponsored') : null}
+          onToggleAddon={(kind) => void toggleAddon(kind)}
           onCancel={() => setConfirmPlanId(null)}
           onConfirm={() => void changePlan(confirmTarget.id)}
         />
@@ -1032,33 +1044,148 @@ function TrialExpiredBanner({
 }
 
 /**
- * One-row helper that shows whether a plan bundles a given add-on.
- * Renders "Included" pill OR price string depending on inclusion.
+ * One-row helper for a plan card's add-on slot. When the plan bundles the
+ * add-on, renders a locked "Included" pill. Otherwise, renders a clickable
+ * checkbox that LIVE-toggles the venue's add-on subscription — same single
+ * source of truth as the dedicated AddonsCard above. Stop propagation
+ * because the parent card may have its own click handlers.
  */
-function PlanIncludedRow({
+function PlanAddonToggle({
   label,
-  value,
+  priceCents,
   included,
+  userOn,
+  busy,
   isCurrent,
+  tone,
+  onToggle,
 }: {
   label: string;
-  value: string;
+  priceCents: number;
   included: boolean;
+  userOn: boolean;
+  busy: boolean;
   isCurrent: boolean;
+  tone: 'emerald' | 'violet';
+  onToggle: () => void;
 }) {
-  return (
-    <div className="flex items-center justify-between gap-2 text-[12px]">
-      <span className={isCurrent ? 'text-gray-200' : 'text-gray-700'}>{label}</span>
-      {included ? (
+  if (included) {
+    return (
+      <div className="flex items-center justify-between gap-2 text-[12px]">
+        <span className={isCurrent ? 'text-gray-200' : 'text-gray-700'}>{label}</span>
         <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
           isCurrent ? 'bg-emerald-400/20 text-emerald-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
         }`}>
           <Check size={10} /> Included
         </span>
-      ) : (
-        <span className={`text-[11px] ${isCurrent ? 'text-gray-300' : 'text-gray-500'}`}>{value}</span>
-      )}
-    </div>
+      </div>
+    );
+  }
+
+  const checkedColor = tone === 'emerald' ? 'bg-emerald-600 border-emerald-600' : 'bg-violet-600 border-violet-600';
+  const uncheckedColor = isCurrent ? 'bg-white/10 border-white/30' : 'bg-white border-gray-300';
+
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      aria-pressed={userOn}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onToggle();
+      }}
+      className={`-mx-1.5 flex w-[calc(100%+12px)] items-center justify-between gap-2 rounded-md px-1.5 py-1 text-left text-[12px] transition-colors ${
+        isCurrent ? 'hover:bg-white/10' : 'hover:bg-gray-50'
+      } disabled:opacity-60`}
+    >
+      <span className="flex items-center gap-2">
+        <span className={`inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border-2 transition ${
+          userOn ? checkedColor : uncheckedColor
+        }`}>
+          {busy ? (
+            <Loader2
+              size={9}
+              className={`animate-spin ${isCurrent ? 'text-gray-200' : 'text-gray-500'}`}
+            />
+          ) : userOn ? (
+            <Check size={9} className="text-white" strokeWidth={3} />
+          ) : null}
+        </span>
+        <span className={isCurrent ? 'text-gray-200' : 'text-gray-700'}>{label}</span>
+      </span>
+      <span className={`text-[11px] ${isCurrent ? 'text-gray-300' : 'text-gray-500'}`}>
+        {formatCents(priceCents)}/mo
+      </span>
+    </button>
+  );
+}
+
+/**
+ * Compact add-on toggle for the upgrade modal — same live-toggle behavior
+ * as the plan-card variant, sized to fit inside the plan-summary card.
+ */
+function ModalAddonToggle({
+  label,
+  priceCents,
+  included,
+  userOn,
+  busy,
+  tone,
+  onToggle,
+}: {
+  label: string;
+  priceCents: number;
+  included: boolean;
+  userOn: boolean;
+  busy: boolean;
+  tone: 'emerald' | 'violet';
+  onToggle: () => void;
+}) {
+  if (included) {
+    return (
+      <div className="flex items-center justify-between gap-2 py-0.5 text-xs text-gray-700">
+        <span className="flex items-center gap-2">
+          <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border-2 bg-emerald-600 border-emerald-600">
+            <Check size={9} className="text-white" strokeWidth={3} />
+          </span>
+          {label}
+        </span>
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+          Included
+        </span>
+      </div>
+    );
+  }
+  const checkedColor = tone === 'emerald' ? 'bg-emerald-600 border-emerald-600' : 'bg-violet-600 border-violet-600';
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      aria-pressed={userOn}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onToggle();
+      }}
+      className="-mx-2 flex w-[calc(100%+16px)] items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-xs text-gray-700 hover:bg-gray-100 disabled:opacity-60"
+    >
+      <span className="flex items-center gap-2">
+        <span className={`inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border-2 transition ${
+          userOn ? checkedColor : 'bg-white border-gray-300'
+        }`}>
+          {busy ? (
+            <Loader2 size={9} className="animate-spin text-gray-500" />
+          ) : userOn ? (
+            <Check size={9} className="text-white" strokeWidth={3} />
+          ) : null}
+        </span>
+        {label}
+      </span>
+      <span className="font-mono text-[11px] text-gray-600">
+        {userOn ? `+${formatCents(priceCents)}` : formatCents(priceCents)}
+      </span>
+    </button>
   );
 }
 
@@ -1285,6 +1412,8 @@ function UpgradePlanModal({
   trial,
   subscriptionExists,
   busy,
+  addonBusy,
+  onToggleAddon,
   onCancel,
   onConfirm,
 }: {
@@ -1298,6 +1427,8 @@ function UpgradePlanModal({
   trial: TrialState;
   subscriptionExists: boolean;
   busy: boolean;
+  addonBusy: 'verified' | 'sponsored' | null;
+  onToggleAddon: (kind: 'verified' | 'sponsored') => void;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -1375,23 +1506,33 @@ function UpgradePlanModal({
                 </div>
               </div>
 
-              {/* Show addon line items */}
-              {(verifiedAdds > 0 || sponsoredAdds > 0 || targetInclusion.verified || targetInclusion.sponsored) && (
-                <div className="border-t border-gray-200 pt-2 space-y-1 text-xs text-gray-700">
-                  <div className="flex items-center justify-between">
-                    <span>Verified Listing</span>
-                    <span className="font-mono">
-                      {targetInclusion.verified ? 'Included' : verifiedAdds > 0 ? formatCents(verifiedAdds) : addons.verifiedUser ? formatCents(addonPrices.verified_cents) : '—'}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Sponsored Listing</span>
-                    <span className="font-mono">
-                      {targetInclusion.sponsored ? 'Included' : sponsoredAdds > 0 ? formatCents(sponsoredAdds) : addons.sponsoredUser ? formatCents(addonPrices.sponsored_cents) : '—'}
-                    </span>
-                  </div>
+              {/* Add-on toggles — live on top of the plan switch. Toggling
+                  immediately updates the venue's add-on state, so by the
+                  time the user clicks Confirm the LunarPay subscription
+                  amount already reflects what they want. */}
+              <div className="border-t border-gray-200 pt-2 space-y-0.5">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 mb-1">
+                  Add-ons
                 </div>
-              )}
+                <ModalAddonToggle
+                  label="Verified Listing"
+                  priceCents={addonPrices.verified_cents}
+                  included={targetInclusion.verified}
+                  userOn={addons.verifiedUser}
+                  busy={addonBusy === 'verified'}
+                  tone="emerald"
+                  onToggle={() => onToggleAddon('verified')}
+                />
+                <ModalAddonToggle
+                  label="Sponsored Listing"
+                  priceCents={addonPrices.sponsored_cents}
+                  included={targetInclusion.sponsored}
+                  userOn={addons.sponsoredUser}
+                  busy={addonBusy === 'sponsored'}
+                  tone="violet"
+                  onToggle={() => onToggleAddon('sponsored')}
+                />
+              </div>
               <div className="border-t border-gray-200 pt-2 flex items-center justify-between text-sm font-semibold text-gray-900">
                 <span>Total per month</span>
                 <span className="font-mono">{newTotalCents > 0 ? formatCents(newTotalCents) : 'Free'}</span>
