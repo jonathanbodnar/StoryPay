@@ -8,7 +8,9 @@ interface LPRequestOptions {
 }
 
 export async function lpFetch(path: string, { method = 'GET', body, key }: LPRequestOptions) {
-  const res = await fetch(`${LP_BASE_URL}${path}`, {
+  const url = `${LP_BASE_URL}${path}`;
+  const keyPrefix = key ? `${key.slice(0, 10)}...${key.slice(-4)}` : '<empty>';
+  const res = await fetch(url, {
     method,
     headers: {
       'Authorization': `Bearer ${key}`,
@@ -19,6 +21,15 @@ export async function lpFetch(path: string, { method = 'GET', body, key }: LPReq
 
   if (!res.ok) {
     const errorText = await res.text();
+    // Verbose log so we can see EXACTLY what we sent and what LP returned.
+    console.error('[lpFetch] LunarPay error', {
+      url,
+      method,
+      status: res.status,
+      keyPrefix,
+      requestBody: body,
+      responseText: errorText,
+    });
     throw new Error(`LunarPay API error ${res.status}: ${errorText}`);
   }
 
