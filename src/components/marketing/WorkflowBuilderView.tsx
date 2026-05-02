@@ -2305,13 +2305,18 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
           <aside
             ref={rightPaneRef}
             className="w-80 flex-shrink-0 bg-white flex flex-col overflow-hidden"
-            style={{
-              // Same value as CampaignFlodeskBuilder's right panel — the gray-50
-              // canvas above makes this shadow render as the exact same soft fade.
-              boxShadow: '-12px 0 32px -8px rgba(0,0,0,0.07)',
-            }}
+            style={{ position: 'relative' }}
             onMouseDown={(e) => e.stopPropagation()}
           >
+            {/* Left-edge gradient — sits INSIDE the pane so overflow:hidden on the
+                parent flex container can never clip it. Reproduces the same fade
+                the email/form builders get from their outer box-shadow. */}
+            <div aria-hidden style={{
+              position: 'absolute', top: 0, left: 0, bottom: 0, width: 20,
+              background: 'linear-gradient(to right, rgba(0,0,0,0.055) 0%, rgba(0,0,0,0.02) 50%, transparent 100%)',
+              pointerEvents: 'none', zIndex: 10,
+            }} />
+
             <div
               className="fb-scroll-pane flex-1 overflow-y-auto"
               style={{ overscrollBehavior: 'contain', scrollbarWidth: 'none', msOverflowStyle: 'none', minHeight: 0 } as React.CSSProperties}
