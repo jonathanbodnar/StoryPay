@@ -2,192 +2,451 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, BadgeCheck, Loader2, Megaphone } from 'lucide-react';
+import {
+  ArrowLeft, BadgeCheck, Megaphone, Loader2, CheckCircle2,
+  Clock, XCircle, AlertCircle, ArrowRight, Sparkles, Info,
+} from 'lucide-react';
 import { directoryBadgeLabel } from '@/lib/directory-badges';
 
-const CARD = 'rounded-3xl border border-gray-200 bg-white p-6 sm:p-8';
+// ── Pricing constants (single source of truth for the page) ───────────────
+const VERIFIED_PRICE_MONTHLY = 19;
+const SPONSORED_PRICE_MONTHLY = 97;
 
-type VenueRow = {
-  directory_verified_status?: string | null;
-  directory_sponsored_status?: string | null;
+// ── Types ─────────────────────────────────────────────────────────────────
+
+type StatusPayload = {
+  directory_verified_status: string;
+  directory_sponsored_status: string;
+  verifiedIncluded: boolean;
+  sponsoredIncluded: boolean;
+  isHighestPlan: boolean;
+  planName: string | null;
 };
 
+// ── Style helpers ─────────────────────────────────────────────────────────
+
+const CARD = 'rounded-3xl border border-gray-200 bg-white';
+
+function StatusPill({ status }: { status: string }) {
+  const map: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
+    approved: {
+      label: 'Active',
+      cls: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      icon: <CheckCircle2 size={13} />,
+    },
+    pending: {
+      label: 'Pending review',
+      cls: 'bg-amber-50 text-amber-700 border-amber-200',
+      icon: <Clock size={13} />,
+    },
+    draft: {
+      label: 'In progress',
+      cls: 'bg-blue-50 text-blue-700 border-blue-200',
+      icon: <Clock size={13} />,
+    },
+    rejected: {
+      label: 'Rejected',
+      cls: 'bg-red-50 text-red-700 border-red-200',
+      icon: <XCircle size={13} />,
+    },
+    none: {
+      label: 'Not active',
+      cls: 'bg-gray-100 text-gray-500 border-gray-200',
+      icon: null,
+    },
+  };
+  const s = map[status] ?? map.none;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium ${s.cls}`}
+    >
+      {s.icon}
+      {s.label}
+    </span>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────
+
 export default function ListingDirectoryStatusPage() {
-  const [venue, setVenue] = useState<VenueRow | null>(null);
+  const [data, setData] = useState<StatusPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState<'verified' | 'sponsored' | null>(null);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
+  const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError('');
     try {
-      const res = await fetch('/api/venues/me', { cache: 'no-store' });
-      if (!res.ok) {
-        setError('Could not load venue');
-        return;
-      }
-      const data = (await res.json()) as VenueRow;
-      setVenue(data);
+      const res = await fetch('/api/listing/directory-status', { cache: 'no-store' });
+      if (!res.ok) throw new Error('Could not load status');
+      setData((await res.json()) as StatusPayload);
+    } catch (e) {
+      setToast({ kind: 'error', msg: e instanceof Error ? e.message : 'Load failed' });
     } finally {
       setLoading(false);
     }
   }, []);
 
+  useEffect(() => { void load(); }, [load]);
+
+  // Dismiss toast after 6s
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 6000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   async function apply(kind: 'verified' | 'sponsored') {
     setSubmitting(kind);
-    setMessage('');
-    setError('');
+    setToast(null);
     try {
       const res = await fetch('/api/listing/directory-apply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ kind }),
       });
-      const data = (await res.json().catch(() => ({}))) as { error?: string; ok?: boolean };
+      const j = await res.json().catch(() => ({})) as { error?: string };
       if (!res.ok) {
-        setError(data.error || 'Request failed');
+        setToast({ kind: 'error', msg: j.error ?? 'Request failed' });
         return;
       }
-      setMessage(
-        kind === 'verified'
-          ? 'Verification request submitted. Our team will review your listing.'
-          : 'Sponsored listing request submitted. Our team will be in touch.',
-      );
+      setToast({
+        kind: 'success',
+        msg: kind === 'verified'
+          ? 'Verification request submitted — our team will review your listing within 1–2 business days.'
+          : 'Sponsored placement request submitted — our team will be in touch shortly.',
+      });
       await load();
     } finally {
       setSubmitting(null);
     }
   }
 
-  const vs = venue?.directory_verified_status ?? 'none';
-  const ss = venue?.directory_sponsored_status ?? 'none';
-  const canApplyVerified = vs === 'none' || vs === 'rejected';
-  const canApplySponsored = ss === 'none' || ss === 'rejected';
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24 text-gray-400">
-        <Loader2 className="w-5 h-5 animate-spin" />
+        <Loader2 className="h-5 w-5 animate-spin" />
       </div>
     );
   }
 
+  const vs = data?.directory_verified_status ?? 'none';
+  const ss = data?.directory_sponsored_status ?? 'none';
+  const verifiedIncluded = data?.verifiedIncluded ?? true;
+  const sponsoredIncluded = data?.sponsoredIncluded ?? true;
+  const isHighestPlan = data?.isHighestPlan ?? false;
+  const planName = data?.planName;
+
+  const canApplyVerified = vs === 'none' || vs === 'rejected';
+  const canApplySponsored = ss === 'none' || ss === 'rejected';
+
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col gap-2">
+    <div className="mx-auto max-w-3xl space-y-6 py-2">
+
+      {/* ── Header ──────────────────────────────────────────────────── */}
+      <div>
         <Link
           href="/dashboard/listing"
           className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-900"
         >
-          <ArrowLeft className="w-3.5 h-3.5" /> Back to listing
+          <ArrowLeft size={13} /> Back to listing
         </Link>
-        <h1 className="font-heading text-2xl text-gray-900">Verified &amp; sponsored</h1>
-        <p className="text-sm text-gray-500 max-w-xl">
-          Request a blue verified badge or sponsored placement on the public directory (storyvenue.com). Approval is
-          handled by StoryVenue. Status updates appear here after our team reviews your venue.
+        <h1 className="mt-2 font-heading text-2xl text-gray-900">Verified &amp; Sponsored</h1>
+        <p className="mt-1 max-w-xl text-sm text-gray-500">
+          Add a blue verified badge or sponsored placement to your public listing on
+          storyvenue.com. These optional add-ons are billed monthly and can be cancelled
+          at any time. Pricing is subject to change — current subscribers will receive
+          at least 30 days' notice before any price increase takes effect.
         </p>
-      </header>
+      </div>
 
-      {error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
-      )}
-      {message && (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          {message}
+      {/* ── Plan inclusion banner ──────────────────────────────────── */}
+      {isHighestPlan ? (
+        <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          <Sparkles size={16} className="mt-0.5 shrink-0 text-emerald-600" />
+          <div>
+            <span className="font-semibold">Both add-ons are included in your {planName ?? 'current'} plan</span>
+            {' '}— Verified and Sponsored are available to you at no extra charge.
+            Apply below and our team will review within 1–2 business days.
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-start gap-3 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900">
+          <Info size={16} className="mt-0.5 shrink-0 text-violet-600" />
+          <div>
+            Verified and Sponsored are monthly add-ons on your current plan.
+            {planName && (
+              <> They are included free on our highest-tier plan — upgrade
+              from <strong>{planName}</strong> to get both at no extra cost.</>
+            )}
+            {' '}
+            <Link href="/dashboard/directory-billing" className="font-semibold underline hover:text-violet-700">
+              View plans
+            </Link>
+          </div>
         </div>
       )}
 
-      <section className={CARD}>
-        <div className="flex items-start gap-3">
-          <div
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white"
-            style={{ backgroundColor: '#3897F0' }}
-          >
-            <BadgeCheck className="h-5 w-5" />
+      {/* ── Toast ─────────────────────────────────────────────────── */}
+      {toast && (
+        <div
+          className={`flex items-start gap-2 rounded-2xl border px-4 py-3 text-sm ${
+            toast.kind === 'success'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+              : 'border-red-200 bg-red-50 text-red-700'
+          }`}
+        >
+          {toast.kind === 'success' ? (
+            <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
+          ) : (
+            <AlertCircle size={16} className="mt-0.5 shrink-0" />
+          )}
+          {toast.msg}
+        </div>
+      )}
+
+      {/* ── Verified listing card ──────────────────────────────────── */}
+      <div className={CARD}>
+        {/* Pricing header */}
+        <div className="flex items-start justify-between gap-4 border-b border-gray-100 p-6 sm:p-8">
+          <div className="flex items-start gap-4">
+            <div
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white"
+              style={{ backgroundColor: '#3897F0' }}
+            >
+              <BadgeCheck size={22} />
+            </div>
+            <div>
+              <h2 className="font-heading text-lg text-gray-900">Verified venue</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Displays a blue verified badge next to your venue name on your public
+                listing and in directory search results.
+              </p>
+            </div>
           </div>
-          <div className="min-w-0 flex-1">
-            <h2 className="font-medium text-gray-900">Verified venue</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Shows a blue verified badge next to your venue name on your public listing and in directory search
-              results (similar to Instagram).
-            </p>
-            <p className="mt-3 text-sm">
-              <span className="text-gray-500">Current status:</span>{' '}
-              <span className="font-medium text-gray-900">{directoryBadgeLabel(vs)}</span>
-            </p>
-            {canApplyVerified ? (
+          <div className="shrink-0 text-right">
+            {verifiedIncluded ? (
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                <Sparkles size={11} /> Included
+              </div>
+            ) : (
+              <>
+                <p className="text-2xl font-bold text-gray-900">${VERIFIED_PRICE_MONTHLY}<span className="text-sm font-normal text-gray-500">/mo</span></p>
+                <p className="mt-0.5 text-[11px] text-gray-400">Billed monthly · cancel anytime</p>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* What's included */}
+        <div className="grid grid-cols-1 gap-4 px-6 py-5 sm:grid-cols-2 sm:px-8">
+          {[
+            'Blue verified badge on public listing',
+            'Badge appears in directory search results',
+            'Increases trust and conversion with brides',
+            'Human review within 1–2 business days',
+          ].map((f) => (
+            <div key={f} className="flex items-center gap-2 text-sm text-gray-700">
+              <CheckCircle2 size={15} className="shrink-0 text-emerald-500" />
+              {f}
+            </div>
+          ))}
+        </div>
+
+        {/* Status + action */}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-b-3xl border-t border-gray-100 bg-gray-50 px-6 py-4 sm:px-8">
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            <span>Current status:</span>
+            <StatusPill status={vs} />
+          </div>
+          {vs === 'approved' ? (
+            <p className="text-xs text-gray-500">Your badge is live on the directory.</p>
+          ) : vs === 'pending' || vs === 'draft' ? (
+            <p className="text-xs text-gray-500">Our team is reviewing your listing.</p>
+          ) : canApplyVerified ? (
+            verifiedIncluded ? (
               <button
                 type="button"
                 disabled={!!submitting}
                 onClick={() => void apply('verified')}
-                className="mt-4 inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-                style={{ backgroundColor: '#1b1b1b' }}
+                className="inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-4 py-2 text-xs font-semibold text-white hover:bg-gray-800 disabled:opacity-60"
               >
-                {submitting === 'verified' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                Request verification
+                {submitting === 'verified' ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : (
+                  <BadgeCheck size={13} />
+                )}
+                Apply for verification
               </button>
             ) : (
-              <p className="mt-4 text-sm text-gray-500">
-                {vs === 'pending'
-                  ? 'Your request is pending review.'
-                  : vs === 'approved'
-                    ? 'Your venue is verified on the directory.'
-                    : vs === 'draft'
-                      ? 'Your application is being prepared by our team.'
-                      : null}
+              <div className="flex items-center gap-3">
+                <div className="text-right">
+                  <p className="text-xs font-semibold text-gray-900">${VERIFIED_PRICE_MONTHLY}/month</p>
+                  <p className="text-[11px] text-gray-400">Price may change with notice</p>
+                </div>
+                <button
+                  type="button"
+                  disabled={!!submitting}
+                  onClick={() => void apply('verified')}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-4 py-2 text-xs font-semibold text-white hover:bg-gray-800 disabled:opacity-60"
+                >
+                  {submitting === 'verified' ? (
+                    <Loader2 size={13} className="animate-spin" />
+                  ) : (
+                    <BadgeCheck size={13} />
+                  )}
+                  Apply &amp; subscribe — ${VERIFIED_PRICE_MONTHLY}/mo
+                </button>
+              </div>
+            )
+          ) : vs === 'rejected' ? (
+            <button
+              type="button"
+              disabled={!!submitting}
+              onClick={() => void apply('verified')}
+              className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+            >
+              Reapply
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      {/* ── Sponsored listing card ─────────────────────────────────── */}
+      <div className={CARD}>
+        {/* Pricing header */}
+        <div className="flex items-start justify-between gap-4 border-b border-gray-100 p-6 sm:p-8">
+          <div className="flex items-start gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-100">
+              <Megaphone size={22} className="text-amber-700" />
+            </div>
+            <div>
+              <h2 className="font-heading text-lg text-gray-900">Sponsored listing</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Promoted placement in directory browse and search with a{' '}
+                <span className="font-medium text-amber-700">Sponsored</span> label.
+                Limited slots per market — first come, first served.
               </p>
+            </div>
+          </div>
+          <div className="shrink-0 text-right">
+            {sponsoredIncluded ? (
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                <Sparkles size={11} /> Included
+              </div>
+            ) : (
+              <>
+                <p className="text-2xl font-bold text-gray-900">${SPONSORED_PRICE_MONTHLY}<span className="text-sm font-normal text-gray-500">/mo</span></p>
+                <p className="mt-0.5 text-[11px] text-gray-400">Billed monthly · cancel anytime</p>
+              </>
             )}
           </div>
         </div>
-      </section>
 
-      <section className={CARD}>
-        <div className="flex items-start gap-3">
-          <div
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-900"
-          >
-            <Megaphone className="h-5 w-5" />
+        {/* What's included */}
+        <div className="grid grid-cols-1 gap-4 px-6 py-5 sm:grid-cols-2 sm:px-8">
+          {[
+            '"Sponsored" label on public listing',
+            'Boosted placement in directory search',
+            'Increased visibility during peak search',
+            'Limited slots per metro area',
+          ].map((f) => (
+            <div key={f} className="flex items-center gap-2 text-sm text-gray-700">
+              <CheckCircle2 size={15} className="shrink-0 text-amber-500" />
+              {f}
+            </div>
+          ))}
+        </div>
+
+        {/* Status + action */}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-b-3xl border-t border-gray-100 bg-gray-50 px-6 py-4 sm:px-8">
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            <span>Current status:</span>
+            <StatusPill status={ss} />
           </div>
-          <div className="min-w-0 flex-1">
-            <h2 className="font-medium text-gray-900">Sponsored listing</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Sponsored venues can appear with a &quot;Sponsored&quot; label and boosted placement in directory browse
-              and search (subject to availability and approval).
-            </p>
-            <p className="mt-3 text-sm">
-              <span className="text-gray-500">Current status:</span>{' '}
-              <span className="font-medium text-gray-900">{directoryBadgeLabel(ss)}</span>
-            </p>
-            {canApplySponsored ? (
+          {ss === 'approved' ? (
+            <p className="text-xs text-gray-500">Your sponsored placement is live.</p>
+          ) : ss === 'pending' || ss === 'draft' ? (
+            <p className="text-xs text-gray-500">Our team is confirming your slot.</p>
+          ) : canApplySponsored ? (
+            sponsoredIncluded ? (
               <button
                 type="button"
                 disabled={!!submitting}
                 onClick={() => void apply('sponsored')}
-                className="mt-4 inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-50 disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 rounded-full bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
               >
-                {submitting === 'sponsored' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                Request sponsored placement
+                {submitting === 'sponsored' ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : (
+                  <Megaphone size={13} />
+                )}
+                Apply for sponsored placement
               </button>
             ) : (
-              <p className="mt-4 text-sm text-gray-500">
-                {ss === 'pending'
-                  ? 'Your request is pending review.'
-                  : ss === 'approved'
-                    ? 'Your venue is marked as sponsored on the directory.'
-                    : ss === 'draft'
-                      ? 'Your sponsorship is being set up by our team.'
-                      : null}
-              </p>
-            )}
-          </div>
+              <div className="flex items-center gap-3">
+                <div className="text-right">
+                  <p className="text-xs font-semibold text-gray-900">${SPONSORED_PRICE_MONTHLY}/month</p>
+                  <p className="text-[11px] text-gray-400">Price may change with notice</p>
+                </div>
+                <button
+                  type="button"
+                  disabled={!!submitting}
+                  onClick={() => void apply('sponsored')}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
+                >
+                  {submitting === 'sponsored' ? (
+                    <Loader2 size={13} className="animate-spin" />
+                  ) : (
+                    <Megaphone size={13} />
+                  )}
+                  Apply &amp; subscribe — ${SPONSORED_PRICE_MONTHLY}/mo
+                </button>
+              </div>
+            )
+          ) : ss === 'rejected' ? (
+            <button
+              type="button"
+              disabled={!!submitting}
+              onClick={() => void apply('sponsored')}
+              className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+            >
+              Reapply
+            </button>
+          ) : null}
         </div>
-      </section>
+      </div>
+
+      {/* ── Upgrade CTA (only when on a non-highest plan) ─────────── */}
+      {!isHighestPlan && (
+        <div className="flex items-center justify-between gap-4 rounded-3xl bg-gray-900 px-6 py-5 sm:px-8">
+          <div>
+            <p className="font-heading text-base text-white">Get both included in your plan</p>
+            <p className="mt-1 text-sm text-gray-400">
+              Upgrade to our highest-tier plan and Verified + Sponsored are included
+              at no extra charge — saving you ${VERIFIED_PRICE_MONTHLY + SPONSORED_PRICE_MONTHLY}/month.
+            </p>
+          </div>
+          <Link
+            href="/dashboard/directory-billing"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
+          >
+            View plans <ArrowRight size={14} />
+          </Link>
+        </div>
+      )}
+
+      {/* ── Pricing disclaimer ─────────────────────────────────────── */}
+      <p className="pb-2 text-center text-[11px] leading-relaxed text-gray-400">
+        All prices are in USD and billed monthly. Pricing is subject to change at any time.
+        Current subscribers will receive at least 30 days&apos; advance notice before any price
+        change takes effect. Cancellation takes effect at the end of the current billing period.
+        For questions contact{' '}
+        <a href="mailto:hello@storyvenue.com" className="underline hover:text-gray-600">
+          hello@storyvenue.com
+        </a>
+        .
+      </p>
     </div>
   );
 }
