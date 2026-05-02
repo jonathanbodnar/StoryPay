@@ -60,17 +60,25 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Try to load the parent row; if missing we return an empty shape so the
-  // form can render and PATCH will lazily create on first save.
+  // Try to load the parent row; if the table doesn't exist yet (migration
+  // 091 not applied) or no row exists for this venue, return an empty shape
+  // so the form still renders. The PATCH handler will lazily create on first
+  // save once the schema is in place.
   const { data: guide, error: guideErr } = await supabaseAdmin
     .from('venue_pricing_guides')
     .select('*')
     .eq('venue_id', venueId)
     .maybeSingle();
 
-  if (guideErr && guideErr.code !== 'PGRST116') {
-    console.error('[pricing-guide GET]', guideErr);
-    return NextResponse.json({ error: guideErr.message }, { status: 500 });
+  if (guideErr) {
+    // Tolerate "row not found" (PGRST116) and "undefined table" (42P01) —
+    // both mean the user hasn't done anything yet.
+    const code = (guideErr as { code?: string }).code;
+    if (code !== 'PGRST116' && code !== '42P01') {
+      console.error('[pricing-guide GET]', guideErr);
+      return NextResponse.json({ error: guideErr.message }, { status: 500 });
+    }
+    return NextResponse.json({ guide: emptyGuide(venueId), schemaMissing: code === '42P01' });
   }
 
   if (!guide) {

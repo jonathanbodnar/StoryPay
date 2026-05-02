@@ -144,6 +144,7 @@ export default function PricingGuidePage() {
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [error, setError] = useState<string>('');
+  const [schemaMissing, setSchemaMissing] = useState(false);
 
   // Initial load
   useEffect(() => {
@@ -155,8 +156,11 @@ export default function PricingGuidePage() {
           const j = await res.json().catch(() => ({}));
           throw new Error((j as { error?: string }).error ?? 'Failed to load guide');
         }
-        const j = (await res.json()) as { guide: Guide };
-        if (!cancelled) setGuide(j.guide);
+        const j = (await res.json()) as { guide: Guide; schemaMissing?: boolean };
+        if (!cancelled) {
+          setGuide(j.guide);
+          if (j.schemaMissing) setSchemaMissing(true);
+        }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Load failed');
       } finally {
@@ -330,6 +334,21 @@ export default function PricingGuidePage() {
         <div className="flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
           <span>{error}</span>
+        </div>
+      )}
+
+      {schemaMissing && (
+        <div className="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+          <div>
+            <strong>One-time setup needed.</strong> This page&apos;s database tables haven&apos;t been
+            created yet. An admin needs to run the migration once: open
+            {' '}
+            <code className="rounded bg-amber-100 px-1.5 py-0.5">/api/admin/run-migration-091</code>
+            {' '}
+            in your browser while logged into the admin panel, then refresh this page. Edits below
+            will not save until that&apos;s done.
+          </div>
         </div>
       )}
 
