@@ -295,7 +295,7 @@ export default function PricingGuidePage() {
     updateParent('gallery', guide.gallery.filter((g) => g.url !== url));
   }
 
-  async function uploadFieldImage(field: 'accommodations_image_url' | 'availability_image_url', file: File) {
+  async function uploadFieldImage(field: 'cover_image_url' | 'accommodations_image_url' | 'availability_image_url', file: File) {
     setSaving(true);
     try {
       const url = await uploadOneImage(file);
@@ -542,10 +542,10 @@ export default function PricingGuidePage() {
         </button>
       </div>
 
-      {/* ── Cover image (auto-generated, page 1) ───────────────────── */}
+      {/* ── Cover image (page 1) ────────────────────────────────────── */}
       <Section
         title="Front cover"
-        hint="The first page of the guide and the image that replaces the listing's stat box on your public page. Auto-generated from your venue photos and logo."
+        hint="The first page of the guide and the image that replaces the listing's stat box on your public page."
         icon={<ImageIcon size={18} />}
       >
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-[200px_1fr]">
@@ -553,21 +553,38 @@ export default function PricingGuidePage() {
             {guide.cover_image_url ? (
               <img src={guide.cover_image_url} alt="Guide cover" className="h-full w-full object-cover" />
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-xs text-gray-400">
-                Not generated yet
+              <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-xs text-gray-400">
+                <ImageIcon size={28} className="text-gray-300" />
+                <span>No cover yet</span>
               </div>
             )}
           </div>
-          <div className="space-y-3">
+          <div className="space-y-4">
             <p className="text-sm text-gray-600">
-              The cover is generated automatically using a portrait photo of your venue, your logo, and a
-              <em> Pricing & Availability Guide</em> title in Playfair Display. We&apos;ll wire up the generator
-              in the next phase — for now, save the rest of the guide and enable it when you&apos;re ready.
+              Upload a portrait-style cover image (8.5×11 ratio recommended) that will appear as a preview
+              on your public venue listing and as the first page of your pricing guide.
             </p>
-            <div className="text-xs text-gray-400">
-              {guide.cover_generated_at
-                ? `Last generated ${new Date(guide.cover_generated_at).toLocaleString()}`
-                : 'No cover generated yet.'}
+            <div className="flex flex-wrap gap-2">
+              <label className="cursor-pointer inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                <Upload size={15} />
+                {guide.cover_image_url ? 'Replace cover' : 'Upload cover'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadFieldImage('cover_image_url', f); }}
+                />
+              </label>
+              {guide.cover_image_url && (
+                <button
+                  type="button"
+                  onClick={() => updateParent('cover_image_url', null)}
+                  className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+                >
+                  <Trash2 size={14} />
+                  Remove
+                </button>
+              )}
             </div>
           </div>
         </div>
