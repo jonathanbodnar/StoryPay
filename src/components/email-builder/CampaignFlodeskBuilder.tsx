@@ -4696,8 +4696,8 @@ export function CampaignFlodeskBuilder({
           onClick={(e) => e.stopPropagation()}
         >
           <div aria-hidden style={{
-            position: 'absolute', top: 0, left: 0, bottom: 0, width: 28,
-            background: 'linear-gradient(to right, #ffffff 0%, transparent 100%)',
+            position: 'absolute', top: 0, left: 0, bottom: 0, width: 6,
+            background: 'linear-gradient(to right, rgba(0,0,0,0.08) 0%, transparent 100%)',
             pointerEvents: 'none', zIndex: 10,
           }} />
           <div

@@ -2308,12 +2308,12 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
             style={{ background: '#f4f4f5', position: 'relative' }}
             onMouseDown={(e) => e.stopPropagation()}
           >
-            {/* Gradient transition: white canvas fades INTO the gray sidebar.
-                Goes from #ffffff (left edge, matching canvas) to transparent
-                over 28px so the sidebar colour bleeds naturally into the canvas. */}
+            {/* Defined edge shadow at the sidebar's left boundary — matches the
+                Flodesk reference exactly. Thin (6px) shadow fading quickly into
+                the gray sidebar colour. */}
             <div aria-hidden style={{
-              position: 'absolute', top: 0, left: 0, bottom: 0, width: 28,
-              background: 'linear-gradient(to right, #ffffff 0%, transparent 100%)',
+              position: 'absolute', top: 0, left: 0, bottom: 0, width: 6,
+              background: 'linear-gradient(to right, rgba(0,0,0,0.08) 0%, transparent 100%)',
               pointerEvents: 'none', zIndex: 10,
             }} />
 
