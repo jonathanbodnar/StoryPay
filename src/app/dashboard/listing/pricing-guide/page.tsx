@@ -5,8 +5,10 @@ import Link from 'next/link';
 import {
   Loader2, Save, CheckCircle2, AlertCircle, ChevronDown, ChevronRight,
   Plus, Trash2, GripVertical, Image as ImageIcon, Sparkles, Star,
-  ArrowLeft, Upload,
+  ArrowLeft, Upload, Eye, Wand2,
 } from 'lucide-react';
+import { AIField } from '@/components/pricing-guide/AIField';
+import PreviewGuideModal from '@/components/pricing-guide/PreviewGuideModal';
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -138,6 +140,23 @@ async function uploadOneImage(file: File): Promise<string> {
 
 // ─── Page component ─────────────────────────────────────────────────────
 
+type VenueMeta = {
+  name: string | null;
+  venue_type: string | null;
+  location_city: string | null;
+  location_state: string | null;
+  capacity_min: number | null;
+  capacity_max: number | null;
+  indoor_outdoor: string | null;
+  features: string[];
+};
+
+type SeedShape = {
+  seed: Partial<Guide> & { gallery?: GalleryItem[]; reviews?: ReviewItem[] };
+  hasListing: boolean;
+  venue?: VenueMeta;
+};
+
 export default function PricingGuidePage() {
   const [guide, setGuide] = useState<Guide | null>(null);
   const [loading, setLoading] = useState(true);
@@ -145,21 +164,32 @@ export default function PricingGuidePage() {
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [error, setError] = useState<string>('');
   const [schemaMissing, setSchemaMissing] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
-  // Initial load
+  // Listing-derived suggestions used by the auto-fill banner and AI extras
+  const [seedData, setSeedData] = useState<SeedShape | null>(null);
+  const [seedDismissed, setSeedDismissed] = useState(false);
+  const [autoFilling, setAutoFilling] = useState(false);
+
+  // Initial load — guide + seed in parallel
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('/api/listing/pricing-guide', { cache: 'no-store' });
-        if (!res.ok) {
-          const j = await res.json().catch(() => ({}));
+        const [guideRes, seedRes] = await Promise.all([
+          fetch('/api/listing/pricing-guide', { cache: 'no-store' }),
+          fetch('/api/listing/pricing-guide/seed', { cache: 'no-store' }),
+        ]);
+        if (!guideRes.ok) {
+          const j = await guideRes.json().catch(() => ({}));
           throw new Error((j as { error?: string }).error ?? 'Failed to load guide');
         }
-        const j = (await res.json()) as { guide: Guide; schemaMissing?: boolean };
+        const guideJson = (await guideRes.json()) as { guide: Guide; schemaMissing?: boolean };
+        const seedJson = seedRes.ok ? ((await seedRes.json()) as SeedShape) : null;
         if (!cancelled) {
-          setGuide(j.guide);
-          if (j.schemaMissing) setSchemaMissing(true);
+          setGuide(guideJson.guide);
+          if (guideJson.schemaMissing) setSchemaMissing(true);
+          if (seedJson) setSeedData(seedJson);
         }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Load failed');
@@ -285,6 +315,95 @@ export default function PricingGuidePage() {
     } finally { setSaving(false); }
   }
 
+  // ── Auto-fill from listing ─────────────────────────────────────────────
+  //
+  // Pulls everything `/seed` returned and merges it into the guide, only for
+  // fields the owner hasn't already filled in. We never overwrite their work.
+  // Spaces and packages are seeded only when the guide currently has none.
+  const autoFillFromListing = useCallback(async () => {
+    if (!guide || !seedData?.seed) return;
+    setAutoFilling(true);
+    setError('');
+    try {
+      const seed = seedData.seed;
+      const parentPatch: Partial<Guide> = {};
+
+      const stringFields: (keyof Guide)[] = [
+        'congratulatory_message',
+        'about_venue',
+        'accommodations_text',
+        'pricing_intro',
+        'availability_text',
+        'cta_headline',
+        'cta_body',
+        'cover_source_image_url',
+      ];
+      for (const field of stringFields) {
+        const seedVal = (seed as Record<string, unknown>)[field as string];
+        const currentVal = guide[field];
+        if (typeof seedVal === 'string' && seedVal.trim() && !(typeof currentVal === 'string' && currentVal.trim())) {
+          (parentPatch as Record<string, unknown>)[field as string] = seedVal;
+        }
+      }
+
+      // Gallery: only fill if currently empty
+      if (Array.isArray(seed.gallery) && seed.gallery.length > 0 && guide.gallery.length === 0) {
+        parentPatch.gallery = seed.gallery;
+      }
+
+      // Reviews: only fill if currently empty
+      if (Array.isArray(seed.reviews) && seed.reviews.length > 0 && guide.reviews.length === 0) {
+        parentPatch.reviews = seed.reviews;
+      }
+
+      // Apply parent patch optimistically + persist
+      if (Object.keys(parentPatch).length > 0) {
+        setGuide((g) => (g ? { ...g, ...parentPatch } : g));
+        await patchParent(parentPatch);
+      }
+
+      // Spaces: create rows only when no spaces exist yet
+      type SeedSpace = { name?: string | null; description?: string | null; capacity?: string | null };
+      const seedSpaces = ((seed as Record<string, unknown>).spaces as SeedSpace[] | undefined) ?? [];
+      if (seedSpaces.length > 0 && guide.spaces.length === 0) {
+        for (const s of seedSpaces) {
+          const res = await fetch('/api/listing/pricing-guide/spaces', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: s.name ?? null,
+              description: s.description ?? null,
+              capacity: s.capacity ?? null,
+            }),
+          });
+          if (res.ok) {
+            const { space } = (await res.json()) as { space: Space };
+            setGuide((g) => (g ? { ...g, spaces: [...g.spaces, space] } : g));
+          }
+        }
+      }
+
+      setSeedDismissed(true);
+      setSavedAt(Date.now());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Auto-fill failed');
+    } finally {
+      setAutoFilling(false);
+    }
+  }, [guide, seedData, patchParent]);
+
+  // Show the banner only when there's something useful to seed AND the guide
+  // is mostly empty (so we don't pester owners who've already started filling).
+  const guideIsMostlyEmpty =
+    guide
+      ? !guide.about_venue?.trim() &&
+        !guide.congratulatory_message?.trim() &&
+        guide.gallery.length === 0 &&
+        guide.spaces.length === 0
+      : false;
+  const seedIsUseful = !!seedData?.hasListing && !!seedData.seed && Object.keys(seedData.seed).length > 0;
+  const showSeedBanner = !seedDismissed && guideIsMostlyEmpty && seedIsUseful;
+
   // ── Render ─────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -327,6 +446,13 @@ export default function PricingGuidePage() {
               <CheckCircle2 size={12} /> Saved
             </span>
           ) : null}
+          <button
+            type="button"
+            onClick={() => setShowPreview(true)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50"
+          >
+            <Eye size={14} /> Preview guide
+          </button>
         </div>
       </div>
 
@@ -348,6 +474,45 @@ export default function PricingGuidePage() {
             {' '}
             in your browser while logged into the admin panel, then refresh this page. Edits below
             will not save until that&apos;s done.
+          </div>
+        </div>
+      )}
+
+      {/* ── Auto-fill from listing banner ───────────────────────────── */}
+      {showSeedBanner && (
+        <div className="flex items-start justify-between gap-4 rounded-3xl border border-violet-200 bg-gradient-to-br from-violet-50 to-fuchsia-50 p-5">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-white text-violet-700 shadow-sm">
+              <Wand2 size={18} />
+            </div>
+            <div>
+              <h3 className="font-heading text-base text-gray-900">
+                Save 20 minutes — fill the guide from your listing
+              </h3>
+              <p className="mt-1 text-sm text-gray-700">
+                We&apos;ll pre-populate your description, photo gallery, spaces, accommodations,
+                reviews, and cover photo from your public venue listing. You can edit everything
+                afterward, and use <strong>Ask AI</strong> on any section to polish the wording.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-shrink-0 flex-col items-end gap-2">
+            <button
+              type="button"
+              onClick={autoFillFromListing}
+              disabled={autoFilling}
+              className="inline-flex items-center gap-1.5 rounded-full bg-violet-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-violet-700 disabled:opacity-60"
+            >
+              {autoFilling ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+              {autoFilling ? 'Filling…' : 'Auto-fill now'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSeedDismissed(true)}
+              className="text-xs text-gray-500 hover:text-gray-800"
+            >
+              Start from blank
+            </button>
           </div>
         </div>
       )}
@@ -415,12 +580,19 @@ export default function PricingGuidePage() {
         icon={<Sparkles size={18} />}
       >
         <label className={LABEL}>Congratulatory message</label>
-        <textarea
-          rows={5}
-          className={TEXTAREA}
-          placeholder={`Congratulations on your engagement! We're so excited to share what makes our venue special…`}
+        <AIField
+          section="congratulatory_message"
           value={guide.congratulatory_message ?? ''}
-          onChange={(e) => updateParent('congratulatory_message', e.target.value)}
+          onChange={(v) => updateParent('congratulatory_message', v)}
+          render={({ value, onChange }) => (
+            <textarea
+              rows={5}
+              className={`${TEXTAREA} pr-28`}
+              placeholder={`Congratulations on your engagement! We're so excited to share what makes our venue special…`}
+              value={value}
+              onChange={onChange}
+            />
+          )}
         />
       </Section>
 
@@ -430,6 +602,20 @@ export default function PricingGuidePage() {
         hint="A curated set of photos that show off the venue. Drag in landscape and portrait shots; we'll lay them out across the gallery page(s)."
         icon={<ImageIcon size={18} />}
       >
+        {seedData?.seed?.gallery && seedData.seed.gallery.length > 0 && guide.gallery.length === 0 && (
+          <div className="mb-4 flex items-start justify-between gap-3 rounded-2xl border border-violet-200 bg-violet-50 p-3">
+            <p className="text-sm text-violet-900">
+              <strong>{seedData.seed.gallery.length} photos</strong> from your public listing are ready to use.
+            </p>
+            <button
+              type="button"
+              onClick={() => updateParent('gallery', seedData.seed.gallery ?? [])}
+              className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-full bg-violet-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-700"
+            >
+              <Sparkles size={12} /> Use them
+            </button>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {guide.gallery.map((g) => (
             <div key={g.url} className="group relative aspect-[4/3] overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
@@ -467,12 +653,19 @@ export default function PricingGuidePage() {
         hint="The story of your space — history, vibe, what makes it feel different from anywhere else."
         icon={<ImageIcon size={18} />}
       >
-        <textarea
-          rows={8}
-          className={TEXTAREA}
-          placeholder="Tucked into the rolling hills of Napa, our barn-and-vineyard estate has hosted couples for over a decade…"
+        <AIField
+          section="about_venue"
           value={guide.about_venue ?? ''}
-          onChange={(e) => updateParent('about_venue', e.target.value)}
+          onChange={(v) => updateParent('about_venue', v)}
+          render={({ value, onChange }) => (
+            <textarea
+              rows={8}
+              className={`${TEXTAREA} pr-28`}
+              placeholder="Tucked into the rolling hills of Napa, our barn-and-vineyard estate has hosted couples for over a decade…"
+              value={value}
+              onChange={onChange}
+            />
+          )}
         />
       </Section>
 
@@ -517,12 +710,20 @@ export default function PricingGuidePage() {
                     value={space.capacity ?? ''}
                     onChange={(e) => patchSpace(space.id, { capacity: e.target.value })}
                   />
-                  <textarea
-                    rows={3}
-                    className={TEXTAREA}
-                    placeholder="A short description of this space and how it's used."
+                  <AIField
+                    section="space_description"
                     value={space.description ?? ''}
-                    onChange={(e) => patchSpace(space.id, { description: e.target.value })}
+                    onChange={(v) => patchSpace(space.id, { description: v })}
+                    extras={{ space_name: space.name ?? '', capacity: space.capacity ?? '' }}
+                    render={({ value, onChange }) => (
+                      <textarea
+                        rows={3}
+                        className={`${TEXTAREA} pr-28`}
+                        placeholder="A short description of this space and how it's used."
+                        value={value}
+                        onChange={onChange}
+                      />
+                    )}
                   />
                 </div>
 
@@ -555,12 +756,19 @@ export default function PricingGuidePage() {
         icon={<ImageIcon size={18} />}
       >
         <div className="space-y-4">
-          <textarea
-            rows={6}
-            className={TEXTAREA}
-            placeholder="Our guest cottage sleeps 8, and we partner with three hotels within 10 minutes…"
+          <AIField
+            section="accommodations"
             value={guide.accommodations_text ?? ''}
-            onChange={(e) => updateParent('accommodations_text', e.target.value)}
+            onChange={(v) => updateParent('accommodations_text', v)}
+            render={({ value, onChange }) => (
+              <textarea
+                rows={6}
+                className={`${TEXTAREA} pr-28`}
+                placeholder="Our guest cottage sleeps 8, and we partner with three hotels within 10 minutes…"
+                value={value}
+                onChange={onChange}
+              />
+            )}
           />
           <div className="flex items-start gap-4">
             <label className="block aspect-[4/3] w-40 flex-shrink-0 cursor-pointer overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
@@ -594,13 +802,22 @@ export default function PricingGuidePage() {
         icon={<GripVertical size={18} />}
       >
         <label className={LABEL}>Pricing intro</label>
-        <textarea
-          rows={3}
-          className={`${TEXTAREA} mb-6`}
-          placeholder="Our packages are designed to make it easy to plan with confidence…"
-          value={guide.pricing_intro ?? ''}
-          onChange={(e) => updateParent('pricing_intro', e.target.value)}
-        />
+        <div className="mb-6">
+          <AIField
+            section="pricing_intro"
+            value={guide.pricing_intro ?? ''}
+            onChange={(v) => updateParent('pricing_intro', v)}
+            render={({ value, onChange }) => (
+              <textarea
+                rows={3}
+                className={`${TEXTAREA} pr-28`}
+                placeholder="Our packages are designed to make it easy to plan with confidence…"
+                value={value}
+                onChange={onChange}
+              />
+            )}
+          />
+        </div>
 
         <div className="space-y-4">
           {guide.packages.map((pkg) => (
@@ -650,16 +867,25 @@ export default function PricingGuidePage() {
                   }}
                 />
               </div>
-              <textarea
-                rows={3}
-                className={`${TEXTAREA} mt-3`}
-                placeholder="The team made every detail feel effortless…"
-                value={r.body ?? ''}
-                onChange={(e) => {
-                  const next = guide.reviews.map((x, i) => i === idx ? { ...x, body: e.target.value } : x);
-                  updateParent('reviews', next);
-                }}
-              />
+              <div className="mt-3">
+                <AIField
+                  section="review_polish"
+                  value={r.body ?? ''}
+                  onChange={(v) => {
+                    const next = guide.reviews.map((x, i) => i === idx ? { ...x, body: v } : x);
+                    updateParent('reviews', next);
+                  }}
+                  render={({ value, onChange }) => (
+                    <textarea
+                      rows={3}
+                      className={`${TEXTAREA} pr-28`}
+                      placeholder="The team made every detail feel effortless…"
+                      value={value}
+                      onChange={onChange}
+                    />
+                  )}
+                />
+              </div>
               <div className="mt-3 flex items-center justify-between">
                 <div className="flex items-center gap-1">
                   {[1, 2, 3, 4, 5].map((n) => (
@@ -703,12 +929,19 @@ export default function PricingGuidePage() {
         icon={<ImageIcon size={18} />}
       >
         <div className="space-y-4">
-          <textarea
-            rows={5}
-            className={TEXTAREA}
-            placeholder="We typically book 12–18 months in advance. Spring weekends fill first; fall has the strongest availability through October."
+          <AIField
+            section="availability_text"
             value={guide.availability_text ?? ''}
-            onChange={(e) => updateParent('availability_text', e.target.value)}
+            onChange={(v) => updateParent('availability_text', v)}
+            render={({ value, onChange }) => (
+              <textarea
+                rows={5}
+                className={`${TEXTAREA} pr-28`}
+                placeholder="We typically book 12 to 18 months in advance. Spring weekends fill first; fall has the strongest availability through October."
+                value={value}
+                onChange={onChange}
+              />
+            )}
           />
           <div className="flex items-start gap-4">
             <label className="block aspect-[4/3] w-40 flex-shrink-0 cursor-pointer overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
@@ -744,21 +977,35 @@ export default function PricingGuidePage() {
         <div className="space-y-4">
           <div>
             <label className={LABEL}>Headline</label>
-            <input
-              className={INPUT}
-              placeholder="Ready to walk the property?"
+            <AIField
+              section="cta_headline"
               value={guide.cta_headline ?? ''}
-              onChange={(e) => updateParent('cta_headline', e.target.value)}
+              onChange={(v) => updateParent('cta_headline', v)}
+              render={({ value, onChange }) => (
+                <input
+                  className={`${INPUT} pr-28`}
+                  placeholder="Ready to walk the property?"
+                  value={value}
+                  onChange={onChange}
+                />
+              )}
             />
           </div>
           <div>
             <label className={LABEL}>Body</label>
-            <textarea
-              rows={4}
-              className={TEXTAREA}
-              placeholder="We'd love to show you around. Tap the button below to book a private tour with our team."
+            <AIField
+              section="cta_body"
               value={guide.cta_body ?? ''}
-              onChange={(e) => updateParent('cta_body', e.target.value)}
+              onChange={(v) => updateParent('cta_body', v)}
+              render={({ value, onChange }) => (
+                <textarea
+                  rows={4}
+                  className={`${TEXTAREA} pr-28`}
+                  placeholder="We'd love to show you around. Tap the button below to book a private tour with our team."
+                  value={value}
+                  onChange={onChange}
+                />
+              )}
             />
           </div>
           <div>
@@ -783,6 +1030,18 @@ export default function PricingGuidePage() {
           <><Save size={12} /> Edits save automatically</>
         )}
       </div>
+
+      {/* ── Live preview modal ─────────────────────────────────────── */}
+      <PreviewGuideModal
+        open={showPreview}
+        guide={guide}
+        venue={{
+          name: seedData?.venue?.name ?? null,
+          location_city: seedData?.venue?.location_city ?? null,
+          location_state: seedData?.venue?.location_state ?? null,
+        }}
+        onClose={() => setShowPreview(false)}
+      />
     </div>
   );
 }
@@ -797,6 +1056,35 @@ function PackageEditor({
   onDelete: () => void;
 }) {
   const [draftItem, setDraftItem] = useState('');
+  const [generatingItems, setGeneratingItems] = useState(false);
+
+  async function generateIncludedItems() {
+    setGeneratingItems(true);
+    try {
+      const res = await fetch('/api/ai/pricing-guide', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          section: 'package_included_items',
+          mode: 'generate',
+          extras: {
+            package_name: pkg.name ?? '',
+            price_label: pkg.price_label ?? '',
+            existing_items: pkg.included_items.join('; '),
+          },
+        }),
+      });
+      if (!res.ok) return;
+      const { text } = (await res.json()) as { text: string };
+      const items = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+      if (items.length > 0) {
+        onChange({ included_items: items });
+      }
+    } finally {
+      setGeneratingItems(false);
+    }
+  }
+
   return (
     <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -813,17 +1101,38 @@ function PackageEditor({
           onChange={(e) => onChange({ price_label: e.target.value })}
         />
       </div>
-      <textarea
-        rows={3}
-        className={`${TEXTAREA} mt-3`}
-        placeholder="A one-paragraph description of this package."
-        value={pkg.description ?? ''}
-        onChange={(e) => onChange({ description: e.target.value })}
-      />
+      <div className="mt-3">
+        <AIField
+          section="package_description"
+          value={pkg.description ?? ''}
+          onChange={(v) => onChange({ description: v })}
+          extras={{ package_name: pkg.name ?? '', price_label: pkg.price_label ?? '' }}
+          render={({ value, onChange: onChangeText }) => (
+            <textarea
+              rows={3}
+              className={`${TEXTAREA} pr-28`}
+              placeholder="A one-paragraph description of this package."
+              value={value}
+              onChange={onChangeText}
+            />
+          )}
+        />
+      </div>
 
       {/* Included items */}
       <div className="mt-4">
-        <label className={LABEL}>What&apos;s included</label>
+        <div className="mb-1.5 flex items-center justify-between">
+          <label className={LABEL} style={{ marginBottom: 0 }}>What&apos;s included</label>
+          <button
+            type="button"
+            onClick={generateIncludedItems}
+            disabled={generatingItems}
+            className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-60"
+          >
+            {generatingItems ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+            Suggest with AI
+          </button>
+        </div>
         <ul className="space-y-2">
           {pkg.included_items.map((item, idx) => (
             <li key={idx} className="flex items-center gap-2">
