@@ -1981,7 +1981,11 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
             style={{
               flex: 1, position: 'relative', overflow: 'hidden',
               cursor: isPanning ? 'grabbing' : 'grab',
-              background: '#f4f4f5',
+              // Dot-grid canvas background — warm off-white base with subtle dots,
+              // matching the Flodesk / email-builder aesthetic.
+              backgroundColor: '#f7f5f0',
+              backgroundImage: 'radial-gradient(circle, #c8c0b0 1px, transparent 1px)',
+              backgroundSize: '24px 24px',
               // Prevent the browser from doing its own page-zoom on pinch —
               // we handle pinch ourselves via wheel/gesture events.
               touchAction: 'none',
