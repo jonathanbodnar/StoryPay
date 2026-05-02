@@ -10,7 +10,7 @@ import { directoryBadgeLabel } from '@/lib/directory-badges';
 
 // ── Pricing constants (single source of truth for the page) ───────────────
 const VERIFIED_PRICE_MONTHLY = 19;
-const SPONSORED_PRICE_MONTHLY = 97;
+const SPONSORED_PRICE_MONTHLY = 99;
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
