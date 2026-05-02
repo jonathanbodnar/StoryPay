@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Bell, CalendarHeart, Calendar as CalendarIcon, Check, CheckSquare,
-  ChevronDown, ChevronUp, ClipboardList, Clock, DollarSign, Eye, FileSignature,
+  ChevronDown, ChevronUp, ClipboardList, Clock, Copy, DollarSign, Eye, FileSignature,
   Gift, GitBranch, Heart, Image as ImageIcon, Link2, Loader2, Mail,
   MessageSquare, Minus, Phone, Plug, Plus, Search, Send, Shield, Smartphone,
   Sparkles, Square, Tag, Trash2, UserPlus, Users, X, Zap,
@@ -93,6 +93,28 @@ interface EnrollContact {
 
 const DEFAULT_SMS = 'Hi {{first_name}}, a quick note from {{venue_name}}. Reply STOP to opt out.';
 const CARD_W = 240; // canvas card width in pixels
+
+// ─── Right-pane settings primitives ───────────────────────────────────────────
+// These styles mirror the email-builder + form-builder inspector design system
+// (SectionLabel + INSPECTOR_INPUT) so the workflow inspector feels identical.
+const WORKFLOW_INPUT =
+  'w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:bg-white focus:outline-none transition-colors';
+const WORKFLOW_TEXTAREA =
+  'w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:bg-white focus:outline-none transition-colors resize-y';
+const WORKFLOW_SELECT =
+  'w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:bg-white focus:outline-none transition-colors appearance-none pr-9';
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return <p className="text-sm font-semibold text-gray-700 mb-1.5">{children}</p>;
+}
+
+function HelperText({ children }: { children: React.ReactNode }) {
+  return <p className="mt-1.5 text-[11px] text-gray-400 leading-relaxed">{children}</p>;
+}
+
+function SectionGroup({ children }: { children: React.ReactNode }) {
+  return <div className="space-y-5">{children}</div>;
+}
 
 type StepKind =
   | 'delay' | 'send_email' | 'send_sms'
@@ -1391,6 +1413,28 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
     scheduleAutoSave();
   }
 
+  // Clone the step at `localId` and insert the copy directly below it.
+  // The duplicate keeps the same configuration but gets a fresh localId so
+  // it's treated as a brand-new row (and stays selected for further edits).
+  function duplicateStep(localId: string) {
+    setSteps((prev) => {
+      const idx = prev.findIndex((s) => s.localId === localId);
+      if (idx < 0) return prev;
+      const original = prev[idx]!;
+      const newLocalId = `dup-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const cloned: LocalStep = {
+        ...original,
+        localId: newLocalId,
+        title: original.title ? `${original.title} (copy)` : original.title,
+      } as LocalStep;
+      const c = [...prev];
+      c.splice(idx + 1, 0, cloned);
+      setSelected({ kind: 'step', localId: newLocalId });
+      return c;
+    });
+    scheduleAutoSave();
+  }
+
   function moveStep(index: number, dir: -1 | 1) {
     const j = index + dir;
     if (j < 0 || j >= steps.length) return;
@@ -2257,8 +2301,8 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
           {/* ── Right panel ───────────────────────────────────────────────── */}
           <aside
             ref={rightPaneRef}
-            className="w-72 flex-shrink-0 bg-white flex flex-col overflow-hidden"
-            style={{ boxShadow: '-12px 0 32px -8px rgba(0,0,0,0.07)' }}
+            className="w-80 flex-shrink-0 bg-white flex flex-col overflow-hidden border-l border-gray-100"
+            style={{ boxShadow: '-12px 0 32px -8px rgba(0,0,0,0.04)' }}
             onMouseDown={(e) => e.stopPropagation()}
           >
             <div
@@ -2272,131 +2316,137 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
               {/* ── Trigger inspector ──────────────────────────────────── */}
               {selected?.kind === 'trigger' && selected.triggerIdx === 0 ? (
                 /* Primary trigger inspector */
-                <div className="p-5">
-                  <div className="mb-4 flex items-center justify-between">
+                <div className="p-5 text-[13px] text-gray-900">
+                  {/* Block-type pill + Done */}
+                  <div className="mb-5 flex items-center justify-between">
                     <span className="rounded-lg bg-gray-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-gray-600">Trigger 1</span>
                     <button type="button" onClick={() => setSelected(null)} className="text-xs text-gray-400 hover:text-gray-700 transition-colors">Done</button>
                   </div>
 
-                  {/* Trigger type picker */}
-                  <div className="mb-4">
-                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Trigger type</p>
-                    <select
-                      className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
-                      value={auto.trigger_type ?? ''}
-                      onChange={(e) => changeTriggerType(e.target.value ? e.target.value as AutomationTriggerType : null)}
-                    >
-                      <option value="">— Select a trigger —</option>
-                      {TRIGGER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                    </select>
-                  </div>
+                  <SectionGroup>
+                    {/* Trigger type picker */}
+                    <div>
+                      <SectionLabel>Trigger type</SectionLabel>
+                      <div className="relative">
+                        <select
+                          className={WORKFLOW_SELECT}
+                          value={auto.trigger_type ?? ''}
+                          onChange={(e) => changeTriggerType(e.target.value ? e.target.value as AutomationTriggerType : null)}
+                        >
+                          <option value="">— Select a trigger —</option>
+                          {TRIGGER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" strokeWidth={2} aria-hidden />
+                      </div>
+                    </div>
 
-                  {auto.trigger_type === 'form_submitted' && (
-                    <div className="mb-4">
-                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Forms</p>
-                      {forms.length === 0 ? (
-                        <p className="text-[11px] text-gray-500">No forms yet. <Link href="/dashboard/marketing/form-builder" className="text-brand-600 hover:underline">Create one →</Link></p>
-                      ) : (
-                        <div className="max-h-52 space-y-1.5 overflow-y-auto text-xs">
-                          {forms.map((f) => (
-                            <label key={f.id} className="flex items-center gap-2 cursor-pointer">
-                              <input type="checkbox" checked={selForms.includes(f.id)} onChange={() => toggle(selForms, f.id, setSelForms)} />
-                              <span className="truncate">{f.name}</span>
-                              {(f as { is_listing_form?: boolean }).is_listing_form && (
-                                <span className="flex-shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">Venue listing</span>
-                              )}
-                              {!f.published && <span className="text-gray-400">(draft)</span>}
+                    {auto.trigger_type === 'form_submitted' && (
+                      <div>
+                        <SectionLabel>Forms</SectionLabel>
+                        {forms.length === 0 ? (
+                          <p className="text-[12px] text-gray-500">No forms yet. <Link href="/dashboard/marketing/form-builder" className="text-brand-600 hover:underline">Create one →</Link></p>
+                        ) : (
+                          <div className="max-h-52 space-y-1.5 overflow-y-auto rounded-lg border border-gray-100 bg-gray-50/60 px-2.5 py-2 text-[12px]">
+                            {forms.map((f) => (
+                              <label key={f.id} className="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" checked={selForms.includes(f.id)} onChange={() => toggle(selForms, f.id, setSelForms)} />
+                                <span className="truncate">{f.name}</span>
+                                {(f as { is_listing_form?: boolean }).is_listing_form && (
+                                  <span className="flex-shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">Venue listing</span>
+                                )}
+                                {!f.published && <span className="text-gray-400">(draft)</span>}
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                        <HelperText>Empty = enroll on any form.</HelperText>
+                      </div>
+                    )}
+
+                    {auto.trigger_type === 'tag_added' && (
+                      <div>
+                        <div className="mb-1.5 flex items-center justify-between">
+                          <SectionLabel>Tags</SectionLabel>
+                          {selTags.length > 0 && (
+                            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                              {selTags.length} selected
+                            </span>
+                          )}
+                        </div>
+                        {tags.length === 0 ? (
+                          <p className="text-[12px] text-gray-500">No tags yet.</p>
+                        ) : (
+                          <div className="flex flex-wrap gap-1.5">
+                            {tags.map((t) => {
+                              const checked = selTags.includes(t.id);
+                              return (
+                                <button key={t.id} type="button"
+                                  onClick={() => toggle(selTags, t.id, setSelTags)}
+                                  className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
+                                    checked
+                                      ? 'border-blue-300 bg-blue-50 text-blue-700'
+                                      : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300'
+                                  }`}
+                                >
+                                  <Tag size={11} />
+                                  {t.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                        <HelperText>Select one or more — fires when ANY selected tag is added. Empty = any tag.</HelperText>
+                      </div>
+                    )}
+
+                    {auto.trigger_type === 'stage_changed' && (
+                      <div>
+                        <SectionLabel>Stages</SectionLabel>
+                        <div className="max-h-52 space-y-1.5 overflow-y-auto rounded-lg border border-gray-100 bg-gray-50/60 px-2.5 py-2 text-[12px]">
+                          {stages.map((s) => (
+                            <label key={s.id} className="flex items-center gap-2 cursor-pointer">
+                              <input type="checkbox" checked={selStages.includes(s.id)} onChange={() => toggle(selStages, s.id, setSelStages)} />
+                              <span className="text-gray-400">{s.pipelineName}:</span> {s.name}
                             </label>
                           ))}
                         </div>
-                      )}
-                      <p className="mt-2 text-[11px] text-gray-400">Empty = enroll on any form.</p>
-                    </div>
-                  )}
-
-                  {auto.trigger_type === 'tag_added' && (
-                    <div className="mb-4">
-                      <div className="mb-2 flex items-center justify-between">
-                        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Tags</p>
-                        {selTags.length > 0 && (
-                          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
-                            {selTags.length} selected
-                          </span>
-                        )}
                       </div>
-                      {tags.length === 0 ? (
-                        <p className="text-[11px] text-gray-500">No tags yet.</p>
-                      ) : (
-                        <div className="flex flex-wrap gap-1.5">
-                          {tags.map((t) => {
-                            const checked = selTags.includes(t.id);
-                            return (
-                              <button key={t.id} type="button"
-                                onClick={() => toggle(selTags, t.id, setSelTags)}
-                                className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs transition-colors ${
-                                  checked
-                                    ? 'border-blue-300 bg-blue-50 text-blue-700'
-                                    : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300'
-                                }`}
-                              >
-                                <Tag size={11} />
-                                {t.name}
-                              </button>
-                            );
-                          })}
+                    )}
+
+                    {auto.trigger_type === 'trigger_link_click' && (
+                      <div>
+                        <SectionLabel>Trigger links</SectionLabel>
+                        <div className="max-h-52 space-y-1.5 overflow-y-auto rounded-lg border border-gray-100 bg-gray-50/60 px-2.5 py-2 text-[12px]">
+                          {links.map((l) => (
+                            <label key={l.id} className="flex items-center gap-2 cursor-pointer">
+                              <input type="checkbox" checked={selLinks.includes(l.id)} onChange={() => toggle(selLinks, l.id, setSelLinks)} />
+                              <span className="truncate">{l.name}</span>
+                              <span className="text-gray-400">({l.short_code})</span>
+                            </label>
+                          ))}
                         </div>
-                      )}
-                      <p className="mt-2 text-[11px] text-gray-400">Select one or more — fires when ANY selected tag is added. Empty = any tag.</p>
-                    </div>
-                  )}
-
-                  {auto.trigger_type === 'stage_changed' && (
-                    <div className="mb-4">
-                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Stages</p>
-                      <div className="max-h-52 space-y-1.5 overflow-y-auto text-xs">
-                        {stages.map((s) => (
-                          <label key={s.id} className="flex items-center gap-2 cursor-pointer">
-                            <input type="checkbox" checked={selStages.includes(s.id)} onChange={() => toggle(selStages, s.id, setSelStages)} />
-                            <span className="text-gray-400">{s.pipelineName}:</span> {s.name}
-                          </label>
-                        ))}
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {auto.trigger_type === 'trigger_link_click' && (
-                    <div className="mb-4">
-                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Trigger links</p>
-                      <div className="max-h-52 space-y-1.5 overflow-y-auto text-xs">
-                        {links.map((l) => (
-                          <label key={l.id} className="flex items-center gap-2 cursor-pointer">
-                            <input type="checkbox" checked={selLinks.includes(l.id)} onChange={() => toggle(selLinks, l.id, setSelLinks)} />
-                            <span className="truncate">{l.name}</span>
-                            <span className="text-gray-400">({l.short_code})</span>
-                          </label>
-                        ))}
+                    {auto.trigger_type === 'wedding_date_followup' && (
+                      <div>
+                        <SectionLabel>Days after wedding</SectionLabel>
+                        <input type="number" min={0} max={3650}
+                          className={`${WORKFLOW_INPUT} w-32`}
+                          value={daysAfterWedding}
+                          onChange={(e) => setDaysAfterWedding(Number(e.target.value) || 0)}
+                        />
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {auto.trigger_type === 'wedding_date_followup' && (
-                    <div className="mb-4">
-                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Days after wedding</p>
-                      <input type="number" min={0} max={3650}
-                        className="w-28 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
-                        value={daysAfterWedding}
-                        onChange={(e) => setDaysAfterWedding(Number(e.target.value) || 0)}
-                      />
-                    </div>
-                  )}
-
-                  {auto.trigger_type === 'proposal_paid' && (
-                    <p className="mb-4 text-xs text-gray-500">Enrolls when a proposal is marked paid — lead matched by email.</p>
-                  )}
+                    {auto.trigger_type === 'proposal_paid' && (
+                      <p className="text-[12px] text-gray-500 leading-relaxed">Enrolls when a proposal is marked paid — lead matched by email.</p>
+                    )}
+                  </SectionGroup>
 
                   <div className="mt-6 border-t border-gray-100 pt-4">
                     <button type="button" onClick={() => void removeAutomation()}
-                      className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-red-100 py-2 text-xs font-semibold text-red-500 hover:bg-red-50 transition-colors"
+                      className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-white py-2 text-xs font-semibold text-red-500 hover:bg-red-50 transition-colors"
                     >
                       <Trash2 size={12} /> Delete workflow
                     </button>
@@ -2409,131 +2459,138 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                   const extraIdx = selected.triggerIdx - 1;
                   const t = extraTriggers[extraIdx]!;
                   return (
-                    <div className="p-5">
-                      <div className="mb-4 flex items-center justify-between">
+                    <div className="p-5 text-[13px] text-gray-900">
+                      <div className="mb-5 flex items-center justify-between">
                         <span className="rounded-lg bg-gray-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-gray-600">Trigger {selected.triggerIdx + 1}</span>
                         <button type="button" onClick={() => setSelected(null)} className="text-xs text-gray-400 hover:text-gray-700 transition-colors">Done</button>
                       </div>
 
-                      <p className="mb-3 text-[11px] text-gray-400">This workflow will also fire when this trigger matches (OR-logic).</p>
-
-                      <div className="mb-4">
-                        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Trigger type</p>
-                        <select
-                          className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
-                          value={t.type}
-                          onChange={(e) => changeExtraTriggerType(extraIdx, e.target.value as AutomationTriggerType)}
-                        >
-                          {TRIGGER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                        </select>
+                      <div className="mb-5 rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2 text-[11.5px] text-blue-700 leading-relaxed">
+                        This workflow will also fire when this trigger matches (OR-logic).
                       </div>
 
-                      {t.type === 'form_submitted' && (
-                        <div className="mb-4">
-                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Forms</p>
-                          {forms.length === 0 ? (
-                            <p className="text-[11px] text-gray-500">No forms yet.</p>
-                          ) : (
-                            <div className="max-h-52 space-y-1.5 overflow-y-auto text-xs">
-                              {forms.map((f) => (
-                                <label key={f.id} className="flex items-center gap-2 cursor-pointer">
-                                  <input type="checkbox" checked={(t.form_ids ?? []).includes(f.id)} onChange={() => toggleExtraField(extraIdx, 'form_ids', f.id)} />
-                                  <span className="truncate">{f.name}</span>
-                                  {(f as { is_listing_form?: boolean }).is_listing_form && (
-                                    <span className="flex-shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">Venue listing</span>
-                                  )}
-                                  {!f.published && <span className="text-gray-400">(draft)</span>}
+                      <SectionGroup>
+                        <div>
+                          <SectionLabel>Trigger type</SectionLabel>
+                          <div className="relative">
+                            <select
+                              className={WORKFLOW_SELECT}
+                              value={t.type}
+                              onChange={(e) => changeExtraTriggerType(extraIdx, e.target.value as AutomationTriggerType)}
+                            >
+                              {TRIGGER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                            </select>
+                            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" strokeWidth={2} aria-hidden />
+                          </div>
+                        </div>
+
+                        {t.type === 'form_submitted' && (
+                          <div>
+                            <SectionLabel>Forms</SectionLabel>
+                            {forms.length === 0 ? (
+                              <p className="text-[12px] text-gray-500">No forms yet.</p>
+                            ) : (
+                              <div className="max-h-52 space-y-1.5 overflow-y-auto rounded-lg border border-gray-100 bg-gray-50/60 px-2.5 py-2 text-[12px]">
+                                {forms.map((f) => (
+                                  <label key={f.id} className="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" checked={(t.form_ids ?? []).includes(f.id)} onChange={() => toggleExtraField(extraIdx, 'form_ids', f.id)} />
+                                    <span className="truncate">{f.name}</span>
+                                    {(f as { is_listing_form?: boolean }).is_listing_form && (
+                                      <span className="flex-shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">Venue listing</span>
+                                    )}
+                                    {!f.published && <span className="text-gray-400">(draft)</span>}
+                                  </label>
+                                ))}
+                              </div>
+                            )}
+                            <HelperText>Empty = enroll on any form.</HelperText>
+                          </div>
+                        )}
+
+                        {t.type === 'tag_added' && (
+                          <div>
+                            <div className="mb-1.5 flex items-center justify-between">
+                              <SectionLabel>Tags</SectionLabel>
+                              {(t.tag_ids?.length ?? 0) > 0 && (
+                                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                                  {t.tag_ids!.length} selected
+                                </span>
+                              )}
+                            </div>
+                            {tags.length === 0 ? (
+                              <p className="text-[12px] text-gray-500">No tags yet.</p>
+                            ) : (
+                              <div className="flex flex-wrap gap-1.5">
+                                {tags.map((tg) => {
+                                  const checked = (t.tag_ids ?? []).includes(tg.id);
+                                  return (
+                                    <button key={tg.id} type="button"
+                                      onClick={() => toggleExtraField(extraIdx, 'tag_ids', tg.id)}
+                                      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
+                                        checked
+                                          ? 'border-blue-300 bg-blue-50 text-blue-700'
+                                          : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300'
+                                      }`}
+                                    >
+                                      <Tag size={11} />
+                                      {tg.name}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            <HelperText>Select one or more — fires when ANY selected tag is added. Empty = any tag.</HelperText>
+                          </div>
+                        )}
+
+                        {t.type === 'stage_changed' && (
+                          <div>
+                            <SectionLabel>Stages</SectionLabel>
+                            <div className="max-h-52 space-y-1.5 overflow-y-auto rounded-lg border border-gray-100 bg-gray-50/60 px-2.5 py-2 text-[12px]">
+                              {stages.map((s) => (
+                                <label key={s.id} className="flex items-center gap-2 cursor-pointer">
+                                  <input type="checkbox" checked={(t.to_stage_ids ?? []).includes(s.id)} onChange={() => toggleExtraField(extraIdx, 'to_stage_ids', s.id)} />
+                                  <span className="text-gray-400">{s.pipelineName}:</span> {s.name}
                                 </label>
                               ))}
                             </div>
-                          )}
-                          <p className="mt-2 text-[11px] text-gray-400">Empty = enroll on any form.</p>
-                        </div>
-                      )}
-
-                      {t.type === 'tag_added' && (
-                        <div className="mb-4">
-                          <div className="mb-2 flex items-center justify-between">
-                            <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Tags</p>
-                            {(t.tag_ids?.length ?? 0) > 0 && (
-                              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
-                                {t.tag_ids!.length} selected
-                              </span>
-                            )}
                           </div>
-                          {tags.length === 0 ? (
-                            <p className="text-[11px] text-gray-500">No tags yet.</p>
-                          ) : (
-                            <div className="flex flex-wrap gap-1.5">
-                              {tags.map((tg) => {
-                                const checked = (t.tag_ids ?? []).includes(tg.id);
-                                return (
-                                  <button key={tg.id} type="button"
-                                    onClick={() => toggleExtraField(extraIdx, 'tag_ids', tg.id)}
-                                    className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs transition-colors ${
-                                      checked
-                                        ? 'border-blue-300 bg-blue-50 text-blue-700'
-                                        : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300'
-                                    }`}
-                                  >
-                                    <Tag size={11} />
-                                    {tg.name}
-                                  </button>
-                                );
-                              })}
+                        )}
+
+                        {t.type === 'trigger_link_click' && (
+                          <div>
+                            <SectionLabel>Trigger links</SectionLabel>
+                            <div className="max-h-52 space-y-1.5 overflow-y-auto rounded-lg border border-gray-100 bg-gray-50/60 px-2.5 py-2 text-[12px]">
+                              {links.map((l) => (
+                                <label key={l.id} className="flex items-center gap-2 cursor-pointer">
+                                  <input type="checkbox" checked={(t.trigger_link_ids ?? []).includes(l.id)} onChange={() => toggleExtraField(extraIdx, 'trigger_link_ids', l.id)} />
+                                  <span className="truncate">{l.name}</span>
+                                  <span className="text-gray-400">({l.short_code})</span>
+                                </label>
+                              ))}
                             </div>
-                          )}
-                          <p className="mt-2 text-[11px] text-gray-400">Select one or more — fires when ANY selected tag is added. Empty = any tag.</p>
-                        </div>
-                      )}
-
-                      {t.type === 'stage_changed' && (
-                        <div className="mb-4">
-                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Stages</p>
-                          <div className="max-h-52 space-y-1.5 overflow-y-auto text-xs">
-                            {stages.map((s) => (
-                              <label key={s.id} className="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" checked={(t.to_stage_ids ?? []).includes(s.id)} onChange={() => toggleExtraField(extraIdx, 'to_stage_ids', s.id)} />
-                                <span className="text-gray-400">{s.pipelineName}:</span> {s.name}
-                              </label>
-                            ))}
                           </div>
-                        </div>
-                      )}
+                        )}
 
-                      {t.type === 'trigger_link_click' && (
-                        <div className="mb-4">
-                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Trigger links</p>
-                          <div className="max-h-52 space-y-1.5 overflow-y-auto text-xs">
-                            {links.map((l) => (
-                              <label key={l.id} className="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" checked={(t.trigger_link_ids ?? []).includes(l.id)} onChange={() => toggleExtraField(extraIdx, 'trigger_link_ids', l.id)} />
-                                <span className="truncate">{l.name}</span>
-                                <span className="text-gray-400">({l.short_code})</span>
-                              </label>
-                            ))}
+                        {t.type === 'wedding_date_followup' && (
+                          <div>
+                            <SectionLabel>Days after wedding</SectionLabel>
+                            <input type="number" min={0} max={3650}
+                              className={`${WORKFLOW_INPUT} w-32`}
+                              value={t.days_after_wedding ?? 0}
+                              onChange={(e) => updateExtraTrigger(extraIdx, { days_after_wedding: Math.max(0, Math.min(3650, Number(e.target.value) || 0)) })}
+                            />
                           </div>
-                        </div>
-                      )}
+                        )}
 
-                      {t.type === 'wedding_date_followup' && (
-                        <div className="mb-4">
-                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Days after wedding</p>
-                          <input type="number" min={0} max={3650}
-                            className="w-28 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
-                            value={t.days_after_wedding ?? 0}
-                            onChange={(e) => updateExtraTrigger(extraIdx, { days_after_wedding: Math.max(0, Math.min(3650, Number(e.target.value) || 0)) })}
-                          />
-                        </div>
-                      )}
-
-                      {t.type === 'proposal_paid' && (
-                        <p className="mb-4 text-xs text-gray-500">Enrolls when a proposal is marked paid — lead matched by email.</p>
-                      )}
+                        {t.type === 'proposal_paid' && (
+                          <p className="text-[12px] text-gray-500 leading-relaxed">Enrolls when a proposal is marked paid — lead matched by email.</p>
+                        )}
+                      </SectionGroup>
 
                       <div className="mt-6 border-t border-gray-100 pt-4">
                         <button type="button" onClick={() => removeExtraTrigger(extraIdx)}
-                          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-red-100 py-2 text-xs font-semibold text-red-500 hover:bg-red-50 transition-colors"
+                          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-white py-2 text-xs font-semibold text-red-500 hover:bg-red-50 transition-colors"
                         >
                           <Trash2 size={12} /> Remove this trigger
                         </button>
@@ -2544,8 +2601,8 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
 
               ) : selectedStep ? (
                 /* ── Step inspector ──────────────────────────────────────── */
-                <div className="p-5">
-                  <div className="mb-4 flex items-center justify-between">
+                <div className="p-5 text-[13px] text-gray-900">
+                  <div className="mb-5 flex items-center justify-between">
                     <span className="rounded-lg bg-gray-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-gray-600">
                       {selectedStep.step_type === 'send_email' ? 'send email'
                         : selectedStep.step_type === 'send_sms' ? 'send sms'
@@ -2569,35 +2626,32 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                       scheduleAutoSave();
                     };
                     return (
-                      <div data-no-dnd className="mb-5 space-y-2 rounded-xl border border-gray-200 bg-gray-50/60 p-3">
+                      <div data-no-dnd className="mb-6 space-y-4">
                         <div>
-                          <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-                            Step heading <span className="font-normal text-gray-300">— optional, shown on the canvas</span>
-                          </label>
+                          <SectionLabel>Step heading</SectionLabel>
                           <input
                             type="text"
                             value={selectedStep.title ?? ''}
                             onChange={(e) => updateMeta('title', e.target.value)}
                             placeholder="e.g. Welcome email · day 0"
                             maxLength={80}
-                            className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm focus:border-gray-400 focus:outline-none"
+                            className={WORKFLOW_INPUT}
                           />
+                          <HelperText>Optional — shown on the canvas card so you can see what each step does at a glance.</HelperText>
                         </div>
                         <div>
-                          <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-                            Internal note <span className="font-normal text-gray-300">— what this step does, why it exists</span>
-                          </label>
+                          <SectionLabel>Internal note</SectionLabel>
                           <textarea
                             value={selectedStep.note ?? ''}
                             onChange={(e) => updateMeta('note', e.target.value)}
-                            placeholder="e.g. Sends the welcome template the moment a lead fills out the inquiry form. Halts automatically if they reply."
+                            placeholder="e.g. Sends the welcome template the moment a lead fills out the inquiry form."
                             rows={2}
                             maxLength={400}
-                            className="w-full resize-y rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[12px] leading-relaxed focus:border-gray-400 focus:outline-none"
+                            className={`${WORKFLOW_TEXTAREA} text-[12px] leading-relaxed`}
                           />
-                          <p className="mt-1 text-[10px] text-gray-400">
-                            {(selectedStep.note?.length ?? 0)}/400 — only your team sees this; it never goes to the contact.
-                          </p>
+                          <HelperText>
+                            {(selectedStep.note?.length ?? 0)}/400 — only your team sees this; never sent to the contact.
+                          </HelperText>
                         </div>
                       </div>
                     );
@@ -2614,49 +2668,61 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                       scheduleAutoSave();
                     };
                     return (
-                      <div>
-                        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Wait for</p>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number" min={1}
-                            className="w-20 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
-                            value={value}
-                            onChange={(e) => updateMinutes(Number(e.target.value) || 1, unit)}
-                          />
-                          <select
-                            className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
-                            value={unit}
-                            onChange={(e) => updateMinutes(value, e.target.value as WaitUnit)}
-                          >
-                            <option value="minutes">minutes</option>
-                            <option value="hours">hours</option>
-                            <option value="days">days</option>
-                          </select>
+                      <SectionGroup>
+                        <div>
+                          <SectionLabel>Wait for</SectionLabel>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number" min={1}
+                              className={`${WORKFLOW_INPUT} w-24 flex-shrink-0`}
+                              value={value}
+                              onChange={(e) => updateMinutes(Number(e.target.value) || 1, unit)}
+                            />
+                            <div className="relative flex-1">
+                              <select
+                                className={WORKFLOW_SELECT}
+                                value={unit}
+                                onChange={(e) => updateMinutes(value, e.target.value as WaitUnit)}
+                              >
+                                <option value="minutes">minutes</option>
+                                <option value="hours">hours</option>
+                                <option value="days">days</option>
+                              </select>
+                              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" strokeWidth={2} aria-hidden />
+                            </div>
+                          </div>
+                          <HelperText>= {selectedStep.delay_minutes} minute{selectedStep.delay_minutes === 1 ? '' : 's'} total</HelperText>
                         </div>
-                        <p className="mt-2 text-[11px] text-gray-400">
-                          = {selectedStep.delay_minutes} minute{selectedStep.delay_minutes === 1 ? '' : 's'} total
-                        </p>
-                        {/* Quick presets */}
-                        <p className="mt-3 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Presets</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {[
-                            { label: '15m', v: 15,   u: 'minutes' as WaitUnit },
-                            { label: '1h',  v: 1,    u: 'hours'   as WaitUnit },
-                            { label: '1d',  v: 1,    u: 'days'    as WaitUnit },
-                            { label: '2d',  v: 2,    u: 'days'    as WaitUnit },
-                            { label: '3d',  v: 3,    u: 'days'    as WaitUnit },
-                            { label: '7d',  v: 7,    u: 'days'    as WaitUnit },
-                            { label: '14d', v: 14,   u: 'days'    as WaitUnit },
-                          ].map((p) => (
-                            <button key={p.label} type="button"
-                              className="rounded-md border border-gray-200 bg-white px-2 py-0.5 text-[11px] text-gray-600 hover:border-gray-400 transition-colors"
-                              onClick={() => updateMinutes(p.v, p.u)}
-                            >
-                              {p.label}
-                            </button>
-                          ))}
+
+                        <div>
+                          <SectionLabel>Quick presets</SectionLabel>
+                          <div className="flex flex-wrap gap-1.5">
+                            {[
+                              { label: '15m', v: 15,   u: 'minutes' as WaitUnit },
+                              { label: '1h',  v: 1,    u: 'hours'   as WaitUnit },
+                              { label: '1d',  v: 1,    u: 'days'    as WaitUnit },
+                              { label: '2d',  v: 2,    u: 'days'    as WaitUnit },
+                              { label: '3d',  v: 3,    u: 'days'    as WaitUnit },
+                              { label: '7d',  v: 7,    u: 'days'    as WaitUnit },
+                              { label: '14d', v: 14,   u: 'days'    as WaitUnit },
+                            ].map((p) => {
+                              const active = value === p.v && unit === p.u;
+                              return (
+                                <button key={p.label} type="button"
+                                  className={`rounded-lg border px-2.5 py-1 text-[11.5px] font-medium transition-colors ${
+                                    active
+                                      ? 'border-gray-900 bg-gray-900 text-white'
+                                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-400'
+                                  }`}
+                                  onClick={() => updateMinutes(p.v, p.u)}
+                                >
+                                  {p.label}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
-                      </div>
+                      </SectionGroup>
                     );
                   })()}
 
@@ -2697,280 +2763,293 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
 
                     return (
                       <div data-no-dnd>
+                        <SectionGroup>
                         {/* ── Mode tabs ────────────────────────────── */}
-                        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Create email</p>
-                        <div className="grid grid-cols-2 gap-2 mb-4">
-                          <button
-                            type="button"
-                            onClick={() => setField('mode', 'quick')}
-                            className={`rounded-xl border px-3 py-2 text-left transition-colors ${
-                              mode === 'quick'
-                                ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-200'
-                                : 'border-gray-200 bg-white hover:bg-gray-50'
-                            }`}
-                          >
-                            <div className="flex items-center gap-1.5 text-[12px] font-semibold text-gray-800">
-                              <span className={`relative inline-block w-3 h-3 rounded-full border ${mode === 'quick' ? 'border-brand-500 bg-brand-500' : 'border-gray-300'}`}>
-                                {mode === 'quick' && <span className="absolute inset-[3px] rounded-full bg-white" />}
-                              </span>
-                              Quick compose
-                            </div>
-                            <p className="mt-0.5 text-[10.5px] text-gray-500 leading-tight">Write a simple email inline.</p>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setField('mode', 'template')}
-                            className={`rounded-xl border px-3 py-2 text-left transition-colors ${
-                              mode === 'template'
-                                ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-200'
-                                : 'border-gray-200 bg-white hover:bg-gray-50'
-                            }`}
-                          >
-                            <div className="flex items-center gap-1.5 text-[12px] font-semibold text-gray-800">
-                              <span className={`relative inline-block w-3 h-3 rounded-full border ${mode === 'template' ? 'border-brand-500 bg-brand-500' : 'border-gray-300'}`}>
-                                {mode === 'template' && <span className="absolute inset-[3px] rounded-full bg-white" />}
-                              </span>
-                              Use template
-                            </div>
-                            <p className="mt-0.5 text-[10.5px] text-gray-500 leading-tight">Pick a saved Smart Builder template.</p>
-                          </button>
+                        <div>
+                          <SectionLabel>Create email</SectionLabel>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setField('mode', 'quick')}
+                              className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                                mode === 'quick'
+                                  ? 'border-gray-900 bg-gray-50 ring-1 ring-gray-900'
+                                  : 'border-gray-200 bg-white hover:bg-gray-50'
+                              }`}
+                            >
+                              <div className="flex items-center gap-1.5 text-[12px] font-semibold text-gray-800">
+                                <span className={`relative inline-block w-3 h-3 rounded-full border ${mode === 'quick' ? 'border-gray-900 bg-gray-900' : 'border-gray-300'}`}>
+                                  {mode === 'quick' && <span className="absolute inset-[3px] rounded-full bg-white" />}
+                                </span>
+                                Quick compose
+                              </div>
+                              <p className="mt-1 text-[10.5px] text-gray-500 leading-tight">Write a simple email inline.</p>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setField('mode', 'template')}
+                              className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                                mode === 'template'
+                                  ? 'border-gray-900 bg-gray-50 ring-1 ring-gray-900'
+                                  : 'border-gray-200 bg-white hover:bg-gray-50'
+                              }`}
+                            >
+                              <div className="flex items-center gap-1.5 text-[12px] font-semibold text-gray-800">
+                                <span className={`relative inline-block w-3 h-3 rounded-full border ${mode === 'template' ? 'border-gray-900 bg-gray-900' : 'border-gray-300'}`}>
+                                  {mode === 'template' && <span className="absolute inset-[3px] rounded-full bg-white" />}
+                                </span>
+                                Use template
+                              </div>
+                              <p className="mt-1 text-[10.5px] text-gray-500 leading-tight">Pick a saved Smart Builder template.</p>
+                            </button>
+                          </div>
                         </div>
 
                         {mode === 'template' ? (
-                          <>
-                            {/* ── Template select ───────────────── */}
-                            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Template</p>
+                          <div>
+                            <SectionLabel>Template</SectionLabel>
                             {templates.length === 0 ? (
-                              <p className="text-[11px] text-gray-500">
+                              <p className="text-[12px] text-gray-500">
                                 No templates yet.{' '}
                                 <Link href="/dashboard/marketing/email/templates" target="_blank" className="text-brand-600 hover:underline">
                                   Create one in Smart Builder →
                                 </Link>
                               </p>
                             ) : (
-                              <select
-                                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
-                                value={selectedStep.template_id}
-                                onChange={(e) => setField('template_id', e.target.value)}
-                              >
-                                <option value="">Choose a template</option>
-                                {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                              </select>
+                              <div className="relative">
+                                <select
+                                  className={WORKFLOW_SELECT}
+                                  value={selectedStep.template_id}
+                                  onChange={(e) => setField('template_id', e.target.value)}
+                                >
+                                  <option value="">Choose a template</option>
+                                  {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                </select>
+                                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" strokeWidth={2} aria-hidden />
+                              </div>
                             )}
-                            <p className="mt-2 text-[11px] text-gray-400">
+                            <HelperText>
                               <Link href="/dashboard/marketing/email/templates" target="_blank" className="text-brand-600 hover:underline">
                                 + New template in Smart Builder
                               </Link>
-                            </p>
-                          </>
+                            </HelperText>
+                          </div>
                         ) : (
                           <>
                             {/* ── Sender ──────────────────────────── */}
-                            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Sender</p>
-
-                            <label className="block text-[11px] text-gray-600 mb-1">From name</label>
-                            <div className="relative">
-                              <input
-                                ref={(el) => { emailFieldRefs.current['email-from-name'] = el; }}
-                                type="text"
-                                placeholder="From name"
-                                className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-3 pr-9 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
-                                value={selectedStep.from_name ?? ''}
-                                onChange={(e) => setField('from_name', e.target.value)}
-                              />
-                              <VarIconButton field="email-from-name" />
-                            </div>
-                            {mergeTagOpen && mergeTagField === 'email-from-name' && (
-                              <MergeVarPickerPopover
-                                anchorRef={mergeAnchorRef}
-                                boundsRef={rightPaneRef}
-                                onPick={(tag) => { insertIntoEmailField('from_name', tag, lid); setMergeTagOpen(false); }}
-                                onClose={() => setMergeTagOpen(false)}
-                              />
-                            )}
-
-                            <label className="mt-2 block text-[11px] text-gray-600 mb-1">From email</label>
-                            <div className="relative">
-                              <input
-                                ref={(el) => { emailFieldRefs.current['email-from-email'] = el; }}
-                                type="text"
-                                placeholder="From email"
-                                className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-3 pr-9 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
-                                value={selectedStep.from_email ?? ''}
-                                onChange={(e) => setField('from_email', e.target.value)}
-                              />
-                              <VarIconButton field="email-from-email" />
-                            </div>
-                            {mergeTagOpen && mergeTagField === 'email-from-email' && (
-                              <MergeVarPickerPopover
-                                anchorRef={mergeAnchorRef}
-                                boundsRef={rightPaneRef}
-                                onPick={(tag) => { insertIntoEmailField('from_email', tag, lid); setMergeTagOpen(false); }}
-                                onClose={() => setMergeTagOpen(false)}
-                              />
-                            )}
-                            <p className="mt-1 text-[10.5px] text-gray-400">If From Name and From Email are empty, the email is sent using your venue defaults.</p>
-
-                            {/* ── Cc / Bcc toggles ──────────────── */}
-                            <div className="mt-3 flex items-center gap-1.5">
-                              {!showCc && (
-                                <button
-                                  type="button"
-                                  onClick={() => setEmailExtra((p) => ({ ...p, [lid]: { ...p[lid], cc: true } }))}
-                                  className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-700 hover:bg-gray-50 transition-colors"
-                                >
-                                  + Cc
-                                </button>
-                              )}
-                              {!showBcc && (
-                                <button
-                                  type="button"
-                                  onClick={() => setEmailExtra((p) => ({ ...p, [lid]: { ...p[lid], bcc: true } }))}
-                                  className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-700 hover:bg-gray-50 transition-colors"
-                                >
-                                  + Bcc
-                                </button>
-                              )}
-                            </div>
-
-                            {showCc && (
-                              <>
-                                <label className="mt-3 block text-[11px] text-gray-600 mb-1">Cc</label>
-                                <div className="relative">
-                                  <input
-                                    ref={(el) => { emailFieldRefs.current['email-cc'] = el; }}
-                                    type="text"
-                                    placeholder="comma,separated@emails.com"
-                                    className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-3 pr-9 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
-                                    value={selectedStep.cc ?? ''}
-                                    onChange={(e) => setField('cc', e.target.value)}
-                                  />
-                                  <VarIconButton field="email-cc" />
+                            <div>
+                              <SectionLabel>Sender</SectionLabel>
+                              <div className="space-y-2">
+                                <div>
+                                  <label className="mb-1 block text-[11px] text-gray-500">From name</label>
+                                  <div className="relative">
+                                    <input
+                                      ref={(el) => { emailFieldRefs.current['email-from-name'] = el; }}
+                                      type="text"
+                                      placeholder="From name"
+                                      className={`${WORKFLOW_INPUT} pr-9`}
+                                      value={selectedStep.from_name ?? ''}
+                                      onChange={(e) => setField('from_name', e.target.value)}
+                                    />
+                                    <VarIconButton field="email-from-name" />
+                                  </div>
+                                  {mergeTagOpen && mergeTagField === 'email-from-name' && (
+                                    <MergeVarPickerPopover
+                                      anchorRef={mergeAnchorRef}
+                                      boundsRef={rightPaneRef}
+                                      onPick={(tag) => { insertIntoEmailField('from_name', tag, lid); setMergeTagOpen(false); }}
+                                      onClose={() => setMergeTagOpen(false)}
+                                    />
+                                  )}
                                 </div>
-                                {mergeTagOpen && mergeTagField === 'email-cc' && (
-                                  <MergeVarPickerPopover
-                                    anchorRef={mergeAnchorRef}
-                                    boundsRef={rightPaneRef}
-                                    onPick={(tag) => { insertIntoEmailField('cc', tag, lid); setMergeTagOpen(false); }}
-                                    onClose={() => setMergeTagOpen(false)}
-                                  />
-                                )}
-                              </>
-                            )}
-                            {showBcc && (
-                              <>
-                                <label className="mt-3 block text-[11px] text-gray-600 mb-1">Bcc</label>
-                                <div className="relative">
-                                  <input
-                                    ref={(el) => { emailFieldRefs.current['email-bcc'] = el; }}
-                                    type="text"
-                                    placeholder="comma,separated@emails.com"
-                                    className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-3 pr-9 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
-                                    value={selectedStep.bcc ?? ''}
-                                    onChange={(e) => setField('bcc', e.target.value)}
-                                  />
-                                  <VarIconButton field="email-bcc" />
+
+                                <div>
+                                  <label className="mb-1 block text-[11px] text-gray-500">From email</label>
+                                  <div className="relative">
+                                    <input
+                                      ref={(el) => { emailFieldRefs.current['email-from-email'] = el; }}
+                                      type="text"
+                                      placeholder="From email"
+                                      className={`${WORKFLOW_INPUT} pr-9`}
+                                      value={selectedStep.from_email ?? ''}
+                                      onChange={(e) => setField('from_email', e.target.value)}
+                                    />
+                                    <VarIconButton field="email-from-email" />
+                                  </div>
+                                  {mergeTagOpen && mergeTagField === 'email-from-email' && (
+                                    <MergeVarPickerPopover
+                                      anchorRef={mergeAnchorRef}
+                                      boundsRef={rightPaneRef}
+                                      onPick={(tag) => { insertIntoEmailField('from_email', tag, lid); setMergeTagOpen(false); }}
+                                      onClose={() => setMergeTagOpen(false)}
+                                    />
+                                  )}
                                 </div>
-                                {mergeTagOpen && mergeTagField === 'email-bcc' && (
-                                  <MergeVarPickerPopover
-                                    anchorRef={mergeAnchorRef}
-                                    boundsRef={rightPaneRef}
-                                    onPick={(tag) => { insertIntoEmailField('bcc', tag, lid); setMergeTagOpen(false); }}
-                                    onClose={() => setMergeTagOpen(false)}
-                                  />
+                              </div>
+                              <HelperText>If From Name and From Email are empty, the email is sent using your venue defaults.</HelperText>
+
+                              <div className="mt-2.5 flex items-center gap-1.5">
+                                {!showCc && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setEmailExtra((p) => ({ ...p, [lid]: { ...p[lid], cc: true } }))}
+                                    className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-700 hover:bg-gray-50 transition-colors"
+                                  >
+                                    + Cc
+                                  </button>
                                 )}
-                              </>
-                            )}
+                                {!showBcc && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setEmailExtra((p) => ({ ...p, [lid]: { ...p[lid], bcc: true } }))}
+                                    className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-700 hover:bg-gray-50 transition-colors"
+                                  >
+                                    + Bcc
+                                  </button>
+                                )}
+                              </div>
+
+                              {showCc && (
+                                <div className="mt-3">
+                                  <label className="mb-1 block text-[11px] text-gray-500">Cc</label>
+                                  <div className="relative">
+                                    <input
+                                      ref={(el) => { emailFieldRefs.current['email-cc'] = el; }}
+                                      type="text"
+                                      placeholder="comma,separated@emails.com"
+                                      className={`${WORKFLOW_INPUT} pr-9`}
+                                      value={selectedStep.cc ?? ''}
+                                      onChange={(e) => setField('cc', e.target.value)}
+                                    />
+                                    <VarIconButton field="email-cc" />
+                                  </div>
+                                  {mergeTagOpen && mergeTagField === 'email-cc' && (
+                                    <MergeVarPickerPopover
+                                      anchorRef={mergeAnchorRef}
+                                      boundsRef={rightPaneRef}
+                                      onPick={(tag) => { insertIntoEmailField('cc', tag, lid); setMergeTagOpen(false); }}
+                                      onClose={() => setMergeTagOpen(false)}
+                                    />
+                                  )}
+                                </div>
+                              )}
+                              {showBcc && (
+                                <div className="mt-3">
+                                  <label className="mb-1 block text-[11px] text-gray-500">Bcc</label>
+                                  <div className="relative">
+                                    <input
+                                      ref={(el) => { emailFieldRefs.current['email-bcc'] = el; }}
+                                      type="text"
+                                      placeholder="comma,separated@emails.com"
+                                      className={`${WORKFLOW_INPUT} pr-9`}
+                                      value={selectedStep.bcc ?? ''}
+                                      onChange={(e) => setField('bcc', e.target.value)}
+                                    />
+                                    <VarIconButton field="email-bcc" />
+                                  </div>
+                                  {mergeTagOpen && mergeTagField === 'email-bcc' && (
+                                    <MergeVarPickerPopover
+                                      anchorRef={mergeAnchorRef}
+                                      boundsRef={rightPaneRef}
+                                      onPick={(tag) => { insertIntoEmailField('bcc', tag, lid); setMergeTagOpen(false); }}
+                                      onClose={() => setMergeTagOpen(false)}
+                                    />
+                                  )}
+                                </div>
+                              )}
+                            </div>
 
                             {/* ── Subject ──────────────────────── */}
-                            <p className="mt-4 mb-1 text-[11px] font-semibold text-gray-700">
-                              Subject <span className="text-red-500">*</span>
-                            </p>
-                            <div className="relative">
-                              <input
-                                ref={(el) => { emailFieldRefs.current['email-subject'] = el; }}
-                                type="text"
-                                placeholder="Hello {{contact.first_name}}"
-                                className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-3 pr-9 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
-                                value={selectedStep.subject ?? ''}
-                                onChange={(e) => setField('subject', e.target.value)}
-                              />
-                              <VarIconButton field="email-subject" />
+                            <div>
+                              <SectionLabel>Subject <span className="text-red-500">*</span></SectionLabel>
+                              <div className="relative">
+                                <input
+                                  ref={(el) => { emailFieldRefs.current['email-subject'] = el; }}
+                                  type="text"
+                                  placeholder="Hello {{contact.first_name}}"
+                                  className={`${WORKFLOW_INPUT} pr-9`}
+                                  value={selectedStep.subject ?? ''}
+                                  onChange={(e) => setField('subject', e.target.value)}
+                                />
+                                <VarIconButton field="email-subject" />
+                              </div>
+                              {mergeTagOpen && mergeTagField === 'email-subject' && (
+                                <MergeVarPickerPopover
+                                  anchorRef={mergeAnchorRef}
+                                  boundsRef={rightPaneRef}
+                                  onPick={(tag) => { insertIntoEmailField('subject', tag, lid); setMergeTagOpen(false); }}
+                                  onClose={() => setMergeTagOpen(false)}
+                                />
+                              )}
                             </div>
-                            {mergeTagOpen && mergeTagField === 'email-subject' && (
-                              <MergeVarPickerPopover
-                                anchorRef={mergeAnchorRef}
-                                boundsRef={rightPaneRef}
-                                onPick={(tag) => { insertIntoEmailField('subject', tag, lid); setMergeTagOpen(false); }}
-                                onClose={() => setMergeTagOpen(false)}
-                              />
-                            )}
 
                             {/* ── Preheader ──────────────────────── */}
-                            <p className="mt-3 mb-1 text-[11px] font-semibold text-gray-700">Pre-header (preview text)</p>
-                            <div className="relative">
-                              <input
-                                ref={(el) => { emailFieldRefs.current['email-preheader'] = el; }}
-                                type="text"
-                                placeholder="(Optional)"
-                                className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-3 pr-9 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
-                                value={selectedStep.preheader ?? ''}
-                                onChange={(e) => setField('preheader', e.target.value)}
-                              />
-                              <VarIconButton field="email-preheader" />
+                            <div>
+                              <SectionLabel>Pre-header</SectionLabel>
+                              <div className="relative">
+                                <input
+                                  ref={(el) => { emailFieldRefs.current['email-preheader'] = el; }}
+                                  type="text"
+                                  placeholder="Optional preview text"
+                                  className={`${WORKFLOW_INPUT} pr-9`}
+                                  value={selectedStep.preheader ?? ''}
+                                  onChange={(e) => setField('preheader', e.target.value)}
+                                />
+                                <VarIconButton field="email-preheader" />
+                              </div>
+                              {mergeTagOpen && mergeTagField === 'email-preheader' && (
+                                <MergeVarPickerPopover
+                                  anchorRef={mergeAnchorRef}
+                                  boundsRef={rightPaneRef}
+                                  onPick={(tag) => { insertIntoEmailField('preheader', tag, lid); setMergeTagOpen(false); }}
+                                  onClose={() => setMergeTagOpen(false)}
+                                />
+                              )}
+                              <HelperText>Used as preview text in some inboxes.</HelperText>
                             </div>
-                            {mergeTagOpen && mergeTagField === 'email-preheader' && (
-                              <MergeVarPickerPopover
-                                anchorRef={mergeAnchorRef}
-                                boundsRef={rightPaneRef}
-                                onPick={(tag) => { insertIntoEmailField('preheader', tag, lid); setMergeTagOpen(false); }}
-                                onClose={() => setMergeTagOpen(false)}
-                              />
-                            )}
-                            <p className="mt-1 text-[10.5px] text-gray-400">Used as preview text in some inboxes.</p>
 
                             {/* ── Body ───────────────────────────── */}
-                            <div className="mt-4 mb-2 flex items-center justify-between">
-                              <p className="text-[11px] font-semibold text-gray-700">
-                                Message <span className="text-red-500">*</span>
-                              </p>
-                              <button
-                                type="button"
-                                title="Insert merge variable"
-                                onClick={(e) => {
-                                  setMergeAnchor(e.currentTarget as HTMLElement);
-                                  setMergeTagField('email-body');
-                                  setMergeTagOpen(true);
-                                  setTriggerLinkOpen(false);
-                                }}
-                                className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-50 transition-colors"
-                              >
-                                <Tag size={11} /> Variables
-                              </button>
-                            </div>
-                            {mergeTagOpen && mergeTagField === 'email-body' && (
-                              <MergeVarPickerPopover
-                                anchorRef={mergeAnchorRef}
-                                boundsRef={rightPaneRef}
-                                onPick={(tag) => { insertIntoEmailField('body', tag, lid); setMergeTagOpen(false); }}
-                                onClose={() => setMergeTagOpen(false)}
+                            <div>
+                              <div className="mb-1.5 flex items-center justify-between">
+                                <SectionLabel>Message <span className="text-red-500">*</span></SectionLabel>
+                                <button
+                                  type="button"
+                                  title="Insert merge variable"
+                                  onClick={(e) => {
+                                    setMergeAnchor(e.currentTarget as HTMLElement);
+                                    setMergeTagField('email-body');
+                                    setMergeTagOpen(true);
+                                    setTriggerLinkOpen(false);
+                                  }}
+                                  className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-50 transition-colors"
+                                >
+                                  <Tag size={11} /> Variables
+                                </button>
+                              </div>
+                              {mergeTagOpen && mergeTagField === 'email-body' && (
+                                <MergeVarPickerPopover
+                                  anchorRef={mergeAnchorRef}
+                                  boundsRef={rightPaneRef}
+                                  onPick={(tag) => { insertIntoEmailField('body', tag, lid); setMergeTagOpen(false); }}
+                                  onClose={() => setMergeTagOpen(false)}
+                                />
+                              )}
+                              <textarea
+                                ref={(el) => { emailFieldRefs.current['email-body'] = el; }}
+                                placeholder="Hi {{contact.first_name}},&#10;&#10;Write your message here..."
+                                className={`${WORKFLOW_TEXTAREA} min-h-[180px]`}
+                                value={selectedStep.body ?? ''}
+                                onChange={(e) => setField('body', e.target.value)}
                               />
-                            )}
-                            <textarea
-                              ref={(el) => { emailFieldRefs.current['email-body'] = el; }}
-                              placeholder="Hi {{contact.first_name}},&#10;&#10;Write your message here..."
-                              className="min-h-[180px] w-full resize-y rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
-                              value={selectedStep.body ?? ''}
-                              onChange={(e) => setField('body', e.target.value)}
-                            />
-                            <p className="mt-1 text-right text-[10.5px] text-gray-400">{charCount} characters</p>
+                              <p className="mt-1 text-right text-[10.5px] text-gray-400">{charCount} characters</p>
+                            </div>
                           </>
                         )}
 
                         {/* ── Settings ───────────────────────────── */}
-                        <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3">
-                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500">Additional settings</p>
-                          <label className="flex items-start gap-2 cursor-pointer">
+                        <div>
+                          <SectionLabel>Tracking</SectionLabel>
+                          <label className="flex items-start gap-2 cursor-pointer rounded-lg border border-gray-200 bg-gray-50/60 px-3 py-2.5">
                             <input
                               type="checkbox"
                               className="mt-0.5"
@@ -2978,32 +3057,33 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                               onChange={(e) => setField('track_clicks', e.target.checked)}
                             />
                             <span>
-                              <span className="block text-[12px] font-medium text-gray-800">Track clicks</span>
-                              <span className="block text-[10.5px] text-gray-500 leading-tight">See which links subscribers click.</span>
+                              <span className="block text-[12.5px] font-medium text-gray-800">Track clicks</span>
+                              <span className="block text-[11px] text-gray-500 leading-tight">See which links subscribers click.</span>
                             </span>
                           </label>
-                          <p className="mt-2 text-[10.5px] text-gray-400">Unsubscribe links and bounce suppression are always applied.</p>
+                          <HelperText>Unsubscribe links and bounce suppression are always applied.</HelperText>
                         </div>
 
                         {/* ── Send test ──────────────────────────── */}
-                        <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-3">
-                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Send test</p>
+                        <div>
+                          <SectionLabel>Send test</SectionLabel>
                           <input type="email" placeholder="your@email.com"
-                            className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs focus:border-gray-400 focus:outline-none"
+                            className={WORKFLOW_INPUT}
                             value={testStepOrder === stepOrder ? testEmail : ''}
                             onChange={(e) => { setTestEmail(e.target.value); setTestStepOrder(stepOrder); setTestResult(null); }}
                           />
                           <button type="button" disabled={testSending}
                             onClick={() => { setTestStepOrder(stepOrder); void sendTestEmail(stepOrder); }}
-                            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50"
+                            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
                           >
-                            {testSending ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}
+                            {testSending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
                             {testSending ? 'Sending…' : 'Send test email'}
                           </button>
                           {testResult && testStepOrder === stepOrder && (
                             <p className={`mt-1.5 text-[11px] ${testResult.startsWith('✓') ? 'text-emerald-600' : 'text-red-500'}`}>{testResult}</p>
                           )}
                         </div>
+                        </SectionGroup>
                       </div>
                     );
                   })()}
@@ -3019,9 +3099,11 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                     const segCount = charCount === 0 ? 0 : Math.ceil(charCount / 160);
                     return (
                       <div data-no-dnd>
+                        <SectionGroup>
                         {/* ── Message label + toolbar ───────────────── */}
-                        <div className="mb-2 flex items-center justify-between">
-                          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Message</p>
+                        <div>
+                        <div className="mb-1.5 flex items-center justify-between">
+                          <SectionLabel>Message</SectionLabel>
                           <div className="flex items-center gap-1">
                             {/* Merge tags button */}
                             <div>
@@ -3099,7 +3181,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                         {/* ── Textarea ───────────────────────────────── */}
                         <textarea
                           ref={smsTextareaRef}
-                          className="min-h-[110px] w-full resize-y rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
+                          className={`${WORKFLOW_TEXTAREA} min-h-[110px]`}
                           value={smsBody}
                           onChange={(e) => {
                             const v = e.target.value;
@@ -3108,15 +3190,14 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                           }}
                         />
                         {/* Character / segment count */}
-                        <div className="mt-1 flex items-center justify-end gap-2">
-                          <span className="text-[10px] text-gray-400">
-                            {charCount} char{charCount !== 1 ? 's' : ''} · {segCount} SMS segment{segCount !== 1 ? 's' : ''}
-                          </span>
+                        <p className="mt-1 text-right text-[10.5px] text-gray-400">
+                          {charCount} char{charCount !== 1 ? 's' : ''} · {segCount} SMS segment{segCount !== 1 ? 's' : ''}
+                        </p>
                         </div>
 
                         {/* ── Media attachments (MMS) ────────────────── */}
-                        <div className="mt-4">
-                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Attachments <span className="normal-case text-gray-300">(MMS, max 3 images)</span></p>
+                        <div>
+                          <SectionLabel>Attachments <span className="font-normal text-[11px] text-gray-400">(MMS, max 3)</span></SectionLabel>
                           {mediaUrls.length > 0 && (
                             <div className="mb-2 flex flex-wrap gap-2">
                               {mediaUrls.map((url) => (
@@ -3138,7 +3219,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                             <button
                               type="button"
                               onClick={() => setSmsMediaPickerOpen(true)}
-                              className="flex items-center gap-1.5 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-1.5 text-[11px] text-gray-500 hover:border-gray-400 hover:bg-gray-100 transition-colors"
+                              className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-2 text-[12px] text-gray-500 hover:border-gray-400 hover:bg-gray-100 transition-colors"
                             >
                               <ImageIcon size={12} /> Add image from Media Gallery
                             </button>
@@ -3146,15 +3227,14 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                         </div>
 
                         {/* ── Test SMS ───────────────────────────────── */}
-                        <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-3">
-                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Test phone number</p>
+                        <div>
+                          <SectionLabel>Send test</SectionLabel>
                           <input
                             type="tel"
                             placeholder="+1 555 000 0000"
-                            className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs focus:border-gray-400 focus:outline-none"
+                            className={WORKFLOW_INPUT}
                             value={testSmsPhone}
                             onChange={(e) => {
-                              // Always keep +1 prefix for US numbers
                               let v = e.target.value;
                               if (!v.startsWith('+1')) {
                                 const digits = v.replace(/\D/g, '');
@@ -3164,25 +3244,25 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                               setTestSmsResult(null);
                             }}
                             onFocus={(e) => {
-                              // Put cursor at the end
                               const len = e.target.value.length;
                               e.target.setSelectionRange(len, len);
                             }}
                           />
-                          <p className="mt-1 text-[10px] text-gray-400">US numbers — type the 10-digit number after +1.</p>
                           <button
                             type="button"
                             disabled={testSmsSending}
                             onClick={() => void sendTestSms(stepOrder, smsBody, mediaUrls)}
-                            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50"
+                            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
                           >
-                            {testSmsSending ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}
-                            {testSmsSending ? 'Sending…' : 'Send Test SMS'}
+                            {testSmsSending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                            {testSmsSending ? 'Sending…' : 'Send test SMS'}
                           </button>
+                          <HelperText>US numbers — type the 10-digit number after +1.</HelperText>
                           {testSmsResult && (
-                            <p className={`mt-1.5 text-[11px] ${testSmsResult.startsWith('✓') ? 'text-emerald-600' : 'text-red-500'}`}>{testSmsResult}</p>
+                            <p className={`mt-1 text-[11px] ${testSmsResult.startsWith('✓') ? 'text-emerald-600' : 'text-red-500'}`}>{testSmsResult}</p>
                           )}
                         </div>
+                        </SectionGroup>
 
                         {/* ── Media picker modal ─────────────────────── */}
                         <VenueMediaPickerModal
@@ -3211,50 +3291,52 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                     const selectedTagIds = selectedStep.tag_ids;
                     const verb = selectedStep.step_type === 'add_tag' ? 'Apply' : 'Remove';
                     return (
-                      <div>
-                        <div className="mb-2 flex items-center justify-between">
-                          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{verb} Tags</p>
-                          {selectedTagIds.length > 0 && (
-                            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
-                              {selectedTagIds.length} selected
-                            </span>
-                          )}
-                        </div>
-                        {tags.length === 0 ? (
-                          <p className="text-[11px] text-gray-500">No tags yet.</p>
-                        ) : (
-                          <div className="flex flex-wrap gap-1.5">
-                            {tags.map((t) => {
-                              const checked = selectedTagIds.includes(t.id);
-                              return (
-                                <button key={t.id} type="button"
-                                  onClick={() => {
-                                    const next = checked ? selectedTagIds.filter((x) => x !== t.id) : [...selectedTagIds, t.id];
-                                    setSteps((prev) => prev.map((x) =>
-                                      x.localId === lid && (x.step_type === 'add_tag' || x.step_type === 'remove_tag')
-                                        ? { ...x, tag_ids: next } : x
-                                    ));
-                                    scheduleAutoSave();
-                                  }}
-                                  className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs transition-colors ${
-                                    checked
-                                      ? 'border-blue-300 bg-blue-50 text-blue-700'
-                                      : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300'
-                                  }`}
-                                >
-                                  <Tag size={11} />
-                                  {t.name}
-                                </button>
-                              );
-                            })}
+                      <SectionGroup>
+                        <div>
+                          <div className="mb-1.5 flex items-center justify-between">
+                            <SectionLabel>{verb} tags</SectionLabel>
+                            {selectedTagIds.length > 0 && (
+                              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                                {selectedTagIds.length} selected
+                              </span>
+                            )}
                           </div>
-                        )}
-                        <p className="mt-2 text-[11px] text-gray-400">
-                          {selectedStep.step_type === 'add_tag'
-                            ? 'Click tags to select — all selected tags are applied at once when this step runs.'
-                            : 'Click tags to select — all selected tags are removed from the contact.'}
-                        </p>
-                      </div>
+                          {tags.length === 0 ? (
+                            <p className="text-[12px] text-gray-500">No tags yet.</p>
+                          ) : (
+                            <div className="flex flex-wrap gap-1.5">
+                              {tags.map((t) => {
+                                const checked = selectedTagIds.includes(t.id);
+                                return (
+                                  <button key={t.id} type="button"
+                                    onClick={() => {
+                                      const next = checked ? selectedTagIds.filter((x) => x !== t.id) : [...selectedTagIds, t.id];
+                                      setSteps((prev) => prev.map((x) =>
+                                        x.localId === lid && (x.step_type === 'add_tag' || x.step_type === 'remove_tag')
+                                          ? { ...x, tag_ids: next } : x
+                                      ));
+                                      scheduleAutoSave();
+                                    }}
+                                    className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
+                                      checked
+                                        ? 'border-blue-300 bg-blue-50 text-blue-700'
+                                        : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300'
+                                    }`}
+                                  >
+                                    <Tag size={11} />
+                                    {t.name}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                          <HelperText>
+                            {selectedStep.step_type === 'add_tag'
+                              ? 'Click tags to select — all selected tags are applied at once when this step runs.'
+                              : 'Click tags to select — all selected tags are removed from the contact.'}
+                          </HelperText>
+                        </div>
+                      </SectionGroup>
                     );
                   })()}
 
@@ -3262,43 +3344,48 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                   {selectedStep.step_type === 'change_stage' && (() => {
                     const lid = selectedStep.localId;
                     return (
-                      <div>
-                        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Move to stage</p>
-                        {stages.length === 0 ? (
-                          <p className="text-[11px] text-gray-500">No pipeline stages found.</p>
-                        ) : (
-                          <select
-                            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
-                            value={selectedStep.stage_id}
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              setSteps((prev) => prev.map((x) => x.localId === lid && x.step_type === 'change_stage' ? { ...x, stage_id: v } : x));
-                              scheduleAutoSave();
-                            }}
-                          >
-                            <option value="">Choose a stage…</option>
-                            {stages.map((s) => (
-                              <option key={s.id} value={s.id}>{s.pipelineName}: {s.name}</option>
-                            ))}
-                          </select>
-                        )}
-                        <p className="mt-2 text-[11px] text-gray-400">The contact will be moved to this stage when the step runs.</p>
-                      </div>
+                      <SectionGroup>
+                        <div>
+                          <SectionLabel>Move to stage</SectionLabel>
+                          {stages.length === 0 ? (
+                            <p className="text-[12px] text-gray-500">No pipeline stages found.</p>
+                          ) : (
+                            <div className="relative">
+                              <select
+                                className={WORKFLOW_SELECT}
+                                value={selectedStep.stage_id}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  setSteps((prev) => prev.map((x) => x.localId === lid && x.step_type === 'change_stage' ? { ...x, stage_id: v } : x));
+                                  scheduleAutoSave();
+                                }}
+                              >
+                                <option value="">Choose a stage…</option>
+                                {stages.map((s) => (
+                                  <option key={s.id} value={s.id}>{s.pipelineName}: {s.name}</option>
+                                ))}
+                              </select>
+                              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" strokeWidth={2} aria-hidden />
+                            </div>
+                          )}
+                          <HelperText>The contact will be moved to this stage when the step runs.</HelperText>
+                        </div>
+                      </SectionGroup>
                     );
                   })()}
 
                   {selectedStep.step_type === 'create_conversation' && (
-                    <div className="rounded-xl border border-sky-100 bg-sky-50 p-3">
+                    <div className="rounded-xl border border-sky-100 bg-sky-50/70 p-3.5">
                       <div className="flex items-start gap-2">
                         <MessageSquare size={14} className="mt-0.5 shrink-0 text-sky-500" />
-                        <div className="text-[11px] text-sky-800 leading-relaxed">
-                          <p className="font-semibold mb-1">What this step does</p>
-                          <ul className="list-disc pl-3 space-y-0.5">
+                        <div className="text-[12px] text-sky-800 leading-relaxed">
+                          <p className="mb-1.5 font-semibold">What this step does</p>
+                          <ul className="list-disc pl-3.5 space-y-1">
                             <li>Finds or creates a Conversation thread for this lead</li>
                             <li>Stamps a timestamped system message so you can see exactly when the lead entered this workflow</li>
                             <li>All automated SMS &amp; emails in this workflow are also automatically logged to the same thread</li>
                           </ul>
-                          <p className="mt-2 text-sky-600">Place this step first in your workflow for the best experience.</p>
+                          <p className="mt-2 text-sky-600 text-[11.5px]">Tip: place this step first in your workflow for the best experience.</p>
                         </div>
                       </div>
                     </div>
@@ -3319,12 +3406,13 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                       scheduleAutoSave();
                     };
                     return (
-                      <div data-no-dnd className="space-y-3">
+                      <div data-no-dnd>
+                        <SectionGroup>
                         {/* Info banner */}
-                        <div className="rounded-xl border border-amber-100 bg-amber-50 p-3">
+                        <div className="rounded-lg border border-amber-100 bg-amber-50/60 p-3">
                           <div className="flex items-start gap-2">
                             <Bell size={13} className="mt-0.5 shrink-0 text-amber-500" />
-                            <div className="text-[11px] text-amber-800 leading-relaxed">
+                            <div className="text-[12px] text-amber-800 leading-relaxed">
                               Sends a notification to the venue owner. Uses the venue&apos;s primary email and notification phone.
                             </div>
                           </div>
@@ -3332,15 +3420,15 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
 
                         {/* Channel selector */}
                         <div>
-                          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Channel</p>
+                          <SectionLabel>Channel</SectionLabel>
                           <div className="grid grid-cols-3 gap-1.5">
                             {([
                               { id: 'email', label: 'Email',     Icon: Mail },
                               { id: 'sms',   label: 'SMS',       Icon: Smartphone },
-                              { id: 'both',  label: 'Email + SMS', Icon: Bell },
+                              { id: 'both',  label: 'Both',      Icon: Bell },
                             ] as const).map(({ id, label, Icon }) => (
                               <button key={id} type="button" onClick={() => updateField('channel', id)}
-                                className={`flex items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-[11px] font-medium transition ${channel === id ? 'border-amber-400 bg-amber-50 text-amber-800' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}
+                                className={`flex items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-[11.5px] font-medium transition ${channel === id ? 'border-gray-900 bg-gray-50 text-gray-900 ring-1 ring-gray-900' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}
                               >
                                 <Icon size={12} />{label}
                               </button>
@@ -3352,7 +3440,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                         {(channel === 'email' || channel === 'both') && (
                           <div>
                             <div className="mb-1.5 flex items-center justify-between">
-                              <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Email subject</p>
+                              <SectionLabel>Email subject</SectionLabel>
                               <div>
                                 <button
                                   type="button"
@@ -3370,7 +3458,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                                 {mergeTagOpen && mergeTagField === 'notify-subject' && (
                                   <MergeVarPickerPopover
                                     anchorRef={mergeAnchorRef}
-                                  boundsRef={rightPaneRef}
+                                    boundsRef={rightPaneRef}
                                     onPick={(tag) => {
                                       setSteps((prev) => prev.map((x) =>
                                         x.localId === lid && x.step_type === 'notify_owner'
@@ -3390,7 +3478,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                               value={subject}
                               onChange={(e) => updateField('subject', e.target.value)}
                               placeholder="Workflow update for {{contact.name}}"
-                              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
+                              className={WORKFLOW_INPUT}
                             />
                           </div>
                         )}
@@ -3398,9 +3486,9 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                         {/* Body */}
                         <div>
                           <div className="mb-1.5 flex items-center justify-between">
-                            <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                            <SectionLabel>
                               {channel === 'sms' ? 'SMS message' : 'Message body'}
-                            </p>
+                            </SectionLabel>
                             <div>
                               <button
                                 type="button"
@@ -3434,61 +3522,75 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                             </div>
                           </div>
                           <textarea
-                            className="min-h-[110px] w-full resize-y rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-gray-400 focus:bg-white focus:outline-none"
+                            className={`${WORKFLOW_TEXTAREA} min-h-[110px]`}
                             value={body}
                             onChange={(e) => updateField('body', e.target.value)}
                           />
                         </div>
+                        </SectionGroup>
                       </div>
                     );
                   })()}
 
-                  <div className="mt-6 border-t border-gray-100 pt-4">
-                    <button type="button" onClick={() => removeStep(selectedStep.localId)}
-                      className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-red-100 py-2 text-xs font-semibold text-red-500 hover:bg-red-50 transition-colors"
+                  <div className="mt-6 grid grid-cols-2 gap-2 border-t border-gray-100 pt-4">
+                    <button type="button" onClick={() => duplicateStep(selectedStep.localId)}
+                      className="flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
                     >
-                      <Trash2 size={12} /> Remove step
+                      <Copy size={12} /> Duplicate
+                    </button>
+                    <button type="button" onClick={() => removeStep(selectedStep.localId)}
+                      className="flex items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-white py-2 text-xs font-semibold text-red-500 hover:bg-red-50 transition-colors"
+                    >
+                      <Trash2 size={12} /> Remove
                     </button>
                   </div>
                 </div>
 
               ) : (
                 /* ── Blocks + Triggers palette ───────────────────────── */
-                <div className="p-4 space-y-6">
-
-                  {/* Action blocks — categorized */}
-                  {(['timing', 'communication', 'contact', 'alerts'] as PaletteGroup[]).map((g) => {
-                    const items = PALETTE.filter((p) => p.group === g);
-                    if (items.length === 0) return null;
-                    return (
-                      <div key={g}>
-                        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">{PALETTE_GROUP_LABELS[g]}</p>
-                        <div className="flex flex-col gap-2">
-                          {items.map((item) => <PaletteCard key={item.type} {...item} />)}
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  {/* Trigger types for reference — abbreviated catalog */}
-                  <div>
-                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Smart Triggers</p>
-                    <p className="mb-3 text-[11px] text-gray-400 leading-relaxed">
-                      <strong className="text-gray-600">{SMART_TRIGGERS.length} triggers</strong> across {SMART_TRIGGER_CATEGORIES.length} categories. Add via the &ldquo;+&rdquo; on the trigger row.
+                <div className="p-5 text-[13px] text-gray-900">
+                  {/* Header — match the email/form builder palette tone */}
+                  <div className="mb-5">
+                    <p className="text-sm font-semibold text-gray-900">Add to workflow</p>
+                    <p className="mt-1 text-[11.5px] text-gray-500 leading-relaxed">
+                      Drag any step onto the canvas, or click the <span className="font-mono">+</span> on a step row.
                     </p>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {SMART_TRIGGER_CATEGORIES.filter((c) => c.id !== 'native').map((c) => {
-                        const n = SMART_TRIGGERS.filter((t) => t.category === c.id).length;
-                        return (
-                          <div key={c.id} className={`flex items-center justify-between rounded-md border px-2 py-1 text-[10.5px] font-medium ${c.color}`}>
-                            <span>{c.label}</span>
-                            <span className="opacity-70">{n}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
                   </div>
 
+                  <div className="space-y-6">
+                    {/* Action blocks — categorized */}
+                    {(['timing', 'communication', 'contact', 'alerts'] as PaletteGroup[]).map((g) => {
+                      const items = PALETTE.filter((p) => p.group === g);
+                      if (items.length === 0) return null;
+                      return (
+                        <div key={g}>
+                          <SectionLabel>{PALETTE_GROUP_LABELS[g]}</SectionLabel>
+                          <div className="flex flex-col gap-2">
+                            {items.map((item) => <PaletteCard key={item.type} {...item} />)}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Trigger types for reference — abbreviated catalog */}
+                    <div>
+                      <SectionLabel>Smart Triggers</SectionLabel>
+                      <p className="mb-3 text-[11.5px] text-gray-500 leading-relaxed">
+                        <strong className="text-gray-700">{SMART_TRIGGERS.length} triggers</strong> across {SMART_TRIGGER_CATEGORIES.length} categories. Add via the &ldquo;+&rdquo; on the trigger row.
+                      </p>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {SMART_TRIGGER_CATEGORIES.filter((c) => c.id !== 'native').map((c) => {
+                          const n = SMART_TRIGGERS.filter((t) => t.category === c.id).length;
+                          return (
+                            <div key={c.id} className={`flex items-center justify-between rounded-lg border px-2.5 py-1.5 text-[11px] font-medium ${c.color}`}>
+                              <span>{c.label}</span>
+                              <span className="opacity-70">{n}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -3497,9 +3599,9 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
             </div>
 
             {/* Footer */}
-            <div className="flex-shrink-0 border-t border-gray-100 px-4 py-2 flex items-center gap-2 bg-white">
+            <div className="flex-shrink-0 border-t border-gray-100 bg-white px-4 py-2.5 flex items-center gap-2">
               <span className="text-[11px] text-gray-400">
-                {steps.length === 0 ? 'No steps' : `${steps.length} step${steps.length === 1 ? '' : 's'}`}
+                {steps.length === 0 ? 'No steps yet' : `${steps.length} step${steps.length === 1 ? '' : 's'}`}
               </span>
               <span className="ml-auto text-[11px]">
                 {saveStatus === 'saving' && <span className="text-gray-400">Auto-saving…</span>}
