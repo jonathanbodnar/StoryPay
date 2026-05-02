@@ -4443,11 +4443,11 @@ export function CampaignFlodeskBuilder({
         </div>
 
         {/* Center: step breadcrumbs — centered relative to the live canvas
-            (header spans sidebar→viewport-right; right panel = 288px (w-72), so
+            (header spans sidebar→viewport-right; right panel = 320px (w-80), so
             shift left by half its width to center on the canvas itself) */}
         <div
           className="hidden sm:flex items-center gap-2 text-[11px] tracking-widest font-medium uppercase"
-          style={{ position: 'absolute', left: 'calc(50% - 144px)', transform: 'translateX(-50%)' }}
+          style={{ position: 'absolute', left: 'calc(50% - 160px)', transform: 'translateX(-50%)' }}
         >
           <span className="text-gray-300">Choose Template</span>
           <span className="text-gray-200">›</span>
@@ -4691,7 +4691,7 @@ export function CampaignFlodeskBuilder({
 
         {/* ── Right Panel ──────────────────────────────────────────────────── */}
         <aside
-          className="w-72 flex-shrink-0 bg-white flex flex-col overflow-hidden"
+          className="w-80 flex-shrink-0 bg-white flex flex-col overflow-hidden"
           style={{ boxShadow: '-12px 0 32px -8px rgba(0,0,0,0.07)' }}
           onClick={(e) => e.stopPropagation()}
         >
