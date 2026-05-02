@@ -3572,24 +3572,6 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                       );
                     })}
 
-                    {/* Trigger types for reference — abbreviated catalog */}
-                    <div>
-                      <SectionLabel>Smart Triggers</SectionLabel>
-                      <p className="mb-3 text-[11.5px] text-gray-500 leading-relaxed">
-                        <strong className="text-gray-700">{SMART_TRIGGERS.length} triggers</strong> across {SMART_TRIGGER_CATEGORIES.length} categories. Add via the &ldquo;+&rdquo; on the trigger row.
-                      </p>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {SMART_TRIGGER_CATEGORIES.filter((c) => c.id !== 'native').map((c) => {
-                          const n = SMART_TRIGGERS.filter((t) => t.category === c.id).length;
-                          return (
-                            <div key={c.id} className={`flex items-center justify-between rounded-lg border px-2.5 py-1.5 text-[11px] font-medium ${c.color}`}>
-                              <span>{c.label}</span>
-                              <span className="opacity-70">{n}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
                   </div>
                 </div>
               )}
