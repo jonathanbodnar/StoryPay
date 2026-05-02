@@ -4427,7 +4427,9 @@ export function CampaignFlodeskBuilder({
           left: 'var(--sidebar-w, 216px)',
           right: 0,
           zIndex: 30,
-          background: '#ffffff',
+          // Right 320px matches the sidebar's gray so the junction is seamless.
+          // The 32px gradient transition aligns exactly with the sidebar's fade.
+          background: 'linear-gradient(to right, #ffffff 0%, #ffffff calc(100% - 320px), #f4f4f5 calc(100% - 288px), #f4f4f5 100%)',
           boxShadow: '0 1px 18px rgba(0,0,0,0.05)',
           transition: 'left 200ms ease-out',
         }}
