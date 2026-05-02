@@ -4692,7 +4692,7 @@ export function CampaignFlodeskBuilder({
         {/* ── Right Panel ──────────────────────────────────────────────────── */}
         <aside
           className="w-80 flex-shrink-0 bg-white flex flex-col overflow-hidden"
-          style={{ boxShadow: '-12px 0 32px -8px rgba(0,0,0,0.07)' }}
+          style={{ borderLeft: '1px solid rgba(0,0,0,0.06)' }}
           onClick={(e) => e.stopPropagation()}
         >
           <div
