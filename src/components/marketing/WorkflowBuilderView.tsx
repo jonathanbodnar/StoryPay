@@ -1627,7 +1627,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
           position: 'fixed', top: 0,
           left: 'var(--sidebar-w, 216px)', right: 0, zIndex: 20,
           background: '#fff',
-          boxShadow: '0 1px 0 #e5e7eb',
+          boxShadow: '0 1px 18px rgba(0,0,0,0.05)',
           transition: 'left 200ms ease-out',
         }}
       >
