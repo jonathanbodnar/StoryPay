@@ -2304,16 +2304,16 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
           {/* ── Right panel ───────────────────────────────────────────────── */}
           <aside
             ref={rightPaneRef}
-            className="w-80 flex-shrink-0 bg-white flex flex-col overflow-hidden"
-            style={{ position: 'relative' }}
+            className="w-80 flex-shrink-0 flex flex-col overflow-hidden"
+            style={{ background: '#f4f4f5', position: 'relative' }}
             onMouseDown={(e) => e.stopPropagation()}
           >
-            {/* Soft left-edge gradient fade — identical to the email/form builder
-                reference. Rendered INSIDE the pane so it's never clipped by the
-                parent overflow:hidden. */}
+            {/* Gradient transition: white canvas fades INTO the gray sidebar.
+                Goes from #ffffff (left edge, matching canvas) to transparent
+                over 28px so the sidebar colour bleeds naturally into the canvas. */}
             <div aria-hidden style={{
-              position: 'absolute', top: 0, left: 0, bottom: 0, width: 16,
-              background: 'linear-gradient(to right, rgba(0,0,0,0.07) 0%, transparent 100%)',
+              position: 'absolute', top: 0, left: 0, bottom: 0, width: 28,
+              background: 'linear-gradient(to right, #ffffff 0%, transparent 100%)',
               pointerEvents: 'none', zIndex: 10,
             }} />
 
