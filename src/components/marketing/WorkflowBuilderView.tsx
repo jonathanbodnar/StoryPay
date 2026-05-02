@@ -2304,14 +2304,12 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
           {/* ── Right panel ───────────────────────────────────────────────── */}
           <aside
             ref={rightPaneRef}
-            className="w-80 flex-shrink-0 flex flex-col overflow-hidden"
+            className="w-80 flex-shrink-0 bg-white flex flex-col overflow-hidden"
             style={{
-              // Soft left-edge fade so the pane reads as a separate surface
-              // even when the canvas is pure white. Matches the visual depth
-              // that the email/form builders get from their gray-50 canvas.
-              background:
-                'linear-gradient(to right, rgba(15, 23, 42, 0.045) 0px, rgba(15, 23, 42, 0.012) 24px, #ffffff 56px)',
-              boxShadow: '-12px 0 32px -8px rgba(0,0,0,0.07)',
+              // Mirror the main left sidebar's soft glow, but pointing leftward
+              // toward the canvas, so the right pane has the same gradient edge
+              // depth as both the main menu and the top bar.
+              boxShadow: '-6px 0 24px -4px rgba(0,0,0,0.07)',
             }}
             onMouseDown={(e) => e.stopPropagation()}
           >
