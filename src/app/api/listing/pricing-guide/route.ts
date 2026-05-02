@@ -151,37 +151,22 @@ export async function PATCH(req: Request) {
   }
   update.updated_at = new Date().toISOString();
 
-  // Look up an existing row first so we can decide insert vs update.
-  const { data: existing } = await supabaseAdmin
-    .from('venue_pricing_guides')
-    .select('id')
-    .eq('venue_id', venueId)
-    .maybeSingle();
-
-  if (existing) {
-    const { data, error } = await supabaseAdmin
-      .from('venue_pricing_guides')
-      .update(update)
-      .eq('id', existing.id)
-      .select('*')
-      .single();
-    if (error) {
-      console.error('[pricing-guide PATCH update]', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-    return NextResponse.json({ guide: data });
-  }
-
-  // First-time save — insert a new row.
+  // Single round-trip upsert keyed on the unique `venue_id` column.  This
+  // avoids a select+insert race where two concurrent saves could both decide
+  // "no row exists" and try to insert.  It also gives us a single, clear
+  // error path when the schema is missing or RLS blocks writes.
   const { data, error } = await supabaseAdmin
     .from('venue_pricing_guides')
-    .insert({ venue_id: venueId, ...update })
+    .upsert({ venue_id: venueId, ...update }, { onConflict: 'venue_id' })
     .select('*')
     .single();
 
   if (error) {
-    console.error('[pricing-guide PATCH insert]', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('[pricing-guide PATCH upsert]', { error, venueId, keys: Object.keys(update) });
+    return NextResponse.json(
+      { error: error.message, code: (error as { code?: string }).code ?? null },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({ guide: data });
