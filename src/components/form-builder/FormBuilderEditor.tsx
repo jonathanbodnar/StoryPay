@@ -2740,8 +2740,6 @@ export function FormBuilderEditor({
               style={
                 {
                   background: '#ffffff',
-                  borderTopLeftRadius: 12,
-                  borderBottomLeftRadius: 12,
                   overscrollBehavior: 'contain',
                   scrollbarWidth: 'none',
                   msOverflowStyle: 'none',

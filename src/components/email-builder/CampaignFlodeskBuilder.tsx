@@ -4704,8 +4704,6 @@ export function CampaignFlodeskBuilder({
             className="fb-scroll-pane flex-1 overflow-y-auto"
             style={{
               background: '#ffffff',
-              borderTopLeftRadius: 12,
-              borderBottomLeftRadius: 12,
               overscrollBehavior: 'contain',
               scrollbarWidth: 'none',
               msOverflowStyle: 'none',
