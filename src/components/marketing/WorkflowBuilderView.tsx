@@ -1981,10 +1981,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
             style={{
               flex: 1, position: 'relative', overflow: 'hidden',
               cursor: isPanning ? 'grabbing' : 'grab',
-              // Dot-grid canvas — white base, 1px dots at 16px spacing, very subtle.
-              backgroundColor: '#ffffff',
-              backgroundImage: 'radial-gradient(circle, #d4d4d4 1px, transparent 1px)',
-              backgroundSize: '16px 16px',
+              background: '#ffffff',
               // Prevent the browser from doing its own page-zoom on pinch —
               // we handle pinch ourselves via wheel/gesture events.
               touchAction: 'none',
