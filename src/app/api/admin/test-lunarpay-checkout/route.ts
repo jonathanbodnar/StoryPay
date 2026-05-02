@@ -85,11 +85,41 @@ export async function GET(req: NextRequest) {
 
   const results: Array<{
     label: string;
-    request: Record<string, unknown>;
+    method: string;
+    path: string;
+    request?: Record<string, unknown>;
     status: number;
     response: unknown;
   }> = [];
 
+  // 0. Sanity: does the key work at all on a non-checkout endpoint?
+  // GET /api/v1/customers requires auth and returns 200 OK on a healthy merchant.
+  try {
+    const res = await fetch(`${LP_BASE_URL}/api/v1/customers?page=1&limit=1`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${key}` },
+    });
+    const text = await res.text();
+    let parsed: unknown = text;
+    try { parsed = JSON.parse(text); } catch { /* keep as string */ }
+    results.push({
+      label: '0. KEY-CHECK GET /customers (does the key work at all?)',
+      method: 'GET',
+      path: '/api/v1/customers',
+      status: res.status,
+      response: parsed,
+    });
+  } catch (err) {
+    results.push({
+      label: '0. KEY-CHECK GET /customers (does the key work at all?)',
+      method: 'GET',
+      path: '/api/v1/customers',
+      status: 0,
+      response: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  // 1-N. Progressive checkout payloads
   for (const t of tests) {
     try {
       const res = await fetch(`${LP_BASE_URL}/api/v1/checkout/sessions`, {
@@ -109,6 +139,8 @@ export async function GET(req: NextRequest) {
       }
       results.push({
         label: t.label,
+        method: 'POST',
+        path: '/api/v1/checkout/sessions',
         request: t.body,
         status: res.status,
         response: parsed,
@@ -116,6 +148,8 @@ export async function GET(req: NextRequest) {
     } catch (err) {
       results.push({
         label: t.label,
+        method: 'POST',
+        path: '/api/v1/checkout/sessions',
         request: t.body,
         status: 0,
         response: err instanceof Error ? err.message : String(err),
@@ -126,6 +160,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     venue: { id: venue.id, name: venue.name },
     keyPrefix,
+    keyLength: key.length,
     lpBaseUrl: LP_BASE_URL,
     results,
   }, { status: 200 });
