@@ -2318,7 +2318,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
             className="w-80 flex-shrink-0 flex flex-col overflow-hidden"
             style={{
               background: '#f4f4f5',
-              padding: '12px 0 12px 32px',
+              padding: '0 0 0 32px',
               position: 'relative',
             }}
             onMouseDown={(e) => e.stopPropagation()}

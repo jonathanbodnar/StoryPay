@@ -2727,7 +2727,7 @@ export function FormBuilderEditor({
               palette or the active block's inspector. */}
           <aside
             className="w-80 flex-shrink-0 flex flex-col overflow-hidden"
-            style={{ background: '#f4f4f5', padding: '12px 0 12px 32px', position: 'relative' }}
+            style={{ background: '#f4f4f5', padding: '0 0 0 32px', position: 'relative' }}
             onClick={(e) => e.stopPropagation()}
           >
             <div aria-hidden style={{
