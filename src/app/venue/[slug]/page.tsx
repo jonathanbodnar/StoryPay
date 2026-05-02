@@ -129,14 +129,19 @@ export default async function PublicVenuePage({ params }: { params: Promise<{ sl
       )}
 
       <div className="mx-auto max-w-3xl space-y-8 px-4 py-10 sm:px-6">
-        {/* Lead gen CTA */}
-        <ListingLeadModal
-          venueName={venue.name}
-          venueId={venue.id}
-          venueSlug={venue.slug}
-          apiBase={APP_BASE}
-          confirmationBase={DIRECTORY_SITE.replace(/\/$/, '')}
-        />
+        {/* Lead-capture CTA — only rendered for plans that grant the
+            "Pricing Guide" nav permission (marketing tiers). When the box
+            is unchecked in super admin we hide the entire block; the rest
+            of the page stays exactly the same. */}
+        {venue.pricing_guide_enabled && (
+          <ListingLeadModal
+            venueName={venue.name}
+            venueId={venue.id}
+            venueSlug={venue.slug}
+            apiBase={APP_BASE}
+            confirmationBase={DIRECTORY_SITE.replace(/\/$/, '')}
+          />
+        )}
 
         {venue.description && (
           <div className="prose prose-gray max-w-none text-[15px] leading-relaxed text-gray-700">

@@ -43,6 +43,14 @@ type PublicVenuePayload = {
     ga4_measurement_id?: string | null;
     listing_verified?: boolean;
     listing_sponsored?: boolean;
+    /**
+     * False when the venue's plan does NOT grant the "Pricing Guide" nav
+     * permission. The lead-capture sidebar (Get pricing & availability) is
+     * skipped entirely in that case so non-marketing tiers can't promote a
+     * guide they don't have. Defaults to true when the field is absent so
+     * older API responses keep working unchanged.
+     */
+    pricing_guide_enabled?: boolean;
   };
   reviews: {
     average_rating: number | null;
@@ -361,18 +369,25 @@ export default async function PublicVenuePage({ params }: { params: Promise<{ sl
             </div>
 
             <aside className="space-y-6 lg:pt-2">
-              {/* Lead gen CTA — sticky on desktop */}
-              <div className="rounded-3xl border border-gray-200 bg-white p-6">
-                <p className="mb-4 text-sm text-gray-600 leading-relaxed">
-                  Get pricing, check availability, and download the full venue guide.
-                </p>
-                <ListingLeadModal
-                  venueName={venue.name}
-                  venueId={venue.id}
-                  venueSlug={venue.slug}
-                  apiBase={API_BASE}
-                />
-              </div>
+              {/* Lead-capture CTA — only rendered for plans that grant the
+                  "Pricing Guide" nav permission (marketing tiers). When the
+                  box is unchecked in super admin we hide the entire card;
+                  the rest of the listing page stays unchanged. Falsy /
+                  undefined defaults to enabled to preserve legacy
+                  behaviour for older API payloads. */}
+              {venue.pricing_guide_enabled !== false && (
+                <div className="rounded-3xl border border-gray-200 bg-white p-6">
+                  <p className="mb-4 text-sm text-gray-600 leading-relaxed">
+                    Get pricing, check availability, and download the full venue guide.
+                  </p>
+                  <ListingLeadModal
+                    venueName={venue.name}
+                    venueId={venue.id}
+                    venueSlug={venue.slug}
+                    apiBase={API_BASE}
+                  />
+                </div>
+              )}
 
               <div className="rounded-3xl border border-gray-200 bg-white p-6">
                 <h3 className="text-xs font-bold uppercase tracking-wide text-gray-400">Details</h3>

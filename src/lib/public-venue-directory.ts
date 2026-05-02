@@ -8,6 +8,7 @@ import {
   parseGoogleReviewsCache,
   refreshVenueGoogleReviews,
 } from '@/lib/venue-google-reviews';
+import { computeAllowedNavIdsFromPlan } from '@/lib/directory-plans-venue';
 
 export type PublicVenueReviewItem = {
   id: string;
@@ -88,6 +89,17 @@ export type PublicVenuePayload = {
     listing_sponsored: boolean;
     /** Venue's own website URL (brand_website), used on the thank-you page. */
     brand_website: string | null;
+    /**
+     * True when this venue's plan grants `nav_listing_pricing_guide`. The
+     * public listing's lead-capture modal (the entire "Get pricing &
+     * availability" CTA on the directory page) is rendered ONLY when this is
+     * true. When false, the directory page hides that area entirely so the
+     * venue cannot promote a pricing guide they don't have access to.
+     *
+     * Legacy venues (no `directory_plan_id`) are treated as `legacy_full` and
+     * keep the modal — same behaviour as everywhere else in the gating layer.
+     */
+    pricing_guide_enabled: boolean;
   };
   reviews: {
     average_rating: number | null;
@@ -144,6 +156,7 @@ export async function getPublicVenueBySlug(rawSlug: string): Promise<PublicVenue
         'directory_verified_status',
         'directory_sponsored_status',
         'brand_website',
+        'directory_plan_id',
       ].join(','),
     )
     .eq('slug', slug)
@@ -243,6 +256,36 @@ export async function getPublicVenueBySlug(rawSlug: string): Promise<PublicVenue
       .slice(0, 20);
   }
 
+  // ── Pricing-guide lead modal gate ──────────────────────────────────────
+  //
+  // Resolves directly from the venue's directory plan. Mirrors the dashboard
+  // sidebar's "Pricing Guide" menu permission so the marketing-tier checkbox
+  // in super admin is the single source of truth. Legacy (planless) venues
+  // keep access — same as `canAccessDirectoryFeature` everywhere else.
+  let pricing_guide_enabled = true;
+  const directoryPlanId = v.directory_plan_id != null ? String(v.directory_plan_id) : '';
+  if (directoryPlanId) {
+    const { data: plan } = await supabaseAdmin
+      .from('directory_plans')
+      .select('feature_flags, nav_permissions')
+      .eq('id', directoryPlanId)
+      .maybeSingle();
+
+    if (plan) {
+      const allowed = new Set(
+        computeAllowedNavIdsFromPlan({
+          feature_flags: plan.feature_flags as Record<string, boolean> | null,
+          nav_permissions: plan.nav_permissions as Record<string, boolean> | null,
+        }),
+      );
+      pricing_guide_enabled = allowed.has('nav_listing_pricing_guide');
+    } else {
+      // Plan id is set but the plan row is missing — fail closed: don't
+      // promote a feature we can't verify access to.
+      pricing_guide_enabled = false;
+    }
+  }
+
   let google_reviews: PublicVenuePayload['google_reviews'] = null;
   const gPlaceRaw = v.google_place_id != null ? String(v.google_place_id).trim() : '';
   if (gPlaceRaw && isValidGooglePlaceId(gPlaceRaw)) {
@@ -284,6 +327,7 @@ export async function getPublicVenueBySlug(rawSlug: string): Promise<PublicVenue
       listing_verified,
       listing_sponsored,
       brand_website: v.brand_website != null ? String(v.brand_website) : null,
+      pricing_guide_enabled,
     },
     reviews: {
       average_rating,
