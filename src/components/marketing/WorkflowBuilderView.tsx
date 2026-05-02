@@ -1984,10 +1984,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
             style={{
               flex: 1, position: 'relative', overflow: 'hidden',
               cursor: isPanning ? 'grabbing' : 'grab',
-              // #f9fafb = Tailwind gray-50 — visually indistinguishable from
-              // white but allows the right-pane box-shadow to render the same
-              // soft left-edge fade the email builder gets from its gray canvas.
-              background: '#f9fafb',
+              background: '#ffffff',
               touchAction: 'none',
               overscrollBehavior: 'contain',
             }}
@@ -2294,7 +2291,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                       the connector line, making it look like the line ends at END. */}
                   <div style={{
                     position: 'absolute', top: '50%', left: 0, right: 0, bottom: '-9999px',
-                    background: '#f9fafb', zIndex: -1,
+                    background: '#ffffff', zIndex: -1,
                   }} />
                 </div>
 
