@@ -91,6 +91,7 @@ const settingsItems: NavItem[] = [
 
 const listingItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard/listing', icon: LayoutDashboard, navId: 'nav_listing_dashboard' },
+  { label: 'Pricing Guide', href: '/dashboard/listing/pricing-guide', icon: Sparkles, navId: 'nav_listing_pricing_guide' },
   { label: 'Plans & billing', href: '/dashboard/directory-billing', icon: CreditCard, navId: 'nav_listing_directory_billing' },
   { label: 'Analytics', href: '/dashboard/listing/analytics', icon: BarChart3, navId: 'nav_listing_analytics' },
   { label: 'Reviews', href: '/dashboard/listing/reviews', icon: Star, navId: 'nav_listing_reviews' },
