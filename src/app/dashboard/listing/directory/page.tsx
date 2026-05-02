@@ -17,6 +17,10 @@ const SPONSORED_PRICE_MONTHLY = 99;
 type StatusPayload = {
   directory_verified_status: string;
   directory_sponsored_status: string;
+  /** User has actively subscribed to the paid add-on. */
+  addonVerified: boolean;
+  addonSponsored: boolean;
+  /** Plan bundles the add-on at no extra charge. */
   verifiedIncluded: boolean;
   sponsoredIncluded: boolean;
   isHighestPlan: boolean;
@@ -100,21 +104,75 @@ export default function ListingDirectoryStatusPage() {
     setSubmitting(kind);
     setToast(null);
     try {
-      const res = await fetch('/api/listing/directory-apply', {
+      const included = kind === 'verified' ? data?.verifiedIncluded : data?.sponsoredIncluded;
+      // Plan-included: just kick off the admin-review flow.
+      // Add-on (paid): subscribe via the billing endpoint, which will redirect
+      // to LunarPay checkout for free-tier users with no card on file.
+      if (included) {
+        const res = await fetch('/api/listing/directory-apply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kind }),
+        });
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) {
+          setToast({ kind: 'error', msg: j.error ?? 'Request failed' });
+          return;
+        }
+        setToast({
+          kind: 'success',
+          msg: kind === 'verified'
+            ? 'Verification request submitted — our team will review your listing within 1–2 business days.'
+            : 'Sponsored placement request submitted — our team will be in touch shortly.',
+        });
+      } else {
+        const res = await fetch('/api/venue-billing/addons', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ [kind]: true }),
+        });
+        const j = (await res.json().catch(() => ({}))) as
+          | { kind: 'switched'; total_cents: number }
+          | { kind: 'checkout_required'; url: string }
+          | { error?: string };
+        if (!res.ok) {
+          setToast({ kind: 'error', msg: (j as { error?: string }).error ?? 'Request failed' });
+          return;
+        }
+        if ((j as { kind?: string }).kind === 'checkout_required') {
+          window.location.href = (j as { url: string }).url;
+          return;
+        }
+        setToast({
+          kind: 'success',
+          msg: kind === 'verified'
+            ? 'Verified Listing add-on subscribed — your monthly bill includes $19/mo. Our team will review and activate the badge within 1–2 business days.'
+            : 'Sponsored Listing add-on subscribed — your monthly bill includes $99/mo. Our team will review and activate placement within 1–2 business days.',
+        });
+      }
+      await load();
+    } finally {
+      setSubmitting(null);
+    }
+  }
+
+  async function cancel(kind: 'verified' | 'sponsored') {
+    setSubmitting(kind);
+    setToast(null);
+    try {
+      const res = await fetch('/api/venue-billing/addons', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind }),
+        body: JSON.stringify({ [kind]: false }),
       });
-      const j = await res.json().catch(() => ({})) as { error?: string };
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
-        setToast({ kind: 'error', msg: j.error ?? 'Request failed' });
+        setToast({ kind: 'error', msg: j.error ?? 'Cancel failed' });
         return;
       }
       setToast({
         kind: 'success',
-        msg: kind === 'verified'
-          ? 'Verification request submitted — our team will review your listing within 1–2 business days.'
-          : 'Sponsored placement request submitted — our team will be in touch shortly.',
+        msg: `${kind === 'verified' ? 'Verified Listing' : 'Sponsored Listing'} cancelled — your monthly bill will be reduced on the next cycle.`,
       });
       await load();
     } finally {
@@ -132,13 +190,17 @@ export default function ListingDirectoryStatusPage() {
 
   const vs = data?.directory_verified_status ?? 'none';
   const ss = data?.directory_sponsored_status ?? 'none';
-  const verifiedIncluded = data?.verifiedIncluded ?? true;
-  const sponsoredIncluded = data?.sponsoredIncluded ?? true;
+  const verifiedIncluded = data?.verifiedIncluded ?? false;
+  const sponsoredIncluded = data?.sponsoredIncluded ?? false;
+  const verifiedSubscribed = data?.addonVerified ?? false;
+  const sponsoredSubscribed = data?.addonSponsored ?? false;
   const isHighestPlan = data?.isHighestPlan ?? false;
   const planName = data?.planName;
 
-  const canApplyVerified = vs === 'none' || vs === 'rejected';
-  const canApplySponsored = ss === 'none' || ss === 'rejected';
+  // The CTA is shown when no signal exists yet (no application, no subscription)
+  // — or if the user was rejected and may want to retry.
+  const canApplyVerified = (vs === 'none' || vs === 'rejected') && !verifiedSubscribed;
+  const canApplySponsored = (ss === 'none' || ss === 'rejected') && !sponsoredSubscribed;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 py-2">
@@ -258,32 +320,19 @@ export default function ListingDirectoryStatusPage() {
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <span>Current status:</span>
             <StatusPill status={vs} />
+            {verifiedSubscribed && !verifiedIncluded ? (
+              <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700">
+                Subscribed · ${VERIFIED_PRICE_MONTHLY}/mo
+              </span>
+            ) : null}
           </div>
-          {vs === 'approved' ? (
-            <p className="text-xs text-gray-500">Your badge is live on the directory.</p>
-          ) : vs === 'pending' || vs === 'draft' ? (
-            <p className="text-xs text-gray-500">Our team is reviewing your listing.</p>
-          ) : canApplyVerified ? (
-            verifiedIncluded ? (
-              <button
-                type="button"
-                disabled={!!submitting}
-                onClick={() => void apply('verified')}
-                className="inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-4 py-2 text-xs font-semibold text-white hover:bg-gray-800 disabled:opacity-60"
-              >
-                {submitting === 'verified' ? (
-                  <Loader2 size={13} className="animate-spin" />
-                ) : (
-                  <BadgeCheck size={13} />
-                )}
-                Apply for verification
-              </button>
-            ) : (
-              <div className="flex items-center gap-3">
-                <div className="text-right">
-                  <p className="text-xs font-semibold text-gray-900">${VERIFIED_PRICE_MONTHLY}/month</p>
-                  <p className="text-[11px] text-gray-400">Price may change with notice</p>
-                </div>
+          <div className="flex items-center gap-2">
+            {vs === 'approved' ? (
+              <p className="text-xs text-gray-500">Your badge is live on the directory.</p>
+            ) : vs === 'pending' || vs === 'draft' ? (
+              <p className="text-xs text-gray-500">Our team is reviewing your listing.</p>
+            ) : canApplyVerified ? (
+              verifiedIncluded ? (
                 <button
                   type="button"
                   disabled={!!submitting}
@@ -295,20 +344,43 @@ export default function ListingDirectoryStatusPage() {
                   ) : (
                     <BadgeCheck size={13} />
                   )}
-                  Apply &amp; subscribe — ${VERIFIED_PRICE_MONTHLY}/mo
+                  Apply for verification
                 </button>
-              </div>
-            )
-          ) : vs === 'rejected' ? (
-            <button
-              type="button"
-              disabled={!!submitting}
-              onClick={() => void apply('verified')}
-              className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
-            >
-              Reapply
-            </button>
-          ) : null}
+              ) : (
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <p className="text-xs font-semibold text-gray-900">${VERIFIED_PRICE_MONTHLY}/month</p>
+                    <p className="text-[11px] text-gray-400">Price may change with notice</p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!!submitting}
+                    onClick={() => void apply('verified')}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-4 py-2 text-xs font-semibold text-white hover:bg-gray-800 disabled:opacity-60"
+                  >
+                    {submitting === 'verified' ? (
+                      <Loader2 size={13} className="animate-spin" />
+                    ) : (
+                      <BadgeCheck size={13} />
+                    )}
+                    Apply &amp; subscribe — ${VERIFIED_PRICE_MONTHLY}/mo
+                  </button>
+                </div>
+              )
+            ) : null}
+            {/* Cancel button if subscribed (paid add-on, not plan-included) */}
+            {verifiedSubscribed && !verifiedIncluded ? (
+              <button
+                type="button"
+                disabled={!!submitting}
+                onClick={() => void cancel('verified')}
+                className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
+              >
+                {submitting === 'verified' ? <Loader2 size={12} className="animate-spin" /> : null}
+                Cancel add-on
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -363,32 +435,19 @@ export default function ListingDirectoryStatusPage() {
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <span>Current status:</span>
             <StatusPill status={ss} />
+            {sponsoredSubscribed && !sponsoredIncluded ? (
+              <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700">
+                Subscribed · ${SPONSORED_PRICE_MONTHLY}/mo
+              </span>
+            ) : null}
           </div>
-          {ss === 'approved' ? (
-            <p className="text-xs text-gray-500">Your sponsored placement is live.</p>
-          ) : ss === 'pending' || ss === 'draft' ? (
-            <p className="text-xs text-gray-500">Our team is confirming your slot.</p>
-          ) : canApplySponsored ? (
-            sponsoredIncluded ? (
-              <button
-                type="button"
-                disabled={!!submitting}
-                onClick={() => void apply('sponsored')}
-                className="inline-flex items-center gap-1.5 rounded-full bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
-              >
-                {submitting === 'sponsored' ? (
-                  <Loader2 size={13} className="animate-spin" />
-                ) : (
-                  <Megaphone size={13} />
-                )}
-                Apply for sponsored placement
-              </button>
-            ) : (
-              <div className="flex items-center gap-3">
-                <div className="text-right">
-                  <p className="text-xs font-semibold text-gray-900">${SPONSORED_PRICE_MONTHLY}/month</p>
-                  <p className="text-[11px] text-gray-400">Price may change with notice</p>
-                </div>
+          <div className="flex items-center gap-2">
+            {ss === 'approved' ? (
+              <p className="text-xs text-gray-500">Your sponsored placement is live.</p>
+            ) : ss === 'pending' || ss === 'draft' ? (
+              <p className="text-xs text-gray-500">Our team is confirming your slot.</p>
+            ) : canApplySponsored ? (
+              sponsoredIncluded ? (
                 <button
                   type="button"
                   disabled={!!submitting}
@@ -400,20 +459,43 @@ export default function ListingDirectoryStatusPage() {
                   ) : (
                     <Megaphone size={13} />
                   )}
-                  Apply &amp; subscribe — ${SPONSORED_PRICE_MONTHLY}/mo
+                  Apply for sponsored placement
                 </button>
-              </div>
-            )
-          ) : ss === 'rejected' ? (
-            <button
-              type="button"
-              disabled={!!submitting}
-              onClick={() => void apply('sponsored')}
-              className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
-            >
-              Reapply
-            </button>
-          ) : null}
+              ) : (
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <p className="text-xs font-semibold text-gray-900">${SPONSORED_PRICE_MONTHLY}/month</p>
+                    <p className="text-[11px] text-gray-400">Price may change with notice</p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!!submitting}
+                    onClick={() => void apply('sponsored')}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
+                  >
+                    {submitting === 'sponsored' ? (
+                      <Loader2 size={13} className="animate-spin" />
+                    ) : (
+                      <Megaphone size={13} />
+                    )}
+                    Apply &amp; subscribe — ${SPONSORED_PRICE_MONTHLY}/mo
+                  </button>
+                </div>
+              )
+            ) : null}
+            {/* Cancel button if subscribed (paid add-on, not plan-included) */}
+            {sponsoredSubscribed && !sponsoredIncluded ? (
+              <button
+                type="button"
+                disabled={!!submitting}
+                onClick={() => void cancel('sponsored')}
+                className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
+              >
+                {submitting === 'sponsored' ? <Loader2 size={12} className="animate-spin" /> : null}
+                Cancel add-on
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
 

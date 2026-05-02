@@ -18,6 +18,14 @@ import {
   verifyDirectoryPlatformCheckoutAndSubscribe,
   type VenuePlanRow,
 } from './platform-directory-billing';
+import {
+  computeMonthlyTotalCents,
+  resolveEffectiveAddons,
+  VERIFIED_PRICE_CENTS,
+  SPONSORED_PRICE_CENTS,
+  type ChargeBreakdown,
+  type EffectiveAddons,
+} from './directory-addons';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.storypay.io';
 
@@ -76,6 +84,14 @@ export type VenueBillingSummary = {
   plans: DirectoryPlanCatalogEntry[];
   history: VenueBillingHistoryEntry[];
   billing_configured: boolean;
+  /** Effective addon state (user toggles + plan-included resolved together). */
+  addons: EffectiveAddons;
+  /** Pricing breakdown for the current plan + active addons. */
+  charge: ChargeBreakdown;
+  /** Inclusion flags per plan id, for the addon-checkbox UI. */
+  plan_addon_inclusion: Record<string, { verified: boolean; sponsored: boolean }>;
+  /** Static add-on prices in cents, exposed so the page never has to import constants. */
+  addon_prices: { verified_cents: number; sponsored_cents: number };
 };
 
 function mapPlanRow(row: Record<string, unknown>): DirectoryPlanCatalogEntry {
@@ -222,6 +238,55 @@ export async function loadVenueBillingSummary(venueId: string): Promise<VenueBil
     ? plans.find((p) => p.id === ctx.plan!.id) || mapPlanRow(ctx.plan as unknown as Record<string, unknown>)
     : null;
 
+  // Pull stored addon flags. Resilient to the column not existing yet —
+  // mirrors how pricing-guide handles its schema-not-yet-applied case.
+  let addonVerifiedUser = false;
+  let addonSponsoredUser = false;
+  try {
+    const { data: addonRow } = await supabaseAdmin
+      .from('venues')
+      .select('directory_addon_verified, directory_addon_sponsored')
+      .eq('id', venueId)
+      .maybeSingle();
+    if (addonRow) {
+      addonVerifiedUser = Boolean((addonRow as { directory_addon_verified?: boolean }).directory_addon_verified);
+      addonSponsoredUser = Boolean((addonRow as { directory_addon_sponsored?: boolean }).directory_addon_sponsored);
+    }
+  } catch {
+    // 42P01 / column missing — treat as unset until migration 092 runs.
+  }
+
+  const addons = resolveEffectiveAddons({
+    plan: current,
+    allPlans: plans,
+    addonVerifiedUser,
+    addonSponsoredUser,
+  });
+  const charge = computeMonthlyTotalCents({
+    plan: current,
+    allPlans: plans,
+    addonVerifiedUser,
+    addonSponsoredUser,
+  });
+
+  const plan_addon_inclusion: Record<string, { verified: boolean; sponsored: boolean }> = {};
+  for (const p of plans) {
+    plan_addon_inclusion[p.id] = {
+      verified: resolveEffectiveAddons({
+        plan: p,
+        allPlans: plans,
+        addonVerifiedUser: false,
+        addonSponsoredUser: false,
+      }).verifiedFromPlan,
+      sponsored: resolveEffectiveAddons({
+        plan: p,
+        allPlans: plans,
+        addonVerifiedUser: false,
+        addonSponsoredUser: false,
+      }).sponsoredFromPlan,
+    };
+  }
+
   return {
     venue: {
       id: ctx?.venue.id || venueId,
@@ -235,6 +300,13 @@ export async function loadVenueBillingSummary(venueId: string): Promise<VenueBil
     plans,
     history,
     billing_configured: Boolean(secret),
+    addons,
+    charge,
+    plan_addon_inclusion,
+    addon_prices: {
+      verified_cents: VERIFIED_PRICE_CENTS,
+      sponsored_cents: SPONSORED_PRICE_CENTS,
+    },
   };
 }
 
@@ -273,25 +345,66 @@ export async function changeVenuePlan(
 
   const { data: targetRow } = await supabaseAdmin
     .from('directory_plans')
-    .select('id, name, price_monthly_cents, fortis_merchant_id')
+    .select('id, name, price_monthly_cents, fortis_merchant_id, feature_flags')
     .eq('id', targetPlanId)
     .maybeSingle();
   if (!targetRow) throw new Error('Plan not found');
 
   const target = targetRow as VenuePlanRow['plan'];
   if (!target) throw new Error('Plan not found');
+  // The wider plan row used by the addon math helper. The DB query above
+  // selected feature_flags, so we know the shape — cast through unknown.
+  const targetForMath = targetRow as unknown as DirectoryPlanCatalogEntry;
 
   if (ctx.venue.directory_plan_id === target.id) {
     return { kind: 'switched', plan_id: target.id };
   }
 
-  const newCents = target.price_monthly_cents ?? 0;
-  const currentCents = ctx.plan?.price_monthly_cents ?? 0;
+  // Pull existing addon flags so the recalculated subscription amount stays
+  // in sync with what the venue has subscribed to. Defensive in case the
+  // migration hasn't run yet.
+  let addonVerifiedUser = false;
+  let addonSponsoredUser = false;
+  try {
+    const { data: addonRow } = await supabaseAdmin
+      .from('venues')
+      .select('directory_addon_verified, directory_addon_sponsored')
+      .eq('id', venueId)
+      .maybeSingle();
+    if (addonRow) {
+      addonVerifiedUser = Boolean((addonRow as { directory_addon_verified?: boolean }).directory_addon_verified);
+      addonSponsoredUser = Boolean((addonRow as { directory_addon_sponsored?: boolean }).directory_addon_sponsored);
+    }
+  } catch {
+    // schema not applied yet
+  }
+
+  const allPlans = await listDirectoryPlanCatalog();
+  const currentForMath = ctx.plan
+    ? (allPlans.find((p) => p.id === ctx.plan!.id) ?? (ctx.plan as unknown as DirectoryPlanCatalogEntry))
+    : null;
+  const targetCharge = computeMonthlyTotalCents({
+    plan: targetForMath,
+    allPlans,
+    addonVerifiedUser,
+    addonSponsoredUser,
+  });
+  const currentCharge = computeMonthlyTotalCents({
+    plan: currentForMath,
+    allPlans,
+    addonVerifiedUser,
+    addonSponsoredUser,
+  });
+
+  const newCents = targetCharge.total_cents;
+  const currentCents = currentCharge.total_cents;
   const subId = ctx.venue.directory_subscription_external_id;
   const status = ctx.venue.directory_subscription_status;
   const hasActiveSub = Boolean(subId && (status === 'active' || status === 'trialing' || status === 'past_due'));
 
-  // Moving to a free plan: cancel any existing sub then swap.
+  // Total billable goes to zero (free plan AND no add-ons left active).
+  // Cancel the sub and clear status. Note: addons on a free plan can keep a
+  // subscription alive, so we check the *total*, not the plan price.
   if (newCents <= 0) {
     if (hasActiveSub && subId) {
       const secret = getPlatformLunarPaySecretKey();
@@ -299,7 +412,6 @@ export async function changeVenuePlan(
         try {
           await cancelSubscription(secret, subId);
         } catch {
-          // Surface a clearer error if LunarPay rejects.
           throw new Error('Could not cancel current subscription. Try again or contact support.');
         }
       }
@@ -309,7 +421,7 @@ export async function changeVenuePlan(
         0,
         'subscription_cancel',
         `plan_change:${Date.now()}:${venueId}`,
-        { reason: 'switched_to_free_plan', previous_subscription_id: subId },
+        { reason: 'total_charge_zero', previous_subscription_id: subId },
       );
     }
     await supabaseAdmin

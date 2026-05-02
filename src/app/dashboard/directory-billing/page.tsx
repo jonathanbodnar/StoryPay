@@ -4,13 +4,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowUpRight,
+  BadgeCheck,
   Check,
   CheckCircle2,
   CreditCard,
   Loader2,
   Lock,
+  Megaphone,
   Receipt,
   ShieldCheck,
+  Sparkles,
   X,
   AlertTriangle,
 } from 'lucide-react';
@@ -59,6 +62,22 @@ type HistoryEntry = {
   status: 'paid' | 'refunded' | 'failed' | 'pending';
 };
 
+type Addons = {
+  verified: boolean;
+  sponsored: boolean;
+  verifiedFromPlan: boolean;
+  sponsoredFromPlan: boolean;
+  verifiedUser: boolean;
+  sponsoredUser: boolean;
+};
+
+type ChargeBreakdown = {
+  plan_cents: number;
+  verified_cents: number;
+  sponsored_cents: number;
+  total_cents: number;
+};
+
 type BillingSummary = {
   venue: { id: string; name: string; email: string | null };
   current_plan: Plan | null;
@@ -68,6 +87,10 @@ type BillingSummary = {
   plans: Plan[];
   history: HistoryEntry[];
   billing_configured: boolean;
+  addons: Addons;
+  charge: ChargeBreakdown;
+  plan_addon_inclusion: Record<string, { verified: boolean; sponsored: boolean }>;
+  addon_prices: { verified_cents: number; sponsored_cents: number };
 };
 
 function formatCents(cents: number | null | undefined): string {
@@ -143,14 +166,17 @@ export default function DirectoryBillingPage() {
     const sessionId = searchParams.get('session_id');
     if (!sessionId) return;
     const paymentUpdate = searchParams.get('payment_update') === '1';
+    const addonFlow = searchParams.get('addons') === '1';
     let cancelled = false;
     (async () => {
-      setBusy(paymentUpdate ? 'verify_payment_update' : 'verify_checkout');
+      setBusy(addonFlow ? 'verify_addons' : paymentUpdate ? 'verify_payment_update' : 'verify_checkout');
       setError('');
       try {
-        const endpoint = paymentUpdate
-          ? '/api/venue-billing/update-payment'
-          : '/api/directory-platform/verify';
+        const endpoint = addonFlow
+          ? '/api/venue-billing/addons/verify'
+          : paymentUpdate
+            ? '/api/venue-billing/update-payment'
+            : '/api/directory-platform/verify';
         const res = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -159,7 +185,13 @@ export default function DirectoryBillingPage() {
         const d = (await res.json().catch(() => ({}))) as { error?: string };
         if (!res.ok) throw new Error(d.error || 'Verification failed');
         if (!cancelled) {
-          setInfo(paymentUpdate ? 'Payment method updated.' : 'Subscription activated.');
+          setInfo(
+            addonFlow
+              ? 'Add-on subscription activated — your monthly bill is now updated.'
+              : paymentUpdate
+                ? 'Payment method updated.'
+                : 'Subscription activated.',
+          );
           router.replace('/dashboard/directory-billing');
           await load();
         }
@@ -250,6 +282,40 @@ export default function DirectoryBillingPage() {
     }
   }
 
+  async function toggleAddon(kind: 'verified' | 'sponsored') {
+    if (!summary) return;
+    const next = !summary.addons[kind === 'verified' ? 'verifiedUser' : 'sponsoredUser'];
+    setBusy(`addon:${kind}`);
+    setError('');
+    setInfo('');
+    try {
+      const res = await fetch('/api/venue-billing/addons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [kind]: next }),
+      });
+      const d = (await res.json().catch(() => ({}))) as
+        | { kind: 'switched'; total_cents: number }
+        | { kind: 'checkout_required'; url: string }
+        | { error?: string };
+      if (!res.ok) throw new Error((d as { error?: string }).error || 'Could not update add-on');
+      if ((d as { kind?: string }).kind === 'checkout_required') {
+        window.location.href = (d as { url: string }).url;
+        return;
+      }
+      setInfo(
+        next
+          ? `${kind === 'verified' ? 'Verified Listing' : 'Sponsored Listing'} added — your monthly bill is being updated.`
+          : `${kind === 'verified' ? 'Verified Listing' : 'Sponsored Listing'} removed — your monthly bill will be reduced on the next cycle.`,
+      );
+      await load();
+    } catch (e) {
+      setError(friendlyError(e instanceof Error ? e.message : 'Add-on update failed'));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function cancelSubscription() {
     setConfirmCancel(false);
     setBusy('cancel');
@@ -323,7 +389,7 @@ export default function DirectoryBillingPage() {
           <CheckCircle2 size={16} /> {info}
         </div>
       ) : null}
-      {busy === 'verify_checkout' || busy === 'verify_payment_update' ? (
+      {busy === 'verify_checkout' || busy === 'verify_payment_update' || busy === 'verify_addons' ? (
         <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600 flex items-center gap-2">
           <Loader2 size={14} className="animate-spin" /> Confirming with LunarPay…
         </div>
@@ -498,12 +564,24 @@ export default function DirectoryBillingPage() {
         </div>
       </section>
 
+      {/* ── Add-ons (current plan) ─────────────────────────────────────── */}
+      <AddonsCard
+        addons={summary.addons}
+        charge={summary.charge}
+        verifiedPriceCents={summary.addon_prices.verified_cents}
+        sponsoredPriceCents={summary.addon_prices.sponsored_cents}
+        currentPlan={currentPlan}
+        busy={busy}
+        onToggle={(kind) => void toggleAddon(kind)}
+      />
+
       <section>
         <div className="flex items-end justify-between gap-3 mb-3">
           <div>
             <h2 className="font-heading text-lg text-gray-900">Available plans</h2>
             <p className="text-sm text-gray-500">
               Upgrade or downgrade anytime. Paid plans bill monthly; changes apply instantly.
+              Verified &amp; Sponsored add-ons can be added to any plan.
             </p>
           </div>
         </div>
@@ -519,7 +597,16 @@ export default function DirectoryBillingPage() {
               const isCurrent = currentPlan?.id === plan.id && (isActive || isPastDue);
               const isPendingThis = currentPlan?.id === plan.id && isPending;
               const cents = plan.price_monthly_cents ?? 0;
-              const isUpgrade = cents > currentCents;
+              const inclusion = summary.plan_addon_inclusion[plan.id] || { verified: false, sponsored: false };
+              // Preview total at the *plan being viewed*, with the user's currently-active
+              // addons retained (they don't reset when changing plan).
+              const verifiedAdds = !inclusion.verified && summary.addons.verifiedUser
+                ? summary.addon_prices.verified_cents : 0;
+              const sponsoredAdds = !inclusion.sponsored && summary.addons.sponsoredUser
+                ? summary.addon_prices.sponsored_cents : 0;
+              const previewTotal = cents + verifiedAdds + sponsoredAdds;
+              const previewDelta = previewTotal - summary.charge.total_cents;
+              const isUpgrade = previewDelta > 0;
               return (
                 <div
                   key={plan.id}
@@ -570,6 +657,45 @@ export default function DirectoryBillingPage() {
                       </span>
                     ) : null}
                   </div>
+
+                  {/* What this plan bundles for free */}
+                  <div className="space-y-1.5">
+                    <div className={`text-[11px] font-semibold uppercase tracking-wide ${isCurrent ? 'text-gray-300' : 'text-gray-500'}`}>
+                      Add-ons included
+                    </div>
+                    <PlanIncludedRow
+                      label="Verified Listing"
+                      value="$19/mo"
+                      included={inclusion.verified}
+                      isCurrent={isCurrent}
+                    />
+                    <PlanIncludedRow
+                      label="Sponsored Listing"
+                      value="$99/mo"
+                      included={inclusion.sponsored}
+                      isCurrent={isCurrent}
+                    />
+                  </div>
+
+                  {/* Preview total if user switches to this plan keeping their existing addons. */}
+                  {!isCurrent && (verifiedAdds > 0 || sponsoredAdds > 0) ? (
+                    <div className={`rounded-lg px-3 py-2 text-[11px] ${
+                      isCurrent ? 'bg-white/10 text-gray-200' : 'bg-gray-50 text-gray-600'
+                    }`}>
+                      Total with your current add-ons:{' '}
+                      <span className="font-semibold text-gray-900">
+                        {formatCents(previewTotal)}
+                      </span>{' '}
+                      / mo
+                      {previewDelta !== 0 ? (
+                        <span className={previewDelta > 0 ? 'ml-1 text-amber-700' : 'ml-1 text-emerald-700'}>
+                          ({previewDelta > 0 ? '+' : ''}
+                          {formatCents(previewDelta)})
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
+
                   <div className="mt-auto">
                     {isCurrent ? (
                       <span className="inline-flex w-full justify-center items-center gap-1 rounded-xl bg-white/10 px-3 py-2 text-xs font-semibold">
@@ -674,7 +800,12 @@ export default function DirectoryBillingPage() {
         <UpgradePlanModal
           plan={confirmTarget}
           currentPlan={currentPlan}
-          currentCents={currentCents}
+          currentTotalCents={summary.charge.total_cents}
+          targetInclusion={
+            summary.plan_addon_inclusion[confirmTarget.id] || { verified: false, sponsored: false }
+          }
+          addons={summary.addons}
+          addonPrices={summary.addon_prices}
           paymentMethod={summary.payment_method}
           busy={busy === `change:${confirmTarget.id}`}
           onCancel={() => setConfirmPlanId(null)}
@@ -703,6 +834,243 @@ export default function DirectoryBillingPage() {
 }
 
 /**
+ * One-row helper that shows whether a plan bundles a given add-on.
+ * Renders "Included" pill OR price string depending on inclusion.
+ */
+function PlanIncludedRow({
+  label,
+  value,
+  included,
+  isCurrent,
+}: {
+  label: string;
+  value: string;
+  included: boolean;
+  isCurrent: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2 text-[12px]">
+      <span className={isCurrent ? 'text-gray-200' : 'text-gray-700'}>{label}</span>
+      {included ? (
+        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+          isCurrent ? 'bg-emerald-400/20 text-emerald-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+        }`}>
+          <Check size={10} /> Included
+        </span>
+      ) : (
+        <span className={`text-[11px] ${isCurrent ? 'text-gray-300' : 'text-gray-500'}`}>{value}</span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Add-ons management card for the venue's CURRENT plan. Shows the verified +
+ * sponsored toggles, the live total of plan + active add-ons, and a clear
+ * "what gets billed" breakdown.
+ *
+ * Add-ons that are bundled with the current plan render as "Included" + locked.
+ */
+function AddonsCard({
+  addons,
+  charge,
+  verifiedPriceCents,
+  sponsoredPriceCents,
+  currentPlan,
+  busy,
+  onToggle,
+}: {
+  addons: Addons;
+  charge: ChargeBreakdown;
+  verifiedPriceCents: number;
+  sponsoredPriceCents: number;
+  currentPlan: Plan | null;
+  busy: string | null;
+  onToggle: (kind: 'verified' | 'sponsored') => void;
+}) {
+  return (
+    <section className="rounded-2xl border border-gray-200 bg-white p-6">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-heading text-lg text-gray-900 flex items-center gap-2">
+            <Sparkles size={16} className="text-violet-500" /> Verified &amp; Sponsored add-ons
+          </h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Stack these on top of any plan. Toggling on or off updates your monthly charge instantly —
+            no need to wait until your next billing cycle.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-2">
+        <AddonRow
+          icon={<BadgeCheck size={18} />}
+          label="Verified Listing"
+          description="Verified badge on your listing, in search, and in inquiries — builds trust with brides browsing."
+          priceCents={verifiedPriceCents}
+          isOn={addons.verified}
+          isFromPlan={addons.verifiedFromPlan}
+          isUserOn={addons.verifiedUser}
+          busy={busy === 'addon:verified'}
+          onChange={() => onToggle('verified')}
+          tone="emerald"
+        />
+        <AddonRow
+          icon={<Megaphone size={18} />}
+          label="Sponsored Listing"
+          description="Top-of-results placement and 'Sponsored' label, with priority above non-sponsored venues."
+          priceCents={sponsoredPriceCents}
+          isOn={addons.sponsored}
+          isFromPlan={addons.sponsoredFromPlan}
+          isUserOn={addons.sponsoredUser}
+          busy={busy === 'addon:sponsored'}
+          onChange={() => onToggle('sponsored')}
+          tone="violet"
+        />
+      </div>
+
+      {/* Live total breakdown */}
+      <div className="mt-5 rounded-xl border border-gray-100 bg-gray-50 p-4">
+        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+          Monthly total
+        </div>
+        <div className="mt-3 space-y-1 text-sm">
+          <div className="flex items-center justify-between text-gray-700">
+            <span>{currentPlan?.name || 'Free plan'}</span>
+            <span className="font-mono">{charge.plan_cents > 0 ? formatCents(charge.plan_cents) : 'Free'}</span>
+          </div>
+          <div className="flex items-center justify-between text-gray-700">
+            <span>
+              Verified Listing
+              {addons.verifiedFromPlan ? (
+                <span className="ml-1.5 text-[10px] font-semibold text-emerald-700 uppercase tracking-wide">Included</span>
+              ) : null}
+            </span>
+            <span className="font-mono">
+              {charge.verified_cents > 0 ? formatCents(charge.verified_cents) : addons.verified ? 'Included' : '—'}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-gray-700">
+            <span>
+              Sponsored Listing
+              {addons.sponsoredFromPlan ? (
+                <span className="ml-1.5 text-[10px] font-semibold text-emerald-700 uppercase tracking-wide">Included</span>
+              ) : null}
+            </span>
+            <span className="font-mono">
+              {charge.sponsored_cents > 0 ? formatCents(charge.sponsored_cents) : addons.sponsored ? 'Included' : '—'}
+            </span>
+          </div>
+          <div className="border-t border-gray-200 mt-2 pt-2 flex items-center justify-between text-gray-900 font-semibold">
+            <span>Total billed monthly</span>
+            <span className="font-mono">
+              {charge.total_cents > 0 ? formatCents(charge.total_cents) : 'Free'}
+            </span>
+          </div>
+        </div>
+        <p className="mt-3 text-[11px] text-gray-500">
+          Charges happen automatically on the same monthly cycle as your plan. Pricing is subject to
+          change at any time. Current subscribers will receive at least 30 days&apos; advance notice
+          before any price increase takes effect.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function AddonRow({
+  icon,
+  label,
+  description,
+  priceCents,
+  isOn,
+  isFromPlan,
+  isUserOn,
+  busy,
+  onChange,
+  tone,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  description: string;
+  priceCents: number;
+  isOn: boolean;
+  isFromPlan: boolean;
+  isUserOn: boolean;
+  busy: boolean;
+  onChange: () => void;
+  tone: 'emerald' | 'violet';
+}) {
+  const ringClass = tone === 'emerald'
+    ? 'border-emerald-200 bg-emerald-50/40'
+    : 'border-violet-200 bg-violet-50/40';
+  const checkboxBg = isOn
+    ? tone === 'emerald'
+      ? 'bg-emerald-600 border-emerald-600'
+      : 'bg-violet-600 border-violet-600'
+    : 'bg-white border-gray-300';
+  return (
+    <label
+      htmlFor={`addon-${label}`}
+      className={`relative flex flex-col gap-2 rounded-xl border p-4 cursor-pointer transition-colors ${
+        isOn ? ringClass : 'border-gray-200 bg-white hover:bg-gray-50'
+      } ${isFromPlan ? 'cursor-default' : ''}`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <div className={`mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-lg ${
+            tone === 'emerald' ? 'bg-emerald-100 text-emerald-700' : 'bg-violet-100 text-violet-700'
+          }`}>
+            {icon}
+          </div>
+          <div>
+            <div className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+              {label}
+              {isFromPlan ? (
+                <span className="rounded-full bg-emerald-100 text-emerald-700 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
+                  Included
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-0.5 text-xs text-gray-600 leading-relaxed">{description}</p>
+            <div className="mt-1.5 text-[11px] text-gray-500">
+              {isFromPlan
+                ? 'Bundled with your current plan at no extra charge.'
+                : `${formatCents(priceCents)} / month`}
+            </div>
+          </div>
+        </div>
+        <button
+          type="button"
+          id={`addon-${label}`}
+          aria-checked={isOn}
+          role="checkbox"
+          disabled={isFromPlan || busy}
+          onClick={(e) => {
+            e.preventDefault();
+            if (!isFromPlan) onChange();
+          }}
+          className={`flex-shrink-0 mt-1 inline-flex h-5 w-5 items-center justify-center rounded border-2 transition ${checkboxBg} ${
+            isFromPlan ? 'opacity-90' : ''
+          } disabled:opacity-50`}
+        >
+          {busy ? (
+            <Loader2 size={12} className="animate-spin text-gray-700" />
+          ) : isOn ? (
+            <Check size={12} className="text-white" strokeWidth={3} />
+          ) : null}
+        </button>
+      </div>
+      {isFromPlan && !isUserOn ? (
+        <div className="text-[10px] text-emerald-700 font-medium pl-12">
+          Active automatically while you&apos;re on this plan.
+        </div>
+      ) : null}
+    </label>
+  );
+}
+
+/**
  * Polished plan-change modal. Shows the target plan summary, what's changing,
  * and a clear "Continue to secure checkout" CTA when a redirect is needed.
  * If the user already has a card on file, the change happens in-place via the
@@ -711,7 +1079,10 @@ export default function DirectoryBillingPage() {
 function UpgradePlanModal({
   plan,
   currentPlan,
-  currentCents,
+  currentTotalCents,
+  targetInclusion,
+  addons,
+  addonPrices,
   paymentMethod,
   busy,
   onCancel,
@@ -719,16 +1090,24 @@ function UpgradePlanModal({
 }: {
   plan: Plan;
   currentPlan: Plan | null;
-  currentCents: number;
+  currentTotalCents: number;
+  targetInclusion: { verified: boolean; sponsored: boolean };
+  addons: Addons;
+  addonPrices: { verified_cents: number; sponsored_cents: number };
   paymentMethod: PaymentMethod;
   busy: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
   const planCents = plan.price_monthly_cents ?? 0;
-  const isFree = planCents === 0;
-  const isDowngradeToFree = isFree && currentCents > 0;
-  const hasActivePaid = Boolean(paymentMethod) && currentCents > 0;
+  // Total they'll be charged on the new plan, retaining their current addon toggles.
+  const verifiedAdds = !targetInclusion.verified && addons.verifiedUser ? addonPrices.verified_cents : 0;
+  const sponsoredAdds = !targetInclusion.sponsored && addons.sponsoredUser ? addonPrices.sponsored_cents : 0;
+  const newTotalCents = planCents + verifiedAdds + sponsoredAdds;
+
+  const isFree = newTotalCents === 0;
+  const isDowngradeToFree = isFree && currentTotalCents > 0;
+  const hasActivePaid = Boolean(paymentMethod) && currentTotalCents > 0;
   const willCharge = !isFree && !hasActivePaid; // first paid signup → checkout redirect
   const willPatch = !isFree && hasActivePaid;   // already paying → patch the LunarPay subscription
   const nextBillEstimate = useMemo(() => {
@@ -767,8 +1146,8 @@ function UpgradePlanModal({
           </div>
 
           <div className="px-6 py-5 space-y-4">
-            {/* Plan summary card */}
-            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+            {/* Plan summary card with full breakdown */}
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-2">
               <div className="flex items-baseline justify-between">
                 <div>
                   <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -780,11 +1159,42 @@ function UpgradePlanModal({
                 </div>
                 <div className="text-right">
                   <div className="font-bold text-gray-900">
-                    {isFree ? 'Free' : formatCents(planCents)}
+                    {planCents > 0 ? formatCents(planCents) : 'Free'}
                   </div>
-                  {!isFree ? <div className="text-[11px] text-gray-500">per month</div> : null}
+                  {planCents > 0 ? <div className="text-[11px] text-gray-500">per month</div> : null}
                 </div>
               </div>
+
+              {/* Show addon line items */}
+              {(verifiedAdds > 0 || sponsoredAdds > 0 || targetInclusion.verified || targetInclusion.sponsored) && (
+                <div className="border-t border-gray-200 pt-2 space-y-1 text-xs text-gray-700">
+                  <div className="flex items-center justify-between">
+                    <span>Verified Listing</span>
+                    <span className="font-mono">
+                      {targetInclusion.verified ? 'Included' : verifiedAdds > 0 ? formatCents(verifiedAdds) : addons.verifiedUser ? formatCents(addonPrices.verified_cents) : '—'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Sponsored Listing</span>
+                    <span className="font-mono">
+                      {targetInclusion.sponsored ? 'Included' : sponsoredAdds > 0 ? formatCents(sponsoredAdds) : addons.sponsoredUser ? formatCents(addonPrices.sponsored_cents) : '—'}
+                    </span>
+                  </div>
+                </div>
+              )}
+              <div className="border-t border-gray-200 pt-2 flex items-center justify-between text-sm font-semibold text-gray-900">
+                <span>Total per month</span>
+                <span className="font-mono">{newTotalCents > 0 ? formatCents(newTotalCents) : 'Free'}</span>
+              </div>
+              {newTotalCents !== currentTotalCents ? (
+                <div className="text-[11px] text-gray-500 text-right">
+                  Currently {formatCents(currentTotalCents)} / mo —{' '}
+                  <span className={newTotalCents > currentTotalCents ? 'text-amber-700 font-semibold' : 'text-emerald-700 font-semibold'}>
+                    {newTotalCents > currentTotalCents ? '+' : ''}
+                    {formatCents(newTotalCents - currentTotalCents)}
+                  </span>
+                </div>
+              ) : null}
             </div>
 
             {/* What happens next */}
@@ -799,7 +1209,7 @@ function UpgradePlanModal({
             ) : willPatch ? (
               <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-900 space-y-1">
                 <p>
-                  Your monthly charge will change to <strong>{formatCents(planCents)}</strong> on the
+                  Your monthly charge will change to <strong>{formatCents(newTotalCents)}</strong> on the
                   card ending in <strong>•••• {paymentMethod?.last4 || '––––'}</strong>.
                 </p>
                 <p className="text-xs">Next bill estimate: {nextBillEstimate}</p>
