@@ -56,12 +56,12 @@ export async function POST(
 
   const feeRate = Number(venue.service_fee_rate ?? 0);
   const addFee = feeRate > 0;
-  // Default to BOTH cc + ach if the venue hasn't explicitly disabled ACH.
-  // LunarPay only renders the ACH tab on the hosted page when the venue's
-  // Fortis account also has ACH enabled during onboarding, so this is safe
-  // even for venues that haven't completed ACH onboarding yet.
+  // Only override payment_methods when the venue has explicitly opted OUT
+  // of ACH. When the toggle is ON (or unset), we omit payment_methods so
+  // LunarPay's hosted page falls back to its default (cc + ach when the
+  // Fortis account has both enabled, cc-only otherwise). Sending the field
+  // explicitly was triggering 500s from LunarPay for some merchant configs.
   const acceptAch = (venue as { accept_ach?: boolean | null }).accept_ach !== false;
-  const paymentMethods: string[] = acceptAch ? ['cc', 'ach'] : ['cc'];
 
   try {
     let chargeAmountCents = proposal.price;
@@ -94,11 +94,17 @@ export async function POST(
       customer_name: proposal.customer_name,
       success_url: `${APP_URL}/proposal/${token}/success`,
       cancel_url: `${APP_URL}/proposal/${token}`,
-      payment_methods: paymentMethods,
       // Stamp the proposal_id on the LunarPay session so we can match
       // post-settlement webhooks back to the originating proposal.
       metadata: { proposal_id: proposal.id, public_token: token },
     };
+
+    // Restrict to card-only ONLY when the venue has explicitly disabled ACH.
+    // Otherwise leave payment_methods unset so LunarPay uses its hosted-page
+    // default (which already respects the merchant's Fortis configuration).
+    if (!acceptAch) {
+      checkoutData.payment_methods = ['cc'];
+    }
 
     if (hasFuturePayments) {
       checkoutData.save_payment_method = true;
@@ -108,10 +114,31 @@ export async function POST(
       checkoutData.customer_id = proposal.customer_lunarpay_id;
     }
 
-    console.log('[checkout] feeRate:', feeRate, '% originalCents:', chargeAmountCents, 'finalCents:', finalCents, 'paymentMethods:', paymentMethods);
+    console.log('[checkout] feeRate:', feeRate, '% originalCents:', chargeAmountCents, 'finalCents:', finalCents, 'acceptAch:', acceptAch);
     console.log('[checkout] Creating checkout session:', JSON.stringify(checkoutData));
 
-    const result = await createCheckoutSession(venue.lunarpay_secret_key, checkoutData);
+    // First attempt — full payload.
+    // If LunarPay 500s on the metadata or payment_methods extras (some merchant
+    // configurations error out instead of ignoring unsupported fields), retry
+    // once with a minimal payload so customers can still pay.
+    let result;
+    try {
+      result = await createCheckoutSession(venue.lunarpay_secret_key, checkoutData);
+    } catch (lpErr) {
+      const msg = lpErr instanceof Error ? lpErr.message : String(lpErr);
+      console.warn('[checkout] LP create failed with full payload, retrying without metadata/payment_methods:', msg);
+      const minimalData: Record<string, unknown> = {
+        amount: checkoutData.amount,
+        description: checkoutData.description,
+        customer_email: checkoutData.customer_email,
+        customer_name: checkoutData.customer_name,
+        success_url: checkoutData.success_url,
+        cancel_url: checkoutData.cancel_url,
+      };
+      if (checkoutData.save_payment_method) minimalData.save_payment_method = true;
+      if (checkoutData.customer_id !== undefined) minimalData.customer_id = checkoutData.customer_id;
+      result = await createCheckoutSession(venue.lunarpay_secret_key, minimalData);
+    }
     const session = result.data || result;
 
     console.log('[checkout] Session created:', JSON.stringify(session));
