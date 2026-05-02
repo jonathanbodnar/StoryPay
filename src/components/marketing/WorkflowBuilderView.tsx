@@ -2317,15 +2317,18 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
             ref={rightPaneRef}
             className="w-80 flex-shrink-0 flex flex-col overflow-hidden"
             style={{
-              // Outer gray frame — matches the Flodesk reference exactly.
               background: '#f4f4f5',
-              // Padding creates the gray frame visible around the white inner
-              // panel: top, bottom, and left. Right has 0 padding because the
-              // pane already sits at the screen's right edge.
-              padding: '12px 0 12px 16px',
+              padding: '12px 0 12px 32px',
+              position: 'relative',
             }}
             onMouseDown={(e) => e.stopPropagation()}
           >
+            {/* Left-edge fade: gray frame gradients INTO the white canvas. */}
+            <div aria-hidden style={{
+              position: 'absolute', top: 0, left: 0, bottom: 0, width: 32,
+              background: 'linear-gradient(to right, #ffffff 0%, transparent 100%)',
+              pointerEvents: 'none', zIndex: 5,
+            }} />
             <div
               className="fb-scroll-pane flex-1 overflow-y-auto"
               style={{

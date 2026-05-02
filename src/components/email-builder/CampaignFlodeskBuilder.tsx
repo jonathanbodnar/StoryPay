@@ -4692,9 +4692,14 @@ export function CampaignFlodeskBuilder({
         {/* ── Right Panel ──────────────────────────────────────────────────── */}
         <aside
           className="w-80 flex-shrink-0 flex flex-col overflow-hidden"
-          style={{ background: '#f4f4f5', padding: '12px 0 12px 16px' }}
+          style={{ background: '#f4f4f5', padding: '12px 0 12px 32px', position: 'relative' }}
           onClick={(e) => e.stopPropagation()}
         >
+          <div aria-hidden style={{
+            position: 'absolute', top: 0, left: 0, bottom: 0, width: 32,
+            background: 'linear-gradient(to right, #ffffff 0%, transparent 100%)',
+            pointerEvents: 'none', zIndex: 5,
+          }} />
           <div
             className="fb-scroll-pane flex-1 overflow-y-auto"
             style={{
