@@ -2299,6 +2299,27 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
 
               </div>
             </div>
+
+            {/* ── Right-edge gradient fade ───────────────────────────────────
+                Matches the soft fade visible in the email/form builder right
+                rails, without changing the canvas to gray. The strip sits
+                inside the canvas at its right edge (just before the right
+                pane begins) and creates the same depth of shading the email
+                builder gets from its gray-50 canvas + box-shadow combo. */}
+            <div
+              aria-hidden
+              style={{
+                position: 'absolute',
+                top: 0,
+                right: 0,
+                bottom: 0,
+                width: 80,
+                pointerEvents: 'none',
+                zIndex: 5,
+                background:
+                  'linear-gradient(to right, rgba(15, 23, 42, 0) 0%, rgba(15, 23, 42, 0.025) 60%, rgba(15, 23, 42, 0.06) 100%)',
+              }}
+            />
           </div>
 
           {/* ── Right panel ───────────────────────────────────────────────── */}
