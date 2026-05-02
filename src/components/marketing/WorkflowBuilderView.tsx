@@ -1984,9 +1984,10 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
             style={{
               flex: 1, position: 'relative', overflow: 'hidden',
               cursor: isPanning ? 'grabbing' : 'grab',
-              background: '#ffffff',
-              // Prevent the browser from doing its own page-zoom on pinch —
-              // we handle pinch ourselves via wheel/gesture events.
+              // #f9fafb = Tailwind gray-50 — visually indistinguishable from
+              // white but allows the right-pane box-shadow to render the same
+              // soft left-edge fade the email builder gets from its gray canvas.
+              background: '#f9fafb',
               touchAction: 'none',
               overscrollBehavior: 'contain',
             }}
@@ -2293,33 +2294,13 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                       the connector line, making it look like the line ends at END. */}
                   <div style={{
                     position: 'absolute', top: '50%', left: 0, right: 0, bottom: '-9999px',
-                    background: '#ffffff', zIndex: -1,
+                    background: '#f9fafb', zIndex: -1,
                   }} />
                 </div>
 
               </div>
             </div>
 
-            {/* ── Right-edge gradient fade ───────────────────────────────────
-                Matches the soft fade visible in the email/form builder right
-                rails, without changing the canvas to gray. The strip sits
-                inside the canvas at its right edge (just before the right
-                pane begins) and creates the same depth of shading the email
-                builder gets from its gray-50 canvas + box-shadow combo. */}
-            <div
-              aria-hidden
-              style={{
-                position: 'absolute',
-                top: 0,
-                right: 0,
-                bottom: 0,
-                width: 80,
-                pointerEvents: 'none',
-                zIndex: 5,
-                background:
-                  'linear-gradient(to right, rgba(15, 23, 42, 0) 0%, rgba(15, 23, 42, 0.025) 60%, rgba(15, 23, 42, 0.06) 100%)',
-              }}
-            />
           </div>
 
           {/* ── Right panel ───────────────────────────────────────────────── */}
@@ -2327,10 +2308,9 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
             ref={rightPaneRef}
             className="w-80 flex-shrink-0 bg-white flex flex-col overflow-hidden"
             style={{
-              // Mirror the main left sidebar's soft glow, but pointing leftward
-              // toward the canvas, so the right pane has the same gradient edge
-              // depth as both the main menu and the top bar.
-              boxShadow: '-6px 0 24px -4px rgba(0,0,0,0.07)',
+              // Same value as CampaignFlodeskBuilder's right panel — the gray-50
+              // canvas above makes this shadow render as the exact same soft fade.
+              boxShadow: '-12px 0 32px -8px rgba(0,0,0,0.07)',
             }}
             onMouseDown={(e) => e.stopPropagation()}
           >
