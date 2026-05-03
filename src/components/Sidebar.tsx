@@ -371,15 +371,16 @@ export default function Sidebar({
     const SubIcon = sub.icon;
     const locked = !navOk(sub.navId);
 
+    // Locked sub-items render with the SAME color as accessible ones —
+    // only the trailing lock icon distinguishes them. Click is intercepted
+    // by the modal handler instead of navigating.
     const cls = flyoutVariant
       ? `flex items-center gap-2 px-3 py-2 text-sm ${
           active && !locked
             ? 'font-semibold text-gray-900 bg-gray-50'
-            : locked
-              ? 'text-gray-400 cursor-pointer hover:bg-gray-50'
-              : 'text-gray-600 hover:bg-gray-50'
+            : 'text-gray-600 hover:bg-gray-50'
         }`
-      : `${subItem(active && !locked)} ${locked ? 'opacity-60 hover:text-gray-400' : ''}`;
+      : subItem(active && !locked);
 
     if (locked) {
       return (
@@ -524,7 +525,6 @@ export default function Sidebar({
               className={classNames(
                 navItem(active && !isAI, rail),
                 !rail && (isConversations || isUpdates) ? 'w-full' : '',
-                locked ? 'opacity-50 hover:bg-transparent hover:text-gray-400 cursor-pointer' : '',
               )}
               style={navItemStyle(active && !isAI)}
             >
