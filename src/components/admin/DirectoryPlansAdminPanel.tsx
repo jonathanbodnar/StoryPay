@@ -738,35 +738,18 @@ NOTIFY pgrst, 'reload schema';`}</pre>
                   <div className="rounded-lg border border-indigo-100 bg-indigo-50 p-3">
                     <div className="flex items-center gap-2 mb-2">
                       <Star size={13} className="text-indigo-500 shrink-0" />
-                      <span className="text-xs font-semibold text-indigo-900">Highlight badge</span>
+                      <span className="text-xs font-semibold text-indigo-900">Highlight badge label</span>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(editMeta.highlight_label)}
-                          onChange={(e) =>
-                            setEditMeta({
-                              ...editMeta,
-                              highlight_label: e.target.checked ? 'Recommended' : '',
-                            })
-                          }
-                        />
-                        Show badge
-                      </label>
-                      {editMeta.highlight_label && (
-                        <input
-                          type="text"
-                          maxLength={40}
-                          value={editMeta.highlight_label}
-                          onChange={(e) => setEditMeta({ ...editMeta, highlight_label: e.target.value })}
-                          placeholder="Recommended"
-                          className="rounded border border-indigo-200 bg-white px-2 py-1 text-xs w-44 focus:outline-none focus:ring-1 focus:ring-indigo-300"
-                        />
-                      )}
-                    </div>
+                    <input
+                      type="text"
+                      maxLength={40}
+                      value={editMeta.highlight_label ?? ''}
+                      onChange={(e) => setEditMeta({ ...editMeta, highlight_label: e.target.value })}
+                      placeholder="Leave blank to hide — e.g. Recommended, Most Popular, Best Value"
+                      className="w-full rounded border border-indigo-200 bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300"
+                    />
                     <p className="mt-1.5 text-[10px] text-indigo-700">
-                      Shown as a pill above the plan card. Typically one plan. Try: &ldquo;Recommended&rdquo;, &ldquo;Most Popular&rdquo;, &ldquo;Best Value&rdquo;.
+                      Shown as a pill above the plan card on public plan pickers and billing pages. Leave blank to hide it entirely.
                     </p>
                   </div>
                   {/* Trial period editor — applies to NEW signups only */}
