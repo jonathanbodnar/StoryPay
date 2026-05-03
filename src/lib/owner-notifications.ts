@@ -191,24 +191,22 @@ export async function notifyOwner(args: NotifyArgs): Promise<void> {
     if (!meta) return;
 
     // ── Owner-side email ──────────────────────────────────────────────────
-    if (settings[meta.emailKey] && venue.email) {
+    // Gate 1: per-scenario notification toggle (settings[emailKey] defaults to true when unset).
+    // Gate 2: the email template's own enabled flag — if the venue has disabled the
+    //         template, getVenueEmailTemplate returns null and we skip the send entirely.
+    const emailToggleOn = settings[meta.emailKey] !== false;
+    if (emailToggleOn && venue.email) {
       try {
         const tmpl = await getVenueEmailTemplate(args.venueId, meta.templateType);
-        // If the venue has disabled the template, fall back to per-scenario default content.
-        const template = tmpl ?? {
-          type:        meta.templateType,
-          subject:     meta.defaultEmailSubject,
-          heading:     meta.defaultEmailHeading,
-          body:        meta.defaultEmailBody,
-          button_text: 'View in Dashboard',
-          footer:      null,
-          enabled:     true,
-        };
+        if (!tmpl) {
+          // Template disabled by the venue — honour their preference and skip.
+          return;
+        }
         await sendEmail({
           to:      venue.email,
-          subject: fillTemplate(template.subject, vars),
+          subject: fillTemplate(tmpl.subject, vars),
           html:    buildEmailHtml({
-            template,
+            template:   tmpl,
             vars,
             actionUrl:  args.actionUrl,
             brandColor: venue.brand_color   || '#1b1b1b',
