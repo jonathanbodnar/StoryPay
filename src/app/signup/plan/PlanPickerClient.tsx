@@ -206,10 +206,13 @@ export function PlanPickerClient({ plans, allPlans, planAddonInclusion, ownerFir
                     className={[
                       'relative flex cursor-pointer flex-col rounded-2xl border bg-white transition-all duration-200',
                       // Featured card: bigger padding, deeper shadow, slightly scaled up
-                      isFeatured ? 'p-6 shadow-xl ring-2 ring-gray-900/10 scale-[1.035] z-10' : 'p-5 shadow-sm',
-                      // Badge offset for the floating pill
+                      isFeatured
+                        ? 'p-6 shadow-xl ring-2 ring-gray-900/10 scale-[1.035] z-10'
+                        // Side cards: stretch to the same row height so left = right
+                        : 'p-5 shadow-sm self-stretch',
+                      // Badge/featured offset
                       (badgeLabel || isFeatured) ? 'mt-4' : '',
-                      // Border: selected wins, otherwise featured gets dark border
+                      // Border
                       isSelected
                         ? 'border-gray-900'
                         : isFeatured
@@ -269,7 +272,7 @@ export function PlanPickerClient({ plans, allPlans, planAddonInclusion, ownerFir
                     )}
 
                     {/* Full feature comparison — every plan shows all rows */}
-                    <div className="mt-2 space-y-2.5 border-t border-gray-100 pt-3">
+                    <div className="mt-2 flex-1 space-y-2.5 border-t border-gray-100 pt-3">
                       {PLAN_FEATURES.map((f) => {
                         const included = planIncludesFeature(plan.feature_flags, f.key);
                         return (
