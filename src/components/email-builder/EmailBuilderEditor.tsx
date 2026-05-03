@@ -31,6 +31,7 @@ import {
   type EmailTheme,
 } from '@/lib/marketing-email-schema';
 import { renderMarketingEmailHtml } from '@/lib/marketing-email-render';
+import { SYSTEM_MERGE_VARIABLES } from '@/lib/merge-variables';
 
 const PREVIEW_VARS = {
   first_name: 'Alex',
@@ -635,12 +636,34 @@ export function EmailBuilderEditor({
                   onChange={(e) => setPreheader(e.target.value)}
                 />
               </div>
-              <p className="text-[11px] leading-snug text-gray-500">
-                Merge tags: <code className="text-gray-700">{'{{first_name}}'}</code>,{' '}
-                <code className="text-gray-700">{'{{last_name}}'}</code>, <code className="text-gray-700">{'{{venue_name}}'}</code>,{' '}
-                <code className="text-gray-700">{'{{unsubscribe_url}}'}</code>,{' '}
-                <code className="text-gray-700">{'{{resubscribe_url}}'}</code>
-              </p>
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Merge tags</p>
+                {(['contact', 'venue', 'lead', 'marketing', 'system'] as const).map((cat) => {
+                  const vars = SYSTEM_MERGE_VARIABLES.filter(
+                    (v) => v.category === cat && v.usedIn.includes('marketing'),
+                  );
+                  if (!vars.length) return null;
+                  return (
+                    <div key={cat}>
+                      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5 capitalize">{cat}</p>
+                      <div className="flex flex-wrap gap-1">
+                        {vars.map((v) => (
+                          <button
+                            key={v.key}
+                            type="button"
+                            title={v.description}
+                            onClick={() => navigator.clipboard.writeText(v.tag)}
+                            className="rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 font-mono text-[10px] text-gray-700 hover:bg-gray-100 transition-colors"
+                          >
+                            {v.tag}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+                <p className="text-[10px] text-gray-400">Click any tag to copy it, then paste into your template.</p>
+              </div>
             </div>
           </div>
           <div className="rounded-xl border border-gray-200 bg-white p-4">

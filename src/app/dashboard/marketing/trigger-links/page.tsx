@@ -17,6 +17,7 @@ const CATEGORY_LABELS: Record<MergeVarCategory, string> = {
   lead:         'Lead',
   invoice:      'Invoice',
   proposal:     'Proposal',
+  payment:      'Payment',
   subscription: 'Subscription',
   marketing:    'Marketing',
   system:       'System',
@@ -29,6 +30,7 @@ const CATEGORY_COLORS: Record<MergeVarCategory, string> = {
   lead:         'bg-pink-50 text-pink-700 border-pink-200',
   invoice:      'bg-amber-50 text-amber-700 border-amber-200',
   proposal:     'bg-orange-50 text-orange-700 border-orange-200',
+  payment:      'bg-yellow-50 text-yellow-700 border-yellow-200',
   subscription: 'bg-cyan-50 text-cyan-700 border-cyan-200',
   marketing:    'bg-rose-50 text-rose-700 border-rose-200',
   system:       'bg-gray-50 text-gray-600 border-gray-200',
@@ -36,7 +38,7 @@ const CATEGORY_COLORS: Record<MergeVarCategory, string> = {
 
 const CATEGORY_ORDER: MergeVarCategory[] = [
   'contact', 'appointment', 'venue', 'lead',
-  'invoice', 'proposal', 'subscription', 'marketing', 'system',
+  'invoice', 'proposal', 'payment', 'subscription', 'marketing', 'system',
 ];
 
 // Tag category colors (for system tags)

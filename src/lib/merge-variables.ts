@@ -15,6 +15,7 @@ export type MergeVarCategory =
   | 'lead'
   | 'invoice'
   | 'proposal'
+  | 'payment'
   | 'subscription'
   | 'marketing'
   | 'system';
@@ -39,9 +40,10 @@ export const SYSTEM_MERGE_VARIABLES: SystemMergeVar[] = [
   // Contact
   { key: 'contact.first_name',          tag: '{{contact.first_name}}',          description: "Contact's first name",                   example: 'Sarah',                          category: 'contact',      usedIn: ['calendar', 'marketing', 'transactional'] },
   { key: 'contact.last_name',           tag: '{{contact.last_name}}',           description: "Contact's last name",                    example: 'Johnson',                        category: 'contact',      usedIn: ['calendar', 'marketing', 'transactional'] },
-  { key: 'contact.name',                tag: '{{contact.name}}',                description: "Contact's full name",                    example: 'Sarah Johnson',                  category: 'contact',      usedIn: ['calendar', 'marketing', 'transactional'] },
+  { key: 'contact.full_name',           tag: '{{contact.full_name}}',           description: "Contact's full name",                    example: 'Sarah Johnson',                  category: 'contact',      usedIn: ['calendar', 'marketing', 'transactional'] },
+  { key: 'contact.name',                tag: '{{contact.name}}',                description: "Contact's full name (alias)",            example: 'Sarah Johnson',                  category: 'contact',      usedIn: ['calendar', 'marketing', 'transactional'] },
   { key: 'contact.email',               tag: '{{contact.email}}',               description: "Contact's email address",                example: 'sarah@example.com',              category: 'contact',      usedIn: ['calendar', 'marketing', 'transactional'] },
-  { key: 'contact.phone',               tag: '{{contact.phone}}',               description: "Contact's phone number",                 example: '+1 555-123-4567',                category: 'contact',      usedIn: ['calendar', 'marketing'] },
+  { key: 'contact.phone',               tag: '{{contact.phone}}',               description: "Contact's phone number",                 example: '+1 555-123-4567',                category: 'contact',      usedIn: ['calendar', 'marketing', 'transactional'] },
   // Appointment
   { key: 'appointment.title',           tag: '{{appointment.title}}',           description: 'Appointment title',                      example: 'Venue Tour',                     category: 'appointment',  usedIn: ['calendar'] },
   { key: 'appointment.date',            tag: '{{appointment.date}}',            description: 'Date only (e.g. Monday, May 5, 2026)',    example: 'Monday, May 5, 2026',            category: 'appointment',  usedIn: ['calendar'] },
@@ -67,9 +69,17 @@ export const SYSTEM_MERGE_VARIABLES: SystemMergeVar[] = [
   { key: 'lead.wedding_date',           tag: '{{lead.wedding_date}}',           description: 'Wedding date (formatted)',                example: 'October 15, 2027',               category: 'lead',         usedIn: ['marketing'] },
   { key: 'lead.wedding_month',          tag: '{{lead.wedding_month}}',          description: 'Wedding month name',                     example: 'October',                        category: 'lead',         usedIn: ['marketing'] },
   { key: 'lead.guest_count',            tag: '{{lead.guest_count}}',            description: 'Estimated guest count',                  example: '150',                            category: 'lead',         usedIn: ['marketing'] },
+  // Payment (transactional — amount received, fees, failure reason, etc.)
+  { key: 'payment.amount',              tag: '{{payment.amount}}',              description: 'Payment amount',                         example: '$4,500.00',                      category: 'payment',      usedIn: ['transactional'] },
+  { key: 'payment.net_amount',          tag: '{{payment.net_amount}}',          description: 'Net amount after processing fees',       example: '$4,376.25',                      category: 'payment',      usedIn: ['transactional'] },
+  { key: 'payment.fee',                 tag: '{{payment.fee}}',                 description: 'Processing fee amount',                  example: '$123.75',                        category: 'payment',      usedIn: ['transactional'] },
+  { key: 'payment.method',              tag: '{{payment.method}}',              description: 'Payment method (card / ACH)',             example: 'Visa ••••4242',                  category: 'payment',      usedIn: ['transactional'] },
+  { key: 'payment.date',                tag: '{{payment.date}}',                description: 'Date payment was made',                  example: 'April 30, 2026',                 category: 'payment',      usedIn: ['transactional'] },
+  { key: 'payment.reason',              tag: '{{payment.reason}}',              description: 'Failure reason (failed-payment emails)', example: 'Insufficient funds',             category: 'payment',      usedIn: ['transactional'] },
+  { key: 'payment.overdue_by',          tag: '{{payment.overdue_by}}',          description: 'How long since the due date',            example: '3 days',                         category: 'payment',      usedIn: ['transactional'] },
   // Invoice
   { key: 'invoice.number',              tag: '{{invoice.number}}',              description: 'Invoice number',                         example: 'INV-0042',                       category: 'invoice',      usedIn: ['transactional'] },
-  { key: 'invoice.amount',              tag: '{{invoice.amount}}',              description: 'Invoice amount',                         example: '$2,500.00',                      category: 'invoice',      usedIn: ['transactional'] },
+  { key: 'invoice.amount',              tag: '{{invoice.amount}}',              description: 'Invoice total amount',                   example: '$2,500.00',                      category: 'invoice',      usedIn: ['transactional'] },
   { key: 'invoice.due_date',            tag: '{{invoice.due_date}}',            description: 'Invoice due date',                       example: 'May 15, 2026',                   category: 'invoice',      usedIn: ['transactional'] },
   { key: 'invoice.date',                tag: '{{invoice.date}}',                description: 'Date invoice was paid',                  example: 'April 30, 2026',                 category: 'invoice',      usedIn: ['transactional'] },
   { key: 'invoice.payment_method',      tag: '{{invoice.payment_method}}',      description: 'Payment method used',                    example: 'Visa ending 4242',               category: 'invoice',      usedIn: ['transactional'] },
@@ -94,31 +104,52 @@ export const SYSTEM_MERGE_VARIABLES: SystemMergeVar[] = [
 // Keeps every existing template working without migration.
 
 export const FLAT_TO_CANONICAL: Record<string, string> = {
-  // transactional email flat aliases
-  organization:          'venue.name',
-  customer_name:         'contact.name',
-  customer_email:        'contact.email',
-  amount:                'invoice.amount',
-  invoice_number:        'invoice.number',
-  due_date:              'invoice.due_date',
-  date:                  'invoice.date',
-  payment_method:        'invoice.payment_method',
-  frequency:             'subscription.frequency',
-  next_payment_date:     'subscription.next_payment_date',
-  // marketing flat aliases
-  first_name:            'contact.first_name',
-  last_name:             'contact.last_name',
-  venue_name:            'venue.name',
-  venue_full_address:    'venue.address',
-  venue_city:            'venue.city',
-  venue_state:           'venue.state',
-  unsubscribe_url:       'marketing.unsubscribe_url',
-  resubscribe_url:       'marketing.resubscribe_url',
-  preferences_url:       'marketing.preferences_url',
-  wedding_date:          'lead.wedding_date',
-  wedding_date_nice:     'lead.wedding_date',
-  wedding_month:         'lead.wedding_month',
-  guest_count:           'lead.guest_count',
+  // ── Contact ───────────────────────────────────────────────────────────────
+  customer_name:            'contact.name',
+  customer_email:           'contact.email',
+  customer_phone:           'contact.phone',
+  first_name:               'contact.first_name',
+  last_name:                'contact.last_name',
+  contact_name:             'contact.name',
+  contact_email:            'contact.email',
+  contact_phone:            'contact.phone',
+  // ── Venue ─────────────────────────────────────────────────────────────────
+  organization:             'venue.name',
+  venue_name:               'venue.name',
+  venue_email:              'venue.email',
+  venue_phone:              'venue.phone',
+  venue_full_address:       'venue.address',
+  venue_city:               'venue.city',
+  venue_state:              'venue.state',
+  venue_website:            'venue.website',
+  venue_owner_name:         'venue.owner_name',
+  venue_owner_first_name:   'venue.owner_first_name',
+  // ── Payment (transactional) ───────────────────────────────────────────────
+  amount:                   'payment.amount',
+  net_amount:               'payment.net_amount',
+  fee:                      'payment.fee',
+  payment_method:           'payment.method',
+  date:                     'payment.date',
+  reason:                   'payment.reason',
+  offset_label:             'payment.overdue_by',
+  // ── Invoice ───────────────────────────────────────────────────────────────
+  invoice_number:           'invoice.number',
+  invoice_amount:           'invoice.amount',
+  due_date:                 'invoice.due_date',
+  invoice_date:             'invoice.date',
+  // ── Subscription ─────────────────────────────────────────────────────────
+  frequency:                'subscription.frequency',
+  next_payment_date:        'subscription.next_payment_date',
+  // ── Marketing ────────────────────────────────────────────────────────────
+  unsubscribe_url:          'marketing.unsubscribe_url',
+  resubscribe_url:          'marketing.resubscribe_url',
+  manage_prefs_url:         'marketing.preferences_url',
+  preferences_url:          'marketing.preferences_url',
+  // ── Lead / Event ─────────────────────────────────────────────────────────
+  wedding_date:             'lead.wedding_date',
+  wedding_date_nice:        'lead.wedding_date',
+  wedding_month:            'lead.wedding_month',
+  guest_count:              'lead.guest_count',
 };
 
 // Reverse map: canonical → primary flat alias (first one wins)
@@ -161,4 +192,56 @@ export function systemDateVars(): { 'system.date': string; 'system.year': string
     'system.date': now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
     'system.year': String(now.getFullYear()),
   };
+}
+
+// ── Transactional var enricher ────────────────────────────────────────────────
+
+/**
+ * Takes a flat vars dict (as used in all transactional email sends) and adds
+ * canonical dot-notation equivalents alongside every flat key — plus derives
+ * missing first/last name splits from customer_name.
+ *
+ * Call this once per send; renderMergeVars resolves both directions already,
+ * but enriching up-front means {{contact.first_name}}, {{payment.amount}} etc.
+ * all resolve as direct matches (fastest path) regardless of which naming
+ * convention the template author used.
+ */
+export function enrichTransactionalVars(vars: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = { ...vars };
+
+  // Derive canonical keys from every flat key present
+  for (const [flat, canonical] of Object.entries(FLAT_TO_CANONICAL)) {
+    if (out[flat] !== undefined && out[canonical] === undefined) {
+      out[canonical] = out[flat];
+    }
+  }
+
+  // Derive flat keys from any canonical keys that are already set
+  for (const [canonical, flat] of Object.entries(CANONICAL_TO_FLAT)) {
+    if (out[canonical] !== undefined && out[flat] === undefined) {
+      out[flat] = out[canonical];
+    }
+  }
+
+  // Split contact full-name into first/last if the parts are missing
+  const fullName = out['contact.name'] || out['contact.full_name'] || out['customer_name'] || '';
+  if (fullName && !out['contact.first_name']) {
+    const parts = fullName.trim().split(/\s+/);
+    out['contact.first_name'] = parts[0] || '';
+    out['contact.last_name']  = parts.slice(1).join(' ') || '';
+    // Also set flat equivalents
+    if (!out['first_name']) out['first_name'] = out['contact.first_name'];
+    if (!out['last_name'])  out['last_name']  = out['contact.last_name'];
+  }
+
+  // contact.full_name ↔ contact.name should always be in sync
+  if (out['contact.name'] && !out['contact.full_name'])  out['contact.full_name'] = out['contact.name'];
+  if (out['contact.full_name'] && !out['contact.name'])  out['contact.name'] = out['contact.full_name'];
+
+  // payment.amount should also be available as invoice.amount and vice-versa
+  // (same dollar figure, different context labels)
+  if (out['payment.amount'] && !out['invoice.amount']) out['invoice.amount'] = out['payment.amount'];
+  if (out['invoice.amount'] && !out['payment.amount']) out['payment.amount'] = out['invoice.amount'];
+
+  return out;
 }

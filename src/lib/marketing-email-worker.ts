@@ -293,12 +293,12 @@ export async function buildMergeVars(
   const forSms = opts?.forSms === true;
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('name, location_full, location_city, location_state, owner_first_name, owner_last_name, notification_phone, brand_website')
+    .select('name, email, location_full, location_city, location_state, owner_first_name, owner_last_name, notification_phone, brand_website')
     .eq('id', venueId)
     .maybeSingle();
   const { data: lead } = await supabaseAdmin
     .from('leads')
-    .select('id, email, first_name, last_name, name, wedding_date, guest_count, marketing_email_opt_in, sms_dnd')
+    .select('id, email, phone, first_name, last_name, name, wedding_date, guest_count, marketing_email_opt_in, sms_dnd')
     .eq('id', leadId)
     .eq('venue_id', venueId)
     .maybeSingle();
@@ -376,11 +376,11 @@ export async function buildMergeVars(
     'contact.last_name':         ln,
     'contact.name':              fullName || fn,
     'contact.email':             email,
-    'contact.phone':             '',
+    'contact.phone':             (lead.phone as string | null) || '',
     'venue.name':                venueName,
     'venue.owner_name':          ownerName,
     'venue.owner_first_name':    ownerFirst,
-    'venue.email':               '',
+    'venue.email':               (venue?.email as string | null) || '',
     'venue.phone':               (venue?.notification_phone as string | null) || '',
     'venue.address':             fullAddr,
     'venue.city':                (venue?.location_city as string) || '',

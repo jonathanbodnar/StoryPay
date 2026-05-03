@@ -15,7 +15,7 @@ export const DEFAULT_TEMPLATES: Record<string, {
     label: 'Invoice',
     description: 'Invoice sent to customers',
     icon: 'FileText',
-    variables: ['{{organization}}', '{{customer_name}}', '{{invoice_number}}', '{{amount}}', '{{due_date}}'],
+    variables: ['{{contact.first_name}}', '{{contact.full_name}}', '{{contact.email}}', '{{invoice.number}}', '{{invoice.amount}}', '{{invoice.due_date}}', '{{venue.name}}'],
     defaults: {
       subject: 'Invoice {{invoice_number}} from {{organization}} - {{amount}}',
       heading: 'Invoice {{invoice_number}}',
@@ -27,7 +27,7 @@ export const DEFAULT_TEMPLATES: Record<string, {
     label: 'Proposal',
     description: 'Proposal sent to customers',
     icon: 'FileSignature',
-    variables: ['{{organization}}', '{{customer_name}}', '{{amount}}'],
+    variables: ['{{contact.first_name}}', '{{contact.full_name}}', '{{contact.email}}', '{{proposal.amount}}', '{{venue.name}}'],
     defaults: {
       subject: 'Proposal from {{organization}}',
       heading: 'Your Proposal is Ready',
@@ -39,7 +39,7 @@ export const DEFAULT_TEMPLATES: Record<string, {
     label: 'Payment Confirmation',
     description: 'Receipt sent to customers after payment',
     icon: 'CreditCard',
-    variables: ['{{organization}}', '{{customer_name}}', '{{amount}}', '{{date}}', '{{payment_method}}'],
+    variables: ['{{contact.first_name}}', '{{contact.full_name}}', '{{payment.amount}}', '{{payment.date}}', '{{payment.method}}', '{{venue.name}}'],
     defaults: {
       subject: 'Payment receipt from {{organization}} - {{amount}}',
       heading: 'Payment Successful',
@@ -50,7 +50,7 @@ export const DEFAULT_TEMPLATES: Record<string, {
     label: 'Payment Notification',
     description: 'Notification sent to you when you receive a payment',
     icon: 'Bell',
-    variables: ['{{organization}}', '{{customer_name}}', '{{customer_email}}', '{{amount}}', '{{net_amount}}', '{{fee}}'],
+    variables: ['{{contact.full_name}}', '{{contact.email}}', '{{payment.amount}}', '{{payment.net_amount}}', '{{payment.fee}}', '{{venue.name}}'],
     defaults: {
       subject: 'Payment received: {{amount}} from {{customer_name}}',
       heading: 'New Payment Received',
@@ -62,7 +62,7 @@ export const DEFAULT_TEMPLATES: Record<string, {
     label: 'Subscription Confirmation',
     description: 'Confirmation when a customer subscribes',
     icon: 'RefreshCw',
-    variables: ['{{organization}}', '{{customer_name}}', '{{amount}}', '{{frequency}}', '{{next_payment_date}}'],
+    variables: ['{{contact.first_name}}', '{{contact.full_name}}', '{{subscription.amount}}', '{{subscription.frequency}}', '{{subscription.next_payment_date}}', '{{venue.name}}'],
     defaults: {
       subject: 'Subscription confirmed with {{organization}}',
       heading: 'Subscription Confirmed',
@@ -73,7 +73,7 @@ export const DEFAULT_TEMPLATES: Record<string, {
     label: 'Subscription Cancelled',
     description: 'Confirmation when a subscription is cancelled',
     icon: 'XCircle',
-    variables: ['{{organization}}', '{{customer_name}}'],
+    variables: ['{{contact.first_name}}', '{{contact.full_name}}', '{{venue.name}}'],
     defaults: {
       subject: 'Subscription cancelled - {{organization}}',
       heading: 'Subscription Cancelled',
@@ -84,7 +84,7 @@ export const DEFAULT_TEMPLATES: Record<string, {
     label: 'Payment Failed',
     description: 'Notification when a payment fails',
     icon: 'AlertTriangle',
-    variables: ['{{organization}}', '{{customer_name}}', '{{amount}}', '{{reason}}'],
+    variables: ['{{contact.first_name}}', '{{contact.full_name}}', '{{payment.amount}}', '{{payment.reason}}', '{{venue.name}}'],
     defaults: {
       subject: 'Action required: Payment failed - {{organization}}',
       heading: 'Payment Failed',
@@ -96,7 +96,7 @@ export const DEFAULT_TEMPLATES: Record<string, {
     label: 'Payment Reminder',
     description: 'Overdue reminder sent after each installment due date',
     icon: 'Bell',
-    variables: ['{{organization}}', '{{customer_name}}', '{{amount}}', '{{due_date}}', '{{offset_label}}'],
+    variables: ['{{contact.first_name}}', '{{contact.full_name}}', '{{payment.amount}}', '{{invoice.due_date}}', '{{payment.overdue_by}}', '{{venue.name}}'],
     defaults: {
       subject: 'Payment overdue: {{amount}} was due {{due_date}} - {{organization}}',
       heading: 'Payment overdue',
@@ -108,7 +108,7 @@ export const DEFAULT_TEMPLATES: Record<string, {
     label: 'Proposal / Invoice Viewed',
     description: 'Notification sent to you when a customer opens their proposal or invoice',
     icon: 'Eye',
-    variables: ['{{organization}}', '{{customer_name}}', '{{customer_email}}'],
+    variables: ['{{contact.full_name}}', '{{contact.email}}', '{{venue.name}}'],
     defaults: {
       subject: '{{customer_name}} just viewed their document — {{organization}}',
       heading: 'Document Viewed',
@@ -120,9 +120,9 @@ export const DEFAULT_TEMPLATES: Record<string, {
     label: 'Proposal Signed',
     description: 'Notification sent to you when a customer signs a proposal',
     icon: 'FileSignature',
-    variables: ['{{organization}}', '{{customer_name}}', '{{amount}}'],
+    variables: ['{{contact.full_name}}', '{{contact.email}}', '{{proposal.amount}}', '{{venue.name}}'],
     defaults: {
-      subject: '{{customer_name}} signed a proposal — {{organization}}',
+      subject: '{{contact.full_name}} signed a proposal — {{venue.name}}',
       heading: 'Proposal Signed',
       body: '{{customer_name}} just signed a proposal with {{organization}}.\n\nAmount: {{amount}}\n\nReview the signed proposal and reach out to confirm next steps.',
       button_text: 'View Proposal',

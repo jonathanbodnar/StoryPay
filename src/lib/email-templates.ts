@@ -7,7 +7,7 @@
  */
 
 import { supabaseAdmin } from '@/lib/supabase';
-import { renderMergeVars, systemDateVars } from '@/lib/merge-variables';
+import { renderMergeVars, systemDateVars, enrichTransactionalVars } from '@/lib/merge-variables';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -136,7 +136,9 @@ export function fillTemplate(
   text: string,
   vars: Record<string, string>
 ): string {
-  return renderMergeVars(text, { ...systemDateVars(), ...vars });
+  // Enrich with canonical equivalents before rendering so both flat tags
+  // ({{customer_name}}) and canonical tags ({{contact.first_name}}) resolve.
+  return renderMergeVars(text, enrichTransactionalVars({ ...systemDateVars(), ...vars }));
 }
 
 // ─── HTML builder ─────────────────────────────────────────────────────────────
