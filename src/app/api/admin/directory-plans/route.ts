@@ -113,7 +113,9 @@ export async function POST(request: NextRequest) {
 
   // Migration 093 not yet applied — retry without trial columns so admins can
   // still create plans before running the migration.
+  let trialSkipped = false;
   if (error && /trial_period_(value|unit)/.test(error.message)) {
+    trialSkipped = true;
     delete insertPayload.trial_period_value;
     delete insertPayload.trial_period_unit;
     const retry = await supabaseAdmin
@@ -131,5 +133,8 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ plan: data }, { status: 201 });
+  return NextResponse.json(
+    { plan: data, ...(trialSkipped ? { trialSkipped: true } : {}) },
+    { status: 201 },
+  );
 }

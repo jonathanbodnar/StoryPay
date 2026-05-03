@@ -64,6 +64,7 @@ export function DirectoryPlansAdminPanel() {
   const [platformFortisMerchantIdConfigured, setPlatformFortisMerchantIdConfigured] = useState(false);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
+  const [trialMigrationMissing, setTrialMigrationMissing] = useState(false);
 
   const [newFeat, setNewFeat] = useState({ key: '', label: '', category: '' });
   const [featSaving, setFeatSaving] = useState(false);
@@ -111,9 +112,14 @@ export function DirectoryPlansAdminPanel() {
         features?: FeatureDef[];
         platformFortisMerchantIdConfigured?: boolean;
       };
-      setPlans(d.plans || []);
+      const loadedPlans = d.plans || [];
+      setPlans(loadedPlans);
       setFeatures(d.features || []);
       setPlatformFortisMerchantIdConfigured(d.platformFortisMerchantIdConfigured === true);
+      // Detect missing migration 093 — trial columns absent means they come back as undefined.
+      if (loadedPlans.length > 0 && loadedPlans[0].trial_period_unit === undefined) {
+        setTrialMigrationMissing(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -182,11 +188,12 @@ export function DirectoryPlansAdminPanel() {
           trial_period_unit: planForm.trial_period_unit,
         }),
       });
+      const j = (await res.json().catch(() => ({}))) as { error?: string; trialSkipped?: boolean };
       if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: string };
         alert(j.error || 'Failed');
         return;
       }
+      if (j.trialSkipped) setTrialMigrationMissing(true);
       setPlanForm({
         name: '',
         slug: '',
@@ -257,11 +264,12 @@ export function DirectoryPlansAdminPanel() {
         trial_period_unit: editMeta.trial_period_unit,
       }),
     });
+    const j = (await res.json().catch(() => ({}))) as { error?: string; trialSkipped?: boolean };
     if (!res.ok) {
-      const j = (await res.json().catch(() => ({}))) as { error?: string };
       alert(j.error || 'Save failed');
       return;
     }
+    if (j.trialSkipped) setTrialMigrationMissing(true);
     setEditingId(null);
     await load();
   }
@@ -334,6 +342,59 @@ export function DirectoryPlansAdminPanel() {
           </p>
         ) : null}
         {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
+        {trialMigrationMissing && (
+          <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 max-w-3xl">
+            <strong>Trial periods need a one-time database migration.</strong> The{' '}
+            <code className="text-xs bg-amber-100 px-1 rounded">trial_period_value</code> and{' '}
+            <code className="text-xs bg-amber-100 px-1 rounded">trial_period_unit</code> columns
+            don&apos;t exist yet — trial settings are being silently ignored on save.
+            <br />
+            <span className="mt-1 block text-xs">
+              Run the SQL below in the Supabase SQL Editor, then reload this page and re-save your plans.
+            </span>
+            <pre className="mt-2 rounded bg-amber-100 p-2 text-[11px] leading-relaxed overflow-x-auto whitespace-pre-wrap">{`-- Migration 092: addon flags
+ALTER TABLE public.venues
+  ADD COLUMN IF NOT EXISTS directory_addon_verified  BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS directory_addon_sponsored BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Migration 093: trial periods
+ALTER TABLE public.directory_plans
+  ADD COLUMN IF NOT EXISTS trial_period_value INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS trial_period_unit  TEXT    NOT NULL DEFAULT 'none';
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'directory_plans_trial_period_unit_check'
+  ) THEN
+    ALTER TABLE public.directory_plans
+      ADD CONSTRAINT directory_plans_trial_period_unit_check
+      CHECK (trial_period_unit IN ('none','days','weeks','months','years','forever'));
+  END IF;
+END $$;
+
+ALTER TABLE public.venues
+  ADD COLUMN IF NOT EXISTS directory_trial_started_at TIMESTAMPTZ NULL,
+  ADD COLUMN IF NOT EXISTS directory_trial_ends_at    TIMESTAMPTZ NULL,
+  ADD COLUMN IF NOT EXISTS directory_trial_is_forever BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS directory_trial_plan_id    UUID NULL,
+  ADD COLUMN IF NOT EXISTS directory_trial_consumed   BOOLEAN NOT NULL DEFAULT FALSE;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'venues_directory_trial_plan_id_fkey'
+  ) THEN
+    ALTER TABLE public.venues
+      ADD CONSTRAINT venues_directory_trial_plan_id_fkey
+      FOREIGN KEY (directory_trial_plan_id) REFERENCES public.directory_plans(id)
+      ON DELETE SET NULL;
+  END IF;
+END $$;
+
+NOTIFY pgrst, 'reload schema';`}</pre>
+          </div>
+        )}
       </div>
 
       <section className="rounded-2xl border border-gray-200 bg-white p-6 hidden">

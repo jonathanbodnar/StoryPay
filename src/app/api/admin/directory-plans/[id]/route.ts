@@ -97,7 +97,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   // Schema-not-yet-applied path: drop trial columns and retry so admins can
   // still edit other fields before running migration 093.
+  let trialSkipped = false;
   if (error && /trial_period_(value|unit)/.test(error.message)) {
+    trialSkipped = true;
     delete (updates as Record<string, unknown>).trial_period_value;
     delete (updates as Record<string, unknown>).trial_period_unit;
     const retry = await supabaseAdmin
@@ -117,7 +119,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  return NextResponse.json({ plan: data });
+  return NextResponse.json({
+    plan: data,
+    ...(trialSkipped ? { trialSkipped: true } : {}),
+  });
 }
 
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
