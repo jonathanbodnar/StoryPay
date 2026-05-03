@@ -21,6 +21,32 @@ import {
 
 const BRAND = '#1b1b1b';
 
+/**
+ * Curated plan feature list shown as check/X rows inside each plan's
+ * accordion body. `key` maps to a feature_flags JSONB key on directory_plans.
+ */
+const PLAN_FEATURES: { key: string; label: string; outcome: string }[] = [
+  { key: 'dashboard_home',           label: 'Dashboard',                    outcome: 'Central hub for your venue activity and metrics' },
+  { key: 'contacts',                 label: 'Contacts & CRM',               outcome: 'Manage every lead and client in one place' },
+  { key: 'conversations',            label: 'Conversations inbox',          outcome: 'Unified inbox for all client messages and inquiries' },
+  { key: 'leads',                    label: 'Lead management',              outcome: 'Track, qualify, and convert every inquiry into a booking' },
+  { key: 'calendar',                 label: 'Calendar & scheduling',        outcome: 'Block dates, track bookings, and sync availability' },
+  { key: 'payments',                 label: 'Payments & proposals',         outcome: 'Send proposals, collect deposits, and track payments' },
+  { key: 'marketing',                label: 'Email marketing',              outcome: 'Campaigns, automations, and audience management' },
+  { key: 'listing',                  label: 'Venue directory listing',      outcome: 'Appear in the wedding directory so couples can find you' },
+  { key: 'nav_listing_pricing_guide',label: 'Pricing & availability guide', outcome: 'Share your pricing with couples in a polished branded guide' },
+  { key: 'ai_assistant',             label: 'Ask AI assistant',             outcome: 'Draft emails, respond to leads, and generate content instantly' },
+  { key: 'reports',                  label: 'Analytics & reports',          outcome: 'Revenue insights, booking trends, and performance data' },
+];
+
+/** Returns true if a plan's feature_flags includes the given feature key. */
+function planIncludesFeature(featureFlags: Record<string, unknown>, key: string): boolean {
+  if (Boolean(featureFlags[key])) return true;
+  // 'nav_listing_pricing_guide' is implicitly included when the entire 'listing' group is on.
+  if (key === 'nav_listing_pricing_guide' && Boolean(featureFlags.listing)) return true;
+  return false;
+}
+
 type Plan = {
   id: string;
   name: string;
@@ -613,6 +639,37 @@ export default function DirectoryBillingPage() {
                               <ShieldCheck size={10} /> {status.replace(/_/g, ' ') || 'none'}
                             </span>
                           ) : null}
+                        </div>
+                      </div>
+
+                      {/* ── Features ── */}
+                      <div>
+                        <div className="text-[11px] font-semibold uppercase tracking-wide mb-3 text-gray-500">
+                          What&apos;s included
+                        </div>
+                        <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+                          {PLAN_FEATURES.map((f) => {
+                            const on = planIncludesFeature(plan.feature_flags, f.key);
+                            return (
+                              <div key={f.key} className="flex items-start gap-2.5">
+                                <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${
+                                  on ? 'bg-emerald-100 text-emerald-600' : 'bg-red-50 text-red-400'
+                                }`}>
+                                  {on
+                                    ? <Check size={10} strokeWidth={3} />
+                                    : <X size={10} strokeWidth={3} />}
+                                </span>
+                                <div className="min-w-0">
+                                  <div className={`text-xs font-semibold leading-tight ${on ? 'text-gray-900' : 'text-gray-400'}`}>
+                                    {f.label}
+                                  </div>
+                                  <div className={`text-[11px] leading-snug ${on ? 'text-gray-500' : 'text-gray-300'}`}>
+                                    {f.outcome}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
 
