@@ -156,7 +156,7 @@ export async function POST(req: NextRequest) {
     customer_email:       ctx.venue.email || undefined,
     customer_name:        ctx.venue.name,
     success_url:          `${APP_URL}/signup/plan/complete?checkout=1`,
-    cancel_url:           `${APP_URL}/signup/plan`,
+    cancel_url:           `${APP_URL}/signup/addons?plan_id=${planId}`,
     save_payment_method:  true,
     metadata: {
       [STORYPAY_PLATFORM_DIRECTORY_META_KEY]: '1',
