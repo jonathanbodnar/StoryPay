@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
@@ -8,6 +8,20 @@ import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
 type Status = 'verifying' | 'success' | 'error';
 
 export default function SignupPlanCompletePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-4">
+          <Loader2 size={32} className="animate-spin text-gray-400" />
+        </div>
+      }
+    >
+      <CompleteInner />
+    </Suspense>
+  );
+}
+
+function CompleteInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session_id');
