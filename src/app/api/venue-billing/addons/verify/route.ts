@@ -63,8 +63,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const addonVerified = String(meta.addon_verified ?? '0') === '1';
-  const addonSponsored = String(meta.addon_sponsored ?? '0') === '1';
+  const addonVerified   = String(meta.addon_verified   ?? '0') === '1';
+  const addonSponsored  = String(meta.addon_sponsored  ?? '0') === '1';
+  const addonConcierge  = String(meta.addon_concierge  ?? '0') === '1';
 
   const customerId =
     (session.customer_id as string | number | null) ||
@@ -88,8 +89,9 @@ export async function POST(req: NextRequest) {
   const charge = computeMonthlyTotalCents({
     plan: currentPlan,
     allPlans,
-    addonVerifiedUser: addonVerified,
+    addonVerifiedUser:  addonVerified,
     addonSponsoredUser: addonSponsored,
+    addonConciergeUser: addonConcierge,
   });
   if (charge.total_cents <= 0) {
     return NextResponse.json({ error: 'Computed charge is zero — nothing to subscribe to' }, { status: 400 });
@@ -132,13 +134,14 @@ export async function POST(req: NextRequest) {
   await supabaseAdmin
     .from('venues')
     .update({
-      directory_addon_verified: addonVerified,
-      directory_addon_sponsored: addonSponsored,
-      directory_verified_status: verifiedStatus,
+      directory_addon_verified:   addonVerified,
+      directory_addon_sponsored:  addonSponsored,
+      directory_addon_concierge:  addonConcierge,
+      directory_verified_status:  verifiedStatus,
       directory_sponsored_status: sponsoredStatus,
-      directory_subscription_status: 'active',
+      directory_subscription_status:      'active',
       directory_subscription_external_id: String(subId),
-      platform_lunarpay_customer_id: String(customerId),
+      platform_lunarpay_customer_id:      String(customerId),
     })
     .eq('id', venueId);
 
@@ -150,10 +153,11 @@ export async function POST(req: NextRequest) {
     external_event_id: `addon_checkout:${sessionId}`,
     event_type: 'subscription_start',
     metadata: {
-      session_id: sessionId,
+      session_id:      sessionId,
       subscription_id: String(subId),
-      addon_verified: addonVerified,
+      addon_verified:  addonVerified,
       addon_sponsored: addonSponsored,
+      addon_concierge: addonConcierge,
     },
   });
 

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowUpRight,
   BadgeCheck,
+  BotMessageSquare,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -104,16 +105,21 @@ type HistoryEntry = {
 type Addons = {
   verified: boolean;
   sponsored: boolean;
+  concierge: boolean;
   verifiedFromPlan: boolean;
   sponsoredFromPlan: boolean;
+  conciergeFromPlan: boolean;
+  conciergeAvailable: boolean;
   verifiedUser: boolean;
   sponsoredUser: boolean;
+  conciergeUser: boolean;
 };
 
 type ChargeBreakdown = {
   plan_cents: number;
   verified_cents: number;
   sponsored_cents: number;
+  concierge_cents: number;
   total_cents: number;
 };
 
@@ -129,7 +135,7 @@ type BillingSummary = {
   addons: Addons;
   charge: ChargeBreakdown;
   plan_addon_inclusion: Record<string, { verified: boolean; sponsored: boolean }>;
-  addon_prices: { verified_cents: number; sponsored_cents: number };
+  addon_prices: { verified_cents: number; sponsored_cents: number; concierge_cents: number };
   trial: TrialState;
 };
 
@@ -367,9 +373,10 @@ export default function DirectoryBillingPage() {
     }
   }
 
-  async function toggleAddon(kind: 'verified' | 'sponsored') {
+  async function toggleAddon(kind: 'verified' | 'sponsored' | 'concierge') {
     if (!summary) return;
-    const next = !summary.addons[kind === 'verified' ? 'verifiedUser' : 'sponsoredUser'];
+    const userKey = kind === 'verified' ? 'verifiedUser' : kind === 'sponsored' ? 'sponsoredUser' : 'conciergeUser';
+    const next = !summary.addons[userKey];
     setBusy(`addon:${kind}`);
     setError('');
     setInfo('');
@@ -388,10 +395,15 @@ export default function DirectoryBillingPage() {
         window.location.href = (d as { url: string }).url;
         return;
       }
+      const labels: Record<string, string> = {
+        verified:  'Verified Listing',
+        sponsored: 'Sponsored Listing',
+        concierge: 'Venue Concierge',
+      };
       setInfo(
         next
-          ? `${kind === 'verified' ? 'Verified Listing' : 'Sponsored Listing'} added — your monthly bill is being updated.`
-          : `${kind === 'verified' ? 'Verified Listing' : 'Sponsored Listing'} removed — your monthly bill will be reduced on the next cycle.`,
+          ? `${labels[kind]} added — your monthly bill is being updated.`
+          : `${labels[kind]} removed — your monthly bill will be reduced on the next cycle.`,
       );
       await load();
     } catch (e) {
@@ -565,9 +577,13 @@ export default function DirectoryBillingPage() {
               const isPendingThis = currentPlan?.id === plan.id && isPending;
               const cents = plan.price_monthly_cents ?? 0;
               const inclusion = summary.plan_addon_inclusion[plan.id] || { verified: false, sponsored: false };
-              const verifiedAdds = !inclusion.verified && summary.addons.verifiedUser ? summary.addon_prices.verified_cents : 0;
+              const planFF = (plan.feature_flags ?? {}) as Record<string, unknown>;
+              const conciergeAvailable = Boolean(planFF.addon_concierge_available);
+              const conciergeIncluded  = Boolean(planFF.addon_concierge_included);
+              const verifiedAdds  = !inclusion.verified  && summary.addons.verifiedUser  ? summary.addon_prices.verified_cents  : 0;
               const sponsoredAdds = !inclusion.sponsored && summary.addons.sponsoredUser ? summary.addon_prices.sponsored_cents : 0;
-              const previewTotal = cents + verifiedAdds + sponsoredAdds;
+              const conciergeAdds = (conciergeAvailable || conciergeIncluded) && !conciergeIncluded && summary.addons.conciergeUser ? (summary.addon_prices.concierge_cents ?? 29700) : 0;
+              const previewTotal = cents + verifiedAdds + sponsoredAdds + conciergeAdds;
               const previewDelta = previewTotal - summary.charge.total_cents;
               const isExpanded = expandedPlanId === plan.id;
 
@@ -710,6 +726,24 @@ export default function DirectoryBillingPage() {
                             tone="violet"
                           />
                         </div>
+
+                        {/* Venue Concierge — only shown on plans where it's available or included */}
+                        {(conciergeAvailable || conciergeIncluded) && (
+                          <div className="mt-3">
+                            <AddonRow
+                              icon={<BotMessageSquare size={18} />}
+                              label="Venue Concierge"
+                              description="A personal concierge + AI forever-follow-up so no lead is ever forgotten. Books more tours for you automatically."
+                              priceCents={summary.addon_prices.concierge_cents ?? 29700}
+                              isOn={summary.addons.concierge}
+                              isFromPlan={conciergeIncluded}
+                              isUserOn={summary.addons.conciergeUser}
+                              busy={busy === 'addon:concierge'}
+                              onChange={() => void toggleAddon('concierge')}
+                              tone="indigo"
+                            />
+                          </div>
+                        )}
                       </div>
 
                       {/* ── Monthly total breakdown ── */}
@@ -748,6 +782,21 @@ export default function DirectoryBillingPage() {
                                 : (sponsoredAdds > 0 ? `+${formatCents(sponsoredAdds)}` : inclusion.sponsored && summary.addons.sponsoredUser ? 'Included' : '—')}
                             </span>
                           </div>
+                          {(conciergeAvailable || conciergeIncluded) && (
+                            <div className="flex justify-between text-gray-700">
+                              <span className="flex items-center gap-1.5">
+                                Venue Concierge
+                                {conciergeIncluded ? (
+                                  <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600">Included</span>
+                                ) : null}
+                              </span>
+                              <span className="font-mono">
+                                {isCurrent
+                                  ? ((summary.charge.concierge_cents ?? 0) > 0 ? formatCents(summary.charge.concierge_cents) : summary.addons.concierge ? 'Included' : '—')
+                                  : (conciergeAdds > 0 ? `+${formatCents(conciergeAdds)}` : conciergeIncluded && summary.addons.conciergeUser ? 'Included' : '—')}
+                              </span>
+                            </div>
+                          )}
                           <div className="border-t border-gray-200 pt-2 flex justify-between font-semibold text-gray-900">
                             <span>Total billed monthly</span>
                             <span className="font-mono">
@@ -949,7 +998,7 @@ export default function DirectoryBillingPage() {
           trial={summary.trial}
           subscriptionExists={Boolean(summary.subscription)}
           busy={busy === `change:${confirmTarget.id}`}
-          addonBusy={busy?.startsWith('addon:') ? (busy.split(':')[1] as 'verified' | 'sponsored') : null}
+          addonBusy={busy?.startsWith('addon:') ? (busy.split(':')[1] as 'verified' | 'sponsored' | 'concierge') : null}
           onToggleAddon={(kind) => void toggleAddon(kind)}
           onCancel={() => setConfirmPlanId(null)}
           onConfirm={() => void changePlan(confirmTarget.id)}
@@ -1170,7 +1219,7 @@ function ModalAddonToggle({
   included: boolean;
   userOn: boolean;
   busy: boolean;
-  tone: 'emerald' | 'violet';
+  tone: 'emerald' | 'violet' | 'indigo';
   onToggle: () => void;
 }) {
   if (included) {
@@ -1188,7 +1237,10 @@ function ModalAddonToggle({
       </div>
     );
   }
-  const checkedColor = tone === 'emerald' ? 'bg-emerald-600 border-emerald-600' : 'bg-violet-600 border-violet-600';
+  const checkedColor =
+    tone === 'emerald' ? 'bg-emerald-600 border-emerald-600' :
+    tone === 'indigo'  ? 'bg-indigo-600 border-indigo-600'   :
+    'bg-violet-600 border-violet-600';
   return (
     <button
       type="button"
@@ -1355,20 +1407,24 @@ function AddonRow({
   isUserOn: boolean;
   busy: boolean;
   onChange: () => void;
-  tone: 'emerald' | 'violet';
+  tone: 'emerald' | 'violet' | 'indigo';
 }) {
-  const ringClass = tone === 'emerald'
-    ? 'border-emerald-200 bg-emerald-50/40'
-    : 'border-violet-200 bg-violet-50/40';
+  const ringClass =
+    tone === 'emerald' ? 'border-emerald-200 bg-emerald-50/40' :
+    tone === 'indigo'  ? 'border-indigo-200 bg-indigo-50/40'   :
+    'border-violet-200 bg-violet-50/40';
+
+  const iconBg =
+    tone === 'emerald' ? 'bg-emerald-100 text-emerald-700' :
+    tone === 'indigo'  ? 'bg-indigo-100 text-indigo-700'   :
+    'bg-violet-100 text-violet-700';
 
   // ── Plan-included: no checkbox, just show a clean "Included" pill ────────
   if (isFromPlan) {
     return (
       <div className={`relative flex flex-col gap-2 rounded-xl border p-4 ${ringClass}`}>
         <div className="flex items-start gap-3">
-          <div className={`mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
-            tone === 'emerald' ? 'bg-emerald-100 text-emerald-700' : 'bg-violet-100 text-violet-700'
-          }`}>
+          <div className={`mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${iconBg}`}>
             {icon}
           </div>
           <div className="flex-1 min-w-0">
@@ -1390,9 +1446,9 @@ function AddonRow({
 
   // ── Optional add-on: interactive checkbox ────────────────────────────────
   const checkboxBg = isOn
-    ? tone === 'emerald'
-      ? 'bg-emerald-600 border-emerald-600'
-      : 'bg-violet-600 border-violet-600'
+    ? tone === 'emerald' ? 'bg-emerald-600 border-emerald-600' :
+      tone === 'indigo'  ? 'bg-indigo-600 border-indigo-600'   :
+      'bg-violet-600 border-violet-600'
     : 'bg-white border-gray-300';
 
   return (
@@ -1404,9 +1460,7 @@ function AddonRow({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <div className={`mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
-            tone === 'emerald' ? 'bg-emerald-100 text-emerald-700' : 'bg-violet-100 text-violet-700'
-          }`}>
+          <div className={`mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${iconBg}`}>
             {icon}
           </div>
           <div>
@@ -1467,21 +1521,25 @@ function UpgradePlanModal({
   currentTotalCents: number;
   targetInclusion: { verified: boolean; sponsored: boolean };
   addons: Addons;
-  addonPrices: { verified_cents: number; sponsored_cents: number };
+  addonPrices: { verified_cents: number; sponsored_cents: number; concierge_cents: number };
   paymentMethod: PaymentMethod;
   trial: TrialState;
   subscriptionExists: boolean;
   busy: boolean;
-  addonBusy: 'verified' | 'sponsored' | null;
-  onToggleAddon: (kind: 'verified' | 'sponsored') => void;
+  addonBusy: 'verified' | 'sponsored' | 'concierge' | null;
+  onToggleAddon: (kind: 'verified' | 'sponsored' | 'concierge') => void;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
   const planCents = plan.price_monthly_cents ?? 0;
+  const planFF = (plan.feature_flags ?? {}) as Record<string, unknown>;
+  const modalConciergeAvailable = Boolean(planFF.addon_concierge_available);
+  const modalConciergeIncluded  = Boolean(planFF.addon_concierge_included);
   // Total they'll be charged on the new plan, retaining their current addon toggles.
-  const verifiedAdds = !targetInclusion.verified && addons.verifiedUser ? addonPrices.verified_cents : 0;
-  const sponsoredAdds = !targetInclusion.sponsored && addons.sponsoredUser ? addonPrices.sponsored_cents : 0;
-  const newTotalCents = planCents + verifiedAdds + sponsoredAdds;
+  const verifiedAdds   = !targetInclusion.verified  && addons.verifiedUser  ? addonPrices.verified_cents  : 0;
+  const sponsoredAdds  = !targetInclusion.sponsored && addons.sponsoredUser ? addonPrices.sponsored_cents : 0;
+  const conciergeAdds  = (modalConciergeAvailable || modalConciergeIncluded) && !modalConciergeIncluded && addons.conciergeUser ? (addonPrices.concierge_cents ?? 29700) : 0;
+  const newTotalCents  = planCents + verifiedAdds + sponsoredAdds + conciergeAdds;
 
   const isFree = newTotalCents === 0;
   const isDowngradeToFree = isFree && currentTotalCents > 0;
@@ -1577,6 +1635,17 @@ function UpgradePlanModal({
                   tone="violet"
                   onToggle={() => onToggleAddon('sponsored')}
                 />
+                {(modalConciergeAvailable || modalConciergeIncluded) && (
+                  <ModalAddonToggle
+                    label="Venue Concierge"
+                    priceCents={addonPrices.concierge_cents ?? 29700}
+                    included={modalConciergeIncluded}
+                    userOn={addons.conciergeUser}
+                    busy={addonBusy === 'concierge'}
+                    tone="indigo"
+                    onToggle={() => onToggleAddon('concierge')}
+                  />
+                )}
               </div>
               <div className="border-t border-gray-200 pt-2 flex items-center justify-between text-sm font-semibold text-gray-900">
                 <span>Total per month</span>

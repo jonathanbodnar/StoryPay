@@ -23,6 +23,7 @@ import {
   resolveEffectiveAddons,
   VERIFIED_PRICE_CENTS,
   SPONSORED_PRICE_CENTS,
+  CONCIERGE_PRICE_CENTS,
   type ChargeBreakdown,
   type EffectiveAddons,
 } from './directory-addons';
@@ -105,7 +106,7 @@ export type VenueBillingSummary = {
   /** Inclusion flags per plan id, for the addon-checkbox UI. */
   plan_addon_inclusion: Record<string, { verified: boolean; sponsored: boolean }>;
   /** Static add-on prices in cents, exposed so the page never has to import constants. */
-  addon_prices: { verified_cents: number; sponsored_cents: number };
+  addon_prices: { verified_cents: number; sponsored_cents: number; concierge_cents: number };
   /** Trial state snapshot for the current venue (if any). */
   trial: {
     status: 'none' | 'active' | 'forever' | 'expired';
@@ -341,8 +342,9 @@ export async function loadVenueBillingSummary(venueId: string): Promise<VenueBil
 
   // Pull stored addon flags + trial state. Resilient to columns not existing
   // yet — mirrors how pricing-guide handles its schema-not-yet-applied case.
-  let addonVerifiedUser = false;
-  let addonSponsoredUser = false;
+  let addonVerifiedUser   = false;
+  let addonSponsoredUser  = false;
+  let addonConciergeUser  = false;
   let trialState: VenueTrialState = {
     directory_trial_started_at: null,
     directory_trial_ends_at: null,
@@ -354,14 +356,15 @@ export async function loadVenueBillingSummary(venueId: string): Promise<VenueBil
     const { data: addonRow } = await supabaseAdmin
       .from('venues')
       .select(
-        'directory_addon_verified, directory_addon_sponsored, directory_trial_started_at, directory_trial_ends_at, directory_trial_is_forever, directory_trial_plan_id, directory_trial_consumed',
+        'directory_addon_verified, directory_addon_sponsored, directory_addon_concierge, directory_trial_started_at, directory_trial_ends_at, directory_trial_is_forever, directory_trial_plan_id, directory_trial_consumed',
       )
       .eq('id', venueId)
       .maybeSingle();
     if (addonRow) {
       const r = addonRow as Record<string, unknown>;
-      addonVerifiedUser = Boolean(r.directory_addon_verified);
+      addonVerifiedUser  = Boolean(r.directory_addon_verified);
       addonSponsoredUser = Boolean(r.directory_addon_sponsored);
+      addonConciergeUser = Boolean(r.directory_addon_concierge);
       trialState = {
         directory_trial_started_at: (r.directory_trial_started_at as string | null) ?? null,
         directory_trial_ends_at: (r.directory_trial_ends_at as string | null) ?? null,
@@ -378,12 +381,14 @@ export async function loadVenueBillingSummary(venueId: string): Promise<VenueBil
     try {
       const { data: addonOnly } = await supabaseAdmin
         .from('venues')
-        .select('directory_addon_verified, directory_addon_sponsored')
+        .select('directory_addon_verified, directory_addon_sponsored, directory_addon_concierge')
         .eq('id', venueId)
         .maybeSingle();
       if (addonOnly) {
-        addonVerifiedUser = Boolean((addonOnly as { directory_addon_verified?: boolean }).directory_addon_verified);
-        addonSponsoredUser = Boolean((addonOnly as { directory_addon_sponsored?: boolean }).directory_addon_sponsored);
+        const r = addonOnly as Record<string, unknown>;
+        addonVerifiedUser  = Boolean(r.directory_addon_verified);
+        addonSponsoredUser = Boolean(r.directory_addon_sponsored);
+        addonConciergeUser = Boolean(r.directory_addon_concierge);
       }
     } catch {
       // ignore
@@ -395,12 +400,14 @@ export async function loadVenueBillingSummary(venueId: string): Promise<VenueBil
     allPlans: plans,
     addonVerifiedUser,
     addonSponsoredUser,
+    addonConciergeUser,
   });
   const charge = computeMonthlyTotalCents({
     plan: current,
     allPlans: plans,
     addonVerifiedUser,
     addonSponsoredUser,
+    addonConciergeUser,
   });
 
   const plan_addon_inclusion: Record<string, { verified: boolean; sponsored: boolean }> = {};
@@ -446,8 +453,9 @@ export async function loadVenueBillingSummary(venueId: string): Promise<VenueBil
     charge,
     plan_addon_inclusion,
     addon_prices: {
-      verified_cents: VERIFIED_PRICE_CENTS,
+      verified_cents:  VERIFIED_PRICE_CENTS,
       sponsored_cents: SPONSORED_PRICE_CENTS,
+      concierge_cents: CONCIERGE_PRICE_CENTS,
     },
     trial: {
       status: trialStatus,

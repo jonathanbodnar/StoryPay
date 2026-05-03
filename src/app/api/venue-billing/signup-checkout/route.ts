@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   const venueId = c.get('venue_id')?.value;
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  let body: { plan_id?: string; addon_verified?: boolean; addon_sponsored?: boolean };
+  let body: { plan_id?: string; addon_verified?: boolean; addon_sponsored?: boolean; addon_concierge?: boolean };
   try {
     body = await req.json();
   } catch {
@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
 
   const addonVerified  = Boolean(body.addon_verified);
   const addonSponsored = Boolean(body.addon_sponsored);
+  const addonConcierge = Boolean(body.addon_concierge);
 
   // Fetch venue + context
   const ctx = await loadVenueDirectoryPlanContext(venueId);
@@ -62,9 +63,10 @@ export async function POST(req: NextRequest) {
     await supabaseAdmin
       .from('venues')
       .update({
-        directory_plan_id:       planId,
+        directory_plan_id:         planId,
         directory_addon_verified:  addonVerified,
         directory_addon_sponsored: addonSponsored,
+        directory_addon_concierge: addonConcierge,
       })
       .eq('id', venueId);
   } catch (e) {
@@ -85,6 +87,7 @@ export async function POST(req: NextRequest) {
     allPlans,
     addonVerifiedUser:  effectiveVerified,
     addonSponsoredUser: effectiveSponsored,
+    addonConciergeUser: addonConcierge,
   });
 
   // Free plan — no card needed, grant trial and send to dashboard
@@ -157,6 +160,7 @@ export async function POST(req: NextRequest) {
       directory_plan_id: planId,
       addon_verified:   effectiveVerified  ? '1' : '0',
       addon_sponsored:  effectiveSponsored ? '1' : '0',
+      addon_concierge:  addonConcierge     ? '1' : '0',
       trial_ends_at:    trialEndsAtIso,
       action:           'signup_plan',
     },

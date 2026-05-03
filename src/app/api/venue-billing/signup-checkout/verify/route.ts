@@ -79,9 +79,10 @@ export async function POST(req: NextRequest) {
 
   // Pull trial end date from metadata (set by signup-checkout)
   const trialEndsAtRaw = String(meta.trial_ends_at ?? '');
-  const planId = String(meta.directory_plan_id ?? '');
-  const addonVerified  = String(meta.addon_verified  ?? '0') === '1';
-  const addonSponsored = String(meta.addon_sponsored ?? '0') === '1';
+  const planId         = String(meta.directory_plan_id ?? '');
+  const addonVerified  = String(meta.addon_verified   ?? '0') === '1';
+  const addonSponsored = String(meta.addon_sponsored  ?? '0') === '1';
+  const addonConcierge = String(meta.addon_concierge  ?? '0') === '1';
 
   // Compute charge amount
   const allPlans = await listDirectoryPlanCatalog();
@@ -95,6 +96,7 @@ export async function POST(req: NextRequest) {
     allPlans,
     addonVerifiedUser:  addonVerified,
     addonSponsoredUser: addonSponsored,
+    addonConciergeUser: addonConcierge,
   });
   if (charge.total_cents <= 0) {
     return NextResponse.json({ error: 'Nothing to bill' }, { status: 400 });
@@ -144,6 +146,7 @@ export async function POST(req: NextRequest) {
       directory_trial_consumed:           true,
       directory_addon_verified:           addonVerified,
       directory_addon_sponsored:          addonSponsored,
+      directory_addon_concierge:          addonConcierge,
     })
     .eq('id', venueId);
 

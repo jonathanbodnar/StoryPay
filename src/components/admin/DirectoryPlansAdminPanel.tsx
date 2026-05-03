@@ -92,8 +92,10 @@ export function DirectoryPlansAdminPanel() {
   // plan has these enabled the corresponding paid add-on is auto-included for
   // every venue on that plan and cannot be toggled off at checkout.
   const [editAddons, setEditAddons] = useState({
-    verified: false,
-    sponsored: false,
+    verified:            false,
+    sponsored:           false,
+    concierge_available: false,
+    concierge_included:  false,
   });
   const [editMeta, setEditMeta] = useState({
     name: '',
@@ -229,8 +231,10 @@ export function DirectoryPlansAdminPanel() {
     setEditNav(mergeNavPermissionsForEditor(p.nav_permissions, p.feature_flags));
     const ff = p.feature_flags ?? {};
     setEditAddons({
-      verified: Boolean(ff.addon_verified_included ?? ff.directory_addon_verified_included),
-      sponsored: Boolean(ff.addon_sponsored_included ?? ff.directory_addon_sponsored_included),
+      verified:            Boolean(ff.addon_verified_included  ?? ff.directory_addon_verified_included),
+      sponsored:           Boolean(ff.addon_sponsored_included ?? ff.directory_addon_sponsored_included),
+      concierge_available: Boolean(ff.addon_concierge_available),
+      concierge_included:  Boolean(ff.addon_concierge_included),
     });
     const unit = (p.trial_period_unit as TrialUnit) || 'none';
     setEditMeta({
@@ -280,8 +284,10 @@ export function DirectoryPlansAdminPanel() {
         fortis_merchant_id: editMeta.fortis_merchant_id.trim() || null,
         nav_permissions,
         feature_flags: {
-          addon_verified_included: editAddons.verified,
+          addon_verified_included:  editAddons.verified,
           addon_sponsored_included: editAddons.sponsored,
+          addon_concierge_available: editAddons.concierge_available,
+          addon_concierge_included:  editAddons.concierge_included,
         },
         trial_period_value: editMeta.trial_period_unit === 'none' || editMeta.trial_period_unit === 'forever'
           ? 0
@@ -836,6 +842,42 @@ NOTIFY pgrst, 'reload schema';`}</pre>
                           <span className="font-medium text-gray-900">Sponsored Listing</span>
                           <span className="block text-[11px] text-gray-500">
                             Featured top placement ($99/mo add-on)
+                          </span>
+                        </span>
+                      </label>
+                    </div>
+                    {/* Venue Concierge — two flags: available (can purchase) + included (bundled free) */}
+                    <div className="mt-3 rounded-lg border border-violet-100 bg-violet-50 p-3 space-y-2">
+                      <p className="text-xs font-semibold text-violet-900">Venue Concierge ($297/mo add-on)</p>
+                      <p className="text-[11px] text-violet-700 leading-snug">
+                        Personal + AI forever-follow-up concierge for leads. Control which plans can purchase or have it bundled.
+                      </p>
+                      <label className="flex items-start gap-2 text-xs text-gray-700 rounded-lg border border-violet-100 bg-white p-2.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 rounded border-gray-300"
+                          checked={editAddons.concierge_available}
+                          onChange={(ev) => setEditAddons((s) => ({ ...s, concierge_available: ev.target.checked }))}
+                        />
+                        <span>
+                          <span className="font-medium text-gray-900">Available on this plan</span>
+                          <span className="block text-[11px] text-gray-500">
+                            When checked, venues on this plan can purchase Venue Concierge as an add-on.
+                            Uncheck to hide it entirely from lower-tier plans.
+                          </span>
+                        </span>
+                      </label>
+                      <label className="flex items-start gap-2 text-xs text-gray-700 rounded-lg border border-violet-100 bg-white p-2.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 rounded border-gray-300"
+                          checked={editAddons.concierge_included}
+                          onChange={(ev) => setEditAddons((s) => ({ ...s, concierge_included: ev.target.checked }))}
+                        />
+                        <span>
+                          <span className="font-medium text-gray-900">Included in plan (bundled free)</span>
+                          <span className="block text-[11px] text-gray-500">
+                            Auto-applies concierge at no extra charge. Use for ultimate-tier plans where it&apos;s part of the package.
                           </span>
                         </span>
                       </label>

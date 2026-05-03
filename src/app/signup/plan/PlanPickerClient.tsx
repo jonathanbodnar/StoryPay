@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
   BadgeCheck,
+  BotMessageSquare,
   Check,
   Loader2,
   Lock,
@@ -75,8 +76,9 @@ export function PlanPickerClient({ plans, allPlans, planAddonInclusion, ownerFir
   }, [plans]);
 
   const [selectedPlanId, setSelectedPlanId] = useState(defaultPlan);
-  const [addonVerified, setAddonVerified] = useState(false);
-  const [addonSponsored, setAddonSponsored] = useState(false);
+  const [addonVerified,   setAddonVerified]   = useState(false);
+  const [addonSponsored,  setAddonSponsored]  = useState(false);
+  const [addonConcierge,  setAddonConcierge]  = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -87,14 +89,23 @@ export function PlanPickerClient({ plans, allPlans, planAddonInclusion, ownerFir
   const effectiveVerified  = inclusion.verified  || addonVerified;
   const effectiveSponsored = inclusion.sponsored || addonSponsored;
 
+  // Concierge availability is read directly from the selected plan's feature_flags
+  const conciergeAvailable = Boolean((selectedPlan?.feature_flags as Record<string, unknown> | null)?.addon_concierge_available);
+  const conciergeIncluded  = Boolean((selectedPlan?.feature_flags as Record<string, unknown> | null)?.addon_concierge_included);
+  const effectiveConcierge = conciergeIncluded || addonConcierge;
+
+  // Reset concierge toggle when switching to a plan that doesn't allow it
+  // (done imperatively in setSelectedPlanId handler below)
+
   // Live total
   const totalCents = useMemo(() => {
     if (!selectedPlan) return 0;
-    const base = selectedPlan.price_monthly_cents ?? 0;
-    const verifiedCost  = effectiveVerified  && !inclusion.verified  ? 1900 : 0;
-    const sponsoredCost = effectiveSponsored && !inclusion.sponsored ? 9900 : 0;
-    return base + verifiedCost + sponsoredCost;
-  }, [selectedPlan, effectiveVerified, effectiveSponsored, inclusion]);
+    const base          = selectedPlan.price_monthly_cents ?? 0;
+    const verifiedCost  = effectiveVerified   && !inclusion.verified  ? 1900  : 0;
+    const sponsoredCost = effectiveSponsored  && !inclusion.sponsored ? 9900  : 0;
+    const conciergeCost = effectiveConcierge  && !conciergeIncluded   ? 29700 : 0;
+    return base + verifiedCost + sponsoredCost + conciergeCost;
+  }, [selectedPlan, effectiveVerified, effectiveSponsored, effectiveConcierge, inclusion, conciergeIncluded]);
 
   const isFree = totalCents === 0;
   const trialEnd = useMemo(() => trialEndDate(), []);
@@ -108,9 +119,10 @@ export function PlanPickerClient({ plans, allPlans, planAddonInclusion, ownerFir
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          plan_id:        selectedPlanId,
+          plan_id:         selectedPlanId,
           addon_verified:  effectiveVerified,
           addon_sponsored: effectiveSponsored,
+          addon_concierge: effectiveConcierge,
         }),
       });
       const data = await res.json();
@@ -173,7 +185,12 @@ export function PlanPickerClient({ plans, allPlans, planAddonInclusion, ownerFir
             return (
               <div
                 key={plan.id}
-                onClick={() => setSelectedPlanId(plan.id)}
+                onClick={() => {
+                  setSelectedPlanId(plan.id);
+                  // Reset concierge toggle when switching to a plan that doesn't offer it
+                  const ff = plan.feature_flags as Record<string, unknown> | null;
+                  if (!ff?.addon_concierge_available) setAddonConcierge(false);
+                }}
                 className={`relative flex cursor-pointer flex-col rounded-2xl border bg-white p-5 transition-colors ${
                   isSelected
                     ? 'border-gray-900'
@@ -279,6 +296,19 @@ export function PlanPickerClient({ plans, allPlans, planAddonInclusion, ownerFir
                 checked={addonSponsored}
                 onChange={setAddonSponsored}
               />
+
+              {/* Venue Concierge — only shown on plans that allow it */}
+              {(conciergeAvailable || conciergeIncluded) && (
+                <AddonRow
+                  icon={<BotMessageSquare size={16} className="text-violet-500" />}
+                  label="Venue Concierge"
+                  description="A personal concierge + AI forever-follow-up so no lead is ever forgotten. Helps you book more tours automatically."
+                  price="$297/mo"
+                  included={conciergeIncluded}
+                  checked={addonConcierge}
+                  onChange={setAddonConcierge}
+                />
+              )}
             </div>
           </div>
         )}

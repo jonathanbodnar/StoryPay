@@ -49,6 +49,7 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.storypay.io';
 interface Body {
   verified?: boolean;
   sponsored?: boolean;
+  concierge?: boolean;
 }
 
 async function getVenueId() {
@@ -109,7 +110,7 @@ async function handlePost(req: NextRequest) {
   // error with code 42703 (undefined_column) and we return an actionable 503.
   const addonRowResp = await supabaseAdmin
     .from('venues')
-    .select('directory_addon_verified, directory_addon_sponsored, directory_verified_status, directory_sponsored_status')
+    .select('directory_addon_verified, directory_addon_sponsored, directory_addon_concierge, directory_verified_status, directory_sponsored_status')
     .eq('id', venueId)
     .maybeSingle();
 
@@ -138,10 +139,12 @@ async function handlePost(req: NextRequest) {
     return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
   }
 
-  const prevVerified = Boolean((addonRow as { directory_addon_verified?: boolean }).directory_addon_verified);
-  const prevSponsored = Boolean((addonRow as { directory_addon_sponsored?: boolean }).directory_addon_sponsored);
-  const nextVerified = typeof body.verified === 'boolean' ? body.verified : prevVerified;
-  const nextSponsored = typeof body.sponsored === 'boolean' ? body.sponsored : prevSponsored;
+  const prevVerified   = Boolean((addonRow as Record<string, unknown>).directory_addon_verified);
+  const prevSponsored  = Boolean((addonRow as Record<string, unknown>).directory_addon_sponsored);
+  const prevConcierge  = Boolean((addonRow as Record<string, unknown>).directory_addon_concierge);
+  const nextVerified   = typeof body.verified   === 'boolean' ? body.verified   : prevVerified;
+  const nextSponsored  = typeof body.sponsored  === 'boolean' ? body.sponsored  : prevSponsored;
+  const nextConcierge  = typeof body.concierge  === 'boolean' ? body.concierge  : prevConcierge;
 
   const allPlans = await listDirectoryPlanCatalog();
   const currentPlan = allPlans.find((p) => p.id === ctx.venue.directory_plan_id) ?? null;
@@ -149,14 +152,16 @@ async function handlePost(req: NextRequest) {
   const prevCharge = computeMonthlyTotalCents({
     plan: currentPlan,
     allPlans,
-    addonVerifiedUser: prevVerified,
-    addonSponsoredUser: prevSponsored,
+    addonVerifiedUser:   prevVerified,
+    addonSponsoredUser:  prevSponsored,
+    addonConciergeUser:  prevConcierge,
   });
   const nextCharge = computeMonthlyTotalCents({
     plan: currentPlan,
     allPlans,
-    addonVerifiedUser: nextVerified,
-    addonSponsoredUser: nextSponsored,
+    addonVerifiedUser:   nextVerified,
+    addonSponsoredUser:  nextSponsored,
+    addonConciergeUser:  nextConcierge,
   });
 
   const subId = ctx.venue.directory_subscription_external_id;
@@ -173,10 +178,11 @@ async function handlePost(req: NextRequest) {
   // startOn = trial_ends_at.
   if (isTrialing) {
     await applyAddonFlagsAndStatus(venueId, currentPlan?.id ?? null, {
-      verified: nextVerified,
+      verified:  nextVerified,
       sponsored: nextSponsored,
-      prevVerifiedStatus: String((addonRow as { directory_verified_status?: string }).directory_verified_status ?? 'none'),
-      prevSponsoredStatus: String((addonRow as { directory_sponsored_status?: string }).directory_sponsored_status ?? 'none'),
+      concierge: nextConcierge,
+      prevVerifiedStatus:  String((addonRow as Record<string, unknown>).directory_verified_status  ?? 'none'),
+      prevSponsoredStatus: String((addonRow as Record<string, unknown>).directory_sponsored_status ?? 'none'),
     });
     return NextResponse.json({
       kind: 'switched',
@@ -202,8 +208,9 @@ async function handlePost(req: NextRequest) {
         [STORYPAY_PLATFORM_DIRECTORY_META_KEY]: '1',
         venue_id: venueId,
         directory_plan_id: currentPlan?.id ?? null,
-        addon_verified: nextVerified ? '1' : '0',
-        addon_sponsored: nextSponsored ? '1' : '0',
+        addon_verified:   nextVerified   ? '1' : '0',
+        addon_sponsored:  nextSponsored  ? '1' : '0',
+        addon_concierge:  nextConcierge  ? '1' : '0',
         action: 'addon_subscribe',
       },
     };
@@ -215,10 +222,10 @@ async function handlePost(req: NextRequest) {
     const url = (session as { url?: string }).url;
     if (!url) throw new Error('LunarPay did not return a checkout URL');
 
-    return NextResponse.json({
+      return NextResponse.json({
       kind: 'checkout_required',
       url,
-      pending_addons: { verified: nextVerified, sponsored: nextSponsored },
+      pending_addons: { verified: nextVerified, sponsored: nextSponsored, concierge: nextConcierge },
     });
   }
 
@@ -243,10 +250,11 @@ async function handlePost(req: NextRequest) {
       );
     }
     await applyAddonFlagsAndStatus(venueId, currentPlan?.id ?? null, {
-      verified: nextVerified,
+      verified:  nextVerified,
       sponsored: nextSponsored,
-      prevVerifiedStatus: String((addonRow as { directory_verified_status?: string }).directory_verified_status ?? 'none'),
-      prevSponsoredStatus: String((addonRow as { directory_sponsored_status?: string }).directory_sponsored_status ?? 'none'),
+      concierge: nextConcierge,
+      prevVerifiedStatus:  String((addonRow as Record<string, unknown>).directory_verified_status  ?? 'none'),
+      prevSponsoredStatus: String((addonRow as Record<string, unknown>).directory_sponsored_status ?? 'none'),
       clearSubscription: true,
     });
     return NextResponse.json({ kind: 'switched', total_cents: 0 });
@@ -268,10 +276,11 @@ async function handlePost(req: NextRequest) {
       }
     }
     await applyAddonFlagsAndStatus(venueId, currentPlan?.id ?? null, {
-      verified: nextVerified,
+      verified:  nextVerified,
       sponsored: nextSponsored,
-      prevVerifiedStatus: String((addonRow as { directory_verified_status?: string }).directory_verified_status ?? 'none'),
-      prevSponsoredStatus: String((addonRow as { directory_sponsored_status?: string }).directory_sponsored_status ?? 'none'),
+      concierge: nextConcierge,
+      prevVerifiedStatus:  String((addonRow as Record<string, unknown>).directory_verified_status  ?? 'none'),
+      prevSponsoredStatus: String((addonRow as Record<string, unknown>).directory_sponsored_status ?? 'none'),
     });
     await recordBillingEvent(
       venueId,
@@ -282,8 +291,9 @@ async function handlePost(req: NextRequest) {
       {
         previous_amount_cents: prevCharge.total_cents,
         new_amount_cents: nextCharge.total_cents,
-        verified: nextVerified,
-        sponsored: nextSponsored,
+        verified:   nextVerified,
+        sponsored:  nextSponsored,
+        concierge:  nextConcierge,
         subscription_id: subId,
       },
     );
@@ -293,10 +303,11 @@ async function handlePost(req: NextRequest) {
   // No subscription, total is 0 — just flip the flags (e.g. on a top plan that
   // includes everything for free).
   await applyAddonFlagsAndStatus(venueId, currentPlan?.id ?? null, {
-    verified: nextVerified,
+    verified:  nextVerified,
     sponsored: nextSponsored,
-    prevVerifiedStatus: String((addonRow as { directory_verified_status?: string }).directory_verified_status ?? 'none'),
-    prevSponsoredStatus: String((addonRow as { directory_sponsored_status?: string }).directory_sponsored_status ?? 'none'),
+    concierge: nextConcierge,
+    prevVerifiedStatus:  String((addonRow as Record<string, unknown>).directory_verified_status  ?? 'none'),
+    prevSponsoredStatus: String((addonRow as Record<string, unknown>).directory_sponsored_status ?? 'none'),
   });
   return NextResponse.json({ kind: 'switched', total_cents: 0 });
 }
@@ -319,18 +330,20 @@ async function applyAddonFlagsAndStatus(
   opts: {
     verified: boolean;
     sponsored: boolean;
+    concierge: boolean;
     prevVerifiedStatus: string;
     prevSponsoredStatus: string;
     clearSubscription?: boolean;
   },
 ) {
-  const verifiedStatus = nextStatus(opts.verified, opts.prevVerifiedStatus);
+  const verifiedStatus  = nextStatus(opts.verified,  opts.prevVerifiedStatus);
   const sponsoredStatus = nextStatus(opts.sponsored, opts.prevSponsoredStatus);
 
   const update: Record<string, unknown> = {
-    directory_addon_verified: opts.verified,
-    directory_addon_sponsored: opts.sponsored,
-    directory_verified_status: verifiedStatus,
+    directory_addon_verified:   opts.verified,
+    directory_addon_sponsored:  opts.sponsored,
+    directory_addon_concierge:  opts.concierge,
+    directory_verified_status:  verifiedStatus,
     directory_sponsored_status: sponsoredStatus,
   };
   if (opts.clearSubscription) {
@@ -344,7 +357,7 @@ async function applyAddonFlagsAndStatus(
     // status-only update so the public badge state still gets nudged.
     if (code === '42703') {
       const fallback: Record<string, unknown> = {
-        directory_verified_status: verifiedStatus,
+        directory_verified_status:  verifiedStatus,
         directory_sponsored_status: sponsoredStatus,
       };
       if (opts.clearSubscription) {

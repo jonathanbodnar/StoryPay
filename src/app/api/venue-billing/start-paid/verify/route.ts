@@ -81,12 +81,13 @@ export async function POST(req: NextRequest) {
   // (addons may have changed during the trial).
   const { data: row } = await supabaseAdmin
     .from('venues')
-    .select('directory_addon_verified, directory_addon_sponsored, directory_trial_ends_at')
+    .select('directory_addon_verified, directory_addon_sponsored, directory_addon_concierge, directory_trial_ends_at')
     .eq('id', venueId)
     .maybeSingle();
   const r = (row ?? {}) as Record<string, unknown>;
-  const addonVerifiedUser = Boolean(r.directory_addon_verified);
+  const addonVerifiedUser  = Boolean(r.directory_addon_verified);
   const addonSponsoredUser = Boolean(r.directory_addon_sponsored);
+  const addonConciergeUser = Boolean(r.directory_addon_concierge);
 
   const allPlans = await listDirectoryPlanCatalog();
   const currentPlan = allPlans.find((p) => p.id === ctx.venue.directory_plan_id) ?? null;
@@ -95,6 +96,7 @@ export async function POST(req: NextRequest) {
     allPlans,
     addonVerifiedUser,
     addonSponsoredUser,
+    addonConciergeUser,
   });
   if (charge.total_cents <= 0) {
     return NextResponse.json({ error: 'Total monthly is $0' }, { status: 400 });
