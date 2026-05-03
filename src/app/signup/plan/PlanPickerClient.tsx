@@ -61,9 +61,13 @@ type Props = {
 export function PlanPickerClient({ plans, allPlans, planAddonInclusion, ownerFirstName }: Props) {
   const router = useRouter();
 
-  // Default / "Recommended" plan: prefer the admin-selected default flag,
-  // otherwise fall back to the first paid plan in the (already-ordered) list.
+  // Default selection priority:
+  // 1. Plan with a highlight_label (the admin-designated featured plan)
+  // 2. Plan marked is_default
+  // 3. First paid plan in the list
   const defaultPlan = useMemo(() => {
+    const highlighted = plans.find((p) => p.highlight_label);
+    if (highlighted) return highlighted.id;
     const adminDefault = plans.find((p) => p.is_default);
     if (adminDefault) return adminDefault.id;
     const paid = plans.filter((p) => (p.price_monthly_cents ?? 0) > 0);
@@ -162,9 +166,9 @@ export function PlanPickerClient({ plans, allPlans, planAddonInclusion, ownerFir
         {/* Plan grid */}
         <div className={`grid gap-4 ${plans.length <= 2 ? 'sm:grid-cols-2' : plans.length === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2 lg:grid-cols-4'}`}>
           {plans.map((plan) => {
-            const isSelected = plan.id === selectedPlanId;
-            const isPaid = (plan.price_monthly_cents ?? 0) > 0;
-            const isRecommended = plan.id === defaultPlan;
+            const isSelected   = plan.id === selectedPlanId;
+            const isPaid       = (plan.price_monthly_cents ?? 0) > 0;
+            const badgeLabel   = plan.highlight_label ?? null;
 
             return (
               <div
@@ -174,12 +178,12 @@ export function PlanPickerClient({ plans, allPlans, planAddonInclusion, ownerFir
                   isSelected
                     ? 'border-gray-900'
                     : 'border-gray-200 hover:border-gray-400'
-                }`}
+                } ${badgeLabel ? 'mt-3' : ''}`}
               >
-                {isRecommended && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <span className="rounded-full bg-gray-900 px-3 py-0.5 text-[11px] font-semibold text-white">
-                      Recommended
+                {badgeLabel && (
+                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
+                    <span className="whitespace-nowrap rounded-full bg-gray-900 px-3 py-0.5 text-[11px] font-semibold text-white shadow-sm">
+                      {badgeLabel}
                     </span>
                   </div>
                 )}

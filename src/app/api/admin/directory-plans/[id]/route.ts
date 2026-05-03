@@ -46,6 +46,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (typeof body.is_public === 'boolean') {
     updates.is_public = body.is_public;
   }
+  if (body.highlight_label !== undefined) {
+    const label = typeof body.highlight_label === 'string' ? body.highlight_label.trim() : null;
+    updates.highlight_label = label || null;
+  }
   if (body.price_monthly_cents !== undefined) {
     updates.price_monthly_cents =
       body.price_monthly_cents === null

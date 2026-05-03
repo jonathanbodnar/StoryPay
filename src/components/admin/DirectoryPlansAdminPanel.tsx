@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, Plus, Trash2, Pencil, Check, ChevronDown, Copy, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Plus, Trash2, Pencil, Check, ChevronDown, Copy, Eye, EyeOff, Star } from 'lucide-react';
 import {
   DIRECTORY_NAV_GROUP_LABELS,
   DIRECTORY_NAV_REGISTRY,
@@ -31,6 +31,7 @@ type PlanRow = {
   sort_order: number;
   is_default: boolean;
   is_public: boolean;
+  highlight_label?: string | null;
   price_monthly_cents: number | null;
   stripe_price_id: string | null;
   fortis_merchant_id?: string | null;
@@ -103,6 +104,7 @@ export function DirectoryPlansAdminPanel() {
     fortis_merchant_id: '',
     is_default: false,
     is_public: true,
+    highlight_label: '',
     trial_period_value: '0' as string,
     trial_period_unit: 'none' as TrialUnit,
   });
@@ -240,6 +242,7 @@ export function DirectoryPlansAdminPanel() {
       fortis_merchant_id: p.fortis_merchant_id?.trim() || '',
       is_default: p.is_default,
       is_public: p.is_public !== false, // default true if column absent
+      highlight_label: p.highlight_label?.trim() ?? '',
       trial_period_value: typeof p.trial_period_value === 'number' && p.trial_period_value > 0
         ? String(p.trial_period_value)
         : '0',
@@ -270,6 +273,7 @@ export function DirectoryPlansAdminPanel() {
         sort_order: editMeta.sort_order,
         is_default: editMeta.is_default,
         is_public: editMeta.is_public,
+        highlight_label: editMeta.highlight_label.trim() || null,
         price_monthly_cents: editMeta.price_monthly_cents
           ? Math.round(parseFloat(editMeta.price_monthly_cents) * 100)
           : null,
@@ -724,6 +728,41 @@ NOTIFY pgrst, 'reload schema';`}</pre>
                       <span>Public (visible on plan picker &amp; upgrade modals)</span>
                     </label>
                   </div>
+                  {/* Highlight badge */}
+                  <div className="rounded-lg border border-indigo-100 bg-indigo-50 p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Star size={13} className="text-indigo-500 shrink-0" />
+                      <span className="text-xs font-semibold text-indigo-900">Highlight badge</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(editMeta.highlight_label)}
+                          onChange={(e) =>
+                            setEditMeta({
+                              ...editMeta,
+                              highlight_label: e.target.checked ? 'Recommended' : '',
+                            })
+                          }
+                        />
+                        Show badge
+                      </label>
+                      {editMeta.highlight_label && (
+                        <input
+                          type="text"
+                          maxLength={40}
+                          value={editMeta.highlight_label}
+                          onChange={(e) => setEditMeta({ ...editMeta, highlight_label: e.target.value })}
+                          placeholder="Recommended"
+                          className="rounded border border-indigo-200 bg-white px-2 py-1 text-xs w-44 focus:outline-none focus:ring-1 focus:ring-indigo-300"
+                        />
+                      )}
+                    </div>
+                    <p className="mt-1.5 text-[10px] text-indigo-700">
+                      Shown as a pill above the plan card. Typically one plan. Try: &ldquo;Recommended&rdquo;, &ldquo;Most Popular&rdquo;, &ldquo;Best Value&rdquo;.
+                    </p>
+                  </div>
                   {/* Trial period editor — applies to NEW signups only */}
                   <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
                     <label className="block text-xs font-semibold text-gray-700 mb-2">Free trial</label>
@@ -868,8 +907,13 @@ NOTIFY pgrst, 'reload schema';`}</pre>
               ) : (
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-medium text-gray-900">{p.name}</p>
+                      {p.highlight_label && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
+                          <Star size={9} /> {p.highlight_label}
+                        </span>
+                      )}
                       {p.is_public === false && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
                           <EyeOff size={9} /> Hidden

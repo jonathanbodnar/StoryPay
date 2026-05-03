@@ -50,6 +50,8 @@ export type DirectoryPlanCatalogEntry = {
   feature_flags: Record<string, unknown>;
   trial_period_value: number;
   trial_period_unit: PlanTrialConfig['trial_period_unit'];
+  /** Short badge label shown on plan cards, e.g. "Recommended". NULL = no badge. */
+  highlight_label: string | null;
 };
 
 export type VenueBillingPaymentMethod = {
@@ -132,6 +134,10 @@ function mapPlanRow(row: Record<string, unknown>): DirectoryPlanCatalogEntry {
     trial_period_value:
       typeof row.trial_period_value === 'number' ? (row.trial_period_value as number) : 0,
     trial_period_unit: coerceTrialUnit(row.trial_period_unit as string | null),
+    highlight_label:
+      typeof row.highlight_label === 'string' && row.highlight_label.trim()
+        ? row.highlight_label.trim()
+        : null,
   };
 }
 
@@ -155,7 +161,7 @@ export async function listDirectoryPlanCatalog(opts?: {
 
   const baseColumns =
     'id, name, slug, description, price_monthly_cents, is_default, sort_order, feature_flags';
-  const fullColumns = `${baseColumns}, trial_period_value, trial_period_unit, is_public`;
+  const fullColumns = `${baseColumns}, trial_period_value, trial_period_unit, is_public, highlight_label`;
 
   let rows: Record<string, unknown>[] | null = null;
 

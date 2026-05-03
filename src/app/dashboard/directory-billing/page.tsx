@@ -58,6 +58,7 @@ type Plan = {
   feature_flags: Record<string, unknown>;
   trial_period_value?: number;
   trial_period_unit?: 'none' | 'days' | 'weeks' | 'months' | 'years' | 'forever' | string;
+  highlight_label?: string | null;
 };
 
 type TrialState = {
@@ -595,6 +596,11 @@ export default function DirectoryBillingPage() {
                       {planHasTrial(plan) && (
                         <span className="hidden sm:inline-flex shrink-0 items-center gap-1 rounded-full bg-violet-50 border border-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">
                           <Sparkles size={9} /> {formatTrialDuration(plan)}
+                        </span>
+                      )}
+                      {plan.highlight_label && (
+                        <span className="hidden sm:inline-flex shrink-0 items-center gap-1 rounded-full bg-indigo-50 border border-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
+                          ★ {plan.highlight_label}
                         </span>
                       )}
                     </div>
