@@ -170,8 +170,7 @@ export default function DirectoryBillingPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmPlanId, setConfirmPlanId] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
-  // '__default__' = auto-expand the current plan; null = all collapsed; plan.id = specific plan open
-  const [expandedPlanId, setExpandedPlanId] = useState<string | null>('__default__');
+  const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -543,52 +542,41 @@ export default function DirectoryBillingPage() {
               const sponsoredAdds = !inclusion.sponsored && summary.addons.sponsoredUser ? summary.addon_prices.sponsored_cents : 0;
               const previewTotal = cents + verifiedAdds + sponsoredAdds;
               const previewDelta = previewTotal - summary.charge.total_cents;
-              const isExpanded =
-                expandedPlanId === '__default__'
-                  ? plan.id === currentPlan?.id
-                  : expandedPlanId === plan.id;
+              const isExpanded = expandedPlanId === plan.id;
 
               return (
-                <div key={plan.id} className={isCurrent ? 'bg-gray-900' : ''}>
+                <div key={plan.id} className={isCurrent ? 'bg-emerald-50/60' : ''}>
                   {/* ── Row header — always visible ── */}
                   <button
                     type="button"
-                    onClick={() =>
-                      setExpandedPlanId(isExpanded ? null : plan.id)
-                    }
-                    className={`w-full flex items-center justify-between gap-4 px-5 py-4 text-left transition-colors ${
-                      isCurrent ? 'hover:bg-white/5' : 'hover:bg-gray-50'
-                    }`}
+                    onClick={() => setExpandedPlanId(isExpanded ? null : plan.id)}
+                    className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left transition-colors hover:bg-gray-50"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center gap-2.5 min-w-0 flex-wrap">
                       <div className="min-w-0">
-                        <div className={`text-[11px] font-semibold uppercase tracking-wide ${isCurrent ? 'text-gray-400' : 'text-gray-400'}`}>
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                           {cents > 0 ? 'Paid' : 'Free'}{plan.is_default ? ' · default' : ''}
                         </div>
-                        <div className={`font-semibold text-sm leading-tight ${isCurrent ? 'text-white' : 'text-gray-900'}`}>
+                        <div className="font-semibold text-sm leading-tight text-gray-900">
                           {plan.name}
                         </div>
                       </div>
                       {isCurrent && (
-                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-semibold text-white">
-                          <Check size={10} /> Current
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 border border-emerald-200 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                          <Check size={10} /> Active plan
                         </span>
                       )}
                       {planHasTrial(plan) && (
-                        <span className={`hidden sm:inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                          isCurrent ? 'bg-violet-400/20 text-violet-200' : 'bg-violet-50 text-violet-700 border border-violet-100'
-                        }`}>
+                        <span className="hidden sm:inline-flex shrink-0 items-center gap-1 rounded-full bg-violet-50 border border-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">
                           <Sparkles size={9} /> {formatTrialDuration(plan)}
                         </span>
                       )}
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
                       <div className="text-right">
-                        <div className={`font-bold text-sm ${isCurrent ? 'text-white' : 'text-gray-900'}`}>
+                        <div className="font-bold text-sm text-gray-900">
                           {cents > 0 ? formatCents(cents) : 'Free'}
-                          {cents > 0 && (
-                            <span className={`text-xs font-normal ml-0.5 ${isCurrent ? 'text-gray-400' : 'text-gray-500'}`}>/mo</span>
-                          )}
+                          {cents > 0 && <span className="text-xs font-normal ml-0.5 text-gray-500">/mo</span>}
                         </div>
                         {summary.subscription?.next_payment_on && isCurrent ? (
                           <div className="text-[10px] text-gray-400">Next: {formatDate(summary.subscription.next_payment_on)}</div>
@@ -596,44 +584,41 @@ export default function DirectoryBillingPage() {
                       </div>
                       <ChevronDown
                         size={15}
-                        className={`transition-transform duration-200 shrink-0 ${isExpanded ? 'rotate-180' : ''} ${isCurrent ? 'text-gray-400' : 'text-gray-400'}`}
+                        className={`transition-transform duration-200 shrink-0 text-gray-400 ${isExpanded ? 'rotate-180' : ''}`}
                       />
                     </div>
                   </button>
 
                   {/* ── Expanded body ── */}
                   {isExpanded && (
-                    <div className={`px-5 pb-6 space-y-5 border-t ${isCurrent ? 'border-white/10' : 'border-gray-100'}`}>
+                    <div className="px-5 pb-6 space-y-5 border-t border-gray-100">
                       <div className="pt-4 space-y-3">
                         {plan.description ? (
-                          <p className={`text-sm ${isCurrent ? 'text-gray-300' : 'text-gray-600'}`}>{plan.description}</p>
+                          <p className="text-sm text-gray-600">{plan.description}</p>
                         ) : null}
-                        {planHasTrial(plan) ? (
-                          <div className={`sm:hidden inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                            isCurrent ? 'bg-violet-400/20 text-violet-100' : 'bg-violet-50 text-violet-700 border border-violet-100'
-                          }`}>
-                            <Sparkles size={11} /> {formatTrialDuration(plan)}
-                          </div>
-                        ) : null}
-                        {/* Subscription status badge */}
-                        {isCurrent ? (
-                          <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {planHasTrial(plan) ? (
+                            <div className="sm:hidden inline-flex items-center gap-1 rounded-full bg-violet-50 border border-violet-100 px-2.5 py-1 text-[11px] font-semibold text-violet-700">
+                              <Sparkles size={11} /> {formatTrialDuration(plan)}
+                            </div>
+                          ) : null}
+                          {isCurrent ? (
                             <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
                               isActive
-                                ? 'border-emerald-400/30 bg-emerald-400/15 text-emerald-300'
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                                 : isPastDue
-                                  ? 'border-red-400/30 bg-red-400/15 text-red-300'
-                                  : 'border-white/20 bg-white/10 text-gray-300'
+                                  ? 'border-red-200 bg-red-50 text-red-700'
+                                  : 'border-gray-200 bg-gray-50 text-gray-600'
                             }`}>
                               <ShieldCheck size={10} /> {status.replace(/_/g, ' ') || 'none'}
                             </span>
-                          </div>
-                        ) : null}
+                          ) : null}
+                        </div>
                       </div>
 
                       {/* ── Add-ons ── */}
                       <div>
-                        <div className={`text-[11px] font-semibold uppercase tracking-wide mb-3 ${isCurrent ? 'text-gray-400' : 'text-gray-500'}`}>
+                        <div className="text-[11px] font-semibold uppercase tracking-wide mb-3 text-gray-500">
                           Add-ons
                         </div>
                         <div className="grid gap-3 sm:grid-cols-2">
@@ -665,20 +650,20 @@ export default function DirectoryBillingPage() {
                       </div>
 
                       {/* ── Monthly total breakdown ── */}
-                      <div className={`rounded-xl border p-4 ${isCurrent ? 'border-white/10 bg-white/5' : 'border-gray-100 bg-gray-50'}`}>
-                        <div className={`text-[11px] font-semibold uppercase tracking-wide mb-3 ${isCurrent ? 'text-gray-400' : 'text-gray-500'}`}>
+                      <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                        <div className="text-[11px] font-semibold uppercase tracking-wide mb-3 text-gray-500">
                           Monthly total
                         </div>
                         <div className="space-y-1.5 text-sm">
-                          <div className={`flex justify-between ${isCurrent ? 'text-gray-200' : 'text-gray-700'}`}>
+                          <div className="flex justify-between text-gray-700">
                             <span>{plan.name}</span>
                             <span className="font-mono">{cents > 0 ? formatCents(cents) : 'Free'}</span>
                           </div>
-                          <div className={`flex justify-between ${isCurrent ? 'text-gray-200' : 'text-gray-700'}`}>
+                          <div className="flex justify-between text-gray-700">
                             <span className="flex items-center gap-1.5">
                               Verified Listing
                               {inclusion.verified ? (
-                                <span className={`text-[10px] font-semibold uppercase tracking-wide ${isCurrent ? 'text-emerald-400' : 'text-emerald-600'}`}>Included</span>
+                                <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600">Included</span>
                               ) : null}
                             </span>
                             <span className="font-mono">
@@ -687,11 +672,11 @@ export default function DirectoryBillingPage() {
                                 : (verifiedAdds > 0 ? `+${formatCents(verifiedAdds)}` : inclusion.verified && summary.addons.verifiedUser ? 'Included' : '—')}
                             </span>
                           </div>
-                          <div className={`flex justify-between ${isCurrent ? 'text-gray-200' : 'text-gray-700'}`}>
+                          <div className="flex justify-between text-gray-700">
                             <span className="flex items-center gap-1.5">
                               Sponsored Listing
                               {inclusion.sponsored ? (
-                                <span className={`text-[10px] font-semibold uppercase tracking-wide ${isCurrent ? 'text-emerald-400' : 'text-emerald-600'}`}>Included</span>
+                                <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600">Included</span>
                               ) : null}
                             </span>
                             <span className="font-mono">
@@ -700,21 +685,21 @@ export default function DirectoryBillingPage() {
                                 : (sponsoredAdds > 0 ? `+${formatCents(sponsoredAdds)}` : inclusion.sponsored && summary.addons.sponsoredUser ? 'Included' : '—')}
                             </span>
                           </div>
-                          <div className={`border-t pt-2 flex justify-between font-semibold ${isCurrent ? 'border-white/10 text-white' : 'border-gray-200 text-gray-900'}`}>
+                          <div className="border-t border-gray-200 pt-2 flex justify-between font-semibold text-gray-900">
                             <span>Total billed monthly</span>
                             <span className="font-mono">
                               {isCurrent
                                 ? (summary.charge.total_cents > 0 ? formatCents(summary.charge.total_cents) : 'Free')
                                 : (previewTotal > 0 ? formatCents(previewTotal) : 'Free')}
                               {!isCurrent && previewDelta !== 0 ? (
-                                <span className={`ml-1.5 text-xs font-semibold ${previewDelta > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                                <span className={`ml-1.5 text-xs font-semibold ${previewDelta > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
                                   ({previewDelta > 0 ? '+' : ''}{formatCents(previewDelta)})
                                 </span>
                               ) : null}
                             </span>
                           </div>
                         </div>
-                        <p className={`mt-3 text-[11px] leading-relaxed ${isCurrent ? 'text-gray-500' : 'text-gray-400'}`}>
+                        <p className="mt-3 text-[11px] leading-relaxed text-gray-400">
                           Pricing subject to change at any time. Subscribers receive at least 30 days&apos; advance notice before any price increase.
                         </p>
                       </div>
@@ -727,7 +712,7 @@ export default function DirectoryBillingPage() {
                               type="button"
                               disabled={busy === 'update_pm'}
                               onClick={() => void updatePaymentMethod()}
-                              className="inline-flex items-center gap-1.5 rounded-xl border border-white/20 bg-white/10 px-3.5 py-2 text-xs font-semibold text-white hover:bg-white/20 disabled:opacity-50"
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50"
                             >
                               {busy === 'update_pm' ? <Loader2 size={12} className="animate-spin" /> : <CreditCard size={12} />}
                               Update payment method
@@ -736,7 +721,7 @@ export default function DirectoryBillingPage() {
                               type="button"
                               disabled={busy === 'cancel'}
                               onClick={() => setConfirmCancel(true)}
-                              className="inline-flex items-center gap-1.5 rounded-xl border border-red-400/30 bg-red-500/15 px-3.5 py-2 text-xs font-semibold text-red-300 hover:bg-red-500/25 disabled:opacity-50"
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2 text-xs font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50"
                             >
                               {busy === 'cancel' ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
                               Cancel subscription
