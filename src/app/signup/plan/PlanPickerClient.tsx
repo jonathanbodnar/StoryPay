@@ -178,26 +178,9 @@ export function PlanPickerClient({ plans, ownerFirstName }: Props) {
                 const badgeLabel = plan.highlight_label ?? null;
                 const isFeatured = idx === featuredIdx;
 
-                return (
-                  <div
-                    key={plan.id}
-                    onClick={() => setSelectedPlanId(plan.id)}
-                    className={[
-                      'relative flex cursor-pointer flex-col rounded-2xl border bg-white transition-all duration-200',
-                      // Featured: bigger padding, deep shadow, scaled up
-                      // Side: compact padding, natural height (no self-stretch so
-                      // they sit shorter and more square relative to the middle)
-                      isFeatured
-                        ? 'p-6 shadow-xl ring-2 ring-gray-900/10 scale-[1.04] z-10'
-                        : 'p-4 shadow-sm',
-                      badgeLabel || isFeatured ? 'mt-4' : '',
-                      isSelected
-                        ? 'border-gray-900'
-                        : isFeatured
-                        ? 'border-gray-800 hover:border-gray-900'
-                        : 'border-gray-200 hover:border-gray-400',
-                    ].join(' ')}
-                  >
+                // ── Shared card inner content ────────────────────────────────
+                const cardInner = (
+                  <>
                     {/* Floating badge */}
                     {badgeLabel && (
                       <div className="absolute -top-4 left-1/2 -translate-x-1/2">
@@ -208,7 +191,7 @@ export function PlanPickerClient({ plans, ownerFirstName }: Props) {
                     )}
 
                     {/* Selection radio */}
-                    <div className="mb-2.5 flex items-start justify-between">
+                    <div className="mb-2.5 flex items-start">
                       <div
                         className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
                           isSelected ? 'border-gray-900 bg-gray-900' : 'border-gray-300 bg-white'
@@ -222,7 +205,7 @@ export function PlanPickerClient({ plans, ownerFirstName }: Props) {
                     <div className={`mb-1 font-bold text-gray-900 ${isFeatured ? 'text-lg' : 'text-sm'}`}>
                       {plan.name}
                     </div>
-                    {/* Description only on featured card — keeps side cards compact */}
+                    {/* Description only on featured card */}
                     {isFeatured && plan.description && (
                       <p className="mb-3 text-xs text-gray-500 leading-snug">{plan.description}</p>
                     )}
@@ -250,10 +233,10 @@ export function PlanPickerClient({ plans, ownerFirstName }: Props) {
                       </div>
                     )}
 
-                    {/* Feature comparison
-                        Side cards: label only (compact / square feel)
-                        Featured card: label + outcome description (full detail) */}
-                    <div className={`border-t border-gray-100 pt-2.5 ${isFeatured ? 'mt-2 space-y-2.5' : 'mt-1.5 space-y-1.5'}`}>
+                    {/* Feature list
+                        Featured: label + outcome description
+                        Side: label only — keeps them compact */}
+                    <div className={`flex-1 border-t border-gray-100 pt-2.5 ${isFeatured ? 'mt-2 space-y-2.5' : 'mt-1.5 space-y-1.5'}`}>
                       {PLAN_FEATURES.map((f) => {
                         const included = planIncludesFeature(
                           plan.feature_flags as Record<string, unknown>,
@@ -274,7 +257,6 @@ export function PlanPickerClient({ plans, ownerFirstName }: Props) {
                               >
                                 {f.label}
                               </div>
-                              {/* Outcome only on featured card */}
                               {isFeatured && (
                                 <div
                                   className={`mt-0.5 text-[10px] leading-snug ${
@@ -289,6 +271,45 @@ export function PlanPickerClient({ plans, ownerFirstName }: Props) {
                         );
                       })}
                     </div>
+                  </>
+                );
+
+                // ── Featured (middle) card — full height, scaled up ──────────
+                if (isFeatured) {
+                  return (
+                    <div
+                      key={plan.id}
+                      onClick={() => setSelectedPlanId(plan.id)}
+                      className={[
+                        'relative flex cursor-pointer flex-col rounded-2xl border bg-white p-6 shadow-xl ring-2 ring-gray-900/10 scale-[1.04] z-10 transition-all duration-200',
+                        badgeLabel ? 'mt-4' : 'mt-4',
+                        isSelected ? 'border-gray-900' : 'border-gray-800 hover:border-gray-900',
+                      ].join(' ')}
+                    >
+                      {cardInner}
+                    </div>
+                  );
+                }
+
+                // ── Side cards — wrapper fills row height, card occupies 80%
+                // flex ratios 1 : 8 : 1  →  card = 8/10 = 80% of row height.
+                // Both side cards use identical markup → guaranteed equal height.
+                return (
+                  <div key={plan.id} className="self-stretch flex flex-col">
+                    {/* top spacer — 10% of row height */}
+                    <div className="flex-[1]" />
+                    {/* visible card — 80% of row height */}
+                    <div
+                      onClick={() => setSelectedPlanId(plan.id)}
+                      className={[
+                        'relative flex flex-[8] cursor-pointer flex-col rounded-2xl border bg-white p-4 shadow-sm transition-all duration-200',
+                        isSelected ? 'border-gray-900' : 'border-gray-200 hover:border-gray-400',
+                      ].join(' ')}
+                    >
+                      {cardInner}
+                    </div>
+                    {/* bottom spacer — 10% of row height */}
+                    <div className="flex-[1]" />
                   </div>
                 );
               })}
