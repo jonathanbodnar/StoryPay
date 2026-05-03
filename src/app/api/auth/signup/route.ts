@@ -190,12 +190,14 @@ export async function POST(request: NextRequest) {
   const { data: venue, error: venueErr } = await supabaseAdmin
     .from('venues')
     .insert({
-      owner_id:      userId,
-      name:          venueName,
+      owner_id:         userId,
+      name:             venueName,
       email,
-      phone:         phone || null,
-      password_hash: passwordHash,
-      setup_completed: true,
+      phone:            phone || null,
+      password_hash:    passwordHash,
+      setup_completed:  true,
+      owner_first_name: firstName || null,
+      owner_last_name:  lastName  || null,
     })
     .select('id')
     .single();
@@ -223,7 +225,7 @@ export async function POST(request: NextRequest) {
 
   // Log the user in immediately by setting the session cookie
   const maxAge = rememberMe ? 60 * 60 * 24 * 365 : 60 * 60 * 24 * 30;
-  const response = NextResponse.json({ ok: true, redirect: '/dashboard?welcome=1' });
+  const response = NextResponse.json({ ok: true, redirect: '/signup/plan' });
   response.cookies.set('venue_id', venue.id, {
     path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge,
   });
