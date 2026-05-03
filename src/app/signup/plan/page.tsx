@@ -32,8 +32,18 @@ export default async function SignupPlanPage() {
     redirect('/dashboard');
   }
 
-  // Fetch plan catalog
-  const plans = await listDirectoryPlanCatalog();
+  // Fetch plan catalog. The catalog comes back ascending by price; for the
+  // picker we want the highest-tier paid plan first (so prospects see the
+  // strongest offer up top), then descending paid plans, with the free
+  // plan(s) pushed to the end.
+  const catalog = await listDirectoryPlanCatalog();
+  const paid = catalog
+    .filter((p) => (p.price_monthly_cents ?? 0) > 0)
+    .sort(
+      (a, b) => (b.price_monthly_cents ?? 0) - (a.price_monthly_cents ?? 0),
+    );
+  const free = catalog.filter((p) => (p.price_monthly_cents ?? 0) === 0);
+  const plans = [...paid, ...free];
 
   // Compute per-plan addon inclusion flags so the picker can display correctly
   const allPlans = plans;

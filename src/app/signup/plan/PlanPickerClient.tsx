@@ -61,10 +61,12 @@ type Props = {
 export function PlanPickerClient({ plans, allPlans, planAddonInclusion, ownerFirstName }: Props) {
   const router = useRouter();
 
-  // Default to first paid plan (recommended)
+  // Default / "Recommended" plan: prefer the admin-selected default flag,
+  // otherwise fall back to the first paid plan in the (already-ordered) list.
   const defaultPlan = useMemo(() => {
+    const adminDefault = plans.find((p) => p.is_default);
+    if (adminDefault) return adminDefault.id;
     const paid = plans.filter((p) => (p.price_monthly_cents ?? 0) > 0);
-    // Pick the first/cheapest paid plan as default
     return paid[0]?.id ?? plans[0]?.id ?? '';
   }, [plans]);
 

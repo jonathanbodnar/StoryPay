@@ -86,6 +86,13 @@ export function DirectoryPlansAdminPanel() {
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editNav, setEditNav] = useState<Record<string, boolean>>({});
+  // Per-plan feature-flag extras that aren't owned by the nav editor.  When a
+  // plan has these enabled the corresponding paid add-on is auto-included for
+  // every venue on that plan and cannot be toggled off at checkout.
+  const [editAddons, setEditAddons] = useState({
+    verified: false,
+    sponsored: false,
+  });
   const [editMeta, setEditMeta] = useState({
     name: '',
     slug: '',
@@ -215,6 +222,11 @@ export function DirectoryPlansAdminPanel() {
   function startEdit(p: PlanRow) {
     setEditingId(p.id);
     setEditNav(mergeNavPermissionsForEditor(p.nav_permissions, p.feature_flags));
+    const ff = p.feature_flags ?? {};
+    setEditAddons({
+      verified: Boolean(ff.addon_verified_included ?? ff.directory_addon_verified_included),
+      sponsored: Boolean(ff.addon_sponsored_included ?? ff.directory_addon_sponsored_included),
+    });
     const unit = (p.trial_period_unit as TrialUnit) || 'none';
     setEditMeta({
       name: p.name,
@@ -258,6 +270,10 @@ export function DirectoryPlansAdminPanel() {
           : null,
         fortis_merchant_id: editMeta.fortis_merchant_id.trim() || null,
         nav_permissions,
+        feature_flags: {
+          addon_verified_included: editAddons.verified,
+          addon_sponsored_included: editAddons.sponsored,
+        },
         trial_period_value: editMeta.trial_period_unit === 'none' || editMeta.trial_period_unit === 'forever'
           ? 0
           : Math.max(0, parseInt(editMeta.trial_period_value, 10) || 0),
@@ -710,6 +726,50 @@ NOTIFY pgrst, 'reload schema';`}</pre>
                       Affects new signups only. Existing trials keep their original duration.
                     </p>
                   </div>
+
+                  {/* Included add-ons — when checked, the corresponding paid
+                      add-on is automatically applied to every venue on this
+                      plan and cannot be toggled at checkout. */}
+                  <div className="border border-gray-100 rounded-xl p-3">
+                    <div className="mb-2">
+                      <span className="text-xs font-semibold text-gray-800">Included add-ons</span>
+                      <p className="text-[11px] text-gray-500 mt-0.5">
+                        Auto-include these paid add-ons in this plan. Venues on this plan won&apos;t be charged
+                        the add-on fee and can&apos;t deselect them at checkout.
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <label className="flex items-start gap-2 text-xs text-gray-700 rounded-lg border border-gray-100 bg-gray-50 p-2.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 rounded border-gray-300"
+                          checked={editAddons.verified}
+                          onChange={(ev) => setEditAddons((s) => ({ ...s, verified: ev.target.checked }))}
+                        />
+                        <span>
+                          <span className="font-medium text-gray-900">Verified Listing</span>
+                          <span className="block text-[11px] text-gray-500">
+                            Blue verified badge ($19/mo add-on)
+                          </span>
+                        </span>
+                      </label>
+                      <label className="flex items-start gap-2 text-xs text-gray-700 rounded-lg border border-gray-100 bg-gray-50 p-2.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 rounded border-gray-300"
+                          checked={editAddons.sponsored}
+                          onChange={(ev) => setEditAddons((s) => ({ ...s, sponsored: ev.target.checked }))}
+                        />
+                        <span>
+                          <span className="font-medium text-gray-900">Sponsored Listing</span>
+                          <span className="block text-[11px] text-gray-500">
+                            Featured top placement ($99/mo add-on)
+                          </span>
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+
                   <div className="border border-gray-100 rounded-xl p-3 space-y-4 max-h-[min(70vh,520px)] overflow-y-auto">
                     <p className="text-xs text-gray-500">
                       Toggle any screen; submenu sections only appear in the venue sidebar if at least one child is

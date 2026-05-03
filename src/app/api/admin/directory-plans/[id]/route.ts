@@ -70,6 +70,18 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     updates.trial_period_unit = coerceTrialUnit(body.trial_period_unit as string | null);
   }
 
+  // Extra feature_flags keys (e.g. addon_verified_included,
+  // addon_sponsored_included) need to survive a nav_permissions update — the
+  // nav editor only owns the coarse "section" flags, not arbitrary booleans.
+  // When both are sent we layer them: nav-derived base + explicit extras on
+  // top.  When only feature_flags is sent we accept it as-is.
+  const explicitFeatureFlags =
+    body.feature_flags !== undefined &&
+    typeof body.feature_flags === 'object' &&
+    body.feature_flags !== null
+      ? (body.feature_flags as Record<string, unknown>)
+      : null;
+
   if (
     body.nav_permissions !== undefined &&
     typeof body.nav_permissions === 'object' &&
@@ -79,9 +91,19 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       body.nav_permissions as Record<string, boolean>,
     );
     updates.nav_permissions = nav_permissions;
-    updates.feature_flags = feature_flags;
-  } else if (body.feature_flags !== undefined && typeof body.feature_flags === 'object' && body.feature_flags !== null) {
-    updates.feature_flags = body.feature_flags;
+    updates.feature_flags = explicitFeatureFlags
+      ? { ...feature_flags, ...explicitFeatureFlags }
+      : feature_flags;
+  } else if (explicitFeatureFlags) {
+    // Read-modify-write so we don't drop unrelated keys when the caller only
+    // wants to update a few flags (e.g. just the addon includes).
+    const { data: current } = await supabaseAdmin
+      .from('directory_plans')
+      .select('feature_flags')
+      .eq('id', id)
+      .maybeSingle();
+    const base = (current?.feature_flags as Record<string, unknown> | null) ?? {};
+    updates.feature_flags = { ...base, ...explicitFeatureFlags };
   }
 
   if (Object.keys(updates).length <= 1) {
