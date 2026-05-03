@@ -647,7 +647,7 @@ export default function DirectoryBillingPage() {
                         <div className="text-[11px] font-semibold uppercase tracking-wide mb-3 text-gray-500">
                           What&apos;s included
                         </div>
-                        <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+                        <div className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
                           {PLAN_FEATURES.map((f) => {
                             const on = planIncludesFeature(plan.feature_flags, f.key);
                             return (
@@ -660,10 +660,10 @@ export default function DirectoryBillingPage() {
                                     : <X size={10} strokeWidth={3} />}
                                 </span>
                                 <div className="min-w-0">
-                                  <div className={`text-xs font-semibold leading-tight ${on ? 'text-gray-900' : 'text-gray-400'}`}>
+                                  <div className="text-xs font-semibold leading-tight text-gray-900">
                                     {f.label}
                                   </div>
-                                  <div className={`text-[11px] leading-snug ${on ? 'text-gray-500' : 'text-gray-300'}`}>
+                                  <div className="text-[11px] leading-snug text-gray-500">
                                     {f.outcome}
                                   </div>
                                 </div>
@@ -1354,39 +1354,60 @@ function AddonRow({
   const ringClass = tone === 'emerald'
     ? 'border-emerald-200 bg-emerald-50/40'
     : 'border-violet-200 bg-violet-50/40';
+
+  // ── Plan-included: no checkbox, just show a clean "Included" pill ────────
+  if (isFromPlan) {
+    return (
+      <div className={`relative flex flex-col gap-2 rounded-xl border p-4 ${ringClass}`}>
+        <div className="flex items-start gap-3">
+          <div className={`mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+            tone === 'emerald' ? 'bg-emerald-100 text-emerald-700' : 'bg-violet-100 text-violet-700'
+          }`}>
+            {icon}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-semibold text-gray-900 flex flex-wrap items-center gap-2">
+              {label}
+              <span className="rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
+                Included
+              </span>
+            </div>
+            <p className="mt-0.5 text-xs text-gray-600 leading-relaxed">{description}</p>
+            <div className="mt-1.5 text-[11px] text-emerald-700 font-medium">
+              {isUserOn ? 'Active on your listing.' : 'Active automatically while you\'re on this plan.'}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Optional add-on: interactive checkbox ────────────────────────────────
   const checkboxBg = isOn
     ? tone === 'emerald'
       ? 'bg-emerald-600 border-emerald-600'
       : 'bg-violet-600 border-violet-600'
     : 'bg-white border-gray-300';
+
   return (
     <label
       htmlFor={`addon-${label}`}
       className={`relative flex flex-col gap-2 rounded-xl border p-4 cursor-pointer transition-colors ${
         isOn ? ringClass : 'border-gray-200 bg-white hover:bg-gray-50'
-      } ${isFromPlan ? 'cursor-default' : ''}`}
+      }`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <div className={`mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-lg ${
+          <div className={`mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
             tone === 'emerald' ? 'bg-emerald-100 text-emerald-700' : 'bg-violet-100 text-violet-700'
           }`}>
             {icon}
           </div>
           <div>
-            <div className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-              {label}
-              {isFromPlan ? (
-                <span className="rounded-full bg-emerald-100 text-emerald-700 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
-                  Included
-                </span>
-              ) : null}
-            </div>
+            <div className="text-sm font-semibold text-gray-900">{label}</div>
             <p className="mt-0.5 text-xs text-gray-600 leading-relaxed">{description}</p>
             <div className="mt-1.5 text-[11px] text-gray-500">
-              {isFromPlan
-                ? 'Bundled with your current plan at no extra charge.'
-                : `${formatCents(priceCents)} / month`}
+              {formatCents(priceCents)} / month
             </div>
           </div>
         </div>
@@ -1395,14 +1416,12 @@ function AddonRow({
           id={`addon-${label}`}
           aria-checked={isOn}
           role="checkbox"
-          disabled={isFromPlan || busy}
+          disabled={busy}
           onClick={(e) => {
             e.preventDefault();
-            if (!isFromPlan) onChange();
+            onChange();
           }}
-          className={`flex-shrink-0 mt-1 inline-flex h-5 w-5 items-center justify-center rounded border-2 transition ${checkboxBg} ${
-            isFromPlan ? 'opacity-90' : ''
-          } disabled:opacity-50`}
+          className={`flex-shrink-0 mt-1 inline-flex h-5 w-5 items-center justify-center rounded border-2 transition ${checkboxBg} disabled:opacity-50`}
         >
           {busy ? (
             <Loader2 size={12} className="animate-spin text-gray-700" />
@@ -1411,11 +1430,6 @@ function AddonRow({
           ) : null}
         </button>
       </div>
-      {isFromPlan && !isUserOn ? (
-        <div className="text-[10px] text-emerald-700 font-medium pl-12">
-          Active automatically while you&apos;re on this plan.
-        </div>
-      ) : null}
     </label>
   );
 }
