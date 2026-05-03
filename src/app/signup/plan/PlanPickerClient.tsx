@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import {
   Check,
   ChevronRight,
+  Lock,
   Loader2,
   Sparkles,
   X,
@@ -56,26 +57,40 @@ export function SignupStepHeader({
     <div className="border-b border-gray-200 bg-white px-6 py-4">
       <div className="mx-auto flex max-w-6xl items-center justify-between">
         <Image src="/storyvenue-logo-dark.png" alt="StoryVenue" width={120} height={30} />
-        <div className="hidden items-center gap-2 text-sm text-gray-500 sm:flex">
-          {steps.map((s, i) => (
-            <span key={s.n} className="flex items-center gap-2">
-              {i > 0 && <span className="mx-1 text-gray-300">→</span>}
-              <span
-                className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
-                  s.n < step
-                    ? 'bg-gray-900 text-white'
-                    : s.n === step
-                    ? 'bg-gray-900 text-white'
-                    : 'border border-gray-300 text-gray-400'
-                }`}
-              >
-                {s.n < step ? '✓' : s.n}
+        <div className="hidden items-center gap-1.5 text-sm sm:flex">
+          {steps.map((s, i) => {
+            const isDone    = s.n < step;
+            const isCurrent = s.n === step;
+            return (
+              <span key={s.n} className="flex items-center gap-1.5">
+                {i > 0 && <span className="mx-1 text-gray-200">›</span>}
+                {/* Step circle */}
+                <span
+                  className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold shrink-0 ${
+                    isDone
+                      ? 'bg-emerald-500 text-white'
+                      : isCurrent
+                      ? 'bg-gray-900 text-white'
+                      : 'border border-gray-200 text-gray-300'
+                  }`}
+                >
+                  {isDone ? '✓' : s.n}
+                </span>
+                {/* Step label */}
+                <span
+                  className={
+                    isDone
+                      ? 'text-emerald-600 text-xs'
+                      : isCurrent
+                      ? 'font-semibold text-gray-900 text-xs'
+                      : 'text-gray-300 text-xs'
+                  }
+                >
+                  {s.label}
+                </span>
               </span>
-              <span className={s.n === step ? 'font-semibold text-gray-900' : 'text-gray-400'}>
-                {s.label}
-              </span>
-            </span>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
@@ -274,6 +289,12 @@ export function PlanPickerClient({ plans, ownerFirstName }: Props) {
 
         {/* CTA */}
         <div className="mt-8 flex flex-col items-center gap-3">
+          {/* Registration is a one-way door — no back button here */}
+          <div className="flex items-center gap-2 text-[11px] text-gray-400 mb-1">
+            <Lock size={11} className="shrink-0" />
+            Registration complete — you can&apos;t go back to this step
+          </div>
+
           <button
             type="button"
             disabled={loading || !selectedPlanId}
@@ -293,6 +314,7 @@ export function PlanPickerClient({ plans, ownerFirstName }: Props) {
               </>
             )}
           </button>
+
           {selectedPlan && (
             <p className="text-xs text-gray-400">
               Selected: <strong className="text-gray-600">{selectedPlan.name}</strong>

@@ -206,27 +206,39 @@ export function AddonsClient({
             <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>
           )}
 
-          <button
-            type="button"
-            disabled={loading}
-            onClick={handleContinue}
-            className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold text-white transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-60"
-            style={{ backgroundColor: '#1b1b1b' }}
-          >
-            {loading ? (
-              <>
-                <Loader2 size={15} className="animate-spin" />
-                Setting up…
-              </>
-            ) : isFree ? (
-              'Start for free →'
-            ) : (
-              <>
-                <Lock size={14} />
-                Continue to payment →
-              </>
-            )}
-          </button>
+          {/* Back + Continue row */}
+          <div className="mt-4 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => router.push('/signup/plan')}
+              className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 shrink-0"
+            >
+              <ChevronLeft size={14} />
+              Back
+            </button>
+
+            <button
+              type="button"
+              disabled={loading}
+              onClick={handleContinue}
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold text-white transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ backgroundColor: '#1b1b1b' }}
+            >
+              {loading ? (
+                <>
+                  <Loader2 size={15} className="animate-spin" />
+                  Setting up…
+                </>
+              ) : isFree ? (
+                'Start for free →'
+              ) : (
+                <>
+                  <Lock size={14} />
+                  Continue to payment →
+                </>
+              )}
+            </button>
+          </div>
 
           {!isFree && (
             <p className="mt-2 text-center text-[11px] text-gray-400">
@@ -235,16 +247,6 @@ export function AddonsClient({
             </p>
           )}
         </div>
-
-        {/* Back link */}
-        <button
-          type="button"
-          onClick={() => router.push('/signup/plan')}
-          className="mt-4 flex items-center gap-1 mx-auto text-xs text-gray-400 hover:text-gray-600 transition-colors"
-        >
-          <ChevronLeft size={13} />
-          Back to plan selection
-        </button>
       </div>
     </div>
   );
