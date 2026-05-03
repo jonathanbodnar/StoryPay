@@ -582,7 +582,7 @@ export default function DirectoryBillingPage() {
               const conciergeIncluded  = Boolean(planFF.addon_concierge_included);
               const verifiedAdds  = !inclusion.verified  && summary.addons.verifiedUser  ? summary.addon_prices.verified_cents  : 0;
               const sponsoredAdds = !inclusion.sponsored && summary.addons.sponsoredUser ? summary.addon_prices.sponsored_cents : 0;
-              const conciergeAdds = (conciergeAvailable || conciergeIncluded) && !conciergeIncluded && summary.addons.conciergeUser ? (summary.addon_prices.concierge_cents ?? 29700) : 0;
+              const conciergeAdds = (conciergeAvailable || conciergeIncluded) && !conciergeIncluded && summary.addons.conciergeUser ? (summary.addon_prices.concierge_cents ?? 49900) : 0;
               const previewTotal = cents + verifiedAdds + sponsoredAdds + conciergeAdds;
               const previewDelta = previewTotal - summary.charge.total_cents;
               const isExpanded = expandedPlanId === plan.id;
@@ -734,7 +734,7 @@ export default function DirectoryBillingPage() {
                               icon={<BotMessageSquare size={18} />}
                               label="Venue Concierge"
                               description="A personal concierge + AI forever-follow-up so no lead is ever forgotten. Books more tours for you automatically."
-                              priceCents={summary.addon_prices.concierge_cents ?? 29700}
+                              priceCents={summary.addon_prices.concierge_cents ?? 49900}
                               isOn={summary.addons.concierge}
                               isFromPlan={conciergeIncluded}
                               isUserOn={summary.addons.conciergeUser}
@@ -1538,7 +1538,7 @@ function UpgradePlanModal({
   // Total they'll be charged on the new plan, retaining their current addon toggles.
   const verifiedAdds   = !targetInclusion.verified  && addons.verifiedUser  ? addonPrices.verified_cents  : 0;
   const sponsoredAdds  = !targetInclusion.sponsored && addons.sponsoredUser ? addonPrices.sponsored_cents : 0;
-  const conciergeAdds  = (modalConciergeAvailable || modalConciergeIncluded) && !modalConciergeIncluded && addons.conciergeUser ? (addonPrices.concierge_cents ?? 29700) : 0;
+  const conciergeAdds  = (modalConciergeAvailable || modalConciergeIncluded) && !modalConciergeIncluded && addons.conciergeUser ? (addonPrices.concierge_cents ?? 49900) : 0;
   const newTotalCents  = planCents + verifiedAdds + sponsoredAdds + conciergeAdds;
 
   const isFree = newTotalCents === 0;
@@ -1638,7 +1638,7 @@ function UpgradePlanModal({
                 {(modalConciergeAvailable || modalConciergeIncluded) && (
                   <ModalAddonToggle
                     label="Venue Concierge"
-                    priceCents={addonPrices.concierge_cents ?? 29700}
+                    priceCents={addonPrices.concierge_cents ?? 49900}
                     included={modalConciergeIncluded}
                     userOn={addons.conciergeUser}
                     busy={addonBusy === 'concierge'}

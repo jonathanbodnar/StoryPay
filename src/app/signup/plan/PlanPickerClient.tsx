@@ -103,7 +103,7 @@ export function PlanPickerClient({ plans, allPlans, planAddonInclusion, ownerFir
     const base          = selectedPlan.price_monthly_cents ?? 0;
     const verifiedCost  = effectiveVerified   && !inclusion.verified  ? 1900  : 0;
     const sponsoredCost = effectiveSponsored  && !inclusion.sponsored ? 9900  : 0;
-    const conciergeCost = effectiveConcierge  && !conciergeIncluded   ? 29700 : 0;
+    const conciergeCost = effectiveConcierge  && !conciergeIncluded   ? 49900 : 0;
     return base + verifiedCost + sponsoredCost + conciergeCost;
   }, [selectedPlan, effectiveVerified, effectiveSponsored, effectiveConcierge, inclusion, conciergeIncluded]);
 
@@ -303,7 +303,7 @@ export function PlanPickerClient({ plans, allPlans, planAddonInclusion, ownerFir
                   icon={<BotMessageSquare size={16} className="text-violet-500" />}
                   label="Venue Concierge"
                   description="A personal concierge + AI forever-follow-up so no lead is ever forgotten. Helps you book more tours automatically."
-                  price="$297/mo"
+                  price="$499/mo"
                   included={conciergeIncluded}
                   checked={addonConcierge}
                   onChange={setAddonConcierge}

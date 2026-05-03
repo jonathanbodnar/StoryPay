@@ -831,7 +831,7 @@ NOTIFY pgrst, 'reload schema';`}</pre>
                     </div>
                     {/* Venue Concierge — two flags: available (can purchase) + included (bundled free) */}
                     <div className="mt-3 rounded-lg border border-violet-100 bg-violet-50 p-3 space-y-2">
-                      <p className="text-xs font-semibold text-violet-900">Venue Concierge ($297/mo add-on)</p>
+                      <p className="text-xs font-semibold text-violet-900">Venue Concierge ($499/mo add-on)</p>
                       <p className="text-[11px] text-violet-700 leading-snug">
                         Personal + AI forever-follow-up concierge for leads. Control which plans can purchase or have it bundled.
                       </p>

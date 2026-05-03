@@ -21,7 +21,7 @@ export const SPONSORED_PRICE_CENTS  = 9900;  // $99.00 / mo
  * Venue Concierge: personal + AI forever-follow-up lead concierge.
  * Update this constant to change the global price.
  */
-export const CONCIERGE_PRICE_CENTS  = 29700; // $297.00 / mo
+export const CONCIERGE_PRICE_CENTS  = 49900; // $499.00 / mo
 
 export type AddonKey = 'verified' | 'sponsored' | 'concierge';
 
