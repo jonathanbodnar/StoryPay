@@ -100,7 +100,7 @@ Click the bubble to open the setup checklist. It tracks the core setup steps:
 
 1. Publish your listing — fill in your venue details and flip Publish on (Sidebar → Venue listing → Dashboard)
 2. Create Your Profile and Branding — upload your logo and set brand colors (Settings → Branding)
-3. Customize Email Templates — personalize the emails sent to clients (Settings → Email Templates)
+3. Customize Email Templates — personalize the emails sent to clients (Settings → Notifications)
 4. Create Your First Proposal Template — build a reusable contract template (Payments → Proposal Templates)
 5. Create Your First Proposal — use a template to create a proposal for a client
 6. Send Your First Proposal — send it to a client so they can sign and pay
@@ -114,22 +114,37 @@ Note: The setup guide is only visible to account owners. Admins and Members do n
       },
       {
         id: 'gs-login',
-        title: 'Logging in and your login link',
-        tags: ['login', 'link', 'access', 'sign in', 'token', 'magic link', 'forgot password'],
-        body: `StoryVenue uses magic-link login at app.storyvenue.com/login — no password needed.
+        title: 'Logging in, passwords, and forgot password',
+        tags: ['login', 'password', 'access', 'sign in', 'forgot password', 'reset password', 'change password'],
+        body: `StoryVenue uses email and password authentication at app.storyvenue.com/login.
 
-Enter the email address on your account and click Send Login Link. We email a personalised login URL that signs you in with a single click. The link is valid for one hour.
+To log in:
+1. Go to app.storyvenue.com/login
+2. Enter your email address and password
+3. Click Sign in
 
-Your session lasts 30 days on that device. If the session expires, just request a new magic link from the login page.
+Forgot your password:
+1. Click "Forgot password?" on the login page
+2. Enter your email address
+3. You'll receive a password reset link by email
+4. Click the link and set a new password
 
-New venues can create an account themselves at storyvenue.com/signup (or app.storyvenue.com/signup). See the "Signing up for a new venue account" article for details.
+Changing your email or password:
+- Click your name or avatar in the sidebar → My Profile
+- Enter your new email address or new password and save
+- No current-password re-entry required
+- If you update your email, use the new address on next login
 
-To log out, click Logout at the bottom of the sidebar.
+Team members:
+- Team members accept an email invitation and set their own password on first login
+- If a team member never received their invite, have an owner go to Settings → Team → find the member → resend invite
 
-Troubleshooting:
-- Didn't receive the email? Check spam, wait 30 seconds and try again, or contact support.
-- "Account not found"? The email isn't registered yet — create an account via /signup.
-- Team member who never received their invite? Have an owner resend it from Settings → Team → ⋯ → Resend Invite.`,
+Logging out:
+- Click Logout at the bottom of the sidebar
+
+Couples (clients):
+- Couples log in at app.storyvenue.com/couple/login with the email and password they set at signup
+- Forgot password works the same way for couples`,
       },
     ],
   },
@@ -2898,23 +2913,48 @@ Pipeline revenue visibility — The venue owner can enable Hide $ for individual
     articles: [
       {
         id: 'notif-settings',
-        title: 'Configuring notification settings',
-        tags: ['notifications', 'email alerts', 'sms alerts', 'alerts'],
-        body: `Go to Settings → Notifications to control which events trigger an email or SMS to you.
+        title: 'Email notifications and templates (Settings → Notifications)',
+        tags: ['notifications', 'email alerts', 'email templates', 'alerts', 'payment reminder', 'proposal signed', 'invoice viewed', 'toggle', 'on off'],
+        body: `Settings → Notifications is the single page for all transactional email templates. It replaced the old separate "Email Templates" and "Notifications" pages.
 
-Email notifications you can toggle:
-- Payment received
-- Payment failed
-- Invoice paid
-- Proposal signed
-- Proposal viewed
-- Weekly summary digest
+The left sidebar lists every template with an on/off toggle. The main panel shows the full editor for whichever template is selected.
 
-SMS notifications (requires messaging connected):
-- High-value payment received
-- Payment failed
+The 10 template types:
+- Invoice — sent to the customer when an invoice is created
+- Proposal — sent to the customer when a proposal is sent
+- Payment Confirmation — receipt sent to the customer after a successful payment
+- Payment Notification — owner-only alert when you receive a payment
+- Subscription Confirmation — sent when a subscription starts
+- Subscription Cancelled — sent when a subscription ends
+- Payment Failed — alert when a payment attempt fails
+- Payment Reminder — overdue reminder sent to customers after a payment due date
+- Proposal / Invoice Viewed — owner-only alert when a customer opens their document for the first time
+- Proposal Signed — owner-only alert when a customer signs a proposal
 
-Toggle each switch on or off, then click Save. Changes take effect immediately.`,
+Editing a template:
+1. Click the template name in the left sidebar to open it
+2. Edit the Subject, Heading, Body, Button Text, or Footer
+3. Click Save
+
+Toggling a template on/off:
+- Use the toggle switch next to the template name in the left sidebar
+- Off = that email will not send for any future event
+- The toggle persists after page reload
+
+Variable pills:
+- Below the editor, click any variable pill (e.g. {{contact.first_name}}, {{payment.amount}}) to copy it
+- Paste it anywhere in the Subject or Body
+- Both flat-style tags ({{customer_name}}) and canonical dot-notation ({{contact.full_name}}) resolve correctly
+
+Payment Reminder — overdue schedule:
+- Select the Payment Reminder template to see the Reminder schedule panel
+- Configure up to 3 send-times: each one is a number of days/hours AFTER the due date (overdue, not advance)
+- Default: 1 day after, 3 days after, 7 days after
+- Remove an offset by clicking X; add one with "Add reminder"
+
+Test any template:
+- Click the Preview button to see the rendered email
+- Click Send Test to fire a real email to any address with sample values filled in`,
       },
       {
         id: 'sms-notifications',
@@ -3067,6 +3107,167 @@ Tip: write the description as an outcome — "I want to be able to X so that Y" 
     ],
   },
   {
+    id: 'billing-plans',
+    label: 'Plans, Billing & Add-ons',
+    iconName: 'CreditCard',
+    color: '#10b981',
+    articles: [
+      {
+        id: 'billing-plans-overview',
+        title: 'Understanding your subscription plans',
+        tags: ['plans', 'billing', 'subscription', 'upgrade', 'downgrade', 'free', 'paid', 'directory billing', 'pricing', 'accordion'],
+        body: `Your storyvenue.com directory subscription is managed at /dashboard/directory-billing.
+
+The page shows four plans — Free plus three paid tiers — as accordion rows. Click any row to expand it and see the full feature comparison: green checkmarks show what's included, red X marks show what isn't.
+
+Your active plan is identified with a colored "Active plan" pill. All other plans are collapsed by default.
+
+Upgrading or downgrading:
+- Click any plan row to expand it and review its features
+- Look for the upgrade/downgrade button inside the expanded plan
+- Your new plan takes effect immediately
+
+Feature gating (locked menu items):
+- If a feature isn't in your plan, its sidebar menu item shows a lock icon
+- Clicking a locked item opens an upgrade prompt — the feature stays inaccessible until you upgrade
+- You can see every available feature listed (nothing is hidden) so you always know what's on higher plans
+- Going directly to a locked page's URL shows an inline locked screen
+
+Trial periods:
+- If a plan has an active trial, the trial details appear on that plan's card
+- Trials can be days, weeks, months, years, or "forever"
+- Only new signups during the trial window receive the trial — existing accounts are not affected`,
+      },
+      {
+        id: 'billing-verified-sponsored',
+        title: 'Verified and Sponsored listing add-ons',
+        tags: ['verified', 'sponsored', 'badge', 'listing', 'add-on', 'addon', '$19', '$99', 'promote', 'visibility'],
+        body: `Verified and Sponsored are optional add-ons that enhance how your venue appears on storyvenue.com.
+
+Verified ($19/month):
+- Displays a verified badge on your storyvenue.com listing
+- Signals to couples that your venue is confirmed legitimate
+- Price may change; the current price is always shown on the /dashboard/listing/directory page
+
+Sponsored ($99/month):
+- Promotes your listing more prominently in directory search results
+- Increases discovery by couples browsing storyvenue.com
+- Price may change; current price is shown on the page
+
+Plan inclusion:
+- Highest paid plan: both Verified and Sponsored are included automatically at no extra cost
+- Second-highest paid plan: Verified is included; Sponsored is an optional add-on
+- Free plan and first paid plan: neither is included, but both are available to purchase as add-ons
+
+Managing your add-ons:
+- Go to sidebar → Verified & Sponsored (or /dashboard/listing/directory)
+- Toggle Verified and/or Sponsored on or off
+- Pricing and your current status are shown clearly on the page
+- Both add-ons can be changed at any time regardless of your base plan`,
+      },
+      {
+        id: 'billing-pricing-guide',
+        title: 'Pricing & Availability Guide',
+        tags: ['pricing guide', 'availability guide', 'venue guide', 'packages', 'shareable', 'ai generate', 'lead form'],
+        body: `The Pricing & Availability Guide is a shareable page that showcases your venue packages, pricing ranges, and availability to prospective couples. It's a polished, branded resource you can link to from your storyvenue.com listing.
+
+Availability:
+- Only available on plans that include the Pricing Guide feature
+- If your plan doesn't include it, the sidebar menu item shows a lock icon with an upgrade prompt
+- When the feature is off, the guide's lead-capture form is also hidden from your public listing automatically — no broken links or placeholders appear
+
+Creating your guide:
+1. Go to Venue listing → Pricing Guide
+2. Fill in your packages, pricing ranges, and availability windows
+3. Click "Generate with AI" to have Ask AI draft compelling, outcome-focused copy for each section based on your venue info and listing details
+4. Each section can be individually regenerated for variations
+
+Images:
+- Your listing cover photo and gallery images are automatically pre-populated in the guide so it looks polished immediately
+- Update photos under Venue listing → Photos to refresh the guide
+
+Preview:
+- A preview modal shows exactly what couples will see before you publish
+- Make changes and regenerate sections as needed until you're happy with the result`,
+      },
+    ],
+  },
+  {
+    id: 'merge-variables',
+    label: 'Merge Variables',
+    iconName: 'Braces',
+    color: '#6366f1',
+    articles: [
+      {
+        id: 'merge-vars-overview',
+        title: 'Using merge variables (merge tags)',
+        tags: ['merge variables', 'merge tags', 'variables', 'personalization', 'first name', 'contact name', 'canonical', 'dot notation', 'workflow variables', 'email variables'],
+        body: `Merge variables let you personalize your emails, SMS messages, and notifications with real data — contact name, payment amount, appointment time, venue name, and more.
+
+How to use them:
+1. While editing a template, email, or SMS, click the variable picker (or copy a pill from the Notifications page)
+2. The tag is copied to your clipboard — paste it into your subject line or message body
+3. At send time, the tag is replaced with the real value for that specific recipient or event
+
+Naming convention:
+StoryVenue uses dot-notation canonical tags: {{category.field}}
+- {{contact.first_name}} — the contact's first name
+- {{venue.name}} — your venue / business name
+- {{payment.amount}} — the payment amount
+Legacy flat tags (like {{customer_name}}, {{organization}}, {{amount}}) still work as aliases.
+
+Contact variables:
+- {{contact.first_name}} / {{contact.last_name}} / {{contact.full_name}} / {{contact.name}}
+- {{contact.email}} — contact's email
+- {{contact.phone}} — contact's phone number
+
+Venue variables:
+- {{venue.name}} — your business name
+- {{venue.email}} / {{venue.phone}} — venue contact info
+- {{venue.address}} / {{venue.city}} / {{venue.state}} / {{venue.website}}
+- {{venue.owner_name}} / {{venue.owner_first_name}}
+
+Payment variables (transactional emails):
+- {{payment.amount}} — total payment amount
+- {{payment.net_amount}} — after fees
+- {{payment.fee}} — processing fee
+- {{payment.method}} — card or ACH
+- {{payment.date}} — date paid
+- {{payment.reason}} — failure reason (failed-payment emails)
+- {{payment.overdue_by}} — how long overdue (reminder emails)
+
+Invoice / proposal variables:
+- {{invoice.number}} / {{invoice.amount}} / {{invoice.due_date}}
+- {{proposal.title}} / {{proposal.amount}}
+
+Appointment variables (calendar notifications):
+- {{appointment.title}} / {{appointment.date}} / {{appointment.time}}
+- {{appointment.start_time}} / {{appointment.end_time}} / {{appointment.duration}}
+- {{appointment.timezone}} / {{appointment.meeting_location}} / {{appointment.calendar_name}}
+
+Lead / event variables:
+- {{lead.wedding_date}} / {{lead.wedding_month}} / {{lead.guest_count}}
+
+Subscription variables:
+- {{subscription.amount}} / {{subscription.frequency}} / {{subscription.next_payment_date}}
+
+Marketing-only variables (campaign / workflow emails):
+- {{marketing.unsubscribe_url}} / {{marketing.resubscribe_url}} / {{marketing.preferences_url}}
+
+System variables:
+- {{system.date}} — today's date at send time
+- {{system.year}} — current year
+
+Where to find variable pickers:
+- Trigger Links & Tags page: full searchable reference with all 50+ variables grouped by category (click to copy)
+- Workflow builder: {…} button on every email/SMS step — categorized, searchable, 50+ variables
+- Email/campaign builder: sidebar variable panel — grouped by category, click to copy
+- Notifications page: variable pills below the template editor — click any pill to copy
+- Calendar settings → Notifications: merge tag reference in each channel editor`,
+      },
+    ],
+  },
+  {
     id: 'ai',
     label: 'Ask AI',
     iconName: 'Sparkles',
@@ -3178,7 +3379,7 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/marketing/email/automations':['me-workflows', 'me-templates-vs-campaigns', 'me-builder', 'me-blocks', 'me-compliance', 'me-preview-test'],
   '/dashboard/marketing/email/preferences':['me-compliance', 'me-overview'],
   '/dashboard/marketing/email':            ['me-overview', 'me-builder', 'me-blocks', 'me-segments', 'me-templates-vs-campaigns', 'me-compliance'],
-  '/dashboard/marketing/trigger-links':    ['mkt-trigger-tags-vars', 'mkt-system-tags', 'mkt-system-vars', 'me-workflows', 'me-overview'],
+  '/dashboard/marketing/trigger-links':    ['mkt-trigger-tags-vars', 'mkt-system-tags', 'mkt-system-vars', 'merge-vars-overview', 'me-workflows', 'me-overview'],
   '/dashboard/marketing/form-builder':     ['me-form-builder', 'me-workflows', 'listing-media-library', 'leads-overview', 'gs-overview'],
   '/dashboard/marketing/workflows':        ['me-workflows', 'me-form-builder', 'me-templates-vs-campaigns', 'me-compliance', 'me-overview'],
 
@@ -3203,11 +3404,14 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
 
   // Settings
   '/dashboard/settings/branding':        ['brand-setup', 'brand-colors-saved', 'brand-social-networks', 'listing-media-library', 'me-block-social', 'me-block-address'],
-  '/dashboard/settings/email-templates': ['email-types', 'email-variables', 'me-overview'],
+  '/dashboard/settings/email-templates': ['notif-settings', 'email-types', 'email-variables', 'me-overview'],
   '/dashboard/settings/calendar':        ['cal-settings-overview', 'cal-multi-calendar', 'cal-per-calendar-rules', 'cal-notification-overview', 'cal-notification-reminders', 'cal-settings-booking-rules', 'cal-settings-google-sync'],
   '/dashboard/settings/integrations':    ['int-calendly', 'int-google-cal', 'int-quickbooks', 'int-freshbooks'],
   '/dashboard/settings/team':            ['team-invite', 'team-roles'],
-  '/dashboard/settings/notifications':   ['notif-settings', 'sms-notifications'],
+  '/dashboard/settings/notifications':   ['notif-settings', 'email-types', 'email-variables', 'sms-notifications', 'merge-vars-overview'],
+  '/dashboard/directory-billing':        ['billing-plans-overview', 'billing-verified-sponsored', 'gs-overview'],
+  '/dashboard/listing/directory':        ['billing-verified-sponsored', 'billing-plans-overview', 'listing-overview'],
+  '/dashboard/listing/pricing-guide':    ['billing-pricing-guide', 'listing-overview', 'listing-photos'],
   '/dashboard/settings':                 ['gs-overview', 'gs-onboarding'],
 
   // What's New / Updates

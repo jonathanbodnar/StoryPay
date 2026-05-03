@@ -434,12 +434,25 @@ Setup checklist for a venue building their first speed-to-lead funnel:
 5. Confirm MARKETING_CRON_ENABLED=1 is set so the cron actually runs.
 6. Test: submit the form → check the enrollments table and the contact's inbox.
 
-## Email Templates
-- Go to Settings → Email Templates to customize every type of outgoing email.
-- Template types: Invoice, Proposal, Payment Confirmation, Payment Notification, Subscription Confirmation, Subscription Cancelled, Payment Failed.
-- Each template has: Subject Line, Email Heading, Body Text, Button Text, Footer Text.
-- Click Preview to see exactly what the email will look like.
-- Click Send Test to send a test version to any email address.
+## Notifications & Email Templates (Settings → Notifications)
+- Path: /dashboard/settings/notifications — this single page replaces the old separate "Email Templates" and "Notifications" settings pages.
+- All transactional email templates live here, each with an on/off toggle in the left sidebar list and a full editor in the main panel.
+- Template types (10 total):
+  - Invoice — sent to the customer when an invoice is created
+  - Proposal — sent to the customer when a proposal is sent
+  - Payment Confirmation — receipt sent to the customer after a successful payment
+  - Payment Notification — owner-only alert when a payment is received (shows amount, net, fee)
+  - Subscription Confirmation — sent when a subscription is started
+  - Subscription Cancelled — sent when a subscription is cancelled
+  - Payment Failed — alert when a payment attempt fails
+  - Payment Reminder — overdue reminders sent to customers after a payment due date (see below)
+  - Proposal / Invoice Viewed — owner-only alert when a customer first opens their document
+  - Proposal Signed — owner-only alert when a customer signs a proposal
+- Each template has: Subject Line, Email Heading, Body Text, Button Text, Footer Text — all editable.
+- Toggle switch in the sidebar list turns a template on or off. Off = that email will NOT send. State persists after page reload.
+- Click Preview to see the rendered email. Click Send Test to fire a live test to any email address.
+- Variable pills appear below the editor for each template. Click a pill to copy the tag, then paste it into the subject or body. Both flat tags ({{customer_name}}) and canonical dot-notation tags ({{contact.first_name}}, {{payment.amount}}) work — they resolve the same value.
+- Payment Reminder specifics: When the Payment Reminder template is selected, a "Reminder schedule" panel appears below the editor. Configure up to 3 reminder send-times — each one is a number of days/hours AFTER the due date (overdue reminders, not advance reminders). Default offsets are 1 day, 3 days, and 7 days after the due date. Save changes to update the schedule for all future reminder queues.
 
 ## Team Members
 - Go to Settings → Team to manage who has access to your account.
@@ -583,7 +596,17 @@ When an event is created or updated, StoryVenue automatically schedules one remi
 - How do I see my revenue? Home dashboard (filter by date) or Reports → Revenue.
 - How do I refund a payment? Transactions → Charges → click Refund.
 - Why can't I accept payments? LunarPay account may be pending. Check Settings → Payment Processing.
-- How do I add my logo? Settings → Branding → upload a logo file, or choose an image from **Media** (JPG/PNG/WebP/AVIF/GIF).
+- How do I add my logo? Settings → Branding → upload a logo file, or choose an image from Media (JPG/PNG/WebP/AVIF/GIF).
+- How do I manage my email notification templates? Settings → Notifications. Each template has an on/off toggle and a full editor. Payment Reminder lets you configure overdue reminder timing (days after the due date, not before).
+- How do I turn off a specific email notification? Settings → Notifications → click the template in the left list → toggle the switch off. Saved immediately.
+- How do I set up payment overdue reminders? Settings → Notifications → click "Payment Reminder" → configure up to 3 offsets (e.g. 1 day after due, 3 days after, 7 days after) in the Reminder schedule panel.
+- What are Verified and Sponsored listings? Add-ons you can enable for your storyvenue.com listing. Verified ($19/month) adds a trust badge; Sponsored ($99/month) boosts prominence in search results. Manage at Sidebar → Verified & Sponsored (or /dashboard/listing/directory).
+- What plans include Verified or Sponsored? Highest paid plan: both included. Second-highest: Verified included. Free and first paid plan: available as add-ons.
+- How do I see my subscription plan and upgrade? Go to /dashboard/directory-billing. Plans show as accordion rows with full feature comparisons. Click any plan to expand it and see what's included. Add-ons have checkboxes with live total updates.
+- What is a trial period on a plan? If the StoryVenue team has enabled a trial for a plan, new signups get that period free before billing starts. Trial details show on the plan card at /dashboard/directory-billing.
+- Why is a menu item locked or greyed out? That feature isn't included in your current plan. Click the locked item to see an upgrade prompt. Upgrade at /dashboard/directory-billing.
+- What is the Pricing & Availability Guide? A shareable guide for couples featuring your venue packages and pricing. Available on plans that include the pricing guide feature. Find it under Venue listing → Pricing Guide. AI can generate the copy for you.
+- How do I use merge variables in my emails? Use {{contact.first_name}}, {{venue.name}}, {{payment.amount}}, etc. Full reference at Marketing → Trigger Links & Tags page. Variable pickers are available in the Workflow builder, email builder sidebar, and Notifications page (click any pill to copy).
 - How do I upload images / files once and reuse them? Sidebar → **Media** — upload images or files (PDF, Word, Excel, PowerPoint, CSV, TXT — up to 25 MB each), copy the public URL, or pick from the library on Photos, email templates, forms, and Branding. Each row shows a "Used in" indicator so you know which pages a file is referenced from.
 - How do I add a team member? Settings → Team → Add Team Member.
 - How do I add a wedding date or guest count to a contact? Open the contact profile → Overview tab → Wedding Details → edit.
@@ -663,6 +686,92 @@ When an event is created or updated, StoryVenue automatically schedules one remi
 - What happens if I delete a saved audience that's being used by a campaign? Any draft or scheduled campaigns currently pointing at it auto-detach and fall back to "All leads" so they stay valid and sendable. The campaign owner can then re-pick a different audience. We never silently drop a recipient list.
 - Where do saved audiences live in the database? marketing_segments table (migration 061): id, venue_id (FK to venues with ON DELETE CASCADE), name (unique per venue, case-insensitive), description, definition_json (CampaignSegment shape constrained to non-saved_segment types), created_at, updated_at. Recipients resolve through src/lib/marketing-email-audience.ts → resolveSavedSegment which loads the audience and merges its filters with any inline campaign filters.
 - Why is my saved audience recipient count zero? Common causes: (1) zero leads with email addresses match the audience type, (2) every match is on the marketing suppression list, (3) every match has marketing_email_opt_in=false, (4) you required a wedding date but no matching lead has one set, (5) the audience was deleted (campaign falls back to "All leads"; if you want a non-zero audience, re-pick or build the audience inline). The live count chip in the Audiences editor and the Audience step refresh whenever you change a filter.
+
+## Pricing & Availability Guide
+- Some plans include a Venue Pricing & Availability Guide feature — a dedicated, shareable page that showcases your venue packages, pricing, and availability for prospective couples.
+- Access: the Venue listing sidebar flyout → Pricing Guide (only visible if your plan includes it; the menu item is locked/greyed-out with an upgrade prompt if not included).
+- Creating a guide: fill in the form with your packages, pricing ranges, and availability windows. Click "Generate with AI" to have Ask AI draft compelling, outcome-focused copy for each section based on your venue info. Each section can be individually regenerated for variations.
+- Preview: a preview modal lets you see exactly what couples will see before publishing. Suggest changes and regenerate sections as needed.
+- Images: listing photos and cover photo are automatically pre-populated so the guide looks polished immediately. Update photos under Venue listing → Photos.
+- If your plan does not include the Pricing Guide, the lead form modal that allows couples to request the guide will be hidden from your public listing automatically — no broken links or placeholders.
+
+## Subscription Plans, Add-ons & Trials (Directory Billing)
+- Path: /dashboard/directory-billing — your storyvenue.com directory subscription plan and billing management.
+- Four plans: Free, plus three paid tiers. Each plan is shown as an accordion row — click to expand and see a full feature comparison with green checkmarks (included) and red X marks (not included).
+- Active plan is identified with a colored "Active plan" pill; all plans are collapsed by default.
+- Feature gating and locked menu items: if a feature is not included in your current plan, its sidebar menu item appears with a lock icon. Clicking a locked item opens an upgrade prompt — the feature is not accessible until you upgrade. Direct URL access to a gated feature renders an inline locked screen. Menu items are never hidden completely — every venue can see what's available on higher plans.
+- Add-ons (Verified & Sponsored): available on all plans either as part of the plan or as monthly add-ons — see Verified & Sponsored Listings section below.
+- Trial periods: if a plan has an active trial configured by the StoryVenue team, it's shown on that plan's card. Trial periods can be days, weeks, months, years, or "forever" (permanent free access). Trials only apply to new signups during the period — existing accounts are unaffected.
+- Upgrading / downgrading: change plans at any time from /dashboard/directory-billing. Add-ons can also be toggled independently regardless of plan. The monthly total auto-updates as you select plan + add-ons.
+
+## Verified & Sponsored Listings
+- Path: /dashboard/listing/directory — manage your Verified and Sponsored listing status.
+- Verified listing ($19/month): displays a verified badge on your storyvenue.com listing, signaling to couples that your venue is confirmed legitimate. Price may change; current price is shown on the page.
+- Sponsored listing ($99/month): promotes your listing more prominently in directory search results, increasing visibility. Price may change; current price is shown on the page.
+- Plan inclusion:
+  - Highest paid plan: Verified AND Sponsored are both included automatically at no extra cost.
+  - Second-highest paid plan: Verified is included; Sponsored is available as an optional add-on.
+  - Free plan and first paid plan: neither is included, but both are available as add-ons.
+- Both add-ons can be enabled or disabled at any time regardless of plan. Monthly costs are charged alongside your subscription.
+- Prices are displayed on the /dashboard/listing/directory page and on the plans accordion at /dashboard/directory-billing.
+
+## Merge Variables (Merge Tags)
+StoryVenue has a unified system of 50+ merge variables usable across every builder, notification, and payment template. All tags use canonical dot-notation: {{category.field}}.
+
+Contact variables:
+- {{contact.first_name}} — first name only
+- {{contact.last_name}} — last name only
+- {{contact.full_name}} or {{contact.name}} — full name
+- {{contact.email}} — email address
+- {{contact.phone}} — phone number
+
+Venue variables:
+- {{venue.name}} — your venue / business name
+- {{venue.email}} — venue contact email
+- {{venue.phone}} — venue phone number
+- {{venue.address}} — full venue address
+- {{venue.city}} / {{venue.state}} — city and state
+- {{venue.website}} — venue website URL
+- {{venue.owner_name}} — owner's full name
+- {{venue.owner_first_name}} — owner's first name
+
+Appointment variables (calendar notifications + workflows):
+- {{appointment.title}}, {{appointment.date}}, {{appointment.time}}
+- {{appointment.start_time}}, {{appointment.end_time}}, {{appointment.duration}}
+- {{appointment.timezone}}, {{appointment.meeting_location}}, {{appointment.calendar_name}}
+
+Lead / event variables:
+- {{lead.wedding_date}}, {{lead.wedding_month}}, {{lead.guest_count}}
+
+Payment variables (transactional notifications):
+- {{payment.amount}} — payment amount
+- {{payment.net_amount}} — after processing fees
+- {{payment.fee}} — processing fee amount
+- {{payment.method}} — card/ACH
+- {{payment.date}} — date of payment
+- {{payment.reason}} — failure reason (for failed-payment emails)
+- {{payment.overdue_by}} — how long overdue (for reminder emails)
+
+Invoice / proposal / subscription variables:
+- {{invoice.number}}, {{invoice.amount}}, {{invoice.due_date}}, {{invoice.date}}, {{invoice.payment_method}}
+- {{proposal.title}}, {{proposal.amount}}
+- {{subscription.amount}}, {{subscription.frequency}}, {{subscription.next_payment_date}}
+
+Marketing variables (campaign / automation emails only):
+- {{marketing.unsubscribe_url}}, {{marketing.resubscribe_url}}, {{marketing.preferences_url}}
+
+System variables:
+- {{system.date}} — today's date at send time
+- {{system.year}} — current year
+
+Legacy flat tags still work as aliases (e.g. {{customer_name}} = {{contact.name}}, {{organization}} = {{venue.name}}, {{amount}} = {{payment.amount}}, {{offset_label}} = {{payment.overdue_by}}). The system resolves both formats automatically.
+
+Where to find variable pickers:
+- Trigger Links & Tags page: full searchable reference of all 50+ variables grouped by category
+- Workflow builder: {…} button on every email/SMS step — searchable, categorized, 50+ variables including Payment category
+- Email/campaign builder: sidebar variable panel grouped by category, click to copy
+- Notifications page: variable pills below each template editor, click to copy
+- Calendar settings → Notifications: merge tag reference in each channel editor
 `;
 
 export async function POST(request: NextRequest) {
@@ -889,8 +998,8 @@ ${leadsContext ? '\n' + leadsContext + '\n' : ''}
 - Use numbered lists (1. 2. 3.) or dashes (- item) for lists
 - Keep headings as plain text with a colon, e.g. "How to Access Reports:"
 - When directing the user to a specific page, include ONE navigation link using ONLY this format: [Button Label](/dashboard/path)
-  Examples: [Open Branding Settings](/dashboard/settings/branding) [Manage Social Networks](/dashboard/settings/branding#social-networks) [View Proposals](/dashboard/payments/proposals) [Go to Reports](/dashboard/reports) [Manage Contacts](/dashboard/contacts) [View Transactions](/dashboard/transactions) [Open Calendar](/dashboard/calendar) [Open Integrations](/dashboard/settings/integrations) [Marketing analytics](/dashboard/marketing/analytics) [Email Templates](/dashboard/marketing/email/templates) [Email Campaigns](/dashboard/marketing/email/campaigns) [Email Automations](/dashboard/marketing/email/automations) [Audiences](/dashboard/marketing/email/audiences) [Trigger links](/dashboard/marketing/trigger-links) [Lead Capture Forms](/dashboard/marketing/form-builder) [Media](/dashboard/media) [Listing photos](/dashboard/listing/images)
-- Only link to real dashboard paths. Valid paths: /dashboard, /dashboard/calendar, /dashboard/contacts, /dashboard/conversations, /dashboard/leads, /dashboard/media, /dashboard/listing, /dashboard/listing/images, /dashboard/listing/analytics, /dashboard/listing/reviews, /dashboard/marketing/analytics, /dashboard/marketing/email/templates, /dashboard/marketing/email/campaigns, /dashboard/marketing/email/automations, /dashboard/marketing/email/audiences, /dashboard/marketing/email/preferences, /dashboard/marketing/workflows, /dashboard/marketing/trigger-links, /dashboard/marketing/form-builder, /dashboard/payments/proposals, /dashboard/payments/new, /dashboard/transactions, /dashboard/reports, /dashboard/settings, /dashboard/settings/branding, /dashboard/settings/branding#social-networks, /dashboard/settings/integrations, /dashboard/settings/team, /dashboard/settings/notifications, /dashboard/settings/email-templates, /dashboard/settings/calendar, /dashboard/settings/calendar?tab=notifications, /dashboard/help
+  Examples: [Open Branding Settings](/dashboard/settings/branding) [Manage Social Networks](/dashboard/settings/branding#social-networks) [View Proposals](/dashboard/payments/proposals) [Go to Reports](/dashboard/reports) [Manage Contacts](/dashboard/contacts) [View Transactions](/dashboard/transactions) [Open Calendar](/dashboard/calendar) [Open Integrations](/dashboard/settings/integrations) [Marketing analytics](/dashboard/marketing/analytics) [Email Templates](/dashboard/marketing/email/templates) [Email Campaigns](/dashboard/marketing/email/campaigns) [Email Automations](/dashboard/marketing/email/automations) [Audiences](/dashboard/marketing/email/audiences) [Trigger links](/dashboard/marketing/trigger-links) [Lead Capture Forms](/dashboard/marketing/form-builder) [Media](/dashboard/media) [Listing photos](/dashboard/listing/images) [Notifications](/dashboard/settings/notifications) [Plans & Billing](/dashboard/directory-billing) [Verified & Sponsored](/dashboard/listing/directory)
+- Only link to real dashboard paths. Valid paths: /dashboard, /dashboard/calendar, /dashboard/contacts, /dashboard/conversations, /dashboard/leads, /dashboard/media, /dashboard/listing, /dashboard/listing/images, /dashboard/listing/analytics, /dashboard/listing/reviews, /dashboard/listing/directory, /dashboard/marketing/analytics, /dashboard/marketing/email/templates, /dashboard/marketing/email/campaigns, /dashboard/marketing/email/automations, /dashboard/marketing/email/audiences, /dashboard/marketing/email/preferences, /dashboard/marketing/workflows, /dashboard/marketing/trigger-links, /dashboard/marketing/form-builder, /dashboard/payments/proposals, /dashboard/payments/new, /dashboard/transactions, /dashboard/reports, /dashboard/settings, /dashboard/settings/branding, /dashboard/settings/branding#social-networks, /dashboard/settings/integrations, /dashboard/settings/team, /dashboard/settings/notifications, /dashboard/settings/calendar, /dashboard/settings/calendar?tab=notifications, /dashboard/directory-billing, /dashboard/help
 - Place the link on its own line at the end of the relevant sentence or step, not inline mid-sentence
 
 === TONE ===
