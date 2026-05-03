@@ -112,16 +112,33 @@ export function DirectoryPlansAdminPanel() {
   });
   const [togglingVisibility, setTogglingVisibility] = useState<string | null>(null);
 
+  // ── Addon pricing (global, DB-driven) ─────────────────────────────────────
+  const [addonPrices, setAddonPrices] = useState({
+    verified_cents:  1900,
+    sponsored_cents: 9900,
+    concierge_cents: 49900,
+  });
+  const [addonPriceInputs, setAddonPriceInputs] = useState({
+    verified:  '19',
+    sponsored: '99',
+    concierge: '499',
+  });
+  const [addonPriceSaving, setAddonPriceSaving] = useState(false);
+  const [addonPriceMsg, setAddonPriceMsg] = useState('');
+
   const load = useCallback(async () => {
     setLoading(true);
     setErr('');
     try {
-      const res = await fetch('/api/admin/directory-plans');
-      if (!res.ok) {
+      const [plansRes, pricesRes] = await Promise.all([
+        fetch('/api/admin/directory-plans'),
+        fetch('/api/admin/addon-prices'),
+      ]);
+      if (!plansRes.ok) {
         setErr('Could not load plans');
         return;
       }
-      const d = (await res.json()) as {
+      const d = (await plansRes.json()) as {
         plans?: PlanRow[];
         features?: FeatureDef[];
         platformFortisMerchantIdConfigured?: boolean;
@@ -130,9 +147,24 @@ export function DirectoryPlansAdminPanel() {
       setPlans(loadedPlans);
       setFeatures(d.features || []);
       setPlatformFortisMerchantIdConfigured(d.platformFortisMerchantIdConfigured === true);
-      // Detect missing migration 093 — trial columns absent means they come back as undefined.
       if (loadedPlans.length > 0 && loadedPlans[0].trial_period_unit === undefined) {
         setTrialMigrationMissing(true);
+      }
+      if (pricesRes.ok) {
+        const prices = (await pricesRes.json()) as {
+          verified_cents?: number;
+          sponsored_cents?: number;
+          concierge_cents?: number;
+        };
+        const v  = prices.verified_cents  ?? 1900;
+        const s  = prices.sponsored_cents ?? 9900;
+        const c  = prices.concierge_cents ?? 49900;
+        setAddonPrices({ verified_cents: v, sponsored_cents: s, concierge_cents: c });
+        setAddonPriceInputs({
+          verified:  String(v / 100),
+          sponsored: String(s / 100),
+          concierge: String(c / 100),
+        });
       }
     } finally {
       setLoading(false);
@@ -367,6 +399,35 @@ export function DirectoryPlansAdminPanel() {
     }
   }
 
+  async function saveAddonPrices() {
+    setAddonPriceSaving(true);
+    setAddonPriceMsg('');
+    try {
+      const body = {
+        verified_cents:  Math.round(parseFloat(addonPriceInputs.verified  || '0') * 100),
+        sponsored_cents: Math.round(parseFloat(addonPriceInputs.sponsored || '0') * 100),
+        concierge_cents: Math.round(parseFloat(addonPriceInputs.concierge || '0') * 100),
+      };
+      if (Object.values(body).some((v) => isNaN(v) || v < 0)) {
+        setAddonPriceMsg('All prices must be valid positive numbers.');
+        return;
+      }
+      const res = await fetch('/api/admin/addon-prices', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = (await res.json()) as { ok?: boolean; prices?: typeof addonPrices; error?: string };
+      if (!res.ok) { setAddonPriceMsg(data.error || 'Save failed'); return; }
+      if (data.prices) setAddonPrices(data.prices);
+      setAddonPriceMsg('Prices saved — new signups and plan changes will use these amounts.');
+    } catch {
+      setAddonPriceMsg('Network error, please try again.');
+    } finally {
+      setAddonPriceSaving(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center py-20 text-gray-400">
@@ -391,6 +452,64 @@ export function DirectoryPlansAdminPanel() {
             your StoryVenue merchant unless a plan specifies its own id.
           </p>
         ) : null}
+
+        {/* ── Addon Pricing ── */}
+        <div className="mt-6 rounded-xl border border-gray-200 bg-white p-5 max-w-2xl">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-sm font-semibold text-gray-900">Add-on pricing</span>
+            <span className="rounded-full bg-blue-50 border border-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">Global</span>
+          </div>
+          <p className="text-xs text-gray-500 mb-4">
+            Changes take effect immediately for all new checkouts and plan changes.
+            Existing subscribers keep their current billed amount until they upgrade, downgrade, or resubscribe.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {(
+              [
+                { key: 'verified',  label: 'Verified Listing',  field: 'verified'  },
+                { key: 'sponsored', label: 'Sponsored Listing', field: 'sponsored' },
+                { key: 'concierge', label: 'Venue Concierge',   field: 'concierge' },
+              ] as { key: string; label: string; field: 'verified' | 'sponsored' | 'concierge' }[]
+            ).map(({ label, field }) => (
+              <div key={field}>
+                <label className="block text-xs font-medium text-gray-700 mb-1">{label}</label>
+                <div className="flex items-center rounded-lg border border-gray-200 bg-gray-50 overflow-hidden focus-within:ring-1 focus-within:ring-gray-400">
+                  <span className="pl-3 pr-1 text-sm text-gray-500 select-none">$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={addonPriceInputs[field]}
+                    onChange={(e) =>
+                      setAddonPriceInputs((s) => ({ ...s, [field]: e.target.value }))
+                    }
+                    className="flex-1 bg-transparent py-2 pr-3 text-sm text-gray-900 focus:outline-none"
+                    placeholder="0"
+                  />
+                  <span className="pr-3 text-xs text-gray-400 select-none">/mo</span>
+                </div>
+                <p className="mt-1 text-[10px] text-gray-400">
+                  Currently saved: ${(addonPrices[`${field}_cents` as keyof typeof addonPrices] / 100).toFixed(2)}/mo
+                </p>
+              </div>
+            ))}
+          </div>
+          {addonPriceMsg && (
+            <p className={`mt-3 text-xs rounded px-2 py-1 ${addonPriceMsg.includes('saved') ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+              {addonPriceMsg}
+            </p>
+          )}
+          <button
+            type="button"
+            disabled={addonPriceSaving}
+            onClick={() => void saveAddonPrices()}
+            className="mt-4 inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
+            style={{ backgroundColor: BRAND }}
+          >
+            {addonPriceSaving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+            Save addon prices
+          </button>
+        </div>
         {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
         {trialMigrationMissing && (
           <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 max-w-3xl">

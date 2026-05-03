@@ -8,9 +8,11 @@ import {
 } from 'lucide-react';
 import { directoryBadgeLabel } from '@/lib/directory-badges';
 
-// ── Pricing constants (single source of truth for the page) ───────────────
-const VERIFIED_PRICE_MONTHLY = 19;
-const SPONSORED_PRICE_MONTHLY = 99;
+// Prices are loaded dynamically from the billing summary so admin changes
+// propagate here without a code deploy. These fallbacks are used only during
+// the initial render before the API responds.
+const verifiedPriceMonthly_FALLBACK  = 19;
+const sponsoredPriceMonthly_FALLBACK = 99;
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -77,13 +79,26 @@ export default function ListingDirectoryStatusPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState<'verified' | 'sponsored' | null>(null);
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
+  const [verifiedPriceMonthly,  setVerifiedPriceMonthly]  = useState(verifiedPriceMonthly_FALLBACK);
+  const [sponsoredPriceMonthly, setSponsoredPriceMonthly] = useState(sponsoredPriceMonthly_FALLBACK);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/listing/directory-status', { cache: 'no-store' });
-      if (!res.ok) throw new Error('Could not load status');
-      setData((await res.json()) as StatusPayload);
+      const [statusRes, pricesRes] = await Promise.all([
+        fetch('/api/listing/directory-status', { cache: 'no-store' }),
+        fetch('/api/admin/addon-prices').catch(() => null),
+      ]);
+      if (!statusRes.ok) throw new Error('Could not load status');
+      setData((await statusRes.json()) as StatusPayload);
+      if (pricesRes?.ok) {
+        const prices = (await pricesRes.json()) as {
+          verified_cents?: number;
+          sponsored_cents?: number;
+        };
+        if (prices.verified_cents)  setVerifiedPriceMonthly(Math.round(prices.verified_cents / 100));
+        if (prices.sponsored_cents) setSponsoredPriceMonthly(Math.round(prices.sponsored_cents / 100));
+      }
     } catch (e) {
       setToast({ kind: 'error', msg: e instanceof Error ? e.message : 'Load failed' });
     } finally {
@@ -146,8 +161,8 @@ export default function ListingDirectoryStatusPage() {
         setToast({
           kind: 'success',
           msg: kind === 'verified'
-            ? 'Verified Listing add-on subscribed — your monthly bill includes $19/mo. Our team will review and activate the badge within 1–2 business days.'
-            : 'Sponsored Listing add-on subscribed — your monthly bill includes $99/mo. Our team will review and activate placement within 1–2 business days.',
+            ? `Verified Listing add-on subscribed — your monthly bill includes $${verifiedPriceMonthly}/mo. Our team will review and activate the badge within 1–2 business days.`
+            : `Sponsored Listing add-on subscribed — your monthly bill includes $${sponsoredPriceMonthly}/mo. Our team will review and activate placement within 1–2 business days.`,
         });
       }
       await load();
@@ -293,7 +308,7 @@ export default function ListingDirectoryStatusPage() {
               </div>
             ) : (
               <>
-                <p className="text-2xl font-bold text-gray-900">${VERIFIED_PRICE_MONTHLY}<span className="text-sm font-normal text-gray-500">/mo</span></p>
+                <p className="text-2xl font-bold text-gray-900">${verifiedPriceMonthly}<span className="text-sm font-normal text-gray-500">/mo</span></p>
                 <p className="mt-0.5 text-[11px] text-gray-400">Billed monthly · cancel anytime</p>
               </>
             )}
@@ -322,7 +337,7 @@ export default function ListingDirectoryStatusPage() {
             <StatusPill status={vs} />
             {verifiedSubscribed && !verifiedIncluded ? (
               <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700">
-                Subscribed · ${VERIFIED_PRICE_MONTHLY}/mo
+                Subscribed · ${verifiedPriceMonthly}/mo
               </span>
             ) : null}
           </div>
@@ -349,7 +364,7 @@ export default function ListingDirectoryStatusPage() {
               ) : (
                 <div className="flex items-center gap-3">
                   <div className="text-right">
-                    <p className="text-xs font-semibold text-gray-900">${VERIFIED_PRICE_MONTHLY}/month</p>
+                    <p className="text-xs font-semibold text-gray-900">${verifiedPriceMonthly}/month</p>
                     <p className="text-[11px] text-gray-400">Price may change with notice</p>
                   </div>
                   <button
@@ -363,7 +378,7 @@ export default function ListingDirectoryStatusPage() {
                     ) : (
                       <BadgeCheck size={13} />
                     )}
-                    Apply &amp; subscribe — ${VERIFIED_PRICE_MONTHLY}/mo
+                    Apply &amp; subscribe — ${verifiedPriceMonthly}/mo
                   </button>
                 </div>
               )
@@ -408,7 +423,7 @@ export default function ListingDirectoryStatusPage() {
               </div>
             ) : (
               <>
-                <p className="text-2xl font-bold text-gray-900">${SPONSORED_PRICE_MONTHLY}<span className="text-sm font-normal text-gray-500">/mo</span></p>
+                <p className="text-2xl font-bold text-gray-900">${sponsoredPriceMonthly}<span className="text-sm font-normal text-gray-500">/mo</span></p>
                 <p className="mt-0.5 text-[11px] text-gray-400">Billed monthly · cancel anytime</p>
               </>
             )}
@@ -437,7 +452,7 @@ export default function ListingDirectoryStatusPage() {
             <StatusPill status={ss} />
             {sponsoredSubscribed && !sponsoredIncluded ? (
               <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700">
-                Subscribed · ${SPONSORED_PRICE_MONTHLY}/mo
+                Subscribed · ${sponsoredPriceMonthly}/mo
               </span>
             ) : null}
           </div>
@@ -464,7 +479,7 @@ export default function ListingDirectoryStatusPage() {
               ) : (
                 <div className="flex items-center gap-3">
                   <div className="text-right">
-                    <p className="text-xs font-semibold text-gray-900">${SPONSORED_PRICE_MONTHLY}/month</p>
+                    <p className="text-xs font-semibold text-gray-900">${sponsoredPriceMonthly}/month</p>
                     <p className="text-[11px] text-gray-400">Price may change with notice</p>
                   </div>
                   <button
@@ -478,7 +493,7 @@ export default function ListingDirectoryStatusPage() {
                     ) : (
                       <Megaphone size={13} />
                     )}
-                    Apply &amp; subscribe — ${SPONSORED_PRICE_MONTHLY}/mo
+                    Apply &amp; subscribe — ${sponsoredPriceMonthly}/mo
                   </button>
                 </div>
               )
@@ -506,7 +521,7 @@ export default function ListingDirectoryStatusPage() {
             <p className="font-heading text-base text-white">Get both included in your plan</p>
             <p className="mt-1 text-sm text-gray-400">
               Upgrade to our highest-tier plan and Verified + Sponsored are included
-              at no extra charge — saving you ${VERIFIED_PRICE_MONTHLY + SPONSORED_PRICE_MONTHLY}/month.
+              at no extra charge — saving you ${verifiedPriceMonthly + sponsoredPriceMonthly}/month.
             </p>
           </div>
           <Link

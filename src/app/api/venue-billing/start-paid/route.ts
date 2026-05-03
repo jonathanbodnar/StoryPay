@@ -8,7 +8,7 @@ import {
 } from '@/lib/platform-directory-billing';
 import { createCheckoutSession } from '@/lib/lunarpay';
 import { computeMonthlyTotalCents } from '@/lib/directory-addons';
-import { listDirectoryPlanCatalog } from '@/lib/venue-billing';
+import { listDirectoryPlanCatalog, loadAddonPrices } from '@/lib/venue-billing';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -60,13 +60,17 @@ export async function POST() {
     );
   }
 
-  const allPlans = await listDirectoryPlanCatalog();
+  const [allPlans, addonPrices] = await Promise.all([
+    listDirectoryPlanCatalog(),
+    loadAddonPrices(),
+  ]);
   const currentPlan = allPlans.find((p) => p.id === ctx.venue.directory_plan_id) ?? null;
   const charge = computeMonthlyTotalCents({
     plan: currentPlan,
     allPlans,
     addonVerifiedUser,
     addonSponsoredUser,
+    prices: addonPrices,
   });
   if (charge.total_cents <= 0) {
     return NextResponse.json(

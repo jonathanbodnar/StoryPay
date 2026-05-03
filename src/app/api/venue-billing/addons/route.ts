@@ -15,7 +15,7 @@ import {
 import {
   computeMonthlyTotalCents,
 } from '@/lib/directory-addons';
-import { listDirectoryPlanCatalog } from '@/lib/venue-billing';
+import { listDirectoryPlanCatalog, loadAddonPrices } from '@/lib/venue-billing';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -146,7 +146,10 @@ async function handlePost(req: NextRequest) {
   const nextSponsored  = typeof body.sponsored  === 'boolean' ? body.sponsored  : prevSponsored;
   const nextConcierge  = typeof body.concierge  === 'boolean' ? body.concierge  : prevConcierge;
 
-  const allPlans = await listDirectoryPlanCatalog();
+  const [allPlans, addonPrices] = await Promise.all([
+    listDirectoryPlanCatalog(),
+    loadAddonPrices(),
+  ]);
   const currentPlan = allPlans.find((p) => p.id === ctx.venue.directory_plan_id) ?? null;
 
   const prevCharge = computeMonthlyTotalCents({
@@ -155,6 +158,7 @@ async function handlePost(req: NextRequest) {
     addonVerifiedUser:   prevVerified,
     addonSponsoredUser:  prevSponsored,
     addonConciergeUser:  prevConcierge,
+    prices: addonPrices,
   });
   const nextCharge = computeMonthlyTotalCents({
     plan: currentPlan,
@@ -162,6 +166,7 @@ async function handlePost(req: NextRequest) {
     addonVerifiedUser:   nextVerified,
     addonSponsoredUser:  nextSponsored,
     addonConciergeUser:  nextConcierge,
+    prices: addonPrices,
   });
 
   const subId = ctx.venue.directory_subscription_external_id;
@@ -197,7 +202,7 @@ async function handlePost(req: NextRequest) {
   if (!hasActiveSub && nextCharge.total_cents > 0) {
     const secret = requirePlatformLunarPaySecretKey();
     const checkoutData: Record<string, unknown> = {
-      amount: nextCharge.total_cents / 100,
+      amount: nextCharge.total_cents / 100, // total already uses dynamic prices
       description: 'StoryVenue directory — add-ons (monthly)',
       customer_email: ctx.venue.email || undefined,
       customer_name: ctx.venue.name,

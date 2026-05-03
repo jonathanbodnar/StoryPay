@@ -15,12 +15,13 @@
  * Single source of truth so prices and inclusion rules stay in sync.
  */
 
+/**
+ * Hardcoded fallback prices — used when the platform_addon_prices table has
+ * not been seeded or when a DB read fails. The admin can override these at
+ * any time from the super admin panel without a code deploy.
+ */
 export const VERIFIED_PRICE_CENTS   = 1900;  // $19.00 / mo
 export const SPONSORED_PRICE_CENTS  = 9900;  // $99.00 / mo
-/**
- * Venue Concierge: personal + AI forever-follow-up lead concierge.
- * Update this constant to change the global price.
- */
 export const CONCIERGE_PRICE_CENTS  = 49900; // $499.00 / mo
 
 export type AddonKey = 'verified' | 'sponsored' | 'concierge';
@@ -35,6 +36,23 @@ export const ADDON_LABEL: Record<AddonKey, string> = {
   verified:  'Verified Listing',
   sponsored: 'Sponsored Listing',
   concierge: 'Venue Concierge',
+};
+
+/**
+ * Dynamic addon prices loaded from the DB. Pass this into billing helpers so
+ * any admin price change takes effect for all new checkouts without redeploying.
+ */
+export type AddonPrices = {
+  verified_cents:  number;
+  sponsored_cents: number;
+  concierge_cents: number;
+};
+
+/** Fallback used when the DB hasn't been seeded yet. */
+export const DEFAULT_ADDON_PRICES: AddonPrices = {
+  verified_cents:  VERIFIED_PRICE_CENTS,
+  sponsored_cents: SPONSORED_PRICE_CENTS,
+  concierge_cents: CONCIERGE_PRICE_CENTS,
 };
 
 // ── Plan inclusion + availability ──────────────────────────────────────────
@@ -174,8 +192,9 @@ export type ChargeBreakdown = {
  * Total billed monthly for the venue. Add-on prices ONLY apply when the user
  * has opted in AND their plan does not include the addon for free.
  *
- * `addonConciergeUser` is optional (defaults false) so existing callers
- * compile unchanged — they simply won't bill concierge until they're updated.
+ * Pass `prices` (loaded from the DB via `loadAddonPrices()`) to use the
+ * admin-configured amounts. Falls back to the hardcoded constants when omitted
+ * so existing callers compile and behave correctly.
  */
 export function computeMonthlyTotalCents<T extends PlanLike>(opts: {
   plan: T | null;
@@ -183,12 +202,14 @@ export function computeMonthlyTotalCents<T extends PlanLike>(opts: {
   addonVerifiedUser: boolean;
   addonSponsoredUser: boolean;
   addonConciergeUser?: boolean;
+  prices?: AddonPrices;
 }): ChargeBreakdown {
+  const p = opts.prices ?? DEFAULT_ADDON_PRICES;
   const plan_cents = opts.plan?.price_monthly_cents ?? 0;
   const eff = resolveEffectiveAddons(opts);
-  const verified_cents  = !eff.verifiedFromPlan  && eff.verifiedUser  ? VERIFIED_PRICE_CENTS  : 0;
-  const sponsored_cents = !eff.sponsoredFromPlan && eff.sponsoredUser ? SPONSORED_PRICE_CENTS : 0;
-  const concierge_cents = !eff.conciergeFromPlan && eff.conciergeUser ? CONCIERGE_PRICE_CENTS : 0;
+  const verified_cents  = !eff.verifiedFromPlan  && eff.verifiedUser  ? p.verified_cents  : 0;
+  const sponsored_cents = !eff.sponsoredFromPlan && eff.sponsoredUser ? p.sponsored_cents : 0;
+  const concierge_cents = !eff.conciergeFromPlan && eff.conciergeUser ? p.concierge_cents : 0;
   return {
     plan_cents,
     verified_cents,

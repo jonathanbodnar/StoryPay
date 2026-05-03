@@ -8,7 +8,7 @@ import {
 } from '@/lib/platform-directory-billing';
 import { createSubscription, getCheckoutSession } from '@/lib/lunarpay';
 import { computeMonthlyTotalCents } from '@/lib/directory-addons';
-import { listDirectoryPlanCatalog } from '@/lib/venue-billing';
+import { listDirectoryPlanCatalog, loadAddonPrices } from '@/lib/venue-billing';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -84,8 +84,11 @@ export async function POST(req: NextRequest) {
   const addonSponsored = String(meta.addon_sponsored  ?? '0') === '1';
   const addonConcierge = String(meta.addon_concierge  ?? '0') === '1';
 
-  // Compute charge amount
-  const allPlans = await listDirectoryPlanCatalog();
+  // Compute charge amount with dynamic prices
+  const [allPlans, addonPrices] = await Promise.all([
+    listDirectoryPlanCatalog(),
+    loadAddonPrices(),
+  ]);
   const targetPlan = allPlans.find((p) => p.id === planId) ?? null;
   if (!targetPlan) {
     return NextResponse.json({ error: 'Plan not found' }, { status: 400 });
@@ -97,6 +100,7 @@ export async function POST(req: NextRequest) {
     addonVerifiedUser:  addonVerified,
     addonSponsoredUser: addonSponsored,
     addonConciergeUser: addonConcierge,
+    prices: addonPrices,
   });
   if (charge.total_cents <= 0) {
     return NextResponse.json({ error: 'Nothing to bill' }, { status: 400 });

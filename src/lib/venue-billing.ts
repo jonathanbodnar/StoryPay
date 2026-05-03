@@ -24,6 +24,8 @@ import {
   VERIFIED_PRICE_CENTS,
   SPONSORED_PRICE_CENTS,
   CONCIERGE_PRICE_CENTS,
+  DEFAULT_ADDON_PRICES,
+  type AddonPrices,
   type ChargeBreakdown,
   type EffectiveAddons,
 } from './directory-addons';
@@ -54,6 +56,35 @@ export type DirectoryPlanCatalogEntry = {
   /** Short badge label shown on plan cards, e.g. "Recommended". NULL = no badge. */
   highlight_label: string | null;
 };
+
+// ── Dynamic addon price loader ─────────────────────────────────────────────
+
+/**
+ * Load admin-configurable addon prices from the DB.
+ * Falls back to DEFAULT_ADDON_PRICES if the table doesn't exist yet or a
+ * row is missing — ensures zero breakage before migration 097 is applied.
+ *
+ * Export so billing API routes can call it before computing a charge.
+ */
+export async function loadAddonPrices(): Promise<AddonPrices> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('platform_addon_prices')
+      .select('key, price_cents');
+    if (error || !data) return { ...DEFAULT_ADDON_PRICES };
+    const map: Record<string, number> = {};
+    for (const row of data as { key: string; price_cents: number }[]) {
+      map[row.key] = row.price_cents;
+    }
+    return {
+      verified_cents:  map.verified  ?? VERIFIED_PRICE_CENTS,
+      sponsored_cents: map.sponsored ?? SPONSORED_PRICE_CENTS,
+      concierge_cents: map.concierge ?? CONCIERGE_PRICE_CENTS,
+    };
+  } catch {
+    return { ...DEFAULT_ADDON_PRICES };
+  }
+}
 
 export type VenueBillingPaymentMethod = {
   id: string;
@@ -395,6 +426,8 @@ export async function loadVenueBillingSummary(venueId: string): Promise<VenueBil
     }
   }
 
+  const addonPrices = await loadAddonPrices();
+
   const addons = resolveEffectiveAddons({
     plan: current,
     allPlans: plans,
@@ -408,6 +441,7 @@ export async function loadVenueBillingSummary(venueId: string): Promise<VenueBil
     addonVerifiedUser,
     addonSponsoredUser,
     addonConciergeUser,
+    prices: addonPrices,
   });
 
   const plan_addon_inclusion: Record<string, { verified: boolean; sponsored: boolean }> = {};
@@ -452,11 +486,7 @@ export async function loadVenueBillingSummary(venueId: string): Promise<VenueBil
     addons,
     charge,
     plan_addon_inclusion,
-    addon_prices: {
-      verified_cents:  VERIFIED_PRICE_CENTS,
-      sponsored_cents: SPONSORED_PRICE_CENTS,
-      concierge_cents: CONCIERGE_PRICE_CENTS,
-    },
+    addon_prices: addonPrices,
     trial: {
       status: trialStatus,
       started_at: trialState.directory_trial_started_at,

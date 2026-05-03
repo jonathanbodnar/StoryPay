@@ -9,7 +9,7 @@ import {
 } from '@/lib/platform-directory-billing';
 import { createCheckoutSession } from '@/lib/lunarpay';
 import { computeMonthlyTotalCents } from '@/lib/directory-addons';
-import { listDirectoryPlanCatalog } from '@/lib/venue-billing';
+import { listDirectoryPlanCatalog, loadAddonPrices } from '@/lib/venue-billing';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -53,8 +53,11 @@ export async function POST(req: NextRequest) {
   const ctx = await loadVenueDirectoryPlanContext(venueId);
   if (!ctx) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
 
-  // Find plan
-  const allPlans = await listDirectoryPlanCatalog();
+  // Find plan + load dynamic addon prices in parallel
+  const [allPlans, addonPrices] = await Promise.all([
+    listDirectoryPlanCatalog(),
+    loadAddonPrices(),
+  ]);
   const targetPlan = allPlans.find((p) => p.id === planId);
   if (!targetPlan) return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
 
@@ -88,6 +91,7 @@ export async function POST(req: NextRequest) {
     addonVerifiedUser:  effectiveVerified,
     addonSponsoredUser: effectiveSponsored,
     addonConciergeUser: addonConcierge,
+    prices: addonPrices,
   });
 
   // Free plan — no card needed, grant trial and send to dashboard
