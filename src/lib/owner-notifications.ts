@@ -21,6 +21,7 @@ export type OwnerScenario =
   | 'payment_failed'
   | 'high_value_payment'
   | 'proposal_signed'
+  | 'document_viewed'
   | 'subscription_created'
   | 'subscription_cancelled'
   | 'invoice_paid'
@@ -102,11 +103,20 @@ const SCENARIO_META: Record<OwnerScenario, {
   proposal_signed: {
     emailKey: 'email_proposal_signed',
     smsKey:   'sms_proposal_signed',
-    templateType: 'payment_notification',
+    templateType: 'proposal_signed',
     defaultSmsTemplate: '✍️ Proposal signed by {{customer_name}} — {{organization}}',
-    defaultEmailSubject: 'Proposal signed by {{customer_name}}',
+    defaultEmailSubject: '{{customer_name}} signed a proposal — {{organization}}',
     defaultEmailHeading: 'Proposal Signed',
-    defaultEmailBody:    '{{customer_name}} just signed a proposal with {{organization}}.\n\nAmount: {{amount}}',
+    defaultEmailBody:    '{{customer_name}} just signed a proposal with {{organization}}.\n\nAmount: {{amount}}\n\nReview the signed proposal and reach out to confirm next steps.',
+  },
+  document_viewed: {
+    emailKey: 'email_document_viewed',
+    smsKey:   'sms_payment_received', // reuse closest SMS toggle
+    templateType: 'document_viewed',
+    defaultSmsTemplate: '👀 {{customer_name}} just viewed their document — {{organization}}',
+    defaultEmailSubject: '{{customer_name}} just viewed their document — {{organization}}',
+    defaultEmailHeading: 'Document Viewed',
+    defaultEmailBody:    'Good news — {{customer_name}} just opened their proposal or invoice from {{organization}}.\n\nNow is a great time to follow up if they have any questions.',
   },
   subscription_created: {
     emailKey: 'email_subscription_created',

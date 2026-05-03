@@ -104,6 +104,30 @@ export const DEFAULT_TEMPLATES: Record<string, {
       button_text: 'View & Pay Now',
     },
   },
+  document_viewed: {
+    label: 'Proposal / Invoice Viewed',
+    description: 'Notification sent to you when a customer opens their proposal or invoice',
+    icon: 'Eye',
+    variables: ['{{organization}}', '{{customer_name}}', '{{customer_email}}'],
+    defaults: {
+      subject: '{{customer_name}} just viewed their document — {{organization}}',
+      heading: 'Document Viewed',
+      body: 'Good news — {{customer_name}} just opened their proposal or invoice from {{organization}}.\n\nNow is a great time to follow up if they have any questions.',
+      button_text: 'View in Dashboard',
+    },
+  },
+  proposal_signed: {
+    label: 'Proposal Signed',
+    description: 'Notification sent to you when a customer signs a proposal',
+    icon: 'FileSignature',
+    variables: ['{{organization}}', '{{customer_name}}', '{{amount}}'],
+    defaults: {
+      subject: '{{customer_name}} signed a proposal — {{organization}}',
+      heading: 'Proposal Signed',
+      body: '{{customer_name}} just signed a proposal with {{organization}}.\n\nAmount: {{amount}}\n\nReview the signed proposal and reach out to confirm next steps.',
+      button_text: 'View Proposal',
+    },
+  },
 };
 
 async function getVenueId() {

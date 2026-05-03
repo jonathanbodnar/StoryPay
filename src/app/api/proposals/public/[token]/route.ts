@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { notifyOwner } from '@/lib/owner-notifications';
 
 export async function GET(
   _request: Request,
@@ -24,6 +25,18 @@ export async function GET(
       .eq('id', proposal.id);
     proposal.status = 'opened';
     proposal.opened_at = new Date().toISOString();
+
+    // Notify the venue owner once, on first open.
+    if (proposal.venue_id) {
+      void notifyOwner({
+        venueId: proposal.venue_id as string,
+        scenario: 'document_viewed',
+        vars: {
+          customer_name:  String(proposal.customer_name || 'Your customer'),
+          customer_email: String(proposal.customer_email || ''),
+        },
+      });
+    }
   }
 
   const venue = proposal.venues as { name: string; logo_url: string | null; service_fee_rate: number; brand_logo_url?: string; brand_tagline?: string; brand_email?: string; brand_phone?: string; brand_website?: string; brand_color?: string; brand_address?: string; brand_city?: string; brand_state?: string; brand_zip?: string; brand_footer_note?: string } | null;

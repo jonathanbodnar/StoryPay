@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import {
   Bell, CreditCard, FileText, Loader2, Save, CheckCircle2, Eye, Send,
-  X, PenLine, RefreshCw, XCircle, AlertTriangle, ChevronRight,
+  X, PenLine, RefreshCw, XCircle, AlertTriangle, ChevronRight, FilePen,
 } from 'lucide-react';
 import type { ReminderOffset } from '@/lib/appointment-reminders';
 import {
@@ -29,6 +29,7 @@ interface EmailTemplate {
 
 const ICON_MAP: Record<string, React.ElementType> = {
   FileText, FileSignature: PenLine, CreditCard, Bell, RefreshCw, XCircle, AlertTriangle,
+  Eye, FilePen,
 };
 
 const INPUT =

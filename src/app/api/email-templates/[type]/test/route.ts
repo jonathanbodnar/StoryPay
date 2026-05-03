@@ -57,6 +57,16 @@ const SAMPLE_VARS: Record<string, Record<string, string>> = {
     due_date:      'June 15, 2026 at 12:00 PM',
     offset_label:  '3 days',
   },
+  document_viewed: {
+    organization:   '{{organization}}',
+    customer_name:  'Jane Smith',
+    customer_email: 'jane@example.com',
+  },
+  proposal_signed: {
+    organization:  '{{organization}}',
+    customer_name: 'Jane Smith',
+    amount:        '$4,500.00',
+  },
 };
 
 export async function POST(

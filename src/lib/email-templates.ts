@@ -80,6 +80,20 @@ const DEFAULTS: Record<string, Omit<EmailTemplateRow, 'type' | 'enabled'>> = {
     button_text: 'View & Pay Now',
     footer:      null,
   },
+  document_viewed: {
+    subject:     '{{customer_name}} just viewed their document — {{organization}}',
+    heading:     'Document Viewed',
+    body:        'Good news — {{customer_name}} just opened their proposal or invoice from {{organization}}.\n\nNow is a great time to follow up if they have any questions.',
+    button_text: 'View in Dashboard',
+    footer:      null,
+  },
+  proposal_signed: {
+    subject:     '{{customer_name}} signed a proposal — {{organization}}',
+    heading:     'Proposal Signed',
+    body:        '{{customer_name}} just signed a proposal with {{organization}}.\n\nAmount: {{amount}}\n\nReview the signed proposal and reach out to confirm next steps.',
+    button_text: 'View Proposal',
+    footer:      null,
+  },
 };
 
 // ─── Loader ───────────────────────────────────────────────────────────────────
