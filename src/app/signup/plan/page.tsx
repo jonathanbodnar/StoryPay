@@ -2,9 +2,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { supabaseAdmin } from '@/lib/supabase';
 import { listDirectoryPlanCatalog } from '@/lib/venue-billing';
-import { computeMonthlyTotalCents } from '@/lib/directory-addons';
 import { PlanPickerClient } from './PlanPickerClient';
-import type { DirectoryPlanCatalogEntry } from '@/lib/venue-billing';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,7 +34,7 @@ export default async function SignupPlanPage() {
   // picker we want the highest-tier paid plan first (so prospects see the
   // strongest offer up top), then descending paid plans, with the free
   // plan(s) pushed to the end.
-  const catalog = await listDirectoryPlanCatalog();
+  const catalog = await listDirectoryPlanCatalog({ publicOnly: true });
   const paid = catalog
     .filter((p) => (p.price_monthly_cents ?? 0) > 0)
     .sort(
@@ -46,7 +44,6 @@ export default async function SignupPlanPage() {
   const plans = [...paid, ...free];
 
   // Compute per-plan addon inclusion flags so the picker can display correctly
-  const allPlans = plans;
   const planAddonInclusion: Record<string, { verified: boolean; sponsored: boolean }> = {};
   for (const p of plans) {
     const ff = p.feature_flags as Record<string, unknown>;
@@ -62,7 +59,7 @@ export default async function SignupPlanPage() {
   return (
     <PlanPickerClient
       plans={plans}
-      allPlans={allPlans}
+      allPlans={plans}
       planAddonInclusion={planAddonInclusion}
       venueName={venueName}
       ownerFirstName={ownerFirstName}

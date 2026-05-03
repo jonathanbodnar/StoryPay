@@ -9,6 +9,6 @@ export async function GET() {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const plans = await listDirectoryPlanCatalog();
+  const plans = await listDirectoryPlanCatalog({ publicOnly: true });
   return NextResponse.json({ plans });
 }

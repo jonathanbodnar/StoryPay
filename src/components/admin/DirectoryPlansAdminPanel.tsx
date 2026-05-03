@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, Plus, Trash2, Pencil, Check, ChevronDown, Copy } from 'lucide-react';
+import { Loader2, Plus, Trash2, Pencil, Check, ChevronDown, Copy, Eye, EyeOff } from 'lucide-react';
 import {
   DIRECTORY_NAV_GROUP_LABELS,
   DIRECTORY_NAV_REGISTRY,
@@ -30,6 +30,7 @@ type PlanRow = {
   description: string | null;
   sort_order: number;
   is_default: boolean;
+  is_public: boolean;
   price_monthly_cents: number | null;
   stripe_price_id: string | null;
   fortis_merchant_id?: string | null;
@@ -101,9 +102,11 @@ export function DirectoryPlansAdminPanel() {
     price_monthly_cents: '' as string,
     fortis_merchant_id: '',
     is_default: false,
+    is_public: true,
     trial_period_value: '0' as string,
     trial_period_unit: 'none' as TrialUnit,
   });
+  const [togglingVisibility, setTogglingVisibility] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -236,6 +239,7 @@ export function DirectoryPlansAdminPanel() {
       price_monthly_cents: p.price_monthly_cents != null ? (p.price_monthly_cents / 100).toFixed(2) : '',
       fortis_merchant_id: p.fortis_merchant_id?.trim() || '',
       is_default: p.is_default,
+      is_public: p.is_public !== false, // default true if column absent
       trial_period_value: typeof p.trial_period_value === 'number' && p.trial_period_value > 0
         ? String(p.trial_period_value)
         : '0',
@@ -265,6 +269,7 @@ export function DirectoryPlansAdminPanel() {
         description: editMeta.description.trim() || null,
         sort_order: editMeta.sort_order,
         is_default: editMeta.is_default,
+        is_public: editMeta.is_public,
         price_monthly_cents: editMeta.price_monthly_cents
           ? Math.round(parseFloat(editMeta.price_monthly_cents) * 100)
           : null,
@@ -295,6 +300,25 @@ export function DirectoryPlansAdminPanel() {
     const res = await fetch(`/api/admin/directory-plans/${id}`, { method: 'DELETE' });
     if (!res.ok) alert('Delete failed');
     await load();
+  }
+
+  async function toggleVisibility(p: PlanRow) {
+    setTogglingVisibility(p.id);
+    try {
+      const res = await fetch(`/api/admin/directory-plans/${p.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_public: !p.is_public }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        alert(j.error || 'Could not update visibility');
+        return;
+      }
+      await load();
+    } finally {
+      setTogglingVisibility(null);
+    }
   }
 
   async function duplicatePlan(p: PlanRow) {
@@ -690,6 +714,15 @@ NOTIFY pgrst, 'reload schema';`}</pre>
                       />
                       Default
                     </label>
+                    <label className="flex items-center gap-1.5 text-xs cursor-pointer rounded-lg border border-gray-200 px-2 py-1">
+                      <input
+                        type="checkbox"
+                        checked={editMeta.is_public}
+                        onChange={(e) => setEditMeta({ ...editMeta, is_public: e.target.checked })}
+                      />
+                      <Eye size={12} className="text-gray-500" />
+                      <span>Public (visible on plan picker &amp; upgrade modals)</span>
+                    </label>
                   </div>
                   {/* Trial period editor — applies to NEW signups only */}
                   <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
@@ -835,7 +868,14 @@ NOTIFY pgrst, 'reload schema';`}</pre>
               ) : (
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
-                    <p className="font-medium text-gray-900">{p.name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-gray-900">{p.name}</p>
+                      {p.is_public === false && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                          <EyeOff size={9} /> Hidden
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs font-mono text-gray-400">{p.slug}</p>
                     <p className="text-[11px] text-gray-500 mt-0.5">
                       Fortis:{' '}
@@ -859,6 +899,22 @@ NOTIFY pgrst, 'reload schema';`}</pre>
                     </div>
                   </div>
                   <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => void toggleVisibility(p)}
+                      disabled={togglingVisibility === p.id}
+                      className={`p-2 rounded-lg border border-gray-200 disabled:opacity-40 transition-colors ${
+                        p.is_public === false
+                          ? 'text-amber-600 bg-amber-50 hover:bg-amber-100'
+                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                      }`}
+                      title={p.is_public === false ? 'Make public (show on plan picker)' : 'Hide from public plan picker'}
+                      aria-label={p.is_public === false ? 'Make public' : 'Hide plan'}
+                    >
+                      {togglingVisibility === p.id
+                        ? <Loader2 size={16} className="animate-spin" />
+                        : p.is_public === false ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
                     <button
                       type="button"
                       onClick={() => startEdit(p)}

@@ -135,32 +135,80 @@ function mapPlanRow(row: Record<string, unknown>): DirectoryPlanCatalogEntry {
   };
 }
 
-export async function listDirectoryPlanCatalog(): Promise<DirectoryPlanCatalogEntry[]> {
+export async function listDirectoryPlanCatalog(opts?: {
+  /**
+   * When true, only plans with is_public = true are returned.
+   * Falls back gracefully if migration 094 hasn't been applied yet
+   * (in that case all plans are treated as public).
+   * Defaults to false to avoid breaking internal billing-math callers
+   * that need the full catalog regardless of visibility.
+   */
+  publicOnly?: boolean;
+  /**
+   * If provided, this plan ID is always included in the result even if
+   * it would otherwise be filtered out (e.g. it's a hidden legacy plan
+   * that a venue is currently subscribed to — we still need to show it).
+   */
+  alwaysIncludeId?: string;
+}): Promise<DirectoryPlanCatalogEntry[]> {
+  const { publicOnly = false, alwaysIncludeId } = opts ?? {};
+
   const baseColumns =
     'id, name, slug, description, price_monthly_cents, is_default, sort_order, feature_flags';
-  const fullColumns = `${baseColumns}, trial_period_value, trial_period_unit`;
+  const fullColumns = `${baseColumns}, trial_period_value, trial_period_unit, is_public`;
 
   let rows: Record<string, unknown>[] | null = null;
-  const full = await supabaseAdmin
-    .from('directory_plans')
-    .select(fullColumns)
-    .order('price_monthly_cents', { ascending: true, nullsFirst: true })
-    .order('sort_order', { ascending: true })
-    .order('name', { ascending: true });
-  if (full.error && /trial_period_(value|unit)/.test(full.error.message)) {
-    // Pre-migration fallback: re-query without trial columns so the page still loads.
-    const slim = await supabaseAdmin
+
+  const buildQuery = (cols: string) => {
+    let q = supabaseAdmin
       .from('directory_plans')
-      .select(baseColumns)
+      .select(cols)
       .order('price_monthly_cents', { ascending: true, nullsFirst: true })
       .order('sort_order', { ascending: true })
       .order('name', { ascending: true });
+    // Only filter at the DB level when migration 094 is confirmed applied
+    // (we detect that below). For now always fetch all and post-filter.
+    return q;
+  };
+
+  const full = await buildQuery(fullColumns);
+
+  if (full.error) {
+    // Pre-migration fallback: drop unknown columns and re-query
+    const slimColumns =
+      /trial_period_(value|unit)/.test(full.error.message)
+        ? baseColumns
+        : `${baseColumns}, trial_period_value, trial_period_unit`;
+    const slim = await buildQuery(slimColumns);
     rows = (slim.data ?? null) as unknown as Record<string, unknown>[] | null;
   } else {
     rows = (full.data ?? null) as unknown as Record<string, unknown>[] | null;
   }
 
-  return (rows ?? []).map((r) => mapPlanRow(r));
+  const allMapped = (rows ?? []).map((r) => mapPlanRow(r));
+
+  // Post-filter by is_public. If the column didn't come back (pre-094) every
+  // plan is treated as public so the picker still shows everything.
+  if (!publicOnly) return allMapped;
+
+  const columnExists = rows && rows.length > 0 && 'is_public' in (rows[0] as object);
+  if (!columnExists) {
+    // Migration 094 not yet applied — treat all plans as public
+    return allMapped;
+  }
+
+  const filtered = allMapped.filter((p) => {
+    const raw = (rows!.find((r) => String(r.id) === p.id) ?? {}) as Record<string, unknown>;
+    return raw.is_public !== false; // null/undefined treated as public
+  });
+
+  // Always include the alwaysIncludeId plan even if hidden
+  if (alwaysIncludeId && !filtered.find((p) => p.id === alwaysIncludeId)) {
+    const pinned = allMapped.find((p) => p.id === alwaysIncludeId);
+    if (pinned) filtered.push(pinned);
+  }
+
+  return filtered;
 }
 
 function asRecord(v: unknown): Record<string, unknown> | null {
@@ -259,7 +307,12 @@ async function loadBillingHistory(venueId: string): Promise<VenueBillingHistoryE
 
 export async function loadVenueBillingSummary(venueId: string): Promise<VenueBillingSummary> {
   const ctx = await loadVenueDirectoryPlanContext(venueId);
-  const plans = await listDirectoryPlanCatalog();
+  // Only show public plans on the billing page. If the venue is already on a
+  // hidden/legacy plan we still pin it in the list so their card renders.
+  const plans = await listDirectoryPlanCatalog({
+    publicOnly:       true,
+    alwaysIncludeId:  ctx?.venue?.directory_plan_id ?? undefined,
+  });
   const history = await loadBillingHistory(venueId);
   const secret = getPlatformLunarPaySecretKey();
 

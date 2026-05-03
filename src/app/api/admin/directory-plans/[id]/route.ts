@@ -43,6 +43,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       await supabaseAdmin.from('directory_plans').update({ is_default: false }).neq('id', id);
     }
   }
+  if (typeof body.is_public === 'boolean') {
+    updates.is_public = body.is_public;
+  }
   if (body.price_monthly_cents !== undefined) {
     updates.price_monthly_cents =
       body.price_monthly_cents === null
