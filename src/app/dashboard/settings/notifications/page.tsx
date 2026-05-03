@@ -510,11 +510,11 @@ export default function NotificationsPage() {
               {/* ── Payment reminder timing (only shown for payment_reminder) ── */}
               {current.type === 'payment_reminder' && (
                 <div className="rounded-2xl border border-gray-200 bg-gray-50/40 overflow-hidden">
-                  <div className="flex items-center gap-2.5 px-5 py-4 border-b border-gray-200">
+                    <div className="flex items-center gap-2.5 px-5 py-4 border-b border-gray-200">
                     <CreditCard size={14} className="text-gray-400" />
                     <div className="flex-1">
                       <p className="text-sm font-semibold text-gray-900">Reminder schedule</p>
-                      <p className="text-xs text-gray-400 mt-0.5">Set when to send reminders before each installment due date. Up to 3 reminders.</p>
+                      <p className="text-xs text-gray-400 mt-0.5">Set how long after each installment due date to send overdue reminders. Up to 3 reminders.</p>
                     </div>
                   </div>
                   <div className="px-5 py-4 space-y-4">
@@ -529,7 +529,7 @@ export default function NotificationsPage() {
                           <Toggle checked={payEnabled} onChange={setPayEnabled} />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-gray-500 mb-1.5">Number of reminders (1–3)</label>
+                          <label className="block text-xs font-medium text-gray-500 mb-1.5">Number of overdue reminders (1–3)</label>
                           <select
                             value={payCount}
                             onChange={(e) => setPayCount(Number(e.target.value))}
@@ -538,7 +538,7 @@ export default function NotificationsPage() {
                             {[1, 2, 3].map((n) => <option key={n} value={n}>{n}</option>)}
                           </select>
                         </div>
-                        <p className="text-xs text-gray-400">Each reminder fires this long before the due time (noon local on the due date).</p>
+                        <p className="text-xs text-gray-400">Each reminder fires this long after the due date if payment has not been received.</p>
                         <div className="space-y-3">
                           {Array.from({ length: payCount }, (_, i) => (
                             <div key={i} className="flex flex-wrap items-center gap-2 text-sm">

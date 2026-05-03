@@ -94,14 +94,14 @@ export const DEFAULT_TEMPLATES: Record<string, {
   },
   payment_reminder: {
     label: 'Payment Reminder',
-    description: 'Reminder sent before each installment due date',
+    description: 'Overdue reminder sent after each installment due date',
     icon: 'Bell',
     variables: ['{{organization}}', '{{customer_name}}', '{{amount}}', '{{due_date}}', '{{offset_label}}'],
     defaults: {
-      subject: 'Payment reminder: {{amount}} due {{due_date}} - {{organization}}',
-      heading: 'Upcoming payment reminder',
-      body: 'Hi {{customer_name}},\n\nThis is a friendly reminder about an upcoming payment to {{organization}}.\n\nAmount due: {{amount}}\nDue: {{due_date}}\n\nReminder sent {{offset_label}} before the due date.',
-      button_text: 'View & Pay',
+      subject: 'Payment overdue: {{amount}} was due {{due_date}} - {{organization}}',
+      heading: 'Payment overdue',
+      body: 'Hi {{customer_name}},\n\nThis is a friendly reminder that a payment to {{organization}} is now overdue.\n\nAmount due: {{amount}}\nOriginal due date: {{due_date}}\n\nPlease complete your payment at your earliest convenience.',
+      button_text: 'View & Pay Now',
     },
   },
 };

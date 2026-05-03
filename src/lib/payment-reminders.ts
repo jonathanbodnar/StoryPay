@@ -4,16 +4,22 @@ import { sendEmail } from '@/lib/email';
 import { resolveVenueTimezone, wallClockToUtc } from '@/lib/venue-timezone';
 import {
   type ReminderOffset,
-  computeReminderSendAt,
   normalizeReminderOffsets,
 } from '@/lib/appointment-reminders';
 import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
 
+/** Default overdue-reminder offsets: 1 day after, 3 days after, 7 days after. */
 export const DEFAULT_PAYMENT_REMINDER_OFFSETS: ReminderOffset[] = [
-  { d: 3, h: 0, m: 0 },
   { d: 1, h: 0, m: 0 },
-  { d: 0, h: 2, m: 0 },
+  { d: 3, h: 0, m: 0 },
+  { d: 7, h: 0, m: 0 },
 ];
+
+/** send_at = due_at + offset (fires AFTER the due date). */
+function computeReminderSendAfter(dueAt: Date, o: ReminderOffset): Date {
+  const ms = ((o.d * 24 + o.h) * 60 + o.m) * 60 * 1000;
+  return new Date(dueAt.getTime() + ms);
+}
 
 const MAX_PAYMENT_REMINDER_SLOTS = 3;
 
@@ -118,9 +124,10 @@ export async function syncPaymentRemindersForProposal(proposalId: string): Promi
     if (dueAt.getTime() <= now) return;
 
     offsets.forEach((o, rIdx) => {
-      const sendAt = computeReminderSendAt(dueAt, o);
+      const sendAt = computeReminderSendAfter(dueAt, o);
       if (sendAt.getTime() <= now) return;
-      if (sendAt.getTime() >= dueAt.getTime()) return;
+      // Must be strictly after the due date.
+      if (sendAt.getTime() <= dueAt.getTime()) return;
       rows.push({
         proposal_id: proposalId,
         venue_id: (proposal as { venue_id: string }).venue_id,
@@ -228,6 +235,7 @@ export async function sendPaymentDueReminderEmail(row: {
     customer_name: customerName,
     amount:        amountStr || '$0.00',
     due_date:      when,
+    // offset_label now reflects how long AFTER the due date this reminder fires.
     offset_label:  formatOffsetLabel(o),
   };
 

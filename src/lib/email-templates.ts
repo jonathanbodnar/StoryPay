@@ -74,10 +74,10 @@ const DEFAULTS: Record<string, Omit<EmailTemplateRow, 'type' | 'enabled'>> = {
     footer:      null,
   },
   payment_reminder: {
-    subject:     'Payment reminder: {{amount}} due {{due_date}} — {{organization}}',
-    heading:     'Upcoming payment reminder',
-    body:        'Hi {{customer_name}},\n\nThis is a friendly reminder about an upcoming payment to {{organization}}.\n\nAmount due: {{amount}}\nDue: {{due_date}}\n\nReminder sent {{offset_label}} before the due date.',
-    button_text: 'View & Pay',
+    subject:     'Payment overdue: {{amount}} was due {{due_date}} — {{organization}}',
+    heading:     'Payment overdue',
+    body:        'Hi {{customer_name}},\n\nThis is a friendly reminder that a payment to {{organization}} is now overdue.\n\nAmount due: {{amount}}\nOriginal due date: {{due_date}}\n\nPlease complete your payment at your earliest convenience.',
+    button_text: 'View & Pay Now',
     footer:      null,
   },
 };
