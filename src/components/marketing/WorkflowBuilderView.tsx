@@ -431,7 +431,7 @@ function MergeVarPickerPopover({ anchorRef, boundsRef, onPick, onClose, scopes }
     if (!grouped[v.category]) grouped[v.category] = [];
     grouped[v.category].push(v);
   }
-  const orderedCats = ['contact', 'venue', 'lead', 'appointment', 'proposal', 'invoice', 'subscription', 'marketing', 'system']
+  const orderedCats = ['contact', 'venue', 'lead', 'appointment', 'proposal', 'invoice', 'payment', 'subscription', 'marketing', 'system']
     .filter((c) => grouped[c]?.length);
 
   return (
