@@ -184,9 +184,12 @@ export function PlanPickerClient({ plans, ownerFirstName }: Props) {
                     onClick={() => setSelectedPlanId(plan.id)}
                     className={[
                       'relative flex cursor-pointer flex-col rounded-2xl border bg-white transition-all duration-200',
+                      // Featured: bigger padding, deep shadow, scaled up
+                      // Side: compact padding, natural height (no self-stretch so
+                      // they sit shorter and more square relative to the middle)
                       isFeatured
-                        ? 'p-6 shadow-xl ring-2 ring-gray-900/10 scale-[1.035] z-10'
-                        : 'p-5 shadow-sm self-stretch',
+                        ? 'p-6 shadow-xl ring-2 ring-gray-900/10 scale-[1.04] z-10'
+                        : 'p-4 shadow-sm',
                       badgeLabel || isFeatured ? 'mt-4' : '',
                       isSelected
                         ? 'border-gray-900'
@@ -205,7 +208,7 @@ export function PlanPickerClient({ plans, ownerFirstName }: Props) {
                     )}
 
                     {/* Selection radio */}
-                    <div className="mb-3 flex items-start justify-between">
+                    <div className="mb-2.5 flex items-start justify-between">
                       <div
                         className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
                           isSelected ? 'border-gray-900 bg-gray-900' : 'border-gray-300 bg-white'
@@ -216,38 +219,41 @@ export function PlanPickerClient({ plans, ownerFirstName }: Props) {
                     </div>
 
                     {/* Plan name */}
-                    <div className={`mb-1 font-bold text-gray-900 ${isFeatured ? 'text-lg' : 'text-base'}`}>
+                    <div className={`mb-1 font-bold text-gray-900 ${isFeatured ? 'text-lg' : 'text-sm'}`}>
                       {plan.name}
                     </div>
-                    {plan.description && (
+                    {/* Description only on featured card — keeps side cards compact */}
+                    {isFeatured && plan.description && (
                       <p className="mb-3 text-xs text-gray-500 leading-snug">{plan.description}</p>
                     )}
 
                     {/* Price */}
-                    <div className="mb-1">
+                    <div className={isFeatured ? 'mb-1' : 'mb-0.5'}>
                       {isPaid ? (
                         <div className="flex items-baseline gap-1">
-                          <span className={`font-extrabold text-gray-900 ${isFeatured ? 'text-3xl' : 'text-2xl'}`}>
+                          <span className={`font-extrabold text-gray-900 ${isFeatured ? 'text-3xl' : 'text-xl'}`}>
                             {formatCents(plan.price_monthly_cents!)}
                           </span>
-                          <span className="text-sm text-gray-500">/mo</span>
+                          <span className={`text-gray-500 ${isFeatured ? 'text-sm' : 'text-xs'}`}>/mo</span>
                         </div>
                       ) : (
-                        <span className={`font-extrabold text-gray-900 ${isFeatured ? 'text-3xl' : 'text-2xl'}`}>
+                        <span className={`font-extrabold text-gray-900 ${isFeatured ? 'text-3xl' : 'text-xl'}`}>
                           Free
                         </span>
                       )}
                     </div>
 
                     {isPaid && (
-                      <div className="mb-4 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
-                        <Sparkles size={10} />
+                      <div className={`inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 ${isFeatured ? 'mb-4' : 'mb-2'}`}>
+                        <Sparkles size={9} />
                         14-day free trial
                       </div>
                     )}
 
-                    {/* Feature comparison */}
-                    <div className="mt-2 flex-1 space-y-2.5 border-t border-gray-100 pt-3">
+                    {/* Feature comparison
+                        Side cards: label only (compact / square feel)
+                        Featured card: label + outcome description (full detail) */}
+                    <div className={`border-t border-gray-100 pt-2.5 ${isFeatured ? 'mt-2 space-y-2.5' : 'mt-1.5 space-y-1.5'}`}>
                       {PLAN_FEATURES.map((f) => {
                         const included = planIncludesFeature(
                           plan.feature_flags as Record<string, unknown>,
@@ -256,25 +262,28 @@ export function PlanPickerClient({ plans, ownerFirstName }: Props) {
                         return (
                           <div key={f.key} className="flex items-start gap-2">
                             {included ? (
-                              <Check size={13} className="mt-0.5 shrink-0 text-emerald-500" />
+                              <Check size={12} className="mt-px shrink-0 text-emerald-500" />
                             ) : (
-                              <X size={13} className="mt-0.5 shrink-0 text-red-400" />
+                              <X size={12} className="mt-px shrink-0 text-red-400" />
                             )}
                             <div>
                               <div
-                                className={`text-xs font-medium leading-tight ${
-                                  included ? 'text-gray-800' : 'text-gray-400'
-                                }`}
+                                className={`font-medium leading-tight ${
+                                  isFeatured ? 'text-xs' : 'text-[11px]'
+                                } ${included ? 'text-gray-800' : 'text-gray-400'}`}
                               >
                                 {f.label}
                               </div>
-                              <div
-                                className={`mt-0.5 text-[10px] leading-snug ${
-                                  included ? 'text-gray-500' : 'text-gray-300'
-                                }`}
-                              >
-                                {f.outcome}
-                              </div>
+                              {/* Outcome only on featured card */}
+                              {isFeatured && (
+                                <div
+                                  className={`mt-0.5 text-[10px] leading-snug ${
+                                    included ? 'text-gray-500' : 'text-gray-300'
+                                  }`}
+                                >
+                                  {f.outcome}
+                                </div>
+                              )}
                             </div>
                           </div>
                         );
