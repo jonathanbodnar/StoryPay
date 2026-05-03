@@ -7,6 +7,7 @@ import {
   BadgeCheck,
   Check,
   CheckCircle2,
+  ChevronDown,
   CreditCard,
   Loader2,
   Lock,
@@ -169,6 +170,8 @@ export default function DirectoryBillingPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmPlanId, setConfirmPlanId] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  // '__default__' = auto-expand the current plan; null = all collapsed; plan.id = specific plan open
+  const [expandedPlanId, setExpandedPlanId] = useState<string | null>('__default__');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -516,81 +519,266 @@ export default function DirectoryBillingPage() {
         </div>
       ) : null}
 
-      <section className="rounded-2xl border border-gray-200 bg-white p-6">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-              Current plan
-            </div>
-            <h2 className="mt-1 font-heading text-xl text-gray-900">
-              {currentPlan?.name ?? 'No plan assigned'}
-            </h2>
-            {currentPlan?.description ? (
-              <p className="mt-1 text-sm text-gray-600">{currentPlan.description}</p>
-            ) : null}
-            <div className="mt-2 text-sm text-gray-700">
-              {currentCents > 0 ? (
-                <>
-                  <span className="font-semibold text-gray-900">
-                    {formatCents(currentCents)}
-                  </span>{' '}
-                  / month
-                </>
-              ) : (
-                <>No monthly charge.</>
-              )}
-            </div>
-          </div>
-          <div className="flex flex-col gap-1 sm:items-end text-xs">
-            <span
-              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-semibold ${
-                isActive
-                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                  : isPastDue
-                    ? 'border-red-200 bg-red-50 text-red-700'
-                    : status === 'canceled'
-                      ? 'border-gray-200 bg-gray-50 text-gray-600'
-                      : 'border-amber-200 bg-amber-50 text-amber-800'
-              }`}
-            >
-              <ShieldCheck size={11} /> {status.replace(/_/g, ' ') || 'none'}
-            </span>
-            {summary.subscription?.next_payment_on ? (
-              <span className="text-gray-500">
-                Next bill: {formatDate(summary.subscription.next_payment_on)}
-              </span>
-            ) : null}
-          </div>
+      {/* ── Plans accordion ──────────────────────────────────────────── */}
+      <section>
+        <div className="mb-3">
+          <h2 className="font-heading text-lg text-gray-900">Your plan</h2>
+          <p className="text-sm text-gray-500">
+            Click any plan to expand details, manage add-ons, and upgrade or switch anytime.
+          </p>
         </div>
 
-        {isActive || isPastDue ? (
-          <div className="mt-5 pt-5 border-t border-gray-100 flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={busy === 'update_pm'}
-              onClick={() => void updatePaymentMethod()}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50"
-            >
-              {busy === 'update_pm' ? (
-                <Loader2 size={12} className="animate-spin" />
-              ) : (
-                <CreditCard size={12} />
-              )}
-              Update payment method
-            </button>
-            <button
-              type="button"
-              disabled={busy === 'cancel'}
-              onClick={() => setConfirmCancel(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50"
-            >
-              {busy === 'cancel' ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
-              Cancel subscription
-            </button>
+        {plans.length === 0 ? (
+          <div className="rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-500">
+            No directory plans configured yet. An admin needs to set up plans in the super admin panel.
           </div>
-        ) : null}
+        ) : (
+          <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden divide-y divide-gray-100">
+            {plans.map((plan) => {
+              const isCurrent = currentPlan?.id === plan.id && (isActive || isPastDue);
+              const isPendingThis = currentPlan?.id === plan.id && isPending;
+              const cents = plan.price_monthly_cents ?? 0;
+              const inclusion = summary.plan_addon_inclusion[plan.id] || { verified: false, sponsored: false };
+              const verifiedAdds = !inclusion.verified && summary.addons.verifiedUser ? summary.addon_prices.verified_cents : 0;
+              const sponsoredAdds = !inclusion.sponsored && summary.addons.sponsoredUser ? summary.addon_prices.sponsored_cents : 0;
+              const previewTotal = cents + verifiedAdds + sponsoredAdds;
+              const previewDelta = previewTotal - summary.charge.total_cents;
+              const isExpanded =
+                expandedPlanId === '__default__'
+                  ? plan.id === currentPlan?.id
+                  : expandedPlanId === plan.id;
+
+              return (
+                <div key={plan.id} className={isCurrent ? 'bg-gray-900' : ''}>
+                  {/* ── Row header — always visible ── */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpandedPlanId(isExpanded ? null : plan.id)
+                    }
+                    className={`w-full flex items-center justify-between gap-4 px-5 py-4 text-left transition-colors ${
+                      isCurrent ? 'hover:bg-white/5' : 'hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="min-w-0">
+                        <div className={`text-[11px] font-semibold uppercase tracking-wide ${isCurrent ? 'text-gray-400' : 'text-gray-400'}`}>
+                          {cents > 0 ? 'Paid' : 'Free'}{plan.is_default ? ' · default' : ''}
+                        </div>
+                        <div className={`font-semibold text-sm leading-tight ${isCurrent ? 'text-white' : 'text-gray-900'}`}>
+                          {plan.name}
+                        </div>
+                      </div>
+                      {isCurrent && (
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-semibold text-white">
+                          <Check size={10} /> Current
+                        </span>
+                      )}
+                      {planHasTrial(plan) && (
+                        <span className={`hidden sm:inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                          isCurrent ? 'bg-violet-400/20 text-violet-200' : 'bg-violet-50 text-violet-700 border border-violet-100'
+                        }`}>
+                          <Sparkles size={9} /> {formatTrialDuration(plan)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <div className="text-right">
+                        <div className={`font-bold text-sm ${isCurrent ? 'text-white' : 'text-gray-900'}`}>
+                          {cents > 0 ? formatCents(cents) : 'Free'}
+                          {cents > 0 && (
+                            <span className={`text-xs font-normal ml-0.5 ${isCurrent ? 'text-gray-400' : 'text-gray-500'}`}>/mo</span>
+                          )}
+                        </div>
+                        {summary.subscription?.next_payment_on && isCurrent ? (
+                          <div className="text-[10px] text-gray-400">Next: {formatDate(summary.subscription.next_payment_on)}</div>
+                        ) : null}
+                      </div>
+                      <ChevronDown
+                        size={15}
+                        className={`transition-transform duration-200 shrink-0 ${isExpanded ? 'rotate-180' : ''} ${isCurrent ? 'text-gray-400' : 'text-gray-400'}`}
+                      />
+                    </div>
+                  </button>
+
+                  {/* ── Expanded body ── */}
+                  {isExpanded && (
+                    <div className={`px-5 pb-6 space-y-5 border-t ${isCurrent ? 'border-white/10' : 'border-gray-100'}`}>
+                      <div className="pt-4 space-y-3">
+                        {plan.description ? (
+                          <p className={`text-sm ${isCurrent ? 'text-gray-300' : 'text-gray-600'}`}>{plan.description}</p>
+                        ) : null}
+                        {planHasTrial(plan) ? (
+                          <div className={`sm:hidden inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                            isCurrent ? 'bg-violet-400/20 text-violet-100' : 'bg-violet-50 text-violet-700 border border-violet-100'
+                          }`}>
+                            <Sparkles size={11} /> {formatTrialDuration(plan)}
+                          </div>
+                        ) : null}
+                        {/* Subscription status badge */}
+                        {isCurrent ? (
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
+                              isActive
+                                ? 'border-emerald-400/30 bg-emerald-400/15 text-emerald-300'
+                                : isPastDue
+                                  ? 'border-red-400/30 bg-red-400/15 text-red-300'
+                                  : 'border-white/20 bg-white/10 text-gray-300'
+                            }`}>
+                              <ShieldCheck size={10} /> {status.replace(/_/g, ' ') || 'none'}
+                            </span>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      {/* ── Add-ons ── */}
+                      <div>
+                        <div className={`text-[11px] font-semibold uppercase tracking-wide mb-3 ${isCurrent ? 'text-gray-400' : 'text-gray-500'}`}>
+                          Add-ons
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <AddonRow
+                            icon={<BadgeCheck size={18} />}
+                            label="Verified Listing"
+                            description="Verified badge on your listing, in search, and in inquiries — builds trust with couples browsing."
+                            priceCents={summary.addon_prices.verified_cents}
+                            isOn={summary.addons.verified}
+                            isFromPlan={inclusion.verified}
+                            isUserOn={summary.addons.verifiedUser}
+                            busy={busy === 'addon:verified'}
+                            onChange={() => void toggleAddon('verified')}
+                            tone="emerald"
+                          />
+                          <AddonRow
+                            icon={<Megaphone size={18} />}
+                            label="Sponsored Listing"
+                            description="Top-of-results placement and 'Sponsored' label, with priority above non-sponsored venues."
+                            priceCents={summary.addon_prices.sponsored_cents}
+                            isOn={summary.addons.sponsored}
+                            isFromPlan={inclusion.sponsored}
+                            isUserOn={summary.addons.sponsoredUser}
+                            busy={busy === 'addon:sponsored'}
+                            onChange={() => void toggleAddon('sponsored')}
+                            tone="violet"
+                          />
+                        </div>
+                      </div>
+
+                      {/* ── Monthly total breakdown ── */}
+                      <div className={`rounded-xl border p-4 ${isCurrent ? 'border-white/10 bg-white/5' : 'border-gray-100 bg-gray-50'}`}>
+                        <div className={`text-[11px] font-semibold uppercase tracking-wide mb-3 ${isCurrent ? 'text-gray-400' : 'text-gray-500'}`}>
+                          Monthly total
+                        </div>
+                        <div className="space-y-1.5 text-sm">
+                          <div className={`flex justify-between ${isCurrent ? 'text-gray-200' : 'text-gray-700'}`}>
+                            <span>{plan.name}</span>
+                            <span className="font-mono">{cents > 0 ? formatCents(cents) : 'Free'}</span>
+                          </div>
+                          <div className={`flex justify-between ${isCurrent ? 'text-gray-200' : 'text-gray-700'}`}>
+                            <span className="flex items-center gap-1.5">
+                              Verified Listing
+                              {inclusion.verified ? (
+                                <span className={`text-[10px] font-semibold uppercase tracking-wide ${isCurrent ? 'text-emerald-400' : 'text-emerald-600'}`}>Included</span>
+                              ) : null}
+                            </span>
+                            <span className="font-mono">
+                              {isCurrent
+                                ? (summary.charge.verified_cents > 0 ? formatCents(summary.charge.verified_cents) : summary.addons.verified ? 'Included' : '—')
+                                : (verifiedAdds > 0 ? `+${formatCents(verifiedAdds)}` : inclusion.verified && summary.addons.verifiedUser ? 'Included' : '—')}
+                            </span>
+                          </div>
+                          <div className={`flex justify-between ${isCurrent ? 'text-gray-200' : 'text-gray-700'}`}>
+                            <span className="flex items-center gap-1.5">
+                              Sponsored Listing
+                              {inclusion.sponsored ? (
+                                <span className={`text-[10px] font-semibold uppercase tracking-wide ${isCurrent ? 'text-emerald-400' : 'text-emerald-600'}`}>Included</span>
+                              ) : null}
+                            </span>
+                            <span className="font-mono">
+                              {isCurrent
+                                ? (summary.charge.sponsored_cents > 0 ? formatCents(summary.charge.sponsored_cents) : summary.addons.sponsored ? 'Included' : '—')
+                                : (sponsoredAdds > 0 ? `+${formatCents(sponsoredAdds)}` : inclusion.sponsored && summary.addons.sponsoredUser ? 'Included' : '—')}
+                            </span>
+                          </div>
+                          <div className={`border-t pt-2 flex justify-between font-semibold ${isCurrent ? 'border-white/10 text-white' : 'border-gray-200 text-gray-900'}`}>
+                            <span>Total billed monthly</span>
+                            <span className="font-mono">
+                              {isCurrent
+                                ? (summary.charge.total_cents > 0 ? formatCents(summary.charge.total_cents) : 'Free')
+                                : (previewTotal > 0 ? formatCents(previewTotal) : 'Free')}
+                              {!isCurrent && previewDelta !== 0 ? (
+                                <span className={`ml-1.5 text-xs font-semibold ${previewDelta > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                                  ({previewDelta > 0 ? '+' : ''}{formatCents(previewDelta)})
+                                </span>
+                              ) : null}
+                            </span>
+                          </div>
+                        </div>
+                        <p className={`mt-3 text-[11px] leading-relaxed ${isCurrent ? 'text-gray-500' : 'text-gray-400'}`}>
+                          Pricing subject to change at any time. Subscribers receive at least 30 days&apos; advance notice before any price increase.
+                        </p>
+                      </div>
+
+                      {/* ── Actions ── */}
+                      {isCurrent ? (
+                        (isActive || isPastDue) ? (
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              disabled={busy === 'update_pm'}
+                              onClick={() => void updatePaymentMethod()}
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-white/20 bg-white/10 px-3.5 py-2 text-xs font-semibold text-white hover:bg-white/20 disabled:opacity-50"
+                            >
+                              {busy === 'update_pm' ? <Loader2 size={12} className="animate-spin" /> : <CreditCard size={12} />}
+                              Update payment method
+                            </button>
+                            <button
+                              type="button"
+                              disabled={busy === 'cancel'}
+                              onClick={() => setConfirmCancel(true)}
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-red-400/30 bg-red-500/15 px-3.5 py-2 text-xs font-semibold text-red-300 hover:bg-red-500/25 disabled:opacity-50"
+                            >
+                              {busy === 'cancel' ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
+                              Cancel subscription
+                            </button>
+                          </div>
+                        ) : null
+                      ) : isPendingThis ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3.5 py-2 text-xs font-semibold text-amber-900">
+                          <AlertTriangle size={12} /> Complete checkout above
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={busy === `change:${plan.id}` || isPending}
+                          onClick={() => setConfirmPlanId(plan.id)}
+                          className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                          style={{ backgroundColor: BRAND }}
+                        >
+                          {busy === `change:${plan.id}` ? (
+                            <Loader2 size={12} className="animate-spin" />
+                          ) : (
+                            <ArrowUpRight size={12} />
+                          )}
+                          {cents === 0
+                            ? 'Switch to free'
+                            : planHasTrial(plan) && summary.trial.status === 'none' && !summary.subscription
+                              ? 'Start free trial'
+                              : previewDelta > 0
+                                ? 'Upgrade'
+                                : 'Switch plan'}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </section>
 
+      {/* ── Payment method ──────────────────────────────────────────────── */}
       <section className="rounded-2xl border border-gray-200 bg-white p-6">
         <h2 className="font-heading text-lg text-gray-900">Payment method</h2>
         <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -606,16 +794,15 @@ export default function DirectoryBillingPage() {
                 <div className="text-[11px] text-gray-500">
                   {summary.payment_method.name_holder || summary.venue.name}
                   {summary.payment_method.exp_month && summary.payment_method.exp_year
-                    ? ` · expires ${summary.payment_method.exp_month}/${String(
-                        summary.payment_method.exp_year,
-                      ).slice(-2)}`
+                    ? ` · expires ${summary.payment_method.exp_month}/${String(summary.payment_method.exp_year).slice(-2)}`
                     : ''}
                 </div>
               </div>
             </div>
           ) : (
             <p className="text-sm text-gray-500">
-              No card on file. {currentCents > 0 ? 'Resume checkout to add one.' : 'Switch to a paid plan to add a payment method.'}
+              No card on file.{' '}
+              {currentCents > 0 ? 'Resume checkout to add one.' : 'Switch to a paid plan to add a payment method.'}
             </p>
           )}
           {currentCents > 0 && summary.payment_method ? (
@@ -626,208 +813,11 @@ export default function DirectoryBillingPage() {
               className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
               style={{ backgroundColor: BRAND }}
             >
-              {busy === 'update_pm' ? (
-                <Loader2 size={12} className="animate-spin" />
-              ) : (
-                <CreditCard size={12} />
-              )}
+              {busy === 'update_pm' ? <Loader2 size={12} className="animate-spin" /> : <CreditCard size={12} />}
               Update payment method
             </button>
           ) : null}
         </div>
-      </section>
-
-      {/* ── Add-ons (current plan) ─────────────────────────────────────── */}
-      <AddonsCard
-        addons={summary.addons}
-        charge={summary.charge}
-        verifiedPriceCents={summary.addon_prices.verified_cents}
-        sponsoredPriceCents={summary.addon_prices.sponsored_cents}
-        currentPlan={currentPlan}
-        busy={busy}
-        onToggle={(kind) => void toggleAddon(kind)}
-      />
-
-      <section>
-        <div className="flex items-end justify-between gap-3 mb-3">
-          <div>
-            <h2 className="font-heading text-lg text-gray-900">Available plans</h2>
-            <p className="text-sm text-gray-500">
-              Upgrade or downgrade anytime. Paid plans bill monthly; changes apply instantly.
-              Verified &amp; Sponsored add-ons can be added to any plan.
-            </p>
-          </div>
-        </div>
-
-        {plans.length === 0 ? (
-          <div className="rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-500">
-            No directory plans are available yet. An admin needs to configure plans in the super admin
-            dashboard.
-          </div>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {plans.map((plan) => {
-              const isCurrent = currentPlan?.id === plan.id && (isActive || isPastDue);
-              const isPendingThis = currentPlan?.id === plan.id && isPending;
-              const cents = plan.price_monthly_cents ?? 0;
-              const inclusion = summary.plan_addon_inclusion[plan.id] || { verified: false, sponsored: false };
-              // Preview total at the *plan being viewed*, with the user's currently-active
-              // addons retained (they don't reset when changing plan).
-              const verifiedAdds = !inclusion.verified && summary.addons.verifiedUser
-                ? summary.addon_prices.verified_cents : 0;
-              const sponsoredAdds = !inclusion.sponsored && summary.addons.sponsoredUser
-                ? summary.addon_prices.sponsored_cents : 0;
-              const previewTotal = cents + verifiedAdds + sponsoredAdds;
-              const previewDelta = previewTotal - summary.charge.total_cents;
-              const isUpgrade = previewDelta > 0;
-              return (
-                <div
-                  key={plan.id}
-                  className={`rounded-2xl border p-5 flex flex-col gap-3 ${
-                    isCurrent ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 bg-white'
-                  }`}
-                >
-                  <div>
-                    <div
-                      className={`text-xs font-semibold uppercase tracking-wide ${
-                        isCurrent ? 'text-gray-300' : 'text-gray-400'
-                      }`}
-                    >
-                      {cents > 0 ? 'Paid' : 'Free'}
-                      {plan.is_default ? ' · default' : ''}
-                    </div>
-                    <div
-                      className={`mt-1 font-heading text-lg ${
-                        isCurrent ? 'text-white' : 'text-gray-900'
-                      }`}
-                    >
-                      {plan.name}
-                    </div>
-                    {plan.description ? (
-                      <p
-                        className={`mt-1 text-sm ${
-                          isCurrent ? 'text-gray-300' : 'text-gray-600'
-                        }`}
-                      >
-                        {plan.description}
-                      </p>
-                    ) : null}
-                  </div>
-                  <div
-                    className={`text-2xl font-bold ${
-                      isCurrent ? 'text-white' : 'text-gray-900'
-                    }`}
-                  >
-                    {cents > 0 ? formatCents(cents) : 'Free'}
-                    {cents > 0 ? (
-                      <span
-                        className={`text-xs font-medium ${
-                          isCurrent ? 'text-gray-300' : 'text-gray-500'
-                        }`}
-                      >
-                        {' '}
-                        / month
-                      </span>
-                    ) : null}
-                  </div>
-
-                  {/* Trial badge — shown when this plan offers a trial */}
-                  {planHasTrial(plan) ? (
-                    <div className={`inline-flex items-center gap-1 self-start rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                      isCurrent
-                        ? 'bg-violet-400/20 text-violet-100'
-                        : 'bg-violet-50 text-violet-700 border border-violet-100'
-                    }`}>
-                      <Sparkles size={11} />
-                      {formatTrialDuration(plan)}
-                    </div>
-                  ) : null}
-
-                  {/* Add-ons — interactive: live-toggle the venue's add-on
-                      state from any plan card. Plan-bundled add-ons render
-                      as locked "Included" pills. */}
-                  <div className="space-y-1.5">
-                    <div className={`text-[11px] font-semibold uppercase tracking-wide ${isCurrent ? 'text-gray-300' : 'text-gray-500'}`}>
-                      Add-ons
-                    </div>
-                    <PlanAddonToggle
-                      label="Verified Listing"
-                      priceCents={summary.addon_prices.verified_cents}
-                      included={inclusion.verified}
-                      userOn={summary.addons.verifiedUser}
-                      busy={busy === 'addon:verified'}
-                      isCurrent={isCurrent}
-                      tone="emerald"
-                      onToggle={() => void toggleAddon('verified')}
-                    />
-                    <PlanAddonToggle
-                      label="Sponsored Listing"
-                      priceCents={summary.addon_prices.sponsored_cents}
-                      included={inclusion.sponsored}
-                      userOn={summary.addons.sponsoredUser}
-                      busy={busy === 'addon:sponsored'}
-                      isCurrent={isCurrent}
-                      tone="violet"
-                      onToggle={() => void toggleAddon('sponsored')}
-                    />
-                  </div>
-
-                  {/* Preview total if user switches to this plan keeping their existing addons. */}
-                  {!isCurrent && (verifiedAdds > 0 || sponsoredAdds > 0) ? (
-                    <div className={`rounded-lg px-3 py-2 text-[11px] ${
-                      isCurrent ? 'bg-white/10 text-gray-200' : 'bg-gray-50 text-gray-600'
-                    }`}>
-                      Total with your current add-ons:{' '}
-                      <span className="font-semibold text-gray-900">
-                        {formatCents(previewTotal)}
-                      </span>{' '}
-                      / mo
-                      {previewDelta !== 0 ? (
-                        <span className={previewDelta > 0 ? 'ml-1 text-amber-700' : 'ml-1 text-emerald-700'}>
-                          ({previewDelta > 0 ? '+' : ''}
-                          {formatCents(previewDelta)})
-                        </span>
-                      ) : null}
-                    </div>
-                  ) : null}
-
-                  <div className="mt-auto">
-                    {isCurrent ? (
-                      <span className="inline-flex w-full justify-center items-center gap-1 rounded-xl bg-white/10 px-3 py-2 text-xs font-semibold">
-                        <Check size={12} /> Current plan
-                      </span>
-                    ) : isPendingThis ? (
-                      <span className="inline-flex w-full justify-center items-center gap-1 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
-                        <AlertTriangle size={12} /> Complete checkout above
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled={busy === `change:${plan.id}` || isPending}
-                        onClick={() => setConfirmPlanId(plan.id)}
-                        className="inline-flex w-full justify-center items-center gap-1 rounded-xl px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
-                        style={{ backgroundColor: BRAND }}
-                      >
-                        {busy === `change:${plan.id}` ? (
-                          <Loader2 size={12} className="animate-spin" />
-                        ) : (
-                          <ArrowUpRight size={12} />
-                        )}
-                        {cents === 0
-                          ? 'Switch to free'
-                          : planHasTrial(plan) && summary.trial.status === 'none' && !summary.subscription
-                            ? 'Start free trial'
-                            : isUpgrade
-                              ? 'Upgrade'
-                              : 'Switch plan'}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
       </section>
 
       <section className="rounded-2xl border border-gray-200 bg-white">
@@ -1043,13 +1033,6 @@ function TrialExpiredBanner({
   );
 }
 
-/**
- * One-row helper for a plan card's add-on slot. When the plan bundles the
- * add-on, renders a locked "Included" pill. Otherwise, renders a clickable
- * checkbox that LIVE-toggles the venue's add-on subscription — same single
- * source of truth as the dedicated AddonsCard above. Stop propagation
- * because the parent card may have its own click handlers.
- */
 function PlanAddonToggle({
   label,
   priceCents,
