@@ -76,6 +76,19 @@ async function recordBillingEvent(
 }
 
 export async function POST(req: NextRequest) {
+  try {
+    return await handlePost(req);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Add-on update failed';
+    const schemaMissing = /migration 092|undefined column|42703/i.test(msg);
+    return NextResponse.json(
+      { error: msg, schemaMissing: schemaMissing || undefined },
+      { status: schemaMissing ? 503 : 500 },
+    );
+  }
+}
+
+async function handlePost(req: NextRequest) {
   const venueId = await getVenueId();
   if (!venueId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -91,13 +104,36 @@ export async function POST(req: NextRequest) {
   const ctx = await loadVenueDirectoryPlanContext(venueId);
   if (!ctx) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
 
-  // Read existing addon flags so we only flip what was sent
-  const { data: addonRow } = await supabaseAdmin
+  // Read existing addon flags so we only flip what was sent. If migration 092
+  // hasn't been applied yet, the addon columns don't exist — the SELECT will
+  // error with code 42703 (undefined_column) and we return an actionable 503.
+  const addonRowResp = await supabaseAdmin
     .from('venues')
     .select('directory_addon_verified, directory_addon_sponsored, directory_verified_status, directory_sponsored_status')
     .eq('id', venueId)
     .maybeSingle();
 
+  if (addonRowResp.error) {
+    // 42703 = undefined column → migration 092 hasn't run.
+    // 42P01 = undefined table  → schema fully missing.
+    const code = (addonRowResp.error as { code?: string }).code;
+    if (code === '42703' || code === '42P01') {
+      return NextResponse.json(
+        {
+          error:
+            'Add-on subscriptions need a one-time database migration. Open the Supabase SQL editor and run migration 092 (directory_addon_verified / directory_addon_sponsored columns), then try again.',
+          schemaMissing: true,
+        },
+        { status: 503 },
+      );
+    }
+    return NextResponse.json(
+      { error: addonRowResp.error.message || 'Could not read add-on state' },
+      { status: 500 },
+    );
+  }
+
+  const addonRow = addonRowResp.data;
   if (!addonRow) {
     return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
   }
@@ -301,7 +337,27 @@ async function applyAddonFlagsAndStatus(
     update.directory_subscription_status = 'none';
     update.directory_subscription_external_id = null;
   }
-  await supabaseAdmin.from('venues').update(update).eq('id', venueId);
+  const upd = await supabaseAdmin.from('venues').update(update).eq('id', venueId);
+  if (upd.error) {
+    const code = (upd.error as { code?: string }).code;
+    // Migration 092 not applied — drop the new flags and retry with the legacy
+    // status-only update so the public badge state still gets nudged.
+    if (code === '42703') {
+      const fallback: Record<string, unknown> = {
+        directory_verified_status: verifiedStatus,
+        directory_sponsored_status: sponsoredStatus,
+      };
+      if (opts.clearSubscription) {
+        fallback.directory_subscription_status = 'none';
+        fallback.directory_subscription_external_id = null;
+      }
+      await supabaseAdmin.from('venues').update(fallback).eq('id', venueId);
+      throw new Error(
+        'Add-on subscriptions need a one-time database migration (092). Run it in the Supabase SQL editor, then try again.',
+      );
+    }
+    throw new Error(upd.error.message || 'Could not save add-on flags');
+  }
 }
 
 function nextStatus(enabled: boolean, prev: string): string {
