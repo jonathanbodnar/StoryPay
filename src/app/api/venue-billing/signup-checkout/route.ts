@@ -132,7 +132,16 @@ export async function POST(req: NextRequest) {
   trialEndsAt.setDate(trialEndsAt.getDate() + SIGNUP_TRIAL_DAYS);
   const trialEndsAtIso = trialEndsAt.toISOString();
 
-  const secret = requirePlatformLunarPaySecretKey();
+  let secret: string;
+  try {
+    secret = requirePlatformLunarPaySecretKey();
+  } catch (e) {
+    console.error('[signup-checkout] missing LunarPay secret:', e);
+    return NextResponse.json(
+      { error: 'Payments are not yet configured. Please contact support.' },
+      { status: 503 },
+    );
+  }
 
   const checkoutData: Record<string, unknown> = {
     amount:               charge.total_cents / 100,
@@ -157,12 +166,27 @@ export async function POST(req: NextRequest) {
     checkoutData.customer_id = ctx.venue.platform_lunarpay_customer_id;
   }
 
-  const result = await createCheckoutSession(secret, checkoutData);
-  const session = (result as { data?: { url?: string }; url?: string }).data || result;
-  const url = (session as { url?: string }).url;
-  if (!url) {
-    return NextResponse.json({ error: 'Could not create checkout session. Please try again.' }, { status: 502 });
+  // LunarPay can throw on network failures, invalid keys, validation errors,
+  // etc.  Surface a user-friendly message instead of letting Next.js return a
+  // generic 500 — which is what was breaking the signup flow before.
+  try {
+    const result = await createCheckoutSession(secret, checkoutData);
+    const session = (result as { data?: { url?: string }; url?: string }).data || result;
+    const url = (session as { url?: string }).url;
+    if (!url) {
+      console.error('[signup-checkout] checkout session missing url:', result);
+      return NextResponse.json(
+        { error: 'Could not create checkout session. Please try again.' },
+        { status: 502 },
+      );
+    }
+    return NextResponse.json({ url });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Unknown error';
+    console.error('[signup-checkout] LunarPay error:', message, e);
+    return NextResponse.json(
+      { error: `Could not start checkout: ${message}` },
+      { status: 502 },
+    );
   }
-
-  return NextResponse.json({ url });
 }

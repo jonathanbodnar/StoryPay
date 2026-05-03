@@ -6,8 +6,6 @@ import { useRouter } from 'next/navigation';
 import {
   BadgeCheck,
   Check,
-  ChevronDown,
-  ChevronUp,
   Loader2,
   Lock,
   Megaphone,
@@ -73,7 +71,6 @@ export function PlanPickerClient({ plans, allPlans, planAddonInclusion, ownerFir
   const [selectedPlanId, setSelectedPlanId] = useState(defaultPlan);
   const [addonVerified, setAddonVerified] = useState(false);
   const [addonSponsored, setAddonSponsored] = useState(false);
-  const [expandedFeatures, setExpandedFeatures] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -171,10 +168,10 @@ export function PlanPickerClient({ plans, allPlans, planAddonInclusion, ownerFir
               <div
                 key={plan.id}
                 onClick={() => setSelectedPlanId(plan.id)}
-                className={`relative flex cursor-pointer flex-col rounded-2xl border-2 bg-white p-5 shadow-sm transition-all ${
+                className={`relative flex cursor-pointer flex-col rounded-2xl border bg-white p-5 transition-colors ${
                   isSelected
-                    ? 'border-gray-900 shadow-md ring-1 ring-gray-900/10'
-                    : 'border-gray-200 hover:border-gray-300'
+                    ? 'border-gray-900'
+                    : 'border-gray-200 hover:border-gray-400'
                 }`}
               >
                 {isRecommended && (
@@ -225,39 +222,24 @@ export function PlanPickerClient({ plans, allPlans, planAddonInclusion, ownerFir
                   </div>
                 )}
 
-                {/* Feature toggle */}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setExpandedFeatures(expandedFeatures === plan.id ? null : plan.id);
-                  }}
-                  className="mt-auto flex items-center gap-1 pt-2 text-xs font-medium text-gray-500 hover:text-gray-800 transition-colors"
-                >
-                  {expandedFeatures === plan.id ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                  {expandedFeatures === plan.id ? 'Hide features' : 'View features'}
-                </button>
-
-                {/* Expandable features */}
-                {expandedFeatures === plan.id && (
-                  <div className="mt-3 space-y-1.5 border-t border-gray-100 pt-3">
-                    {PLAN_FEATURES.map((f) => {
-                      const included = planIncludesFeature(plan.feature_flags, f.key);
-                      return (
-                        <div key={f.key} className="flex items-start gap-2">
-                          {included ? (
-                            <Check size={13} className="mt-0.5 shrink-0 text-emerald-500" />
-                          ) : (
-                            <X size={13} className="mt-0.5 shrink-0 text-gray-300" />
-                          )}
-                          <span className={`text-xs leading-tight ${included ? 'text-gray-700' : 'text-gray-400'}`}>
-                            {f.label}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                {/* Always-visible feature comparison list */}
+                <div className="mt-2 space-y-1.5 border-t border-gray-100 pt-3">
+                  {PLAN_FEATURES.map((f) => {
+                    const included = planIncludesFeature(plan.feature_flags, f.key);
+                    return (
+                      <div key={f.key} className="flex items-start gap-2">
+                        {included ? (
+                          <Check size={13} className="mt-0.5 shrink-0 text-emerald-500" />
+                        ) : (
+                          <X size={13} className="mt-0.5 shrink-0 text-gray-300" />
+                        )}
+                        <span className={`text-xs leading-tight ${included ? 'text-gray-700' : 'text-gray-400 line-through'}`}>
+                          {f.label}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             );
           })}
@@ -265,7 +247,7 @@ export function PlanPickerClient({ plans, allPlans, planAddonInclusion, ownerFir
 
         {/* Add-ons panel */}
         {selectedPlan && (
-          <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5">
             <h3 className="mb-1 text-sm font-semibold text-gray-900">Add-ons</h3>
             <p className="mb-4 text-xs text-gray-500">Boost your listing visibility. Can be added or removed anytime.</p>
 
@@ -296,7 +278,7 @@ export function PlanPickerClient({ plans, allPlans, planAddonInclusion, ownerFir
         )}
 
         {/* Summary + CTA */}
-        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-semibold text-gray-900">
