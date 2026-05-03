@@ -69,7 +69,6 @@ const paymentsItems: NavItem[] = [
   { label: 'Installments', href: '/dashboard/payments/installments', icon: Calendar, navId: 'nav_payments_installments' },
   { label: 'Subscriptions', href: '/dashboard/payments/subscriptions', icon: RefreshCw, navId: 'nav_payments_subscriptions' },
   { label: 'Transactions', href: '/dashboard/transactions', icon: CreditCard, navId: 'nav_transactions' },
-  { label: 'Email Templates', href: '/dashboard/settings/email-templates', icon: Mail, navId: 'nav_settings_email_templates' },
   { label: 'Notifications', href: '/dashboard/settings/notifications', icon: Bell, navId: 'nav_settings_notifications' },
 ];
 
@@ -206,11 +205,9 @@ export default function Sidebar({
     return () => window.removeEventListener('storypay:open-onboarding', handler);
   }, []);
 
-  // Email Templates + Notifications live under /dashboard/settings/* but
-  // belong to the Payments menu group (they're payment-related templates and
-  // notifications). Treat their paths as payments-active, not settings-active.
+  // Notifications lives under /dashboard/settings/* but belongs to the Payments
+  // menu group. Treat its path as payments-active, not settings-active.
   const paymentSettingsPaths = [
-    '/dashboard/settings/email-templates',
     '/dashboard/settings/notifications',
   ];
   const isOnPaymentSettings = paymentSettingsPaths.some((p) => pathname.startsWith(p));
