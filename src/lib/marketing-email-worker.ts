@@ -375,6 +375,7 @@ export async function buildMergeVars(
     'contact.first_name':        fn,
     'contact.last_name':         ln,
     'contact.name':              fullName || fn,
+    'contact.full_name':         fullName || fn,
     'contact.email':             email,
     'contact.phone':             (lead.phone as string | null) || '',
     'venue.name':                venueName,

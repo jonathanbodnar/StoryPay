@@ -265,6 +265,7 @@ function buildVarMap(venue: VenueRow, vars: CalendarNotifVars): Record<string, s
     'contact.first_name':              vars.contact_first_name || vars.contact_name.split(' ')[0] || '',
     'contact.last_name':               vars.contact_last_name  || '',
     'contact.name':                    vars.contact_name || 'Guest',
+    'contact.full_name':               vars.contact_name || 'Guest',
     'contact.email':                   vars.contact_email || '',
     'contact.phone':                   vars.contact_phone || '',
     // ── Appointment (canonical) ──────────────────────────────────────────

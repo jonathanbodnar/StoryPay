@@ -16,14 +16,36 @@ import { sendEmail } from '@/lib/email';
 import { renderTemplate, plainToHtml } from '@/lib/calendar-notifications';
 
 const TEST_VARS: Record<string, string> = {
-  'contact.name':                  'Alex Johnson',
-  'contact.email':                 'alex@example.com',
-  'contact.phone':                 '+1 (555) 234-5678',
-  'appointment.title':             'Strategy Call',
-  'appointment.start_time':        'Thursday, May 1 at 10:00 AM',
-  'appointment.timezone':          'EST',
-  'appointment.meeting_location':  'https://zoom.us/j/123456789',
-  'venue.name':                    '', // filled in below from real venue data
+  // Contact
+  'contact.first_name':           'Alex',
+  'contact.last_name':            'Johnson',
+  'contact.name':                 'Alex Johnson',
+  'contact.full_name':            'Alex Johnson',
+  'contact.email':                'alex@example.com',
+  'contact.phone':                '+1 (555) 234-5678',
+  // Appointment
+  'appointment.title':            'Strategy Call',
+  'appointment.date':             'Thursday, May 1, 2026',
+  'appointment.time':             '10:00 AM',
+  'appointment.start_time':       'Thursday, May 1 at 10:00 AM',
+  'appointment.end_time':         'Thursday, May 1 at 11:00 AM',
+  'appointment.duration':         '1 hour',
+  'appointment.timezone':         'EST',
+  'appointment.meeting_location': 'https://zoom.us/j/123456789',
+  'appointment.calendar_name':    'Tour Calendar',
+  // Venue — name and owner fields filled in below from real venue data
+  'venue.name':                   '',
+  'venue.owner_name':             '',
+  'venue.owner_first_name':       '',
+  'venue.email':                  '',
+  'venue.phone':                  '',
+  'venue.address':                '',
+  'venue.city':                   '',
+  'venue.state':                  '',
+  'venue.website':                '',
+  // System
+  'system.date':                  new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+  'system.year':                  String(new Date().getFullYear()),
 };
 
 export async function POST(req: NextRequest) {
@@ -32,7 +54,7 @@ export async function POST(req: NextRequest) {
 
   const { data: venue, error: venueErr } = await supabaseAdmin
     .from('venues')
-    .select('email, name, ghl_access_token, ghl_location_id, ghl_connected')
+    .select('email, name, owner_first_name, owner_last_name, notification_phone, location_full, location_city, location_state, brand_website, ghl_access_token, ghl_location_id, ghl_connected')
     .eq('id', venueId)
     .maybeSingle();
 
@@ -40,14 +62,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
   }
 
-  const venueName = (venue as { name?: string }).name || 'Us';
-  const venueEmail = (venue as { email?: string | null }).email;
+  const v = venue as {
+    name?: string; email?: string | null;
+    owner_first_name?: string | null; owner_last_name?: string | null;
+    notification_phone?: string | null; location_full?: string | null;
+    location_city?: string | null; location_state?: string | null;
+    brand_website?: string | null;
+  } | null;
+
+  const venueName  = v?.name || 'Us';
+  const venueEmail = v?.email;
+  const ownerFirst = v?.owner_first_name?.trim() || '';
+  const ownerLast  = v?.owner_last_name?.trim()  || '';
 
   if (!venueEmail) {
     return NextResponse.json({ error: 'No venue email configured. Add one in your venue settings.' }, { status: 400 });
   }
 
-  const varMap = { ...TEST_VARS, 'venue.name': venueName };
+  const varMap = {
+    ...TEST_VARS,
+    'venue.name':          venueName,
+    'venue.owner_name':    [ownerFirst, ownerLast].filter(Boolean).join(' '),
+    'venue.owner_first_name': ownerFirst,
+    'venue.email':         venueEmail || '',
+    'venue.phone':         v?.notification_phone || '',
+    'venue.address':       v?.location_full || [v?.location_city, v?.location_state].filter(Boolean).join(', ') || '',
+    'venue.city':          v?.location_city  || '',
+    'venue.state':         v?.location_state || '',
+    'venue.website':       v?.brand_website  || '',
+  };
 
   const body = await req.json() as {
     channel: string;
