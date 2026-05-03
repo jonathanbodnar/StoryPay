@@ -184,7 +184,7 @@ export function PlanPickerClient({ plans, allPlans, planAddonInclusion, ownerFir
           const featuredIdx  = highlightIdx >= 0 ? highlightIdx : Math.floor((plans.length - 1) / 2);
 
           return (
-            <div className={`grid items-start gap-4 ${
+            <div className={`grid items-center gap-4 ${
               plans.length <= 2 ? 'sm:grid-cols-2' :
               plans.length === 3 ? 'sm:grid-cols-3' :
               'sm:grid-cols-2 lg:grid-cols-4'
