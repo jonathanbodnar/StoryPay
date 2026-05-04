@@ -805,16 +805,12 @@ export async function changeVenuePlan(
     customer_name: ctx.venue.name,
     success_url: `${APP_URL}/dashboard/directory-billing`,
     cancel_url: `${APP_URL}/dashboard/directory-billing`,
-    save_payment_method: true,
     metadata: {
       [STORYPAY_PLATFORM_DIRECTORY_META_KEY]: '1',
       venue_id: venueId,
       directory_plan_id: target.id,
     },
   };
-  if (ctx.venue.platform_lunarpay_customer_id) {
-    checkoutData.customer_id = ctx.venue.platform_lunarpay_customer_id;
-  }
   const result = await createCheckoutSession(secret, checkoutData);
   const session = (result as { data?: { url?: string }; url?: string }).data || result;
   const url = (session as { url?: string }).url;
@@ -851,16 +847,12 @@ export async function resumePendingCheckout(venueId: string): Promise<{ url: str
     customer_name: ctx.venue.name,
     success_url: `${APP_URL}/dashboard/directory-billing`,
     cancel_url: `${APP_URL}/dashboard/directory-billing`,
-    save_payment_method: true,
     metadata: {
       [STORYPAY_PLATFORM_DIRECTORY_META_KEY]: '1',
       venue_id: venueId,
       directory_plan_id: ctx.plan.id,
     },
   };
-  if (ctx.venue.platform_lunarpay_customer_id) {
-    checkoutData.customer_id = ctx.venue.platform_lunarpay_customer_id;
-  }
   const result = await createCheckoutSession(secret, checkoutData);
   const session = (result as { data?: { url?: string }; url?: string }).data || result;
   const url = (session as { url?: string }).url;
@@ -957,7 +949,6 @@ export async function startUpdatePaymentMethodCheckout(
     customer_name: ctx.venue.name,
     success_url: `${APP_URL}/dashboard/directory-billing?payment_update=1`,
     cancel_url: `${APP_URL}/dashboard/directory-billing`,
-    save_payment_method: true,
     metadata: {
       [STORYPAY_PLATFORM_DIRECTORY_META_KEY]: '1',
       venue_id: venueId,
@@ -965,9 +956,6 @@ export async function startUpdatePaymentMethodCheckout(
       action: 'update_payment_method',
     },
   };
-  if (ctx.venue.platform_lunarpay_customer_id) {
-    checkoutData.customer_id = ctx.venue.platform_lunarpay_customer_id;
-  }
   const result = await createCheckoutSession(secret, checkoutData);
   const session = (result as { data?: { url?: string }; url?: string }).data || result;
   const url = (session as { url?: string }).url;

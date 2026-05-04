@@ -91,17 +91,12 @@ export async function createDirectoryPlatformCheckoutSession(venueId: string): P
     customer_name: ctx.venue.name,
     success_url: `${APP_URL}/dashboard/directory-billing`,
     cancel_url: `${APP_URL}/dashboard/directory-billing`,
-    save_payment_method: true,
     metadata: {
       [STORYPAY_PLATFORM_DIRECTORY_META_KEY]: '1',
       venue_id: venueId,
       directory_plan_id: ctx.plan.id,
     },
   };
-
-  if (ctx.venue.platform_lunarpay_customer_id) {
-    checkoutData.customer_id = ctx.venue.platform_lunarpay_customer_id;
-  }
 
   const result = await createCheckoutSession(secret, checkoutData);
   const session = (result as { data?: { url?: string; id?: string }; url?: string }).data || result;

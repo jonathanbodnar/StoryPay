@@ -198,17 +198,16 @@ async function handlePost(req: NextRequest) {
 
   // ── Flow 2: NO subscription yet, but addons now create a non-zero total ─
   // The owner needs to enter a card. We don't write the addon flags yet —
-  // only after checkout completes will the verify webhook flip them.
+  // only after checkout completes will the verify endpoint flip them.
   if (!hasActiveSub && nextCharge.total_cents > 0) {
     const secret = requirePlatformLunarPaySecretKey();
     const checkoutData: Record<string, unknown> = {
-      amount: nextCharge.total_cents / 100, // total already uses dynamic prices
+      amount: nextCharge.total_cents / 100,
       description: 'StoryVenue directory — add-ons (monthly)',
       customer_email: ctx.venue.email || undefined,
       customer_name: ctx.venue.name,
       success_url: `${APP_URL}/dashboard/directory-billing?addons=1`,
       cancel_url: `${APP_URL}/dashboard/directory-billing`,
-      save_payment_method: true,
       metadata: {
         [STORYPAY_PLATFORM_DIRECTORY_META_KEY]: '1',
         venue_id: venueId,
@@ -219,19 +218,23 @@ async function handlePost(req: NextRequest) {
         action: 'addon_subscribe',
       },
     };
-    if (ctx.venue.platform_lunarpay_customer_id) {
-      checkoutData.customer_id = ctx.venue.platform_lunarpay_customer_id;
-    }
-    const result = await createCheckoutSession(secret, checkoutData);
-    const session = (result as { data?: { url?: string }; url?: string }).data || result;
-    const url = (session as { url?: string }).url;
-    if (!url) throw new Error('LunarPay did not return a checkout URL');
+
+    try {
+      const result = await createCheckoutSession(secret, checkoutData);
+      const session = (result as { data?: { url?: string }; url?: string }).data || result;
+      const url = (session as { url?: string }).url;
+      if (!url) throw new Error('LunarPay did not return a checkout URL');
 
       return NextResponse.json({
-      kind: 'checkout_required',
-      url,
-      pending_addons: { verified: nextVerified, sponsored: nextSponsored, concierge: nextConcierge },
-    });
+        kind: 'checkout_required',
+        url,
+        pending_addons: { verified: nextVerified, sponsored: nextSponsored, concierge: nextConcierge },
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Could not create checkout session';
+      console.error('[addons] LunarPay error:', msg);
+      return NextResponse.json({ error: msg }, { status: 502 });
+    }
   }
 
   // ── Flow 3: Total drops to 0 — cancel the sub if any ───────────────────

@@ -183,13 +183,13 @@ export function createCheckoutSession(
 ) {
   const body: Record<string, unknown> = {};
 
-  // Only the fields known-safe for the LunarPay hosted-checkout API.
-  // Do NOT add customer_id, save_payment_method, metadata, or expires_in —
-  // several Fortis merchant configurations return a 500 on any unrecognised
-  // or unsupported field. Keep the set minimal and extend only when confirmed.
+  // Only the fields documented in the LunarPay hosted-checkout API spec.
+  // Do NOT add customer_id or save_payment_method — those are undocumented
+  // on this endpoint and cause LunarPay to return a 500.
   const allowedFields = [
     'amount', 'description', 'success_url', 'cancel_url',
     'customer_email', 'customer_name', 'payment_methods',
+    'metadata', 'expires_in',
   ];
 
   for (const field of allowedFields) {

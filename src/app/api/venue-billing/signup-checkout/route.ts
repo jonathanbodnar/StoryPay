@@ -133,11 +133,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ redirect: '/dashboard?welcome=1' });
   }
 
-  // Compute trial end date
+  // Compute trial end date — write to DB now so the verify step can read it
+  // without relying on LunarPay session metadata.
   const now = new Date();
   const trialEndsAt = new Date(now);
   trialEndsAt.setDate(trialEndsAt.getDate() + SIGNUP_TRIAL_DAYS);
   const trialEndsAtIso = trialEndsAt.toISOString();
+
+  // Write plan, addon choices, and trial dates to the venue row before
+  // redirecting to LunarPay. The verify endpoint reads context from here
+  // instead of from session metadata (metadata causes 500s for some Fortis
+  // merchant configurations).
+  try {
+    await supabaseAdmin
+      .from('venues')
+      .update({
+        directory_trial_ends_at: trialEndsAtIso,
+        directory_trial_started_at: now.toISOString(),
+      })
+      .eq('id', venueId);
+  } catch (e) {
+    console.error('[signup-checkout] failed to persist trial dates:', e);
+  }
 
   let secret: string;
   try {
@@ -157,7 +174,6 @@ export async function POST(req: NextRequest) {
     customer_name:        ctx.venue.name,
     success_url:          `${APP_URL}/signup/plan/complete?checkout=1`,
     cancel_url:           `${APP_URL}/signup/addons?plan_id=${planId}`,
-    save_payment_method:  true,
     metadata: {
       [STORYPAY_PLATFORM_DIRECTORY_META_KEY]: '1',
       venue_id:         venueId,
@@ -169,10 +185,6 @@ export async function POST(req: NextRequest) {
       action:           'signup_plan',
     },
   };
-
-  if (ctx.venue.platform_lunarpay_customer_id) {
-    checkoutData.customer_id = ctx.venue.platform_lunarpay_customer_id;
-  }
 
   // LunarPay can throw on network failures, invalid keys, validation errors,
   // etc.  Surface a user-friendly message instead of letting Next.js return a

@@ -39,50 +39,50 @@ export async function POST(req: NextRequest) {
   const result = (await getCheckoutSession(secret, sessionId)) as Record<string, unknown>;
   const session = (result.data as Record<string, unknown>) || result;
 
-  if (session.status !== 'completed') {
-    return NextResponse.json(
-      { error: `Checkout not completed (status: ${String(session.status)})` },
-      { status: 400 },
-    );
-  }
+    if (session.status !== 'completed') {
+      return NextResponse.json(
+        { error: `Checkout not completed (status: ${String(session.status)})` },
+        { status: 400 },
+      );
+    }
 
-  const meta = (session.metadata && typeof session.metadata === 'object'
-    ? (session.metadata as Record<string, unknown>)
-    : {}) as Record<string, unknown>;
+    const meta = (session.metadata && typeof session.metadata === 'object'
+      ? (session.metadata as Record<string, unknown>)
+      : {}) as Record<string, unknown>;
 
-  if (String(meta[STORYPAY_PLATFORM_DIRECTORY_META_KEY] ?? '') !== '1') {
-    return NextResponse.json({ error: 'Invalid checkout session' }, { status: 400 });
-  }
-  if (String(meta.venue_id ?? '') !== venueId) {
-    return NextResponse.json({ error: 'Session does not match venue' }, { status: 400 });
-  }
-  if (String(meta.action ?? '') !== 'signup_plan') {
-    return NextResponse.json({ error: 'Unexpected checkout action' }, { status: 400 });
-  }
+    if (String(meta[STORYPAY_PLATFORM_DIRECTORY_META_KEY] ?? '') !== '1') {
+      return NextResponse.json({ error: 'Invalid checkout session' }, { status: 400 });
+    }
+    if (String(meta.venue_id ?? '') !== venueId) {
+      return NextResponse.json({ error: 'Session does not match venue' }, { status: 400 });
+    }
+    if (String(meta.action ?? '') !== 'signup_plan') {
+      return NextResponse.json({ error: 'Unexpected checkout action' }, { status: 400 });
+    }
 
-  // Extract IDs from session
-  const customerId =
-    (session.customer_id as string | number | null) ||
-    (session.customerId as string | number | null) ||
-    ctx.venue.platform_lunarpay_customer_id;
-  const paymentMethodId =
-    (session.payment_method_id as string | number | null) ||
-    (session.paymentMethodId as string | number | null) ||
-    (session.payment_method as string | number | null);
+    // Extract customer and payment method from the completed session.
+    const customerId =
+      (session.customer_id as string | number | null) ||
+      (session.customerId as string | number | null) ||
+      ctx.venue.platform_lunarpay_customer_id;
+    const paymentMethodId =
+      (session.payment_method_id as string | number | null) ||
+      (session.paymentMethodId as string | number | null) ||
+      (session.payment_method as string | number | null);
 
-  if (!customerId || !paymentMethodId) {
-    return NextResponse.json(
-      { error: 'Missing customer or payment method from checkout' },
-      { status: 400 },
-    );
-  }
+    if (!customerId || !paymentMethodId) {
+      return NextResponse.json(
+        { error: 'Missing customer or payment method from checkout' },
+        { status: 400 },
+      );
+    }
 
-  // Pull trial end date from metadata (set by signup-checkout)
-  const trialEndsAtRaw = String(meta.trial_ends_at ?? '');
-  const planId         = String(meta.directory_plan_id ?? '');
-  const addonVerified  = String(meta.addon_verified   ?? '0') === '1';
-  const addonSponsored = String(meta.addon_sponsored  ?? '0') === '1';
-  const addonConcierge = String(meta.addon_concierge  ?? '0') === '1';
+    // Pull trial end date from metadata (set by signup-checkout)
+    const trialEndsAtRaw = String(meta.trial_ends_at ?? '');
+    const planId         = String(meta.directory_plan_id ?? '');
+    const addonVerified  = String(meta.addon_verified   ?? '0') === '1';
+    const addonSponsored = String(meta.addon_sponsored  ?? '0') === '1';
+    const addonConcierge = String(meta.addon_concierge  ?? '0') === '1';
 
   // Compute charge amount with dynamic prices
   const [allPlans, addonPrices] = await Promise.all([

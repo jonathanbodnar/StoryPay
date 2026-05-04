@@ -87,7 +87,6 @@ export async function POST() {
     customer_name: ctx.venue.name,
     success_url: `${APP_URL}/dashboard/directory-billing?start_paid=1`,
     cancel_url: `${APP_URL}/dashboard/directory-billing`,
-    save_payment_method: true,
     metadata: {
       [STORYPAY_PLATFORM_DIRECTORY_META_KEY]: '1',
       venue_id: venueId,
@@ -98,14 +97,16 @@ export async function POST() {
       action: 'start_paid_after_trial',
     },
   };
-  if (ctx.venue.platform_lunarpay_customer_id) {
-    checkoutData.customer_id = ctx.venue.platform_lunarpay_customer_id;
+
+  try {
+    const result = await createCheckoutSession(secret, checkoutData);
+    const session = (result as { data?: { url?: string }; url?: string }).data || result;
+    const url = (session as { url?: string }).url;
+    if (!url) throw new Error('LunarPay did not return a checkout URL');
+    return NextResponse.json({ url });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Could not create checkout session';
+    console.error('[start-paid] LunarPay error:', msg);
+    return NextResponse.json({ error: msg }, { status: 502 });
   }
-
-  const result = await createCheckoutSession(secret, checkoutData);
-  const session = (result as { data?: { url?: string }; url?: string }).data || result;
-  const url = (session as { url?: string }).url;
-  if (!url) throw new Error('LunarPay did not return a checkout URL');
-
-  return NextResponse.json({ url });
 }
