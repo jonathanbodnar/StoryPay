@@ -59,7 +59,33 @@ export async function POST(request: NextRequest) {
   console.log('[webhooks/lunarpay]', event, merchant?.id);
 
   if (event === 'merchant.approved' && keys?.secretKey && keys?.publishableKey) {
-    // Find the venue by merchantId
+    // Special case: this might be StoryPay HQ — the merchant we use to
+    // collect SaaS subscription fees from venues. The HQ merchant is NOT
+    // a venue, so don't try to look it up in the venues table. Instead
+    // log the keys very loudly so the operator can copy them into Railway
+    // as STORYPAY_HQ_LUNARPAY_SK / STORYPAY_HQ_LUNARPAY_PK. (We never write
+    // them to the DB — env vars are the source of truth for HQ.)
+    const hqMerchantIdEnv = process.env.STORYPAY_HQ_LUNARPAY_MERCHANT_ID?.trim();
+    const isHQByEnvId = hqMerchantIdEnv && String(merchant.id) === hqMerchantIdEnv;
+    const isHQByName =
+      typeof merchant.businessName === 'string' &&
+      merchant.businessName.trim().toLowerCase() === 'storypay';
+
+    if (isHQByEnvId || isHQByName) {
+      console.warn('=========================================================');
+      console.warn('[webhooks/lunarpay] StoryPay HQ MERCHANT APPROVED');
+      console.warn(`  merchantId      = ${merchant.id}`);
+      console.warn(`  businessName    = ${merchant.businessName}`);
+      console.warn(`  organizationId  = ${merchant.organizationId}`);
+      console.warn('  → Set these in Railway env (and redeploy):');
+      console.warn(`    STORYPAY_HQ_LUNARPAY_SK = ${keys.secretKey}`);
+      console.warn(`    STORYPAY_HQ_LUNARPAY_PK = ${keys.publishableKey}`);
+      console.warn(`    STORYPAY_HQ_LUNARPAY_MERCHANT_ID = ${merchant.id}`);
+      console.warn('=========================================================');
+      return NextResponse.json({ received: true, role: 'hq' });
+    }
+
+    // Otherwise it's a venue merchant — store its keys on its venue row.
     const { data: venues } = await supabaseAdmin
       .from('venues')
       .select('id')
@@ -77,6 +103,10 @@ export async function POST(request: NextRequest) {
         })
         .eq('id', venueId);
       console.log('[webhooks/lunarpay] venue activated', venueId);
+    } else {
+      console.warn(
+        `[webhooks/lunarpay] merchant.approved for id=${merchant.id} (${merchant.businessName}) but no matching venue — keys NOT stored. If this is StoryPay HQ, set STORYPAY_HQ_LUNARPAY_MERCHANT_ID=${merchant.id} in env so future webhooks recognise it.`,
+      );
     }
   }
 

@@ -6,26 +6,46 @@ import { getPlatformFortisMerchantId } from '@/lib/platform-billing';
 export const STORYPAY_PLATFORM_DIRECTORY_META_KEY = 'storypay_platform_directory';
 
 /**
- * Returns the StoryVenue platform's OWN merchant secret key (lp_sk_...).
+ * Returns "StoryPay HQ"'s merchant secret key (lp_sk_...) — the merchant
+ * account StoryPay uses to bill its own SaaS subscribers (the venues).
  *
- * IMPORTANT: this MUST be a merchant key, not an agency key. Per the LunarPay
- * API docs, agency keys (lp_agency_...) are only valid on /api/v1/agency/*
- * endpoints — they cannot create checkout sessions, subscriptions, or charges.
+ * Two-role architecture:
+ *   • Agency key (lp_agency_..., env: LP_AGENCY_KEY) — used ONLY to register
+ *     and onboard new venue merchants via /api/v1/agency/*. Cannot be used
+ *     for checkout/charges/subscriptions.
+ *   • StoryPay HQ merchant key (lp_sk_..., env: STORYPAY_HQ_LUNARPAY_SK) —
+ *     used to bill venues for their StoryPay SaaS subscriptions.
+ *   • Each venue's own merchant key (lp_sk_..., column:
+ *     venues.lunarpay_secret_key) — used to bill end-clients for proposals
+ *     and invoices.
  *
- * To bill venues for their directory subscriptions, StoryVenue itself has to
- * be registered as a merchant on LunarPay and that merchant's lp_sk_ goes in
- * STORYPAY_PLATFORM_LUNARPAY_SECRET_KEY. We refuse to silently fall back to
- * LP_AGENCY_KEY because that returns opaque 500s from /api/v1/checkout.
+ * STORYPAY_HQ_LUNARPAY_SK is the canonical env var. The old name
+ * STORYPAY_PLATFORM_LUNARPAY_SECRET_KEY is honoured for backwards compat
+ * during the rename; new deploys should use STORYPAY_HQ_LUNARPAY_SK.
  */
 export function getPlatformLunarPaySecretKey(): string | null {
-  const raw = process.env.STORYPAY_PLATFORM_LUNARPAY_SECRET_KEY?.trim();
+  const raw =
+    process.env.STORYPAY_HQ_LUNARPAY_SK?.trim() ||
+    process.env.STORYPAY_PLATFORM_LUNARPAY_SECRET_KEY?.trim() ||
+    null;
   if (!raw) return null;
   if (!raw.startsWith('lp_sk_')) {
     console.warn(
-      '[platform-directory-billing] STORYPAY_PLATFORM_LUNARPAY_SECRET_KEY is set but does not start with "lp_sk_" — agency keys are NOT valid on /api/v1/checkout. Refusing to use it.',
+      '[platform-directory-billing] StoryPay HQ key is set but does not start with "lp_sk_" — agency keys (lp_agency_...) are NOT valid on /api/v1/checkout. Refusing to use it.',
     );
     return null;
   }
+  return raw;
+}
+
+/** StoryPay HQ's publishable key — for Fortis Elements card-update flows. */
+export function getPlatformLunarPayPublishableKey(): string | null {
+  const raw =
+    process.env.STORYPAY_HQ_LUNARPAY_PK?.trim() ||
+    process.env.STORYPAY_PLATFORM_LUNARPAY_PUBLISHABLE_KEY?.trim() ||
+    null;
+  if (!raw) return null;
+  if (!raw.startsWith('lp_pk_')) return null;
   return raw;
 }
 
@@ -37,7 +57,7 @@ export function requirePlatformLunarPaySecretKey(): string {
   const sk = getPlatformLunarPaySecretKey();
   if (!sk) {
     throw new Error(
-      'StoryVenue platform billing is not configured. Set STORYPAY_PLATFORM_LUNARPAY_SECRET_KEY to a LunarPay merchant secret key (starts with lp_sk_). Agency keys (lp_agency_...) cannot be used for checkout — they only work on /api/v1/agency/* endpoints.',
+      'StoryPay HQ billing is not configured. Set STORYPAY_HQ_LUNARPAY_SK to a LunarPay merchant secret key (starts with lp_sk_). Agency keys (lp_agency_...) cannot be used for checkout — they only work on /api/v1/agency/* endpoints. To get the HQ key, onboard "StoryPay" as a merchant via the agency API: see /api/admin/storypay-hq/onboard.',
     );
   }
   return sk;

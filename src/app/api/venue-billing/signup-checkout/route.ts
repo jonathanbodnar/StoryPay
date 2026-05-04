@@ -133,28 +133,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ redirect: '/dashboard?welcome=1' });
   }
 
-  // Compute trial end date — write to DB now so the verify step can read it
-  // without relying on LunarPay session metadata.
+  // Compute trial end date — passed via session metadata so the verify step
+  // can schedule the first charge for exactly when the trial ends.
   const now = new Date();
   const trialEndsAt = new Date(now);
   trialEndsAt.setDate(trialEndsAt.getDate() + SIGNUP_TRIAL_DAYS);
   const trialEndsAtIso = trialEndsAt.toISOString();
-
-  // Write plan, addon choices, and trial dates to the venue row before
-  // redirecting to LunarPay. The verify endpoint reads context from here
-  // instead of from session metadata (metadata causes 500s for some Fortis
-  // merchant configurations).
-  try {
-    await supabaseAdmin
-      .from('venues')
-      .update({
-        directory_trial_ends_at: trialEndsAtIso,
-        directory_trial_started_at: now.toISOString(),
-      })
-      .eq('id', venueId);
-  } catch (e) {
-    console.error('[signup-checkout] failed to persist trial dates:', e);
-  }
 
   let secret: string;
   try {
