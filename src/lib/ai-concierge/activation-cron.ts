@@ -189,54 +189,23 @@ export async function runAiActivationCron(
  * Find dormant leads whose AI follow-up is due to start (or restart after
  * the 24-hour re-enable cooldown).
  *
- * Joins `venues` so we can filter on the addon flags + a2p verification + the
- * venue-side toggle in a single round trip, and pull the timezone we need for
- * quiet-hours math.
- *
- * For the first-time activation path we also require that the lead was either:
- *   a) enrolled in at least one workflow whose `ai_concierge_eligible` flag is
- *      TRUE — this prevents AI from firing on post-tour or re-engagement
- *      sequences where outreach would be out of place, OR
- *   b) NOT enrolled in any workflow at all (manually-created / legacy leads).
- *
- * The re-enable path bypasses this check because a human explicitly pressed
- * "Re-enable AI" — that human decision is sufficient authorisation.
+ * The AI Concierge is venue-level: if the venue has it enabled and the lead
+ * has been silent for 14 days, AI activates. Workflow enrollment is
+ * irrelevant — the AI's only job is to re-engage silent leads and fire a
+ * notification the moment they reply. Workflow automations handle everything
+ * else (sequences, content delivery, etc.) independently.
  */
 async function fetchEligibleLeads(
   sql: postgres.Sql,
   limit: number,
   bypassEligibility: boolean,
 ): Promise<EligibleLeadRow[]> {
-  // The eligibility filter is split between application code and SQL so we can
-  // optionally short-circuit for super-admin debug runs.
   const venueGuard = bypassEligibility
     ? sql`TRUE`
     : sql`
         COALESCE(v.ai_concierge_enabled, false) = true
         AND COALESCE(v.directory_addon_concierge, false) = true
         AND COALESCE(v.a2p_verified, false) = true
-      `;
-
-  // Workflow eligibility: used in the first-time activation sub-condition only.
-  // Bypassed when bypassEligibility = true (super-admin debug runs).
-  const workflowEligibleClause = bypassEligibility
-    ? sql`TRUE`
-    : sql`
-        (
-          -- Enrolled in at least one AI-eligible workflow
-          EXISTS (
-            SELECT 1 FROM public.marketing_automation_enrollments mae
-            JOIN public.marketing_automations ma ON ma.id = mae.automation_id
-            WHERE mae.lead_id = l.id
-              AND COALESCE(ma.ai_concierge_eligible, true) = true
-          )
-          OR
-          -- Not enrolled in any workflow (manually-created / legacy leads)
-          NOT EXISTS (
-            SELECT 1 FROM public.marketing_automation_enrollments mae2
-            WHERE mae2.lead_id = l.id
-          )
-        )
       `;
 
   const rows = await sql<EligibleLeadRow[]>`
@@ -253,15 +222,13 @@ async function fetchEligibleLeads(
       AND COALESCE(l.sms_dnd, false) = false
       AND ${venueGuard}
       AND (
-        -- First-time path: outbound went out 14+ days ago, no inbound yet,
-        -- and the lead's workflow allows AI outreach.
+        -- First-time path: outbound went out 14+ days ago, no inbound yet
         (l.ai_first_activated_at IS NULL
           AND l.last_inbound_at IS NULL
           AND l.last_outbound_at IS NOT NULL
-          AND l.last_outbound_at < NOW() - INTERVAL '14 days'
-          AND ${workflowEligibleClause})
+          AND l.last_outbound_at < NOW() - INTERVAL '14 days')
         OR
-        -- Re-enable path: 24h cooldown has elapsed (human decision, no workflow check)
+        -- Re-enable path: 24h cooldown has elapsed
         (l.ai_re_enabled_at IS NOT NULL
           AND l.ai_next_send_at IS NOT NULL
           AND l.ai_next_send_at <= NOW())
@@ -301,26 +268,6 @@ async function activateLead(
         )
       `;
 
-  // Mirror the same workflow eligibility guard used in fetchEligibleLeads so
-  // a concurrent inbound reply or toggle change can't slip through between
-  // the SELECT and this UPDATE.
-  const workflowEligibleSubquery = bypassEligibility
-    ? sql`TRUE`
-    : sql`
-        (
-          EXISTS (
-            SELECT 1 FROM public.marketing_automation_enrollments mae
-            JOIN public.marketing_automations ma ON ma.id = mae.automation_id
-            WHERE mae.lead_id = leads.id
-              AND COALESCE(ma.ai_concierge_eligible, true) = true
-          )
-          OR NOT EXISTS (
-            SELECT 1 FROM public.marketing_automation_enrollments mae2
-            WHERE mae2.lead_id = leads.id
-          )
-        )
-      `;
-
   const updated = await sql<UpdateActivationRow[]>`
     UPDATE public.leads
        SET ai_state              = 'ai_active',
@@ -333,14 +280,11 @@ async function activateLead(
        AND COALESCE(sms_dnd, false) = false
        AND ${venueGuardSubquery}
        AND (
-         -- First-time path: also requires workflow eligibility
          (ai_first_activated_at IS NULL
            AND last_inbound_at IS NULL
            AND last_outbound_at IS NOT NULL
-           AND last_outbound_at < NOW() - INTERVAL '14 days'
-           AND ${workflowEligibleSubquery})
+           AND last_outbound_at < NOW() - INTERVAL '14 days')
          OR
-         -- Re-enable path: human decision, no workflow check
          (ai_re_enabled_at IS NOT NULL
            AND ai_next_send_at IS NOT NULL
            AND ai_next_send_at <= NOW())
