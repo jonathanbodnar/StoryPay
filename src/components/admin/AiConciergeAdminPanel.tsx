@@ -22,7 +22,9 @@ import {
   Sparkles, Loader2, AlertTriangle, RotateCw, Power, Search,
   CheckCircle2, XCircle, Pause, Play, Shield, ShieldOff,
   ExternalLink, BadgeCheck, Activity, MessageSquare, Filter,
+  Workflow,
 } from 'lucide-react';
+import AiConciergeHandoffRulesEditor from './AiConciergeHandoffRulesEditor';
 
 const BRAND = '#1b1b1b';
 
@@ -113,7 +115,7 @@ interface VenuesPayload {
   };
 }
 
-type TabKey = 'runs' | 'transitions' | 'venues';
+type TabKey = 'runs' | 'transitions' | 'venues' | 'handoff-rules';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -285,9 +287,10 @@ export function AiConciergeAdminPanel() {
       {/* Tab bar */}
       <div className="flex items-center gap-1 border-b border-gray-200">
         {([
-          { key: 'runs',         label: 'Live runs',       icon: Activity },
-          { key: 'transitions',  label: 'State transitions', icon: MessageSquare },
-          { key: 'venues',       label: 'Venues',          icon: BadgeCheck },
+          { key: 'runs',           label: 'Live runs',         icon: Activity },
+          { key: 'transitions',    label: 'State transitions', icon: MessageSquare },
+          { key: 'venues',         label: 'Venues',            icon: BadgeCheck },
+          { key: 'handoff-rules',  label: 'Handoff rules',     icon: Workflow },
         ] as const).map(({ key, label, icon: Icon }) => {
           const active = tab === key;
           return (
@@ -308,9 +311,10 @@ export function AiConciergeAdminPanel() {
         })}
       </div>
 
-      {tab === 'runs'        && <RunsTable />}
-      {tab === 'transitions' && <TransitionsTable />}
-      {tab === 'venues'      && <VenuesTable />}
+      {tab === 'runs'          && <RunsTable />}
+      {tab === 'transitions'   && <TransitionsTable />}
+      {tab === 'venues'        && <VenuesTable />}
+      {tab === 'handoff-rules' && <AiConciergeHandoffRulesEditor />}
     </div>
   );
 }
