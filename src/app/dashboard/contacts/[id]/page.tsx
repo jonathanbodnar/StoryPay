@@ -11,6 +11,7 @@ import {
   AlertCircle, Undo2, Smartphone,
 } from 'lucide-react';
 import RefundModal from '@/components/RefundModal';
+import ContactAiControls from '@/components/ai-concierge/ContactAiControls';
 import { formatCents, formatDate, formatDateTime, getStatusColor, classNames, toTitleCase, dispatchStageChange, onStageChange } from '@/lib/utils';
 import { slugifyStageLabel } from '@/lib/pipeline-stage-slug';
 
@@ -1491,6 +1492,13 @@ export default function CustomerDetailPage() {
                 </button>
                 <p className="mt-2 text-xs text-amber-800/80">Only use if they have agreed to receive texts again (written consent recommended).</p>
               </div>
+            </div>
+          ) : null}
+
+          {/* ── AI Concierge controls (only when this contact has a linked lead) ── */}
+          {venueCustomer?.pipeline_context?.linkedLeadId ? (
+            <div className="lg:col-span-2">
+              <ContactAiControls leadId={venueCustomer.pipeline_context.linkedLeadId} />
             </div>
           ) : null}
         </div>

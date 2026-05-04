@@ -111,6 +111,7 @@ export interface AiVenueResources {
 export type AiTransitionReason =
   | 'first_activation'
   | 'manually_re_enabled'
+  | 'manually_paused'
   | 'inbound_reply'
   | 'inbound_negative_intent'
   | 'inbound_handoff_keyword'
