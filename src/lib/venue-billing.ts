@@ -2,10 +2,10 @@ import { supabaseAdmin } from './supabase';
 import {
   cancelSubscription,
   createCheckoutSession,
+  createSubscription,
   getCheckoutSession,
   getSubscription,
   listPaymentMethods,
-  updateSubscription,
 } from './lunarpay';
 import {
   getPlatformFortisMerchantId,
@@ -556,6 +556,114 @@ async function recordBillingEvent(
   });
 }
 
+/**
+ * Replace an existing LunarPay subscription with one whose first charge
+ * lands on the OLD subscription's next renewal date — a clean "rollover at
+ * period end" with no proration. The current period stays paid for; the new
+ * amount kicks in the day the next charge would have happened.
+ *
+ * Used for plan upgrades/downgrades and add-on changes once a venue is on
+ * an active or trialing LunarPay subscription. The user gets exactly what
+ * they paid for in the current period and never sees a partial charge.
+ *
+ * Steps:
+ *  1. GET the existing subscription so we can see its next renewal date,
+ *     bound customer, and bound payment method.
+ *  2. Cancel it (LunarPay does not refund the unused portion on cancel,
+ *     which is what "no proration" requires).
+ *  3. Create a new subscription at the new amount with
+ *     `startOn = old next-renewal date`.
+ *
+ * If the existing subscription has no scheduled next-renewal date (rare —
+ * e.g. fully delinquent, frozen), we fall back to "tomorrow" so we don't
+ * inadvertently charge today.
+ */
+async function rolloverSubscriptionAtNextRenewal(opts: {
+  secret: string;
+  oldSubId: string | number;
+  newAmountCents: number;
+  description: string;
+  frequency?: string;
+  fallbackCustomerId?: string | number | null;
+}): Promise<{ newSubId: string; startOn: string; rolledOverFrom: string }> {
+  const oldRaw = await getSubscription(opts.secret, opts.oldSubId);
+  const oldSub =
+    ((oldRaw as { data?: Record<string, unknown> }).data as Record<string, unknown>) ||
+    (oldRaw as Record<string, unknown>);
+
+  const customerId =
+    (oldSub.customerId as string | number | null | undefined) ??
+    (oldSub.customer_id as string | number | null | undefined) ??
+    opts.fallbackCustomerId ??
+    null;
+  const paymentMethodId =
+    (oldSub.paymentMethodId as string | number | null | undefined) ??
+    (oldSub.payment_method_id as string | number | null | undefined) ??
+    (oldSub.payment_method as string | number | null | undefined) ??
+    null;
+  if (!customerId || !paymentMethodId) {
+    throw new Error(
+      'Could not read customer / payment method from the existing LunarPay subscription. Plan change cannot complete without re-entering a card.',
+    );
+  }
+
+  // LunarPay's update endpoint accepts `nextPaymentOn` for writes, so we
+  // expect the read shape to expose it under one of these names. Try them
+  // in priority order.
+  const nextRenewalRaw =
+    (oldSub.nextPaymentOn as string | null | undefined) ??
+    (oldSub.next_payment_on as string | null | undefined) ??
+    (oldSub.nextChargeAt as string | null | undefined) ??
+    (oldSub.next_charge_at as string | null | undefined) ??
+    (oldSub.nextChargeDate as string | null | undefined) ??
+    (oldSub.next_charge_date as string | null | undefined) ??
+    (oldSub.nextPaymentDate as string | null | undefined) ??
+    (oldSub.next_payment_date as string | null | undefined) ??
+    (oldSub.next_billing_date as string | null | undefined) ??
+    null;
+
+  const nowMs = Date.now();
+  const tomorrow = new Date(nowMs + 24 * 60 * 60 * 1000);
+  let startOnDate = tomorrow;
+  if (nextRenewalRaw) {
+    const parsed = new Date(nextRenewalRaw);
+    if (!Number.isNaN(parsed.getTime()) && parsed.getTime() > nowMs) {
+      startOnDate = parsed;
+    }
+  }
+  const startOn = startOnDate.toISOString().slice(0, 10);
+
+  await cancelSubscription(opts.secret, opts.oldSubId);
+
+  const subResp = await createSubscription(opts.secret, {
+    customerId: Number(customerId),
+    paymentMethodId: Number(paymentMethodId),
+    amount: opts.newAmountCents,
+    frequency: opts.frequency ?? 'monthly',
+    startOn,
+    description: opts.description,
+  });
+  const sub =
+    ((subResp as { data?: Record<string, unknown> }).data as Record<string, unknown>) ||
+    (subResp as Record<string, unknown>);
+  const newSubId = (sub.id as string | number | undefined) ?? null;
+  if (newSubId === null || newSubId === undefined) {
+    throw new Error('LunarPay did not return a subscription id for the rolled-over subscription');
+  }
+
+  return {
+    newSubId: String(newSubId),
+    startOn,
+    rolledOverFrom: String(opts.oldSubId),
+  };
+}
+
+/**
+ * Public re-export so callers outside this module (e.g. addon route) can
+ * use the same rollover semantics for add-on changes mid-cycle.
+ */
+export { rolloverSubscriptionAtNextRenewal };
+
 export async function changeVenuePlan(
   venueId: string,
   targetPlanId: string,
@@ -693,32 +801,55 @@ export async function changeVenuePlan(
     return { kind: 'switched', plan_id: target.id };
   }
 
-  // Both plans priced and we have an active subscription — PATCH the amount.
-  if (hasActiveSub && subId && currentCents > 0) {
+  // We have an LP subscription on file (active, trialing, or past_due) AND
+  // the new total is non-zero. Roll the subscription over: cancel the
+  // existing one and create a new one starting on the OLD sub's next
+  // renewal date at the new amount. The customer keeps using the period
+  // they already paid for; the new price kicks in only at next renewal.
+  // No proration.
+  //
+  // For trialing accounts, the existing sub is already scheduled to first
+  // charge on directory_trial_ends_at — the rollover preserves that date,
+  // just at the updated amount. We keep the venue's subscription_status as
+  // 'trialing' so the dashboard still shows trial copy until trial end.
+  if (hasActiveSub && subId) {
     const secret = requirePlatformLunarPaySecretKey();
+    let rollover: { newSubId: string; startOn: string; rolledOverFrom: string };
     try {
-      await updateSubscription(secret, subId, { amount: newCents });
+      rollover = await rolloverSubscriptionAtNextRenewal({
+        secret,
+        oldSubId: subId,
+        newAmountCents: newCents,
+        description: `StoryVenue directory — ${target.name} (monthly)`,
+        fallbackCustomerId: ctx.venue.platform_lunarpay_customer_id,
+      });
     } catch (e) {
       throw new Error(
-        `LunarPay rejected the plan change: ${e instanceof Error ? e.message : 'unknown error'}`,
+        `Could not change plan in LunarPay: ${e instanceof Error ? e.message : 'unknown error'}`,
       );
     }
     await supabaseAdmin
       .from('venues')
-      .update({ directory_plan_id: target.id, directory_subscription_status: 'active' })
+      .update({
+        directory_plan_id: target.id,
+        directory_subscription_status: status === 'trialing' ? 'trialing' : 'active',
+        directory_subscription_external_id: rollover.newSubId,
+      })
       .eq('id', venueId);
     await recordBillingEvent(
       venueId,
       target.id,
       0,
-      'plan_change',
+      'plan_change_rolled_over',
       `plan_change:${target.id}:${venueId}:${Date.now()}`,
       {
-        previous_plan_id: ctx.plan?.id || null,
-        new_plan_id: target.id,
-        previous_amount_cents: currentCents,
-        new_amount_cents: newCents,
-        subscription_id: subId,
+        previous_plan_id:        ctx.plan?.id || null,
+        new_plan_id:             target.id,
+        previous_amount_cents:   currentCents,
+        new_amount_cents:        newCents,
+        previous_subscription_id: subId,
+        new_subscription_id:      rollover.newSubId,
+        new_charge_starts_on:     rollover.startOn,
       },
     );
     return { kind: 'switched', plan_id: target.id };

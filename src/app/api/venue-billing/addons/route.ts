@@ -8,13 +8,16 @@ import {
 } from '@/lib/platform-directory-billing';
 import {
   cancelSubscription,
-  updateSubscription,
   createCheckoutSession,
 } from '@/lib/lunarpay';
 import {
   computeMonthlyTotalCents,
 } from '@/lib/directory-addons';
-import { listDirectoryPlanCatalog, loadAddonPrices } from '@/lib/venue-billing';
+import {
+  listDirectoryPlanCatalog,
+  loadAddonPrices,
+  rolloverSubscriptionAtNextRenewal,
+} from '@/lib/venue-billing';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -24,20 +27,29 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.storypay.io';
 /**
  * POST /api/venue-billing/addons
  *
- * Body: { verified?: boolean, sponsored?: boolean }
+ * Body: { verified?: boolean, sponsored?: boolean, concierge?: boolean }
  *
  * Toggles the venue's add-on subscriptions. Recalculates the total monthly
  * charge (plan price + active add-ons that aren't already plan-included) and
- * pushes the new amount to LunarPay. Three flows:
+ * synchronises that with LunarPay. Branches:
  *
- *  1. New total > 0 with an active LunarPay subscription
- *     → PATCH the subscription amount.
+ *  1. New total > 0 with an LP subscription on file (active, trialing-with-
+ *     sub, or past_due) → ROLL OVER: cancel the existing sub and create a
+ *     fresh one starting on the old sub's next-renewal date at the new
+ *     amount. No proration — the customer keeps using the period they
+ *     already paid for and the new price kicks in on next renewal. For
+ *     trialing accounts the rollover preserves trial_ends_at as the start
+ *     date.
  *
- *  2. New total > 0 with NO active subscription (e.g. free plan owner adds
- *     their first paid addon) → return a checkout URL so they can enter a card.
+ *  2. New total > 0 with NO LP subscription (e.g. free plan owner adds
+ *     their first paid addon) → return a checkout URL so they can enter a
+ *     card. Verify will create the first sub.
  *
- *  3. New total === 0 with an active subscription (e.g. user removes the only
- *     paid addon while on a free plan) → cancel the LunarPay subscription.
+ *  3. New total === 0 with an LP subscription on file → cancel the sub and
+ *     clear the venue's billing status.
+ *
+ * Legacy: pre-2026-05 trial grants (status='trialing', no LP sub) just
+ * persist the addon flags; LP work happens later via /start-paid.
  *
  * The verified/sponsored *statuses* (admin approval flow) are also nudged so
  * the public listing badge stays correct: enabling sets to 'pending' if not
@@ -170,17 +182,21 @@ async function handlePost(req: NextRequest) {
 
   const subId = ctx.venue.directory_subscription_external_id;
   const status = ctx.venue.directory_subscription_status;
-  // A LunarPay sub is only "real" with an external id; trialing venues don't
-  // have one yet (they activate when card is added at trial end).
-  const hasActiveSub = Boolean(subId && (status === 'active' || status === 'past_due'));
+  // Any LunarPay subscription on file (active, trialing-with-sub from our
+  // post-2026-05 signup-checkout flow, or past-due) is eligible for the
+  // "rollover at next renewal" pattern. Legacy trials granted before the
+  // signup-checkout fix (status='trialing' but subId is null) take the
+  // no-LP-update path further down.
+  const hasLpSub = Boolean(
+    subId && (status === 'active' || status === 'past_due' || status === 'trialing'),
+  );
   const isTrialing = status === 'trialing';
 
-  // ── Trial case ──────────────────────────────────────────────────────────
-  // During an active trial we just persist the addon flags — nothing to bill.
-  // The first charge (computed from plan + active addons at that moment) fires
-  // when the venue adds a card and the LunarPay sub is created with
-  // startOn = trial_ends_at.
-  if (isTrialing) {
+  // ── Legacy trial (no LP sub) ────────────────────────────────────────────
+  // Pre-2026-05 signup grants set status='trialing' without creating an
+  // LP subscription. For those accounts addon changes are pure local
+  // bookkeeping until the venue adds a card and triggers /start-paid.
+  if (isTrialing && !subId) {
     await applyAddonFlagsAndStatus(venueId, currentPlan?.id ?? null, {
       verified:  nextVerified,
       sponsored: nextSponsored,
@@ -202,7 +218,7 @@ async function handlePost(req: NextRequest) {
   // (May 2026 schema drift), so the metadata round-trip isn't safe. Pre-
   // writing is harmless: with no LP subscription on file, no money moves
   // until verify creates one.
-  if (!hasActiveSub && nextCharge.total_cents > 0) {
+  if (!hasLpSub && nextCharge.total_cents > 0) {
     const secret = requirePlatformLunarPaySecretKey();
     await applyAddonFlagsAndStatus(venueId, currentPlan?.id ?? null, {
       verified:  nextVerified,
@@ -241,7 +257,7 @@ async function handlePost(req: NextRequest) {
 
   // ── Flow 3: Total drops to 0 — cancel the sub if any ───────────────────
   if (nextCharge.total_cents === 0) {
-    if (hasActiveSub && subId) {
+    if (hasLpSub && subId) {
       const secret = getPlatformLunarPaySecretKey();
       if (secret) {
         try {
@@ -270,12 +286,46 @@ async function handlePost(req: NextRequest) {
     return NextResponse.json({ kind: 'switched', total_cents: 0 });
   }
 
-  // ── Flow 1: PATCH subscription amount ──────────────────────────────────
-  if (hasActiveSub && subId) {
+  // ── Flow 1: roll the subscription over at next renewal ──────────────────
+  // We have an LP sub (active, trialing, or past_due) AND a non-zero new
+  // total. Cancel the existing sub and create a fresh one whose first
+  // charge lands on the OLD sub's next-renewal date — same period the
+  // customer already paid for, just at the new amount. No proration.
+  //
+  // For trialing accounts, the OLD sub's next charge is trial_ends_at, so
+  // the rollover preserves that date and the new amount kicks in on day 14.
+  if (hasLpSub && subId) {
     const secret = requirePlatformLunarPaySecretKey();
     if (nextCharge.total_cents !== prevCharge.total_cents) {
       try {
-        await updateSubscription(secret, subId, { amount: nextCharge.total_cents });
+        const rollover = await rolloverSubscriptionAtNextRenewal({
+          secret,
+          oldSubId: subId,
+          newAmountCents: nextCharge.total_cents,
+          description: 'StoryVenue directory — add-ons (monthly)',
+          fallbackCustomerId: ctx.venue.platform_lunarpay_customer_id,
+        });
+        await supabaseAdmin
+          .from('venues')
+          .update({ directory_subscription_external_id: rollover.newSubId })
+          .eq('id', venueId);
+        await recordBillingEvent(
+          venueId,
+          currentPlan?.id ?? null,
+          nextCharge.total_cents,
+          'addon_change_rolled_over',
+          `addon_change:${venueId}:${Date.now()}`,
+          {
+            previous_amount_cents:    prevCharge.total_cents,
+            new_amount_cents:         nextCharge.total_cents,
+            verified:                 nextVerified,
+            sponsored:                nextSponsored,
+            concierge:                nextConcierge,
+            previous_subscription_id: subId,
+            new_subscription_id:      rollover.newSubId,
+            new_charge_starts_on:     rollover.startOn,
+          },
+        );
       } catch (e) {
         return NextResponse.json(
           {
@@ -292,21 +342,6 @@ async function handlePost(req: NextRequest) {
       prevVerifiedStatus:  String((addonRow as Record<string, unknown>).directory_verified_status  ?? 'none'),
       prevSponsoredStatus: String((addonRow as Record<string, unknown>).directory_sponsored_status ?? 'none'),
     });
-    await recordBillingEvent(
-      venueId,
-      currentPlan?.id ?? null,
-      nextCharge.total_cents,
-      'addon_change',
-      `addon_change:${venueId}:${Date.now()}`,
-      {
-        previous_amount_cents: prevCharge.total_cents,
-        new_amount_cents: nextCharge.total_cents,
-        verified:   nextVerified,
-        sponsored:  nextSponsored,
-        concierge:  nextConcierge,
-        subscription_id: subId,
-      },
-    );
     return NextResponse.json({ kind: 'switched', total_cents: nextCharge.total_cents });
   }
 
