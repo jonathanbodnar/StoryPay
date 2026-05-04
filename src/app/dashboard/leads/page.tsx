@@ -2337,7 +2337,7 @@ function LeadDrawer({
           {/* Workflow Enrollments */}
           {enrollments.length > 0 && (
             <section>
-              <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5 mb-3">
+              <h3 className="text-sm font-semibold text-[#1b1b1b] flex items-center gap-1.5 mb-3">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
                 Workflow Enrollments
               </h3>
@@ -2382,7 +2382,7 @@ function LeadDrawer({
           {/* Personalized trigger links (automatic attribution via ?t=) */}
           <section>
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+              <h3 className="text-sm font-semibold text-[#1b1b1b] flex items-center gap-1.5">
                 <Link2 className="w-4 h-4" /> Trigger links for this lead
               </h3>
               <Link
@@ -2445,7 +2445,7 @@ function LeadDrawer({
 
           {/* Tasks */}
           <section>
-            <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5 mb-2">
+            <h3 className="text-sm font-semibold text-[#1b1b1b] flex items-center gap-1.5 mb-2">
               <ListTodo className="w-4 h-4" /> Tasks & follow-ups
             </h3>
             <div className="rounded-2xl border border-gray-200 bg-white p-3 space-y-2">
@@ -2511,7 +2511,7 @@ function LeadDrawer({
 
           {/* Audit trail + quick call log */}
           <section>
-            <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5 mb-2">
+            <h3 className="text-sm font-semibold text-[#1b1b1b] flex items-center gap-1.5 mb-2">
               <Activity className="w-4 h-4" /> Activity &amp; audit
             </h3>
             <p className="text-[11px] text-gray-400 mb-3">
@@ -2568,7 +2568,7 @@ function LeadDrawer({
           {/* Unified timeline */}
           <section>
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+              <h3 className="text-sm font-semibold text-[#1b1b1b] flex items-center gap-1.5">
                 <History className="w-4 h-4" /> Timeline
               </h3>
               <span className="text-[11px] text-gray-400">{timelineItems.length} items</span>
