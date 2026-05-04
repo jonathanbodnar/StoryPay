@@ -9,6 +9,7 @@ import {
 import { applySmsDndForVenueCustomer, isSmsOptOutKeyword } from '@/lib/sms-compliance';
 import { syncSingleGhlContact } from '@/lib/ghl-contacts-sync';
 import { ghlDndToConversationFlags } from '@/app/api/venue-customers/[id]/dnd/route';
+import { handleInboundAiMessage } from '@/lib/ai-concierge/inbound-handler';
 
 export async function POST(request: NextRequest) {
   try {
@@ -49,12 +50,30 @@ export async function POST(request: NextRequest) {
         });
         if (!r.ok) {
           console.error('[ghl webhook] inbound SMS ingest failed:', r.error);
-        } else if (r.venueCustomerId && isSmsOptOutKeyword(inboundSms.body)) {
-          await applySmsDndForVenueCustomer({
-            venueId: venue.id as string,
-            venueCustomerId: r.venueCustomerId,
-            source: 'inbound_stop_keyword',
-          });
+        } else {
+          // TCPA: STOP keyword → set sms_dnd on venue_customer + matching leads.
+          // Runs FIRST so the AI inbound handler sees the dnd state correctly.
+          if (r.venueCustomerId && isSmsOptOutKeyword(inboundSms.body)) {
+            await applySmsDndForVenueCustomer({
+              venueId: venue.id as string,
+              venueCustomerId: r.venueCustomerId,
+              source: 'inbound_stop_keyword',
+            });
+          }
+
+          // AI Concierge: classify the reply + drive the lead's AI state machine.
+          // Only runs when the message was newly inserted (not a duplicate
+          // re-delivery from GHL) AND we resolved a venue_customer.
+          if (r.inserted && r.venueCustomerId) {
+            void handleInboundAiMessage({
+              venueId:         venue.id as string,
+              venueCustomerId: r.venueCustomerId,
+              messageBody:     inboundSms.body,
+              ghlMessageId:    inboundSms.messageId ?? null,
+            }).catch((err) => {
+              console.error('[ghl webhook] AI inbound handler failed:', err);
+            });
+          }
         }
       } else {
         console.warn('[ghl webhook] inbound SMS: no venue for locationId', inboundSms.locationId);
