@@ -57,7 +57,7 @@ import { buildAiConciergeSystemPrompt } from './prompt-builder';
 import { generateSmsWithDeepSeek, clampSmsLength } from './llm';
 import { logAiOutboundMessage } from './conversation-helpers';
 import { sendAiSms } from './sms-provider';
-import { getAiRuntimeSettings } from './runtime-settings';
+import { getAiRuntimeSettings, stampCronHeartbeat } from './runtime-settings';
 import { evaluateSpendCap, maybeSendCapWarningEmail } from './spend-caps';
 import { wallClockToUtc, addCalendarDaysYmd } from '@/lib/venue-timezone';
 import { formatInTimeZone } from 'date-fns-tz';
@@ -160,6 +160,9 @@ export async function runAiSendCron(
       errors.push({ leadId: row.id, error: msg });
     }
   }
+
+  // Stamp heartbeat at end of a successful run. Best-effort.
+  await stampCronHeartbeat('send');
 
   const finishedAt = new Date();
   return {

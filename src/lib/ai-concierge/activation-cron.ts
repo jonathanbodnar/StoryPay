@@ -40,7 +40,7 @@ import { ensureVenueAiResources } from './venue-resources';
 import { moveLeadToAiStage, applyAiTag } from './pipeline-tag-service';
 import { recordAiStateTransition } from './state-transitions';
 import { enforceQuietHours } from './quiet-hours';
-import { getAiRuntimeSettings } from './runtime-settings';
+import { getAiRuntimeSettings, stampCronHeartbeat } from './runtime-settings';
 
 // ── Public types ───────────────────────────────────────────────────────────
 
@@ -164,6 +164,10 @@ export async function runAiActivationCron(
       errors.push({ leadId: row.id, error: msg });
     }
   }
+
+  // Stamp heartbeat at end of a successful run so the admin dashboard
+  // can surface a green/red liveness badge. Best-effort — never throws.
+  await stampCronHeartbeat('activation');
 
   const finishedAt = new Date();
   return {

@@ -127,6 +127,9 @@ const nextConfig: NextConfig = {
       { source: "/favicon.ico", destination: "/storyvenue-sidebar-mark.png", permanent: true },
       { source: "/dashboard/customers", destination: "/dashboard/contacts", permanent: true },
       { source: "/dashboard/customers/:id", destination: "/dashboard/contacts/:id", permanent: true },
+      // AI Concierge moved from settings → marketing (May 2026). Forward
+      // bookmarks + any old email CTAs.
+      { source: "/dashboard/settings/ai-concierge", destination: "/dashboard/marketing/ai-concierge", permanent: true },
     ];
   },
 };

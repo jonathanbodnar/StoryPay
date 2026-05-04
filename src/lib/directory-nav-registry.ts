@@ -71,6 +71,7 @@ export const DIRECTORY_NAV_REGISTRY: DirectoryNavRegistryEntry[] = [
   { id: 'nav_marketing_email_automations', label: 'Marketing — Workflows', pathPrefix: '/dashboard/marketing/workflows', group: 'marketing' },
   { id: 'nav_marketing_email_root', label: 'Marketing — Email (index)', pathPrefix: '/dashboard/marketing/email', group: 'marketing' },
   { id: 'nav_marketing_trigger_links', label: 'Marketing — Trigger links & tags', pathPrefix: '/dashboard/marketing/trigger-links', group: 'marketing' },
+  { id: 'nav_marketing_ai_concierge', label: 'Marketing — AI Concierge', pathPrefix: '/dashboard/marketing/ai-concierge', group: 'marketing' },
 
   { id: 'nav_settings_general', label: 'Settings — General', pathPrefix: '/dashboard/settings', group: 'settings' },
   { id: 'nav_settings_branding', label: 'Settings — Branding', pathPrefix: '/dashboard/settings/branding', group: 'settings' },
@@ -78,7 +79,6 @@ export const DIRECTORY_NAV_REGISTRY: DirectoryNavRegistryEntry[] = [
   { id: 'nav_settings_integrations', label: 'Settings — Integrations', pathPrefix: '/dashboard/settings/integrations', group: 'settings' },
   { id: 'nav_settings_team', label: 'Settings — Team', pathPrefix: '/dashboard/settings/team', group: 'settings' },
   { id: 'nav_settings_notifications', label: 'Settings — Notifications', pathPrefix: '/dashboard/settings/notifications', group: 'settings' },
-  { id: 'nav_settings_ai_concierge', label: 'Settings — AI Concierge', pathPrefix: '/dashboard/settings/ai-concierge', group: 'settings' },
 ];
 
 const NAV_IDS = DIRECTORY_NAV_REGISTRY.map((e) => e.id);

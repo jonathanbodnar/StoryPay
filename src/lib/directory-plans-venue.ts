@@ -69,6 +69,15 @@ export function computeAllowedNavIdsFromPlan(plan: {
     set = navIdsFromLegacyFeatureFlags(plan.feature_flags);
   }
 
+  // Backward compat: AI Concierge moved from settings → marketing in
+  // May 2026. Plans saved before that have `nav_settings_ai_concierge: true`
+  // which is no longer in the registry; forward it to its new id so the
+  // upgrade is invisible to existing customers.
+  if (set.has('nav_settings_ai_concierge')) {
+    set.delete('nav_settings_ai_concierge');
+    set.add('nav_marketing_ai_concierge');
+  }
+
   if (set.size === 0) {
     return ['nav_main_home'];
   }

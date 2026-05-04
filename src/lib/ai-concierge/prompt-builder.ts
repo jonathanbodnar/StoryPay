@@ -201,14 +201,7 @@ export async function buildAiConciergeSystemPrompt(
     bride_notes_or_none:         joinNotes(lead),
   };
 
-  const venueCtx: PromptInputContextVenueEntry = {
-    venue_name:              venue.name?.trim() || 'our venue',
-    venue_city:              venue.location_city?.trim() || '',
-    venue_state:              venue.location_state?.trim() || '',
-    venue_style_description:  venue.description?.trim().slice(0, 400) || '',
-    assistant_persona_name:   venue.ai_assistant_persona_name?.trim() || 'Alison',
-    timezone:                tz,
-  };
+  const venueCtx: PromptInputContextVenueEntry = venueRowToContext(venue, tz);
 
   const renderTokens: Record<string, string> = {
     // Config sections (also embedded literally in the template)
@@ -262,6 +255,103 @@ export async function buildAiConciergeSystemPrompt(
       lead:  leadCtx,
       venue: venueCtx,
     },
+  };
+}
+
+// ── Public: build a TEST prompt with a synthetic lead ─────────────────────
+
+export interface BuildTestPromptInput {
+  venueId: string;
+  /** Display first-name to use for the synthetic bride. Defaults to "Sarah". */
+  brideFirstName?: string;
+  configOverride?: AiConfigRow;
+}
+
+/**
+ * Build a system prompt against a SYNTHETIC lead — used by the venue-facing
+ * "Send test SMS" feature so the venue can see exactly what the AI will send
+ * without polluting their leads table or counting toward metrics.
+ *
+ * The venue context is real (venue name, city, persona, etc.) so the test
+ * message reads authentically, but the lead is a fixed sample (Sarah Johnson,
+ * 14 days since inquiry, wedding 6 months out).
+ */
+export async function buildAiConciergeTestSystemPrompt(
+  input: BuildTestPromptInput,
+): Promise<BuildPromptResult | { ok: false; error: string }> {
+  const config = input.configOverride ?? await loadActiveAiConfig();
+  if (!config) {
+    return { ok: false, error: 'No active ai_config row — run migration 098 first' };
+  }
+  const venue = await loadVenueContext(input.venueId);
+  if (!venue) {
+    return { ok: false, error: `Venue ${input.venueId} not found` };
+  }
+
+  const tz = resolveVenueTimezone(venue.timezone);
+  const venueCtx = venueRowToContext(venue, tz);
+
+  const fakeFirstName = (input.brideFirstName?.trim() || 'Sarah').slice(0, 60);
+  const fakeFullName  = `${fakeFirstName} Johnson`;
+  const inquiryIso    = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+  const weddingIso    = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString();
+
+  const leadCtx: PromptInputContextLeadEntry = {
+    bride_first_name:            fakeFirstName,
+    bride_full_name:             fakeFullName,
+    initial_inquiry_iso:         inquiryIso,
+    time_since_initial_inquiry:  '14 days ago',
+    wedding_date_or_unknown:     formatWeddingDate(weddingIso),
+    bride_notes_or_none:         'Initial inquiry: looking for an outdoor ceremony space, ~150 guests, mid-budget. (TEST DATA)',
+  };
+
+  const renderTokens: Record<string, string> = {
+    personality:        config.personality,
+    goals:              config.goals,
+    guardrails:         config.guardrails,
+    prohibited_topics:  config.prohibited_topics,
+    venue_name:               venueCtx.venue_name,
+    venue_city:               venueCtx.venue_city,
+    venue_state:              venueCtx.venue_state,
+    venue_style_description:  venueCtx.venue_style_description,
+    assistant_persona_name:   venueCtx.assistant_persona_name,
+    bride_first_name:           leadCtx.bride_first_name,
+    bride_full_name:             leadCtx.bride_full_name,
+    initial_inquiry_date:       formatInTimeZone(new Date(inquiryIso), tz, 'MMMM d, yyyy'),
+    time_since_initial_inquiry:  leadCtx.time_since_initial_inquiry,
+    wedding_date_or_unknown:    leadCtx.wedding_date_or_unknown,
+    bride_notes_or_none:        leadCtx.bride_notes_or_none,
+    attempt_number:           '1',
+    angles_used_list:         'none yet',
+    message_history_last_10:  '(no prior messages — test send)',
+    outreach_questions:         formatOutreachQuestions(config.outreach_questions),
+    outreach_questions_grouped: formatOutreachQuestionsGrouped(config.outreach_questions),
+  };
+
+  const systemPrompt = renderTemplate(config.system_prompt_template, renderTokens);
+
+  return {
+    ok: true,
+    systemPrompt,
+    config,
+    inputContext: {
+      attempt_number: 1,
+      angles_used:    [],
+      message_history_last_10: [],
+      lead:  leadCtx,
+      venue: venueCtx,
+    },
+  };
+}
+
+function venueRowToContext(venue: VenueContextRow, tz: string): PromptInputContextVenueEntry {
+  return {
+    venue_name:              venue.name?.trim() || 'our venue',
+    venue_city:              venue.location_city?.trim() || '',
+    venue_state:              venue.location_state?.trim() || '',
+    venue_style_description:  venue.description?.trim().slice(0, 400) || '',
+    assistant_persona_name:   venue.ai_assistant_persona_name?.trim() || 'Alison',
+    timezone:                tz,
   };
 }
 

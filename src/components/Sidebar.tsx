@@ -79,6 +79,7 @@ const marketingItems: NavItem[] = [
   { label: 'Forms',              href: '/dashboard/marketing/form-builder',    icon: LayoutTemplate, navId: 'nav_marketing_form_builder' },
   { label: 'Workflows',          href: '/dashboard/marketing/workflows',        icon: Workflow,      navId: 'nav_marketing_email_automations' },
   { label: 'Trigger links & tags', href: '/dashboard/marketing/trigger-links', icon: Link2,         navId: 'nav_marketing_trigger_links' },
+  { label: 'AI Concierge',       href: '/dashboard/marketing/ai-concierge',    icon: Sparkles,      navId: 'nav_marketing_ai_concierge' },
 ];
 
 const settingsItems: NavItem[] = [
@@ -86,7 +87,6 @@ const settingsItems: NavItem[] = [
   { label: 'Branding', href: '/dashboard/settings/branding', icon: Palette, navId: 'nav_settings_branding' },
   { label: 'Calendar', href: '/dashboard/settings/calendar', icon: Calendar, navId: 'nav_settings_calendar' },
   { label: 'Integrations', href: '/dashboard/settings/integrations', icon: Link2, navId: 'nav_settings_integrations' },
-  { label: 'AI Concierge', href: '/dashboard/settings/ai-concierge', icon: Sparkles, navId: 'nav_settings_ai_concierge' },
   { label: 'Team', href: '/dashboard/settings/team', icon: UsersRound, navId: 'nav_settings_team' },
   { label: 'Billing', href: '/dashboard/directory-billing', icon: CreditCard, navId: 'nav_settings_billing' },
 ];

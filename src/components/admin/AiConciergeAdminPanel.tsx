@@ -131,12 +131,14 @@ interface A2pSnapshot {
 }
 
 interface RuntimeSettings {
-  killSwitchEnabled:   boolean;
-  killSwitchReason:    string | null;
-  killSwitchSetBy:     string | null;
-  killSwitchSetAt:     string | null;
-  defaultDailySendCap: number;
-  updatedAt:           string;
+  killSwitchEnabled:    boolean;
+  killSwitchReason:     string | null;
+  killSwitchSetBy:      string | null;
+  killSwitchSetAt:      string | null;
+  defaultDailySendCap:  number;
+  lastActivationCronAt: string | null;
+  lastSendCronAt:       string | null;
+  updatedAt:            string;
 }
 
 interface VenuesPayload {
@@ -318,6 +320,8 @@ export function AiConciergeAdminPanel() {
       />
 
       <SpendDefaultsCard />
+
+      <CronHealthCard />
 
       <PulseSummary />
 
@@ -1424,6 +1428,149 @@ function DailyCapCell({ venue, busy, onSave }: {
         >
           {isOverride ? `cap: ${venue.ai_daily_send_cap}` : <em className="text-gray-400">default ({effective})</em>}
         </button>
+      )}
+    </div>
+  );
+}
+
+// ── Sub-component: cron health badge ──────────────────────────────────────
+
+interface CronExpectation {
+  /** Display label. */
+  label:   string;
+  /** Path of `RuntimeSettings` where the heartbeat lives. */
+  field:   'lastActivationCronAt' | 'lastSendCronAt';
+  /** Expected interval between runs, in minutes. */
+  intervalMin: number;
+  /** Manual-trigger admin endpoint, if any. */
+  triggerUrl?: string;
+}
+
+const CRON_EXPECTATIONS: CronExpectation[] = [
+  { label: 'Activation cron (hourly)', field: 'lastActivationCronAt', intervalMin: 60, triggerUrl: '/api/cron/ai-activate' },
+  { label: 'Send cron (every 10 min)', field: 'lastSendCronAt',       intervalMin: 10, triggerUrl: '/api/cron/ai-send' },
+];
+
+function classifyHeartbeat(ageMin: number, expectedMin: number):
+  { tone: 'green' | 'amber' | 'red'; label: string } {
+  if (ageMin < expectedMin * 2)  return { tone: 'green', label: 'healthy' };
+  if (ageMin < expectedMin * 5)  return { tone: 'amber', label: 'late'    };
+  return { tone: 'red', label: 'stalled' };
+}
+
+function CronHealthCard() {
+  const [settings, setSettings] = useState<RuntimeSettings | null>(null);
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState('');
+  const [now, setNow]           = useState(() => Date.now());
+
+  const load = useCallback(async () => {
+    setLoading(true); setError('');
+    try {
+      const res = await fetch('/api/admin/ai-concierge/runtime-settings', { cache: 'no-store' });
+      const j = await res.json().catch(() => ({})) as RuntimeSettings & { error?: string };
+      if (!res.ok) {
+        setError(j.error ?? 'Failed to load cron health');
+        return;
+      }
+      setSettings(j);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load cron health');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  // Refresh "now" every 30s so the relative timestamps + tone stays current.
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-5">
+      <div className="mb-3 flex items-center justify-between">
+        <div>
+          <h2 className="font-heading text-base text-gray-900 flex items-center gap-2">
+            <Activity size={16} className="text-gray-400" />
+            Cron health
+          </h2>
+          <p className="text-[11px] text-gray-400">Heartbeat from each AI Concierge cron — stamped at end of every successful run.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => { setNow(Date.now()); void load(); }}
+          disabled={loading}
+          className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+        >
+          <RotateCw size={11} className={loading ? 'animate-spin' : ''} />
+          Refresh
+        </button>
+      </div>
+
+      {error && (
+        <div className="mb-3 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        {CRON_EXPECTATIONS.map((spec) => {
+          const iso = settings?.[spec.field] ?? null;
+          const ageMs  = iso ? now - new Date(iso).getTime() : null;
+          const ageMin = ageMs !== null ? ageMs / 60_000 : null;
+          const status = ageMin !== null
+            ? classifyHeartbeat(ageMin, spec.intervalMin)
+            : { tone: 'red' as const, label: 'never run' };
+          const tone = status.tone;
+          const toneCls =
+            tone === 'green' ? 'border-emerald-200 bg-emerald-50' :
+            tone === 'amber' ? 'border-amber-200  bg-amber-50' :
+                              'border-rose-200   bg-rose-50';
+          const dotCls =
+            tone === 'green' ? 'bg-emerald-500' :
+            tone === 'amber' ? 'bg-amber-500'   :
+                              'bg-rose-500';
+
+          return (
+            <div key={spec.field} className={`rounded-xl border px-3 py-2.5 ${toneCls}`}>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-[12px] font-semibold text-gray-800">
+                  <span className={`inline-block h-2 w-2 rounded-full ${dotCls}`} />
+                  {spec.label}
+                </div>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-600">
+                  {status.label}
+                </span>
+              </div>
+              <div className="mt-1 text-[11px] text-gray-700">
+                Last run:{' '}
+                <strong>
+                  {iso
+                    ? `${fmtRelative(iso)} (${new Date(iso).toLocaleString()})`
+                    : 'never'}
+                </strong>
+              </div>
+              <div className="text-[10px] text-gray-500">
+                Expected every {spec.intervalMin === 60 ? '1 hour' : `${spec.intervalMin} min`}.
+                {tone === 'red' && (
+                  <>
+                    {' '}<span className="font-medium text-rose-700">Check your scheduler</span>.
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {settings && !settings.lastActivationCronAt && !settings.lastSendCronAt && (
+        <p className="mt-3 text-[11px] text-gray-400">
+          No heartbeats recorded yet. After migration 102 is applied, the next successful cron tick will populate these.
+        </p>
       )}
     </div>
   );

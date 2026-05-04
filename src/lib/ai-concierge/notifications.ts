@@ -201,7 +201,7 @@ function dashboardContactUrl(leadId: string): string {
 
 function aiConciergeSettingsUrl(): string {
   const base = (process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com').replace(/\/$/, '');
-  return `${base}/dashboard/settings/ai-concierge`;
+  return `${base}/dashboard/marketing/ai-concierge`;
 }
 
 /** Scenario-aware CTA URL. */
