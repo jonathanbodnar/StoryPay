@@ -22,6 +22,20 @@ export const STORYPAY_PLATFORM_DIRECTORY_META_KEY = 'storypay_platform_directory
  * STORYPAY_HQ_LUNARPAY_SK is the canonical env var. The old name
  * STORYPAY_PLATFORM_LUNARPAY_SECRET_KEY is honoured for backwards compat
  * during the rename; new deploys should use STORYPAY_HQ_LUNARPAY_SK.
+ *
+ * NOTE on shared MID:
+ * StoryPay and StoryVenue are the same legal entity (Myurbanspot LLC), so
+ * STORYPAY_HQ_LUNARPAY_SK currently points at the same Fortis merchant
+ * StoryVenue uses for proposals/invoices. The API doesn't care, but bear
+ * in mind:
+ *   1. SaaS revenue and proposal income land in the same Fortis deposit;
+ *      reconciliation has to use checkout-session metadata or descriptions.
+ *   2. Both flows share one MCC and one chargeback ratio.
+ *   3. The card-statement descriptor reads the same for both. SaaS subs
+ *      will see "STORYVENUE" on their statement.
+ * If/when SaaS volume warrants its own MID, register a fresh "StoryPay HQ"
+ * merchant via /api/admin/storypay-hq/onboard and swap the env var to its
+ * keys — the rest of the code already works with a separate merchant.
  */
 export function getPlatformLunarPaySecretKey(): string | null {
   const raw =
