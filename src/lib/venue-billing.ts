@@ -1006,6 +1006,166 @@ export async function cancelPendingUpgrade(venueId: string): Promise<void> {
     .eq('id', venueId);
 }
 
+// ── Extend trial ──────────────────────────────────────────────────────────
+
+/**
+ * Extend (or shorten) a venue's free trial by setting a new `trialEndsAt`
+ * date.
+ *
+ * Database side: writes `directory_trial_ends_at` (and clears
+ * `directory_trial_consumed` so the sign-in gate re-recognises the venue as
+ * still-trialing rather than expired).
+ *
+ * LunarPay side: if the venue already has a scheduled LP subscription
+ * (status = 'trialing' + a non-null `directory_subscription_external_id`),
+ * that subscription's `startOn` was set to the *original* trial-end date.
+ * Extending the trial without touching LP would let LP charge on the old
+ * date regardless of what the DB says.  We fix this by:
+ *
+ *   1. Reading the old sub's `customerId` and `paymentMethodId` via
+ *      `getSubscription` (same approach as `rolloverSubscriptionAtNextRenewal`).
+ *   2. Cancelling the old sub.
+ *   3. Creating a new sub with `startOn = new trialEndsAt date`.
+ *
+ * If there is no existing LP sub (venue is in a free trial that was manually
+ * granted, or is on a free plan) we only update the DB columns.
+ *
+ * Returns the new `directory_trial_ends_at` ISO string so callers can surface
+ * it to the admin UI.
+ */
+export async function extendVenueTrial(
+  venueId: string,
+  newTrialEndsAt: Date,
+): Promise<{ trialEndsAt: string; newSubId: string | null }> {
+  const secret = getPlatformLunarPaySecretKey();
+  const ctx = await loadVenueDirectoryPlanContext(venueId);
+  if (!ctx) throw new Error('Venue not found');
+
+  const trialEndsAtIso = newTrialEndsAt.toISOString();
+  const trialEndsAtDate = newTrialEndsAt.toISOString().slice(0, 10);
+  const status = String(ctx.venue.directory_subscription_status ?? 'none');
+  const subId = ctx.venue.directory_subscription_external_id;
+
+  // Only sync LP when the venue is actively trialing AND has a scheduled sub.
+  const needsLpSync = status === 'trialing' && !!subId && !!secret;
+  let newSubId: string | null = null;
+
+  if (needsLpSync && secret && subId) {
+    // Read the existing sub for customer / payment method before cancelling.
+    const oldRaw = (await getSubscription(secret, subId)) as Record<string, unknown>;
+    const oldSub =
+      ((oldRaw as { data?: Record<string, unknown> }).data as Record<string, unknown>) || oldRaw;
+
+    const customerId =
+      (oldSub.customerId as string | number | null | undefined) ??
+      (oldSub.customer_id as string | number | null | undefined) ??
+      ctx.venue.platform_lunarpay_customer_id ??
+      null;
+    const paymentMethodId =
+      (oldSub.paymentMethodId as string | number | null | undefined) ??
+      (oldSub.payment_method_id as string | number | null | undefined) ??
+      (oldSub.payment_method as string | number | null | undefined) ??
+      null;
+
+    if (!customerId || !paymentMethodId) {
+      throw new Error(
+        'Could not read customer / payment method from the existing LunarPay subscription. ' +
+        'Cannot reschedule first charge without re-entering a card.',
+      );
+    }
+
+    // Compute full monthly total (plan + current addons).
+    const { data: addonRow } = await supabaseAdmin
+      .from('venues')
+      .select('directory_addon_verified, directory_addon_sponsored, directory_addon_concierge')
+      .eq('id', venueId)
+      .maybeSingle();
+    const ar = (addonRow ?? {}) as Record<string, unknown>;
+    const [allPlans, addonPrices] = await Promise.all([
+      listDirectoryPlanCatalog(),
+      loadAddonPrices(),
+    ]);
+    const planForMath = allPlans.find((p) => p.id === ctx.plan?.id) ?? null;
+    const isLegacy = Boolean(planForMath?.is_legacy);
+    const totalCharge = isLegacy
+      ? { total_cents: 0 }
+      : computeMonthlyTotalCents({
+          plan: planForMath,
+          allPlans,
+          addonVerifiedUser:  Boolean(ar.directory_addon_verified),
+          addonSponsoredUser: Boolean(ar.directory_addon_sponsored),
+          addonConciergeUser: Boolean(ar.directory_addon_concierge),
+          prices: addonPrices,
+        });
+    const cents = totalCharge.total_cents;
+
+    // Cancel the old sub.
+    try {
+      await cancelSubscription(secret, subId);
+    } catch (e) {
+      throw new Error(
+        `Failed to cancel old LunarPay subscription (${subId}) before rescheduling: ${
+          e instanceof Error ? e.message : 'unknown'
+        }`,
+      );
+    }
+
+    if (cents > 0) {
+      // Re-create the sub with the new startOn.
+      const subResp = (await createSubscription(secret, {
+        customerId:      Number(customerId),
+        paymentMethodId: Number(paymentMethodId),
+        amount:          cents,
+        frequency:       'monthly',
+        startOn:         trialEndsAtDate,
+        description:     `StoryVenue directory — ${ctx.plan?.name ?? 'subscription'} (monthly)`,
+      })) as Record<string, unknown>;
+      const sub =
+        ((subResp as { data?: Record<string, unknown> }).data as Record<string, unknown>) ||
+        subResp;
+      const sid = (sub.id as string | number | undefined) ?? null;
+      if (sid === null) {
+        throw new Error('LunarPay did not return a subscription id for the rescheduled trial');
+      }
+      newSubId = String(sid);
+    } else {
+      // Free / legacy plan — no paid sub needed; the cancel above is enough.
+      newSubId = null;
+    }
+  }
+
+  // Write updated trial columns + new sub id (if any) to the venue row.
+  const dbUpdate: Record<string, unknown> = {
+    directory_trial_ends_at:  trialEndsAtIso,
+    // Clear consumed flag so the sign-in gate recognises this as still-trialing.
+    directory_trial_consumed: false,
+  };
+  if (newSubId !== null) {
+    dbUpdate.directory_subscription_external_id = newSubId;
+  } else if (needsLpSync) {
+    // Sub was cancelled and not replaced (free/legacy plan) — clear the ref.
+    dbUpdate.directory_subscription_external_id = null;
+  }
+
+  await supabaseAdmin.from('venues').update(dbUpdate).eq('id', venueId);
+
+  await recordBillingEvent(
+    venueId,
+    ctx.plan?.id ?? null,
+    0,
+    'trial_extended',
+    `trial_ext:${venueId}:${Date.now()}`,
+    {
+      new_trial_ends_at:     trialEndsAtIso,
+      old_subscription_id:   subId ?? null,
+      new_subscription_id:   newSubId,
+      lp_synced:             needsLpSync,
+    },
+  );
+
+  return { trialEndsAt: trialEndsAtIso, newSubId };
+}
+
 // ── Cancel subscription ────────────────────────────────────────────────────
 
 export async function cancelVenueSubscription(venueId: string): Promise<void> {

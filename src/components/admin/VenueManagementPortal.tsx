@@ -13,6 +13,7 @@ import {
   EyeOff,
   X,
   CheckCircle2,
+  CalendarClock,
 } from 'lucide-react';
 import { DIRECTORY_BADGE_STATUSES, directoryBadgeLabel } from '@/lib/directory-badges';
 import {
@@ -38,6 +39,7 @@ export type AdminVenueRow = Record<string, unknown> & {
   directory_verified_status?: string | null;
   directory_sponsored_status?: string | null;
   directory_subscription_status?: string | null;
+  directory_trial_ends_at?: string | null;
   directory_plans?: { id: string; name: string; slug: string } | null;
   lunarpay_admin?: LunarPayAdminSummary;
 };
@@ -129,6 +131,13 @@ export function VenueManagementPortal({
   const [pwSaving, setPwSaving] = useState(false);
   const [pwError, setPwError] = useState('');
   const [pwSuccess, setPwSuccess] = useState(false);
+
+  // Extend-trial modal
+  const [trialTarget, setTrialTarget] = useState<AdminVenueRow | null>(null);
+  const [trialDate, setTrialDate] = useState('');
+  const [trialSaving, setTrialSaving] = useState(false);
+  const [trialError, setTrialError] = useState('');
+  const [trialSuccess, setTrialSuccess] = useState(false);
 
   const loadPlans = useCallback(async () => {
     setPlansLoading(true);
@@ -267,6 +276,27 @@ export function VenueManagementPortal({
       }
     } catch {
       alert('Request failed');
+    }
+  }
+
+  async function extendTrial() {
+    if (!trialTarget || !trialDate) return;
+    setTrialSaving(true);
+    setTrialError('');
+    try {
+      const res = await fetch(`/api/admin/venues/${trialTarget.id}/extend-trial`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trial_ends_at: trialDate }),
+      });
+      const d = (await res.json().catch(() => ({}))) as { trialEndsAt?: string; lpSynced?: boolean; error?: string };
+      if (!res.ok) { setTrialError(d.error || 'Failed to extend trial'); return; }
+      setTrialSuccess(true);
+      await onRefresh();
+    } catch {
+      setTrialError('Network error');
+    } finally {
+      setTrialSaving(false);
     }
   }
 
@@ -509,6 +539,16 @@ export function VenueManagementPortal({
               onViewAs={() => void viewAsVenue(venue.id)}
               onCopyBillingLink={() => void copyDirectoryBillingLink(venue.id)}
               onDelete={() => { setDeleteTarget(venue); setDeleteConfirmName(''); }}
+              onExtendTrial={() => {
+                const current = venue.directory_trial_ends_at as string | null | undefined;
+                const def = current
+                  ? new Date(current).toISOString().slice(0, 10)
+                  : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+                setTrialTarget(venue);
+                setTrialDate(def);
+                setTrialError('');
+                setTrialSuccess(false);
+              }}
             />
           ))
         )}
@@ -659,6 +699,22 @@ export function VenueManagementPortal({
                           </button>
                           <button
                             type="button"
+                            onClick={() => {
+                              const current = venue.directory_trial_ends_at as string | null | undefined;
+                              const def = current
+                                ? new Date(current).toISOString().slice(0, 10)
+                                : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+                              setTrialTarget(venue);
+                              setTrialDate(def);
+                              setTrialError('');
+                              setTrialSuccess(false);
+                            }}
+                            className="inline-flex items-center justify-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2 py-1 text-[11px] font-semibold text-violet-700 hover:bg-violet-100"
+                          >
+                            <CalendarClock size={12} /> Extend trial
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => { setDeleteTarget(venue); setDeleteConfirmName(''); }}
                             className="inline-flex items-center justify-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100"
                           >
@@ -763,6 +819,75 @@ export function VenueManagementPortal({
       </div>
     )}
 
+    {/* Extend-trial modal */}
+    {trialTarget && (
+      <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 p-4" onClick={() => !trialSaving && setTrialTarget(null)}>
+        <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="font-bold text-gray-900 flex items-center gap-2"><CalendarClock size={16} /> Extend Trial</h3>
+              <p className="text-xs text-gray-500 mt-0.5">{trialTarget.name}</p>
+            </div>
+            <button onClick={() => !trialSaving && setTrialTarget(null)} className="text-gray-400 hover:text-gray-600">
+              <X size={18} />
+            </button>
+          </div>
+
+          {trialSuccess ? (
+            <div className="flex flex-col items-center gap-3 py-4">
+              <CheckCircle2 size={36} className="text-green-500" />
+              <p className="text-sm font-medium text-gray-800">Trial extended successfully!</p>
+              <p className="text-xs text-gray-500 text-center">
+                The venue&apos;s trial end date and LunarPay subscription have been updated.
+              </p>
+              <button onClick={() => setTrialTarget(null)} className="mt-2 text-sm text-gray-600 hover:text-gray-900 underline">Close</button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-xs text-gray-600">
+                Set a new trial end date. If the venue has an active trialing LunarPay subscription,
+                it will be cancelled and recreated with <code className="bg-gray-100 rounded px-1">startOn</code> set
+                to this date so they are not charged early.
+              </p>
+              {trialTarget.directory_trial_ends_at ? (
+                <p className="text-[11px] text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+                  Current trial end: {new Date(trialTarget.directory_trial_ends_at as string).toLocaleDateString()}
+                </p>
+              ) : null}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">New trial end date</label>
+                <input
+                  type="date"
+                  value={trialDate}
+                  min={new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}
+                  onChange={(e) => setTrialDate(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-300"
+                />
+              </div>
+              {trialError && (
+                <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{trialError}</p>
+              )}
+              <div className="flex justify-end gap-2 pt-2">
+                <button onClick={() => setTrialTarget(null)} disabled={trialSaving} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">
+                  Cancel
+                </button>
+                <button
+                  disabled={trialSaving || !trialDate}
+                  onClick={() => void extendTrial()}
+                  className="px-4 py-2 text-sm text-white rounded-lg hover:opacity-85 disabled:opacity-60 inline-flex items-center gap-1.5"
+                  style={{ backgroundColor: BRAND }}
+                >
+                  {trialSaving && <Loader2 size={13} className="animate-spin" />}
+                  <CalendarClock size={13} />
+                  Extend trial
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    )}
+
     {/* Delete confirmation modal */}
     {deleteTarget && (
       <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 p-4">
@@ -828,6 +953,7 @@ function VenueMobileCard({
   onViewAs,
   onCopyBillingLink,
   onDelete,
+  onExtendTrial,
 }: {
   venue: AdminVenueRow;
   lpSummary: LunarPayAdminSummary;
@@ -840,6 +966,7 @@ function VenueMobileCard({
   onViewAs: () => void;
   onCopyBillingLink: () => void;
   onDelete: () => void;
+  onExtendTrial: () => void;
 }) {
   const vs = (venue.directory_verified_status as string) || 'none';
   const ss = (venue.directory_sponsored_status as string) || 'none';
@@ -927,6 +1054,13 @@ function VenueMobileCard({
           className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg border border-pink-200 bg-pink-50 py-2 text-xs font-semibold text-pink-900"
         >
           <Eye size={12} /> View as
+        </button>
+        <button
+          type="button"
+          onClick={onExtendTrial}
+          className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg border border-violet-200 bg-violet-50 py-2 text-xs font-semibold text-violet-700"
+        >
+          <CalendarClock size={12} /> Trial
         </button>
         <button
           type="button"
