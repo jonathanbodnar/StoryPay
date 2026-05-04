@@ -4,7 +4,6 @@ import { supabaseAdmin } from '@/lib/supabase';
 import {
   loadVenueDirectoryPlanContext,
   requirePlatformLunarPaySecretKey,
-  STORYPAY_PLATFORM_DIRECTORY_META_KEY,
 } from '@/lib/platform-directory-billing';
 import { createCheckoutSession } from '@/lib/lunarpay';
 import { computeMonthlyTotalCents } from '@/lib/directory-addons';
@@ -43,7 +42,7 @@ export async function POST() {
   const { data: row } = await supabaseAdmin
     .from('venues')
     .select(
-      'directory_addon_verified, directory_addon_sponsored, directory_trial_ends_at, directory_trial_is_forever',
+      'directory_addon_verified, directory_addon_sponsored, directory_trial_is_forever',
     )
     .eq('id', venueId)
     .maybeSingle();
@@ -51,7 +50,6 @@ export async function POST() {
   const addonVerifiedUser = Boolean(r.directory_addon_verified);
   const addonSponsoredUser = Boolean(r.directory_addon_sponsored);
   const trialIsForever = Boolean(r.directory_trial_is_forever);
-  const trialEndsAt = (r.directory_trial_ends_at as string | null) ?? null;
 
   if (trialIsForever) {
     return NextResponse.json(
@@ -79,6 +77,8 @@ export async function POST() {
     );
   }
 
+  // No metadata: LP currently 500s when checkout sessions include it.
+  // The verify endpoint reads plan + addons + trial state from the venue row.
   const secret = requirePlatformLunarPaySecretKey();
   const checkoutData: Record<string, unknown> = {
     amount: charge.total_cents / 100,
@@ -87,15 +87,6 @@ export async function POST() {
     customer_name: ctx.venue.name,
     success_url: `${APP_URL}/dashboard/directory-billing?start_paid=1`,
     cancel_url: `${APP_URL}/dashboard/directory-billing`,
-    metadata: {
-      [STORYPAY_PLATFORM_DIRECTORY_META_KEY]: '1',
-      venue_id: venueId,
-      directory_plan_id: currentPlan?.id ?? null,
-      addon_verified: addonVerifiedUser ? '1' : '0',
-      addon_sponsored: addonSponsoredUser ? '1' : '0',
-      trial_ends_at: trialEndsAt ?? '',
-      action: 'start_paid_after_trial',
-    },
   };
 
   try {

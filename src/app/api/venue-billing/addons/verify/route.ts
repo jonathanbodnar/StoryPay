@@ -2,7 +2,6 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import {
-  STORYPAY_PLATFORM_DIRECTORY_META_KEY,
   loadVenueDirectoryPlanContext,
   requirePlatformLunarPaySecretKey,
 } from '@/lib/platform-directory-billing';
@@ -46,26 +45,21 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Pull metadata
-  const meta = (session.metadata && typeof session.metadata === 'object'
-    ? (session.metadata as Record<string, unknown>)
-    : {}) as Record<string, unknown>;
-  if (String(meta[STORYPAY_PLATFORM_DIRECTORY_META_KEY] ?? '') !== '1') {
-    return NextResponse.json({ error: 'Invalid checkout session metadata' }, { status: 400 });
-  }
-  if (String(meta.venue_id ?? '') !== venueId) {
-    return NextResponse.json({ error: 'Checkout session does not match venue' }, { status: 400 });
-  }
-  if (String(meta.action ?? '') !== 'addon_subscribe') {
-    return NextResponse.json(
-      { error: 'Use the regular plan verify for non-addon checkouts' },
-      { status: 400 },
-    );
-  }
-
-  const addonVerified   = String(meta.addon_verified   ?? '0') === '1';
-  const addonSponsored  = String(meta.addon_sponsored  ?? '0') === '1';
-  const addonConcierge  = String(meta.addon_concierge  ?? '0') === '1';
+  // We don't verify session.metadata anymore (LP currently 500s when metadata
+  // is present in the checkout-create call, so the saved session has none).
+  // Read the requested addon flags from the venue row — addons/route writes
+  // them before redirecting to LP, so they reflect what the user selected.
+  const { data: addonRow } = await supabaseAdmin
+    .from('venues')
+    .select(
+      'directory_addon_verified, directory_addon_sponsored, directory_addon_concierge, directory_verified_status, directory_sponsored_status',
+    )
+    .eq('id', venueId)
+    .maybeSingle();
+  const ar = (addonRow ?? {}) as Record<string, unknown>;
+  const addonVerified  = Boolean(ar.directory_addon_verified);
+  const addonSponsored = Boolean(ar.directory_addon_sponsored);
+  const addonConcierge = Boolean(ar.directory_addon_concierge);
 
   const customerId =
     (session.customer_id as string | number | null) ||
@@ -117,13 +111,8 @@ export async function POST(req: NextRequest) {
   }
 
   // Status transitions for the public-listing badge — pending review by admin.
-  const { data: vRow } = await supabaseAdmin
-    .from('venues')
-    .select('directory_verified_status, directory_sponsored_status')
-    .eq('id', venueId)
-    .maybeSingle();
-  const prevV = String((vRow as { directory_verified_status?: string } | null)?.directory_verified_status ?? 'none');
-  const prevS = String((vRow as { directory_sponsored_status?: string } | null)?.directory_sponsored_status ?? 'none');
+  const prevV = String(ar.directory_verified_status  ?? 'none');
+  const prevS = String(ar.directory_sponsored_status ?? 'none');
   const verifiedStatus = addonVerified
     ? prevV === 'approved' || prevV === 'pending' || prevV === 'draft'
       ? prevV

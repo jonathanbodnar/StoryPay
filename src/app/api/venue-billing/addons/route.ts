@@ -5,7 +5,6 @@ import {
   loadVenueDirectoryPlanContext,
   getPlatformLunarPaySecretKey,
   requirePlatformLunarPaySecretKey,
-  STORYPAY_PLATFORM_DIRECTORY_META_KEY,
 } from '@/lib/platform-directory-billing';
 import {
   cancelSubscription,
@@ -197,10 +196,22 @@ async function handlePost(req: NextRequest) {
   }
 
   // ── Flow 2: NO subscription yet, but addons now create a non-zero total ─
-  // The owner needs to enter a card. We don't write the addon flags yet —
-  // only after checkout completes will the verify endpoint flip them.
+  // The owner needs to enter a card. We pre-write the requested addon flags
+  // to the venue row so the verify endpoint can read them — LP's
+  // checkout/sessions endpoint currently 500s when metadata is present
+  // (May 2026 schema drift), so the metadata round-trip isn't safe. Pre-
+  // writing is harmless: with no LP subscription on file, no money moves
+  // until verify creates one.
   if (!hasActiveSub && nextCharge.total_cents > 0) {
     const secret = requirePlatformLunarPaySecretKey();
+    await applyAddonFlagsAndStatus(venueId, currentPlan?.id ?? null, {
+      verified:  nextVerified,
+      sponsored: nextSponsored,
+      concierge: nextConcierge,
+      prevVerifiedStatus:  String((addonRow as Record<string, unknown>).directory_verified_status  ?? 'none'),
+      prevSponsoredStatus: String((addonRow as Record<string, unknown>).directory_sponsored_status ?? 'none'),
+    });
+
     const checkoutData: Record<string, unknown> = {
       amount: nextCharge.total_cents / 100,
       description: 'StoryVenue directory — add-ons (monthly)',
@@ -208,15 +219,6 @@ async function handlePost(req: NextRequest) {
       customer_name: ctx.venue.name,
       success_url: `${APP_URL}/dashboard/directory-billing?addons=1`,
       cancel_url: `${APP_URL}/dashboard/directory-billing`,
-      metadata: {
-        [STORYPAY_PLATFORM_DIRECTORY_META_KEY]: '1',
-        venue_id: venueId,
-        directory_plan_id: currentPlan?.id ?? null,
-        addon_verified:   nextVerified   ? '1' : '0',
-        addon_sponsored:  nextSponsored  ? '1' : '0',
-        addon_concierge:  nextConcierge  ? '1' : '0',
-        action: 'addon_subscribe',
-      },
     };
 
     try {

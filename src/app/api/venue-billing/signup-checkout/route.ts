@@ -5,7 +5,6 @@ import {
   loadVenueDirectoryPlanContext,
   isPlatformDirectoryBillingConfigured,
   requirePlatformLunarPaySecretKey,
-  STORYPAY_PLATFORM_DIRECTORY_META_KEY,
 } from '@/lib/platform-directory-billing';
 import { createCheckoutSession } from '@/lib/lunarpay';
 import { computeMonthlyTotalCents } from '@/lib/directory-addons';
@@ -133,12 +132,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ redirect: '/dashboard?welcome=1' });
   }
 
-  // Compute trial end date — passed via session metadata so the verify step
-  // can schedule the first charge for exactly when the trial ends.
+  // Compute trial end date and persist it on the venue row BEFORE checkout.
+  // We used to round-trip this through LunarPay session.metadata, but LP's
+  // checkout/sessions endpoint currently 500s when metadata is present
+  // (May 2026 schema drift). Reading from the DB at verify time is more
+  // reliable anyway.
   const now = new Date();
   const trialEndsAt = new Date(now);
   trialEndsAt.setDate(trialEndsAt.getDate() + SIGNUP_TRIAL_DAYS);
   const trialEndsAtIso = trialEndsAt.toISOString();
+
+  await supabaseAdmin
+    .from('venues')
+    .update({
+      directory_trial_started_at: now.toISOString(),
+      directory_trial_ends_at:    trialEndsAtIso,
+      directory_trial_plan_id:    planId,
+    })
+    .eq('id', venueId);
 
   let secret: string;
   try {
@@ -152,22 +163,12 @@ export async function POST(req: NextRequest) {
   }
 
   const checkoutData: Record<string, unknown> = {
-    amount:               charge.total_cents / 100,
-    description:          `StoryVenue — ${targetPlan.name} (14-day free trial, then monthly)`,
-    customer_email:       ctx.venue.email || undefined,
-    customer_name:        ctx.venue.name,
-    success_url:          `${APP_URL}/signup/plan/complete?checkout=1`,
-    cancel_url:           `${APP_URL}/signup/addons?plan_id=${planId}`,
-    metadata: {
-      [STORYPAY_PLATFORM_DIRECTORY_META_KEY]: '1',
-      venue_id:         venueId,
-      directory_plan_id: planId,
-      addon_verified:   effectiveVerified  ? '1' : '0',
-      addon_sponsored:  effectiveSponsored ? '1' : '0',
-      addon_concierge:  addonConcierge     ? '1' : '0',
-      trial_ends_at:    trialEndsAtIso,
-      action:           'signup_plan',
-    },
+    amount:         charge.total_cents / 100,
+    description:    `StoryVenue — ${targetPlan.name} (14-day free trial, then monthly)`,
+    customer_email: ctx.venue.email || undefined,
+    customer_name:  ctx.venue.name,
+    success_url:    `${APP_URL}/signup/plan/complete?checkout=1`,
+    cancel_url:     `${APP_URL}/signup/addons?plan_id=${planId}`,
   };
 
   // LunarPay can throw on network failures, invalid keys, validation errors,

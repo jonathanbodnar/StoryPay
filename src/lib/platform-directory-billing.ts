@@ -143,11 +143,6 @@ export async function createDirectoryPlatformCheckoutSession(venueId: string): P
     customer_name: ctx.venue.name,
     success_url: `${APP_URL}/dashboard/directory-billing`,
     cancel_url: `${APP_URL}/dashboard/directory-billing`,
-    metadata: {
-      [STORYPAY_PLATFORM_DIRECTORY_META_KEY]: '1',
-      venue_id: venueId,
-      directory_plan_id: ctx.plan.id,
-    },
   };
 
   const result = await createCheckoutSession(secret, checkoutData);
@@ -157,18 +152,6 @@ export async function createDirectoryPlatformCheckoutSession(venueId: string): P
     throw new Error('LunarPay did not return a checkout URL');
   }
   return { url };
-}
-
-function sessionMeta(session: Record<string, unknown>): Record<string, string> {
-  const m = session.metadata || session.Metadata;
-  if (m && typeof m === 'object' && !Array.isArray(m)) {
-    const out: Record<string, string> = {};
-    for (const [k, v] of Object.entries(m as Record<string, unknown>)) {
-      if (v !== undefined && v !== null) out[k] = String(v);
-    }
-    return out;
-  }
-  return {};
 }
 
 export async function verifyDirectoryPlatformCheckoutAndSubscribe(
@@ -198,14 +181,10 @@ export async function verifyDirectoryPlatformCheckoutAndSubscribe(
     throw new Error(`Checkout not completed (status: ${String(session.status)})`);
   }
 
-  const meta = sessionMeta(session as Record<string, unknown>);
-  if (
-    meta[STORYPAY_PLATFORM_DIRECTORY_META_KEY] !== '1' ||
-    meta.venue_id !== venueId ||
-    meta.directory_plan_id !== ctx.plan.id
-  ) {
-    throw new Error('Checkout session does not match this venue or plan');
-  }
+  // Note: we used to validate session.metadata here, but LP currently 500s
+  // when metadata is sent in the create call (May 2026 schema drift), so the
+  // saved session has no metadata to read back. The caller binds the session
+  // to a venue via the cookie, and the plan is read from the venue row.
 
   const customerId =
     session.customer_id || session.customerId || ctx.venue.platform_lunarpay_customer_id;

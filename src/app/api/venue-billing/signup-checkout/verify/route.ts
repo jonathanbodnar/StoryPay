@@ -4,7 +4,6 @@ import { supabaseAdmin } from '@/lib/supabase';
 import {
   loadVenueDirectoryPlanContext,
   requirePlatformLunarPaySecretKey,
-  STORYPAY_PLATFORM_DIRECTORY_META_KEY,
 } from '@/lib/platform-directory-billing';
 import { createSubscription, getCheckoutSession } from '@/lib/lunarpay';
 import { computeMonthlyTotalCents } from '@/lib/directory-addons';
@@ -46,20 +45,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const meta = (session.metadata && typeof session.metadata === 'object'
-      ? (session.metadata as Record<string, unknown>)
-      : {}) as Record<string, unknown>;
-
-    if (String(meta[STORYPAY_PLATFORM_DIRECTORY_META_KEY] ?? '') !== '1') {
-      return NextResponse.json({ error: 'Invalid checkout session' }, { status: 400 });
-    }
-    if (String(meta.venue_id ?? '') !== venueId) {
-      return NextResponse.json({ error: 'Session does not match venue' }, { status: 400 });
-    }
-    if (String(meta.action ?? '') !== 'signup_plan') {
-      return NextResponse.json({ error: 'Unexpected checkout action' }, { status: 400 });
-    }
-
     // Extract customer and payment method from the completed session.
     const customerId =
       (session.customer_id as string | number | null) ||
@@ -77,12 +62,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Pull trial end date from metadata (set by signup-checkout)
-    const trialEndsAtRaw = String(meta.trial_ends_at ?? '');
-    const planId         = String(meta.directory_plan_id ?? '');
-    const addonVerified  = String(meta.addon_verified   ?? '0') === '1';
-    const addonSponsored = String(meta.addon_sponsored  ?? '0') === '1';
-    const addonConcierge = String(meta.addon_concierge  ?? '0') === '1';
+    // Read context from the venue row instead of session.metadata. The
+    // metadata round-trip via LunarPay is unreliable (LP returns 500 when
+    // metadata is present, May 2026), so signup-checkout writes plan +
+    // addons + trial dates to the venue row before redirecting.
+    const { data: venueRow } = await supabaseAdmin
+      .from('venues')
+      .select(
+        'directory_plan_id, directory_addon_verified, directory_addon_sponsored, directory_addon_concierge, directory_trial_ends_at',
+      )
+      .eq('id', venueId)
+      .maybeSingle();
+    const vr = (venueRow ?? {}) as Record<string, unknown>;
+    const planId         = String(vr.directory_plan_id ?? '');
+    const addonVerified  = Boolean(vr.directory_addon_verified);
+    const addonSponsored = Boolean(vr.directory_addon_sponsored);
+    const addonConcierge = Boolean(vr.directory_addon_concierge);
+    const trialEndsAtRaw = String(vr.directory_trial_ends_at ?? '');
+
+    if (!planId) {
+      return NextResponse.json(
+        { error: 'Plan was not pre-assigned for this venue.' },
+        { status: 400 },
+      );
+    }
 
   // Compute charge amount with dynamic prices
   const [allPlans, addonPrices] = await Promise.all([

@@ -2,7 +2,6 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import {
-  STORYPAY_PLATFORM_DIRECTORY_META_KEY,
   loadVenueDirectoryPlanContext,
   requirePlatformLunarPaySecretKey,
 } from '@/lib/platform-directory-billing';
@@ -46,21 +45,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const meta = (session.metadata && typeof session.metadata === 'object'
-    ? (session.metadata as Record<string, unknown>)
-    : {}) as Record<string, unknown>;
-  if (String(meta[STORYPAY_PLATFORM_DIRECTORY_META_KEY] ?? '') !== '1') {
-    return NextResponse.json({ error: 'Invalid checkout session metadata' }, { status: 400 });
-  }
-  if (String(meta.venue_id ?? '') !== venueId) {
-    return NextResponse.json({ error: 'Checkout session does not match venue' }, { status: 400 });
-  }
-  if (String(meta.action ?? '') !== 'start_paid_after_trial') {
-    return NextResponse.json(
-      { error: 'Use the right verify endpoint for this checkout' },
-      { status: 400 },
-    );
-  }
+  // We no longer check session.metadata (LP currently 500s when metadata is
+  // present). The venue cookie + the start-paid route's pre-conditions
+  // already pin this verify to the right venue + flow.
 
   const customerId =
     (session.customer_id as string | number | null) ||

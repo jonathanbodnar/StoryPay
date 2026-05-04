@@ -183,13 +183,19 @@ export function createCheckoutSession(
 ) {
   const body: Record<string, unknown> = {};
 
-  // Only the fields documented in the LunarPay hosted-checkout API spec.
-  // Do NOT add customer_id or save_payment_method — those are undocumented
-  // on this endpoint and cause LunarPay to return a 500.
+  // Documented hosted-checkout fields per the LunarPay API spec.
+  //
+  // - customer_id / save_payment_method: never include — undocumented and
+  //   trigger 500.
+  // - metadata: documented but currently 500s on at least one production
+  //   merchant (a checkout_sessions schema drift on LP's side, May 2026).
+  //   We now never send metadata; verify endpoints derive the post-payment
+  //   context from our own DB instead. Re-add to the allowlist if/when LP
+  //   confirms the column is restored on all merchants.
   const allowedFields = [
     'amount', 'description', 'success_url', 'cancel_url',
     'customer_email', 'customer_name', 'payment_methods',
-    'metadata', 'expires_in',
+    'expires_in',
   ];
 
   for (const field of allowedFields) {

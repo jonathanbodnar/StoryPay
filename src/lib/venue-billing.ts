@@ -14,7 +14,6 @@ import {
   getPlatformLunarPaySecretKey,
   loadVenueDirectoryPlanContext,
   requirePlatformLunarPaySecretKey,
-  STORYPAY_PLATFORM_DIRECTORY_META_KEY,
   verifyDirectoryPlatformCheckoutAndSubscribe,
   type VenuePlanRow,
 } from './platform-directory-billing';
@@ -798,6 +797,9 @@ export async function changeVenuePlan(
   // stranding the venue in a pending-but-no-checkout state.
   const secret = requirePlatformLunarPaySecretKey();
   const amountDollars = newCents / 100;
+  // No metadata: LP currently 500s when checkout sessions include it.
+  // The pending plan id is persisted on the venue row below, so verify can
+  // recover the context from cookie + DB.
   const checkoutData: Record<string, unknown> = {
     amount: amountDollars,
     description: `StoryVenue directory — ${target.name} (monthly)`,
@@ -805,11 +807,6 @@ export async function changeVenuePlan(
     customer_name: ctx.venue.name,
     success_url: `${APP_URL}/dashboard/directory-billing`,
     cancel_url: `${APP_URL}/dashboard/directory-billing`,
-    metadata: {
-      [STORYPAY_PLATFORM_DIRECTORY_META_KEY]: '1',
-      venue_id: venueId,
-      directory_plan_id: target.id,
-    },
   };
   const result = await createCheckoutSession(secret, checkoutData);
   const session = (result as { data?: { url?: string }; url?: string }).data || result;
@@ -847,11 +844,6 @@ export async function resumePendingCheckout(venueId: string): Promise<{ url: str
     customer_name: ctx.venue.name,
     success_url: `${APP_URL}/dashboard/directory-billing`,
     cancel_url: `${APP_URL}/dashboard/directory-billing`,
-    metadata: {
-      [STORYPAY_PLATFORM_DIRECTORY_META_KEY]: '1',
-      venue_id: venueId,
-      directory_plan_id: ctx.plan.id,
-    },
   };
   const result = await createCheckoutSession(secret, checkoutData);
   const session = (result as { data?: { url?: string }; url?: string }).data || result;
@@ -941,6 +933,9 @@ export async function startUpdatePaymentMethodCheckout(
   if (cents <= 0) {
     throw new Error('Free plans do not require a payment method on file.');
   }
+  // No metadata: LP currently 500s when checkout sessions include it.
+  // The flow is identified by the success URL's ?payment_update=1 marker;
+  // the venue is identified by cookie at verify time.
   const secret = requirePlatformLunarPaySecretKey();
   const checkoutData: Record<string, unknown> = {
     amount: cents / 100,
@@ -949,12 +944,6 @@ export async function startUpdatePaymentMethodCheckout(
     customer_name: ctx.venue.name,
     success_url: `${APP_URL}/dashboard/directory-billing?payment_update=1`,
     cancel_url: `${APP_URL}/dashboard/directory-billing`,
-    metadata: {
-      [STORYPAY_PLATFORM_DIRECTORY_META_KEY]: '1',
-      venue_id: venueId,
-      directory_plan_id: ctx.plan.id,
-      action: 'update_payment_method',
-    },
   };
   const result = await createCheckoutSession(secret, checkoutData);
   const session = (result as { data?: { url?: string }; url?: string }).data || result;
@@ -1002,10 +991,8 @@ export async function verifyUpdatePaymentMethod(
     }
   }
 
-  // Re-use the subscribe helper via a fresh verify call - easier to just
-  // import the existing verify helper isn't feasible here because it reads
-  // metadata.action='update_payment_method' and would re-run swap logic.
-  // Create subscription directly inline.
+  // Create the replacement subscription directly inline so we can wire it
+  // to the freshly saved payment method.
   const { createSubscription } = await import('./lunarpay');
   const cents = ctx.plan.price_monthly_cents ?? 0;
   const startOn = new Date().toISOString().slice(0, 10);

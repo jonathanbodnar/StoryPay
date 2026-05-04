@@ -86,8 +86,9 @@ export async function POST(
     const amountInDollars = finalCents / 100;
 
     // Only fields documented by the LunarPay hosted-checkout API.
-    // Do NOT add customer_id or save_payment_method — those are undocumented
-    // on this endpoint and cause LunarPay to return a 500.
+    // metadata is documented but is currently broken on LP (May 2026 schema
+    // drift) so we no longer send it. The proposal is identified post-payment
+    // via the token in success_url, which is all verify needs.
     const checkoutData: Record<string, unknown> = {
       amount: amountInDollars,
       description,
@@ -95,7 +96,6 @@ export async function POST(
       customer_name: proposal.customer_name,
       success_url: `${APP_URL}/proposal/${token}/success`,
       cancel_url: `${APP_URL}/proposal/${token}`,
-      metadata: { proposal_id: proposal.id, public_token: token },
     };
 
     // Only restrict to card-only when ACH is explicitly disabled by the venue.
