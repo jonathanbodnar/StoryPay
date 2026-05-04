@@ -5,12 +5,28 @@ import { getPlatformFortisMerchantId } from '@/lib/platform-billing';
 /** Checkout + subscription metadata so webhooks can attribute revenue to a venue. */
 export const STORYPAY_PLATFORM_DIRECTORY_META_KEY = 'storypay_platform_directory';
 
+/**
+ * Returns the StoryVenue platform's OWN merchant secret key (lp_sk_...).
+ *
+ * IMPORTANT: this MUST be a merchant key, not an agency key. Per the LunarPay
+ * API docs, agency keys (lp_agency_...) are only valid on /api/v1/agency/*
+ * endpoints — they cannot create checkout sessions, subscriptions, or charges.
+ *
+ * To bill venues for their directory subscriptions, StoryVenue itself has to
+ * be registered as a merchant on LunarPay and that merchant's lp_sk_ goes in
+ * STORYPAY_PLATFORM_LUNARPAY_SECRET_KEY. We refuse to silently fall back to
+ * LP_AGENCY_KEY because that returns opaque 500s from /api/v1/checkout.
+ */
 export function getPlatformLunarPaySecretKey(): string | null {
-  return (
-    process.env.STORYPAY_PLATFORM_LUNARPAY_SECRET_KEY?.trim() ||
-    process.env.LP_AGENCY_KEY?.trim() ||
-    null
-  );
+  const raw = process.env.STORYPAY_PLATFORM_LUNARPAY_SECRET_KEY?.trim();
+  if (!raw) return null;
+  if (!raw.startsWith('lp_sk_')) {
+    console.warn(
+      '[platform-directory-billing] STORYPAY_PLATFORM_LUNARPAY_SECRET_KEY is set but does not start with "lp_sk_" — agency keys are NOT valid on /api/v1/checkout. Refusing to use it.',
+    );
+    return null;
+  }
+  return raw;
 }
 
 export function isPlatformDirectoryBillingConfigured(): boolean {
@@ -20,7 +36,9 @@ export function isPlatformDirectoryBillingConfigured(): boolean {
 export function requirePlatformLunarPaySecretKey(): string {
   const sk = getPlatformLunarPaySecretKey();
   if (!sk) {
-    throw new Error('STORYPAY_PLATFORM_LUNARPAY_SECRET_KEY is not configured');
+    throw new Error(
+      'StoryVenue platform billing is not configured. Set STORYPAY_PLATFORM_LUNARPAY_SECRET_KEY to a LunarPay merchant secret key (starts with lp_sk_). Agency keys (lp_agency_...) cannot be used for checkout — they only work on /api/v1/agency/* endpoints.',
+    );
   }
   return sk;
 }

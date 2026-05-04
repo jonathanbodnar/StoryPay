@@ -92,8 +92,35 @@ export async function GET(req: NextRequest) {
     response: unknown;
   }> = [];
 
-  // 0. Sanity: does the key work at all on a non-checkout endpoint?
-  // GET /api/v1/customers requires auth and returns 200 OK on a healthy merchant.
+  // 0a. Onboarding status — the most important diagnostic. If isActive is
+  // false, the merchant cannot process payments yet (Fortis hasn't approved
+  // them). Checkout will return 403/500 until they're ACTIVE.
+  try {
+    const res = await fetch(`${LP_BASE_URL}/api/v1/onboarding/status`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${key}` },
+    });
+    const text = await res.text();
+    let parsed: unknown = text;
+    try { parsed = JSON.parse(text); } catch { /* keep as string */ }
+    results.push({
+      label: '0a. ONBOARDING STATUS — is this merchant ACTIVE on Fortis?',
+      method: 'GET',
+      path: '/api/v1/onboarding/status',
+      status: res.status,
+      response: parsed,
+    });
+  } catch (err) {
+    results.push({
+      label: '0a. ONBOARDING STATUS — is this merchant ACTIVE on Fortis?',
+      method: 'GET',
+      path: '/api/v1/onboarding/status',
+      status: 0,
+      response: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  // 0b. Sanity: does the key work at all on a non-checkout endpoint?
   try {
     const res = await fetch(`${LP_BASE_URL}/api/v1/customers?page=1&limit=1`, {
       method: 'GET',
@@ -103,7 +130,7 @@ export async function GET(req: NextRequest) {
     let parsed: unknown = text;
     try { parsed = JSON.parse(text); } catch { /* keep as string */ }
     results.push({
-      label: '0. KEY-CHECK GET /customers (does the key work at all?)',
+      label: '0b. KEY-CHECK GET /customers (does the key work at all?)',
       method: 'GET',
       path: '/api/v1/customers',
       status: res.status,
@@ -111,7 +138,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (err) {
     results.push({
-      label: '0. KEY-CHECK GET /customers (does the key work at all?)',
+      label: '0b. KEY-CHECK GET /customers (does the key work at all?)',
       method: 'GET',
       path: '/api/v1/customers',
       status: 0,
