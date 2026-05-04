@@ -954,11 +954,18 @@ export default function DirectoryBillingPage() {
             </div>
           ) : (
             <p className="text-sm text-gray-500">
-              No card on file.{' '}
-              {currentCents > 0 ? 'Resume checkout to add one.' : 'Switch to a paid plan to add a payment method.'}
+              {currentCents > 0
+                ? 'No card on file. Add one to keep your subscription active.'
+                : 'No card on file. Switch to a paid plan to add a payment method.'}
             </p>
           )}
-          {currentCents > 0 && summary.payment_method ? (
+          {/*
+            Always offer the button on paid plans, even when no card is on
+            file — this is the only path a venue has to add a new card after
+            their saved card was removed (or to swap it out before renewal).
+            Free plans don't need a card so we hide it there.
+          */}
+          {currentCents > 0 ? (
             <button
               type="button"
               disabled={busy === 'update_pm'}
@@ -967,7 +974,7 @@ export default function DirectoryBillingPage() {
               style={{ backgroundColor: BRAND }}
             >
               {busy === 'update_pm' ? <Loader2 size={12} className="animate-spin" /> : <CreditCard size={12} />}
-              Update payment method
+              {summary.payment_method ? 'Update payment method' : 'Add card'}
             </button>
           ) : null}
         </div>

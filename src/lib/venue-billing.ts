@@ -6,6 +6,7 @@ import {
   getCheckoutSession,
   getSubscription,
   listPaymentMethods,
+  refundCharge,
 } from './lunarpay';
 import {
   getPlatformFortisMerchantId,
@@ -1048,11 +1049,15 @@ export async function cancelVenueSubscription(venueId: string): Promise<void> {
 /**
  * Kick off a LunarPay checkout session dedicated to updating the saved card.
  *
- * Because the LunarPay subscription PATCH endpoint does not support swapping
- * the paymentMethodId, this flow charges the current plan price now on a new
- * card (via save_payment_method=true). After the customer returns, the
- * verify step replaces the active subscription with a new one bound to the
- * fresh paymentMethodId.
+ * LunarPay's subscription PATCH endpoint does not support swapping the
+ * paymentMethodId, so the only way to swap a card on an existing sub is to
+ * cancel + recreate. To make that safe (no double-charge, no lost trial)
+ * the flow runs a $1 card verification through hosted checkout, refunds it,
+ * then recreates the subscription with `startOn` pinned to the original
+ * sub's `nextPaymentOn` so the renewal cadence is preserved.
+ *
+ * Restricted to credit card to keep verification synchronous (ACH would
+ * delay this 1-3 business days).
  */
 export async function startUpdatePaymentMethodCheckout(
   venueId: string,
@@ -1069,10 +1074,11 @@ export async function startUpdatePaymentMethodCheckout(
   // the venue is identified by cookie at verify time.
   const secret = requirePlatformLunarPaySecretKey();
   const checkoutData: Record<string, unknown> = {
-    amount: cents / 100,
-    description: `StoryVenue directory — ${ctx.plan.name} (update card)`,
+    amount: 1,
+    description: `StoryVenue — update card ($1 verification, refunded immediately)`,
     customer_email: ctx.venue.email || undefined,
     customer_name: ctx.venue.name,
+    payment_methods: ['cc'],
     success_url: `${APP_URL}/dashboard/directory-billing?payment_update=1`,
     cancel_url: `${APP_URL}/dashboard/directory-billing`,
   };
@@ -1084,8 +1090,10 @@ export async function startUpdatePaymentMethodCheckout(
 }
 
 /**
- * Finish the update-payment flow: cancel the old subscription and create a new
- * one bound to the freshly saved payment method from the checkout session.
+ * Finish the update-payment flow: cancel the old subscription, refund the
+ * $1 verification charge, and create a replacement sub bound to the freshly
+ * saved card with `startOn` preserved from the original sub so the next
+ * renewal date does not move.
  */
 export async function verifyUpdatePaymentMethod(
   venueId: string,
@@ -1115,12 +1123,71 @@ export async function verifyUpdatePaymentMethod(
     throw new Error('Missing customer or payment method from checkout session');
   }
 
+  // Read the old sub's nextPaymentOn BEFORE canceling so we can preserve
+  // the renewal cadence on the replacement. Without this we'd reset the
+  // renewal date to today, which would either lose the trial (for trialing
+  // subs) or double-charge the venue this cycle (for active subs).
   const oldSubId = ctx.venue.directory_subscription_external_id;
+  let preservedStartOn: string | null = null;
   if (oldSubId) {
+    try {
+      const oldRaw = (await getSubscription(secret, oldSubId)) as Record<string, unknown>;
+      const oldSub =
+        ((oldRaw as { data?: Record<string, unknown> }).data as Record<string, unknown>) || oldRaw;
+      const nextRenewalRaw =
+        (oldSub.nextPaymentOn as string | null | undefined) ??
+        (oldSub.next_payment_on as string | null | undefined) ??
+        (oldSub.nextChargeAt as string | null | undefined) ??
+        (oldSub.next_charge_at as string | null | undefined) ??
+        (oldSub.nextChargeDate as string | null | undefined) ??
+        (oldSub.next_charge_date as string | null | undefined) ??
+        (oldSub.nextPaymentDate as string | null | undefined) ??
+        (oldSub.next_payment_date as string | null | undefined) ??
+        (oldSub.next_billing_date as string | null | undefined) ??
+        null;
+      if (nextRenewalRaw) {
+        const parsed = new Date(nextRenewalRaw);
+        if (!Number.isNaN(parsed.getTime()) && parsed.getTime() > Date.now()) {
+          preservedStartOn = parsed.toISOString().slice(0, 10);
+        }
+      }
+    } catch (e) {
+      console.warn(
+        '[verifyUpdatePaymentMethod] could not read old sub nextPaymentOn — replacement will start tomorrow',
+        e instanceof Error ? e.message : e,
+      );
+    }
     try {
       await cancelSubscription(secret, oldSubId);
     } catch {
       // If it's already cancelled we can still proceed.
+    }
+  }
+
+  // Refund the $1 card-verification charge from this update flow. Best-
+  // effort — a failure here doesn't invalidate the new card.
+  const sessionCharge = (session.charge as Record<string, unknown> | null) || null;
+  const sessionCharges = Array.isArray(session.charges) ? session.charges : null;
+  const firstCharge = sessionCharges
+    ? (sessionCharges[0] as Record<string, unknown> | undefined)
+    : undefined;
+  const verificationChargeId =
+    (session.charge_id as string | number | null) ??
+    (session.chargeId as string | number | null) ??
+    (sessionCharge?.id as string | number | null | undefined) ??
+    (firstCharge?.id as string | number | null | undefined) ??
+    (session.transaction_id as string | number | null) ??
+    (session.transactionId as string | number | null) ??
+    null;
+  if (verificationChargeId !== null && verificationChargeId !== undefined) {
+    try {
+      await refundCharge(secret, verificationChargeId);
+    } catch (e) {
+      console.warn(
+        '[verifyUpdatePaymentMethod] could not refund $1 verification charge',
+        verificationChargeId,
+        e instanceof Error ? e.message : e,
+      );
     }
   }
 
@@ -1172,7 +1239,14 @@ export async function verifyUpdatePaymentMethod(
     return;
   }
 
-  const startOn = new Date().toISOString().slice(0, 10);
+  // Preserve the renewal cadence:
+  //  • If the old sub had a future nextPaymentOn, the replacement starts
+  //    on that exact day so the venue isn't billed twice this cycle and
+  //    trialing accounts keep their trial-end date.
+  //  • Otherwise (no old sub, or old sub already past renewal) the
+  //    replacement starts tomorrow.
+  const startOn =
+    preservedStartOn ?? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const subResult = (await createSubscription(secret, {
     customerId: Number(customerId),
     paymentMethodId: Number(paymentMethodId),
@@ -1185,10 +1259,15 @@ export async function verifyUpdatePaymentMethod(
   const newSubId = (sub.id as string | number | undefined) ?? null;
   if (newSubId === null) throw new Error('LunarPay did not return a subscription id');
 
+  // Preserve 'trialing' if the old sub was still trialing — only flip to
+  // 'active' if we're past the trial end date.
+  const wasTrialing = String(ctx.venue.directory_subscription_status) === 'trialing';
+  const newStatus = wasTrialing ? 'trialing' : 'active';
+
   await supabaseAdmin
     .from('venues')
     .update({
-      directory_subscription_status: 'active',
+      directory_subscription_status: newStatus,
       directory_subscription_external_id: String(newSubId),
       platform_lunarpay_customer_id: String(customerId),
     })
@@ -1200,7 +1279,14 @@ export async function verifyUpdatePaymentMethod(
     cents,
     'payment_method_updated',
     `pm_update:${sessionId}`,
-    { session_id: sessionId, old_subscription_id: oldSubId, new_subscription_id: String(newSubId) },
+    {
+      session_id:              sessionId,
+      old_subscription_id:     oldSubId,
+      new_subscription_id:     String(newSubId),
+      preserved_start_on:      preservedStartOn,
+      effective_start_on:      startOn,
+      verification_charge_id:  verificationChargeId,
+    },
   );
 }
 
