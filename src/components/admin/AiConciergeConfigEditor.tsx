@@ -632,7 +632,18 @@ function formToOverride(f: FormState): {
 
 // ── Outreach questions section ────────────────────────────────────────────
 
-const KNOWN_CATEGORIES = ['discovery', 'qualifying', 'cta', 'objection', 'general'] as const;
+const KNOWN_CATEGORIES = [
+  // Tactical (ask the bride something concrete)
+  'discovery', 'qualifying',
+  // Asks (call-to-action variants)
+  'cta', 'soft_cta',
+  // Empathy (no ask, just connect)
+  'check_in', 'reassurance', 'vibe',
+  // Trust (handle objections about pricing / fit)
+  'objection',
+  // Catch-all
+  'general',
+] as const;
 
 function OutreachQuestionsSection({
   questions, isDirty, editMode, onChange,
