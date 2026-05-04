@@ -40,6 +40,7 @@ import { ensureVenueAiResources } from './venue-resources';
 import { moveLeadToAiStage, applyAiTag } from './pipeline-tag-service';
 import { recordAiStateTransition } from './state-transitions';
 import { enforceQuietHours } from './quiet-hours';
+import { getAiRuntimeSettings } from './runtime-settings';
 
 // ── Public types ───────────────────────────────────────────────────────────
 
@@ -60,6 +61,10 @@ export interface ActivationCronResult {
   durationMs:   number;
   startedAt:    string;
   finishedAt:   string;
+  /** When true, the global kill switch was on and the cron exited immediately. */
+  killSwitchEngaged?: boolean;
+  /** Reason recorded with the kill switch (operator-supplied), if any. */
+  killSwitchReason?:  string | null;
 }
 
 // ── Internal row shape from the eligibility query ──────────────────────────
@@ -87,6 +92,27 @@ export async function runAiActivationCron(
 ): Promise<ActivationCronResult> {
   const startedAt = new Date();
   const maxLeads = opts.maxLeads ?? 500;
+
+  // Global kill switch — exit immediately, log reason. We don't even open a
+  // DB connection past this point so the operator's "stop everything" lever
+  // really does stop everything cheaply.
+  const runtime = await getAiRuntimeSettings();
+  if (runtime.killSwitchEnabled) {
+    const finishedAt = new Date();
+    return {
+      ok:                true,
+      scanned:           0,
+      activated:         0,
+      reEnabled:         0,
+      skipped:           0,
+      errors:            [],
+      durationMs:        finishedAt.getTime() - startedAt.getTime(),
+      startedAt:         startedAt.toISOString(),
+      finishedAt:        finishedAt.toISOString(),
+      killSwitchEngaged: true,
+      killSwitchReason:  runtime.killSwitchReason,
+    };
+  }
 
   const sql = await getDbAsync();
 

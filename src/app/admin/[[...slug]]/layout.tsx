@@ -21,6 +21,7 @@ import { CoupleManagementPortal } from '@/components/admin/CoupleManagementPorta
 import { DirectoryPlansAdminPanel } from '@/components/admin/DirectoryPlansAdminPanel';
 import { DirectoryBadgesAdminPanel } from '@/components/admin/DirectoryBadgesAdminPanel';
 import { SubscriptionsAdminPanel } from '@/components/admin/SubscriptionsAdminPanel';
+import { AiConciergeAdminPanel } from '@/components/admin/AiConciergeAdminPanel';
 
 // Lazy-load the WYSIWYG editor so it doesn't affect admin initial load
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
@@ -42,6 +43,7 @@ type AdminTabKey =
   | 'subscriptions'
   | 'directory-plans'
   | 'directory-badges'
+  | 'ai-concierge'
   | 'announcements'
   | 'feature-requests'
   | 'changelog'
@@ -60,6 +62,7 @@ const ADMIN_TAB_KEYS: ReadonlySet<string> = new Set<AdminTabKey>([
   'subscriptions',
   'directory-plans',
   'directory-badges',
+  'ai-concierge',
   'announcements',
   'feature-requests',
   'changelog',
@@ -495,6 +498,7 @@ const ADMIN_NAV_ITEMS = [
   { key: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
   { key: 'directory-badges', label: 'Verified & Sponsored', icon: BadgeCheck },
   { key: 'directory-plans', label: 'Directory plans', icon: Layers },
+  { key: 'ai-concierge', label: 'AI Concierge', icon: Sparkles },
   { key: 'blog', label: 'Blog Posts', icon: BookOpen },
   { key: 'seo-pages', label: 'SEO / Pages', icon: Globe },
   { key: 'trends', label: 'Google Trends', icon: TrendingUp },
@@ -1703,6 +1707,8 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
         )}
 
         {activeTab === 'subscriptions' && <SubscriptionsAdminPanel />}
+
+        {activeTab === 'ai-concierge' && <AiConciergeAdminPanel />}
 
         {activeTab === 'directory-plans' && <DirectoryPlansAdminPanel />}
 

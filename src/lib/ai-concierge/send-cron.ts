@@ -57,6 +57,7 @@ import { buildAiConciergeSystemPrompt } from './prompt-builder';
 import { generateSmsWithDeepSeek, clampSmsLength } from './llm';
 import { logAiOutboundMessage } from './conversation-helpers';
 import { sendAiSms } from './sms-provider';
+import { getAiRuntimeSettings } from './runtime-settings';
 
 import type { AiAngleKey } from './types';
 import type { SmsSendOutcome } from './sms-provider/types';
@@ -82,6 +83,9 @@ export interface SendCronResult {
   durationMs:  number;
   startedAt:   string;
   finishedAt:  string;
+  /** When true, the global kill switch was on and the cron exited immediately. */
+  killSwitchEngaged?: boolean;
+  killSwitchReason?:  string | null;
 }
 
 interface ReservedLeadRow {
@@ -103,6 +107,28 @@ export async function runAiSendCron(
   const startedAt = new Date();
   const maxLeads  = opts.maxLeads ?? 200;
   const reservMin = opts.reservationMinutes ?? 15;
+
+  // Global kill switch — exit before reserving anything. Leads stay in their
+  // current state with their existing ai_next_send_at; once the switch is
+  // released the next send-cron tick picks them up where they left off.
+  const runtime = await getAiRuntimeSettings();
+  if (runtime.killSwitchEnabled) {
+    const finishedAt = new Date();
+    return {
+      ok:                true,
+      scanned:           0,
+      sent:              0,
+      expired:           0,
+      retried:           0,
+      optedOut:          0,
+      errors:            [],
+      durationMs:        finishedAt.getTime() - startedAt.getTime(),
+      startedAt:         startedAt.toISOString(),
+      finishedAt:        finishedAt.toISOString(),
+      killSwitchEngaged: true,
+      killSwitchReason:  runtime.killSwitchReason,
+    };
+  }
 
   const sql = await getDbAsync();
 
