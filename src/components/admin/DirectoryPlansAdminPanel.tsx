@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, Plus, Trash2, Pencil, Check, ChevronDown, Copy, Eye, EyeOff, Star } from 'lucide-react';
+import { Loader2, Plus, Trash2, Pencil, Check, ChevronDown, Copy, Eye, EyeOff, Star, Lock } from 'lucide-react';
 import {
   DIRECTORY_NAV_GROUP_LABELS,
   DIRECTORY_NAV_REGISTRY,
@@ -31,6 +31,7 @@ type PlanRow = {
   sort_order: number;
   is_default: boolean;
   is_public: boolean;
+  is_legacy?: boolean;
   highlight_label?: string | null;
   price_monthly_cents: number | null;
   stripe_price_id: string | null;
@@ -106,6 +107,7 @@ export function DirectoryPlansAdminPanel() {
     fortis_merchant_id: '',
     is_default: false,
     is_public: true,
+    is_legacy: false,
     highlight_label: '',
     trial_period_value: '0' as string,
     trial_period_unit: 'none' as TrialUnit,
@@ -278,6 +280,7 @@ export function DirectoryPlansAdminPanel() {
       fortis_merchant_id: p.fortis_merchant_id?.trim() || '',
       is_default: p.is_default,
       is_public: p.is_public !== false, // default true if column absent
+      is_legacy: Boolean(p.is_legacy),
       highlight_label: p.highlight_label?.trim() ?? '',
       trial_period_value: typeof p.trial_period_value === 'number' && p.trial_period_value > 0
         ? String(p.trial_period_value)
@@ -309,6 +312,7 @@ export function DirectoryPlansAdminPanel() {
         sort_order: editMeta.sort_order,
         is_default: editMeta.is_default,
         is_public: editMeta.is_public,
+        is_legacy: editMeta.is_legacy,
         highlight_label: editMeta.highlight_label.trim() || null,
         price_monthly_cents: editMeta.price_monthly_cents
           ? Math.round(parseFloat(editMeta.price_monthly_cents) * 100)
@@ -852,6 +856,15 @@ NOTIFY pgrst, 'reload schema';`}</pre>
                       <Eye size={12} className="text-gray-500" />
                       <span>Public (visible on plan picker &amp; upgrade modals)</span>
                     </label>
+                    <label className="flex items-center gap-1.5 text-xs cursor-pointer rounded-lg border border-amber-200 bg-amber-50 px-2 py-1">
+                      <input
+                        type="checkbox"
+                        checked={editMeta.is_legacy}
+                        onChange={(e) => setEditMeta({ ...editMeta, is_legacy: e.target.checked })}
+                      />
+                      <Lock size={12} className="text-amber-600" />
+                      <span className="text-amber-800">Legacy plan — all add-ons included, billing managed directly, no subscription required</span>
+                    </label>
                   </div>
                   {/* Highlight badge */}
                   <div className="rounded-lg border border-indigo-100 bg-indigo-50 p-3">
@@ -1061,6 +1074,11 @@ NOTIFY pgrst, 'reload schema';`}</pre>
                       {p.is_public === false && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
                           <EyeOff size={9} /> Hidden
+                        </span>
+                      )}
+                      {p.is_legacy && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-700">
+                          <Lock size={9} /> Legacy
                         </span>
                       )}
                     </div>

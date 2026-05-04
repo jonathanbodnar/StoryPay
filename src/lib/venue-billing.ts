@@ -55,6 +55,12 @@ export type DirectoryPlanCatalogEntry = {
   trial_period_unit: PlanTrialConfig['trial_period_unit'];
   /** Short badge label shown on plan cards, e.g. "Recommended". NULL = no badge. */
   highlight_label: string | null;
+  /**
+   * When true this is a legacy / grandfathered plan. Venues on it get all
+   * add-ons automatically, pay nothing through the platform, and see a
+   * locked billing page that explains billing is handled directly.
+   */
+  is_legacy: boolean;
 };
 
 // ── Dynamic addon price loader ─────────────────────────────────────────────
@@ -147,6 +153,11 @@ export type VenueBillingSummary = {
     days_remaining: number | null; // null when status is none
     plan_id: string | null;
   };
+  /**
+   * True when the current plan is a legacy / grandfathered plan. Billing is
+   * managed directly — no subscription required, all add-ons included.
+   */
+  is_legacy_plan: boolean;
 };
 
 function mapPlanRow(row: Record<string, unknown>): DirectoryPlanCatalogEntry {
@@ -170,6 +181,7 @@ function mapPlanRow(row: Record<string, unknown>): DirectoryPlanCatalogEntry {
       typeof row.highlight_label === 'string' && row.highlight_label.trim()
         ? row.highlight_label.trim()
         : null,
+    is_legacy: Boolean(row.is_legacy),
   };
 }
 
@@ -193,7 +205,7 @@ export async function listDirectoryPlanCatalog(opts?: {
 
   const baseColumns =
     'id, name, slug, description, price_monthly_cents, is_default, sort_order, feature_flags';
-  const fullColumns = `${baseColumns}, trial_period_value, trial_period_unit, is_public, highlight_label`;
+  const fullColumns = `${baseColumns}, trial_period_value, trial_period_unit, is_public, highlight_label, is_legacy`;
 
   let rows: Record<string, unknown>[] | null = null;
 
@@ -428,21 +440,40 @@ export async function loadVenueBillingSummary(venueId: string): Promise<VenueBil
 
   const addonPrices = await loadAddonPrices();
 
-  const addons = resolveEffectiveAddons({
-    plan: current,
-    allPlans: plans,
-    addonVerifiedUser,
-    addonSponsoredUser,
-    addonConciergeUser,
-  });
-  const charge = computeMonthlyTotalCents({
-    plan: current,
-    allPlans: plans,
-    addonVerifiedUser,
-    addonSponsoredUser,
-    addonConciergeUser,
-    prices: addonPrices,
-  });
+  const isLegacyPlan = Boolean(current?.is_legacy);
+
+  // Legacy plan: all add-ons auto-included, no platform charge.
+  const addons: EffectiveAddons = isLegacyPlan
+    ? {
+        verified:            true,
+        sponsored:           true,
+        concierge:           true,
+        verifiedFromPlan:    true,
+        sponsoredFromPlan:   true,
+        conciergeFromPlan:   true,
+        conciergeAvailable:  true,
+        verifiedUser:        false,
+        sponsoredUser:       false,
+        conciergeUser:       false,
+      }
+    : resolveEffectiveAddons({
+        plan: current,
+        allPlans: plans,
+        addonVerifiedUser,
+        addonSponsoredUser,
+        addonConciergeUser,
+      });
+
+  const charge: ChargeBreakdown = isLegacyPlan
+    ? { plan_cents: 0, verified_cents: 0, sponsored_cents: 0, concierge_cents: 0, total_cents: 0 }
+    : computeMonthlyTotalCents({
+        plan: current,
+        allPlans: plans,
+        addonVerifiedUser,
+        addonSponsoredUser,
+        addonConciergeUser,
+        prices: addonPrices,
+      });
 
   const plan_addon_inclusion: Record<string, { verified: boolean; sponsored: boolean }> = {};
   for (const p of plans) {
@@ -496,6 +527,7 @@ export async function loadVenueBillingSummary(venueId: string): Promise<VenueBil
       days_remaining: daysRemaining === Infinity ? null : daysRemaining,
       plan_id: trialState.directory_trial_plan_id,
     },
+    is_legacy_plan: isLegacyPlan,
   };
 }
 

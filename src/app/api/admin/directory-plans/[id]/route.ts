@@ -46,6 +46,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (typeof body.is_public === 'boolean') {
     updates.is_public = body.is_public;
   }
+  if (typeof body.is_legacy === 'boolean') {
+    updates.is_legacy = body.is_legacy;
+  }
   if (body.highlight_label !== undefined) {
     const label = typeof body.highlight_label === 'string' ? body.highlight_label.trim() : null;
     updates.highlight_label = label || null;
