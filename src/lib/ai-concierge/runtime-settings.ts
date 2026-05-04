@@ -22,6 +22,12 @@ export interface AiRuntimeSettings {
   killSwitchReason:  string | null;
   killSwitchSetBy:   string | null;
   killSwitchSetAt:   string | null;
+  /**
+   * Platform-wide default daily SMS send cap per venue. Each venue can
+   * override via `venues.ai_daily_send_cap`. NULL on a venue = use this.
+   * Migration 100 sets the column default to 100.
+   */
+  defaultDailySendCap: number;
   updatedAt:         string;
 }
 
@@ -32,11 +38,12 @@ let cache: CacheEntry | null = null;
 
 /** Hard-fallback returned when the table doesn't exist yet (pre-migration). */
 const SAFE_DEFAULT: AiRuntimeSettings = {
-  killSwitchEnabled: false,
-  killSwitchReason:  null,
-  killSwitchSetBy:   null,
-  killSwitchSetAt:   null,
-  updatedAt:         new Date(0).toISOString(),
+  killSwitchEnabled:   false,
+  killSwitchReason:    null,
+  killSwitchSetBy:     null,
+  killSwitchSetAt:     null,
+  defaultDailySendCap: 100,
+  updatedAt:           new Date(0).toISOString(),
 };
 
 /**
@@ -51,17 +58,22 @@ export async function getAiRuntimeSettings(force = false): Promise<AiRuntimeSett
 
   const { data, error } = await supabaseAdmin
     .from('ai_runtime_settings')
-    .select('kill_switch_enabled, kill_switch_reason, kill_switch_set_by, kill_switch_set_at, updated_at')
+    .select('kill_switch_enabled, kill_switch_reason, kill_switch_set_by, kill_switch_set_at, default_daily_send_cap, updated_at')
     .eq('id', 1)
     .maybeSingle();
 
   if (error) {
-    // 42P01 = table missing. Anything else gets logged but we still return
-    // the safe default — same rationale as the AI helpers' "never throw"
-    // discipline. We do NOT cache the failure: if the table arrives we'll
-    // pick it up on the next call.
-    if (error.code !== '42P01') {
+    // 42P01 = table missing. 42703 = column missing (migration 100 not yet
+    // applied — we still want kill-switch reads to work). Anything else gets
+    // logged but we still return the safe default — same rationale as the AI
+    // helpers' "never throw" discipline. We do NOT cache the failure: if the
+    // table/column arrives we'll pick it up on the next call.
+    if (error.code !== '42P01' && error.code !== '42703') {
       console.error('[ai-concierge] getAiRuntimeSettings error:', error.message);
+    }
+    if (error.code === '42703') {
+      // Column missing → re-query without it so the kill switch still works.
+      return await getAiRuntimeSettingsWithoutCap();
     }
     return SAFE_DEFAULT;
   }
@@ -70,12 +82,14 @@ export async function getAiRuntimeSettings(force = false): Promise<AiRuntimeSett
     return SAFE_DEFAULT;
   }
 
+  const rawCap = (data as { default_daily_send_cap?: number | null }).default_daily_send_cap;
   const value: AiRuntimeSettings = {
-    killSwitchEnabled: data.kill_switch_enabled === true,
-    killSwitchReason:  data.kill_switch_reason ?? null,
-    killSwitchSetBy:   data.kill_switch_set_by ?? null,
-    killSwitchSetAt:   data.kill_switch_set_at ?? null,
-    updatedAt:         data.updated_at ?? new Date().toISOString(),
+    killSwitchEnabled:   data.kill_switch_enabled === true,
+    killSwitchReason:    data.kill_switch_reason ?? null,
+    killSwitchSetBy:     data.kill_switch_set_by ?? null,
+    killSwitchSetAt:     data.kill_switch_set_at ?? null,
+    defaultDailySendCap: typeof rawCap === 'number' && rawCap > 0 ? rawCap : SAFE_DEFAULT.defaultDailySendCap,
+    updatedAt:           data.updated_at ?? new Date().toISOString(),
   };
   cache = { value, loadedAt: Date.now() };
   return value;
@@ -118,7 +132,57 @@ export async function setAiKillSwitch(input: {
   return await getAiRuntimeSettings(true);
 }
 
+/**
+ * Update the platform-wide default daily SMS send cap. Returns fresh settings.
+ * Bypasses cache. Caller is responsible for validating positive integer.
+ */
+export async function setDefaultDailySendCap(input: {
+  cap:  number;
+}): Promise<AiRuntimeSettings> {
+  if (!Number.isFinite(input.cap) || input.cap < 1 || input.cap > 100_000) {
+    throw new Error('default_daily_send_cap must be an integer between 1 and 100000');
+  }
+  const now = new Date().toISOString();
+  const { error } = await supabaseAdmin
+    .from('ai_runtime_settings')
+    .upsert({
+      id:                     1,
+      default_daily_send_cap: Math.floor(input.cap),
+      updated_at:             now,
+    });
+
+  if (error) {
+    throw new Error(`Failed to update ai_runtime_settings: ${error.message}`);
+  }
+
+  clearRuntimeSettingsCache();
+  return await getAiRuntimeSettings(true);
+}
+
 /** Force the cache to refresh on the next call. */
 export function clearRuntimeSettingsCache(): void {
   cache = null;
+}
+
+/**
+ * Pre-migration-100 fallback: re-read the row without the new column so
+ * the kill-switch keeps working until migration 100 is applied. Internal.
+ */
+async function getAiRuntimeSettingsWithoutCap(): Promise<AiRuntimeSettings> {
+  const { data, error } = await supabaseAdmin
+    .from('ai_runtime_settings')
+    .select('kill_switch_enabled, kill_switch_reason, kill_switch_set_by, kill_switch_set_at, updated_at')
+    .eq('id', 1)
+    .maybeSingle();
+
+  if (error || !data) return SAFE_DEFAULT;
+
+  return {
+    killSwitchEnabled:   data.kill_switch_enabled === true,
+    killSwitchReason:    data.kill_switch_reason ?? null,
+    killSwitchSetBy:     data.kill_switch_set_by ?? null,
+    killSwitchSetAt:     data.kill_switch_set_at ?? null,
+    defaultDailySendCap: SAFE_DEFAULT.defaultDailySendCap,
+    updatedAt:           data.updated_at ?? new Date().toISOString(),
+  };
 }

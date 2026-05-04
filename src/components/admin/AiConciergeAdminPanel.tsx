@@ -22,7 +22,7 @@ import {
   Sparkles, Loader2, AlertTriangle, RotateCw, Power, Search,
   CheckCircle2, XCircle, Pause, Play, Shield, ShieldOff,
   ExternalLink, BadgeCheck, Activity, MessageSquare, Filter,
-  Workflow, FileCode2,
+  Workflow, FileCode2, DollarSign, RefreshCw,
 } from 'lucide-react';
 import AiConciergeHandoffRulesEditor from './AiConciergeHandoffRulesEditor';
 import AiConciergeConfigEditor from './AiConciergeConfigEditor';
@@ -103,6 +103,39 @@ interface VenueRow {
     dormant:    number;
     total:      number;
   };
+  // Migration 100 fields. Optional because the venues GET falls back when
+  // the columns are missing.
+  ai_daily_send_cap?:           number | null;
+  ai_daily_alert_threshold_pct?: number | null;
+  a2p_brand_id?:                string | null;
+  a2p_brand_status?:            string | null;
+  a2p_campaign_id?:             string | null;
+  a2p_campaign_status?:         string | null;
+  a2p_last_checked_at?:         string | null;
+  a2p_last_check_error?:        string | null;
+  // Server-derived (route hydration).
+  sentLast24h?:                 number;
+  effectiveDailyCap?:           number;
+}
+
+interface A2pSnapshot {
+  brandId:        string | null;
+  brandStatus:    string;
+  campaignId:     string | null;
+  campaignStatus: string;
+  verified:       boolean;
+  lastCheckedAt:  string | null;
+  lastCheckError: string | null;
+  decision:       'auto_verified' | 'auto_revoked' | 'no_change' | 'fetch_failed';
+}
+
+interface RuntimeSettings {
+  killSwitchEnabled:   boolean;
+  killSwitchReason:    string | null;
+  killSwitchSetBy:     string | null;
+  killSwitchSetAt:     string | null;
+  defaultDailySendCap: number;
+  updatedAt:           string;
 }
 
 interface VenuesPayload {
@@ -282,6 +315,8 @@ export function AiConciergeAdminPanel() {
         onToggle={toggleKillSwitch}
         onRefresh={() => void loadKillSwitch()}
       />
+
+      <SpendDefaultsCard />
 
       <PulseSummary />
 
@@ -793,6 +828,31 @@ function VenuesTable() {
     }
   }, [data, load]);
 
+  const refreshA2p = useCallback(async (venueId: string) => {
+    setBusyVenue(venueId); setError('');
+    try {
+      const res = await fetch(`/api/admin/ai-concierge/venues/${venueId}/refresh-a2p`, { method: 'POST' });
+      const j = await res.json().catch(() => ({})) as { error?: string; ok?: boolean; snapshot?: A2pSnapshot };
+      if (!res.ok) {
+        setError(j.error ?? 'Failed to refresh A2P status');
+        return;
+      }
+      // Always reload to pick up the latest cached fields. Cheaper than
+      // patching the row in place — the response shape doesn't include all
+      // the venue columns we display.
+      await load();
+      // If the fetch failed (best-effort), surface the diagnostic so the
+      // operator sees what happened.
+      if (j.snapshot?.decision === 'fetch_failed' && j.snapshot.lastCheckError) {
+        setError(`A2P fetch failed: ${j.snapshot.lastCheckError}`);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to refresh A2P status');
+    } finally {
+      setBusyVenue('');
+    }
+  }, [load]);
+
   const totals = data?.totals;
 
   const filtered = useMemo(() => data?.venues ?? [], [data]);
@@ -846,12 +906,13 @@ function VenuesTable() {
               <th className="px-4 py-2.5">AI on?</th>
               <th className="px-4 py-2.5">Active leads</th>
               <th className="px-4 py-2.5">Other states</th>
+              <th className="px-4 py-2.5">Daily cap</th>
               <th className="px-4 py-2.5 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {filtered.length === 0 && !loading && (
-              <tr><td colSpan={8} className="px-4 py-10 text-center text-sm text-gray-400">No venues match.</td></tr>
+              <tr><td colSpan={9} className="px-4 py-10 text-center text-sm text-gray-400">No venues match.</td></tr>
             )}
             {filtered.map((v) => {
               const busy = busyVenue === v.id;
@@ -868,19 +929,14 @@ function VenuesTable() {
                       : <XCircle      size={14} className="text-gray-300"   />}
                   </td>
                   <td className="px-4 py-3">
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void patchVenue(v.id, { a2p_verified: !v.a2p_verified })}
-                      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors disabled:opacity-50 ${
-                        v.a2p_verified
-                          ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                    >
-                      {v.a2p_verified ? <CheckCircle2 size={11} /> : <XCircle size={11} />}
-                      {v.a2p_verified ? 'verified' : 'not verified'}
-                    </button>
+                    <A2pCell
+                      venue={v}
+                      busy={busy}
+                      onToggle={() => void patchVenue(v.id, { a2p_verified: !v.a2p_verified })}
+                      onRefresh={async () => {
+                        await refreshA2p(v.id);
+                      }}
+                    />
                   </td>
                   <td className="px-4 py-3">
                     {v.ghlConnected
@@ -917,6 +973,13 @@ function VenuesTable() {
                       {v.leadCounts.exhausted > 0 && <Mini label="exhausted" value={v.leadCounts.exhausted} tone="orange" />}
                     </div>
                   </td>
+                  <td className="px-4 py-3">
+                    <DailyCapCell
+                      venue={v}
+                      busy={busy}
+                      onSave={(value) => patchVenue(v.id, { ai_daily_send_cap: value })}
+                    />
+                  </td>
                   <td className="px-4 py-3 text-right">
                     <button
                       type="button"
@@ -945,7 +1008,7 @@ function VenuesTable() {
               );
             })}
             {loading && (
-              <tr><td colSpan={8} className="px-4 py-6 text-center"><Loader2 size={16} className="inline animate-spin text-gray-400" /></td></tr>
+              <tr><td colSpan={9} className="px-4 py-6 text-center"><Loader2 size={16} className="inline animate-spin text-gray-400" /></td></tr>
             )}
           </tbody>
         </table>
@@ -971,6 +1034,295 @@ function Mini({ label, value, tone }: { label: string; value: number; tone: 'amb
     orange: 'bg-orange-50 text-orange-700',
   } as const;
   return <span className={`inline-flex rounded-full px-1.5 py-0.5 text-[10px] ${map[tone]}`}>{label}: {value}</span>;
+}
+
+// ── Sub-component: A2P verification cell ──────────────────────────────────
+
+function A2pCell({ venue, busy, onToggle, onRefresh }: {
+  venue:     VenueRow;
+  busy:      boolean;
+  onToggle:  () => void;
+  onRefresh: () => Promise<void>;
+}) {
+  const [refreshing, setRefreshing] = useState(false);
+
+  const refresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try { await onRefresh(); } finally { setRefreshing(false); }
+  };
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          disabled={busy || refreshing}
+          onClick={onToggle}
+          className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors disabled:opacity-50 ${
+            venue.a2p_verified
+              ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+          title="Click to manually flip the verified flag"
+        >
+          {venue.a2p_verified ? <CheckCircle2 size={11} /> : <XCircle size={11} />}
+          {venue.a2p_verified ? 'verified' : 'not verified'}
+        </button>
+        <button
+          type="button"
+          disabled={busy || refreshing || !venue.ghlConnected}
+          onClick={() => void refresh()}
+          title={venue.ghlConnected ? 'Pull current A2P brand + campaign status from GHL' : 'GHL not connected'}
+          className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] text-gray-600 hover:bg-gray-50 disabled:opacity-30"
+        >
+          <RefreshCw size={10} className={refreshing ? 'animate-spin' : ''} />
+          GHL
+        </button>
+      </div>
+      {(venue.a2p_brand_status || venue.a2p_campaign_status) && (
+        <div className="flex flex-wrap gap-1">
+          {venue.a2p_brand_status && <A2pStatusPill kind="brand" status={venue.a2p_brand_status} />}
+          {venue.a2p_campaign_status && <A2pStatusPill kind="campaign" status={venue.a2p_campaign_status} />}
+        </div>
+      )}
+      {venue.a2p_last_checked_at && (
+        <span className="text-[10px] text-gray-300">checked {fmtRelative(venue.a2p_last_checked_at)}</span>
+      )}
+      {venue.a2p_last_check_error && (
+        <span className="text-[10px] text-rose-500 line-clamp-2" title={venue.a2p_last_check_error}>
+          {venue.a2p_last_check_error}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function A2pStatusPill({ kind, status }: { kind: 'brand' | 'campaign'; status: string }) {
+  const tone = status === 'approved'
+    ? 'bg-emerald-50 text-emerald-700'
+    : status === 'rejected' || status === 'failed' || status === 'suspended'
+      ? 'bg-rose-50 text-rose-700'
+      : status === 'pending' || status === 'in_review'
+        ? 'bg-amber-50 text-amber-700'
+        : 'bg-gray-100 text-gray-600';
+  return (
+    <span className={`inline-flex rounded-full px-1.5 py-0.5 text-[9px] font-medium ${tone}`}>
+      {kind}: {status}
+    </span>
+  );
+}
+
+// ── Sub-component: per-venue daily cap cell ───────────────────────────────
+
+function DailyCapCell({ venue, busy, onSave }: {
+  venue:  VenueRow;
+  busy:   boolean;
+  onSave: (capOrNull: number | null) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState<string>(venue.ai_daily_send_cap !== null && venue.ai_daily_send_cap !== undefined
+    ? String(venue.ai_daily_send_cap)
+    : '');
+  const [editing, setEditing] = useState(false);
+
+  const effective = venue.effectiveDailyCap ?? venue.ai_daily_send_cap ?? 100;
+  const sent      = venue.sentLast24h ?? 0;
+  const isOverride = venue.ai_daily_send_cap !== null && venue.ai_daily_send_cap !== undefined;
+
+  const tone = effective > 0 && sent >= effective
+    ? 'text-rose-600'
+    : effective > 0 && sent >= Math.floor(effective * 0.8)
+      ? 'text-amber-600'
+      : 'text-gray-700';
+
+  const commit = async () => {
+    const trimmed = draft.trim();
+    if (trimmed === '') {
+      // Clear override
+      if (isOverride) await onSave(null);
+      setEditing(false);
+      return;
+    }
+    const n = Number(trimmed);
+    if (!Number.isFinite(n) || n < 1 || n > 100_000) {
+      // Reset draft to original on invalid input
+      setDraft(isOverride ? String(venue.ai_daily_send_cap) : '');
+      setEditing(false);
+      return;
+    }
+    if (Math.floor(n) !== venue.ai_daily_send_cap) {
+      await onSave(Math.floor(n));
+    }
+    setEditing(false);
+  };
+
+  return (
+    <div className="flex flex-col gap-0.5 min-w-[110px]">
+      <div className={`text-sm font-medium ${tone}`}>
+        {sent}<span className="text-gray-300"> / </span>{effective}
+        <span className="ml-1 text-[10px] text-gray-400">today</span>
+      </div>
+      {editing ? (
+        <input
+          type="number"
+          min={1}
+          max={100_000}
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => void commit()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void commit();
+            if (e.key === 'Escape') { setEditing(false); setDraft(isOverride ? String(venue.ai_daily_send_cap) : ''); }
+          }}
+          placeholder="default"
+          disabled={busy}
+          className="w-[90px] rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-[11px] focus:border-gray-400 focus:outline-none"
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          disabled={busy}
+          className="text-left text-[10px] text-gray-500 hover:text-gray-900 disabled:opacity-50"
+          title="Click to set a per-venue daily cap (clear input to revert to platform default)"
+        >
+          {isOverride ? `cap: ${venue.ai_daily_send_cap}` : <em className="text-gray-400">default ({effective})</em>}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── Sub-component: platform spend defaults ────────────────────────────────
+
+function SpendDefaultsCard() {
+  const [settings, setSettings] = useState<RuntimeSettings | null>(null);
+  const [loading,  setLoading]  = useState(false);
+  const [saving,   setSaving]   = useState(false);
+  const [draft,    setDraft]    = useState<string>('');
+  const [error,    setError]    = useState('');
+  const [savedFlash, setSavedFlash] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true); setError('');
+    try {
+      const res = await fetch('/api/admin/ai-concierge/runtime-settings', { cache: 'no-store' });
+      const j = await res.json().catch(() => ({})) as RuntimeSettings & { error?: string; schemaMissing?: boolean };
+      if (!res.ok) {
+        setError(j.error ?? 'Failed to load runtime settings');
+        return;
+      }
+      setSettings(j);
+      setDraft(String(j.defaultDailySendCap));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load runtime settings');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const save = useCallback(async () => {
+    if (!settings || saving) return;
+    const n = Number(draft);
+    if (!Number.isFinite(n) || n < 1 || n > 100_000) {
+      setError('Default daily cap must be between 1 and 100000');
+      return;
+    }
+    setSaving(true); setError('');
+    try {
+      const res = await fetch('/api/admin/ai-concierge/runtime-settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ default_daily_send_cap: Math.floor(n) }),
+      });
+      const j = await res.json().catch(() => ({})) as RuntimeSettings & { error?: string };
+      if (!res.ok) {
+        setError(j.error ?? 'Failed to save');
+        return;
+      }
+      setSettings(j);
+      setDraft(String(j.defaultDailySendCap));
+      setSavedFlash(true);
+      window.setTimeout(() => setSavedFlash(false), 1500);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  }, [draft, saving, settings]);
+
+  const dirty = !!settings && draft !== String(settings.defaultDailySendCap);
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-5">
+      <div className="flex items-start gap-3">
+        <div className="rounded-lg bg-indigo-50 p-2">
+          <DollarSign size={16} className="text-indigo-600" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="font-heading text-lg text-gray-900">Platform spend defaults</h2>
+            <button
+              type="button"
+              onClick={() => void load()}
+              disabled={loading}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+            >
+              <RotateCw size={12} className={loading ? 'animate-spin' : ''} />
+              Refresh
+            </button>
+          </div>
+          <p className="mt-1 text-sm text-gray-500">
+            Default daily SMS cap applied to every venue without an explicit override.
+            Crossing 80% triggers a warning email; the cap itself defers further sends to tomorrow.
+            Per-venue overrides live in the Venues tab.
+          </p>
+
+          {error && (
+            <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">{error}</p>
+          )}
+
+          <div className="mt-4 flex items-end gap-2">
+            <div className="flex-1 max-w-[220px]">
+              <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1">
+                Default daily send cap
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={100_000}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                disabled={loading || saving || !settings}
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-gray-400 focus:outline-none disabled:bg-gray-50"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => void save()}
+              disabled={!dirty || saving || loading}
+              className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+                dirty
+                  ? 'bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-50'
+                  : 'bg-gray-100 text-gray-400 cursor-default'
+              }`}
+            >
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+              {savedFlash ? 'Saved!' : 'Save'}
+            </button>
+            {settings && (
+              <p className="ml-auto text-[11px] text-gray-400">
+                Updated {fmtRelative(settings.updatedAt)}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default AiConciergeAdminPanel;

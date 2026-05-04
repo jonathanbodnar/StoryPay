@@ -1,12 +1,18 @@
 /**
  * AI Concierge — owner notifications (email-only for v1).
  *
- * Five new scenarios:
+ * Lead-driven scenarios:
  *   - ai_handoff_urgent   — lawyer / manager / refund keywords → owner + concierge
  *   - ai_handoff_pricing  — pricing question                  → concierge only
  *   - ai_reply_received   — bride replied (neutral)            → owner
  *   - ai_not_interested   — negative-intent reply              → owner
  *   - ai_tcpa_opt_out     — STOP / unsubscribe keyword         → owner (FYI)
+ *
+ * Spend-cap scenarios (no bride context — `brideName` is a friendly label
+ * like "Today's AI usage", `brideReply` is unused, `extraDetail` carries
+ * the count summary):
+ *   - ai_daily_cap_warning — venue crossed the 80% threshold     → owner
+ *   - ai_daily_cap_reached — venue hit its daily cap; sends paused → owner
  *
  * Recipients:
  *   - "owner"     → venues.notification_email if set, else venues.email
@@ -32,7 +38,9 @@ export type AiOwnerScenario =
   | 'ai_handoff_pricing'
   | 'ai_reply_received'
   | 'ai_not_interested'
-  | 'ai_tcpa_opt_out';
+  | 'ai_tcpa_opt_out'
+  | 'ai_daily_cap_warning'
+  | 'ai_daily_cap_reached';
 
 export type AiNotifyRole = 'venue_owner' | 'concierge';
 
@@ -111,6 +119,20 @@ const SCENARIOS: Record<AiOwnerScenario, ScenarioMeta> = {
     urgent:       false,
     ctaLabel:     'View her contact record →',
   },
+  ai_daily_cap_warning: {
+    emailSubject: (_n, v) => `Heads up: AI Concierge is at 80% of today's send cap — ${v}`,
+    heading:      ()      => `AI Concierge daily cap warning`,
+    intro:        ()      => `Your AI Concierge has used most of today's outbound SMS budget. We'll keep sending until the cap is reached, then pause new sends until tomorrow morning. Raise the cap from your AI Concierge admin if you want today's outreach to continue uninterrupted.`,
+    urgent:       false,
+    ctaLabel:     'Open AI Concierge admin →',
+  },
+  ai_daily_cap_reached: {
+    emailSubject: (_n, v) => `AI Concierge has hit today's send cap — ${v}`,
+    heading:      ()      => `AI Concierge daily cap reached`,
+    intro:        ()      => `Your AI Concierge has hit today's outbound SMS cap. New sends are paused until tomorrow morning (in your venue's local timezone). Inbound replies are unaffected — you'll still receive every reply notification. To resume sends sooner, raise the cap from your AI Concierge admin.`,
+    urgent:       false,
+    ctaLabel:     'Open AI Concierge admin →',
+  },
 };
 
 // ── Public entry ───────────────────────────────────────────────────────────
@@ -177,6 +199,19 @@ function dashboardContactUrl(leadId: string): string {
   return `${base}/dashboard/contacts/${leadId}`;
 }
 
+function aiConciergeSettingsUrl(): string {
+  const base = (process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com').replace(/\/$/, '');
+  return `${base}/dashboard/settings/ai-concierge`;
+}
+
+/** Scenario-aware CTA URL. */
+function ctaUrlFor(scenario: AiOwnerScenario, leadId: string): string {
+  if (scenario === 'ai_daily_cap_warning' || scenario === 'ai_daily_cap_reached') {
+    return aiConciergeSettingsUrl();
+  }
+  return dashboardContactUrl(leadId);
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -198,7 +233,7 @@ function renderHtml(opts: {
   const logoHtml   = venue.brand_logo_url
     ? `<img src="${escapeHtml(venue.brand_logo_url)}" alt="${escapeHtml(venueName)}" style="height:36px;display:block;margin-bottom:8px">`
     : '';
-  const ctaUrl = dashboardContactUrl(input.leadId);
+  const ctaUrl = ctaUrlFor(input.scenario, input.leadId);
 
   const briderReplyBlock = input.brideReply?.trim()
     ? `

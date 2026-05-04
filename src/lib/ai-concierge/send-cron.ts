@@ -58,6 +58,9 @@ import { generateSmsWithDeepSeek, clampSmsLength } from './llm';
 import { logAiOutboundMessage } from './conversation-helpers';
 import { sendAiSms } from './sms-provider';
 import { getAiRuntimeSettings } from './runtime-settings';
+import { evaluateSpendCap, maybeSendCapWarningEmail } from './spend-caps';
+import { wallClockToUtc, addCalendarDaysYmd } from '@/lib/venue-timezone';
+import { formatInTimeZone } from 'date-fns-tz';
 
 import type { AiAngleKey } from './types';
 import type { SmsSendOutcome } from './sms-provider/types';
@@ -260,6 +263,34 @@ async function processOneLead(
       detail:    `Inside quiet hours; rescheduled to ${nextWindow.toISOString()}`,
     });
     return { kind: 'skipped', reason: 'quiet_hours' };
+  }
+
+  // 3.5. Per-venue daily spend cap. Cheaper than building a prompt + calling
+  // DeepSeek + sending SMS, so we check before any of that work.
+  const spend = await evaluateSpendCap(row.venue_id);
+  if (spend.capReached) {
+    // Defer to tomorrow's morning send window in venue tz.
+    const tomorrowMorning = nextMorningInVenueTz(tz);
+    await rescheduleLead(row.id, tomorrowMorning);
+    await logAiRun({
+      leadId:  row.id,
+      venueId: row.venue_id,
+      attempt: row.ai_attempt_count + 1,
+      outcome: 'skipped_cap_reached',
+      detail:  `Daily cap reached (${spend.countToday}/${spend.effectiveCap}); rescheduled to ${tomorrowMorning.toISOString()}`,
+    });
+    // Best-effort one-per-day "you hit the cap" email. The threshold-only
+    // warning email is fired below, on the first send that crosses 80%.
+    void maybeSendCapWarningEmail({ venueId: row.venue_id, evaluation: spend, variant: 'reached' })
+      .catch((e) => console.error('[ai-send] cap-reached email failed:', e));
+    return { kind: 'skipped', reason: 'cap_reached' };
+  }
+  // Soft warning (no behavior change, just an email). We fire this BEFORE the
+  // send so the operator knows usage is climbing; the email itself is
+  // throttled to once per UTC day inside `maybeSendCapWarningEmail`.
+  if (spend.atWarning) {
+    void maybeSendCapWarningEmail({ venueId: row.venue_id, evaluation: spend, variant: 'warning' })
+      .catch((e) => console.error('[ai-send] cap-warning email failed:', e));
   }
 
   // 4. Build prompt
@@ -491,6 +522,18 @@ async function markOptedOut(
   } catch (e) {
     console.error('[ai-send] markOptedOut failed:', e);
   }
+}
+
+/**
+ * Tomorrow at 9am in the venue's local timezone, expressed as UTC. Used
+ * when a venue hits its daily SMS cap — we defer all further leads from
+ * today's batch to that exact instant so the cron picks them up first
+ * thing in the morning.
+ */
+function nextMorningInVenueTz(timezone: string): Date {
+  const todayLocalYmd = formatInTimeZone(new Date(), timezone, 'yyyy-MM-dd');
+  const tomorrowYmd   = addCalendarDaysYmd(todayLocalYmd, 1, timezone);
+  return wallClockToUtc(tomorrowYmd, '09:00', timezone);
 }
 
 /**

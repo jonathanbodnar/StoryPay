@@ -26,12 +26,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdminCookie } from '@/lib/admin-auth';
 import { supabaseAdmin } from '@/lib/supabase';
 import { ensureVenueAiResources } from '@/lib/ai-concierge/venue-resources';
+import { clearVenueSpendCache } from '@/lib/ai-concierge/spend-caps';
 
 export const dynamic = 'force-dynamic';
 
 interface PatchBody {
   a2p_verified?:        boolean;
   ai_concierge_enabled?: boolean;
+  /**
+   * Per-venue daily SMS send cap. Pass:
+   *   - a positive integer (1..100000) to set the per-venue override
+   *   - null to clear the override (use platform default)
+   */
+  ai_daily_send_cap?:           number | null;
+  /** Warning threshold % (1..100). Default 80 if null. */
+  ai_daily_alert_threshold_pct?: number | null;
   action?:              'pause_all_leads';
   reason?:              string;
 }
@@ -147,6 +156,36 @@ export async function PATCH(
     touched = true;
   }
 
+  if (body.ai_daily_send_cap !== undefined) {
+    if (body.ai_daily_send_cap === null) {
+      update.ai_daily_send_cap = null;
+    } else {
+      const n = Number(body.ai_daily_send_cap);
+      if (!Number.isFinite(n) || n < 1 || n > 100_000) {
+        return NextResponse.json({
+          error: 'ai_daily_send_cap must be null or an integer between 1 and 100000',
+        }, { status: 422 });
+      }
+      update.ai_daily_send_cap = Math.floor(n);
+    }
+    touched = true;
+  }
+
+  if (body.ai_daily_alert_threshold_pct !== undefined) {
+    if (body.ai_daily_alert_threshold_pct === null) {
+      update.ai_daily_alert_threshold_pct = 80;
+    } else {
+      const n = Number(body.ai_daily_alert_threshold_pct);
+      if (!Number.isFinite(n) || n < 1 || n > 100) {
+        return NextResponse.json({
+          error: 'ai_daily_alert_threshold_pct must be null or an integer between 1 and 100',
+        }, { status: 422 });
+      }
+      update.ai_daily_alert_threshold_pct = Math.floor(n);
+    }
+    touched = true;
+  }
+
   if (!touched) {
     return NextResponse.json({ error: 'No supported fields in patch' }, { status: 400 });
   }
@@ -155,7 +194,7 @@ export async function PATCH(
     .from('venues')
     .update(update)
     .eq('id', venueId)
-    .select('id, name, email, ai_concierge_enabled, a2p_verified, directory_addon_concierge, ai_assistant_persona_name, ai_concierge_enabled_at, sms_provider, ghl_location_id, created_at')
+    .select('id, name, email, ai_concierge_enabled, a2p_verified, directory_addon_concierge, ai_assistant_persona_name, ai_concierge_enabled_at, sms_provider, ghl_location_id, ai_daily_send_cap, ai_daily_alert_threshold_pct, a2p_brand_id, a2p_brand_status, a2p_campaign_id, a2p_campaign_status, a2p_last_checked_at, a2p_last_check_error, created_at')
     .maybeSingle();
 
   if (updateErr) {
@@ -176,6 +215,15 @@ export async function PATCH(
     void ensureVenueAiResources(venueId).catch((e) => {
       console.error('[admin/ai-concierge] ensureVenueAiResources failed:', e);
     });
+  }
+
+  // If we touched any spend-cap field, invalidate the in-memory cache so
+  // the cron picks up the new cap on the next lead it processes.
+  if (
+    update.ai_daily_send_cap            !== undefined
+    || update.ai_daily_alert_threshold_pct !== undefined
+  ) {
+    clearVenueSpendCache(venueId);
   }
 
   return NextResponse.json({
