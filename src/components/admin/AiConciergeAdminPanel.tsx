@@ -22,9 +22,10 @@ import {
   Sparkles, Loader2, AlertTriangle, RotateCw, Power, Search,
   CheckCircle2, XCircle, Pause, Play, Shield, ShieldOff,
   ExternalLink, BadgeCheck, Activity, MessageSquare, Filter,
-  Workflow,
+  Workflow, FileCode2,
 } from 'lucide-react';
 import AiConciergeHandoffRulesEditor from './AiConciergeHandoffRulesEditor';
+import AiConciergeConfigEditor from './AiConciergeConfigEditor';
 
 const BRAND = '#1b1b1b';
 
@@ -115,7 +116,7 @@ interface VenuesPayload {
   };
 }
 
-type TabKey = 'runs' | 'transitions' | 'venues' | 'handoff-rules';
+type TabKey = 'runs' | 'transitions' | 'venues' | 'handoff-rules' | 'prompt-config';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -287,10 +288,11 @@ export function AiConciergeAdminPanel() {
       {/* Tab bar */}
       <div className="flex items-center gap-1 border-b border-gray-200">
         {([
-          { key: 'runs',           label: 'Live runs',         icon: Activity },
+          { key: 'runs',           label: 'Live runs',         icon: Activity     },
           { key: 'transitions',    label: 'State transitions', icon: MessageSquare },
-          { key: 'venues',         label: 'Venues',            icon: BadgeCheck },
-          { key: 'handoff-rules',  label: 'Handoff rules',     icon: Workflow },
+          { key: 'venues',         label: 'Venues',            icon: BadgeCheck   },
+          { key: 'handoff-rules',  label: 'Handoff rules',     icon: Workflow     },
+          { key: 'prompt-config',  label: 'Prompt config',     icon: FileCode2    },
         ] as const).map(({ key, label, icon: Icon }) => {
           const active = tab === key;
           return (
@@ -315,6 +317,7 @@ export function AiConciergeAdminPanel() {
       {tab === 'transitions'   && <TransitionsTable />}
       {tab === 'venues'        && <VenuesTable />}
       {tab === 'handoff-rules' && <AiConciergeHandoffRulesEditor />}
+      {tab === 'prompt-config' && <AiConciergeConfigEditor />}
     </div>
   );
 }
