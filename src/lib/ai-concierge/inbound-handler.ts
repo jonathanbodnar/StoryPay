@@ -359,6 +359,18 @@ async function handleDormantLeadReply(opts: {
     console.error('[ai-concierge] handleDormantLeadReply: applySystemTags failed:', e);
   }
 
+  // Step 1b: move the lead into the "Conversation Started" pipeline stage.
+  // This signals to the venue team (and the AI team) that this person is
+  // actively engaged and should be prioritised in the pipeline. If she was
+  // previously in any other stage (e.g. "Follow Up", "Not Interested") a
+  // fresh reply resets her position to the right place.
+  try {
+    await ensureVenueAiResources(lead.venue_id);
+    await moveLeadToAiStage(lead.venue_id, lead.id, 'conversation_started');
+  } catch (e) {
+    console.error('[ai-concierge] handleDormantLeadReply: moveLeadToAiStage failed:', e);
+  }
+
   // Step 2: notify venue owner + concierge directly
   const brideName     = firstNameOf(lead);
   const brideFullName = fullNameOf(lead);
