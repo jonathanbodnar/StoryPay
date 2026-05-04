@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
 
   const { data: proposal } = await supabaseAdmin
     .from('proposals')
-    .select('id, status, charge_id, price')
+    .select('id, status, charge_id, transaction_id, price')
     .eq('id', proposalId)
     .eq('venue_id', venueId)
     .single();
@@ -32,7 +32,11 @@ export async function POST(request: NextRequest) {
   if (!proposal) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
   if (proposal.status === 'refunded') return NextResponse.json({ error: 'Already refunded' }, { status: 400 });
 
-  const resolvedChargeId = chargeId || proposal.charge_id;
+  // Prefer the explicit chargeId from the request, then proposal.charge_id,
+  // then proposal.transaction_id (older proposals paid through hosted
+  // checkout never had charge_id written — the same LP id was only
+  // persisted as transaction_id, so the refund still works).
+  const resolvedChargeId = chargeId || proposal.charge_id || proposal.transaction_id;
   if (!resolvedChargeId) return NextResponse.json({ error: 'No charge ID found' }, { status: 400 });
 
   // Validate partial amount

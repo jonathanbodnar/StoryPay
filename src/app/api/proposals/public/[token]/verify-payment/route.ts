@@ -99,11 +99,35 @@ export async function POST(
     console.log('[verify-payment] payment_type:', proposal.payment_type, 'feeRate:', feeRate, '%');
     console.log('[verify-payment] payment_config:', JSON.stringify(proposal.payment_config));
 
+    // Pull the LP charge id off the completed session. LP returns it under
+    // a few different shapes depending on payload version, so try them all.
+    // We need this on `proposals.charge_id` for /api/transactions/refund to
+    // hit POST /api/v1/charges/{chargeId}/refund.
+    const sessionCharge = (session.charge as Record<string, unknown> | null) || null;
+    const sessionCharges = Array.isArray(session.charges) ? session.charges : null;
+    const firstCharge = sessionCharges
+      ? (sessionCharges[0] as Record<string, unknown> | undefined)
+      : undefined;
+    const chargeIdFromSession =
+      (session.charge_id as string | number | null) ??
+      (session.chargeId as string | number | null) ??
+      (sessionCharge?.id as string | number | null | undefined) ??
+      (firstCharge?.id as string | number | null | undefined) ??
+      null;
+    const transactionId =
+      (session.transaction_id as string | number | null) ??
+      (session.transactionId as string | number | null) ??
+      null;
+
     const updateData: Record<string, unknown> = {
       status: 'paid',
       paid_at: session.paid_at || session.paidAt || new Date().toISOString(),
       checkout_session_id: session_id,
-      transaction_id: session.transaction_id || session.transactionId || null,
+      transaction_id: transactionId,
+      // LP's /charges/{id}/refund endpoint expects the charge id; if the
+      // session didn't surface one, fall back to the transaction id (some
+      // LP responses use the same value in both fields).
+      charge_id: chargeIdFromSession ?? transactionId,
     };
 
     if (proposal.payment_type === 'installment' && proposal.payment_config) {

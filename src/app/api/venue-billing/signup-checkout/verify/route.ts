@@ -5,7 +5,7 @@ import {
   loadVenueDirectoryPlanContext,
   requirePlatformLunarPaySecretKey,
 } from '@/lib/platform-directory-billing';
-import { createSubscription, getCheckoutSession } from '@/lib/lunarpay';
+import { createSubscription, getCheckoutSession, refundCharge } from '@/lib/lunarpay';
 import { computeMonthlyTotalCents } from '@/lib/directory-addons';
 import { listDirectoryPlanCatalog, loadAddonPrices } from '@/lib/venue-billing';
 
@@ -119,7 +119,8 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Create subscription in LunarPay
+  // Create subscription in LunarPay. startOn = trial_ends_at (today + 14
+  // days) so the first real charge fires on trial end, not today.
   const subResult = (await createSubscription(secret, {
     customerId:      Number(customerId),
     paymentMethodId: Number(paymentMethodId),
@@ -132,6 +133,40 @@ export async function POST(req: NextRequest) {
   const subId = (sub.id as string | number | undefined) ?? null;
   if (subId === null) {
     return NextResponse.json({ error: 'LunarPay did not return a subscription id' }, { status: 502 });
+  }
+
+  // Refund the $1 card-verification charge from signup-checkout. The
+  // subscription above defers the real billing to trial end; this refund
+  // means the user pays nothing during the trial. Best-effort: a failure
+  // here doesn't invalidate the trial, we just log and move on.
+  const sessionCharge = (session.charge as Record<string, unknown> | null) || null;
+  const sessionCharges = Array.isArray(session.charges) ? session.charges : null;
+  const firstCharge = sessionCharges
+    ? (sessionCharges[0] as Record<string, unknown> | undefined)
+    : undefined;
+  const verificationChargeId =
+    (session.charge_id as string | number | null) ??
+    (session.chargeId as string | number | null) ??
+    (sessionCharge?.id as string | number | null | undefined) ??
+    (firstCharge?.id as string | number | null | undefined) ??
+    (session.transaction_id as string | number | null) ??
+    (session.transactionId as string | number | null) ??
+    null;
+  if (verificationChargeId !== null && verificationChargeId !== undefined) {
+    try {
+      await refundCharge(secret, verificationChargeId);
+    } catch (e) {
+      console.warn(
+        '[signup-checkout/verify] could not refund $1 verification charge',
+        verificationChargeId,
+        e instanceof Error ? e.message : e,
+      );
+    }
+  } else {
+    console.warn(
+      '[signup-checkout/verify] no charge id on completed session — $1 verification charge NOT refunded. Session keys:',
+      Object.keys(session),
+    );
   }
 
   // Persist all state to venues row

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
+import { agencyCreateMerchant } from '@/lib/lunarpay';
 import bcrypt from 'bcryptjs';
 
 export const dynamic = 'force-dynamic';
@@ -209,6 +210,47 @@ export async function POST(request: NextRequest) {
       { error: `Could not create venue: ${venueErr?.message ?? 'unknown error'}` },
       { status: 500 }
     );
+  }
+
+  // Auto-create the LunarPay merchant under our agency key so this venue can
+  // start taking proposal payments under their own MID. The agency endpoint
+  // returns merchantId/orgId/orgToken and a fresh lp_sk_/lp_pk_ pair
+  // immediately, even though the merchant's onboarding status starts at
+  // PENDING — it flips to ACTIVE later via the merchant.approved webhook
+  // (handled in /api/webhooks/lunarpay) once Fortis approves the MPA.
+  //
+  // Best-effort only: if LP_AGENCY_KEY is unset (local dev) or the call
+  // fails, we still let the user finish signup. They (or an admin) can
+  // re-run agency provisioning later via /api/venues/onboard.
+  if (process.env.LP_AGENCY_KEY) {
+    try {
+      const lpResult = await agencyCreateMerchant({
+        email,
+        password,
+        firstName,
+        lastName,
+        phone: phone || '',
+        businessName: venueName,
+      });
+      const merchant = (lpResult as { data?: Record<string, unknown> }).data
+        || (lpResult as Record<string, unknown>);
+      const onboardStatus = String(
+        (merchant.onboardingStatus as string | undefined) ?? 'pending',
+      ).toLowerCase();
+      await supabaseAdmin
+        .from('venues')
+        .update({
+          lunarpay_merchant_id:     (merchant.merchantId as number | string) ?? null,
+          lunarpay_organization_id: (merchant.organizationId as number | string) ?? null,
+          lunarpay_secret_key:      (merchant.secretKey as string) ?? null,
+          lunarpay_publishable_key: (merchant.publishableKey as string) ?? null,
+          lunarpay_org_token:       (merchant.orgToken as string) ?? null,
+          onboarding_status:        onboardStatus,
+        })
+        .eq('id', venue.id);
+    } catch (e) {
+      console.error('[signup] LunarPay merchant create failed (non-fatal):', e);
+    }
   }
 
   // Send welcome email (best-effort, non-blocking)

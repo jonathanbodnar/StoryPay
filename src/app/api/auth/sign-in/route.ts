@@ -29,7 +29,9 @@ export async function POST(request: NextRequest) {
   // ── Check venue owner ──────────────────────────────────────────────────────
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('id, name, email, setup_completed, onboarding_status, login_token, password_hash')
+    .select(
+      'id, name, email, setup_completed, onboarding_status, login_token, password_hash, directory_plan_id, directory_subscription_status',
+    )
     .ilike('email', normalized)
     .maybeSingle();
 
@@ -48,7 +50,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Incorrect email or password.' }, { status: 401 });
     }
 
-    const response = NextResponse.json({ redirect: '/dashboard' });
+    // Signup-plan gate: a venue owner is only "fully onboarded" once they've
+    // picked a plan AND completed (or trial-activated) the subscription.
+    // Anything else routes them back to /signup/plan to finish that step,
+    // otherwise they bounce back into the signup funnel mid-flow on every
+    // login.
+    const subStatus = String(venue.directory_subscription_status ?? 'none');
+    const needsPlan =
+      !venue.directory_plan_id ||
+      subStatus === 'none' ||
+      subStatus === 'pending';
+    const redirect = needsPlan ? '/signup/plan' : '/dashboard';
+
+    const response = NextResponse.json({ redirect });
     response.cookies.set('venue_id', venue.id, {
       path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge,
     });
