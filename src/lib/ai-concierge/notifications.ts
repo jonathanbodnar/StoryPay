@@ -84,6 +84,13 @@ interface ScenarioMeta {
   intro:        (brideName: string) => string;
   urgent:       boolean;
   ctaLabel:     string;
+  /**
+   * When true, all venue team members (venue_team_members rows) are
+   * automatically CC'd alongside the owner and concierge emails.
+   * Set to true for every scenario that a human needs to act on;
+   * false for operational/admin-only alerts (spend caps, etc.).
+   */
+  notifyTeam:   boolean;
 }
 
 const SCENARIOS: Record<AiOwnerScenario, ScenarioMeta> = {
@@ -93,6 +100,7 @@ const SCENARIOS: Record<AiOwnerScenario, ScenarioMeta> = {
     intro:        (n) => `${n} replied to one of your AI follow-up messages with something that needs a human in the loop right away. The AI has stopped and is waiting for you to take over.`,
     urgent:       true,
     ctaLabel:     'Open the conversation →',
+    notifyTeam:   true,
   },
   ai_handoff_pricing: {
     emailSubject: (n, v) => `${n} is asking about pricing — ${v}`,
@@ -100,6 +108,7 @@ const SCENARIOS: Record<AiOwnerScenario, ScenarioMeta> = {
     intro:        (n) => `${n} replied to one of your AI follow-up messages asking about pricing, packages, or rates. The AI is intentionally never quoting prices, so it has handed the conversation off so a real person can give her real answers.`,
     urgent:       false,
     ctaLabel:     'Reply to her now →',
+    notifyTeam:   true,
   },
   ai_reply_received: {
     emailSubject: (n, v) => `🎉 ${n} just replied — ${v}`,
@@ -107,6 +116,7 @@ const SCENARIOS: Record<AiOwnerScenario, ScenarioMeta> = {
     intro:        (n) => `Great news — ${n} just replied to one of your AI follow-up messages. The AI has paused so a human (you or your team) can take over the conversation. The sooner you respond, the warmer she'll feel.`,
     urgent:       false,
     ctaLabel:     'Reply to her now →',
+    notifyTeam:   true,
   },
   ai_not_interested: {
     emailSubject: (n, v) => `${n} marked herself as not interested — ${v}`,
@@ -114,6 +124,7 @@ const SCENARIOS: Record<AiOwnerScenario, ScenarioMeta> = {
     intro:        (n) => `${n} replied to your AI follow-up indicating she's no longer interested or has chosen another venue. We've moved her to your "Not Interested" pipeline and stopped all future AI follow-ups for her.`,
     urgent:       false,
     ctaLabel:     'View her contact record →',
+    notifyTeam:   true,
   },
   ai_tcpa_opt_out: {
     emailSubject: (n, v) => `${n} opted out of SMS — ${v}`,
@@ -121,6 +132,7 @@ const SCENARIOS: Record<AiOwnerScenario, ScenarioMeta> = {
     intro:        (n) => `${n} replied with a TCPA opt-out keyword (STOP, UNSUBSCRIBE, etc.). She will not receive any more SMS messages from your account — this is a legal compliance requirement and cannot be undone from the AI side. You can still reach out via email or other channels.`,
     urgent:       false,
     ctaLabel:     'View her contact record →',
+    notifyTeam:   true,
   },
   ai_daily_cap_warning: {
     emailSubject: (_n, v) => `Heads up: AI Concierge is at 80% of today's send cap — ${v}`,
@@ -128,6 +140,7 @@ const SCENARIOS: Record<AiOwnerScenario, ScenarioMeta> = {
     intro:        ()      => `Your AI Concierge has used most of today's outbound SMS budget. We'll keep sending until the cap is reached, then pause new sends until tomorrow morning. Raise the cap from your AI Concierge admin if you want today's outreach to continue uninterrupted.`,
     urgent:       false,
     ctaLabel:     'Open AI Concierge admin →',
+    notifyTeam:   false,
   },
   ai_daily_cap_reached: {
     emailSubject: (_n, v) => `AI Concierge has hit today's send cap — ${v}`,
@@ -135,6 +148,7 @@ const SCENARIOS: Record<AiOwnerScenario, ScenarioMeta> = {
     intro:        ()      => `Your AI Concierge has hit today's outbound SMS cap. New sends are paused until tomorrow morning (in your venue's local timezone). Inbound replies are unaffected — you'll still receive every reply notification. To resume sends sooner, raise the cap from your AI Concierge admin.`,
     urgent:       false,
     ctaLabel:     'Open AI Concierge admin →',
+    notifyTeam:   false,
   },
   sequence_reply_received: {
     emailSubject: (n, v) => `💬 ${n} replied to your follow-up — ${v}`,
@@ -142,6 +156,7 @@ const SCENARIOS: Record<AiOwnerScenario, ScenarioMeta> = {
     intro:        (n) => `${n} replied to one of your automated follow-up messages. The AI Concierge hasn't activated yet, so this conversation needs a real person right now. The faster you respond, the warmer she'll feel — don't let this one go cold.`,
     urgent:       false,
     ctaLabel:     'Reply to her now →',
+    notifyTeam:   true,
   },
 };
 
@@ -156,36 +171,46 @@ export async function notifyAiOwner(input: AiOwnerNotifyInput): Promise<void> {
     const meta = SCENARIOS[input.scenario];
     if (!meta) return;
 
-    const ownerEmail = venue.notification_email?.trim() || venue.email?.trim() || '';
+    const ownerEmail = (venue.notification_email?.trim() || venue.email?.trim() || '');
     const conciergeEmails = (venue.ai_concierge_notify_emails ?? [])
       .map((e) => (e || '').trim())
       .filter((e) => e.includes('@'));
 
-    const includesOwner    = input.notifyRoles.includes('venue_owner');
+    const includesOwner     = input.notifyRoles.includes('venue_owner');
     const includesConcierge = input.notifyRoles.includes('concierge');
 
+    // Resolve primary recipient
     let to: string | null = null;
     const cc: string[] = [];
+
     if (includesOwner && ownerEmail) {
       to = ownerEmail;
-      if (includesConcierge) cc.push(...conciergeEmails.filter((e) => e.toLowerCase() !== ownerEmail.toLowerCase()));
+      if (includesConcierge) {
+        cc.push(...conciergeEmails.filter((e) => e.toLowerCase() !== ownerEmail.toLowerCase()));
+      }
     } else if (includesConcierge && conciergeEmails.length > 0) {
       to = conciergeEmails[0];
       if (conciergeEmails.length > 1) cc.push(...conciergeEmails.slice(1));
     } else if (ownerEmail) {
-      // Fallback: still tell the owner
       to = ownerEmail;
     } else {
       return;
     }
 
+    // For lead-action scenarios (replies, negative intent, handoffs) also CC
+    // every venue team member so the whole team can act without waiting for
+    // the owner to forward the email.
+    if (meta.notifyTeam) {
+      const teamEmails = await loadTeamMemberEmails(input.venueId, to);
+      for (const e of teamEmails) {
+        if (!cc.some((c) => c.toLowerCase() === e.toLowerCase())) {
+          cc.push(e);
+        }
+      }
+    }
+
     const subject = meta.emailSubject(input.brideName, venueName);
-    const html = renderHtml({
-      meta,
-      input,
-      venue,
-      venueName,
-    });
+    const html = renderHtml({ meta, input, venue, venueName });
 
     await sendEmail({ to, cc, subject, html });
   } catch (e) {
@@ -202,6 +227,34 @@ async function loadVenue(venueId: string): Promise<VenueRow | null> {
     .eq('id', venueId)
     .maybeSingle();
   return (data as VenueRow | null) ?? null;
+}
+
+/**
+ * Return the email addresses of all venue team members (both 'invited' and
+ * 'active' statuses) so that even a newly-added team member who hasn't yet
+ * accepted their invite still receives lead notifications.
+ * Deduplicates against the provided ownerEmail so we never send twice.
+ */
+async function loadTeamMemberEmails(
+  venueId: string,
+  excludeEmail?: string,
+): Promise<string[]> {
+  try {
+    const { data } = await supabaseAdmin
+      .from('venue_team_members')
+      .select('email, status')
+      .eq('venue_id', venueId)
+      .in('status', ['invited', 'active']);
+
+    if (!data) return [];
+
+    const ownerLower = (excludeEmail || '').trim().toLowerCase();
+    return (data as { email: string; status: string }[])
+      .map((m) => (m.email || '').trim())
+      .filter((e) => e.includes('@') && e.toLowerCase() !== ownerLower);
+  } catch {
+    return [];
+  }
 }
 
 function dashboardContactUrl(leadId: string): string {
