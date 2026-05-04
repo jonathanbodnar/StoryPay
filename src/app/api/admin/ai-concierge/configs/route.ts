@@ -21,6 +21,12 @@ import { clearAiConfigCache } from '@/lib/ai-concierge/prompt-builder';
 
 export const dynamic = 'force-dynamic';
 
+interface OutreachQuestion {
+  text:      string;
+  category?: string;
+  priority?: number;
+}
+
 interface AiConfigRow {
   id:                       string;
   version:                  number;
@@ -31,6 +37,7 @@ interface AiConfigRow {
   prohibited_topics:        string;
   message_constraints:      Record<string, unknown>;
   system_prompt_template:   string;
+  outreach_questions:       OutreachQuestion[];
   notes:                    string | null;
   created_by:               string | null;
   created_at:               string;
@@ -44,11 +51,38 @@ interface CreateBody {
   prohibited_topics?:      string;
   message_constraints?:    Record<string, unknown>;
   system_prompt_template?: string;
+  outreach_questions?:     OutreachQuestion[];
   notes?:                  string | null;
   /** Source-version to clone from. If provided we copy fields from that
    *  row first, then overlay anything in the body. Convenience for the
    *  "duplicate to new version" UI. */
   cloneFromVersionId?:     string;
+}
+
+/**
+ * Defensive validator. Strips malformed entries, normalizes shape, caps
+ * length per item and pool size to avoid blowing past the model's
+ * context budget on a runaway list.
+ */
+export function sanitizeOutreachQuestions(input: unknown): OutreachQuestion[] {
+  if (!Array.isArray(input)) return [];
+  const out: OutreachQuestion[] = [];
+  for (const raw of input) {
+    if (!raw || typeof raw !== 'object') continue;
+    const r = raw as Record<string, unknown>;
+    const text = typeof r.text === 'string' ? r.text.trim() : '';
+    if (!text) continue;
+    const entry: OutreachQuestion = { text: text.slice(0, 280) };
+    if (typeof r.category === 'string' && r.category.trim()) {
+      entry.category = r.category.trim().slice(0, 60);
+    }
+    if (typeof r.priority === 'number' && Number.isFinite(r.priority)) {
+      entry.priority = Math.max(-100, Math.min(100, Math.floor(r.priority)));
+    }
+    out.push(entry);
+    if (out.length >= 100) break;  // hard cap on pool size
+  }
+  return out;
 }
 
 // ── GET ────────────────────────────────────────────────────────────────────
@@ -57,10 +91,20 @@ export async function GET() {
   const ok = await verifyAdminCookie();
   if (!ok) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { data, error } = await supabaseAdmin
+  // Try the wider select with outreach_questions; fall back if migration 101
+  // hasn't run yet so the editor still loads.
+  let { data, error } = await supabaseAdmin
     .from('ai_config')
-    .select('id, version, is_active, personality, goals, guardrails, prohibited_topics, message_constraints, system_prompt_template, notes, created_by, created_at, updated_at')
+    .select('id, version, is_active, personality, goals, guardrails, prohibited_topics, message_constraints, system_prompt_template, outreach_questions, notes, created_by, created_at, updated_at')
     .order('version', { ascending: false });
+  if (error && error.code === '42703') {
+    const retry = await supabaseAdmin
+      .from('ai_config')
+      .select('id, version, is_active, personality, goals, guardrails, prohibited_topics, message_constraints, system_prompt_template, notes, created_by, created_at, updated_at')
+      .order('version', { ascending: false });
+    error = retry.error;
+    data  = retry.data as typeof data;
+  }
 
   if (error) {
     if (error.code === '42P01') {
@@ -91,11 +135,20 @@ export async function POST(request: NextRequest) {
   // Optional: clone from an existing version
   let base: Partial<AiConfigRow> = {};
   if (body.cloneFromVersionId) {
-    const { data: src, error: srcErr } = await supabaseAdmin
+    let { data: src, error: srcErr } = await supabaseAdmin
       .from('ai_config')
-      .select('personality, goals, guardrails, prohibited_topics, message_constraints, system_prompt_template, notes')
+      .select('personality, goals, guardrails, prohibited_topics, message_constraints, system_prompt_template, outreach_questions, notes')
       .eq('id', body.cloneFromVersionId)
       .maybeSingle();
+    if (srcErr && srcErr.code === '42703') {
+      const retry = await supabaseAdmin
+        .from('ai_config')
+        .select('personality, goals, guardrails, prohibited_topics, message_constraints, system_prompt_template, notes')
+        .eq('id', body.cloneFromVersionId)
+        .maybeSingle();
+      srcErr = retry.error;
+      src    = retry.data as typeof src;
+    }
     if (srcErr) return NextResponse.json({ error: srcErr.message }, { status: 500 });
     if (!src)   return NextResponse.json({ error: 'cloneFromVersionId not found' }, { status: 404 });
     base = src as Partial<AiConfigRow>;
@@ -108,6 +161,7 @@ export async function POST(request: NextRequest) {
   const prohibited_topics     = body.prohibited_topics     ?? base.prohibited_topics     ?? '';
   const message_constraints   = body.message_constraints   ?? base.message_constraints   ?? {};
   const system_prompt_template = body.system_prompt_template ?? base.system_prompt_template ?? '';
+  const outreach_questions    = sanitizeOutreachQuestions(body.outreach_questions ?? base.outreach_questions ?? []);
   const notes                 = body.notes ?? base.notes ?? null;
 
   // JSON guard for message_constraints (in case the editor sends a string)
@@ -129,7 +183,9 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
   const nextVersion = (maxRow?.version ?? 0) + 1;
 
-  const { data: inserted, error: insErr } = await supabaseAdmin
+  // Try INSERT including outreach_questions. If migration 101 hasn't run,
+  // retry without it so v1 of the editor still works.
+  let { data: inserted, error: insErr } = await supabaseAdmin
     .from('ai_config')
     .insert({
       version:                nextVersion,
@@ -140,11 +196,33 @@ export async function POST(request: NextRequest) {
       prohibited_topics,
       message_constraints,
       system_prompt_template,
+      outreach_questions,
       notes,
       created_by:             'admin',
     })
-    .select('id, version, is_active, personality, goals, guardrails, prohibited_topics, message_constraints, system_prompt_template, notes, created_by, created_at, updated_at')
+    .select('id, version, is_active, personality, goals, guardrails, prohibited_topics, message_constraints, system_prompt_template, outreach_questions, notes, created_by, created_at, updated_at')
     .single();
+
+  if (insErr && insErr.code === '42703') {
+    const retry = await supabaseAdmin
+      .from('ai_config')
+      .insert({
+        version:                nextVersion,
+        is_active:              false,
+        personality,
+        goals,
+        guardrails,
+        prohibited_topics,
+        message_constraints,
+        system_prompt_template,
+        notes,
+        created_by:             'admin',
+      })
+      .select('id, version, is_active, personality, goals, guardrails, prohibited_topics, message_constraints, system_prompt_template, notes, created_by, created_at, updated_at')
+      .single();
+    insErr   = retry.error;
+    inserted = retry.data as typeof inserted;
+  }
 
   if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
 

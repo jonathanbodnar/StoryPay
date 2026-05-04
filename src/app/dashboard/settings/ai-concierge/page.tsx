@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Sparkles, Loader2, Save, Check, X, Plus, AlertTriangle, ShieldCheck,
   ShieldAlert, MessageSquare, UserCircle, Mail, BadgeCheck, Lock, ExternalLink,
+  TrendingUp, Send, Inbox, UserCheck, UserX, Activity, Pause as PauseIcon,
+  AlertOctagon, Gauge,
 } from 'lucide-react';
 
 interface Eligibility {
@@ -184,6 +186,9 @@ export default function AiConciergeSettingsPage() {
       </div>
 
       <div className="space-y-6 max-w-3xl">
+
+        {/* Metrics card — shows real engagement once leads start activating */}
+        <AiConciergeMetricsCard />
 
         {/* Eligibility status card */}
         <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
@@ -479,6 +484,228 @@ function Step({ n, title, body }: { n: number; title: string; body: string }) {
         <p className="text-sm font-medium text-gray-900">{title}</p>
         <p className="mt-0.5 text-xs text-gray-500" dangerouslySetInnerHTML={{ __html: body }} />
       </div>
+    </div>
+  );
+}
+
+// ── Metrics card ───────────────────────────────────────────────────────────
+
+interface MetricsPayload {
+  windowDays:        number;
+  windowStartIso:    string;
+  messagesSent:      number;
+  leadsReplied:      number;
+  replyRate:         number;
+  handedOff:         number;
+  optedOut:          number;
+  exhausted:         number;
+  activated:         number;
+  activeNow:         number;
+  pausedNow:         number;
+  handoffNow:        number;
+  sentToday:         number;
+  effectiveDailyCap: number;
+  enabled:           boolean;
+  a2pVerified:       boolean;
+  addonActive:       boolean;
+}
+
+const WINDOW_OPTIONS = [
+  { days: 7,   label: '7d' },
+  { days: 30,  label: '30d' },
+  { days: 90,  label: '90d' },
+] as const;
+
+function AiConciergeMetricsCard() {
+  const [data, setData]       = useState<MetricsPayload | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [windowDays, setWindowDays] = useState<number>(30);
+
+  const load = useCallback(async (days: number) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/dashboard/ai-concierge/metrics?days=${days}`, { cache: 'no-store' });
+      if (!res.ok) {
+        setData(null);
+        return;
+      }
+      const j = await res.json() as MetricsPayload;
+      setData(j);
+    } catch {
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void load(windowDays); }, [load, windowDays]);
+
+  // If the venue isn't on the addon at all, hide the metrics card entirely —
+  // the eligibility card below already explains they need to upgrade.
+  if (!loading && data && !data.addonActive) {
+    return null;
+  }
+
+  const sentTodayPct = data && data.effectiveDailyCap > 0
+    ? Math.min(100, Math.round((data.sentToday / data.effectiveDailyCap) * 100))
+    : 0;
+  const sentTodayTone =
+    sentTodayPct >= 100 ? 'text-rose-600' :
+    sentTodayPct >= 80  ? 'text-amber-600' :
+    'text-gray-700';
+
+  const replyRatePct = data ? Math.round(data.replyRate * 100) : 0;
+
+  return (
+    <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+      <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-6 py-4">
+        <div className="flex items-center gap-3">
+          <TrendingUp size={18} className="text-gray-400" />
+          <h2 className="font-heading text-base font-semibold text-gray-900">Performance</h2>
+        </div>
+        <div className="flex items-center gap-1 rounded-full bg-gray-100 p-0.5">
+          {WINDOW_OPTIONS.map(({ days, label }) => (
+            <button
+              key={days}
+              type="button"
+              onClick={() => setWindowDays(days)}
+              className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                windowDays === days ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="px-6 py-5">
+        {loading && !data && (
+          <div className="flex items-center justify-center py-8 text-gray-400">
+            <Loader2 size={18} className="animate-spin" />
+          </div>
+        )}
+
+        {!loading && !data && (
+          <p className="py-6 text-center text-sm text-gray-400">
+            Couldn&apos;t load metrics right now.
+          </p>
+        )}
+
+        {data && (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <MetricTile
+                icon={<Send size={14} />}
+                label="Messages sent"
+                value={data.messagesSent.toLocaleString()}
+                hint={`${data.activated.toLocaleString()} activations`}
+                tone="default"
+              />
+              <MetricTile
+                icon={<Inbox size={14} />}
+                label="Leads who replied"
+                value={data.leadsReplied.toLocaleString()}
+                hint={data.replyRate > 0 ? `${replyRatePct}% reply rate` : 'No replies yet'}
+                tone={data.leadsReplied > 0 ? 'emerald' : 'default'}
+              />
+              <MetricTile
+                icon={<UserCheck size={14} />}
+                label="Handed to humans"
+                value={data.handedOff.toLocaleString()}
+                hint={data.handoffNow > 0 ? `${data.handoffNow} waiting` : '—'}
+                tone={data.handoffNow > 0 ? 'amber' : 'default'}
+              />
+              <MetricTile
+                icon={<UserX size={14} />}
+                label="Opted out"
+                value={data.optedOut.toLocaleString()}
+                hint={data.exhausted > 0 ? `+ ${data.exhausted} exhausted` : '—'}
+                tone="default"
+              />
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <MicroTile
+                icon={<Activity size={12} />}
+                label="Active now"
+                value={data.activeNow}
+                tone="emerald"
+              />
+              <MicroTile
+                icon={<PauseIcon size={12} />}
+                label="Paused"
+                value={data.pausedNow}
+                tone="amber"
+              />
+              <MicroTile
+                icon={<AlertOctagon size={12} />}
+                label="Awaiting human"
+                value={data.handoffNow}
+                tone={data.handoffNow > 0 ? 'rose' : 'default'}
+              />
+              <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
+                <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+                  <Gauge size={12} /> Today&apos;s sends
+                </div>
+                <p className={`mt-0.5 text-base font-semibold ${sentTodayTone}`}>
+                  {data.sentToday}
+                  <span className="text-xs text-gray-400"> / {data.effectiveDailyCap}</span>
+                </p>
+              </div>
+            </div>
+
+            {!data.enabled && data.addonActive && (
+              <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
+                AI Concierge is currently <strong>off</strong>. Existing metrics still show but no new follow-ups will go out until you toggle it on below.
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
+const TONE_MAP = {
+  default: 'border-gray-200 bg-white text-gray-900',
+  emerald: 'border-emerald-100 bg-emerald-50/60 text-emerald-900',
+  amber:   'border-amber-100 bg-amber-50/60 text-amber-900',
+  rose:    'border-rose-100 bg-rose-50/60 text-rose-900',
+} as const;
+
+type Tone = keyof typeof TONE_MAP;
+
+function MetricTile({ icon, label, value, hint, tone }: {
+  icon:  React.ReactNode;
+  label: string;
+  value: string;
+  hint?: string;
+  tone:  Tone;
+}) {
+  return (
+    <div className={`rounded-xl border px-3 py-3 ${TONE_MAP[tone]}`}>
+      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider opacity-70">
+        {icon} {label}
+      </div>
+      <p className="mt-1 text-xl font-semibold">{value}</p>
+      {hint && <p className="mt-0.5 text-[10px] opacity-60">{hint}</p>}
+    </div>
+  );
+}
+
+function MicroTile({ icon, label, value, tone }: {
+  icon:  React.ReactNode;
+  label: string;
+  value: number;
+  tone:  Tone;
+}) {
+  return (
+    <div className={`rounded-xl border px-3 py-2 ${TONE_MAP[tone]}`}>
+      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider opacity-70">
+        {icon} {label}
+      </div>
+      <p className="mt-0.5 text-base font-semibold">{value}</p>
     </div>
   );
 }

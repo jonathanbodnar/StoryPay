@@ -274,6 +274,151 @@ function pickString(obj: Record<string, unknown>, keys: string[]): string | null
   return null;
 }
 
+// ── Diagnostic mode ───────────────────────────────────────────────────────
+
+export interface A2pProbeAttempt {
+  url:        string;
+  status:     number | null;
+  ok:         boolean;
+  /** First 1000 chars of the response body (parsed when JSON, raw when text). */
+  bodyPreview: string;
+  /** Set when fetch itself failed (network, timeout). */
+  error:      string | null;
+  /** Recognized A2P fields we extracted from this response, if any. */
+  extracted:  {
+    brandId:        string | null;
+    brandStatus:    A2pStatus;
+    campaignId:     string | null;
+    campaignStatus: A2pStatus;
+  } | null;
+}
+
+export interface A2pDiagnosticReport {
+  venueId:         string;
+  venueName:       string | null;
+  smsProvider:     string;
+  ghlConnected:    boolean;
+  hasAccessToken:  boolean;
+  attempts:        A2pProbeAttempt[];
+  /** Best-recognized values across all attempts, if anything matched. */
+  bestExtracted:   A2pProbeAttempt['extracted'];
+  /** Final verdict if we were going to persist (without persisting). */
+  wouldVerify:     boolean;
+  /** Diagnostic-only error (eg "no GHL token"). */
+  bootstrapError:  string | null;
+}
+
+/**
+ * Diagnose mode — call all GHL A2P probes and return the raw responses
+ * for each attempt. NEVER persists. Use from the super-admin UI to
+ * troubleshoot why a venue's A2P refresh is failing or returning unexpected
+ * statuses.
+ */
+export async function diagnoseVenueA2pStatus(venueId: string): Promise<A2pDiagnosticReport> {
+  const venue = await loadVenue(venueId);
+  if (!venue) {
+    throw new Error(`Venue not found: ${venueId}`);
+  }
+
+  const provider     = venue.sms_provider ?? 'ghl';
+  const ghlConnected = !!venue.ghl_location_id;
+  const accessToken  = ghlConnected ? getGhlToken({ ghl_access_token: venue.ghl_access_token }) : null;
+
+  const attempts: A2pProbeAttempt[] = [];
+  let bootstrapError: string | null = null;
+
+  if (provider !== 'ghl') {
+    bootstrapError = `A2P diagnostic only implemented for sms_provider='ghl' (got '${provider}').`;
+  } else if (!ghlConnected) {
+    bootstrapError = 'Venue has no ghl_location_id — connect GHL before diagnosing A2P.';
+  } else if (!accessToken) {
+    bootstrapError = 'No GHL access token (per-venue OAuth or agency env var).';
+  } else {
+    // Same probe URLs as fetchGhlA2pRaw, but we collect all attempts instead
+    // of bailing on the first success. That gives the operator full visibility.
+    const probes = [
+      `${GHL_API_BASE}/phone-system/messaging-services/${encodeURIComponent(venue.ghl_location_id!)}/a2p`,
+      `${GHL_API_BASE}/phone-system/messaging-services/${encodeURIComponent(venue.ghl_location_id!)}`,
+      `${GHL_API_BASE}/locations/${encodeURIComponent(venue.ghl_location_id!)}`,
+    ];
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      Version: '2021-07-28',
+      'X-Location-Id': venue.ghl_location_id!,
+    };
+
+    for (const url of probes) {
+      attempts.push(await runProbe(url, headers));
+    }
+  }
+
+  // Pick the best-recognized result across all attempts.
+  let bestExtracted: A2pProbeAttempt['extracted'] = null;
+  for (const a of attempts) {
+    if (a.extracted && (a.extracted.brandStatus !== 'unknown' || a.extracted.campaignStatus !== 'unknown')) {
+      bestExtracted = a.extracted;
+      break;
+    }
+  }
+
+  const wouldVerify = !!bestExtracted
+    && isA2pApproved(bestExtracted.brandStatus, bestExtracted.campaignStatus);
+
+  return {
+    venueId:        venue.id,
+    venueName:      venue.name,
+    smsProvider:    provider,
+    ghlConnected,
+    hasAccessToken: !!accessToken,
+    attempts,
+    bestExtracted,
+    wouldVerify,
+    bootstrapError,
+  };
+}
+
+async function runProbe(url: string, headers: Record<string, string>): Promise<A2pProbeAttempt> {
+  try {
+    const res = await fetch(url, { headers, method: 'GET' });
+    let bodyPreview = '';
+    let json: Record<string, unknown> | null = null;
+    try {
+      const text = await res.text();
+      bodyPreview = text.slice(0, 1000);
+      try { json = JSON.parse(text); } catch { /* not JSON, keep text preview */ }
+    } catch {
+      bodyPreview = '(could not read body)';
+    }
+
+    let extracted: A2pProbeAttempt['extracted'] = null;
+    if (json) {
+      const f = flattenA2pResponse(json);
+      if (f.brandId || f.brandStatus !== 'unknown' || f.campaignId || f.campaignStatus !== 'unknown') {
+        extracted = f;
+      }
+    }
+
+    return {
+      url,
+      status:      res.status,
+      ok:          res.ok,
+      bodyPreview,
+      error:       null,
+      extracted,
+    };
+  } catch (e) {
+    return {
+      url,
+      status:      null,
+      ok:          false,
+      bodyPreview: '',
+      error:       e instanceof Error ? e.message : String(e),
+      extracted:   null,
+    };
+  }
+}
+
 // ── Public API ────────────────────────────────────────────────────────────
 
 /**

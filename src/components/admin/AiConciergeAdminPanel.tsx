@@ -22,7 +22,8 @@ import {
   Sparkles, Loader2, AlertTriangle, RotateCw, Power, Search,
   CheckCircle2, XCircle, Pause, Play, Shield, ShieldOff,
   ExternalLink, BadgeCheck, Activity, MessageSquare, Filter,
-  Workflow, FileCode2, DollarSign, RefreshCw,
+  Workflow, FileCode2, DollarSign, RefreshCw, Stethoscope,
+  X as XIcon,
 } from 'lucide-react';
 import AiConciergeHandoffRulesEditor from './AiConciergeHandoffRulesEditor';
 import AiConciergeConfigEditor from './AiConciergeConfigEditor';
@@ -1045,6 +1046,7 @@ function A2pCell({ venue, busy, onToggle, onRefresh }: {
   onRefresh: () => Promise<void>;
 }) {
   const [refreshing, setRefreshing] = useState(false);
+  const [diagOpen, setDiagOpen]     = useState(false);
 
   const refresh = async () => {
     if (refreshing) return;
@@ -1079,6 +1081,16 @@ function A2pCell({ venue, busy, onToggle, onRefresh }: {
           <RefreshCw size={10} className={refreshing ? 'animate-spin' : ''} />
           GHL
         </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => setDiagOpen(true)}
+          title="Probe each GHL A2P endpoint and show raw responses (does not modify the venue)"
+          className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] text-gray-600 hover:bg-gray-50 disabled:opacity-30"
+        >
+          <Stethoscope size={10} />
+          Diagnose
+        </button>
       </div>
       {(venue.a2p_brand_status || venue.a2p_campaign_status) && (
         <div className="flex flex-wrap gap-1">
@@ -1094,6 +1106,229 @@ function A2pCell({ venue, busy, onToggle, onRefresh }: {
           {venue.a2p_last_check_error}
         </span>
       )}
+      {diagOpen && (
+        <A2pDiagnoseModal
+          venueId={venue.id}
+          venueName={venue.name}
+          onClose={() => setDiagOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+interface A2pProbeAttempt {
+  url:         string;
+  status:      number | null;
+  ok:          boolean;
+  bodyPreview: string;
+  error:       string | null;
+  extracted:   {
+    brandId:        string | null;
+    brandStatus:    string;
+    campaignId:     string | null;
+    campaignStatus: string;
+  } | null;
+}
+
+interface A2pDiagnosticReport {
+  venueId:        string;
+  venueName:      string | null;
+  smsProvider:    string;
+  ghlConnected:   boolean;
+  hasAccessToken: boolean;
+  attempts:       A2pProbeAttempt[];
+  bestExtracted:  A2pProbeAttempt['extracted'];
+  wouldVerify:    boolean;
+  bootstrapError: string | null;
+}
+
+function A2pDiagnoseModal({ venueId, venueName, onClose }: {
+  venueId:   string;
+  venueName: string | null;
+  onClose:   () => void;
+}) {
+  const [report, setReport] = useState<A2pDiagnosticReport | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState('');
+
+  const run = useCallback(async () => {
+    setLoading(true); setError('');
+    try {
+      const res = await fetch(`/api/admin/ai-concierge/venues/${venueId}/diagnose-a2p`, { method: 'POST' });
+      const j = await res.json().catch(() => ({})) as { ok?: boolean; report?: A2pDiagnosticReport; error?: string };
+      if (!res.ok) {
+        setError(j.error ?? 'Diagnostic failed');
+        return;
+      }
+      if (j.report) setReport(j.report);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Diagnostic failed');
+    } finally {
+      setLoading(false);
+    }
+  }, [venueId]);
+
+  useEffect(() => { void run(); }, [run]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/30 p-4 pt-8">
+      <div className="w-full max-w-3xl rounded-2xl bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
+          <div>
+            <h2 className="font-heading text-base text-gray-900 flex items-center gap-2">
+              <Stethoscope size={16} className="text-gray-400" />
+              A2P diagnostic — {venueName || venueId}
+            </h2>
+            <p className="text-[11px] text-gray-400">Read-only probe of GHL endpoints. Nothing is persisted.</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md p-1 text-gray-400 hover:bg-gray-100"
+            title="Close"
+          >
+            <XIcon size={14} />
+          </button>
+        </div>
+
+        <div className="px-5 py-4">
+          {loading && (
+            <div className="flex items-center justify-center py-10 text-gray-400">
+              <Loader2 size={18} className="animate-spin" />
+            </div>
+          )}
+
+          {error && !loading && (
+            <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">{error}</p>
+          )}
+
+          {report && !loading && (
+            <div className="space-y-4">
+              {/* Header / verdict */}
+              <div className={`rounded-xl border px-4 py-3 ${
+                report.bootstrapError
+                  ? 'border-rose-200 bg-rose-50'
+                  : report.wouldVerify
+                    ? 'border-emerald-200 bg-emerald-50'
+                    : 'border-amber-200 bg-amber-50'
+              }`}>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">
+                      {report.bootstrapError
+                        ? 'Cannot probe GHL'
+                        : report.wouldVerify
+                          ? 'Would auto-verify'
+                          : 'Would NOT auto-verify'}
+                    </p>
+                    {report.bootstrapError && (
+                      <p className="text-[12px] text-rose-700 mt-0.5">{report.bootstrapError}</p>
+                    )}
+                    {!report.bootstrapError && report.bestExtracted && (
+                      <p className="text-[12px] text-gray-700 mt-0.5">
+                        Best brand: <strong>{report.bestExtracted.brandStatus}</strong>{' '}
+                        · campaign: <strong>{report.bestExtracted.campaignStatus}</strong>
+                      </p>
+                    )}
+                    {!report.bootstrapError && !report.bestExtracted && (
+                      <p className="text-[12px] text-gray-700 mt-0.5">
+                        No A2P fields recognized in any GHL response.
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void run()}
+                    className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-50"
+                  >
+                    <RotateCw size={11} />
+                    Re-run
+                  </button>
+                </div>
+              </div>
+
+              {/* Connection info */}
+              <div className="grid grid-cols-3 gap-2 text-[11px]">
+                <div className="rounded-md bg-gray-50 px-2 py-1.5">
+                  <span className="text-gray-400">SMS provider:</span>{' '}
+                  <span className="font-medium text-gray-700">{report.smsProvider}</span>
+                </div>
+                <div className="rounded-md bg-gray-50 px-2 py-1.5">
+                  <span className="text-gray-400">GHL connected:</span>{' '}
+                  <span className={`font-medium ${report.ghlConnected ? 'text-emerald-700' : 'text-rose-700'}`}>
+                    {report.ghlConnected ? 'yes' : 'no'}
+                  </span>
+                </div>
+                <div className="rounded-md bg-gray-50 px-2 py-1.5">
+                  <span className="text-gray-400">Token present:</span>{' '}
+                  <span className={`font-medium ${report.hasAccessToken ? 'text-emerald-700' : 'text-rose-700'}`}>
+                    {report.hasAccessToken ? 'yes' : 'no'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Per-attempt results */}
+              {report.attempts.length === 0 ? (
+                <p className="text-[12px] text-gray-400">No probes attempted (see verdict above).</p>
+              ) : (
+                <div className="space-y-2">
+                  {report.attempts.map((a, idx) => (
+                    <details key={idx} className="rounded-lg border border-gray-200 bg-white">
+                      <summary className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-[12px] hover:bg-gray-50">
+                        <div className="min-w-0 truncate">
+                          <span className="font-mono text-[11px] text-gray-500">{a.url}</span>
+                        </div>
+                        <span className={`shrink-0 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                          a.error
+                            ? 'bg-rose-50 text-rose-700'
+                            : a.ok
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : a.status === 404
+                                ? 'bg-gray-100 text-gray-600'
+                                : 'bg-amber-50 text-amber-700'
+                        }`}>
+                          {a.error ? 'fetch error' : a.status ?? '—'}
+                        </span>
+                      </summary>
+                      <div className="border-t border-gray-100 px-3 py-2 text-[11px]">
+                        {a.error && (
+                          <p className="mb-2 text-rose-700"><strong>Error:</strong> {a.error}</p>
+                        )}
+                        {a.extracted ? (
+                          <div className="mb-2 grid grid-cols-2 gap-2 rounded-md bg-emerald-50 px-2 py-1.5 text-emerald-900">
+                            <div><span className="opacity-60">brandId:</span> <code className="font-mono">{a.extracted.brandId ?? '—'}</code></div>
+                            <div><span className="opacity-60">brandStatus:</span> <strong>{a.extracted.brandStatus}</strong></div>
+                            <div><span className="opacity-60">campaignId:</span> <code className="font-mono">{a.extracted.campaignId ?? '—'}</code></div>
+                            <div><span className="opacity-60">campaignStatus:</span> <strong>{a.extracted.campaignStatus}</strong></div>
+                          </div>
+                        ) : (
+                          <p className="mb-2 text-gray-500"><em>No A2P fields recognized in this response.</em></p>
+                        )}
+                        {a.bodyPreview && (
+                          <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-gray-50 px-2 py-1.5 font-mono text-[10px] leading-snug text-gray-700">
+                            {a.bodyPreview}
+                          </pre>
+                        )}
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end border-t border-gray-100 px-5 py-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Close
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

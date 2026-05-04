@@ -18,6 +18,14 @@ import type { AiAngleKey } from './types';
 
 // ── Public types ───────────────────────────────────────────────────────────
 
+export interface OutreachQuestion {
+  text:      string;
+  /** Optional grouping (e.g. "discovery", "qualifying", "cta"). */
+  category?: string;
+  /** Optional weight; higher = surfaced earlier in the rendered list. */
+  priority?: number;
+}
+
 export interface AiConfigRow {
   id:                       string;
   version:                  number;
@@ -28,6 +36,8 @@ export interface AiConfigRow {
   prohibited_topics:        string;
   message_constraints:      Record<string, unknown>;
   system_prompt_template:   string;
+  /** Curated pool of question ideas the LLM may rephrase casually. */
+  outreach_questions?:      OutreachQuestion[];
 }
 
 export interface BuildPromptInput {
@@ -84,13 +94,26 @@ export async function loadActiveAiConfig(force = false): Promise<AiConfigRow | n
   if (!force && _cachedConfig && Date.now() - _cachedConfig.loadedAt < CONFIG_CACHE_MS) {
     return _cachedConfig.row;
   }
-  const { data, error } = await supabaseAdmin
+  // Try the wider select that includes outreach_questions (migration 101).
+  // If the column doesn't exist yet, retry without it so the cron stays up.
+  let { data, error } = await supabaseAdmin
     .from('ai_config')
-    .select('id, version, is_active, personality, goals, guardrails, prohibited_topics, message_constraints, system_prompt_template')
+    .select('id, version, is_active, personality, goals, guardrails, prohibited_topics, message_constraints, system_prompt_template, outreach_questions')
     .eq('is_active', true)
     .order('version', { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (error && error.code === '42703') {
+    const retry = await supabaseAdmin
+      .from('ai_config')
+      .select('id, version, is_active, personality, goals, guardrails, prohibited_topics, message_constraints, system_prompt_template')
+      .eq('is_active', true)
+      .order('version', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    error = retry.error;
+    data  = retry.data as typeof data;
+  }
   if (error || !data) return null;
   const row = data as unknown as AiConfigRow;
   _cachedConfig = { row, loadedAt: Date.now() };
@@ -214,6 +237,12 @@ export async function buildAiConciergeSystemPrompt(
       ? input.anglesUsed.join(', ')
       : 'none yet',
     message_history_last_10:  formatMessageHistory(history),
+    // Outreach question pool (migration 101). Two render variants so the
+    // template author can choose flat or grouped:
+    //   {{outreach_questions}}        — bullet list, one per line
+    //   {{outreach_questions_grouped}} — grouped by category headings
+    outreach_questions:         formatOutreachQuestions(config.outreach_questions),
+    outreach_questions_grouped: formatOutreachQuestionsGrouped(config.outreach_questions),
   };
 
   const systemPrompt = renderTemplate(config.system_prompt_template, renderTokens);
@@ -286,6 +315,59 @@ function humanizeSinceIso(iso: string | null): string {
   if (days < 60) return `${Math.round(days / 7)} weeks ago`;
   if (days < 365) return `${Math.round(days / 30)} months ago`;
   return `${Math.round(days / 365)} years ago`;
+}
+
+/**
+ * Render the outreach question pool as a flat bullet list. Higher-priority
+ * items first; ties broken by original order. Caps at 30 lines so a runaway
+ * pool doesn't blow past the model's context budget.
+ */
+function formatOutreachQuestions(pool: OutreachQuestion[] | null | undefined): string {
+  const items = sortPool(pool);
+  if (items.length === 0) return '(none configured — ask anything reasonable about her wedding plans)';
+  return items
+    .slice(0, 30)
+    .map((q) => `- ${q.text.replace(/\s+/g, ' ').trim()}`)
+    .join('\n');
+}
+
+/**
+ * Render the outreach question pool grouped by category. Items without a
+ * category land under "general". Useful when the prompt template wants the
+ * model to pick a category-appropriate question for the current attempt.
+ */
+function formatOutreachQuestionsGrouped(pool: OutreachQuestion[] | null | undefined): string {
+  const items = sortPool(pool);
+  if (items.length === 0) return '(none configured)';
+
+  const byCategory = new Map<string, OutreachQuestion[]>();
+  for (const q of items) {
+    const cat = (q.category || 'general').trim().toLowerCase() || 'general';
+    if (!byCategory.has(cat)) byCategory.set(cat, []);
+    byCategory.get(cat)!.push(q);
+  }
+
+  const sections: string[] = [];
+  for (const [cat, qs] of byCategory.entries()) {
+    sections.push(`${cat}:\n${qs.map((q) => `  - ${q.text.replace(/\s+/g, ' ').trim()}`).join('\n')}`);
+  }
+  return sections.join('\n');
+}
+
+function sortPool(pool: OutreachQuestion[] | null | undefined): OutreachQuestion[] {
+  if (!Array.isArray(pool)) return [];
+  // Filter out malformed entries; preserve order for ties so the operator's
+  // ordering in the editor is meaningful.
+  return [...pool]
+    .filter((q): q is OutreachQuestion => !!q && typeof q.text === 'string' && q.text.trim().length > 0)
+    .map((q, idx) => ({ ...q, _idx: idx }))
+    .sort((a, b) => {
+      const pa = typeof a.priority === 'number' ? a.priority : 0;
+      const pb = typeof b.priority === 'number' ? b.priority : 0;
+      if (pa !== pb) return pb - pa;
+      return ((a as OutreachQuestion & { _idx: number })._idx)
+           - ((b as OutreachQuestion & { _idx: number })._idx);
+    });
 }
 
 function formatMessageHistory(

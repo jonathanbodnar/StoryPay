@@ -48,7 +48,7 @@ interface PreviewBody {
   anglesUsed?:     string[];
   configOverride?: Partial<Pick<AiConfigRow,
     'personality' | 'goals' | 'guardrails' | 'prohibited_topics' |
-    'message_constraints' | 'system_prompt_template'
+    'message_constraints' | 'system_prompt_template' | 'outreach_questions'
   >>;
   configVersionId?: string;
 }
@@ -71,12 +71,28 @@ export async function POST(request: NextRequest) {
   // row directly (same as the cron).
   let configOverride: AiConfigRow | undefined;
 
+  // SELECT helper that retries without `outreach_questions` if migration 101
+  // hasn't run.
+  const selectConfig = async (where: { id?: string; isActive?: boolean }) => {
+    const cols = 'id, version, is_active, personality, goals, guardrails, prohibited_topics, message_constraints, system_prompt_template, outreach_questions';
+    const fallback = 'id, version, is_active, personality, goals, guardrails, prohibited_topics, message_constraints, system_prompt_template';
+    let q = supabaseAdmin.from('ai_config').select(cols);
+    if (where.id) q = q.eq('id', where.id);
+    if (where.isActive) q = q.eq('is_active', true).order('version', { ascending: false }).limit(1);
+    let { data, error } = await q.maybeSingle();
+    if (error && error.code === '42703') {
+      let r = supabaseAdmin.from('ai_config').select(fallback);
+      if (where.id) r = r.eq('id', where.id);
+      if (where.isActive) r = r.eq('is_active', true).order('version', { ascending: false }).limit(1);
+      const retry = await r.maybeSingle();
+      error = retry.error;
+      data  = retry.data as typeof data;
+    }
+    return { data, error };
+  };
+
   if (body.configVersionId) {
-    const { data, error } = await supabaseAdmin
-      .from('ai_config')
-      .select('id, version, is_active, personality, goals, guardrails, prohibited_topics, message_constraints, system_prompt_template')
-      .eq('id', body.configVersionId)
-      .maybeSingle();
+    const { data, error } = await selectConfig({ id: body.configVersionId });
     if (error)  return NextResponse.json({ error: error.message }, { status: 500 });
     if (!data)  return NextResponse.json({ error: 'configVersionId not found' }, { status: 404 });
     configOverride = data as AiConfigRow;
@@ -87,13 +103,7 @@ export async function POST(request: NextRequest) {
     // config to fill in the gaps. This lets the editor preview a partial
     // edit (e.g. only the system_prompt_template field changed).
     if (!configOverride) {
-      const { data } = await supabaseAdmin
-        .from('ai_config')
-        .select('id, version, is_active, personality, goals, guardrails, prohibited_topics, message_constraints, system_prompt_template')
-        .eq('is_active', true)
-        .order('version', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const { data } = await selectConfig({ isActive: true });
       if (data) configOverride = data as AiConfigRow;
     }
     if (configOverride) {
@@ -105,6 +115,7 @@ export async function POST(request: NextRequest) {
         ...(body.configOverride.prohibited_topics      !== undefined ? { prohibited_topics:      body.configOverride.prohibited_topics      } : {}),
         ...(body.configOverride.message_constraints    !== undefined ? { message_constraints:    body.configOverride.message_constraints    } : {}),
         ...(body.configOverride.system_prompt_template !== undefined ? { system_prompt_template: body.configOverride.system_prompt_template } : {}),
+        ...(body.configOverride.outreach_questions     !== undefined ? { outreach_questions:     body.configOverride.outreach_questions     } : {}),
       };
     }
   }

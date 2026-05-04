@@ -31,11 +31,20 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   const { id } = await ctx.params;
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
 
-  const { data, error } = await supabaseAdmin
+  let { data, error } = await supabaseAdmin
     .from('ai_config')
-    .select('id, version, is_active, personality, goals, guardrails, prohibited_topics, message_constraints, system_prompt_template, notes, created_by, created_at, updated_at')
+    .select('id, version, is_active, personality, goals, guardrails, prohibited_topics, message_constraints, system_prompt_template, outreach_questions, notes, created_by, created_at, updated_at')
     .eq('id', id)
     .maybeSingle();
+  if (error && error.code === '42703') {
+    const retry = await supabaseAdmin
+      .from('ai_config')
+      .select('id, version, is_active, personality, goals, guardrails, prohibited_topics, message_constraints, system_prompt_template, notes, created_by, created_at, updated_at')
+      .eq('id', id)
+      .maybeSingle();
+    error = retry.error;
+    data  = retry.data as typeof data;
+  }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data)  return NextResponse.json({ error: 'Version not found' }, { status: 404 });

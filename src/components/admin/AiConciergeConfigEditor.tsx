@@ -42,6 +42,12 @@ import {
 
 // ── API types ─────────────────────────────────────────────────────────────
 
+interface OutreachQuestion {
+  text:      string;
+  category?: string;
+  priority?: number;
+}
+
 interface ConfigRow {
   id:                      string;
   version:                 number;
@@ -52,6 +58,7 @@ interface ConfigRow {
   prohibited_topics:       string;
   message_constraints:     Record<string, unknown>;
   system_prompt_template:  string;
+  outreach_questions?:     OutreachQuestion[];
   notes:                   string | null;
   created_by:              string | null;
   created_at:              string;
@@ -105,8 +112,17 @@ function rowToFormState(r: ConfigRow): FormState {
     prohibited_topics:      r.prohibited_topics,
     message_constraints:    JSON.stringify(r.message_constraints ?? {}, null, 2),
     system_prompt_template: r.system_prompt_template,
+    outreach_questions:     Array.isArray(r.outreach_questions) ? r.outreach_questions.map(cleanQuestion).filter(Boolean) as OutreachQuestion[] : [],
     notes:                  r.notes ?? '',
   };
+}
+
+function cleanQuestion(q: OutreachQuestion | null | undefined): OutreachQuestion | null {
+  if (!q || typeof q.text !== 'string' || !q.text.trim()) return null;
+  const out: OutreachQuestion = { text: q.text };
+  if (q.category && typeof q.category === 'string') out.category = q.category;
+  if (typeof q.priority === 'number') out.priority = q.priority;
+  return out;
 }
 
 interface FormState {
@@ -116,6 +132,7 @@ interface FormState {
   prohibited_topics:       string;
   message_constraints:     string;       // JSON-as-text in the editor
   system_prompt_template:  string;
+  outreach_questions:      OutreachQuestion[];
   notes:                   string;
 }
 
@@ -126,6 +143,7 @@ interface FormStateDirty {
   prohibited_topics:       boolean;
   message_constraints:     boolean;
   system_prompt_template:  boolean;
+  outreach_questions:      boolean;
   notes:                   boolean;
 }
 
@@ -137,6 +155,7 @@ function diffForm(base: FormState, current: FormState): FormStateDirty {
     prohibited_topics:      base.prohibited_topics      !== current.prohibited_topics,
     message_constraints:    base.message_constraints    !== current.message_constraints,
     system_prompt_template: base.system_prompt_template !== current.system_prompt_template,
+    outreach_questions:     JSON.stringify(base.outreach_questions) !== JSON.stringify(current.outreach_questions),
     notes:                  base.notes                  !== current.notes,
   };
 }
@@ -241,6 +260,7 @@ export function AiConciergeConfigEditor() {
           prohibited_topics:      form.prohibited_topics,
           message_constraints:    constraintsJson,
           system_prompt_template: form.system_prompt_template,
+          outreach_questions:     form.outreach_questions,
           notes:                  form.notes || null,
         }),
       });
@@ -509,10 +529,20 @@ export function AiConciergeConfigEditor() {
                   );
                 })}
 
+                {/* Outreach question pool (structured editor) */}
+                {form && (
+                  <OutreachQuestionsSection
+                    questions={form.outreach_questions}
+                    isDirty={dirty?.outreach_questions === true && editMode}
+                    editMode={editMode}
+                    onChange={(next) => setForm({ ...form, outreach_questions: next })}
+                  />
+                )}
+
                 <div className="rounded-xl bg-gray-50 px-3 py-2 text-[11px] text-gray-500">
                   <strong className="font-semibold">Available tokens:</strong>
                   <span className="ml-1 font-mono">
-                    {`{{venue_name}} {{venue_city}} {{venue_state}} {{venue_style_description}} {{assistant_persona_name}} {{bride_first_name}} {{bride_full_name}} {{initial_inquiry_date}} {{time_since_initial_inquiry}} {{wedding_date_or_unknown}} {{bride_notes_or_none}} {{attempt_number}} {{angles_used_list}} {{message_history_last_10}} {{personality}} {{goals}} {{guardrails}} {{prohibited_topics}}`}
+                    {`{{venue_name}} {{venue_city}} {{venue_state}} {{venue_style_description}} {{assistant_persona_name}} {{bride_first_name}} {{bride_full_name}} {{initial_inquiry_date}} {{time_since_initial_inquiry}} {{wedding_date_or_unknown}} {{bride_notes_or_none}} {{attempt_number}} {{angles_used_list}} {{message_history_last_10}} {{personality}} {{goals}} {{guardrails}} {{prohibited_topics}} {{outreach_questions}} {{outreach_questions_grouped}}`}
                   </span>
                 </div>
               </div>
@@ -582,6 +612,7 @@ function formToOverride(f: FormState): {
   prohibited_topics:      string;
   message_constraints:    Record<string, unknown> | undefined;
   system_prompt_template: string;
+  outreach_questions:     OutreachQuestion[];
 } {
   let constraints: Record<string, unknown> | undefined;
   try {
@@ -595,7 +626,183 @@ function formToOverride(f: FormState): {
     prohibited_topics:      f.prohibited_topics,
     message_constraints:    constraints,
     system_prompt_template: f.system_prompt_template,
+    outreach_questions:     f.outreach_questions,
   };
+}
+
+// ── Outreach questions section ────────────────────────────────────────────
+
+const KNOWN_CATEGORIES = ['discovery', 'qualifying', 'cta', 'objection', 'general'] as const;
+
+function OutreachQuestionsSection({
+  questions, isDirty, editMode, onChange,
+}: {
+  questions:  OutreachQuestion[];
+  isDirty:    boolean;
+  editMode:   boolean;
+  onChange:   (next: OutreachQuestion[]) => void;
+}) {
+  const [draftText, setDraftText]         = useState('');
+  const [draftCategory, setDraftCategory] = useState<string>('discovery');
+
+  const add = () => {
+    const t = draftText.trim();
+    if (!t) return;
+    const next: OutreachQuestion = { text: t.slice(0, 280) };
+    if (draftCategory) next.category = draftCategory;
+    onChange([...questions, next]);
+    setDraftText('');
+  };
+
+  const updateAt = (idx: number, patch: Partial<OutreachQuestion>) => {
+    onChange(questions.map((q, i) => i === idx ? { ...q, ...patch } : q));
+  };
+
+  const removeAt = (idx: number) => {
+    onChange(questions.filter((_, i) => i !== idx));
+  };
+
+  const moveBy = (idx: number, delta: number) => {
+    const target = idx + delta;
+    if (target < 0 || target >= questions.length) return;
+    const next = [...questions];
+    const [moved] = next.splice(idx, 1);
+    next.splice(target, 0, moved);
+    onChange(next);
+  };
+
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center justify-between">
+        <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+          Outreach question pool · {questions.length} {questions.length === 1 ? 'item' : 'items'}
+        </label>
+        {isDirty && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-700">
+            edited
+          </span>
+        )}
+      </div>
+
+      <div className={`rounded-lg border ${
+        isDirty
+          ? 'border-amber-300 ring-1 ring-amber-200'
+          : editMode ? 'border-gray-200' : 'border-gray-100 bg-gray-50'
+      }`}>
+        <div className="px-3 py-2 text-[11px] text-gray-500 border-b border-gray-100">
+          Curated list of question ideas the LLM can rephrase casually. Render in the prompt template via{' '}
+          <code className="font-mono">{`{{outreach_questions}}`}</code> (flat list) or{' '}
+          <code className="font-mono">{`{{outreach_questions_grouped}}`}</code> (grouped by category).
+        </div>
+
+        {questions.length === 0 && (
+          <div className="px-3 py-4 text-center text-[12px] text-gray-400 italic">
+            No questions yet. {editMode ? 'Add one below.' : 'Switch to edit mode to add some.'}
+          </div>
+        )}
+
+        {questions.length > 0 && (
+          <ul className="divide-y divide-gray-100">
+            {questions.map((q, idx) => (
+              <li key={idx} className="grid grid-cols-[auto_1fr_140px_auto_auto] items-start gap-2 px-3 py-2">
+                <span className="mt-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-gray-100 text-[10px] font-semibold text-gray-500">
+                  {idx + 1}
+                </span>
+                <input
+                  type="text"
+                  value={q.text}
+                  readOnly={!editMode}
+                  onChange={(e) => updateAt(idx, { text: e.target.value })}
+                  maxLength={280}
+                  className={`min-w-0 rounded-md border px-2 py-1 text-[12px] ${
+                    editMode
+                      ? 'border-gray-200 focus:border-gray-400 focus:outline-none'
+                      : 'border-transparent bg-transparent text-gray-700'
+                  }`}
+                />
+                <select
+                  value={q.category ?? 'general'}
+                  disabled={!editMode}
+                  onChange={(e) => updateAt(idx, { category: e.target.value })}
+                  className={`rounded-md border px-2 py-1 text-[11px] ${
+                    editMode
+                      ? 'border-gray-200 bg-white focus:border-gray-400 focus:outline-none'
+                      : 'border-transparent bg-transparent text-gray-500'
+                  }`}
+                >
+                  {KNOWN_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+                <div className="flex items-center gap-0.5">
+                  <button
+                    type="button"
+                    disabled={!editMode || idx === 0}
+                    onClick={() => moveBy(idx, -1)}
+                    className="rounded-md p-1 text-gray-400 hover:bg-gray-100 disabled:opacity-30"
+                    title="Move up"
+                  >▲</button>
+                  <button
+                    type="button"
+                    disabled={!editMode || idx === questions.length - 1}
+                    onClick={() => moveBy(idx, 1)}
+                    className="rounded-md p-1 text-gray-400 hover:bg-gray-100 disabled:opacity-30"
+                    title="Move down"
+                  >▼</button>
+                </div>
+                <button
+                  type="button"
+                  disabled={!editMode}
+                  onClick={() => removeAt(idx)}
+                  className="rounded-md p-1 text-rose-500 hover:bg-rose-50 disabled:opacity-30"
+                  title="Remove"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {editMode && (
+          <div className="border-t border-gray-100 bg-gray-50/40 px-3 py-2">
+            <div className="grid grid-cols-[1fr_140px_auto] gap-2">
+              <input
+                type="text"
+                value={draftText}
+                onChange={(e) => setDraftText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+                placeholder="e.g., What does your dream wedding day look like?"
+                maxLength={280}
+                className="rounded-md border border-gray-200 bg-white px-2 py-1 text-[12px] focus:border-gray-400 focus:outline-none"
+              />
+              <select
+                value={draftCategory}
+                onChange={(e) => setDraftCategory(e.target.value)}
+                className="rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] focus:border-gray-400 focus:outline-none"
+              >
+                {KNOWN_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={add}
+                disabled={!draftText.trim()}
+                className="inline-flex items-center gap-1 rounded-md bg-gray-900 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-gray-800 disabled:opacity-40"
+              >
+                <Plus size={11} />
+                Add
+              </button>
+            </div>
+            <p className="mt-1 text-[10px] text-gray-400">
+              Categories help when using <code className="font-mono">{`{{outreach_questions_grouped}}`}</code>. Use the up/down arrows to control which questions surface earliest.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ── Field wrapper ─────────────────────────────────────────────────────────
