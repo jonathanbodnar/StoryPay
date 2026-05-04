@@ -85,11 +85,11 @@ export async function POST(
     const finalCents = addFee ? applyFee(chargeAmountCents, feeRate) : chargeAmountCents;
     const amountInDollars = finalCents / 100;
 
-    const hasFuturePayments = proposal.payment_type === 'installment' || proposal.payment_type === 'subscription';
-
     // Only fields documented by the LunarPay hosted-checkout API.
-    // customer_id and save_payment_method are NOT checkout-session fields —
-    // sending them causes a 500 from LunarPay.
+    // customer_id, save_payment_method, and metadata are NOT safe to send —
+    // some merchant configurations on Fortis return a 500 when they receive
+    // any unrecognised or unsupported field. The proposal is identified on
+    // return via the token in success_url, so metadata is not needed.
     const checkoutData: Record<string, unknown> = {
       amount: amountInDollars,
       description,
@@ -97,7 +97,6 @@ export async function POST(
       customer_name: proposal.customer_name,
       success_url: `${APP_URL}/proposal/${token}/success`,
       cancel_url: `${APP_URL}/proposal/${token}`,
-      metadata: { proposal_id: proposal.id, public_token: token },
     };
 
     // Only restrict to card-only when ACH is explicitly disabled by the venue.
