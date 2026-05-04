@@ -51,6 +51,7 @@ export async function PATCH(
     triggerType?: AutomationTriggerType | null;
     triggerConfig?: AutomationTriggerConfig;
     steps?: StepIn[] | null;
+    aiConciergeEligible?: boolean;
   };
   try {
     body = await request.json();
@@ -103,6 +104,9 @@ export async function PATCH(
   // Allow setting trigger_type to null (clear the primary trigger)
   if (triggerTypeProvided) patch.trigger_type = body.triggerType ?? null;
   if (body.triggerConfig !== undefined) patch.trigger_config = body.triggerConfig;
+  if (typeof body.aiConciergeEligible === 'boolean') {
+    patch.ai_concierge_eligible = body.aiConciergeEligible;
+  }
 
   const stepsProvided = body.steps !== undefined && body.steps !== null;
   if (Object.keys(patch).length > 1) {

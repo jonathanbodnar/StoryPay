@@ -79,6 +79,7 @@ interface AutomationRow {
   status: 'draft' | 'active' | 'paused';
   trigger_type: AutomationTriggerType | null;
   trigger_config: Record<string, unknown>;
+  ai_concierge_eligible: boolean;
 }
 interface TagRow    { id: string; name: string; system_key?: string | null; category?: string | null; is_system?: boolean }
 interface StageOpt { id: string; name: string; pipelineName: string }
@@ -1090,6 +1091,10 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
       if (rawCfg.__placeholder) {
         a = { ...a, trigger_type: null };
       }
+      // Default to true if column not yet present (migration 104 not applied)
+      if (typeof (a as { ai_concierge_eligible?: unknown }).ai_concierge_eligible !== 'boolean') {
+        a = { ...a, ai_concierge_eligible: true };
+      }
       setAuto(a);
       const cfg = (a.trigger_config || {}) as {
         tag_ids?: string[]; to_stage_ids?: string[];
@@ -1793,6 +1798,52 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                   <div className="flex items-center gap-4 text-sm text-gray-500 border-t border-gray-100 pt-4">
                     <span><strong className="text-gray-900">{steps.length}</strong> step{steps.length !== 1 ? 's' : ''}</span>
                     <span><strong className="text-gray-900">{(extraTriggers.length + (auto.trigger_type ? 1 : 0))}</strong> trigger{(extraTriggers.length + (auto.trigger_type ? 1 : 0)) !== 1 ? 's' : ''}</span>
+                  </div>
+                </div>
+
+                {/* ── AI Concierge eligibility ─────────────────────────────────── */}
+                <div className="rounded-2xl border border-gray-200 bg-white p-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <h3 className="text-sm font-semibold text-gray-900">AI Concierge</h3>
+                      <p className="mt-1 text-xs text-gray-500 leading-relaxed">
+                        When enabled, leads who complete this workflow without replying can be
+                        picked up by the AI Concierge for automated follow-up after 14 days of
+                        silence. Disable for post-tour sequences, re-engagement campaigns, or
+                        any workflow where AI outreach would be out of place.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={auto.ai_concierge_eligible}
+                      onClick={() => {
+                        const next = !auto.ai_concierge_eligible;
+                        setAuto({ ...auto, ai_concierge_eligible: next });
+                        void fetch(`/api/marketing/automations/${id}`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ aiConciergeEligible: next }),
+                        });
+                      }}
+                      className={`relative mt-0.5 h-6 w-11 shrink-0 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+                        auto.ai_concierge_eligible ? 'bg-indigo-600' : 'bg-gray-200'
+                      }`}
+                    >
+                      <span
+                        className={`block h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                          auto.ai_concierge_eligible ? 'translate-x-5' : 'translate-x-0.5'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                  <div className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                    auto.ai_concierge_eligible
+                      ? 'bg-indigo-50 text-indigo-700'
+                      : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${auto.ai_concierge_eligible ? 'bg-indigo-500' : 'bg-gray-400'}`} />
+                    {auto.ai_concierge_eligible ? 'AI follow-up enabled' : 'AI follow-up disabled'}
                   </div>
                 </div>
 
