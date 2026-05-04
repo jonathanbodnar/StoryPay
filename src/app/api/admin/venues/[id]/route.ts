@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { verifyAdminCookie } from '@/lib/admin-auth';
 import { isDirectoryBadgeStatus } from '@/lib/directory-badges';
+import { cancelVenueSubscription, changeVenuePlan } from '@/lib/venue-billing';
 import bcrypt from 'bcryptjs';
 
 export const dynamic = 'force-dynamic';
@@ -48,27 +49,55 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
   }
 
+  // Plan changes go through the same flow as the venue-facing UI so the
+  // LunarPay subscription is actually rolled over (cancel + recreate at
+  // next renewal) under the HQ merchant — not stranded with the wrong
+  // amount in LP. The helpers below own the venues-row writes for the
+  // plan/subscription columns, so we don't merge them into `updates`.
+  let planChangeCheckoutUrl: string | null = null;
   if ('directory_plan_id' in body) {
     if (body.directory_plan_id === null || body.directory_plan_id === '') {
-      updates.directory_plan_id = null;
-      updates.directory_subscription_status = 'none';
-      updates.directory_subscription_external_id = null;
+      // Clear plan: cancel any LP sub (best-effort), then reset.
+      try {
+        await cancelVenueSubscription(venueId);
+      } catch (e) {
+        // cancelVenueSubscription throws on LP failure but we still need
+        // the admin to be able to clear the plan locally.
+        console.warn('[admin/venues PATCH] LP cancel failed during plan clear:', e);
+      }
+      const { error: clearErr } = await supabaseAdmin
+        .from('venues')
+        .update({
+          directory_plan_id:                  null,
+          directory_subscription_status:      'none',
+          directory_subscription_external_id: null,
+        })
+        .eq('id', venueId);
+      if (clearErr) {
+        return NextResponse.json({ error: clearErr.message }, { status: 500 });
+      }
     } else if (typeof body.directory_plan_id === 'string') {
       const pid = body.directory_plan_id.trim();
+      // Validate plan exists before delegating to changeVenuePlan so we
+      // return a clean 400 (not a 500 from the helper).
       const { data: planRow } = await supabaseAdmin
         .from('directory_plans')
-        .select('id, price_monthly_cents')
+        .select('id')
         .eq('id', pid)
         .maybeSingle();
       if (!planRow) return NextResponse.json({ error: 'Invalid directory_plan_id' }, { status: 400 });
-      updates.directory_plan_id = pid;
-      const price = planRow.price_monthly_cents ?? 0;
-      if (price > 0) {
-        updates.directory_subscription_status = 'pending_payment';
-        updates.directory_subscription_external_id = null;
-      } else {
-        updates.directory_subscription_status = 'active';
-        updates.directory_subscription_external_id = null;
+      try {
+        const result = await changeVenuePlan(venueId, pid);
+        if (result.kind === 'checkout_required') {
+          // Venue has no LP sub on file (e.g. free → paid for the first
+          // time). Admin can copy this URL to the venue owner so they can
+          // enter a card. The plan is already pre-assigned in 'pending'
+          // status by changeVenuePlan.
+          planChangeCheckoutUrl = result.url;
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Plan change failed';
+        return NextResponse.json({ error: msg }, { status: 502 });
       }
     } else {
       return NextResponse.json({ error: 'Invalid directory_plan_id' }, { status: 400 });
@@ -88,22 +117,34 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     updates.directory_sponsored_status = body.directory_sponsored_status;
   }
 
-  if (Object.keys(updates).length === 0) {
+  // If a plan change was applied via the helper but no other fields were
+  // sent, skip the no-op final UPDATE — return what the venue row looks
+  // like now. Otherwise apply the badge/password updates and return.
+  const hasOtherUpdates = Object.keys(updates).length > 0;
+  const planChanged = 'directory_plan_id' in body;
+  if (!hasOtherUpdates && !planChanged) {
     return NextResponse.json({ error: 'No valid fields' }, { status: 400 });
+  }
+
+  if (hasOtherUpdates) {
+    const { error: upErr } = await supabaseAdmin
+      .from('venues')
+      .update(updates)
+      .eq('id', venueId);
+    if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
   }
 
   const { data, error } = await supabaseAdmin
     .from('venues')
-    .update(updates)
-    .eq('id', venueId)
     .select(
-      'id, name, directory_plan_id, directory_verified_status, directory_sponsored_status, directory_subscription_status',
+      'id, name, directory_plan_id, directory_verified_status, directory_sponsored_status, directory_subscription_status, directory_subscription_external_id',
     )
+    .eq('id', venueId)
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
-  return NextResponse.json({ venue: data });
+  return NextResponse.json({ venue: data, checkoutUrl: planChangeCheckoutUrl ?? undefined });
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {

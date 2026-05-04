@@ -1094,6 +1094,8 @@ export async function verifyUpdatePaymentMethod(
   const secret = requirePlatformLunarPaySecretKey();
   const ctx = await loadVenueDirectoryPlanContext(venueId);
   if (!ctx?.plan) throw new Error('No directory plan assigned');
+  // Narrow once so TS doesn't need to re-prove it across awaits below.
+  const ctxPlan = ctx.plan;
 
   const result = (await getCheckoutSession(secret, sessionId)) as Record<string, unknown>;
   const session = (result.data as Record<string, unknown>) || result;
@@ -1122,10 +1124,54 @@ export async function verifyUpdatePaymentMethod(
     }
   }
 
-  // Create the replacement subscription directly inline so we can wire it
-  // to the freshly saved payment method.
-  const { createSubscription } = await import('./lunarpay');
-  const cents = ctx.plan.price_monthly_cents ?? 0;
+  // Bill the FULL monthly total (plan + active add-ons), not just the plan
+  // price — otherwise updating the card after addons were enabled would
+  // silently drop the addon billing on the next sub cycle.
+  const { data: addonRow } = await supabaseAdmin
+    .from('venues')
+    .select('directory_addon_verified, directory_addon_sponsored, directory_addon_concierge')
+    .eq('id', venueId)
+    .maybeSingle();
+  const ar = (addonRow ?? {}) as Record<string, unknown>;
+  const [allPlans, addonPrices] = await Promise.all([
+    listDirectoryPlanCatalog(),
+    loadAddonPrices(),
+  ]);
+  const planForMath = allPlans.find((p) => p.id === ctxPlan.id) ?? null;
+  const isLegacy = Boolean(planForMath?.is_legacy);
+  const totalCharge = isLegacy
+    ? { plan_cents: 0, verified_cents: 0, sponsored_cents: 0, concierge_cents: 0, total_cents: 0 }
+    : computeMonthlyTotalCents({
+        plan: planForMath,
+        allPlans,
+        addonVerifiedUser:  Boolean(ar.directory_addon_verified),
+        addonSponsoredUser: Boolean(ar.directory_addon_sponsored),
+        addonConciergeUser: Boolean(ar.directory_addon_concierge),
+        prices: addonPrices,
+      });
+  const cents = totalCharge.total_cents;
+  if (cents <= 0) {
+    // Nothing left to bill (e.g. switched to free plan + no addons mid-flow).
+    // Just clear the sub and return — no new subscription needed.
+    await supabaseAdmin
+      .from('venues')
+      .update({
+        directory_subscription_status: 'active',
+        directory_subscription_external_id: null,
+        platform_lunarpay_customer_id: String(customerId),
+      })
+      .eq('id', venueId);
+    await recordBillingEvent(
+      venueId,
+      ctxPlan.id,
+      0,
+      'payment_method_updated',
+      `pm_update:${sessionId}`,
+      { session_id: sessionId, old_subscription_id: oldSubId, new_subscription_id: null, reason: 'total_zero' },
+    );
+    return;
+  }
+
   const startOn = new Date().toISOString().slice(0, 10);
   const subResult = (await createSubscription(secret, {
     customerId: Number(customerId),
@@ -1133,7 +1179,7 @@ export async function verifyUpdatePaymentMethod(
     amount: cents,
     frequency: 'monthly',
     startOn,
-    description: `StoryVenue directory — ${ctx.plan.name}`,
+    description: `StoryVenue directory — ${ctxPlan.name}`,
   })) as Record<string, unknown>;
   const sub = (subResult.data as Record<string, unknown>) || subResult;
   const newSubId = (sub.id as string | number | undefined) ?? null;
@@ -1150,7 +1196,7 @@ export async function verifyUpdatePaymentMethod(
 
   await recordBillingEvent(
     venueId,
-    ctx.plan.id,
+    ctxPlan.id,
     cents,
     'payment_method_updated',
     `pm_update:${sessionId}`,
