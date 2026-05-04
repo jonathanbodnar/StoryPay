@@ -539,11 +539,51 @@ export function AiConciergeConfigEditor() {
                   />
                 )}
 
-                <div className="rounded-xl bg-gray-50 px-3 py-2 text-[11px] text-gray-500">
-                  <strong className="font-semibold">Available tokens:</strong>
-                  <span className="ml-1 font-mono">
-                    {`{{venue_name}} {{venue_city}} {{venue_state}} {{venue_style_description}} {{assistant_persona_name}} {{bride_first_name}} {{bride_full_name}} {{initial_inquiry_date}} {{time_since_initial_inquiry}} {{wedding_date_or_unknown}} {{bride_notes_or_none}} {{attempt_number}} {{angles_used_list}} {{message_history_last_10}} {{personality}} {{goals}} {{guardrails}} {{prohibited_topics}} {{outreach_questions}} {{outreach_questions_grouped}}`}
-                  </span>
+                <div className="space-y-2 rounded-xl bg-gray-50 px-3 py-2 text-[11px] text-gray-500">
+                  <div>
+                    <strong className="font-semibold text-gray-700">Available tokens</strong>
+                    <span className="ml-1 text-gray-400">
+                      — same dot-notation language as our email & form builders. Legacy
+                      flat names still work for any older prompts.
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="font-semibold uppercase tracking-wide text-[10px] text-gray-500">Venue</span>
+                    <div className="font-mono text-gray-600">
+                      {`{{venue.name}} {{venue.city}} {{venue.state}} {{venue.description}}`}
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="font-semibold uppercase tracking-wide text-[10px] text-gray-500">Contact / Lead</span>
+                    <div className="font-mono text-gray-600">
+                      {`{{contact.first_name}} {{contact.full_name}} {{lead.wedding_date}} {{lead.created_at}} {{lead.time_since_inquiry}} {{lead.notes}}`}
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="font-semibold uppercase tracking-wide text-[10px] text-gray-500">AI runtime</span>
+                    <div className="font-mono text-gray-600">
+                      {`{{ai.assistant_persona_name}} {{ai.attempt_number}} {{ai.angles_used_list}} {{ai.message_history_last_10}} {{ai.personality}} {{ai.goals}} {{ai.guardrails}} {{ai.prohibited_topics}} {{ai.outreach_questions}} {{ai.outreach_questions_grouped}}`}
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="font-semibold uppercase tracking-wide text-[10px] text-gray-500">System</span>
+                    <div className="font-mono text-gray-600">
+                      {`{{system.date}} {{system.year}}`}
+                    </div>
+                  </div>
+
+                  <details className="pt-1">
+                    <summary className="cursor-pointer text-gray-500 hover:text-gray-700">
+                      Show legacy flat token names (still supported)
+                    </summary>
+                    <div className="mt-1 font-mono text-gray-500">
+                      {`{{venue_name}} {{venue_city}} {{venue_state}} {{venue_style_description}} {{assistant_persona_name}} {{bride_first_name}} {{bride_full_name}} {{initial_inquiry_date}} {{time_since_initial_inquiry}} {{wedding_date_or_unknown}} {{bride_notes_or_none}} {{attempt_number}} {{angles_used_list}} {{message_history_last_10}} {{personality}} {{goals}} {{guardrails}} {{prohibited_topics}} {{outreach_questions}} {{outreach_questions_grouped}}`}
+                    </div>
+                  </details>
                 </div>
               </div>
 

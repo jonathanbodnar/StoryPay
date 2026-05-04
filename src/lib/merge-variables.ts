@@ -18,7 +18,10 @@ export type MergeVarCategory =
   | 'payment'
   | 'subscription'
   | 'marketing'
+  | 'ai'
   | 'system';
+
+export type MergeVarChannel = 'calendar' | 'marketing' | 'transactional' | 'ai_concierge';
 
 export interface SystemMergeVar {
   /** Canonical dot-notation key, e.g. "contact.first_name" */
@@ -30,20 +33,21 @@ export interface SystemMergeVar {
   /** Example value for display */
   example: string;
   category: MergeVarCategory;
-  /** Which email systems this variable is available in */
-  usedIn: Array<'calendar' | 'marketing' | 'transactional'>;
+  /** Which rendering systems this variable is available in */
+  usedIn: MergeVarChannel[];
 }
 
 // ── Canonical variable list ───────────────────────────────────────────────────
 
 export const SYSTEM_MERGE_VARIABLES: SystemMergeVar[] = [
   // Contact
-  { key: 'contact.first_name',          tag: '{{contact.first_name}}',          description: "Contact's first name",                   example: 'Sarah',                          category: 'contact',      usedIn: ['calendar', 'marketing', 'transactional'] },
-  { key: 'contact.last_name',           tag: '{{contact.last_name}}',           description: "Contact's last name",                    example: 'Johnson',                        category: 'contact',      usedIn: ['calendar', 'marketing', 'transactional'] },
-  { key: 'contact.full_name',           tag: '{{contact.full_name}}',           description: "Contact's full name",                    example: 'Sarah Johnson',                  category: 'contact',      usedIn: ['calendar', 'marketing', 'transactional'] },
-  { key: 'contact.name',                tag: '{{contact.name}}',                description: "Contact's full name (alias)",            example: 'Sarah Johnson',                  category: 'contact',      usedIn: ['calendar', 'marketing', 'transactional'] },
+  { key: 'contact.first_name',          tag: '{{contact.first_name}}',          description: "Contact's first name",                   example: 'Sarah',                          category: 'contact',      usedIn: ['calendar', 'marketing', 'transactional', 'ai_concierge'] },
+  { key: 'contact.last_name',           tag: '{{contact.last_name}}',           description: "Contact's last name",                    example: 'Johnson',                        category: 'contact',      usedIn: ['calendar', 'marketing', 'transactional', 'ai_concierge'] },
+  { key: 'contact.full_name',           tag: '{{contact.full_name}}',           description: "Contact's full name",                    example: 'Sarah Johnson',                  category: 'contact',      usedIn: ['calendar', 'marketing', 'transactional', 'ai_concierge'] },
+  { key: 'contact.name',                tag: '{{contact.name}}',                description: "Contact's full name (alias)",            example: 'Sarah Johnson',                  category: 'contact',      usedIn: ['calendar', 'marketing', 'transactional', 'ai_concierge'] },
   { key: 'contact.email',               tag: '{{contact.email}}',               description: "Contact's email address",                example: 'sarah@example.com',              category: 'contact',      usedIn: ['calendar', 'marketing', 'transactional'] },
   { key: 'contact.phone',               tag: '{{contact.phone}}',               description: "Contact's phone number",                 example: '+1 555-123-4567',                category: 'contact',      usedIn: ['calendar', 'marketing', 'transactional'] },
+  { key: 'contact.notes',               tag: '{{contact.notes}}',               description: 'Free-form notes about the contact',      example: 'Outdoor ceremony, ~150 guests',  category: 'contact',      usedIn: ['ai_concierge'] },
   // Appointment
   { key: 'appointment.title',           tag: '{{appointment.title}}',           description: 'Appointment title',                      example: 'Venue Tour',                     category: 'appointment',  usedIn: ['calendar'] },
   { key: 'appointment.date',            tag: '{{appointment.date}}',            description: 'Date only (e.g. Monday, May 5, 2026)',    example: 'Monday, May 5, 2026',            category: 'appointment',  usedIn: ['calendar'] },
@@ -56,19 +60,23 @@ export const SYSTEM_MERGE_VARIABLES: SystemMergeVar[] = [
   { key: 'appointment.calendar_name',   tag: '{{appointment.calendar_name}}',   description: 'Calendar name (e.g. Tour Calendar)',      example: 'Tour Calendar',                  category: 'appointment',  usedIn: ['calendar'] },
   { key: 'appointment.status',          tag: '{{appointment.status}}',          description: 'Status (confirmed / cancelled)',          example: 'confirmed',                      category: 'appointment',  usedIn: ['calendar'] },
   // Venue
-  { key: 'venue.name',                  tag: '{{venue.name}}',                  description: 'Venue / business name',                  example: 'The Grand Ballroom',             category: 'venue',        usedIn: ['calendar', 'marketing', 'transactional'] },
+  { key: 'venue.name',                  tag: '{{venue.name}}',                  description: 'Venue / business name',                  example: 'The Grand Ballroom',             category: 'venue',        usedIn: ['calendar', 'marketing', 'transactional', 'ai_concierge'] },
   { key: 'venue.owner_name',            tag: '{{venue.owner_name}}',            description: "Owner's full name",                      example: 'Jason Westbrook',                category: 'venue',        usedIn: ['calendar', 'marketing', 'transactional'] },
   { key: 'venue.owner_first_name',      tag: '{{venue.owner_first_name}}',      description: "Owner's first name",                     example: 'Jason',                          category: 'venue',        usedIn: ['calendar', 'marketing', 'transactional'] },
   { key: 'venue.email',                 tag: '{{venue.email}}',                 description: "Venue's contact email",                  example: 'hello@yourvenue.com',            category: 'venue',        usedIn: ['calendar', 'marketing', 'transactional'] },
   { key: 'venue.phone',                 tag: '{{venue.phone}}',                 description: "Venue's phone number",                   example: '+1 555-987-6543',                category: 'venue',        usedIn: ['calendar', 'marketing'] },
   { key: 'venue.address',               tag: '{{venue.address}}',               description: 'Full venue address',                     example: '123 Main St, Nashville, TN',     category: 'venue',        usedIn: ['calendar', 'marketing'] },
-  { key: 'venue.city',                  tag: '{{venue.city}}',                  description: 'Venue city',                             example: 'Nashville',                      category: 'venue',        usedIn: ['calendar', 'marketing'] },
-  { key: 'venue.state',                 tag: '{{venue.state}}',                 description: 'Venue state',                            example: 'TN',                             category: 'venue',        usedIn: ['calendar', 'marketing'] },
+  { key: 'venue.city',                  tag: '{{venue.city}}',                  description: 'Venue city',                             example: 'Nashville',                      category: 'venue',        usedIn: ['calendar', 'marketing', 'ai_concierge'] },
+  { key: 'venue.state',                 tag: '{{venue.state}}',                 description: 'Venue state',                            example: 'TN',                             category: 'venue',        usedIn: ['calendar', 'marketing', 'ai_concierge'] },
   { key: 'venue.website',               tag: '{{venue.website}}',               description: 'Venue website URL',                      example: 'https://yourvenue.com',          category: 'venue',        usedIn: ['calendar', 'marketing'] },
+  { key: 'venue.description',           tag: '{{venue.description}}',           description: 'Short venue style description',          example: 'Restored 1920s ballroom in downtown Nashville', category: 'venue', usedIn: ['ai_concierge'] },
   // Lead
-  { key: 'lead.wedding_date',           tag: '{{lead.wedding_date}}',           description: 'Wedding date (formatted)',                example: 'October 15, 2027',               category: 'lead',         usedIn: ['marketing'] },
+  { key: 'lead.wedding_date',           tag: '{{lead.wedding_date}}',           description: 'Wedding date (formatted)',                example: 'October 15, 2027',               category: 'lead',         usedIn: ['marketing', 'ai_concierge'] },
   { key: 'lead.wedding_month',          tag: '{{lead.wedding_month}}',          description: 'Wedding month name',                     example: 'October',                        category: 'lead',         usedIn: ['marketing'] },
   { key: 'lead.guest_count',            tag: '{{lead.guest_count}}',            description: 'Estimated guest count',                  example: '150',                            category: 'lead',         usedIn: ['marketing'] },
+  { key: 'lead.created_at',             tag: '{{lead.created_at}}',             description: 'When the lead first inquired (formatted)', example: 'April 16, 2026',                 category: 'lead',         usedIn: ['marketing', 'ai_concierge'] },
+  { key: 'lead.time_since_inquiry',     tag: '{{lead.time_since_inquiry}}',     description: 'Humanized time since first inquiry',     example: '14 days ago',                    category: 'lead',         usedIn: ['ai_concierge'] },
+  { key: 'lead.notes',                  tag: '{{lead.notes}}',                  description: "Lead's free-form notes / inquiry message", example: 'Looking for outdoor ceremony, ~150 guests', category: 'lead', usedIn: ['ai_concierge'] },
   // Payment (transactional — amount received, fees, failure reason, etc.)
   { key: 'payment.amount',              tag: '{{payment.amount}}',              description: 'Payment amount',                         example: '$4,500.00',                      category: 'payment',      usedIn: ['transactional'] },
   { key: 'payment.net_amount',          tag: '{{payment.net_amount}}',          description: 'Net amount after processing fees',       example: '$4,376.25',                      category: 'payment',      usedIn: ['transactional'] },
@@ -94,9 +102,20 @@ export const SYSTEM_MERGE_VARIABLES: SystemMergeVar[] = [
   { key: 'marketing.unsubscribe_url',   tag: '{{marketing.unsubscribe_url}}',   description: 'One-click unsubscribe link',              example: 'https://app.storypay.io/u/…',    category: 'marketing',    usedIn: ['marketing'] },
   { key: 'marketing.resubscribe_url',   tag: '{{marketing.resubscribe_url}}',   description: 'Resubscribe link',                       example: 'https://app.storypay.io/u/…',    category: 'marketing',    usedIn: ['marketing'] },
   { key: 'marketing.preferences_url',   tag: '{{marketing.preferences_url}}',   description: 'Manage email preferences link',          example: 'https://app.storypay.io/u/…',    category: 'marketing',    usedIn: ['marketing'] },
+  // AI Concierge (only available inside the AI prompt builder)
+  { key: 'ai.assistant_persona_name',   tag: '{{ai.assistant_persona_name}}',   description: 'AI assistant display name (e.g. "Alison")', example: 'Alison',                       category: 'ai',           usedIn: ['ai_concierge'] },
+  { key: 'ai.attempt_number',           tag: '{{ai.attempt_number}}',           description: 'How many AI messages have been sent to this lead', example: '3',                       category: 'ai',           usedIn: ['ai_concierge'] },
+  { key: 'ai.angles_used_list',         tag: '{{ai.angles_used_list}}',         description: 'Comma-separated list of prompt angles already tried', example: 'casual_check_in, wedding_date_focus', category: 'ai', usedIn: ['ai_concierge'] },
+  { key: 'ai.message_history_last_10',  tag: '{{ai.message_history_last_10}}',  description: 'Last 10 SMS messages in this conversation, oldest first', example: '[2026-04-16] AI → Hi Sarah …', category: 'ai', usedIn: ['ai_concierge'] },
+  { key: 'ai.outreach_questions',       tag: '{{ai.outreach_questions}}',       description: 'Bullet list of every outreach question in the active pool', example: '- What\'s most important about your ceremony space?', category: 'ai', usedIn: ['ai_concierge'] },
+  { key: 'ai.outreach_questions_grouped', tag: '{{ai.outreach_questions_grouped}}', description: 'Outreach questions grouped by category', example: 'discovery:\n  - What\'s most important …', category: 'ai', usedIn: ['ai_concierge'] },
+  { key: 'ai.personality',              tag: '{{ai.personality}}',              description: 'Configured personality block from the active prompt config', example: 'Warm, casual, lightly playful.', category: 'ai', usedIn: ['ai_concierge'] },
+  { key: 'ai.goals',                    tag: '{{ai.goals}}',                    description: 'Configured goals block',                 example: 'Book a tour. Reply rate > insistence.', category: 'ai', usedIn: ['ai_concierge'] },
+  { key: 'ai.guardrails',               tag: '{{ai.guardrails}}',               description: 'Configured guardrails block',            example: 'Never quote prices. Never schedule directly.', category: 'ai', usedIn: ['ai_concierge'] },
+  { key: 'ai.prohibited_topics',        tag: '{{ai.prohibited_topics}}',        description: 'Configured prohibited topics block',     example: 'No legal, religious, political topics.', category: 'ai', usedIn: ['ai_concierge'] },
   // System
-  { key: 'system.date',                 tag: '{{system.date}}',                 description: "Today's date at send time",              example: 'April 30, 2026',                 category: 'system',       usedIn: ['calendar', 'marketing', 'transactional'] },
-  { key: 'system.year',                 tag: '{{system.year}}',                 description: 'Current year at send time',              example: '2026',                           category: 'system',       usedIn: ['calendar', 'marketing', 'transactional'] },
+  { key: 'system.date',                 tag: '{{system.date}}',                 description: "Today's date at send time",              example: 'April 30, 2026',                 category: 'system',       usedIn: ['calendar', 'marketing', 'transactional', 'ai_concierge'] },
+  { key: 'system.year',                 tag: '{{system.year}}',                 description: 'Current year at send time',              example: '2026',                           category: 'system',       usedIn: ['calendar', 'marketing', 'transactional', 'ai_concierge'] },
 ];
 
 // ── Legacy flat alias bridges ─────────────────────────────────────────────────
@@ -148,8 +167,28 @@ export const FLAT_TO_CANONICAL: Record<string, string> = {
   // ── Lead / Event ─────────────────────────────────────────────────────────
   wedding_date:             'lead.wedding_date',
   wedding_date_nice:        'lead.wedding_date',
+  wedding_date_or_unknown:  'lead.wedding_date',
   wedding_month:            'lead.wedding_month',
   guest_count:              'lead.guest_count',
+  initial_inquiry_date:     'lead.created_at',
+  time_since_initial_inquiry: 'lead.time_since_inquiry',
+  bride_notes_or_none:      'lead.notes',
+  // ── AI Concierge legacy aliases ───────────────────────────────────────────
+  // Pre-2026-05 prompts used flat snake_case names; map them to the canonical
+  // dot-notation so old prompt versions keep rendering after the unification.
+  bride_first_name:         'contact.first_name',
+  bride_full_name:          'contact.full_name',
+  venue_style_description:  'venue.description',
+  assistant_persona_name:   'ai.assistant_persona_name',
+  attempt_number:           'ai.attempt_number',
+  angles_used_list:         'ai.angles_used_list',
+  message_history_last_10:  'ai.message_history_last_10',
+  outreach_questions:       'ai.outreach_questions',
+  outreach_questions_grouped: 'ai.outreach_questions_grouped',
+  personality:              'ai.personality',
+  goals:                    'ai.goals',
+  guardrails:               'ai.guardrails',
+  prohibited_topics:        'ai.prohibited_topics',
 };
 
 // Reverse map: canonical → primary flat alias (first one wins)

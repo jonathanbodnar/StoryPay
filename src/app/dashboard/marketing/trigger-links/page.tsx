@@ -20,6 +20,7 @@ const CATEGORY_LABELS: Record<MergeVarCategory, string> = {
   payment:      'Payment',
   subscription: 'Subscription',
   marketing:    'Marketing',
+  ai:           'AI Concierge',
   system:       'System',
 };
 
@@ -33,12 +34,13 @@ const CATEGORY_COLORS: Record<MergeVarCategory, string> = {
   payment:      'bg-yellow-50 text-yellow-700 border-yellow-200',
   subscription: 'bg-cyan-50 text-cyan-700 border-cyan-200',
   marketing:    'bg-rose-50 text-rose-700 border-rose-200',
+  ai:           'bg-indigo-50 text-indigo-700 border-indigo-200',
   system:       'bg-gray-50 text-gray-600 border-gray-200',
 };
 
 const CATEGORY_ORDER: MergeVarCategory[] = [
   'contact', 'appointment', 'venue', 'lead',
-  'invoice', 'proposal', 'payment', 'subscription', 'marketing', 'system',
+  'invoice', 'proposal', 'payment', 'subscription', 'marketing', 'ai', 'system',
 ];
 
 // Tag category colors (for system tags)

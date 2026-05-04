@@ -16,7 +16,7 @@ import {
   SMART_TRIGGERS, SMART_TRIGGER_CATEGORIES, findSmartTrigger, groupSmartTriggers,
   type SmartTrigger, type SmartTriggerCategory,
 } from '@/lib/workflow-triggers';
-import { SYSTEM_MERGE_VARIABLES } from '@/lib/merge-variables';
+import { SYSTEM_MERGE_VARIABLES, type MergeVarChannel } from '@/lib/merge-variables';
 import {
   DndContext, closestCenter, PointerSensor,
   useSensor, useSensors, useDraggable, DragOverlay,
@@ -412,15 +412,18 @@ function MergeVarPickerPopover({ anchorRef, boundsRef, onPick, onClose, scopes }
   boundsRef?: RefObject<HTMLElement | null>;
   onPick: (tag: string) => void;
   onClose: () => void;
-  /** Optional scope filter. Omit to show ALL 50 variables (recommended for workflows). */
-  scopes?: Array<'calendar' | 'marketing' | 'transactional'>;
+  /** Optional scope filter. Omit to show every channel-rendered variable
+   *  (AI Concierge tokens are excluded by default — they only render inside
+   *  the AI prompt builder, not in workflow emails/SMS). */
+  scopes?: MergeVarChannel[];
 }) {
   const [query, setQuery] = useState('');
 
-  // Default: show every variable so the user always sees the full canonical set.
+  // Default: show every variable that's renderable in workflow channels —
+  // AI-only tokens are filtered out unless the caller explicitly opts in.
   const visible = scopes && scopes.length > 0
     ? SYSTEM_MERGE_VARIABLES.filter((v) => v.usedIn.some((u) => scopes.includes(u)))
-    : SYSTEM_MERGE_VARIABLES;
+    : SYSTEM_MERGE_VARIABLES.filter((v) => v.usedIn.some((u) => u !== 'ai_concierge'));
   const filtered = visible.filter((v) => {
     const q = query.toLowerCase();
     return !q || v.key.toLowerCase().includes(q) || v.description.toLowerCase().includes(q);

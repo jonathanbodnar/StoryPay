@@ -13,6 +13,8 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { resolveVenueTimezone } from '@/lib/venue-timezone';
 import { formatInTimeZone } from 'date-fns-tz';
 
+import { CANONICAL_TO_FLAT, FLAT_TO_CANONICAL, systemDateVars } from '@/lib/merge-variables';
+
 import { fetchLeadConversationHistory } from './conversation-helpers';
 import type { AiAngleKey } from './types';
 
@@ -203,7 +205,7 @@ export async function buildAiConciergeSystemPrompt(
 
   const venueCtx: PromptInputContextVenueEntry = venueRowToContext(venue, tz);
 
-  const renderTokens: Record<string, string> = {
+  const renderTokens = withCanonicalAliases({
     // Config sections (also embedded literally in the template)
     personality:        config.personality,
     goals:              config.goals,
@@ -236,7 +238,7 @@ export async function buildAiConciergeSystemPrompt(
     //   {{outreach_questions_grouped}} — grouped by category headings
     outreach_questions:         formatOutreachQuestions(config.outreach_questions),
     outreach_questions_grouped: formatOutreachQuestionsGrouped(config.outreach_questions),
-  };
+  });
 
   const systemPrompt = renderTemplate(config.system_prompt_template, renderTokens);
 
@@ -305,7 +307,7 @@ export async function buildAiConciergeTestSystemPrompt(
     bride_notes_or_none:         'Initial inquiry: looking for an outdoor ceremony space, ~150 guests, mid-budget. (TEST DATA)',
   };
 
-  const renderTokens: Record<string, string> = {
+  const renderTokens = withCanonicalAliases({
     personality:        config.personality,
     goals:              config.goals,
     guardrails:         config.guardrails,
@@ -326,7 +328,7 @@ export async function buildAiConciergeTestSystemPrompt(
     message_history_last_10:  '(no prior messages — test send)',
     outreach_questions:         formatOutreachQuestions(config.outreach_questions),
     outreach_questions_grouped: formatOutreachQuestionsGrouped(config.outreach_questions),
-  };
+  });
 
   const systemPrompt = renderTemplate(config.system_prompt_template, renderTokens);
 
@@ -357,11 +359,58 @@ function venueRowToContext(venue: VenueContextRow, tz: string): PromptInputConte
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-/** Replace `{{key}}` with values, leave unknown tokens as-is for debug visibility. */
+/**
+ * Replace `{{key}}` (or `{{namespace.key}}`) with values from `vars`.
+ *
+ * Resolution order — same contract as `renderMergeVars` in `merge-variables.ts`,
+ * but with one critical difference: unknown tokens are left as the literal
+ * `{{token}}` so a typo in a system_prompt_template is *visible* in the Live
+ * Runs Monitor instead of silently swallowing into the LLM's context.
+ *
+ *  1. Direct match — key exists verbatim in vars
+ *  2. Flat → canonical bridge (e.g. `bride_first_name` → `contact.first_name`)
+ *  3. Canonical → flat bridge (e.g. `contact.first_name` → `bride_first_name`)
+ *  4. Leave the literal `{{key}}` for debugging
+ */
 function renderTemplate(template: string, vars: Record<string, string>): string {
-  return template.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key) => {
-    return vars[key] !== undefined ? vars[key] : `{{${key}}}`;
+  return template.replace(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g, (_, rawKey: string) => {
+    const key = rawKey.trim();
+    if (vars[key] !== undefined) return vars[key];
+    const canonical = FLAT_TO_CANONICAL[key];
+    if (canonical && vars[canonical] !== undefined) return vars[canonical];
+    const flatKey = CANONICAL_TO_FLAT[key];
+    if (flatKey && vars[flatKey] !== undefined) return vars[flatKey];
+    return `{{${key}}}`;
   });
+}
+
+/**
+ * Enrich a flat (snake_case) token map with canonical dot-notation aliases —
+ * and vice-versa — using the system-wide alias map. Plus injects system date
+ * / year so prompts can use the same `{{system.date}}` token the rest of the
+ * platform uses.
+ *
+ * After this runs, `{{contact.first_name}}` and `{{bride_first_name}}` both
+ * resolve as direct (fastest-path) hits inside `renderTemplate`.
+ */
+function withCanonicalAliases(
+  flatTokens: Record<string, string>,
+): Record<string, string> {
+  const out: Record<string, string> = { ...flatTokens, ...systemDateVars() };
+
+  // Forward: flat → canonical
+  for (const [flat, canonical] of Object.entries(FLAT_TO_CANONICAL)) {
+    if (out[flat] !== undefined && out[canonical] === undefined) {
+      out[canonical] = out[flat];
+    }
+  }
+  // Reverse: canonical → flat (catches any canonical-only entries)
+  for (const [canonical, flat] of Object.entries(CANONICAL_TO_FLAT)) {
+    if (out[canonical] !== undefined && out[flat] === undefined) {
+      out[flat] = out[canonical];
+    }
+  }
+  return out;
 }
 
 function firstName(lead: LeadContextRow): string {
