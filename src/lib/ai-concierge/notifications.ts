@@ -40,7 +40,10 @@ export type AiOwnerScenario =
   | 'ai_not_interested'
   | 'ai_tcpa_opt_out'
   | 'ai_daily_cap_warning'
-  | 'ai_daily_cap_reached';
+  | 'ai_daily_cap_reached'
+  /** Bride replied while still in the 14-day follow-up sequence (ai_state=dormant).
+   *  AI is NOT active yet — a human needs to step in and respond. */
+  | 'sequence_reply_received';
 
 export type AiNotifyRole = 'venue_owner' | 'concierge';
 
@@ -132,6 +135,13 @@ const SCENARIOS: Record<AiOwnerScenario, ScenarioMeta> = {
     intro:        ()      => `Your AI Concierge has hit today's outbound SMS cap. New sends are paused until tomorrow morning (in your venue's local timezone). Inbound replies are unaffected — you'll still receive every reply notification. To resume sends sooner, raise the cap from your AI Concierge admin.`,
     urgent:       false,
     ctaLabel:     'Open AI Concierge admin →',
+  },
+  sequence_reply_received: {
+    emailSubject: (n, v) => `💬 ${n} replied to your follow-up — ${v}`,
+    heading:      (n) => `${n} replied — time to step in`,
+    intro:        (n) => `${n} replied to one of your automated follow-up messages. The AI Concierge hasn't activated yet, so this conversation needs a real person right now. The faster you respond, the warmer she'll feel — don't let this one go cold.`,
+    urgent:       false,
+    ctaLabel:     'Reply to her now →',
   },
 };
 

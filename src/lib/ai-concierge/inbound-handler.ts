@@ -32,6 +32,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase';
 import { normalizePhone } from '@/lib/ghl';
+import { applySystemTags, ensureSystemTagsForVenue } from '@/lib/system-tags';
 
 import {
   loadActiveHandoffRules,
@@ -129,6 +130,11 @@ async function resolveLeadForAi(
 
   const SELECT = 'id, venue_id, email, phone, first_name, last_name, name, ai_state, ai_attempt_count';
 
+  // Relevant AI states: active states first (ai_active/paused/handoff), then
+  // dormant (14-day sequence still running). We prefer an active state if there
+  // are multiple leads for the same contact.
+  const AI_RELEVANT_STATES = ['ai_active', 'paused', 'handoff', 'dormant'] as const;
+
   // Try email match first
   if (email && !email.endsWith('@ghl-sms.storypay.placeholder')) {
     const { data: byEmail } = await supabaseAdmin
@@ -136,25 +142,31 @@ async function resolveLeadForAi(
       .select(SELECT)
       .eq('venue_id', venueId)
       .ilike('email', email)
-      .in('ai_state', ['ai_active', 'paused', 'handoff'])
+      .in('ai_state', [...AI_RELEVANT_STATES])
+      // Prefer active/paused/handoff over dormant; within same state prefer newest
+      .order('ai_state', { ascending: true })
       .order('created_at', { ascending: false })
       .limit(1);
     const row = (byEmail as LeadAiSnapshot[] | null)?.[0];
     if (row) return row;
   }
 
-  // Fall back to phone match (have to scan the venue's leads — same approach
-  // sms-compliance.ts uses for DND propagation).
+  // Fall back to phone match
   if (phoneNorm) {
     const { data: phoneCandidates } = await supabaseAdmin
       .from('leads')
       .select(SELECT)
       .eq('venue_id', venueId)
-      .in('ai_state', ['ai_active', 'paused', 'handoff']);
+      .in('ai_state', [...AI_RELEVANT_STATES]);
     if (phoneCandidates) {
-      for (const cand of phoneCandidates as LeadAiSnapshot[]) {
-        if (normalizePhone(cand.phone) === phoneNorm) return cand;
-      }
+      // Prefer active states; within ties, pick the newest lead
+      const sorted = (phoneCandidates as LeadAiSnapshot[])
+        .filter((c) => normalizePhone(c.phone) === phoneNorm)
+        .sort((a, b) => {
+          const order = ['ai_active', 'paused', 'handoff', 'dormant'];
+          return order.indexOf(a.ai_state) - order.indexOf(b.ai_state);
+        });
+      if (sorted[0]) return sorted[0];
     }
   }
 
@@ -176,6 +188,14 @@ export async function handleInboundAiMessage(
     const lead = await resolveLeadForAi(input.venueId, input.venueCustomerId);
     if (!lead) {
       return { ok: true, acted: false, skippedReason: 'no_ai_relevant_lead' };
+    }
+
+    // Dormant fast-path: AI hasn't activated yet (14-day sequence still running).
+    // We don't run the full state machine — just apply the 'replied' system tag
+    // so any venue workflow listening to that trigger fires, and notify the owner
+    // + concierge team directly so they know to respond manually.
+    if (lead.ai_state === 'dormant') {
+      return handleDormantLeadReply({ lead, input });
     }
 
     // 3. Keyword pass
@@ -302,6 +322,86 @@ export async function handleInboundAiMessage(
     console.error('[ai-concierge] handleInboundAiMessage failed:', msg);
     return { ok: true, acted: false, skippedReason: `error:${msg}` };
   }
+}
+
+// ── Dormant-lead reply handler ─────────────────────────────────────────────
+
+/**
+ * A lead in `dormant` state replied during the 14-day follow-up sequence —
+ * before the AI Concierge has activated. We don't run the full state machine
+ * here. Instead we:
+ *
+ *   1. Apply the `replied` system tag so any workflow the venue built on that
+ *      trigger fires automatically (e.g. a `notify_owner` workflow step).
+ *   2. Send a direct notification to the venue owner + concierge team via the
+ *      existing AI notification system so they know to respond manually right
+ *      now — the AI is NOT taking over yet.
+ *   3. Log to `ai_runs` for audit visibility.
+ *
+ * The lead's `ai_state` stays `dormant`. If the bride keeps the conversation
+ * going with a human, the AI activation cron will never activate (because
+ * `last_inbound_at` is now set, which the cron filters out). If the
+ * conversation goes cold again after a human reply, the 14-day timer resets
+ * from that new `last_outbound_at`.
+ */
+async function handleDormantLeadReply(opts: {
+  lead:  LeadAiSnapshot;
+  input: HandleInboundAiMessageInput;
+}): Promise<HandleInboundAiMessageResult> {
+  const { lead, input } = opts;
+  const body = (input.messageBody || '').trim();
+
+  // Step 1: apply 'replied' system tag — triggers any workflow configured on it
+  try {
+    await ensureSystemTagsForVenue(lead.venue_id);
+    await applySystemTags(lead.venue_id, lead.id, ['replied']);
+  } catch (e) {
+    console.error('[ai-concierge] handleDormantLeadReply: applySystemTags failed:', e);
+  }
+
+  // Step 2: notify venue owner + concierge directly
+  const brideName     = firstNameOf(lead);
+  const brideFullName = fullNameOf(lead);
+  void notifyAiOwner({
+    venueId:       lead.venue_id,
+    leadId:        lead.id,
+    scenario:      'sequence_reply_received',
+    notifyRoles:   ['venue_owner', 'concierge'],
+    brideName,
+    brideFullName,
+    brideReply:    body,
+    matchedTrigger: 'replied during 14-day sequence (AI not yet active)',
+  }).catch((e) => {
+    console.error('[ai-concierge] handleDormantLeadReply: notifyAiOwner failed:', e);
+  });
+
+  // Step 3: audit log (same table the send cron uses, kind='dormant_reply')
+  void supabaseAdmin.from('ai_runs').insert({
+    lead_id:             lead.id,
+    venue_id:            input.venueId,
+    attempt_number:      0,
+    input_context:       {
+      kind:        'dormant_reply',
+      body:        body.slice(0, 800),
+      ai_state:    'dormant',
+    },
+    outcome:             'dormant_reply_received',
+    sms_provider:        'ghl',
+    provider_message_id: input.ghlMessageId ?? null,
+  }).then(() => {}).then(undefined, (e) => {
+    console.error('[ai-concierge] handleDormantLeadReply: ai_runs insert failed:', e);
+  });
+
+  return {
+    ok:               true,
+    acted:            true,
+    leadId:           lead.id,
+    fromState:        'dormant',
+    toState:          'dormant',   // state unchanged — sequence keeps running
+    matchedRule:      null,
+    matchedVia:       'default_neutral',
+    notifiedScenario: 'sequence_reply_received',
+  };
 }
 
 // ── Outcome derivation ─────────────────────────────────────────────────────
