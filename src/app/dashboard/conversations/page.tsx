@@ -970,11 +970,11 @@ export default function ConversationsPage() {
         {/* Thread list */}
         <aside
           className={classNames(
-            'flex w-full flex-shrink-0 flex-col border-gray-200 bg-gray-50/80 md:w-[min(100%,300px)] md:border-r',
+            'flex w-full flex-shrink-0 flex-col border-gray-200 bg-gray-50/80 md:w-[min(100%,340px)] md:border-r',
             mobileShowThread ? 'hidden md:flex' : 'flex',
           )}
         >
-          <div className="flex flex-shrink-0 flex-wrap items-center gap-2 border-b border-gray-200 p-3">
+          <div className="flex flex-shrink-0 items-center gap-1.5 border-b border-gray-200 px-3 py-2">
             {listActionError ? (
               <p className="w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                 {listActionError}
@@ -994,7 +994,7 @@ export default function ConversationsPage() {
                 type="button"
                 onClick={() => setThreadListFilter(tab.id)}
                 className={classNames(
-                  'rounded-full px-3 py-1.5 text-xs font-semibold transition-colors',
+                  'rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors',
                   threadListFilter === tab.id
                     ? 'bg-gray-900 text-white'
                     : 'bg-white text-gray-600 border border-gray-200',
