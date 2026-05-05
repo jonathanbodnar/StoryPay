@@ -956,8 +956,8 @@ function NewProposalInvoicePageInner() {
          <div className="flex items-center justify-between mb-4">
            <p className="text-sm font-semibold text-gray-900">What type of line item?</p>
            <button type="button"
-             onMouseDown={e => { e.preventDefault(); activatedItems.current.add(itemPickerId!); setItemPickerId(null); setItemPickerMode('menu'); itemInputRefs.current[itemPickerId!]?.focus(); }}
-             className="text-gray-400 hover:text-gray-700 transition-colors"><X size={15}/></button>
+onMouseDown={e => { e.preventDefault(); setItemPickerId(null); setItemPickerMode('menu'); }}
+            className="text-gray-400 hover:text-gray-700 transition-colors"><X size={15}/></button>
          </div>
          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
            {/* Manual entry */}
@@ -1002,9 +1002,9 @@ function NewProposalInvoicePageInner() {
          <div className="flex items-center gap-2 mb-3 shrink-0">
            <button type="button" onMouseDown={e => { e.preventDefault(); setItemPickerMode('menu'); }} className="text-gray-400 hover:text-gray-700"><ChevronRight size={14} className="rotate-180"/></button>
            <p className="text-sm font-semibold text-gray-900 flex-1">Choose an item or bundle</p>
-           <button type="button" onMouseDown={e => { e.preventDefault(); activatedItems.current.add(itemPickerId!); setItemPickerId(null); setItemPickerMode('menu'); }} className="text-gray-400 hover:text-gray-700"><X size={14}/></button>
-         </div>
-         <div className="space-y-1.5 overflow-y-auto flex-1 pr-0.5">
+<button type="button" onMouseDown={e => { e.preventDefault(); setItemPickerId(null); setItemPickerMode('menu'); }} className="text-gray-400 hover:text-gray-700"><X size={14}/></button>
+        </div>
+        <div className="space-y-1.5 overflow-y-auto flex-1 pr-0.5">
            {/* Individual items */}
            {products.length > 0 && (
              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 px-1 pt-1 pb-0.5">Items</p>
@@ -1082,9 +1082,9 @@ function NewProposalInvoicePageInner() {
          <div className="flex items-center gap-2 mb-3">
            <button type="button" onMouseDown={e => { e.preventDefault(); setItemPickerMode('menu'); }} className="text-gray-400 hover:text-gray-700"><ChevronRight size={14} className="rotate-180"/></button>
            <p className="text-sm font-semibold text-gray-900 flex-1">Apply a coupon</p>
-           <button type="button" onMouseDown={e => { e.preventDefault(); activatedItems.current.add(itemPickerId!); setItemPickerId(null); setItemPickerMode('menu'); }} className="text-gray-400 hover:text-gray-700"><X size={14}/></button>
-         </div>
-         <div className="space-y-1.5 max-h-56 overflow-y-auto">
+<button type="button" onMouseDown={e => { e.preventDefault(); setItemPickerId(null); setItemPickerMode('menu'); }} className="text-gray-400 hover:text-gray-700"><X size={14}/></button>
+        </div>
+        <div className="space-y-1.5 max-h-56 overflow-y-auto">
            {appliedCouponId && (
              <button type="button"
                onMouseDown={e => { e.preventDefault(); setCouponSelection(null); activatedItems.current.add(itemPickerId!); setItemPickerId(null); setItemPickerMode('menu'); }}
