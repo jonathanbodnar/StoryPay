@@ -1315,7 +1315,7 @@ export default function CustomerDetailPage() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Catering Notes</label>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Notes</label>
                   <textarea value={weddingForm.catering_notes} onChange={e => setWeddingForm(p => ({...p,catering_notes:e.target.value}))} rows={2}
                     className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none resize-none" />
                 </div>
@@ -1329,7 +1329,7 @@ export default function CustomerDetailPage() {
                 {venueCustomer.venue_spaces && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Space</p><p className="text-gray-900 font-medium flex items-center gap-1.5"><span className="inline-block w-2.5 h-2.5 rounded-full" style={{backgroundColor:venueCustomer.venue_spaces.color}} />{venueCustomer.venue_spaces.name}</p></div>}
                 {venueCustomer.rehearsal_date && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Rehearsal</p><p className="text-gray-900 font-medium">{formatDate(venueCustomer.rehearsal_date)}</p></div>}
                 {venueCustomer.coordinator_name && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Coordinator</p><p className="text-gray-900 font-medium">{venueCustomer.coordinator_name}{venueCustomer.coordinator_phone && <span className="text-gray-500 font-normal"> · {venueCustomer.coordinator_phone}</span>}</p></div>}
-                {venueCustomer.catering_notes && <div className="sm:col-span-2 lg:col-span-4"><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Catering Notes</p><p className="text-gray-700">{venueCustomer.catering_notes}</p></div>}
+                {venueCustomer.catering_notes && <div className="sm:col-span-2 lg:col-span-4"><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Notes</p><p className="text-gray-700">{venueCustomer.catering_notes}</p></div>}
               </div>
             ) : (
               <p className="text-xs text-gray-400">No wedding details yet.{' '}
