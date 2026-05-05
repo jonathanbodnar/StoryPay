@@ -17,10 +17,11 @@ import {
   Inbox, LifeBuoy, Search, RefreshCw, Send, MessageSquare,
   Mail, MessageCircle, Building2, Loader2, AlertCircle, CheckCircle2,
   StickyNote, ShieldCheck, AlertTriangle, CircleDot, CircleSlash,
-  UserPlus, Flag, X, Radio, Sparkles,
+  UserPlus, Flag, X, Radio, Sparkles, FileText,
 } from 'lucide-react';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels, type BrideMessageEvent, type TicketMessageEvent, type TicketStatusEvent } from '@/lib/realtime/channels';
+import { CannedReplyPicker } from '@/components/support/CannedReplyPicker';
 
 const BRAND = '#1b1b1b';
 
@@ -781,6 +782,7 @@ function ThreadDetailView({
   showIntent: boolean;
   onToggleIntent: () => void;
 }) {
+  const [pickerOpen, setPickerOpen] = useState(false);
   const contactName = fullName(
     detail.customer?.first_name ?? null,
     detail.customer?.last_name ?? null,
@@ -918,18 +920,42 @@ function ThreadDetailView({
             onChange={e => onReplyBodyChange(e.target.value)}
             placeholder={`Reply on behalf of ${detail.venue?.name || 'the venue'}… or click Suggest for an AI draft.`}
             rows={3}
-            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 pr-28 outline-none focus:ring-2 focus:ring-brand-900/10 focus:border-gray-300"
+            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 pr-44 outline-none focus:ring-2 focus:ring-brand-900/10 focus:border-gray-300"
           />
-          <button
-            type="button"
-            onClick={onDraft}
-            disabled={drafting}
-            title="Generate a reply with AI using venue voice + bride context"
-            className="absolute top-2 right-2 inline-flex items-center gap-1 rounded-md border border-violet-200 bg-white hover:bg-violet-50 px-2 py-1 text-[11px] font-semibold text-violet-700 disabled:opacity-50"
-          >
-            {drafting ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
-            {drafting ? 'Drafting…' : 'Suggest'}
-          </button>
+          <div className="absolute top-2 right-2 flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setPickerOpen(v => !v)}
+              title="Insert a saved reply"
+              className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors ${
+                pickerOpen
+                  ? 'border-violet-300 bg-violet-100 text-violet-800'
+                  : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <FileText size={11} /> Saved
+            </button>
+            <button
+              type="button"
+              onClick={onDraft}
+              disabled={drafting}
+              title="Generate a reply with AI using venue voice + bride context"
+              className="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-white hover:bg-violet-50 px-2 py-1 text-[11px] font-semibold text-violet-700 disabled:opacity-50"
+            >
+              {drafting ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+              {drafting ? 'Drafting…' : 'Suggest'}
+            </button>
+            <CannedReplyPicker
+              open={pickerOpen}
+              onClose={() => setPickerOpen(false)}
+              listEndpoint="/api/admin/support/canned-replies?scope=admin"
+              renderEndpoint={(id) => `/api/admin/support/canned-replies/${id}/render`}
+              threadId={detail.thread.id}
+              agentName={actAsName ?? undefined}
+              channel={effectiveChannel}
+              onInsert={(b) => onReplyBodyChange(b)}
+            />
+          </div>
         </div>
 
         <div className="flex items-center justify-between">

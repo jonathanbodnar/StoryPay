@@ -24,6 +24,7 @@ import { DirectoryBadgesAdminPanel } from '@/components/admin/DirectoryBadgesAdm
 import { SubscriptionsAdminPanel } from '@/components/admin/SubscriptionsAdminPanel';
 import { AiConciergeAdminPanel } from '@/components/admin/AiConciergeAdminPanel';
 import { SupportInboxPanel } from '@/components/admin/SupportInboxPanel';
+import { CannedRepliesPanel } from '@/components/admin/CannedRepliesPanel';
 
 // Lazy-load the WYSIWYG editor so it doesn't affect admin initial load
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
@@ -47,6 +48,7 @@ type AdminTabKey =
   | 'directory-badges'
   | 'ai-concierge'
   | 'support'
+  | 'canned-replies'
   | 'announcements'
   | 'feature-requests'
   | 'changelog'
@@ -67,6 +69,7 @@ const ADMIN_TAB_KEYS: ReadonlySet<string> = new Set<AdminTabKey>([
   'directory-badges',
   'ai-concierge',
   'support',
+  'canned-replies',
   'announcements',
   'feature-requests',
   'changelog',
@@ -504,6 +507,7 @@ const ADMIN_NAV_ITEMS = [
   { key: 'directory-plans', label: 'Directory plans', icon: Layers },
   { key: 'ai-concierge', label: 'AI Concierge', icon: Sparkles },
   { key: 'support', label: 'Support inbox', icon: Inbox },
+  { key: 'canned-replies', label: 'Saved replies', icon: FileText },
   { key: 'blog', label: 'Blog Posts', icon: BookOpen },
   { key: 'seo-pages', label: 'SEO / Pages', icon: Globe },
   { key: 'trends', label: 'Google Trends', icon: TrendingUp },
@@ -1716,6 +1720,8 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
         {activeTab === 'ai-concierge' && <AiConciergeAdminPanel />}
 
         {activeTab === 'support' && <SupportInboxPanel />}
+
+        {activeTab === 'canned-replies' && <CannedRepliesPanel />}
 
         {activeTab === 'directory-plans' && <DirectoryPlansAdminPanel />}
 

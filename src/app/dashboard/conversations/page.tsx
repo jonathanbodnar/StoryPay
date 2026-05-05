@@ -34,12 +34,14 @@ import {
   Sparkles,
   Wand2,
   AlertCircle,
+  FileText,
 } from 'lucide-react';
 import { classNames, toTitleCase, dispatchStageChange, onStageChange } from '@/lib/utils';
 import { EmojiPickerPopover } from '@/components/EmojiPickerPopover';
 import ContactProfileDrawer from '@/components/conversations/ContactProfileDrawer';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels, type BrideMessageEvent } from '@/lib/realtime/channels';
+import { CannedReplyPicker } from '@/components/support/CannedReplyPicker';
 
 interface ThreadRow {
   thread_id: string;
@@ -242,6 +244,7 @@ export default function ConversationsPage() {
   const [draftError, setDraftError] = useState('');
   const [draftIntent, setDraftIntent] = useState('');
   const [showDraftIntent, setShowDraftIntent] = useState(false);
+  const [savedRepliesOpen, setSavedRepliesOpen] = useState(false);
   const [dndSaving, setDndSaving] = useState(false);
   const [showDndPanel, setShowDndPanel] = useState(false);
   const [listActionError, setListActionError] = useState('');
@@ -2153,6 +2156,31 @@ export default function ConversationsPage() {
                             >
                               <Zap size={16} strokeWidth={1.75} />
                             </button>
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={() => setSavedRepliesOpen((v) => !v)}
+                                className={classNames(
+                                  'rounded-lg p-1.5 transition-colors hover:bg-gray-100',
+                                  savedRepliesOpen ? 'bg-violet-50 text-violet-700' : 'text-gray-500 hover:text-gray-800',
+                                )}
+                                aria-label="Saved replies"
+                                title="Insert a saved reply"
+                              >
+                                <FileText size={16} strokeWidth={1.75} />
+                              </button>
+                              {selectedId && (
+                                <CannedReplyPicker
+                                  open={savedRepliesOpen}
+                                  onClose={() => setSavedRepliesOpen(false)}
+                                  listEndpoint="/api/dashboard/canned-replies"
+                                  renderEndpoint={(id) => `/api/dashboard/canned-replies/${id}/render`}
+                                  threadId={selectedId}
+                                  channel={composerTab === 'email' ? 'email' : 'sms'}
+                                  onInsert={(b) => { setBody(b); setComposerExpanded(true); }}
+                                />
+                              )}
+                            </div>
                             <button
                               type="button"
                               onClick={() => setShowDraftIntent((v) => !v)}
