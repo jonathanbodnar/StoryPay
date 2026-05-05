@@ -28,6 +28,7 @@ import { verifySupportAccess } from '@/lib/support/auth';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 import { broadcastBrideMessageAdminOnly } from '@/lib/realtime/broadcast';
+import { ensureSuperAdminSupportMember, SUPER_ADMIN_SUPPORT_USER_ID } from '@/lib/support/super-admin-member';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -58,11 +59,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Note exceeds ${NOTE_MAX_CHARS} chars` }, { status: 400 });
   }
 
-  // Acting agent — when a super admin uses the identity picker, they pass an
-  // explicit supportUserId. Otherwise we fall back to the logged-in agent.
-  const actingAgentId = auth.agent?.sub || (body.supportUserId?.trim() ?? null);
+  // Acting agent — resolution order:
+  //   1. Logged-in support agent session.
+  //   2. Explicit supportUserId in the body.
+  //   3. Synthetic Super Admin (auto-bootstrapped) when isSuperAdmin.
+  let actingAgentId = auth.agent?.sub || (body.supportUserId?.trim() || '');
+  if (!actingAgentId && auth.isSuperAdmin) {
+    const sa = await ensureSuperAdminSupportMember();
+    actingAgentId = sa.id;
+  }
   if (!actingAgentId) {
     return NextResponse.json({ error: 'Pick a support identity first' }, { status: 400 });
+  }
+  if (actingAgentId === SUPER_ADMIN_SUPPORT_USER_ID) {
+    await ensureSuperAdminSupportMember();
   }
 
   // Validate the acting agent + thread exist

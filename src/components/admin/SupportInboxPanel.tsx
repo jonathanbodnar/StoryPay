@@ -158,16 +158,18 @@ export function SupportInboxPanel() {
     loadTeamMembers();
   }, [loadMe, loadTeamMembers]);
 
-  // Persist actAsId for super-admin sessions across reloads
+  // Persist actAsId for super-admin sessions across reloads. Real support
+  // agent sessions have a fixed identity (their own member id), so we skip.
   useEffect(() => {
     if (!me) return;
-    if (me.member?.id) return; // agent identity is fixed
+    if (!me.superAdmin) return; // agent identity is fixed; only super admin can switch
     const stored = typeof window !== 'undefined' ? window.localStorage.getItem('support_act_as_id') : '';
     if (stored && teamMembers.some(m => m.id === stored && m.active)) {
       setActAsId(stored);
-    } else if (!actAsId && teamMembers.length > 0) {
-      const firstActive = teamMembers.find(m => m.active);
-      if (firstActive) setActAsId(firstActive.id);
+    } else if (!actAsId && me.member?.id) {
+      // Default to the synthetic Super Admin row so a fresh super admin can
+      // act immediately without picking from a dropdown.
+      setActAsId(me.member.id);
     }
   }, [me, teamMembers, actAsId]);
 
@@ -480,7 +482,10 @@ export function SupportInboxPanel() {
           body:          replyBody.trim(),
           channel:       replyChannel === 'auto' ? undefined : replyChannel,
           internalNote:  internalNote.trim() || undefined,
-          supportUserId: me?.member?.id ? undefined : actAsId,
+          // Super admin: explicitly send the selected identity (synthetic
+          // Super Admin or a teammate they're acting-as). Agent sessions
+          // omit so the server falls through to agent.sub.
+          supportUserId: me?.superAdmin ? (actAsId || me?.member?.id) : undefined,
         }),
       });
       const d = await r.json().catch(() => ({}));
@@ -518,7 +523,7 @@ export function SupportInboxPanel() {
           threadId:                detail.thread.id,
           body:                    noteBody.trim(),
           mentionedSupportUserIds: noteMentionIds,
-          supportUserId:           me?.member?.id ? undefined : actAsId,
+          supportUserId:           me?.superAdmin ? (actAsId || me?.member?.id) : undefined,
         }),
       });
       const d = await r.json().catch(() => ({}));
@@ -716,13 +721,20 @@ export function SupportInboxPanel() {
                 noteMentionIds={noteMentionIds}
                 onNoteMentionIdsChange={setNoteMentionIds}
                 teamMembers={teamMembers}
-                selfId={me?.member?.id ?? actAsId ?? null}
+                selfId={(me?.superAdmin ? actAsId : null) || me?.member?.id || null}
                 onSwitchActiveThread={setActiveThreadId}
                 canSend={canSend}
                 sending={sending}
                 onSend={send}
                 sendStatus={sendStatus}
                 actAsName={
+                  // For super admin, prefer the explicitly-selected teammate
+                  // (actAsId) over the synthetic Super Admin row, so the
+                  // composer reflects who the message is being attributed to.
+                  (me?.superAdmin && actAsId
+                    ? teamMembers.find(m => m.id === actAsId)?.name
+                    : null
+                  ) ||
                   me?.member?.name ||
                   teamMembers.find(m => m.id === actAsId)?.name ||
                   null
@@ -820,13 +832,41 @@ function IdentityPicker({
   onChange: (id: string) => void;
 }) {
   if (!me) return null;
+
+  // Super admin (or any logged-in support agent) always has a member id
+  // resolved by /api/admin/support/me — for super admins this is the
+  // synthetic Super Admin row, auto-bootstrapped on first /me call.
   if (me.member?.id) {
+    // Super admin gets a "switch identity" affordance when other team
+    // members exist, so they can attribute replies to a real teammate
+    // instead of the synthetic Super Admin row.
+    if (me.superAdmin && teamMembers.filter(m => m.active && m.id !== me.member!.id).length > 0) {
+      const selectedId = actAsId || me.member.id;
+      return (
+        <label className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs text-gray-600">
+          <ShieldCheck size={14} className="text-emerald-600" />
+          Acting as
+          <select
+            value={selectedId}
+            onChange={e => onChange(e.target.value)}
+            className="bg-transparent outline-none font-semibold text-gray-900 cursor-pointer"
+          >
+            <option value={me.member.id}>{me.member.name} (super admin)</option>
+            {teamMembers.filter(m => m.active && m.id !== me.member!.id).map(m => (
+              <option key={m.id} value={m.id}>{m.name} ({m.role})</option>
+            ))}
+          </select>
+        </label>
+      );
+    }
     return (
       <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs text-gray-600">
         <ShieldCheck size={14} className="text-emerald-600" />
         <span>
           Acting as <span className="font-semibold text-gray-900">{me.member.name}</span>
-          <span className="ml-1 text-gray-400">({me.member.role})</span>
+          <span className="ml-1 text-gray-400">
+            ({me.superAdmin ? 'super admin' : me.member.role})
+          </span>
         </span>
       </div>
     );
@@ -1642,7 +1682,7 @@ function TicketsView({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           body:          replyBody.trim(),
-          supportUserId: me?.member?.id ? undefined : supportUserId,
+          supportUserId: me?.superAdmin ? supportUserId : undefined,
         }),
       });
       const d = await r.json().catch(() => ({}));

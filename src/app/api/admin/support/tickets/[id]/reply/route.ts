@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifySupportAccess } from '@/lib/support/auth';
 import { supabaseAdmin } from '@/lib/supabase';
 import { broadcastTicketMessage } from '@/lib/realtime/broadcast';
+import { ensureSuperAdminSupportMember, SUPER_ADMIN_SUPPORT_USER_ID } from '@/lib/support/super-admin-member';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -37,12 +38,21 @@ export async function POST(
   const text = (body.body || '').trim();
   if (!text) return NextResponse.json({ error: 'Empty message body' }, { status: 400 });
 
-  const supportUserId = agent?.sub || (body.supportUserId || '').trim();
+  // Resolve support user id with the same fallback as bride-reply: real
+  // agent session → explicit body id → synthetic Super Admin (auto-created).
+  let supportUserId = agent?.sub || (body.supportUserId || '').trim();
+  if (!supportUserId && isSuperAdmin) {
+    const sa = await ensureSuperAdminSupportMember();
+    supportUserId = sa.id;
+  }
   if (!supportUserId) {
     return NextResponse.json(
       { error: 'Sign in as a support agent or pass supportUserId.' },
       { status: 400 },
     );
+  }
+  if (supportUserId === SUPER_ADMIN_SUPPORT_USER_ID) {
+    await ensureSuperAdminSupportMember();
   }
 
   // Validate the support user exists

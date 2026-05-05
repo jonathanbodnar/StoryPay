@@ -19,6 +19,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifySupportAccess } from '@/lib/support/auth';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendAsVenue } from '@/lib/support/send-as-venue';
+import { ensureSuperAdminSupportMember, SUPER_ADMIN_SUPPORT_USER_ID } from '@/lib/support/super-admin-member';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -47,13 +48,26 @@ export async function POST(req: NextRequest) {
   if (!threadId) return NextResponse.json({ error: 'threadId required' }, { status: 400 });
   if (!text)     return NextResponse.json({ error: 'Empty message body' }, { status: 400 });
 
-  // Determine support user id
-  const supportUserId = agent?.sub || (body.supportUserId || '').trim();
+  // Determine support user id. Resolution order:
+  //   1. Logged-in support agent session (real member).
+  //   2. Explicit supportUserId in the body (super admin acting-as).
+  //   3. Synthetic Super Admin support member — auto-bootstrapped so the
+  //      master super admin can act with zero setup.
+  let supportUserId = agent?.sub || (body.supportUserId || '').trim();
+  if (!supportUserId && isSuperAdmin) {
+    const sa = await ensureSuperAdminSupportMember();
+    supportUserId = sa.id;
+  }
   if (!supportUserId) {
     return NextResponse.json(
       { error: 'Sign in as a support agent or pass supportUserId.' },
       { status: 400 },
     );
+  }
+  // If the super admin's synthetic id was passed explicitly, make sure
+  // the row actually exists before validating.
+  if (supportUserId === SUPER_ADMIN_SUPPORT_USER_ID) {
+    await ensureSuperAdminSupportMember();
   }
 
   // Validate the support user exists and is active
