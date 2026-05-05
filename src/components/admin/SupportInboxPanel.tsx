@@ -19,11 +19,12 @@ import {
   StickyNote, ShieldCheck, AlertTriangle, CircleDot, CircleSlash,
   UserPlus, Flag, X, Radio, Sparkles, FileText,
 } from 'lucide-react';
-import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
+import { useBroadcastChannel, useBroadcastChannels } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels, type BrideMessageEvent, type TicketMessageEvent, type TicketStatusEvent } from '@/lib/realtime/channels';
 import { CannedReplyPicker } from '@/components/support/CannedReplyPicker';
 import { SupportContextSidebar } from '@/components/admin/SupportContextSidebar';
 import { SlaDot, SlaPill } from '@/components/support/SlaIndicator';
+import { SupportMentionPicker } from '@/components/support/SupportMentionPicker';
 
 const BRAND = '#1b1b1b';
 
@@ -48,21 +49,23 @@ interface BrideInboxRow {
 }
 
 interface ThreadMessage {
-  id:                       string;
-  thread_id:                string;
-  visibility:               'internal' | 'external';
-  channel:                  'sms' | 'email';
-  body:                     string;
-  sender_kind:              'owner' | 'team' | 'contact' | 'system' | 'ai' | 'concierge';
-  venue_team_member_id:     string | null;
-  contact_from_name:        string | null;
-  contact_from_email:       string | null;
-  external_email_sent:      boolean | null;
-  send_error:               string | null;
-  sent_by_support_user_id:  string | null;
-  sent_on_behalf_of_venue:  boolean | null;
-  support_internal_note:    string | null;
-  created_at:               string;
+  id:                          string;
+  thread_id:                   string;
+  visibility:                  'internal' | 'external';
+  channel:                     'sms' | 'email';
+  body:                        string;
+  sender_kind:                 'owner' | 'team' | 'contact' | 'system' | 'ai' | 'concierge';
+  venue_team_member_id:        string | null;
+  contact_from_name:           string | null;
+  contact_from_email:          string | null;
+  external_email_sent:         boolean | null;
+  send_error:                  string | null;
+  sent_by_support_user_id:     string | null;
+  sent_on_behalf_of_venue:     boolean | null;
+  support_internal_note:       string | null;
+  support_only?:               boolean | null;
+  mentioned_support_user_ids?: string[] | null;
+  created_at:                  string;
 }
 
 interface ThreadDetail {
@@ -80,6 +83,13 @@ interface ThreadDetail {
   lead: { id: string; first_name: string | null; last_name: string | null; email: string | null; phone: string | null; status: string | null } | null;
   messages: ThreadMessage[];
   supportUsers: Record<string, { id: string; name: string; email: string }>;
+  /** Other conversation_threads for the same bride (different channels). */
+  siblings: Array<{
+    id: string;
+    subject: string;
+    last_message_at: string;
+    external_reply_channel: string | null;
+  }>;
 }
 
 interface SupportMe {
@@ -269,6 +279,10 @@ export function SupportInboxPanel() {
       setLiveBride(true);
       setTimeout(() => setLiveBride(false), 1500);
 
+      // Support-only internal notes don't change the bride's "needs attention"
+      // status — never bump or drop the inbox row for those.
+      if (evt.supportOnly) return;
+
       if (evt.inbound) {
         // Bride replied — bump existing row to top with new preview, or fetch
         // a fresh list to pull in a brand-new thread.
@@ -297,41 +311,71 @@ export function SupportInboxPanel() {
     }, [debouncedInboxRefresh]),
   );
 
-  // Active thread realtime — append new messages immediately
-  useBroadcastChannel(
-    activeThreadId && subTab === 'bride-replies' ? supportChannels.brideThread(activeThreadId) : null,
+  // Active thread realtime — append new messages immediately. Subscribes to
+  // the active thread AND every sibling thread so cross-channel messages
+  // (e.g. an email reply while the agent is viewing the SMS thread) appear
+  // live in the merged conversation.
+  const liveThreadChannels = useMemo(() => {
+    if (!activeThreadId || subTab !== 'bride-replies' || !detail) {
+      return [] as string[];
+    }
+    const ids = [activeThreadId, ...detail.siblings.map(s => s.id)];
+    return Array.from(new Set(ids)).map(id => supportChannels.brideThread(id));
+  }, [activeThreadId, subTab, detail]);
+
+  useBroadcastChannels(
+    liveThreadChannels,
     ['message'],
     useCallback((_evt, payload) => {
       const evt = payload as BrideMessageEvent;
       if (!evt) return;
       setDetail(prev => {
-        if (!prev || prev.thread.id !== evt.threadId) return prev;
+        if (!prev) return prev;
+        // Accept events from the active thread or any of its siblings
+        const validThreadIds = new Set([prev.thread.id, ...prev.siblings.map(s => s.id)]);
+        if (!validThreadIds.has(evt.threadId)) return prev;
         if (prev.messages.some(m => m.id === evt.messageId)) return prev;
+        const isNote = evt.supportOnly === true;
+        const isFromActiveThread = evt.threadId === prev.thread.id;
         const newMsg: ThreadMessage = {
-          id:                      evt.messageId,
-          thread_id:               evt.threadId,
-          visibility:              'external',
-          channel:                 evt.channel,
-          body:                    evt.body,
+          id:                          evt.messageId,
+          thread_id:                   evt.threadId,
+          visibility:                  isNote ? 'internal' : 'external',
+          channel:                     evt.channel,
+          body:                        evt.body,
           // Narrow to the union; concierge/ai/contact/owner/team/system all valid
-          sender_kind:             evt.senderKind as ThreadMessage['sender_kind'],
-          venue_team_member_id:    null,
-          contact_from_name:       null,
-          contact_from_email:      null,
-          external_email_sent:     null,
-          send_error:              null,
-          sent_by_support_user_id: evt.supportAgentId,
-          sent_on_behalf_of_venue: evt.sentByVenueSupport,
-          support_internal_note:   null,
-          created_at:              evt.createdAt,
+          sender_kind:                 evt.senderKind as ThreadMessage['sender_kind'],
+          venue_team_member_id:        null,
+          contact_from_name:           null,
+          contact_from_email:          null,
+          external_email_sent:         null,
+          send_error:                  null,
+          sent_by_support_user_id:     evt.supportAgentId,
+          sent_on_behalf_of_venue:     evt.sentByVenueSupport,
+          support_internal_note:       null,
+          support_only:                isNote,
+          mentioned_support_user_ids:  evt.mentionedSupportUserIds || [],
+          created_at:                  evt.createdAt,
         };
         return {
           ...prev,
-          thread: {
+          // Update active-thread summary only when the message is for the
+          // active thread AND it isn't a support-only note (notes never
+          // affect last_message_preview — see migration 110).
+          thread: (isFromActiveThread && !isNote) ? {
             ...prev.thread,
             last_message_at:      evt.createdAt,
             last_message_preview: evt.body.slice(0, 200),
-          },
+          } : prev.thread,
+          // For sibling-thread messages, also bump that sibling's last_message_at
+          // so the channel-bridge banner updates timestamps live.
+          siblings: !isFromActiveThread && !isNote
+            ? prev.siblings.map(s =>
+                s.id === evt.threadId
+                  ? { ...s, last_message_at: evt.createdAt }
+                  : s,
+              )
+            : prev.siblings,
           messages: [...prev.messages, newMsg],
         };
       });
@@ -342,10 +386,16 @@ export function SupportInboxPanel() {
   );
 
   // ── Reply box ──────────────────────────────────────────────────────────────
+  // Composer has two modes:
+  //   'reply' — outbound message to the bride (existing flow)
+  //   'note'  — internal "support-team-only" note with @-mentions
+  const [composerMode, setComposerMode] = useState<'reply' | 'note'>('reply');
   const [replyBody, setReplyBody] = useState('');
   const [replyChannel, setReplyChannel] = useState<'auto' | 'sms' | 'email'>('auto');
   const [internalNote, setInternalNote] = useState('');
   const [showInternalNote, setShowInternalNote] = useState(false);
+  const [noteBody, setNoteBody] = useState('');
+  const [noteMentionIds, setNoteMentionIds] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
   const [sendStatus, setSendStatus] = useState<{ ok: boolean; msg: string } | null>(null);
   const [drafting, setDrafting] = useState(false);
@@ -354,10 +404,13 @@ export function SupportInboxPanel() {
   const [showIntent, setShowIntent] = useState(false);
 
   useEffect(() => {
+    setComposerMode('reply');
     setReplyBody('');
     setReplyChannel('auto');
     setInternalNote('');
     setShowInternalNote(false);
+    setNoteBody('');
+    setNoteMentionIds([]);
     setSendStatus(null);
     setDrafting(false);
     setDraftIntent('');
@@ -403,13 +456,19 @@ export function SupportInboxPanel() {
   }, [detail, drafting, effectiveChannel, draftIntent]);
 
   const canSend = useMemo(() => {
-    if (!detail || !replyBody.trim() || sending) return false;
+    if (!detail || sending) return false;
+    if (composerMode === 'note') {
+      if (!noteBody.trim()) return false;
+    } else {
+      if (!replyBody.trim()) return false;
+    }
     if (me?.member?.id) return true;
     return Boolean(actAsId);
-  }, [detail, replyBody, sending, me, actAsId]);
+  }, [detail, replyBody, noteBody, sending, me, actAsId, composerMode]);
 
   async function send() {
     if (!detail || !canSend) return;
+    if (composerMode === 'note') return saveNote();
     setSending(true);
     setSendStatus(null);
     try {
@@ -440,6 +499,43 @@ export function SupportInboxPanel() {
       });
     } catch (e) {
       setSendStatus({ ok: false, msg: e instanceof Error ? e.message : 'Send failed' });
+    } finally {
+      setSending(false);
+    }
+  }
+
+  /** POST a support-only internal note. The realtime broadcast will append it
+   *  to this view automatically; we just need to clear the composer. */
+  async function saveNote() {
+    if (!detail) return;
+    setSending(true);
+    setSendStatus(null);
+    try {
+      const r = await fetch('/api/admin/support/bride-note', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          threadId:                detail.thread.id,
+          body:                    noteBody.trim(),
+          mentionedSupportUserIds: noteMentionIds,
+          supportUserId:           me?.member?.id ? undefined : actAsId,
+        }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || `Save failed (${r.status})`);
+      setSendStatus({
+        ok: true,
+        msg: noteMentionIds.length > 0
+          ? `Note saved — ${noteMentionIds.length} teammate${noteMentionIds.length === 1 ? '' : 's'} notified`
+          : 'Note saved',
+      });
+      setNoteBody('');
+      setNoteMentionIds([]);
+      // Refresh detail so the note shows up immediately even if realtime
+      // hasn't propagated yet.
+      await loadDetail(detail.thread.id);
+    } catch (e) {
+      setSendStatus({ ok: false, msg: e instanceof Error ? e.message : 'Save failed' });
     } finally {
       setSending(false);
     }
@@ -603,6 +699,8 @@ export function SupportInboxPanel() {
             {detail && (
               <ThreadDetailView
                 detail={detail}
+                composerMode={composerMode}
+                onComposerModeChange={setComposerMode}
                 replyBody={replyBody}
                 onReplyBodyChange={setReplyBody}
                 replyChannel={replyChannel}
@@ -613,6 +711,13 @@ export function SupportInboxPanel() {
                 onInternalNoteChange={setInternalNote}
                 showInternalNote={showInternalNote}
                 onToggleInternalNote={() => setShowInternalNote(v => !v)}
+                noteBody={noteBody}
+                onNoteBodyChange={setNoteBody}
+                noteMentionIds={noteMentionIds}
+                onNoteMentionIdsChange={setNoteMentionIds}
+                teamMembers={teamMembers}
+                selfId={me?.member?.id ?? actAsId ?? null}
+                onSwitchActiveThread={setActiveThreadId}
                 canSend={canSend}
                 sending={sending}
                 onSend={send}
@@ -756,11 +861,16 @@ function IdentityPicker({
 
 function ThreadDetailView({
   detail,
+  composerMode, onComposerModeChange,
   replyBody, onReplyBodyChange,
   replyChannel, onReplyChannelChange,
   effectiveChannel, lastInboundChannel,
   internalNote, onInternalNoteChange,
   showInternalNote, onToggleInternalNote,
+  noteBody, onNoteBodyChange,
+  noteMentionIds, onNoteMentionIdsChange,
+  teamMembers, selfId,
+  onSwitchActiveThread,
   canSend, sending, onSend, sendStatus,
   actAsName, noActorWarning,
   messagesEndRef,
@@ -769,6 +879,8 @@ function ThreadDetailView({
   showIntent, onToggleIntent,
 }: {
   detail: ThreadDetail;
+  composerMode: 'reply' | 'note';
+  onComposerModeChange: (m: 'reply' | 'note') => void;
   replyBody: string; onReplyBodyChange: (v: string) => void;
   replyChannel: 'auto' | 'sms' | 'email';
   onReplyChannelChange: (v: 'auto' | 'sms' | 'email') => void;
@@ -776,6 +888,11 @@ function ThreadDetailView({
   lastInboundChannel: 'sms' | 'email';
   internalNote: string; onInternalNoteChange: (v: string) => void;
   showInternalNote: boolean; onToggleInternalNote: () => void;
+  noteBody: string; onNoteBodyChange: (v: string) => void;
+  noteMentionIds: string[]; onNoteMentionIdsChange: (ids: string[]) => void;
+  teamMembers: SupportTeamMember[];
+  selfId: string | null;
+  onSwitchActiveThread: (threadId: string) => void;
   canSend: boolean; sending: boolean;
   onSend: () => void;
   sendStatus: { ok: boolean; msg: string } | null;
@@ -796,6 +913,7 @@ function ThreadDetailView({
     detail.customer?.last_name ?? null,
     detail.customer?.customer_email || 'Unknown bride',
   );
+  const isNoteMode = composerMode === 'note';
 
   return (
     <>
@@ -823,6 +941,18 @@ function ThreadDetailView({
         </div>
       </div>
 
+      {/* Cross-channel merge banner — only when the bride has talked across
+          more than one thread/channel for this venue. Lets agents pivot the
+          reply target by clicking the alternate channel chip. */}
+      {detail.siblings.length > 0 && (
+        <CrossChannelBanner
+          activeChannel={effectiveChannel}
+          activeThreadId={detail.thread.id}
+          siblings={detail.siblings}
+          onSwitchActive={onSwitchActiveThread}
+        />
+      )}
+
       {/* Messages */}
       <div className="flex-1 overflow-y-auto bg-gray-50/30 px-4 py-4 space-y-3">
         {detail.messages.length === 0 && (
@@ -837,13 +967,37 @@ function ThreadDetailView({
                 ? detail.supportUsers[m.sent_by_support_user_id]?.name || 'Support'
                 : null
             }
+            supportUsers={detail.supportUsers}
           />
         ))}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Reply box */}
-      <div className="border-t border-gray-200 bg-white p-3 space-y-2">
+      {/* Composer */}
+      <div className={`border-t bg-white p-3 space-y-2 ${isNoteMode ? 'border-amber-200 bg-amber-50/40' : 'border-gray-200'}`}>
+        {/* Mode tabs */}
+        <div className="flex items-center gap-1 -mt-1">
+          <ComposerTabButton
+            active={!isNoteMode}
+            onClick={() => onComposerModeChange('reply')}
+            icon={<Send size={11} />}
+            label="Reply"
+            tone="reply"
+          />
+          <ComposerTabButton
+            active={isNoteMode}
+            onClick={() => onComposerModeChange('note')}
+            icon={<StickyNote size={11} />}
+            label="Internal note"
+            tone="note"
+          />
+          {isNoteMode && (
+            <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
+              <ShieldCheck size={10} /> Support team only
+            </span>
+          )}
+        </div>
+
         {noActorWarning && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 flex items-center gap-2">
             <AlertCircle size={12} /> Pick a support identity above before sending.
@@ -860,128 +1014,164 @@ function ThreadDetailView({
           </div>
         )}
 
-        <div className="flex items-center gap-2 text-[11px] text-gray-500 flex-wrap">
-          <span>Reply via</span>
-          <div className="flex rounded-lg border border-gray-200 overflow-hidden">
-            {(['auto', 'sms', 'email'] as const).map(opt => (
+        {!isNoteMode && (
+          <>
+            <div className="flex items-center gap-2 text-[11px] text-gray-500 flex-wrap">
+              <span>Reply via</span>
+              <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+                {(['auto', 'sms', 'email'] as const).map(opt => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => onReplyChannelChange(opt)}
+                    className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                      replyChannel === opt ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {opt === 'auto' ? `Auto (${lastInboundChannel.toUpperCase()})` : opt.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+              <span className="text-gray-400">→ as <span className="font-semibold text-gray-700">{effectiveChannel.toUpperCase()}</span></span>
               <button
-                key={opt}
                 type="button"
-                onClick={() => onReplyChannelChange(opt)}
-                className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                  replyChannel === opt ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'
+                onClick={onToggleIntent}
+                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+                  showIntent ? 'bg-violet-100 text-violet-800' : 'text-gray-500 hover:bg-gray-100'
                 }`}
               >
-                {opt === 'auto' ? `Auto (${lastInboundChannel.toUpperCase()})` : opt.toUpperCase()}
+                <Sparkles size={11} /> {showIntent ? 'Hide intent' : 'Steer AI'}
               </button>
-            ))}
-          </div>
-          <span className="text-gray-400">→ as <span className="font-semibold text-gray-700">{effectiveChannel.toUpperCase()}</span></span>
-          <button
-            type="button"
-            onClick={onToggleIntent}
-            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
-              showIntent ? 'bg-violet-100 text-violet-800' : 'text-gray-500 hover:bg-gray-100'
-            }`}
-          >
-            <Sparkles size={11} /> {showIntent ? 'Hide intent' : 'Steer AI'}
-          </button>
-          <button
-            type="button"
-            onClick={onToggleInternalNote}
-            className={`ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
-              showInternalNote ? 'bg-amber-100 text-amber-800' : 'text-gray-500 hover:bg-gray-100'
-            }`}
-          >
-            <StickyNote size={11} /> Internal note
-          </button>
-        </div>
+              <button
+                type="button"
+                onClick={onToggleInternalNote}
+                className={`ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+                  showInternalNote ? 'bg-amber-100 text-amber-800' : 'text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                <StickyNote size={11} /> Pin note to message
+              </button>
+            </div>
 
-        {showIntent && (
-          <input
-            type="text"
-            value={draftIntent}
-            onChange={e => onDraftIntentChange(e.target.value)}
-            placeholder="Optional: tell the AI what to say (e.g. 'offer a Tuesday tour')"
-            className="w-full text-xs border border-violet-200 bg-violet-50/40 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300"
-          />
+            {showIntent && (
+              <input
+                type="text"
+                value={draftIntent}
+                onChange={e => onDraftIntentChange(e.target.value)}
+                placeholder="Optional: tell the AI what to say (e.g. 'offer a Tuesday tour')"
+                className="w-full text-xs border border-violet-200 bg-violet-50/40 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300"
+              />
+            )}
+
+            {showInternalNote && (
+              <textarea
+                value={internalNote}
+                onChange={e => onInternalNoteChange(e.target.value)}
+                placeholder="Pin a small note to this reply (only support sees it)"
+                rows={2}
+                className="w-full text-sm border border-amber-200 bg-amber-50/40 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-300"
+              />
+            )}
+
+            {draftError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 flex items-center gap-2">
+                <AlertCircle size={12} /> {draftError}
+              </div>
+            )}
+
+            <div className="relative">
+              <textarea
+                value={replyBody}
+                onChange={e => onReplyBodyChange(e.target.value)}
+                placeholder={`Reply on behalf of ${detail.venue?.name || 'the venue'}… or click Suggest for an AI draft.`}
+                rows={3}
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 pr-44 outline-none focus:ring-2 focus:ring-brand-900/10 focus:border-gray-300"
+              />
+              <div className="absolute top-2 right-2 flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setPickerOpen(v => !v)}
+                  title="Insert a saved reply"
+                  className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors ${
+                    pickerOpen
+                      ? 'border-violet-300 bg-violet-100 text-violet-800'
+                      : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <FileText size={11} /> Saved
+                </button>
+                <button
+                  type="button"
+                  onClick={onDraft}
+                  disabled={drafting}
+                  title="Generate a reply with AI using venue voice + bride context"
+                  className="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-white hover:bg-violet-50 px-2 py-1 text-[11px] font-semibold text-violet-700 disabled:opacity-50"
+                >
+                  {drafting ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+                  {drafting ? 'Drafting…' : 'Suggest'}
+                </button>
+                <CannedReplyPicker
+                  open={pickerOpen}
+                  onClose={() => setPickerOpen(false)}
+                  listEndpoint="/api/admin/support/canned-replies?scope=admin"
+                  renderEndpoint={(id) => `/api/admin/support/canned-replies/${id}/render`}
+                  threadId={detail.thread.id}
+                  agentName={actAsName ?? undefined}
+                  channel={effectiveChannel}
+                  onInsert={(b) => onReplyBodyChange(b)}
+                />
+              </div>
+            </div>
+          </>
         )}
 
-        {showInternalNote && (
-          <textarea
-            value={internalNote}
-            onChange={e => onInternalNoteChange(e.target.value)}
-            placeholder="Internal note (only visible to your team — saved on the message row)"
-            rows={2}
-            className="w-full text-sm border border-amber-200 bg-amber-50/40 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-300"
-          />
-        )}
-
-        {draftError && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 flex items-center gap-2">
-            <AlertCircle size={12} /> {draftError}
-          </div>
-        )}
-
-        <div className="relative">
-          <textarea
-            value={replyBody}
-            onChange={e => onReplyBodyChange(e.target.value)}
-            placeholder={`Reply on behalf of ${detail.venue?.name || 'the venue'}… or click Suggest for an AI draft.`}
-            rows={3}
-            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 pr-44 outline-none focus:ring-2 focus:ring-brand-900/10 focus:border-gray-300"
-          />
-          <div className="absolute top-2 right-2 flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setPickerOpen(v => !v)}
-              title="Insert a saved reply"
-              className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors ${
-                pickerOpen
-                  ? 'border-violet-300 bg-violet-100 text-violet-800'
-                  : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              <FileText size={11} /> Saved
-            </button>
-            <button
-              type="button"
-              onClick={onDraft}
-              disabled={drafting}
-              title="Generate a reply with AI using venue voice + bride context"
-              className="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-white hover:bg-violet-50 px-2 py-1 text-[11px] font-semibold text-violet-700 disabled:opacity-50"
-            >
-              {drafting ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
-              {drafting ? 'Drafting…' : 'Suggest'}
-            </button>
-            <CannedReplyPicker
-              open={pickerOpen}
-              onClose={() => setPickerOpen(false)}
-              listEndpoint="/api/admin/support/canned-replies?scope=admin"
-              renderEndpoint={(id) => `/api/admin/support/canned-replies/${id}/render`}
-              threadId={detail.thread.id}
-              agentName={actAsName ?? undefined}
-              channel={effectiveChannel}
-              onInsert={(b) => onReplyBodyChange(b)}
+        {isNoteMode && (
+          <>
+            <SupportMentionPicker
+              members={teamMembers}
+              selectedIds={noteMentionIds}
+              onChange={onNoteMentionIdsChange}
+              selfId={selfId}
+              disabled={sending}
             />
-          </div>
-        </div>
+            <textarea
+              value={noteBody}
+              onChange={e => onNoteBodyChange(e.target.value)}
+              placeholder="Leave context for whoever picks this up next. The bride and venue never see this."
+              rows={3}
+              className="w-full text-sm border border-amber-200 bg-amber-50/60 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-300"
+            />
+            <p className="text-[10px] text-amber-800/80">
+              {noteMentionIds.length === 0
+                ? 'Tip: @-mention a teammate to email them this note.'
+                : `${noteMentionIds.length} teammate${noteMentionIds.length === 1 ? '' : 's'} will be emailed when you save.`}
+            </p>
+          </>
+        )}
 
         <div className="flex items-center justify-between">
           <p className="text-[11px] text-gray-500">
-            {actAsName
-              ? <>Sending as <span className="font-semibold text-gray-700">{actAsName}</span> on behalf of <span className="font-semibold text-gray-700">{detail.venue?.name || 'venue'}</span></>
-              : 'Pick an identity to send.'}
+            {isNoteMode
+              ? (actAsName
+                  ? <>Saving as <span className="font-semibold text-gray-700">{actAsName}</span></>
+                  : 'Pick an identity to save.')
+              : (actAsName
+                  ? <>Sending as <span className="font-semibold text-gray-700">{actAsName}</span> on behalf of <span className="font-semibold text-gray-700">{detail.venue?.name || 'venue'}</span></>
+                  : 'Pick an identity to send.')}
           </p>
           <button
             type="button"
             onClick={onSend}
             disabled={!canSend}
             className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ backgroundColor: BRAND }}
+            style={{ backgroundColor: isNoteMode ? '#b45309' : BRAND }}
           >
-            {sending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
-            {sending ? 'Sending…' : `Send ${effectiveChannel.toUpperCase()}`}
+            {sending
+              ? <Loader2 size={12} className="animate-spin" />
+              : (isNoteMode ? <StickyNote size={12} /> : <Send size={12} />)}
+            {sending
+              ? (isNoteMode ? 'Saving…' : 'Sending…')
+              : (isNoteMode ? 'Save note' : `Send ${effectiveChannel.toUpperCase()}`)}
           </button>
         </div>
       </div>
@@ -989,17 +1179,132 @@ function ThreadDetailView({
   );
 }
 
+/**
+ * Banner shown above a merged thread view when the bride has multiple
+ * conversation_threads (one per channel) for the same venue. Agents can
+ * click an alternate channel to switch the *reply target* — the merged
+ * message stream stays the same.
+ */
+function CrossChannelBanner({
+  activeChannel,
+  activeThreadId,
+  siblings,
+  onSwitchActive,
+}: {
+  activeChannel: 'sms' | 'email';
+  activeThreadId: string;
+  siblings: ThreadDetail['siblings'];
+  onSwitchActive: (threadId: string) => void;
+}) {
+  // Group active + siblings together for the chip row
+  const all = [
+    { id: activeThreadId, label: activeChannel.toUpperCase(), channel: activeChannel as 'sms' | 'email', isActive: true },
+    ...siblings.map(s => {
+      const ch = (s.external_reply_channel === 'sms' || s.external_reply_channel === 'email')
+        ? s.external_reply_channel
+        : 'email';
+      return { id: s.id, label: ch.toUpperCase(), channel: ch as 'sms' | 'email', isActive: false };
+    }),
+  ];
+
+  return (
+    <div className="border-b border-gray-200 bg-blue-50/40 px-4 py-2 flex items-center gap-2 flex-wrap">
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-blue-800">
+        Merged from {all.length} channel{all.length === 1 ? '' : 's'}
+      </span>
+      <span className="text-[10px] text-blue-700/80">— Reply targets:</span>
+      <div className="flex items-center gap-1 flex-wrap">
+        {all.map(t => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => { if (!t.isActive) onSwitchActive(t.id); }}
+            className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold transition-colors ${
+              t.isActive
+                ? 'border-blue-500 bg-blue-100 text-blue-900'
+                : 'border-blue-200 bg-white text-blue-800 hover:bg-blue-50'
+            }`}
+            title={t.isActive ? 'Replies go to this thread' : 'Switch reply target to this channel'}
+          >
+            {t.channel === 'sms' ? <MessageCircle size={10} /> : <Mail size={10} />}
+            {t.label}{t.isActive ? ' · active' : ''}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ComposerTabButton({
+  active, onClick, icon, label, tone,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  tone: 'reply' | 'note';
+}) {
+  const activeCls = tone === 'reply'
+    ? 'border-gray-900 text-gray-900 bg-white'
+    : 'border-amber-500 text-amber-800 bg-white';
+  const idleCls = 'border-transparent text-gray-500 hover:text-gray-700';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 rounded-md border-b-2 px-2.5 py-1 text-[11px] font-semibold transition-colors ${active ? activeCls : idleCls}`}
+    >
+      {icon} {label}
+    </button>
+  );
+}
+
 function MessageBubble({
   msg,
   supportName,
+  supportUsers,
 }: {
   msg: ThreadMessage;
   supportName: string | null;
+  supportUsers: Record<string, { id: string; name: string; email: string }>;
 }) {
   const isInbound = msg.sender_kind === 'contact';
   const isInternal = msg.visibility === 'internal';
   const isAi = msg.sender_kind === 'ai';
   const isConcierge = msg.sender_kind === 'concierge' || msg.sent_on_behalf_of_venue;
+  const isSupportNote = msg.support_only === true;
+
+  // Support-only notes always render full-width with sticky-note styling so
+  // they read as "scratchpad for the team" rather than a conversation bubble.
+  if (isSupportNote) {
+    const mentionedNames = (msg.mentioned_support_user_ids ?? [])
+      .map(id => supportUsers[id]?.name)
+      .filter(Boolean) as string[];
+    return (
+      <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 shadow-sm">
+        <div className="flex items-center gap-2 text-[10px] text-amber-800 mb-1">
+          <StickyNote size={11} />
+          <span className="font-semibold uppercase tracking-wide">Internal note</span>
+          <span className="rounded-full bg-amber-100 border border-amber-300 px-1.5 py-0.5 text-[9px] font-semibold">
+            Support team only
+          </span>
+          {supportName && <span className="text-amber-700">— {supportName}</span>}
+          <span className="ml-auto text-amber-600">{relativeTime(msg.created_at)}</span>
+        </div>
+        <p className="text-sm text-amber-900 whitespace-pre-wrap">{msg.body}</p>
+        {mentionedNames.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[10px]">
+            <span className="text-amber-700">Notified:</span>
+            {mentionedNames.map(n => (
+              <span key={n} className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 border border-amber-300 text-amber-900 px-1.5 py-0.5 font-semibold">
+                @{n}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   const bubbleSide = isInbound ? 'justify-start' : 'justify-end';
 

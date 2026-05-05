@@ -39,21 +39,23 @@ interface CustomerRow {
 }
 
 interface MessageRow {
-  id:                       string;
-  thread_id:                string;
-  visibility:               'internal' | 'external';
-  channel:                  'email' | 'sms';
-  body:                     string;
-  sender_kind:              'owner' | 'team' | 'contact' | 'system' | 'ai' | 'concierge';
-  venue_team_member_id:     string | null;
-  contact_from_name:        string | null;
-  contact_from_email:       string | null;
-  external_email_sent:      boolean | null;
-  send_error:               string | null;
-  sent_by_support_user_id:  string | null;
-  sent_on_behalf_of_venue:  boolean | null;
-  support_internal_note:    string | null;
-  created_at:               string;
+  id:                          string;
+  thread_id:                   string;
+  visibility:                  'internal' | 'external';
+  channel:                     'email' | 'sms';
+  body:                        string;
+  sender_kind:                 'owner' | 'team' | 'contact' | 'system' | 'ai' | 'concierge';
+  venue_team_member_id:        string | null;
+  contact_from_name:           string | null;
+  contact_from_email:          string | null;
+  external_email_sent:         boolean | null;
+  send_error:                  string | null;
+  sent_by_support_user_id:     string | null;
+  sent_on_behalf_of_venue:     boolean | null;
+  support_internal_note:       string | null;
+  support_only:                boolean | null;
+  mentioned_support_user_ids:  string[] | null;
+  created_at:                  string;
 }
 
 interface LeadRow {
@@ -91,7 +93,11 @@ export async function GET(
   const thread = tRow as ThreadRow | null;
   if (!thread) return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
 
-  const [{ data: venueRow }, { data: vcRow }, { data: msgs }] = await Promise.all([
+  // Cross-channel thread merging: pull all sibling threads for this bride
+  // (same venue + venue_customer_id, e.g. one SMS thread + one email thread)
+  // and return a merged chronological message stream so the agent sees the
+  // full conversation across channels in one place.
+  const [{ data: venueRow }, { data: vcRow }, { data: siblingThreads }] = await Promise.all([
     supabaseAdmin
       .from('venues')
       .select('id, name, notification_email, ai_concierge_notify_emails, timezone')
@@ -103,20 +109,40 @@ export async function GET(
       .eq('id', thread.venue_customer_id)
       .maybeSingle(),
     supabaseAdmin
-      .from('conversation_messages')
-      .select(`
-        id, thread_id, visibility, channel, body, sender_kind, venue_team_member_id,
-        contact_from_name, contact_from_email, external_email_sent, send_error,
-        sent_by_support_user_id, sent_on_behalf_of_venue, support_internal_note,
-        created_at
-      `)
-      .eq('thread_id', threadId)
-      .order('created_at', { ascending: true }),
+      .from('conversation_threads')
+      .select('id, subject, last_message_at, external_reply_channel')
+      .eq('venue_id', thread.venue_id)
+      .eq('venue_customer_id', thread.venue_customer_id),
   ]);
+
+  const allThreadIds = ((siblingThreads ?? []) as Array<{ id: string }>).map(s => s.id);
+  // Always include the active thread even if for some reason the venue_customer
+  // join missed it (data integrity safety net).
+  if (!allThreadIds.includes(threadId)) allThreadIds.push(threadId);
+
+  const { data: msgs } = await supabaseAdmin
+    .from('conversation_messages')
+    .select(`
+      id, thread_id, visibility, channel, body, sender_kind, venue_team_member_id,
+      contact_from_name, contact_from_email, external_email_sent, send_error,
+      sent_by_support_user_id, sent_on_behalf_of_venue, support_internal_note,
+      support_only, mentioned_support_user_ids, created_at
+    `)
+    .in('thread_id', allThreadIds)
+    .order('created_at', { ascending: true });
 
   const venue    = venueRow as VenueRow | null;
   const customer = vcRow as CustomerRow | null;
   const messages = (msgs as MessageRow[]) || [];
+
+  const siblings = ((siblingThreads ?? []) as Array<{ id: string; subject: string | null; last_message_at: string; external_reply_channel: string | null }>)
+    .filter(s => s.id !== threadId)
+    .map(s => ({
+      id:                       s.id,
+      subject:                  s.subject ?? '',
+      last_message_at:          s.last_message_at,
+      external_reply_channel:   s.external_reply_channel ?? null,
+    }));
 
   // Try to resolve a matching lead by venue + customer email (best-effort)
   let lead: LeadRow | null = null;
@@ -133,10 +159,12 @@ export async function GET(
     lead = leadRow as LeadRow | null;
   }
 
-  // Resolve support user names referenced in messages
-  const supportUserIds = Array.from(new Set(
-    messages.map(m => m.sent_by_support_user_id).filter((x): x is string => Boolean(x))
-  ));
+  // Resolve support user names referenced in messages — both authors AND
+  // anyone mentioned in a support-only note.
+  const supportUserIds = Array.from(new Set([
+    ...messages.map(m => m.sent_by_support_user_id).filter((x): x is string => Boolean(x)),
+    ...messages.flatMap(m => m.mentioned_support_user_ids || []).filter(Boolean),
+  ]));
   let supportUsers: Record<string, { id: string; name: string; email: string }> = {};
   if (supportUserIds.length > 0) {
     const { data: stm } = await supabaseAdmin
@@ -153,5 +181,9 @@ export async function GET(
     lead,
     messages,
     supportUsers,
+    /** Other conversation_threads belonging to the same bride (different
+     *  channels). UI uses this to render a "merged from N channels" banner
+     *  and subscribe to realtime broadcasts from each sibling. */
+    siblings,
   });
 }

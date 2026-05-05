@@ -53,6 +53,12 @@ export interface BrideMessageEvent {
   sentByVenueSupport:    boolean;
   supportAgentId:        string | null;
   createdAt:             string;
+  /** True for support-team-only internal notes (visible only to admin/support).
+   *  When true, the inbox list MUST NOT bump/drop on this event because a note
+   *  doesn't change the bride's "needs attention" status. */
+  supportOnly?:          boolean;
+  /** Optional list of support_team_members.id mentioned in a note. */
+  mentionedSupportUserIds?: string[];
 }
 
 // ─── Support ticket events ──────────────────────────────────────────────────

@@ -50,6 +50,17 @@ export async function broadcastBrideMessage(evt: BrideMessageEvent): Promise<voi
   ]);
 }
 
+/**
+ * Like broadcastBrideMessage but only fans out to admin-side channels.
+ * Used for support_only internal notes that the venue must NOT receive.
+ */
+export async function broadcastBrideMessageAdminOnly(evt: BrideMessageEvent): Promise<void> {
+  await Promise.allSettled([
+    send(supportChannels.brideInbox(),                                'message', evt),
+    send(supportChannels.brideThread(evt.threadId),                   'message', evt),
+  ]);
+}
+
 // ─── Support tickets ───────────────────────────────────────────────────────
 
 export async function broadcastTicketMessage(evt: TicketMessageEvent): Promise<void> {

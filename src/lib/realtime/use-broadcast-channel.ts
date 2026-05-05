@@ -50,3 +50,48 @@ export function useBroadcastChannel(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channelName, events.join('|')]);
 }
+
+/**
+ * Subscribe to multiple broadcast channels with a single shared handler.
+ * Useful when a single conversation view needs to listen across siblings
+ * (e.g. cross-channel merged thread view subscribing to every sibling
+ * thread's channel).
+ */
+export function useBroadcastChannels(
+  channelNames: string[],
+  events: string[],
+  onEvent: EventCallback,
+): void {
+  const callbackRef = useRef<EventCallback>(onEvent);
+  callbackRef.current = onEvent;
+
+  // Stable serialization for the dep array
+  const channelsKey = channelNames.slice().sort().join('|');
+  const eventsKey = events.join('|');
+
+  useEffect(() => {
+    if (channelNames.length === 0 || events.length === 0) return;
+
+    const channels = channelNames.map(name => {
+      const ch = supabase.channel(name, { config: { broadcast: { self: false } } });
+      for (const evt of events) {
+        ch.on('broadcast', { event: evt }, (msg: { event: string; payload: unknown }) => {
+          try {
+            callbackRef.current?.(msg.event, msg.payload);
+          } catch (err) {
+            console.warn('[realtime] handler threw', name, msg.event, err);
+          }
+        });
+      }
+      ch.subscribe();
+      return ch;
+    });
+
+    return () => {
+      for (const ch of channels) {
+        supabase.removeChannel(ch).catch(() => {});
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channelsKey, eventsKey]);
+}

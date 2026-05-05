@@ -129,10 +129,13 @@ export async function GET(
     });
   }
 
+  // Hide support-team-only internal notes from the venue's view; they're
+  // visible only to super admin / support agents in the admin support inbox.
   const { data: messages, error } = await supabaseAdmin
     .from('conversation_messages')
     .select('*')
     .eq('thread_id', threadId)
+    .eq('support_only', false)
     .order('created_at', { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
