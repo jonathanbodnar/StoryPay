@@ -54,19 +54,21 @@ export default async function PublicVenuePage({ params }: { params: Promise<{ sl
     <div className="min-h-screen bg-[#fafaf9] pb-12">
       <Ga4Scripts measurementId={venue.ga4_measurement_id} />
       <ListingTracker venueId={venue.id} />
-      <header className="border-b border-gray-200 bg-white/90 px-4 py-4 sm:px-6">
-        <div className="mx-auto flex max-w-3xl items-center justify-between">
-          <Link href="/" className="text-sm font-semibold text-[#1b1b1b] hover:opacity-80">
-            StoryVenue
-          </Link>
-          <a
-            href={`${DIRECTORY_SITE.replace(/\/$/, '')}/venue/${venue.slug}`}
-            className="text-xs text-gray-500 hover:text-gray-800"
-          >
-            Directory
-          </a>
-        </div>
-      </header>
+      {!venue.hide_header && (
+        <header className="border-b border-gray-200 bg-white/90 px-4 py-4 sm:px-6">
+          <div className="mx-auto flex max-w-3xl items-center justify-between">
+            <Link href="/" className="text-sm font-semibold text-[#1b1b1b] hover:opacity-80">
+              StoryVenue
+            </Link>
+            <a
+              href={`${DIRECTORY_SITE.replace(/\/$/, '')}/venue/${venue.slug}`}
+              className="text-xs text-gray-500 hover:text-gray-800"
+            >
+              Directory
+            </a>
+          </div>
+        </header>
+      )}
 
       {venue.cover_image_url ? (
         <div className="relative h-[min(45vh,420px)] w-full bg-gray-200">

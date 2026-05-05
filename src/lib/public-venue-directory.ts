@@ -100,6 +100,8 @@ export type PublicVenuePayload = {
      * keep the modal — same behaviour as everywhere else in the gating layer.
      */
     pricing_guide_enabled: boolean;
+    /** When true the venue's plan requests the directory listing header be hidden (landing page mode). */
+    hide_header: boolean;
   };
   reviews: {
     average_rating: number | null;
@@ -256,18 +258,19 @@ export async function getPublicVenueBySlug(rawSlug: string): Promise<PublicVenue
       .slice(0, 20);
   }
 
-  // ── Pricing-guide lead modal gate ──────────────────────────────────────
+  // ── Pricing-guide lead modal gate + plan flags ─────────────────────────
   //
   // Resolves directly from the venue's directory plan. Mirrors the dashboard
   // sidebar's "Pricing Guide" menu permission so the marketing-tier checkbox
   // in super admin is the single source of truth. Legacy (planless) venues
   // keep access — same as `canAccessDirectoryFeature` everywhere else.
   let pricing_guide_enabled = true;
+  let hide_header = false;
   const directoryPlanId = v.directory_plan_id != null ? String(v.directory_plan_id) : '';
   if (directoryPlanId) {
     const { data: plan } = await supabaseAdmin
       .from('directory_plans')
-      .select('feature_flags, nav_permissions')
+      .select('feature_flags, nav_permissions, hide_header')
       .eq('id', directoryPlanId)
       .maybeSingle();
 
@@ -279,6 +282,7 @@ export async function getPublicVenueBySlug(rawSlug: string): Promise<PublicVenue
         }),
       );
       pricing_guide_enabled = allowed.has('nav_listing_pricing_guide');
+      hide_header = Boolean((plan as Record<string, unknown>).hide_header);
     } else {
       // Plan id is set but the plan row is missing — fail closed: don't
       // promote a feature we can't verify access to.
@@ -328,6 +332,7 @@ export async function getPublicVenueBySlug(rawSlug: string): Promise<PublicVenue
       listing_sponsored,
       brand_website: v.brand_website != null ? String(v.brand_website) : null,
       pricing_guide_enabled,
+      hide_header,
     },
     reviews: {
       average_rating,

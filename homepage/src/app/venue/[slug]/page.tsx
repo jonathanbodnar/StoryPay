@@ -51,6 +51,8 @@ type PublicVenuePayload = {
      * older API responses keep working unchanged.
      */
     pricing_guide_enabled?: boolean;
+    /** When true the venue's plan requests the directory listing header be hidden (landing page mode). */
+    hide_header?: boolean;
   };
   reviews: {
     average_rating: number | null;
@@ -202,17 +204,19 @@ export default async function PublicVenuePage({ params }: { params: Promise<{ sl
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
       <div className="min-h-screen bg-[#fafaf9]">
-        <header className="border-b border-gray-200/80 bg-white/90 backdrop-blur-sm">
-          <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4 sm:px-6">
-            <Link
-              href="/"
-              className="text-sm font-semibold tracking-wide text-[#1b1b1b] hover:opacity-80"
-              style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
-            >
-              StoryVenue
-            </Link>
-          </div>
-        </header>
+        {!venue.hide_header && (
+          <header className="border-b border-gray-200/80 bg-white/90 backdrop-blur-sm">
+            <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4 sm:px-6">
+              <Link
+                href="/"
+                className="text-sm font-semibold tracking-wide text-[#1b1b1b] hover:opacity-80"
+                style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
+              >
+                StoryVenue
+              </Link>
+            </div>
+          </header>
+        )}
 
         <section className="relative">
           {venue.cover_image_url ? (
