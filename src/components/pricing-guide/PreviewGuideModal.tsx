@@ -1,17 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, X, Star, MapPin, Calendar } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { X, Star, MapPin, Calendar } from 'lucide-react';
 
 /**
- * Lightweight preview of the Pricing & Availability Guide as the bride will
- * see it — rendered directly inside a modal so the owner can flip through
- * pages, request changes, and re-trigger AI improvements without leaving the
- * editor.
- *
- * This is intentionally NOT pixel-perfect with the eventual public PDF — it's
- * a functional preview for editing decisions, with a stylesheet that matches
- * the brand fonts (Playfair for headings, Open Sans body).
+ * Continuous vertical-scroll preview of the Pricing & Availability Guide.
+ * Renders every section as a full-width magazine page stacked vertically,
+ * so the owner scrolls down through the entire guide just like a bride
+ * would in the final digital version.
  */
 
 type GalleryItem = { url: string; caption?: string };
@@ -63,150 +59,142 @@ interface Props {
   onClose: () => void;
 }
 
-type Page =
-  | { kind: 'cover' }
-  | { kind: 'welcome' }
-  | { kind: 'gallery' }
-  | { kind: 'about' }
-  | { kind: 'spaces' }
-  | { kind: 'accommodations' }
-  | { kind: 'pricing' }
-  | { kind: 'reviews' }
-  | { kind: 'availability' }
-  | { kind: 'cta' };
-
-function buildPages(g: Guide): Page[] {
-  const pages: Page[] = [{ kind: 'cover' }];
-  if (g.congratulatory_message?.trim()) pages.push({ kind: 'welcome' });
-  if (g.gallery.length > 0) pages.push({ kind: 'gallery' });
-  if (g.about_venue?.trim()) pages.push({ kind: 'about' });
-  if (g.spaces.length > 0) pages.push({ kind: 'spaces' });
-  if (g.accommodations_text?.trim()) pages.push({ kind: 'accommodations' });
-  if (g.pricing_intro?.trim() || g.packages.length > 0) pages.push({ kind: 'pricing' });
-  if (g.reviews.length > 0) pages.push({ kind: 'reviews' });
-  if (g.availability_text?.trim()) pages.push({ kind: 'availability' });
-  if (g.cta_headline?.trim() || g.cta_body?.trim()) pages.push({ kind: 'cta' });
-  return pages;
-}
-
 export default function PreviewGuideModal({ open, guide, venue, onClose }: Props) {
-  const pages = buildPages(guide);
-  const [pageIdx, setPageIdx] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Reset scroll to top when opening
   useEffect(() => {
-    if (!open) setPageIdx(0);
+    if (open && scrollRef.current) scrollRef.current.scrollTop = 0;
   }, [open]);
 
+  // Escape to close
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-      if (e.key === 'ArrowRight') setPageIdx((i) => Math.min(i + 1, pages.length - 1));
-      if (e.key === 'ArrowLeft') setPageIdx((i) => Math.max(i - 1, 0));
-    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [open, pages.length, onClose]);
+  }, [open, onClose]);
 
   if (!open) return null;
-  const page = pages[pageIdx];
+
   const venueName = venue.name ?? 'Our Venue';
   const venueLocation = [venue.location_city, venue.location_state].filter(Boolean).join(', ');
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="relative flex h-full max-h-[900px] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 sm:p-6">
+      <div className="relative flex h-full max-h-[95vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
         {/* Top bar */}
         <div className="flex items-center justify-between border-b border-gray-200 px-6 py-3">
           <div>
             <h3 className="font-heading text-lg text-gray-900">Guide preview</h3>
-            <p className="text-xs text-gray-500">
-              Page {pageIdx + 1} of {pages.length} · {prettyName(page.kind)}
-            </p>
+            <p className="text-xs text-gray-500">Scroll to preview the full guide</p>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setPageIdx((i) => Math.max(i - 1, 0))}
-              disabled={pageIdx === 0}
-              className="rounded-full p-2 text-gray-500 hover:bg-gray-100 disabled:opacity-30"
-            >
-              <ChevronLeft size={18} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setPageIdx((i) => Math.min(i + 1, pages.length - 1))}
-              disabled={pageIdx === pages.length - 1}
-              className="rounded-full p-2 text-gray-500 hover:bg-gray-100 disabled:opacity-30"
-            >
-              <ChevronRight size={18} />
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="ml-2 rounded-full p-2 text-gray-500 hover:bg-gray-100"
-            >
-              <X size={18} />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-2 text-gray-500 hover:bg-gray-100"
+          >
+            <X size={18} />
+          </button>
         </div>
 
-        {/* Page area */}
-        <div className="flex-1 overflow-y-auto bg-stone-50">
-          <div className="mx-auto my-6 aspect-[3/4] w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-lg">
-            <PageContent page={page} guide={guide} venueName={venueName} venueLocation={venueLocation} />
+        {/* Scrollable magazine */}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto bg-stone-100">
+          <div className="mx-auto w-full" style={{ maxWidth: 480 }}>
+            {/* ── Cover ── */}
+            <MagCover guide={guide} venueName={venueName} venueLocation={venueLocation} />
+
+            {/* ── Welcome ── */}
+            {guide.congratulatory_message?.trim() && (
+              <MagSection>
+                <WelcomePage guide={guide} venueName={venueName} />
+              </MagSection>
+            )}
+
+            {/* ── Gallery ── */}
+            {guide.gallery.length > 0 && (
+              <MagSection>
+                <GalleryPage guide={guide} />
+              </MagSection>
+            )}
+
+            {/* ── About ── */}
+            {guide.about_venue?.trim() && (
+              <MagSection>
+                <AboutPage guide={guide} venueName={venueName} />
+              </MagSection>
+            )}
+
+            {/* ── Spaces ── */}
+            {guide.spaces.length > 0 && (
+              <MagSection>
+                <SpacesPage guide={guide} />
+              </MagSection>
+            )}
+
+            {/* ── Accommodations ── */}
+            {guide.accommodations_text?.trim() && (
+              <MagSection>
+                <AccommodationsPage guide={guide} />
+              </MagSection>
+            )}
+
+            {/* ── Pricing ── */}
+            {(guide.pricing_intro?.trim() || guide.packages.length > 0) && (
+              <MagSection>
+                <PricingPage guide={guide} />
+              </MagSection>
+            )}
+
+            {/* ── Reviews ── */}
+            {guide.reviews.length > 0 && (
+              <MagSection>
+                <ReviewsPage guide={guide} />
+              </MagSection>
+            )}
+
+            {/* ── Availability ── */}
+            {guide.availability_text?.trim() && (
+              <MagSection>
+                <AvailabilityPage guide={guide} />
+              </MagSection>
+            )}
+
+            {/* ── Save the Date / CTA ── */}
+            {(guide.cta_headline?.trim() || guide.cta_body?.trim()) && (
+              <MagSection>
+                <CtaPage guide={guide} venueName={venueName} />
+              </MagSection>
+            )}
           </div>
         </div>
 
         {/* Bottom hint */}
         <div className="border-t border-gray-200 px-6 py-2.5 text-center text-xs text-gray-400">
-          Use ← → arrow keys to flip pages. Close with Esc.
+          Scroll to explore the guide. Close with Esc.
         </div>
       </div>
     </div>
   );
 }
 
-function prettyName(kind: Page['kind']): string {
-  switch (kind) {
-    case 'cover': return 'Front cover';
-    case 'welcome': return 'Welcome';
-    case 'gallery': return 'Photo gallery';
-    case 'about': return 'About the venue';
-    case 'spaces': return 'Spaces';
-    case 'accommodations': return 'Accommodations';
-    case 'pricing': return 'Pricing & packages';
-    case 'reviews': return 'Reviews';
-    case 'availability': return 'Availability';
-    case 'cta': return 'Save the date';
-  }
+// ─── Layout primitives ──────────────────────────────────────────────────
+
+/** Wrapper for every section after the cover */
+function MagSection({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="bg-white shadow-sm">
+      {children}
+    </div>
+  );
 }
 
-// ─── Page renderers ────────────────────────────────────────────────────────
-
-function PageContent({
-  page, guide, venueName, venueLocation,
-}: {
-  page: Page; guide: Guide; venueName: string; venueLocation: string;
-}) {
-  switch (page.kind) {
-    case 'cover': return <CoverPage guide={guide} venueName={venueName} venueLocation={venueLocation} />;
-    case 'welcome': return <WelcomePage guide={guide} venueName={venueName} />;
-    case 'gallery': return <GalleryPage guide={guide} />;
-    case 'about': return <AboutPage guide={guide} venueName={venueName} />;
-    case 'spaces': return <SpacesPage guide={guide} />;
-    case 'accommodations': return <AccommodationsPage guide={guide} />;
-    case 'pricing': return <PricingPage guide={guide} />;
-    case 'reviews': return <ReviewsPage guide={guide} />;
-    case 'availability': return <AvailabilityPage guide={guide} />;
-    case 'cta': return <CtaPage guide={guide} venueName={venueName} />;
-  }
-}
+// ─── Page renderers ─────────────────────────────────────────────────────
 
 function CoverPage({ guide, venueName, venueLocation }: { guide: Guide; venueName: string; venueLocation: string }) {
   const coverSrc = guide.cover_image_url ?? guide.cover_source_image_url ?? guide.gallery[0]?.url ?? null;
   return (
-    <div className="relative h-full w-full">
+    <div className="relative w-full" style={{ aspectRatio: '3 / 4' }}>
       {coverSrc ? (
         <img src={coverSrc} alt="" className="absolute inset-0 h-full w-full object-cover" />
       ) : (
@@ -214,28 +202,36 @@ function CoverPage({ guide, venueName, venueLocation }: { guide: Guide; venueNam
       )}
       <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/20 to-black/70" />
       <div className="relative flex h-full w-full flex-col items-center justify-end p-10 text-center text-white">
-        <p className="font-heading text-5xl leading-tight" style={{ fontFamily: '"Playfair Display", serif' }}>
+        <p className="font-heading text-4xl leading-tight" style={{ fontFamily: '"Playfair Display", serif' }}>
           {venueName}
         </p>
         {venueLocation && (
           <p className="mt-2 text-sm uppercase tracking-[0.3em] text-white/80">{venueLocation}</p>
         )}
         <div className="mt-8 h-px w-24 bg-white/60" />
-        <p className="mt-6 text-base uppercase tracking-[0.2em] text-white/90">Pricing & Availability Guide</p>
+        <p className="mt-6 text-base uppercase tracking-[0.2em] text-white/90">Pricing &amp; Availability Guide</p>
       </div>
+    </div>
+  );
+}
+
+function MagCover({ guide, venueName, venueLocation }: { guide: Guide; venueName: string; venueLocation: string }) {
+  return (
+    <div className="bg-white shadow-sm">
+      <CoverPage guide={guide} venueName={venueName} venueLocation={venueLocation} />
     </div>
   );
 }
 
 function WelcomePage({ guide, venueName }: { guide: Guide; venueName: string }) {
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center p-12 text-center">
+    <div className="flex w-full flex-col items-center justify-center px-10 py-16 text-center">
       <p className="text-xs uppercase tracking-[0.3em] text-gray-400">A note from</p>
-      <h1 className="mt-3 font-heading text-4xl text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
+      <h1 className="mt-3 font-heading text-3xl text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
         {venueName}
       </h1>
       <div className="mt-6 h-px w-16 bg-gray-300" />
-      <p className="mt-8 max-w-md text-base leading-relaxed text-gray-700">
+      <p className="mt-8 max-w-sm text-base leading-relaxed text-gray-700">
         {guide.congratulatory_message}
       </p>
     </div>
@@ -245,15 +241,16 @@ function WelcomePage({ guide, venueName }: { guide: Guide; venueName: string }) 
 function GalleryPage({ guide }: { guide: Guide }) {
   const items = guide.gallery.slice(0, 6);
   return (
-    <div className="flex h-full w-full flex-col p-8">
-      <h2 className="font-heading text-3xl text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
+    <div className="flex w-full flex-col px-8 py-10">
+      <h2 className="font-heading text-2xl text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
         The Property
       </h2>
-      <div className="mt-6 grid flex-1 grid-cols-3 grid-rows-2 gap-3">
+      <div className="mt-6 grid grid-cols-2 gap-3">
         {items.map((g, i) => (
           <div
             key={g.url}
-            className={`overflow-hidden rounded-xl bg-stone-100 ${i === 0 ? 'col-span-2 row-span-2' : ''}`}
+            className={`overflow-hidden rounded-xl bg-stone-100 ${i === 0 ? 'col-span-2' : ''}`}
+            style={i === 0 ? { aspectRatio: '16 / 9' } : { aspectRatio: '4 / 3' }}
           >
             <img src={g.url} alt="" className="h-full w-full object-cover" />
           </div>
@@ -265,9 +262,9 @@ function GalleryPage({ guide }: { guide: Guide }) {
 
 function AboutPage({ guide, venueName }: { guide: Guide; venueName: string }) {
   return (
-    <div className="flex h-full w-full flex-col p-12">
+    <div className="flex w-full flex-col px-10 py-12">
       <p className="text-xs uppercase tracking-[0.3em] text-gray-400">About</p>
-      <h2 className="mt-3 font-heading text-4xl text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
+      <h2 className="mt-3 font-heading text-3xl text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
         {venueName}
       </h2>
       <div className="mt-5 h-px w-16 bg-gray-300" />
@@ -280,20 +277,20 @@ function AboutPage({ guide, venueName }: { guide: Guide; venueName: string }) {
 
 function SpacesPage({ guide }: { guide: Guide }) {
   return (
-    <div className="flex h-full w-full flex-col overflow-y-auto p-10">
-      <h2 className="font-heading text-3xl text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
+    <div className="flex w-full flex-col px-8 py-10">
+      <h2 className="font-heading text-2xl text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
         Our Spaces
       </h2>
       <div className="mt-6 space-y-5">
         {guide.spaces.map((s) => (
-          <div key={s.id} className="flex gap-5">
+          <div key={s.id} className="flex gap-4">
             {s.image_url && (
-              <div className="aspect-[4/3] w-32 flex-shrink-0 overflow-hidden rounded-xl bg-stone-100">
+              <div className="aspect-[4/3] w-24 flex-shrink-0 overflow-hidden rounded-xl bg-stone-100">
                 <img src={s.image_url} alt={s.name ?? ''} className="h-full w-full object-cover" />
               </div>
             )}
             <div className="flex-1">
-              <h3 className="font-heading text-lg text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
+              <h3 className="font-heading text-base text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
                 {s.name ?? 'Untitled space'}
               </h3>
               {s.capacity && <p className="mt-0.5 text-xs uppercase tracking-wider text-gray-500">{s.capacity}</p>}
@@ -310,8 +307,8 @@ function SpacesPage({ guide }: { guide: Guide }) {
 
 function AccommodationsPage({ guide }: { guide: Guide }) {
   return (
-    <div className="flex h-full w-full flex-col p-10">
-      <h2 className="font-heading text-3xl text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
+    <div className="flex w-full flex-col px-8 py-10">
+      <h2 className="font-heading text-2xl text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
         Accommodations
       </h2>
       {guide.accommodations_image_url && (
@@ -328,21 +325,21 @@ function AccommodationsPage({ guide }: { guide: Guide }) {
 
 function PricingPage({ guide }: { guide: Guide }) {
   return (
-    <div className="flex h-full w-full flex-col overflow-y-auto p-10">
-      <h2 className="font-heading text-3xl text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
-        Pricing & Packages
+    <div className="flex w-full flex-col px-8 py-10">
+      <h2 className="font-heading text-2xl text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
+        Pricing &amp; Packages
       </h2>
       {guide.pricing_intro && (
         <p className="mt-4 text-sm leading-relaxed text-gray-600 whitespace-pre-wrap">{guide.pricing_intro}</p>
       )}
       <div className="mt-6 space-y-4">
         {guide.packages.map((p) => (
-          <div key={p.id} className="rounded-2xl border border-gray-200 bg-white p-5">
+          <div key={p.id} className="rounded-2xl border border-gray-200 bg-stone-50 p-5">
             <div className="flex items-baseline justify-between">
-              <h3 className="font-heading text-xl text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
+              <h3 className="font-heading text-lg text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
                 {p.name ?? 'Untitled package'}
               </h3>
-              {p.price_label && <span className="font-medium text-gray-700">{p.price_label}</span>}
+              {p.price_label && <span className="ml-3 flex-shrink-0 font-medium text-gray-700">{p.price_label}</span>}
             </div>
             {p.description && (
               <p className="mt-2 text-sm leading-relaxed text-gray-600 whitespace-pre-wrap">{p.description}</p>
@@ -366,11 +363,11 @@ function PricingPage({ guide }: { guide: Guide }) {
 
 function ReviewsPage({ guide }: { guide: Guide }) {
   return (
-    <div className="flex h-full w-full flex-col overflow-y-auto p-10">
-      <h2 className="font-heading text-3xl text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
+    <div className="flex w-full flex-col px-8 py-10">
+      <h2 className="font-heading text-2xl text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
         From Our Couples
       </h2>
-      <div className="mt-6 grid grid-cols-1 gap-4">
+      <div className="mt-6 space-y-4">
         {guide.reviews.map((r, i) => (
           <div key={i} className="rounded-2xl border border-gray-200 bg-stone-50 p-5">
             {(r.rating ?? 0) > 0 && (
@@ -395,11 +392,11 @@ function ReviewsPage({ guide }: { guide: Guide }) {
 
 function AvailabilityPage({ guide }: { guide: Guide }) {
   return (
-    <div className="flex h-full w-full flex-col p-10">
+    <div className="flex w-full flex-col px-8 py-10">
       <div className="flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-gray-400">
         <Calendar size={12} /> Availability
       </div>
-      <h2 className="mt-3 font-heading text-3xl text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
+      <h2 className="mt-3 font-heading text-2xl text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
         Find your date
       </h2>
       {guide.availability_image_url && (
@@ -416,12 +413,12 @@ function AvailabilityPage({ guide }: { guide: Guide }) {
 
 function CtaPage({ guide, venueName }: { guide: Guide; venueName: string }) {
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center p-12 text-center">
+    <div className="flex w-full flex-col items-center justify-center px-10 py-16 text-center">
       <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Save the date</p>
-      <h2 className="mt-4 max-w-md font-heading text-4xl leading-tight text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
+      <h2 className="mt-4 max-w-sm font-heading text-3xl leading-tight text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
         {guide.cta_headline ?? 'Ready to walk the property?'}
       </h2>
-      <p className="mt-6 max-w-md text-base leading-relaxed text-gray-700 whitespace-pre-wrap">
+      <p className="mt-6 max-w-sm text-base leading-relaxed text-gray-700 whitespace-pre-wrap">
         {guide.cta_body}
       </p>
       <button
