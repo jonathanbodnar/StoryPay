@@ -548,8 +548,8 @@ export function SupportInboxPanel() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div className="flex flex-col gap-3 lg:h-[calc(100vh-80px)]">
+      <div className="shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center gap-3">
           <div>
             <h2 className="font-heading text-xl text-gray-900">Support inbox</h2>
@@ -568,7 +568,7 @@ export function SupportInboxPanel() {
       </div>
 
       {/* Sub-tabs */}
-      <div className="flex items-center gap-1 border-b border-gray-200">
+      <div className="shrink-0 flex items-center gap-1 border-b border-gray-200">
         <SubTabButton
           active={subTab === 'bride-replies'}
           onClick={() => setSubTab('bride-replies')}
@@ -585,15 +585,17 @@ export function SupportInboxPanel() {
       </div>
 
       {subTab === 'tickets' && (
-        <TicketsView
-          me={me}
-          teamMembers={teamMembers}
-          actAsId={actAsId}
-        />
+        <div className="flex-1 min-h-0">
+          <TicketsView
+            me={me}
+            teamMembers={teamMembers}
+            actAsId={actAsId}
+          />
+        </div>
       )}
 
       {subTab === 'bride-replies' && (
-        <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] xl:grid-cols-[340px_1fr_290px] gap-4 min-h-[600px]">
+        <div className="flex-1 min-h-[500px] lg:min-h-0 grid grid-cols-1 lg:grid-cols-[340px_1fr] xl:grid-cols-[340px_1fr_290px] gap-4">
           {/* Thread list */}
           <div className="rounded-2xl border border-gray-200 bg-white flex flex-col min-h-0">
             <div className="p-3 border-b border-gray-200 space-y-2">
@@ -1717,7 +1719,7 @@ function TicketsView({
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4 min-h-[600px]">
+    <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4 h-full min-h-[500px] lg:min-h-0">
       {/* Ticket list */}
       <div className="rounded-2xl border border-gray-200 bg-white flex flex-col min-h-0">
         <div className="p-3 border-b border-gray-200 space-y-2">
