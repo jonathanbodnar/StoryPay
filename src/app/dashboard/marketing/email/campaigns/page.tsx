@@ -99,7 +99,7 @@ export default function CampaignsListPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
+    <div className="mx-auto max-w-5xl px-4 py-8">
       {/* Header — mirrors the Lead Capture Forms list page so the two
           marketing sub-pages feel like siblings. */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">

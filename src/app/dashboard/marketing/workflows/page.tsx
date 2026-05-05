@@ -107,29 +107,27 @@ export default function WorkflowsListPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
+    <div className="mx-auto max-w-5xl px-4 py-8">
       {/* Header */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <Link
-            href="/dashboard/marketing/analytics"
-            className="mb-2 inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900"
-          >
-            <ArrowLeft size={16} />
-            Marketing
-          </Link>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold text-gray-900">
-            <Workflow className="text-brand-600" size={28} />
-            Workflows
-          </h1>
-          <p className="mt-1 text-sm text-gray-600">
-            Visual automations for your leads — triggers, waits, emails. Set it once and let it run.
-          </p>
-        </div>
+      <div className="mb-6">
+        <Link
+          href="/dashboard/marketing/analytics"
+          className="mb-2 inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900"
+        >
+          <ArrowLeft size={16} />
+          Marketing
+        </Link>
+        <h1 className="flex items-center gap-2 text-2xl font-semibold text-gray-900">
+          <Workflow className="text-brand-600" size={28} />
+          Workflows
+        </h1>
+        <p className="mt-1 text-sm text-gray-600">
+          Visual automations for your leads — triggers, waits, emails. Set it once and let it run.
+        </p>
         <button
           type="button"
           onClick={openModal}
-          className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"
+          className="mt-4 inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"
         >
           <Plus size={18} />
           New workflow
