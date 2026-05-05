@@ -94,10 +94,32 @@ export async function POST(
         storypay_proposal_id: proposal.id,
         storypay_venue_id: venue.id,
         public_token: token,
+        payment_type: proposal.payment_type || 'one_time',
       },
       success_url: `${APP_URL}/proposal/${token}/success`,
       cancel_url: `${APP_URL}/proposal/${token}`,
     };
+
+    // Wire up mode + recurring/installments so LP creates the plan in one call
+    // instead of orphan one-off charges per period.
+    if (proposal.payment_type === 'subscription' && proposal.payment_config) {
+      const config = proposal.payment_config as SubscriptionConfig;
+      checkoutData.mode = 'subscription';
+      checkoutData.recurring = {
+        frequency: config.frequency || 'monthly',
+        ...(config.start_date ? { start_date: config.start_date } : {}),
+      };
+    } else if (proposal.payment_type === 'installment' && proposal.payment_config) {
+      const config = proposal.payment_config as InstallmentConfig;
+      const installments = config.installments || [];
+      if (installments.length > 1) {
+        checkoutData.mode = 'installments';
+        checkoutData.installments = {
+          count: installments.length,
+          frequency: 'monthly',
+        };
+      }
+    }
 
     // Only restrict to card-only when ACH is explicitly disabled by the venue.
     // Otherwise omit payment_methods → LunarPay default = cc + ach
