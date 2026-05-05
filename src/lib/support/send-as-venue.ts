@@ -30,7 +30,10 @@ export type SupportReplyChannel = 'sms' | 'email';
 
 export interface SendAsVenueInput {
   venueId:        string;
-  leadId:         string;
+  /** Lead row to attribute the activity to. Optional — threads can exist
+   *  without a matching lead (e.g. raw inbound SMS), in which case we still
+   *  send the reply but skip the lead_activity_log entry. */
+  leadId:         string | null;
   body:           string;
   supportUserId:  string;
   channel:        SupportReplyChannel;
@@ -38,6 +41,8 @@ export interface SendAsVenueInput {
   internalNote?:  string;
   /** Optional override for email subject. Falls back to thread subject. */
   emailSubject?:  string;
+  /** Optional thread id to use directly. When omitted, we look up by lead/email. */
+  threadId?:      string;
 }
 
 export type SendAsVenueResult =
@@ -83,78 +88,104 @@ export async function sendAsVenue(input: SendAsVenueInput): Promise<SendAsVenueR
   const body = (input.body || '').trim();
   if (!body) return { ok: false, error: 'Empty message body' };
 
-  // 1. Load lead
-  const { data: leadData } = await supabaseAdmin
-    .from('leads')
-    .select('id, email, phone, first_name, last_name, name')
-    .eq('id', leadId)
-    .eq('venue_id', venueId)
-    .maybeSingle();
-  const lead = leadData as LeadRow | null;
-  if (!lead) return { ok: false, error: 'Lead not found' };
-
-  const leadEmail = (lead.email || '').trim().toLowerCase();
-  if (!leadEmail) return { ok: false, error: 'Lead has no email — cannot match to venue customer' };
-
-  // 2. Find or create venue_customer
-  let { data: vcData } = await supabaseAdmin
-    .from('venue_customers')
-    .select('id, customer_email, first_name, last_name, phone, ghl_contact_id')
-    .eq('venue_id', venueId)
-    .ilike('customer_email', leadEmail)
-    .maybeSingle();
-  let vc = vcData as VenueCustomerRow | null;
-
-  if (!vc) {
-    const fn = lead.first_name?.trim() || lead.name?.split(/\s+/)[0] || '';
-    const ln = lead.last_name?.trim() || '';
-    const { data: created, error: vcErr } = await supabaseAdmin
-      .from('venue_customers')
-      .insert({
-        venue_id:       venueId,
-        customer_email: leadEmail,
-        first_name:     fn || null,
-        last_name:      ln || null,
-        phone:          lead.phone || null,
-      })
-      .select('id, customer_email, first_name, last_name, phone, ghl_contact_id')
-      .single();
-    if (vcErr || !created) {
-      return { ok: false, error: `Could not create venue customer: ${vcErr?.message || 'unknown'}` };
-    }
-    vc = created as VenueCustomerRow;
+  // 1. Load lead (optional)
+  let lead: LeadRow | null = null;
+  if (leadId) {
+    const { data: leadData } = await supabaseAdmin
+      .from('leads')
+      .select('id, email, phone, first_name, last_name, name')
+      .eq('id', leadId)
+      .eq('venue_id', venueId)
+      .maybeSingle();
+    lead = leadData as LeadRow | null;
+    if (!lead) return { ok: false, error: 'Lead not found' };
   }
 
-  // 3. Find or create conversation_thread
-  const { data: existing } = await supabaseAdmin
-    .from('conversation_threads')
-    .select('id, subject, external_reply_channel')
-    .eq('venue_id', venueId)
-    .eq('venue_customer_id', vc.id)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
+  // 2. Resolve venue_customer + thread.
   let threadId: string;
   let threadSubject = 'Conversation';
-  if (existing) {
-    threadId = (existing as { id: string }).id;
-    threadSubject = ((existing as { subject?: string }).subject || 'Conversation').trim() || 'Conversation';
-  } else {
-    const { data: newThread, error: tErr } = await supabaseAdmin
+  let vc: VenueCustomerRow | null = null;
+
+  if (input.threadId) {
+    // Fast path: caller already knows the thread (bride inbox case).
+    const { data: tRow } = await supabaseAdmin
       .from('conversation_threads')
-      .insert({
-        venue_id:               venueId,
-        venue_customer_id:      vc.id,
-        subject:                'Conversation',
-        external_reply_channel: channel,
-      })
-      .select('id')
-      .single();
-    if (tErr || !newThread) {
-      return { ok: false, error: `Could not create thread: ${tErr?.message || 'unknown'}` };
+      .select('id, subject, venue_customer_id')
+      .eq('id', input.threadId)
+      .eq('venue_id', venueId)
+      .maybeSingle();
+    if (!tRow) return { ok: false, error: 'Thread not found' };
+    threadId = (tRow as { id: string }).id;
+    threadSubject = ((tRow as { subject?: string }).subject || 'Conversation').trim() || 'Conversation';
+    const vcId = (tRow as { venue_customer_id: string }).venue_customer_id;
+    const { data: vcRow } = await supabaseAdmin
+      .from('venue_customers')
+      .select('id, customer_email, first_name, last_name, phone, ghl_contact_id')
+      .eq('id', vcId)
+      .maybeSingle();
+    vc = vcRow as VenueCustomerRow | null;
+    if (!vc) return { ok: false, error: 'Thread customer not found', threadId };
+  } else {
+    // Derive thread from lead.email
+    const leadEmail = (lead?.email || '').trim().toLowerCase();
+    if (!leadEmail) return { ok: false, error: 'Lead has no email — pass threadId or set lead.email' };
+
+    const { data: vcData } = await supabaseAdmin
+      .from('venue_customers')
+      .select('id, customer_email, first_name, last_name, phone, ghl_contact_id')
+      .eq('venue_id', venueId)
+      .ilike('customer_email', leadEmail)
+      .maybeSingle();
+    vc = vcData as VenueCustomerRow | null;
+
+    if (!vc) {
+      const fn = lead?.first_name?.trim() || lead?.name?.split(/\s+/)[0] || '';
+      const ln = lead?.last_name?.trim() || '';
+      const { data: created, error: vcErr } = await supabaseAdmin
+        .from('venue_customers')
+        .insert({
+          venue_id:       venueId,
+          customer_email: leadEmail,
+          first_name:     fn || null,
+          last_name:      ln || null,
+          phone:          lead?.phone || null,
+        })
+        .select('id, customer_email, first_name, last_name, phone, ghl_contact_id')
+        .single();
+      if (vcErr || !created) {
+        return { ok: false, error: `Could not create venue customer: ${vcErr?.message || 'unknown'}` };
+      }
+      vc = created as VenueCustomerRow;
     }
-    threadId = (newThread as { id: string }).id;
+
+    const { data: existing } = await supabaseAdmin
+      .from('conversation_threads')
+      .select('id, subject')
+      .eq('venue_id', venueId)
+      .eq('venue_customer_id', vc.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existing) {
+      threadId = (existing as { id: string }).id;
+      threadSubject = ((existing as { subject?: string }).subject || 'Conversation').trim() || 'Conversation';
+    } else {
+      const { data: newThread, error: tErr } = await supabaseAdmin
+        .from('conversation_threads')
+        .insert({
+          venue_id:               venueId,
+          venue_customer_id:      vc.id,
+          subject:                'Conversation',
+          external_reply_channel: channel,
+        })
+        .select('id')
+        .single();
+      if (tErr || !newThread) {
+        return { ok: false, error: `Could not create thread: ${tErr?.message || 'unknown'}` };
+      }
+      threadId = (newThread as { id: string }).id;
+    }
   }
 
   // 4. Load venue credentials
@@ -178,20 +209,21 @@ export async function sendAsVenue(input: SendAsVenueInput): Promise<SendAsVenueR
     if (!token) {
       return { ok: false, error: 'No GHL access token available for this venue', threadId };
     }
-    const phoneE164 = normalizePhone(vc.phone || lead.phone || null);
+    const phoneE164 = normalizePhone(vc.phone || lead?.phone || null);
     if (!phoneE164) {
-      return { ok: false, error: 'Lead has no usable phone number for SMS', threadId };
+      return { ok: false, error: 'No usable phone number for SMS', threadId };
     }
 
     let contactId = vc.ghl_contact_id || null;
     try {
       if (!contactId) {
-        const placeholderEmail = leadEmail || `ghl.${vc.id}@${PLACEHOLDER_SMS_EMAIL_DOMAIN}`;
+        const fallbackEmail = (vc.customer_email || lead?.email || '').trim();
+        const placeholderEmail = fallbackEmail || `ghl.${vc.id}@${PLACEHOLDER_SMS_EMAIL_DOMAIN}`;
         contactId = await findOrCreateContact(token, venue.ghl_location_id, {
           email:     placeholderEmail,
           phone:     phoneE164,
-          firstName: vc.first_name || lead.first_name || undefined,
-          lastName:  vc.last_name  || lead.last_name  || undefined,
+          firstName: vc.first_name || lead?.first_name || undefined,
+          lastName:  vc.last_name  || lead?.last_name  || undefined,
         });
         if (contactId) {
           await supabaseAdmin
@@ -212,7 +244,7 @@ export async function sendAsVenue(input: SendAsVenueInput): Promise<SendAsVenueR
     }
   } else {
     // email
-    const to = (vc.customer_email || leadEmail || '').trim();
+    const to = (vc.customer_email || lead?.email || '').trim();
     if (!to) {
       return { ok: false, error: 'No email address available to reply to', threadId };
     }
@@ -283,20 +315,23 @@ ${escapeHtml(body)
     .eq('id', threadId)
     .eq('venue_id', venueId);
 
-  // 7. Lead activity log — actor is null/false because support isn't a venue team member
-  await supabaseAdmin.from('lead_activity_log').insert({
-    venue_id:        venueId,
-    lead_id:         leadId,
-    actor_member_id: null,
-    actor_is_owner:  false,
-    action:          'support_reply_sent',
-    details: {
-      support_user_id: supportUserId,
-      channel,
-      message_id:      messageId,
-      thread_id:       threadId,
-    },
-  });
+  // 7. Lead activity log — actor is null/false because support isn't a venue team member.
+  //    Skipped when there's no matching lead row (raw inbound SMS, etc.)
+  if (leadId) {
+    await supabaseAdmin.from('lead_activity_log').insert({
+      venue_id:        venueId,
+      lead_id:         leadId,
+      actor_member_id: null,
+      actor_is_owner:  false,
+      action:          'support_reply_sent',
+      details: {
+        support_user_id: supportUserId,
+        channel,
+        message_id:      messageId,
+        thread_id:       threadId,
+      },
+    });
+  }
 
   return { ok: true, threadId, messageId };
 }
