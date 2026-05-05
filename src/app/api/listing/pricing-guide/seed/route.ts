@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { parseGoogleReviewsCache } from '@/lib/venue-google-reviews';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,7 +33,7 @@ export async function GET() {
     supabaseAdmin
       .from('venues')
       .select(
-        'id, name, description, venue_type, location_city, location_state, capacity_min, capacity_max, indoor_outdoor, features, cover_image_url, gallery_images, availability_notes, brand_logo_url',
+        'id, name, description, venue_type, location_city, location_state, capacity_min, capacity_max, indoor_outdoor, features, cover_image_url, gallery_images, availability_notes, brand_logo_url, google_reviews_cache, phone, email, website, address',
       )
       .eq('id', venueId)
       .maybeSingle(),
@@ -65,6 +66,11 @@ export async function GET() {
     gallery_images: string[] | null;
     availability_notes: string | null;
     brand_logo_url: string | null;
+    google_reviews_cache: unknown;
+    phone: string | null;
+    email: string | null;
+    website: string | null;
+    address: string | null;
   };
 
   if (!venue) {
@@ -122,20 +128,50 @@ export async function GET() {
     }));
   }
 
-  // ── Reviews: pull approved listing reviews into guide-review shape ──────
-  const reviews = (reviewsRes.data ?? []) as Array<{
+  // ── Reviews: merge approved listing reviews + Google reviews ──────────────
+  // Listing reviews take priority; Google reviews fill up to 6 total.
+  const listingReviews = ((reviewsRes.data ?? []) as Array<{
     rating: number | null;
     body: string | null;
     reviewer_name: string | null;
     wedding_date: string | null;
-  }>;
-  if (reviews.length > 0) {
-    seed.reviews = reviews.map((r) => ({
-      author: r.reviewer_name ?? '',
-      location: r.wedding_date ? `Married ${new Date(r.wedding_date).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}` : '',
-      body: r.body ?? '',
-      rating: r.rating ?? 5,
-    }));
+  }>).map((r) => ({
+    author: r.reviewer_name ?? '',
+    location: r.wedding_date ? `Married ${new Date(r.wedding_date).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}` : '',
+    body: r.body ?? '',
+    rating: r.rating ?? 5,
+  }));
+
+  const mergedReviews = [...listingReviews];
+
+  if (mergedReviews.length < 6) {
+    const googleCache = parseGoogleReviewsCache(venue.google_reviews_cache);
+    if (googleCache?.reviews?.length) {
+      const needed = 6 - mergedReviews.length;
+      for (const gr of googleCache.reviews) {
+        if (mergedReviews.length >= 6) break;
+        // Skip if no meaningful text
+        if (!gr.text?.trim()) continue;
+        // Deduplicate: skip if a listing review already has very similar body text
+        const isDuplicate = listingReviews.some(
+          (lr) => lr.body && gr.text && lr.body.toLowerCase().includes(gr.text.slice(0, 40).toLowerCase()),
+        );
+        if (isDuplicate) continue;
+        const publishedDate = gr.published_at
+          ? new Date(gr.published_at).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+          : '';
+        mergedReviews.push({
+          author: gr.author_name || 'Google Reviewer',
+          location: publishedDate,
+          body: gr.text,
+          rating: gr.rating ?? 5,
+        });
+      }
+    }
+  }
+
+  if (mergedReviews.length > 0) {
+    seed.reviews = mergedReviews.slice(0, 6);
   }
 
   // ── Soft, AI-improvable starter copy ────────────────────────────────────

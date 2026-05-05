@@ -383,6 +383,16 @@ export default function PricingGuidePage() {
   const seedIsUseful = !!seedData?.hasListing && !!seedData.seed && Object.keys(seedData.seed).length > 0;
   const showSeedBanner = !seedDismissed && guideIsMostlyEmpty && seedIsUseful;
 
+  // Auto-apply seed on first load when the guide is completely empty
+  const autoSeedDone = useRef(false);
+  useEffect(() => {
+    if (autoSeedDone.current) return;
+    if (!guide || !seedData?.seed) return;
+    if (!guideIsMostlyEmpty || !seedIsUseful) return;
+    autoSeedDone.current = true;
+    void autoFillFromListing();
+  }, [guide, seedData, guideIsMostlyEmpty, seedIsUseful, autoFillFromListing]);
+
   // ── Render ─────────────────────────────────────────────────────────────
 
   if (loading) {
