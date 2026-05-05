@@ -422,7 +422,7 @@ export default function PricingGuidePage() {
   }
 
   return (
-    <div className="mx-auto max-w-[960px] space-y-6 py-6 sm:py-8">
+    <div className="space-y-6 py-6 sm:py-8">
 
       {/* ── Header ─────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-4">
