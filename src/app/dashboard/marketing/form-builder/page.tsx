@@ -158,7 +158,13 @@ export default function FormBuilderListPage() {
                         {new Date(f.updated_at).toLocaleString()}
                       </p>
                     </div>
-                    <Pencil size={18} className="flex-shrink-0 text-gray-400" />
+                  </Link>
+                  <Link
+                    href={`/dashboard/marketing/form-builder/${f.id}`}
+                    title="Edit form"
+                    className="flex flex-shrink-0 items-center justify-center border-l border-gray-100 px-4 text-gray-400 transition hover:bg-gray-50 hover:text-gray-700"
+                  >
+                    <Pencil size={16} />
                   </Link>
                   <button
                     type="button"

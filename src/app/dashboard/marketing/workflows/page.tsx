@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2, Plus, Trash2, Workflow } from 'lucide-react';
+import { ArrowLeft, Loader2, Pencil, Plus, Trash2, Workflow } from 'lucide-react';
 
 interface AutoRow {
   id: string;
@@ -181,6 +181,13 @@ export default function WorkflowsListPage() {
                     >
                       {r.status}
                     </span>
+                  </Link>
+                  <Link
+                    href={`/dashboard/marketing/workflows/${r.id}`}
+                    title="Edit workflow"
+                    className="flex flex-shrink-0 items-center justify-center border-l border-gray-100 px-4 text-gray-400 transition hover:bg-gray-50 hover:text-gray-700"
+                  >
+                    <Pencil size={16} />
                   </Link>
                   <button
                     type="button"

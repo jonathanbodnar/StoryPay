@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2, Megaphone, Pen, Plus, Send, Trash2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Megaphone, Pencil, Plus, Trash2 } from 'lucide-react';
 
 interface CampaignRow {
   id: string;
@@ -154,8 +154,11 @@ export default function CampaignsListPage() {
             return (
               <li key={c.id}>
                 <div className="group flex items-stretch overflow-hidden rounded-xl border border-gray-200 bg-white transition hover:border-brand-200 hover:bg-brand-50/40">
-                  <div className="flex min-w-0 flex-1 items-center gap-4 px-4 py-3">
-                    <div className="min-w-0 flex-1">
+                  <Link
+                    href={`/dashboard/marketing/email/campaigns/${c.id}/design`}
+                    className="flex min-w-0 flex-1 items-center justify-between gap-4 px-4 py-3"
+                  >
+                    <div className="min-w-0">
                       <p className="truncate font-medium text-gray-900">{c.name}</p>
                       <p className="truncate text-xs text-gray-500">
                         Updated {new Date(c.updated_at).toLocaleDateString()}
@@ -171,23 +174,14 @@ export default function CampaignsListPage() {
                     >
                       {c.status}
                     </span>
-                    <div className="flex flex-shrink-0 items-center gap-2">
-                      {c.status === 'draft' && (
-                        <Link
-                          href={`/dashboard/marketing/email/campaigns/${c.id}/design`}
-                          className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50"
-                        >
-                          <Pen size={12} /> Edit
-                        </Link>
-                      )}
-                      <Link
-                        href={`/dashboard/marketing/email/campaigns/${c.id}`}
-                        className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50"
-                      >
-                        <Send size={12} /> {c.status === 'draft' ? 'Send' : 'View'}
-                      </Link>
-                    </div>
-                  </div>
+                  </Link>
+                  <Link
+                    href={`/dashboard/marketing/email/campaigns/${c.id}/design`}
+                    title="Edit email"
+                    className="flex flex-shrink-0 items-center justify-center border-l border-gray-100 px-4 text-gray-400 transition hover:bg-gray-50 hover:text-gray-700"
+                  >
+                    <Pencil size={16} />
+                  </Link>
                   <button
                     type="button"
                     onClick={() => void deleteCampaign(c)}
@@ -268,7 +262,7 @@ export default function CampaignsListPage() {
                 onClick={() => void createCampaign()}
                 className="flex items-center gap-2 rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-gray-700 disabled:opacity-60 transition-colors"
               >
-                {creating ? <Loader2 size={14} className="animate-spin" /> : <Pen size={14} />}
+                {creating ? <Loader2 size={14} className="animate-spin" /> : <Pencil size={14} />}
                 {creating ? 'Creating…' : 'Design Email →'}
               </button>
             </div>
