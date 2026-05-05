@@ -754,8 +754,8 @@ export default function Sidebar({
         </Link>
         <button
           type="button"
-          title="Support"
-          onClick={() => window.dispatchEvent(new Event('open-ask-ai'))}
+          title="Contact support"
+          onClick={() => window.dispatchEvent(new Event('open-support'))}
           className={`flex items-center gap-2 text-gray-400 hover:text-gray-700 transition-colors text-sm w-full rounded-lg hover:bg-gray-50 ${
             rail ? 'justify-center px-2 py-2' : 'px-2 py-1.5'
           }`}

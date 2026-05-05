@@ -5,9 +5,11 @@ import {
  Sparkles, X, Send, Loader2, ChevronDown,
  RotateCcw, AlertCircle,
  Mic, MicOff, Smile, Paperclip, ChevronRight, BookOpen,
+ LifeBuoy,
 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { getArticlesForPath, getArticleById } from '@/lib/help-articles';
+import { SupportPanel } from '@/components/support/SupportPanel';
 
 interface Message {
  role: 'user' | 'assistant';
@@ -272,6 +274,7 @@ export default function AskAIWidget() {
  const router = useRouter();
 
  const [open, setOpen] = useState(false);
+ const [mode, setMode] = useState<'ai' | 'support'>('ai');
  const [messages, setMessages] = useState<Message[]>([]);
  const [input, setInput] = useState('');
  const [loading, setLoading] = useState(false);
@@ -318,11 +321,17 @@ const [unread, setUnread] = useState(0);
  setSpeechSupported(!!(w['SpeechRecognition'] || w['webkitSpeechRecognition']));
  }, []);
 
- // Listen for sidebar open event
+ // Listen for sidebar open event (`open-ask-ai`) and a dedicated support
+ // event (`open-support`) — letting any component switch tabs.
  useEffect(() => {
- const handler = () => setOpen(true);
- window.addEventListener('open-ask-ai', handler);
- return () => window.removeEventListener('open-ask-ai', handler);
+ const onAi = () => { setMode('ai'); setOpen(true); };
+ const onSupport = () => { setMode('support'); setOpen(true); };
+ window.addEventListener('open-ask-ai', onAi);
+ window.addEventListener('open-support', onSupport);
+ return () => {
+   window.removeEventListener('open-ask-ai', onAi);
+   window.removeEventListener('open-support', onSupport);
+ };
  }, []);
 
  useEffect(() => {
@@ -450,7 +459,7 @@ setPendingImage(null); setShowEmoji(false);
  <div className="flex items-center justify-between px-4 py-3.5 flex-shrink-0"style={{ backgroundColor: BRAND }}>
  <div className="flex items-center gap-2.5">
  {/* Back button when reading an article inline */}
- {inlineArticle ? (
+ {inlineArticle && mode === 'ai' ? (
  <button onClick={() => setInlineArticleId(null)}
  className="flex h-8 w-8 items-center justify-center rounded-full text-white/70 hover:bg-white/15 transition-colors"
  title="Back">
@@ -458,20 +467,22 @@ setPendingImage(null); setShowEmoji(false);
  </button>
  ) : (
  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20">
- <Sparkles size={16} className="text-white"/>
+ {mode === 'support' ? <LifeBuoy size={16} className="text-white"/> : <Sparkles size={16} className="text-white"/>}
  </div>
  )}
  <div>
  <p className="text-sm font-semibold text-white leading-none">
- {inlineArticle ? inlineArticle.title : 'Ask AI'}
+ {mode === 'support' ? 'Contact support' : (inlineArticle ? inlineArticle.title : 'Ask AI')}
  </p>
  <p className="text-[11px] text-white/60 mt-0.5">
- {inlineArticle ? inlineArticle.catLabel : 'Powered by your live account data'}
+ {mode === 'support'
+   ? 'Talk to our human team'
+   : (inlineArticle ? inlineArticle.catLabel : 'Powered by your live account data')}
  </p>
  </div>
  </div>
  <div className="flex items-center gap-1.5">
- {(messages.length > 0 || inlineArticle) && (
+ {mode === 'ai' && (messages.length > 0 || inlineArticle) && (
  <button onClick={reset} title="New conversation"
  className="flex h-7 w-7 items-center justify-center rounded-full text-white/60 hover:bg-white/15 transition-colors">
  <RotateCcw size={13} />
@@ -484,7 +495,41 @@ setPendingImage(null); setShowEmoji(false);
  </div>
  </div>
 
- {/* ── Content area ── */}
+ {/* ── Mode toggle (Ask AI ↔ Contact Support) ── */}
+ <div className="flex items-center gap-1 border-b border-gray-200 bg-white px-2 pt-1.5 flex-shrink-0">
+ <button
+   type="button"
+   onClick={() => setMode('ai')}
+   className={`flex items-center gap-1.5 rounded-t-lg px-3 py-1.5 text-xs font-semibold transition-colors -mb-px border-b-2 ${
+     mode === 'ai'
+       ? 'border-gray-900 text-gray-900'
+       : 'border-transparent text-gray-500 hover:text-gray-800'
+   }`}
+ >
+   <Sparkles size={11} /> Ask AI
+ </button>
+ <button
+   type="button"
+   onClick={() => setMode('support')}
+   className={`flex items-center gap-1.5 rounded-t-lg px-3 py-1.5 text-xs font-semibold transition-colors -mb-px border-b-2 ${
+     mode === 'support'
+       ? 'border-gray-900 text-gray-900'
+       : 'border-transparent text-gray-500 hover:text-gray-800'
+   }`}
+ >
+   <LifeBuoy size={11} /> Contact support
+ </button>
+ </div>
+
+ {/* ── Support mode ── */}
+ {mode === 'support' && (
+ <div className="flex-1 min-h-0 overflow-hidden">
+ <SupportPanel />
+ </div>
+ )}
+
+ {/* ── Ask AI content area ── */}
+ {mode === 'ai' && (
  <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain" style={{ backgroundColor: '#f9fafb' }}>
 
  {/* ── STATE A: Article inline view ── */}
@@ -586,8 +631,10 @@ setPendingImage(null); setShowEmoji(false);
  </div>
  )}
  </div>
+ )}
 
- {/* ── Input bar (stable component — do not define inline in parent) ── */}
+ {/* ── Input bar (Ask AI only — support uses its own input) ── */}
+ {mode === 'ai' && (
  <AskAIInputBar
  input={input}
  onInputChange={setInput}
@@ -607,6 +654,7 @@ setPendingImage(null); setShowEmoji(false);
  onEmojiSelect={e => setInput(p => p + e)}
  onEmojiClose={() => setShowEmoji(false)}
  />
+ )}
  </div>
  )}
  </>
