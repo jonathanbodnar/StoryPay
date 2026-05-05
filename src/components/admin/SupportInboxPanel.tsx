@@ -16,7 +16,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Inbox, LifeBuoy, Search, RefreshCw, Send, MessageSquare,
   Mail, MessageCircle, Building2, Loader2, AlertCircle, CheckCircle2,
-  StickyNote, ShieldCheck,
+  StickyNote, ShieldCheck, AlertTriangle, CircleDot, CircleSlash,
+  UserPlus, Flag, X,
 } from 'lucide-react';
 
 const BRAND = '#1b1b1b';
@@ -346,13 +347,11 @@ export function SupportInboxPanel() {
       </div>
 
       {subTab === 'tickets' && (
-        <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-12 text-center">
-          <LifeBuoy className="mx-auto mb-3 text-gray-400" size={28} />
-          <p className="text-sm font-medium text-gray-700">Venue support tickets coming soon</p>
-          <p className="text-xs text-gray-500 mt-1">
-            This tab is wired up in the next step — it will list help requests opened by venue owners.
-          </p>
-        </div>
+        <TicketsView
+          me={me}
+          teamMembers={teamMembers}
+          actAsId={actAsId}
+        />
       )}
 
       {subTab === 'bride-replies' && (
@@ -810,6 +809,522 @@ function MessageBubble({
         )}
         {msg.send_error && (
           <p className="text-[10px] text-red-600">⚠ {msg.send_error}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Venue support tickets ──────────────────────────────────────────────────
+
+interface TicketListRow {
+  id:                       string;
+  venue_id:                 string;
+  venue_name:               string;
+  subject:                  string;
+  status:                   'open' | 'pending' | 'closed';
+  priority:                 'low' | 'normal' | 'high';
+  assigned_support_user_id: string | null;
+  assigned_support_name:    string | null;
+  last_message_at:          string;
+  last_message_preview:     string | null;
+  opener_label:             string;
+  opener_email:             string | null;
+  message_count:            number;
+  created_at:               string;
+}
+
+interface TicketDetail {
+  ticket: {
+    id: string; venue_id: string; subject: string;
+    status: 'open' | 'pending' | 'closed';
+    priority: 'low' | 'normal' | 'high';
+    assigned_support_user_id: string | null;
+    last_message_at: string;
+    last_message_preview: string | null;
+    opened_by_profile_id: string | null;
+    opened_by_member_id: string | null;
+    created_at: string;
+  };
+  venue: { id: string; name: string; notification_email: string | null; contact_email: string | null; phone: string | null } | null;
+  opener: { kind: 'owner' | 'team_member' | 'unknown'; label: string; email: string | null };
+  messages: {
+    id: string; sender_type: 'venue' | 'support';
+    sender_profile_id: string | null;
+    sender_member_id: string | null;
+    sender_support_user_id: string | null;
+    body: string;
+    attachments: unknown;
+    created_at: string;
+  }[];
+  senders: {
+    profiles: Record<string, { id: string; full_name: string | null }>;
+    members:  Record<string, { id: string; first_name: string | null; last_name: string | null; email: string | null }>;
+    support:  Record<string, { id: string; name: string; email: string }>;
+  };
+}
+
+function StatusPill({ status }: { status: 'open' | 'pending' | 'closed' }) {
+  const map = {
+    open:    { cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: <CircleDot size={10} /> },
+    pending: { cls: 'bg-amber-50 text-amber-700 border-amber-200',       icon: <CircleDot size={10} /> },
+    closed:  { cls: 'bg-gray-100 text-gray-600 border-gray-200',         icon: <CircleSlash size={10} /> },
+  } as const;
+  const { cls, icon } = map[status];
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${cls}`}>
+      {icon} {status}
+    </span>
+  );
+}
+
+function PriorityPill({ priority }: { priority: 'low' | 'normal' | 'high' }) {
+  if (priority === 'high') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 text-red-700 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
+        <AlertTriangle size={10} /> High
+      </span>
+    );
+  }
+  if (priority === 'low') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 text-gray-500 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
+        <Flag size={10} /> Low
+      </span>
+    );
+  }
+  return null;
+}
+
+function TicketsView({
+  me, teamMembers, actAsId,
+}: {
+  me: SupportMe | null;
+  teamMembers: SupportTeamMember[];
+  actAsId: string;
+}) {
+  const [tickets, setTickets] = useState<TicketListRow[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [listLoading, setListLoading] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'open' | 'all' | 'closed'>('open');
+  const [search, setSearch] = useState('');
+  const [committedSearch, setCommittedSearch] = useState('');
+  const [activeTicketId, setActiveTicketId] = useState<string | null>(null);
+
+  const fetchTickets = useCallback(async (opts: { append?: boolean; cursor?: string | null } = {}) => {
+    setListLoading(true);
+    setListError(null);
+    try {
+      const params = new URLSearchParams();
+      if (statusFilter === 'open')   params.set('status', 'open,pending');
+      if (statusFilter === 'closed') params.set('status', 'closed');
+      if (statusFilter === 'all')    params.set('status', 'all');
+      if (committedSearch) params.set('search', committedSearch);
+      if (opts.cursor) params.set('cursor', opts.cursor);
+      params.set('limit', '50');
+
+      const r = await fetch(`/api/admin/support/tickets?${params.toString()}`, { cache: 'no-store' });
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        throw new Error(d.error || `Failed (${r.status})`);
+      }
+      const d = (await r.json()) as { tickets: TicketListRow[]; nextCursor: string | null };
+      setTickets(prev => (opts.append ? [...prev, ...d.tickets] : d.tickets));
+      setNextCursor(d.nextCursor);
+      if (!opts.append && d.tickets.length > 0 && !activeTicketId) {
+        setActiveTicketId(d.tickets[0].id);
+      }
+    } catch (e) {
+      setListError(e instanceof Error ? e.message : 'Failed to load tickets');
+    } finally {
+      setListLoading(false);
+    }
+  }, [statusFilter, committedSearch, activeTicketId]);
+
+  useEffect(() => { fetchTickets(); }, [fetchTickets]);
+
+  function submitSearch() {
+    setCommittedSearch(search.trim());
+    setTickets([]);
+    setActiveTicketId(null);
+    setNextCursor(null);
+  }
+
+  // Active ticket detail
+  const [detail, setDetail] = useState<TicketDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  const loadDetail = useCallback(async (id: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      const r = await fetch(`/api/admin/support/tickets/${id}`, { cache: 'no-store' });
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        throw new Error(d.error || `Failed (${r.status})`);
+      }
+      const d = (await r.json()) as TicketDetail;
+      setDetail(d);
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ block: 'end' });
+      });
+    } catch (e) {
+      setDetailError(e instanceof Error ? e.message : 'Failed to load ticket');
+    } finally {
+      setDetailLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTicketId) loadDetail(activeTicketId);
+    else setDetail(null);
+  }, [activeTicketId, loadDetail]);
+
+  // Reply
+  const [replyBody, setReplyBody] = useState('');
+  const [sending, setSending] = useState(false);
+  const [sendStatus, setSendStatus] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  useEffect(() => {
+    setReplyBody('');
+    setSendStatus(null);
+  }, [activeTicketId]);
+
+  const supportUserId = me?.member?.id || actAsId;
+  const canSend = Boolean(detail && replyBody.trim() && supportUserId && !sending && detail.ticket.status !== 'closed');
+
+  async function send() {
+    if (!detail || !canSend) return;
+    setSending(true);
+    setSendStatus(null);
+    try {
+      const r = await fetch(`/api/admin/support/tickets/${detail.ticket.id}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          body:          replyBody.trim(),
+          supportUserId: me?.member?.id ? undefined : supportUserId,
+        }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || `Send failed (${r.status})`);
+      setSendStatus({ ok: true, msg: 'Reply sent' });
+      setReplyBody('');
+      await loadDetail(detail.ticket.id);
+      // Refresh list so status pill / preview updates
+      fetchTickets();
+    } catch (e) {
+      setSendStatus({ ok: false, msg: e instanceof Error ? e.message : 'Send failed' });
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function updateStatus(updates: { status?: 'open' | 'pending' | 'closed'; priority?: 'low' | 'normal' | 'high'; assigned_support_user_id?: string | null }) {
+    if (!detail) return;
+    try {
+      const r = await fetch(`/api/admin/support/tickets/${detail.ticket.id}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'Update failed');
+      await loadDetail(detail.ticket.id);
+      fetchTickets();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Update failed');
+    }
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4 min-h-[600px]">
+      {/* Ticket list */}
+      <div className="rounded-2xl border border-gray-200 bg-white flex flex-col min-h-0">
+        <div className="p-3 border-b border-gray-200 space-y-2">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') submitSearch(); }}
+              placeholder="Search subject, venue..."
+              className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-900/10 focus:border-gray-300 outline-none"
+            />
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden text-[11px]">
+              {(['open', 'all', 'closed'] as const).map(opt => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => { setStatusFilter(opt); setActiveTicketId(null); setTickets([]); setNextCursor(null); }}
+                  className={`px-2.5 py-1 font-medium transition-colors ${statusFilter === opt ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                >
+                  {opt === 'open' ? 'Open + Pending' : opt === 'all' ? 'All' : 'Closed'}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => fetchTickets()}
+              className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-800"
+            >
+              <RefreshCw size={11} /> Refresh
+            </button>
+          </div>
+          <p className="text-[11px] text-gray-500">{tickets.length} ticket{tickets.length === 1 ? '' : 's'}</p>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {listLoading && tickets.length === 0 && (
+            <div className="flex items-center justify-center py-12 text-gray-400">
+              <Loader2 size={20} className="animate-spin" />
+            </div>
+          )}
+          {listError && (
+            <div className="m-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              <AlertCircle size={12} className="inline mr-1" /> {listError}
+            </div>
+          )}
+          {!listLoading && !listError && tickets.length === 0 && (
+            <div className="px-4 py-12 text-center text-sm text-gray-400">
+              <CheckCircle2 size={22} className="mx-auto mb-2 text-emerald-400" />
+              No tickets {statusFilter === 'open' ? 'open' : 'matching'}.
+            </div>
+          )}
+          {tickets.map(t => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setActiveTicketId(t.id)}
+              className={`w-full text-left px-3 py-3 border-b border-gray-100 last:border-b-0 transition-colors ${
+                activeTicketId === t.id ? 'bg-gray-50' : 'hover:bg-gray-50/60'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2 mb-1">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 truncate">{t.subject}</p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <Building2 size={11} className="text-gray-400 shrink-0" />
+                    <span className="text-[11px] text-gray-500 truncate">{t.venue_name}</span>
+                  </div>
+                </div>
+                <div className="flex flex-col items-end shrink-0 gap-1">
+                  <span className="text-[10px] text-gray-400">{relativeTime(t.last_message_at)}</span>
+                  <div className="flex items-center gap-1">
+                    <PriorityPill priority={t.priority} />
+                    <StatusPill status={t.status} />
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 line-clamp-2 mt-1">
+                {t.last_message_preview || '(no messages)'}
+              </p>
+              <div className="flex items-center justify-between mt-1.5 text-[10px] text-gray-400">
+                <span>From {t.opener_label}</span>
+                <span>
+                  {t.assigned_support_name
+                    ? `Assigned to ${t.assigned_support_name}`
+                    : 'Unassigned'}
+                </span>
+              </div>
+            </button>
+          ))}
+          {nextCursor && (
+            <div className="p-3">
+              <button
+                type="button"
+                onClick={() => fetchTickets({ append: true, cursor: nextCursor })}
+                disabled={listLoading}
+                className="w-full text-xs font-medium text-gray-600 hover:text-gray-900 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50"
+              >
+                {listLoading ? 'Loading...' : 'Load more'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Ticket detail */}
+      <div className="rounded-2xl border border-gray-200 bg-white flex flex-col min-h-0">
+        {!activeTicketId && (
+          <div className="flex-1 flex flex-col items-center justify-center text-gray-400 text-sm py-16">
+            <LifeBuoy size={28} className="mb-2" />
+            Select a ticket to view the conversation.
+          </div>
+        )}
+        {activeTicketId && detailLoading && !detail && (
+          <div className="flex-1 flex items-center justify-center">
+            <Loader2 size={20} className="animate-spin text-gray-400" />
+          </div>
+        )}
+        {detailError && (
+          <div className="m-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+            <AlertCircle size={12} className="inline mr-1" /> {detailError}
+          </div>
+        )}
+        {detail && (
+          <>
+            <div className="border-b border-gray-200 px-4 py-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{detail.ticket.subject}</p>
+                    <StatusPill status={detail.ticket.status} />
+                    <PriorityPill priority={detail.ticket.priority} />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-[11px] text-gray-500">
+                    {detail.venue && (
+                      <span className="inline-flex items-center gap-1">
+                        <Building2 size={11} className="text-gray-400" /> {detail.venue.name}
+                      </span>
+                    )}
+                    <span>From: <span className="text-gray-700 font-medium">{detail.opener.label}</span></span>
+                    {detail.opener.email && <span className="text-gray-400">{detail.opener.email}</span>}
+                    {detail.venue?.notification_email && <span>Notif: {detail.venue.notification_email}</span>}
+                  </div>
+                </div>
+              </div>
+
+              {/* Action bar */}
+              <div className="flex flex-wrap items-center gap-2 mt-3 text-[11px]">
+                <select
+                  value={detail.ticket.priority}
+                  onChange={e => updateStatus({ priority: e.target.value as 'low' | 'normal' | 'high' })}
+                  className="bg-white border border-gray-200 rounded-lg px-2 py-1 text-[11px] cursor-pointer"
+                >
+                  <option value="low">Low priority</option>
+                  <option value="normal">Normal priority</option>
+                  <option value="high">High priority</option>
+                </select>
+                <select
+                  value={detail.ticket.assigned_support_user_id || ''}
+                  onChange={e => updateStatus({ assigned_support_user_id: e.target.value || null })}
+                  className="bg-white border border-gray-200 rounded-lg px-2 py-1 text-[11px] cursor-pointer"
+                >
+                  <option value="">Unassigned</option>
+                  {teamMembers.filter(m => m.active).map(m => (
+                    <option key={m.id} value={m.id}>Assign → {m.name}</option>
+                  ))}
+                </select>
+                {supportUserId && detail.ticket.assigned_support_user_id !== supportUserId && (
+                  <button
+                    type="button"
+                    onClick={() => updateStatus({ assigned_support_user_id: supportUserId })}
+                    className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    <UserPlus size={11} /> Claim
+                  </button>
+                )}
+                <span className="ml-auto" />
+                {detail.ticket.status !== 'closed' ? (
+                  <button
+                    type="button"
+                    onClick={() => updateStatus({ status: 'closed' })}
+                    className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    <X size={11} /> Close ticket
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => updateStatus({ status: 'open' })}
+                    className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    <CircleDot size={11} /> Reopen
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto bg-gray-50/30 px-4 py-4 space-y-3">
+              {detail.messages.length === 0 && (
+                <p className="text-center text-xs text-gray-400 py-8">No messages.</p>
+              )}
+              {detail.messages.map(m => {
+                const isVenue = m.sender_type === 'venue';
+                let label = 'Support';
+                if (isVenue) {
+                  if (m.sender_profile_id) {
+                    label = detail.senders.profiles[m.sender_profile_id]?.full_name || 'Venue owner';
+                  } else if (m.sender_member_id) {
+                    const mem = detail.senders.members[m.sender_member_id];
+                    label = mem ? ([mem.first_name, mem.last_name].filter(Boolean).join(' ').trim() || mem.email || 'Team member') : 'Team member';
+                  }
+                } else if (m.sender_support_user_id) {
+                  label = detail.senders.support[m.sender_support_user_id]?.name || 'Support';
+                }
+
+                return (
+                  <div key={m.id} className={`flex ${isVenue ? 'justify-start' : 'justify-end'}`}>
+                    <div className="max-w-[75%] space-y-1">
+                      <div className="flex items-center gap-2 text-[10px] text-gray-500">
+                        <span className="font-semibold">{label}</span>
+                        <span className="text-gray-400">{relativeTime(m.created_at)}</span>
+                      </div>
+                      <div className={`rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${
+                        isVenue
+                          ? 'bg-white border border-gray-200 text-gray-900'
+                          : 'bg-gray-900 text-white'
+                      }`}>
+                        {m.body}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Reply box */}
+            <div className="border-t border-gray-200 bg-white p-3 space-y-2">
+              {detail.ticket.status === 'closed' && (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+                  This ticket is closed. Reopen it to send a reply.
+                </div>
+              )}
+              {!supportUserId && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 flex items-center gap-2">
+                  <AlertCircle size={12} /> Pick a support identity above before sending.
+                </div>
+              )}
+              {sendStatus && (
+                <div className={`rounded-lg px-3 py-2 text-xs flex items-center gap-2 ${
+                  sendStatus.ok
+                    ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
+                    : 'border border-red-200 bg-red-50 text-red-700'
+                }`}>
+                  {sendStatus.ok ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
+                  {sendStatus.msg}
+                </div>
+              )}
+              <textarea
+                value={replyBody}
+                onChange={e => setReplyBody(e.target.value)}
+                placeholder={detail.ticket.status === 'closed' ? 'Ticket is closed' : 'Reply to this ticket…'}
+                rows={3}
+                disabled={detail.ticket.status === 'closed'}
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-brand-900/10 focus:border-gray-300 disabled:bg-gray-50 disabled:cursor-not-allowed"
+              />
+              <div className="flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={send}
+                  disabled={!canSend}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{ backgroundColor: BRAND }}
+                >
+                  {sending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                  {sending ? 'Sending…' : 'Send reply'}
+                </button>
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>

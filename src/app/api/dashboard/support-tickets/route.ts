@@ -1,0 +1,94 @@
+/**
+ * Venue-side support ticket endpoints.
+ *
+ *   GET  /api/dashboard/support-tickets        list this venue's tickets
+ *   POST /api/dashboard/support-tickets        open a new ticket
+ *
+ * Both endpoints use the existing venue_id / member_id cookie scheme via
+ * resolveVenueAttribution() — no Supabase session required.
+ */
+import { NextRequest, NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/lib/supabase';
+import { resolveVenueAttribution } from '@/lib/support/venue-attribution';
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
+export async function GET() {
+  const attr = await resolveVenueAttribution();
+  if ('error' in attr) {
+    return NextResponse.json({ error: attr.error }, { status: 401 });
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('support_threads')
+    .select(`
+      id, subject, status, priority, last_message_at, last_message_preview,
+      created_at, updated_at, assigned_support_user_id
+    `)
+    .eq('venue_id', attr.venueId)
+    .order('last_message_at', { ascending: false })
+    .limit(100);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ tickets: data ?? [] });
+}
+
+export async function POST(req: NextRequest) {
+  const attr = await resolveVenueAttribution();
+  if ('error' in attr) {
+    return NextResponse.json({ error: attr.error }, { status: 401 });
+  }
+
+  let body: { subject?: string; body?: string; priority?: 'low' | 'normal' | 'high' };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+
+  const subject = (body.subject || '').trim() || 'Support request';
+  const text    = (body.body || '').trim();
+  const priority = (body.priority === 'low' || body.priority === 'high') ? body.priority : 'normal';
+
+  if (!text) return NextResponse.json({ error: 'Message body is required' }, { status: 400 });
+
+  // Create the ticket
+  const { data: ticket, error: tErr } = await supabaseAdmin
+    .from('support_threads')
+    .insert({
+      venue_id:               attr.venueId,
+      opened_by_profile_id:   attr.profileId,
+      opened_by_member_id:    attr.memberId,
+      subject,
+      status:                 'open',
+      priority,
+      last_message_preview:   text.slice(0, 240),
+    })
+    .select('id, subject, status, priority, created_at, last_message_at')
+    .single();
+
+  if (tErr || !ticket) {
+    return NextResponse.json({ error: tErr?.message || 'Failed to open ticket' }, { status: 500 });
+  }
+
+  // Insert the first message
+  const { error: mErr } = await supabaseAdmin
+    .from('support_thread_messages')
+    .insert({
+      support_thread_id: (ticket as { id: string }).id,
+      sender_type:       'venue',
+      sender_profile_id: attr.profileId,
+      sender_member_id:  attr.memberId,
+      body:              text,
+    });
+
+  if (mErr) {
+    return NextResponse.json(
+      { error: `Ticket created but failed to insert first message: ${mErr.message}`, ticket },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({ ok: true, ticket }, { status: 201 });
+}
