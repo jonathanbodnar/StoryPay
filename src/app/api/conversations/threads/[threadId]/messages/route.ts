@@ -7,6 +7,7 @@ import { conversationReaderRef } from '@/lib/conversation-reader';
 import { findOrCreateContact, getGhlToken, normalizePhone, sendSms } from '@/lib/ghl';
 import { buildConversationsReplyToEmail } from '@/lib/conversations-inbound-email';
 import { syncInboundSmsFromGhlForThread } from '@/lib/ghl-sms-conversations';
+import { broadcastBrideMessage } from '@/lib/realtime/broadcast';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -570,6 +571,26 @@ ${triggerBlock}
       .delete()
       .eq('thread_id', threadId)
       .in('reader_ref', mentionedRefs);
+  }
+
+  // Broadcast outbound external messages so the admin support inbox can
+  // remove this thread from "needs attention" and any open thread view
+  // (admin or venue) can append the new bubble live. Internal team notes
+  // skip the broadcast — they shouldn't surface in the support UI.
+  if (visibility === 'external') {
+    void broadcastBrideMessage({
+      inbound:            false,
+      threadId,
+      venueId,
+      venueCustomerId,
+      messageId:          (row as { id: string }).id,
+      body:               rawBody,
+      channel:            messageChannel as 'sms' | 'email',
+      senderKind:         sender_kind,
+      sentByVenueSupport: false,
+      supportAgentId:     null,
+      createdAt:          (row as { created_at?: string }).created_at || new Date().toISOString(),
+    });
   }
 
   return NextResponse.json(row, { status: 201 });

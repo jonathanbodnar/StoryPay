@@ -36,6 +36,8 @@ import {
 import { classNames, toTitleCase, dispatchStageChange, onStageChange } from '@/lib/utils';
 import { EmojiPickerPopover } from '@/components/EmojiPickerPopover';
 import ContactProfileDrawer from '@/components/conversations/ContactProfileDrawer';
+import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
+import { supportChannels, type BrideMessageEvent } from '@/lib/realtime/channels';
 
 interface ThreadRow {
   thread_id: string;
@@ -64,6 +66,7 @@ interface ThreadDetail {
   subject: string;
   last_message_at: string;
   venue_customer_id: string;
+  venue_id?: string;
   external_reply_channel?: string;
   contact_stage?: { name: string; color: string | null } | null;
   /** Authoritative DB stage_id — use this to highlight the correct pill. */
@@ -477,6 +480,46 @@ export default function ConversationsPage() {
     }
     void reloadMessages(selectedId);
   }, [selectedId, reloadMessages]);
+
+  // ── Realtime: append new external messages live ────────────────────────────
+  // Subscribed only when the venue id and active thread id are both known.
+  // Inbound bride replies AND support replies (sent on behalf of venue) AND
+  // outbound owner/team replies all arrive here. We dedupe by message id.
+  useBroadcastChannel(
+    threadDetail?.venue_id && selectedId
+      ? supportChannels.venueThread(threadDetail.venue_id, selectedId)
+      : null,
+    ['message'],
+    useCallback((_evt, payload) => {
+      const evt = payload as BrideMessageEvent;
+      if (!evt) return;
+      setMessages(prev => {
+        if (prev.some(m => m.id === evt.messageId)) return prev;
+        const newMsg: Msg = {
+          id:                      evt.messageId,
+          visibility:              'external',
+          channel:                 evt.channel,
+          body:                    evt.body,
+          sender_kind:             evt.senderKind,
+          created_at:              evt.createdAt,
+          external_email_sent:     null,
+          send_error:              null,
+          mentioned_member_ids:    [],
+          author_label:            evt.sentByVenueSupport
+            ? 'StoryVenue Support'
+            : evt.senderKind === 'ai'
+              ? 'AI Concierge'
+              : undefined,
+          sent_on_behalf_of_venue: evt.sentByVenueSupport,
+          sent_by_support_user_id: evt.supportAgentId,
+        };
+        return [...prev, newMsg];
+      });
+      // Pin to bottom — same UX as a fresh send
+      stuckToBottomRef.current = true;
+      scrollToBottomNow();
+    }, [scrollToBottomNow]),
+  );
 
   // Re-fetch the thread detail + threads list (incl. latest stages) when the user
   // switches back to this browser tab after changing a stage elsewhere.

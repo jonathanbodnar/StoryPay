@@ -143,7 +143,38 @@ export async function logAiOutboundMessage(
       console.error('[ai-concierge] logAiOutboundMessage insert error:', error.message);
       return { threadId, messageId: null };
     }
-    return { threadId, messageId: (msg as { id: string }).id };
+    const messageId = (msg as { id: string }).id;
+
+    // Realtime broadcast — appears live in admin support inbox + venue conversations
+    void (async () => {
+      try {
+        // Look up venue_customer_id for the broadcast payload
+        const { data: t } = await supabaseAdmin
+          .from('conversation_threads')
+          .select('venue_customer_id')
+          .eq('id', threadId)
+          .maybeSingle();
+        const vcId = (t as { venue_customer_id?: string } | null)?.venue_customer_id || '';
+        const { broadcastBrideMessage } = await import('@/lib/realtime/broadcast');
+        await broadcastBrideMessage({
+          inbound:            false,
+          threadId,
+          venueId:            input.venueId,
+          venueCustomerId:    vcId,
+          messageId,
+          body:               input.body,
+          channel:            'sms',
+          senderKind:         'ai',
+          sentByVenueSupport: false,
+          supportAgentId:     null,
+          createdAt:          new Date().toISOString(),
+        });
+      } catch (e) {
+        console.warn('[ai-concierge] broadcast failed', e);
+      }
+    })();
+
+    return { threadId, messageId };
   } catch (e) {
     console.error('[ai-concierge] logAiOutboundMessage exception:', e);
     return { threadId, messageId: null };

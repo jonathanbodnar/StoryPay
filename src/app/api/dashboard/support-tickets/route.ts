@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { resolveVenueAttribution } from '@/lib/support/venue-attribution';
+import { broadcastTicketMessage } from '@/lib/realtime/broadcast';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -31,7 +32,7 @@ export async function GET() {
     .limit(100);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ tickets: data ?? [] });
+  return NextResponse.json({ tickets: data ?? [], venueId: attr.venueId });
 }
 
 export async function POST(req: NextRequest) {
@@ -73,7 +74,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Insert the first message
-  const { error: mErr } = await supabaseAdmin
+  const { data: firstMsg, error: mErr } = await supabaseAdmin
     .from('support_thread_messages')
     .insert({
       support_thread_id: (ticket as { id: string }).id,
@@ -81,13 +82,27 @@ export async function POST(req: NextRequest) {
       sender_profile_id: attr.profileId,
       sender_member_id:  attr.memberId,
       body:              text,
-    });
+    })
+    .select('id, created_at')
+    .single();
 
   if (mErr) {
     return NextResponse.json(
       { error: `Ticket created but failed to insert first message: ${mErr.message}`, ticket },
       { status: 500 },
     );
+  }
+
+  if (firstMsg) {
+    void broadcastTicketMessage({
+      ticketId:   (ticket as { id: string }).id,
+      venueId:    attr.venueId,
+      messageId:  (firstMsg as { id: string }).id,
+      senderType: 'venue',
+      body:       text,
+      createdAt:  (firstMsg as { created_at?: string }).created_at || new Date().toISOString(),
+      status:     'open',
+    });
   }
 
   return NextResponse.json({ ok: true, ticket }, { status: 201 });

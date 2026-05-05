@@ -17,8 +17,10 @@ import {
   Inbox, LifeBuoy, Search, RefreshCw, Send, MessageSquare,
   Mail, MessageCircle, Building2, Loader2, AlertCircle, CheckCircle2,
   StickyNote, ShieldCheck, AlertTriangle, CircleDot, CircleSlash,
-  UserPlus, Flag, X,
+  UserPlus, Flag, X, Radio,
 } from 'lucide-react';
+import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
+import { supportChannels, type BrideMessageEvent, type TicketMessageEvent, type TicketStatusEvent } from '@/lib/realtime/channels';
 
 const BRAND = '#1b1b1b';
 
@@ -239,6 +241,103 @@ export function SupportInboxPanel() {
     else setDetail(null);
   }, [activeThreadId, loadDetail]);
 
+  // ── Realtime: bride inbox ─────────────────────────────────────────────────
+  // A throttled refresh that respects in-flight loads. We refresh the whole
+  // inbox list on any inbound bride message — server-side filtering is much
+  // simpler than reconstructing the "needs attention" computation in the
+  // browser (latest-external-is-contact + venue/customer joins).
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debouncedInboxRefresh = useCallback(() => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(() => {
+      if (subTab === 'bride-replies') fetchInbox();
+    }, 400);
+  }, [subTab, fetchInbox]);
+
+  const [liveBride, setLiveBride] = useState(false);
+
+  useBroadcastChannel(
+    subTab === 'bride-replies' ? supportChannels.brideInbox() : null,
+    ['message'],
+    useCallback((_evt, payload) => {
+      const evt = payload as BrideMessageEvent;
+      if (!evt) return;
+      // Pulse the "live" indicator briefly
+      setLiveBride(true);
+      setTimeout(() => setLiveBride(false), 1500);
+
+      if (evt.inbound) {
+        // Bride replied — bump existing row to top with new preview, or fetch
+        // a fresh list to pull in a brand-new thread.
+        setThreads(prev => {
+          const idx = prev.findIndex(t => t.thread_id === evt.threadId);
+          if (idx === -1) {
+            debouncedInboxRefresh();
+            return prev;
+          }
+          const updated: BrideInboxRow = {
+            ...prev[idx],
+            last_message_preview:    evt.body.slice(0, 200),
+            last_message_at:         evt.createdAt,
+            last_inbound_body:       evt.body,
+            last_inbound_channel:    evt.channel,
+            last_inbound_created_at: evt.createdAt,
+            message_count:           prev[idx].message_count + 1,
+          };
+          const rest = prev.filter((_, i) => i !== idx);
+          return [updated, ...rest];
+        });
+      } else {
+        // Outbound (any sender) — thread is now answered, drop from list
+        setThreads(prev => prev.filter(t => t.thread_id !== evt.threadId));
+      }
+    }, [debouncedInboxRefresh]),
+  );
+
+  // Active thread realtime — append new messages immediately
+  useBroadcastChannel(
+    activeThreadId && subTab === 'bride-replies' ? supportChannels.brideThread(activeThreadId) : null,
+    ['message'],
+    useCallback((_evt, payload) => {
+      const evt = payload as BrideMessageEvent;
+      if (!evt) return;
+      setDetail(prev => {
+        if (!prev || prev.thread.id !== evt.threadId) return prev;
+        if (prev.messages.some(m => m.id === evt.messageId)) return prev;
+        const newMsg: ThreadMessage = {
+          id:                      evt.messageId,
+          thread_id:               evt.threadId,
+          visibility:              'external',
+          channel:                 evt.channel,
+          body:                    evt.body,
+          // Narrow to the union; concierge/ai/contact/owner/team/system all valid
+          sender_kind:             evt.senderKind as ThreadMessage['sender_kind'],
+          venue_team_member_id:    null,
+          contact_from_name:       null,
+          contact_from_email:      null,
+          external_email_sent:     null,
+          send_error:              null,
+          sent_by_support_user_id: evt.supportAgentId,
+          sent_on_behalf_of_venue: evt.sentByVenueSupport,
+          support_internal_note:   null,
+          created_at:              evt.createdAt,
+        };
+        return {
+          ...prev,
+          thread: {
+            ...prev.thread,
+            last_message_at:      evt.createdAt,
+            last_message_preview: evt.body.slice(0, 200),
+          },
+          messages: [...prev.messages, newMsg],
+        };
+      });
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ block: 'end' });
+      });
+    }, []),
+  );
+
   // ── Reply box ──────────────────────────────────────────────────────────────
   const [replyBody, setReplyBody] = useState('');
   const [replyChannel, setReplyChannel] = useState<'auto' | 'sms' | 'email'>('auto');
@@ -315,11 +414,14 @@ export function SupportInboxPanel() {
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h2 className="font-heading text-xl text-gray-900">Support inbox</h2>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Bride replies + venue support tickets, in one place.
-          </p>
+        <div className="flex items-center gap-3">
+          <div>
+            <h2 className="font-heading text-xl text-gray-900">Support inbox</h2>
+            <p className="text-sm text-gray-500 mt-0.5">
+              Bride replies + venue support tickets, in one place.
+            </p>
+          </div>
+          <LiveBadge active={liveBride} />
         </div>
         <IdentityPicker
           me={me}
@@ -494,6 +596,22 @@ export function SupportInboxPanel() {
 }
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
+
+function LiveBadge({ active }: { active: boolean }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition-colors ${
+        active
+          ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+          : 'border-gray-200 bg-gray-50 text-gray-500'
+      }`}
+      title={active ? 'New message just arrived' : 'Live updates active'}
+    >
+      <Radio size={10} className={active ? 'animate-pulse text-emerald-600' : ''} />
+      Live
+    </span>
+  );
+}
 
 function SubTabButton({
   active, onClick, icon, label, count,
@@ -983,6 +1101,98 @@ function TicketsView({
     else setDetail(null);
   }, [activeTicketId, loadDetail]);
 
+  // ── Realtime: tickets list ────────────────────────────────────────────────
+  const ticketsRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debouncedTicketsRefresh = useCallback(() => {
+    if (ticketsRefreshTimerRef.current) clearTimeout(ticketsRefreshTimerRef.current);
+    ticketsRefreshTimerRef.current = setTimeout(() => fetchTickets(), 400);
+  }, [fetchTickets]);
+
+  const [liveTickets, setLiveTickets] = useState(false);
+  const pulseLive = useCallback(() => {
+    setLiveTickets(true);
+    setTimeout(() => setLiveTickets(false), 1500);
+  }, []);
+
+  useBroadcastChannel(
+    supportChannels.tickets(),
+    ['message', 'status'],
+    useCallback((evt, payload) => {
+      if (evt === 'message') {
+        const m = payload as TicketMessageEvent;
+        if (!m) return;
+        pulseLive();
+        // Bump existing row to top with new preview, or refetch for a brand-new ticket
+        setTickets(prev => {
+          const idx = prev.findIndex(t => t.id === m.ticketId);
+          if (idx === -1) {
+            debouncedTicketsRefresh();
+            return prev;
+          }
+          const updated: TicketListRow = {
+            ...prev[idx],
+            status:               m.status,
+            last_message_at:      m.createdAt,
+            last_message_preview: m.body.slice(0, 200),
+          };
+          const rest = prev.filter((_, i) => i !== idx);
+          return [updated, ...rest];
+        });
+      } else if (evt === 'status') {
+        const s = payload as TicketStatusEvent;
+        if (!s) return;
+        pulseLive();
+        setTickets(prev => prev.map(t => t.id === s.ticketId ? {
+          ...t,
+          status:                  s.status,
+          priority:                s.priority,
+          assigned_support_user_id: s.assignedSupportUserId,
+        } : t));
+      }
+    }, [pulseLive, debouncedTicketsRefresh]),
+  );
+
+  // Active ticket realtime — append new messages instantly
+  useBroadcastChannel(
+    activeTicketId ? supportChannels.ticket(activeTicketId) : null,
+    ['message', 'status'],
+    useCallback((evt, payload) => {
+      if (evt === 'message') {
+        const m = payload as TicketMessageEvent;
+        if (!m) return;
+        setDetail(prev => {
+          if (!prev || prev.ticket.id !== m.ticketId) return prev;
+          if (prev.messages.some(x => x.id === m.messageId)) return prev;
+          const newMsg: TicketDetail['messages'][number] = {
+            id:                     m.messageId,
+            sender_type:            m.senderType,
+            sender_profile_id:      null,
+            sender_member_id:       null,
+            sender_support_user_id: null,
+            body:                   m.body,
+            attachments:            [],
+            created_at:             m.createdAt,
+          };
+          return {
+            ...prev,
+            ticket: { ...prev.ticket, status: m.status, last_message_at: m.createdAt, last_message_preview: m.body.slice(0, 200) },
+            messages: [...prev.messages, newMsg],
+          };
+        });
+        requestAnimationFrame(() => {
+          messagesEndRef.current?.scrollIntoView({ block: 'end' });
+        });
+      } else if (evt === 'status') {
+        const s = payload as TicketStatusEvent;
+        if (!s) return;
+        setDetail(prev => prev && prev.ticket.id === s.ticketId
+          ? { ...prev, ticket: { ...prev.ticket, status: s.status, priority: s.priority, assigned_support_user_id: s.assignedSupportUserId } }
+          : prev,
+        );
+      }
+    }, []),
+  );
+
   // Reply
   const [replyBody, setReplyBody] = useState('');
   const [sending, setSending] = useState(false);
@@ -1076,7 +1286,10 @@ function TicketsView({
               <RefreshCw size={11} /> Refresh
             </button>
           </div>
-          <p className="text-[11px] text-gray-500">{tickets.length} ticket{tickets.length === 1 ? '' : 's'}</p>
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] text-gray-500">{tickets.length} ticket{tickets.length === 1 ? '' : 's'}</p>
+            <LiveBadge active={liveTickets} />
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto">

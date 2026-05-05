@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySupportAccess } from '@/lib/support/auth';
 import { supabaseAdmin } from '@/lib/supabase';
+import { broadcastTicketStatus } from '@/lib/realtime/broadcast';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -82,11 +83,27 @@ export async function POST(
     .from('support_threads')
     .update(updates)
     .eq('id', id)
-    .select('id, status, priority, assigned_support_user_id')
+    .select('id, venue_id, status, priority, assigned_support_user_id')
     .maybeSingle();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
 
-  return NextResponse.json({ ok: true, ticket: data });
+  const row = data as {
+    id: string;
+    venue_id: string;
+    status:   'open' | 'pending' | 'closed';
+    priority: 'low' | 'normal' | 'high';
+    assigned_support_user_id: string | null;
+  };
+
+  void broadcastTicketStatus({
+    ticketId:              row.id,
+    venueId:               row.venue_id,
+    status:                row.status,
+    priority:              row.priority,
+    assignedSupportUserId: row.assigned_support_user_id,
+  });
+
+  return NextResponse.json({ ok: true, ticket: row });
 }

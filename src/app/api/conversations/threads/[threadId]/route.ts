@@ -95,6 +95,7 @@ export async function GET(
 
   return NextResponse.json({
     ...thread,
+    venue_id: venueId,
     venue_customers: contact ?? null,
     contact_stage,
     contact_stage_id: resolvedStageId,

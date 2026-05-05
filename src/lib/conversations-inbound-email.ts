@@ -214,12 +214,40 @@ export async function insertInboundConversationEmail(params: {
     send_error: null,
   };
 
-  const { error: insErr } = await supabaseAdmin.from('conversation_messages').insert(row);
+  const { data: inserted, error: insErr } = await supabaseAdmin
+    .from('conversation_messages')
+    .insert(row)
+    .select('id, created_at')
+    .single();
   if (insErr) {
     if (insErr.code === '23505') return { ok: true, inserted: false };
     console.error('[inbound-email] insert', insErr);
     return { ok: false, error: insErr.message };
   }
+
+  if (inserted) {
+    void (async () => {
+      try {
+        const { broadcastBrideMessage } = await import('@/lib/realtime/broadcast');
+        await broadcastBrideMessage({
+          inbound:            true,
+          threadId,
+          venueId,
+          venueCustomerId:    customerId,
+          messageId:          (inserted as { id: string }).id,
+          body,
+          channel:            'email',
+          senderKind:         'contact',
+          sentByVenueSupport: false,
+          supportAgentId:     null,
+          createdAt:          (inserted as { created_at?: string }).created_at || new Date().toISOString(),
+        });
+      } catch (e) {
+        console.warn('[inbound-email] broadcast failed', e);
+      }
+    })();
+  }
+
   return { ok: true, inserted: true };
 }
 

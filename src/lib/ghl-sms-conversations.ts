@@ -374,12 +374,42 @@ export async function insertInboundGhlSms(params: {
     row.created_at = String(createdAt).trim();
   }
 
-  const { error: insErr } = await supabaseAdmin.from('conversation_messages').insert(row);
+  const { data: inserted, error: insErr } = await supabaseAdmin
+    .from('conversation_messages')
+    .insert(row)
+    .select('id, created_at')
+    .single();
   if (insErr) {
     if (insErr.code === '23505') return { ok: true, inserted: false };
     console.error('[ghl-sms] insert message', insErr);
     return { ok: false, error: insErr.message };
   }
+
+  // Realtime broadcast — bride inbox + active thread + venue conversations
+  if (inserted) {
+    const broadcastInbound = async () => {
+      try {
+        const { broadcastBrideMessage } = await import('@/lib/realtime/broadcast');
+        await broadcastBrideMessage({
+          inbound:            true,
+          threadId,
+          venueId,
+          venueCustomerId:    customerId,
+          messageId:          (inserted as { id: string }).id,
+          body:               messageBody.trim(),
+          channel:            'sms',
+          senderKind:         'contact',
+          sentByVenueSupport: false,
+          supportAgentId:     null,
+          createdAt:          (inserted as { created_at?: string }).created_at || new Date().toISOString(),
+        });
+      } catch (e) {
+        console.warn('[ghl-sms] broadcast failed', e);
+      }
+    };
+    void broadcastInbound();
+  }
+
   return { ok: true, inserted: true, venueCustomerId: customerId };
 }
 

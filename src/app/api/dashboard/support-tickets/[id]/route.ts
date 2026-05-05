@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { resolveVenueAttribution } from '@/lib/support/venue-attribution';
+import { broadcastTicketMessage } from '@/lib/realtime/broadcast';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -144,12 +145,24 @@ export async function POST(
   }
 
   // Bump status back to 'open' (awaiting support response) unless closed.
+  let nextStatus: 'open' | 'pending' | 'closed' = ticket.status as 'open' | 'pending' | 'closed';
   if (ticket.status !== 'closed' && ticket.status !== 'open') {
     await supabaseAdmin
       .from('support_threads')
       .update({ status: 'open' })
       .eq('id', id);
+    nextStatus = 'open';
   }
+
+  void broadcastTicketMessage({
+    ticketId:   id,
+    venueId:    attr.venueId,
+    messageId:  (msg as { id: string }).id,
+    senderType: 'venue',
+    body:       text,
+    createdAt:  (msg as { created_at?: string }).created_at || new Date().toISOString(),
+    status:     nextStatus,
+  });
 
   return NextResponse.json({ ok: true, messageId: (msg as { id: string }).id });
 }

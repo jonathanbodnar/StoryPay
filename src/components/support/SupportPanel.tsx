@@ -16,6 +16,8 @@ import {
   Plus, ArrowLeft, RefreshCw, Send, Loader2, AlertCircle,
   CheckCircle2, AlertTriangle, ShieldCheck, X,
 } from 'lucide-react';
+import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
+import { supportChannels, type TicketMessageEvent, type TicketStatusEvent } from '@/lib/realtime/channels';
 
 const BRAND = '#1b1b1b';
 
@@ -101,6 +103,7 @@ export function SupportPanel({ onClose }: { onClose?: () => void }) {
   const [tickets, setTickets] = useState<TicketListRow[]>([]);
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
+  const [venueId, setVenueId] = useState<string | null>(null);
 
   const loadList = useCallback(async () => {
     setListLoading(true);
@@ -111,8 +114,9 @@ export function SupportPanel({ onClose }: { onClose?: () => void }) {
         const d = await r.json().catch(() => ({}));
         throw new Error(d.error || `Failed (${r.status})`);
       }
-      const d = (await r.json()) as { tickets: TicketListRow[] };
+      const d = (await r.json()) as { tickets: TicketListRow[]; venueId?: string };
       setTickets(d.tickets || []);
+      if (d.venueId) setVenueId(d.venueId);
     } catch (e) {
       setListError(e instanceof Error ? e.message : 'Failed to load tickets');
     } finally {
@@ -154,6 +158,86 @@ export function SupportPanel({ onClose }: { onClose?: () => void }) {
   useEffect(() => {
     if (view === 'detail' && activeId) loadDetail(activeId);
   }, [view, activeId, loadDetail]);
+
+  // ── Realtime: ticket list (venue scope) ──────────────────────────────────
+  useBroadcastChannel(
+    venueId ? supportChannels.venueTickets(venueId) : null,
+    ['message', 'status'],
+    useCallback((evt, payload) => {
+      if (evt === 'message') {
+        const m = payload as TicketMessageEvent;
+        if (!m) return;
+        setTickets(prev => {
+          const idx = prev.findIndex(t => t.id === m.ticketId);
+          if (idx === -1) {
+            // Brand-new ticket (or one we hadn't loaded yet) — refetch.
+            // Skip refetch if we just opened it from the new-ticket form, since
+            // POST already returned and we navigated to detail.
+            void loadList();
+            return prev;
+          }
+          const updated: TicketListRow = {
+            ...prev[idx],
+            status:               m.status,
+            last_message_at:      m.createdAt,
+            last_message_preview: m.body.slice(0, 200),
+          };
+          const rest = prev.filter((_, i) => i !== idx);
+          return [updated, ...rest];
+        });
+      } else if (evt === 'status') {
+        const s = payload as TicketStatusEvent;
+        if (!s) return;
+        setTickets(prev => prev.map(t => t.id === s.ticketId ? {
+          ...t,
+          status:                  s.status,
+          priority:                s.priority,
+          assigned_support_user_id: s.assignedSupportUserId,
+        } : t));
+      }
+    }, [loadList]),
+  );
+
+  // ── Realtime: active ticket detail ───────────────────────────────────────
+  useBroadcastChannel(
+    venueId && activeId && view === 'detail' ? supportChannels.venueTicket(venueId, activeId) : null,
+    ['message', 'status'],
+    useCallback((evt, payload) => {
+      if (evt === 'message') {
+        const m = payload as TicketMessageEvent;
+        if (!m) return;
+        setDetail(prev => {
+          if (!prev || prev.ticket.id !== m.ticketId) return prev;
+          if (prev.messages.some(x => x.id === m.messageId)) return prev;
+          const newMsg: TicketMessage = {
+            id:                     m.messageId,
+            sender_type:            m.senderType,
+            sender_profile_id:      null,
+            sender_member_id:       null,
+            sender_support_user_id: null,
+            body:                   m.body,
+            attachments:            [],
+            created_at:             m.createdAt,
+          };
+          return {
+            ...prev,
+            ticket: { ...prev.ticket, status: m.status, last_message_at: m.createdAt, last_message_preview: m.body.slice(0, 200) },
+            messages: [...prev.messages, newMsg],
+          };
+        });
+        requestAnimationFrame(() => {
+          messagesEndRef.current?.scrollIntoView({ block: 'end' });
+        });
+      } else if (evt === 'status') {
+        const s = payload as TicketStatusEvent;
+        if (!s) return;
+        setDetail(prev => prev && prev.ticket.id === s.ticketId
+          ? { ...prev, ticket: { ...prev.ticket, status: s.status, priority: s.priority, assigned_support_user_id: s.assignedSupportUserId } }
+          : prev,
+        );
+      }
+    }, []),
+  );
 
   // Reply
   const [replyBody, setReplyBody] = useState('');

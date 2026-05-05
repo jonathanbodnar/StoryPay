@@ -23,6 +23,7 @@ import {
   normalizePhone,
 } from '@/lib/ghl';
 import { buildConversationsReplyToEmail } from '@/lib/conversations-inbound-email';
+import { broadcastBrideMessage } from '@/lib/realtime/broadcast';
 
 const PLACEHOLDER_SMS_EMAIL_DOMAIN = 'ghl-sms.storypay.placeholder';
 
@@ -332,6 +333,21 @@ ${escapeHtml(body)
       },
     });
   }
+
+  // 8. Broadcast for realtime UIs (admin support inbox + venue conversations)
+  void broadcastBrideMessage({
+    inbound:            false,
+    threadId,
+    venueId,
+    venueCustomerId:    vc.id,
+    messageId,
+    body,
+    channel,
+    senderKind:         'concierge',
+    sentByVenueSupport: true,
+    supportAgentId:     supportUserId,
+    createdAt:          new Date().toISOString(),
+  });
 
   return { ok: true, threadId, messageId };
 }

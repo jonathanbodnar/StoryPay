@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySupportAccess } from '@/lib/support/auth';
 import { supabaseAdmin } from '@/lib/supabase';
+import { broadcastTicketMessage } from '@/lib/realtime/broadcast';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -105,9 +106,31 @@ export async function POST(
     .eq('id', ticketId)
     .is('assigned_support_user_id', null);
 
+  // Look up venue_id for the broadcast scope
+  const { data: tFull } = await supabaseAdmin
+    .from('support_threads')
+    .select('venue_id, status')
+    .eq('id', ticketId)
+    .maybeSingle();
+
+  const venueIdForCast = (tFull as { venue_id?: string } | null)?.venue_id || '';
+  const finalStatus = (nextStatus ?? ticketStatus) as 'open' | 'pending' | 'closed';
+
+  if (venueIdForCast) {
+    void broadcastTicketMessage({
+      ticketId,
+      venueId:    venueIdForCast,
+      messageId:  (msg as { id: string }).id,
+      senderType: 'support',
+      body:       text,
+      createdAt:  (msg as { created_at?: string }).created_at || new Date().toISOString(),
+      status:     finalStatus,
+    });
+  }
+
   return NextResponse.json({
     ok: true,
     messageId: (msg as { id: string }).id,
-    status:    nextStatus ?? ticketStatus,
+    status:    finalStatus,
   });
 }
