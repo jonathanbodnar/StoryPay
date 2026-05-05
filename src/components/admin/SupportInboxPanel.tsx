@@ -17,7 +17,7 @@ import {
   Inbox, LifeBuoy, Search, RefreshCw, Send, MessageSquare,
   Mail, MessageCircle, Building2, Loader2, AlertCircle, CheckCircle2,
   StickyNote, ShieldCheck, AlertTriangle, CircleDot, CircleSlash,
-  UserPlus, Flag, X, Radio,
+  UserPlus, Flag, X, Radio, Sparkles,
 } from 'lucide-react';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels, type BrideMessageEvent, type TicketMessageEvent, type TicketStatusEvent } from '@/lib/realtime/channels';
@@ -345,6 +345,10 @@ export function SupportInboxPanel() {
   const [showInternalNote, setShowInternalNote] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendStatus, setSendStatus] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [drafting, setDrafting] = useState(false);
+  const [draftIntent, setDraftIntent] = useState('');
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const [showIntent, setShowIntent] = useState(false);
 
   useEffect(() => {
     setReplyBody('');
@@ -352,6 +356,10 @@ export function SupportInboxPanel() {
     setInternalNote('');
     setShowInternalNote(false);
     setSendStatus(null);
+    setDrafting(false);
+    setDraftIntent('');
+    setDraftError(null);
+    setShowIntent(false);
   }, [activeThreadId]);
 
   const lastInboundChannel = useMemo<'sms' | 'email'>(() => {
@@ -366,6 +374,30 @@ export function SupportInboxPanel() {
   }, [detail]);
 
   const effectiveChannel: 'sms' | 'email' = replyChannel === 'auto' ? lastInboundChannel : replyChannel;
+
+  const draftReply = useCallback(async () => {
+    if (!detail || drafting) return;
+    setDrafting(true);
+    setDraftError(null);
+    try {
+      const r = await fetch('/api/admin/support/draft-bride-reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          threadId: detail.thread.id,
+          channel:  effectiveChannel,
+          intent:   draftIntent.trim() || undefined,
+        }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || `Draft failed (${r.status})`);
+      setReplyBody(d.text || '');
+    } catch (e) {
+      setDraftError(e instanceof Error ? e.message : 'Draft failed');
+    } finally {
+      setDrafting(false);
+    }
+  }, [detail, drafting, effectiveChannel, draftIntent]);
 
   const canSend = useMemo(() => {
     if (!detail || !replyBody.trim() || sending) return false;
@@ -586,6 +618,13 @@ export function SupportInboxPanel() {
                 }
                 noActorWarning={!me?.member?.id && !actAsId}
                 messagesEndRef={messagesEndRef}
+                drafting={drafting}
+                onDraft={draftReply}
+                draftError={draftError}
+                draftIntent={draftIntent}
+                onDraftIntentChange={setDraftIntent}
+                showIntent={showIntent}
+                onToggleIntent={() => setShowIntent(v => !v)}
               />
             )}
           </div>
@@ -716,6 +755,9 @@ function ThreadDetailView({
   canSend, sending, onSend, sendStatus,
   actAsName, noActorWarning,
   messagesEndRef,
+  drafting, onDraft, draftError,
+  draftIntent, onDraftIntentChange,
+  showIntent, onToggleIntent,
 }: {
   detail: ThreadDetail;
   replyBody: string; onReplyBodyChange: (v: string) => void;
@@ -731,6 +773,13 @@ function ThreadDetailView({
   actAsName: string | null;
   noActorWarning: boolean;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
+  drafting: boolean;
+  onDraft: () => void;
+  draftError: string | null;
+  draftIntent: string;
+  onDraftIntentChange: (v: string) => void;
+  showIntent: boolean;
+  onToggleIntent: () => void;
 }) {
   const contactName = fullName(
     detail.customer?.first_name ?? null,
@@ -800,7 +849,7 @@ function ThreadDetailView({
           </div>
         )}
 
-        <div className="flex items-center gap-2 text-[11px] text-gray-500">
+        <div className="flex items-center gap-2 text-[11px] text-gray-500 flex-wrap">
           <span>Reply via</span>
           <div className="flex rounded-lg border border-gray-200 overflow-hidden">
             {(['auto', 'sms', 'email'] as const).map(opt => (
@@ -816,7 +865,16 @@ function ThreadDetailView({
               </button>
             ))}
           </div>
-          <span className="text-gray-400">→ will send as <span className="font-semibold text-gray-700">{effectiveChannel.toUpperCase()}</span></span>
+          <span className="text-gray-400">→ as <span className="font-semibold text-gray-700">{effectiveChannel.toUpperCase()}</span></span>
+          <button
+            type="button"
+            onClick={onToggleIntent}
+            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+              showIntent ? 'bg-violet-100 text-violet-800' : 'text-gray-500 hover:bg-gray-100'
+            }`}
+          >
+            <Sparkles size={11} /> {showIntent ? 'Hide intent' : 'Steer AI'}
+          </button>
           <button
             type="button"
             onClick={onToggleInternalNote}
@@ -828,6 +886,16 @@ function ThreadDetailView({
           </button>
         </div>
 
+        {showIntent && (
+          <input
+            type="text"
+            value={draftIntent}
+            onChange={e => onDraftIntentChange(e.target.value)}
+            placeholder="Optional: tell the AI what to say (e.g. 'offer a Tuesday tour')"
+            className="w-full text-xs border border-violet-200 bg-violet-50/40 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300"
+          />
+        )}
+
         {showInternalNote && (
           <textarea
             value={internalNote}
@@ -838,13 +906,31 @@ function ThreadDetailView({
           />
         )}
 
-        <textarea
-          value={replyBody}
-          onChange={e => onReplyBodyChange(e.target.value)}
-          placeholder={`Reply on behalf of ${detail.venue?.name || 'the venue'}…`}
-          rows={3}
-          className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-brand-900/10 focus:border-gray-300"
-        />
+        {draftError && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 flex items-center gap-2">
+            <AlertCircle size={12} /> {draftError}
+          </div>
+        )}
+
+        <div className="relative">
+          <textarea
+            value={replyBody}
+            onChange={e => onReplyBodyChange(e.target.value)}
+            placeholder={`Reply on behalf of ${detail.venue?.name || 'the venue'}… or click Suggest for an AI draft.`}
+            rows={3}
+            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 pr-28 outline-none focus:ring-2 focus:ring-brand-900/10 focus:border-gray-300"
+          />
+          <button
+            type="button"
+            onClick={onDraft}
+            disabled={drafting}
+            title="Generate a reply with AI using venue voice + bride context"
+            className="absolute top-2 right-2 inline-flex items-center gap-1 rounded-md border border-violet-200 bg-white hover:bg-violet-50 px-2 py-1 text-[11px] font-semibold text-violet-700 disabled:opacity-50"
+          >
+            {drafting ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+            {drafting ? 'Drafting…' : 'Suggest'}
+          </button>
+        </div>
 
         <div className="flex items-center justify-between">
           <p className="text-[11px] text-gray-500">

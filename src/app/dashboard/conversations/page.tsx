@@ -32,6 +32,8 @@ import {
   Smartphone,
   ShieldCheck,
   Sparkles,
+  Wand2,
+  AlertCircle,
 } from 'lucide-react';
 import { classNames, toTitleCase, dispatchStageChange, onStageChange } from '@/lib/utils';
 import { EmojiPickerPopover } from '@/components/EmojiPickerPopover';
@@ -236,6 +238,10 @@ export default function ConversationsPage() {
   const [triggerSearch, setTriggerSearch] = useState('');
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const [fileAttaching, setFileAttaching] = useState(false);
+  const [drafting, setDrafting] = useState(false);
+  const [draftError, setDraftError] = useState('');
+  const [draftIntent, setDraftIntent] = useState('');
+  const [showDraftIntent, setShowDraftIntent] = useState(false);
   const [dndSaving, setDndSaving] = useState(false);
   const [showDndPanel, setShowDndPanel] = useState(false);
   const [listActionError, setListActionError] = useState('');
@@ -480,6 +486,39 @@ export default function ConversationsPage() {
     }
     void reloadMessages(selectedId);
   }, [selectedId, reloadMessages]);
+
+  // ── AI-drafted reply ───────────────────────────────────────────────────────
+  const draftReply = useCallback(async () => {
+    if (!selectedId || drafting) return;
+    setDrafting(true);
+    setDraftError('');
+    try {
+      const channel = composerTab === 'email' ? 'email' : 'sms';
+      const r = await fetch(`/api/conversations/threads/${selectedId}/draft-reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          channel,
+          intent: draftIntent.trim() || undefined,
+        }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || `Draft failed (${r.status})`);
+      setBody(d.text || '');
+      setComposerExpanded(true);
+    } catch (e) {
+      setDraftError(e instanceof Error ? e.message : 'Draft failed');
+    } finally {
+      setDrafting(false);
+    }
+  }, [selectedId, drafting, composerTab, draftIntent]);
+
+  // Reset draft state when switching threads
+  useEffect(() => {
+    setDraftError('');
+    setDraftIntent('');
+    setShowDraftIntent(false);
+  }, [selectedId]);
 
   // ── Realtime: append new external messages live ────────────────────────────
   // Subscribed only when the venue id and active thread id are both known.
@@ -1886,6 +1925,25 @@ export default function ConversationsPage() {
                         </div>
                       </>
                     )}
+                    {showDraftIntent && composerTab !== 'team' && (
+                      <div className="rounded-xl border border-violet-200 bg-violet-50/40 p-2">
+                        <label className="block text-[10px] font-semibold uppercase tracking-wide text-violet-700 mb-1">
+                          Steer AI draft
+                        </label>
+                        <input
+                          type="text"
+                          value={draftIntent}
+                          onChange={(e) => setDraftIntent(e.target.value)}
+                          placeholder="Optional — tell the AI what to say (e.g. 'invite for a Saturday tour')"
+                          className="w-full rounded-lg border border-violet-200 bg-white px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300"
+                        />
+                      </div>
+                    )}
+                    {draftError && (
+                      <div className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                        <AlertCircle size={12} /> {draftError}
+                      </div>
+                    )}
                     <div>
                       {composerTab === 'email' && (
                         <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-500">
@@ -2094,6 +2152,33 @@ export default function ConversationsPage() {
                               title="Insert a trigger link"
                             >
                               <Zap size={16} strokeWidth={1.75} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShowDraftIntent((v) => !v)}
+                              className={classNames(
+                                'rounded-lg p-1.5 transition-colors hover:bg-gray-100',
+                                showDraftIntent ? 'bg-violet-50 text-violet-700' : 'text-gray-500 hover:text-gray-800',
+                              )}
+                              aria-label="Steer AI draft"
+                              title="Tell the AI what to say"
+                            >
+                              <Wand2 size={16} strokeWidth={1.75} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void draftReply()}
+                              disabled={drafting}
+                              className="inline-flex items-center gap-1 rounded-lg bg-violet-50 hover:bg-violet-100 px-2 py-1.5 text-[11px] font-semibold text-violet-700 transition-colors disabled:opacity-50"
+                              aria-label="Suggest reply"
+                              title="Generate a reply with AI using your venue voice"
+                            >
+                              {drafting ? (
+                                <Loader2 size={13} className="animate-spin" strokeWidth={2} />
+                              ) : (
+                                <Sparkles size={13} strokeWidth={2} />
+                              )}
+                              {drafting ? 'Drafting…' : 'Suggest'}
                             </button>
                             {composerTab === 'sms' && (
                               <span className="ml-auto pr-1 text-[10px] tabular-nums text-gray-400">
