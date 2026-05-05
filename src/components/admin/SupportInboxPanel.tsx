@@ -22,6 +22,7 @@ import {
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels, type BrideMessageEvent, type TicketMessageEvent, type TicketStatusEvent } from '@/lib/realtime/channels';
 import { CannedReplyPicker } from '@/components/support/CannedReplyPicker';
+import { SupportContextSidebar } from '@/components/admin/SupportContextSidebar';
 
 const BRAND = '#1b1b1b';
 
@@ -490,7 +491,7 @@ export function SupportInboxPanel() {
       )}
 
       {subTab === 'bride-replies' && (
-        <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-4 min-h-[600px]">
+        <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] xl:grid-cols-[340px_1fr_290px] gap-4 min-h-[600px]">
           {/* Thread list */}
           <div className="rounded-2xl border border-gray-200 bg-white flex flex-col min-h-0">
             <div className="p-3 border-b border-gray-200 space-y-2">
@@ -629,6 +630,9 @@ export function SupportInboxPanel() {
               />
             )}
           </div>
+
+          {/* Context sidebar — hidden on smaller screens, visible from xl up */}
+          <SupportContextSidebar threadId={activeThreadId} />
         </div>
       )}
     </div>

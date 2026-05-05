@@ -1,0 +1,234 @@
+/**
+ * GET /api/admin/support/bride-context/[threadId]
+ *
+ * Returns a unified payload of bride + venue context that the support sidebar
+ * needs to display at-a-glance information without flipping tabs.
+ *
+ * The shape is *flat* and forgiving — every field is optional so the UI can
+ * gracefully degrade when a piece of data isn't present (e.g. lead doesn't
+ * exist yet for an inbound that hasn't been matched).
+ */
+import { NextRequest, NextResponse } from 'next/server';
+import { verifySupportAccess } from '@/lib/support/auth';
+import { supabaseAdmin } from '@/lib/supabase';
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ threadId: string }> },
+) {
+  const auth = await verifySupportAccess();
+  if (!auth.isSuperAdmin && !auth.agent) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { threadId } = await params;
+
+  // 1. Thread + venue + bride core
+  const { data: thread } = await supabaseAdmin
+    .from('conversation_threads')
+    .select('id, venue_id, venue_customer_id, last_message_at, created_at')
+    .eq('id', threadId)
+    .maybeSingle();
+
+  if (!thread) return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
+
+  const t = thread as { id: string; venue_id: string; venue_customer_id: string; last_message_at: string; created_at: string };
+
+  const [{ data: venue }, { data: customer }] = await Promise.all([
+    supabaseAdmin.from('venues')
+      .select(`
+        id, name, notification_email, timezone, created_at,
+        directory_plan_id, directory_addon_concierge, directory_addon_verified, directory_addon_sponsored,
+        a2p_verified, a2p_brand_status, a2p_campaign_status,
+        ai_concierge_enabled, ai_assistant_persona_name,
+        ai_concierge_notify_emails
+      `)
+      .eq('id', t.venue_id).maybeSingle(),
+    supabaseAdmin.from('venue_customers')
+      .select('id, first_name, last_name, customer_email, phone, created_at, sms_dnd, conversation_dnd_all')
+      .eq('id', t.venue_customer_id).maybeSingle(),
+  ]);
+
+  // 2. Plan
+  const v = venue as Record<string, unknown> | null;
+  let plan: { id: string; name: string; price_cents: number; is_legacy: boolean } | null = null;
+  if (v?.directory_plan_id) {
+    const { data: planRow } = await supabaseAdmin
+      .from('directory_plans')
+      .select('id, name, price_cents, is_legacy')
+      .eq('id', v.directory_plan_id as string)
+      .maybeSingle();
+    if (planRow) {
+      const p = planRow as { id: string; name: string; price_cents: number; is_legacy: boolean };
+      plan = p;
+    }
+  }
+
+  // 3. Lead — best-effort match (email > phone). The bride inbox endpoint
+  //    already does this — replicate the heuristic here.
+  const c = customer as Record<string, unknown> | null;
+  let lead: Record<string, unknown> | null = null;
+  if (c) {
+    const email = ((c.customer_email as string) || '').trim().toLowerCase();
+    if (email) {
+      const { data: leadByEmail } = await supabaseAdmin
+        .from('leads')
+        .select(`
+          id, first_name, last_name, email, phone, status, lead_source, created_at,
+          ai_state, ai_first_activated_at, ai_expires_at, ai_next_send_at,
+          ai_attempt_count, ai_re_enable_count, ai_re_enabled_at,
+          last_inbound_at, last_outbound_at,
+          stage_id, pipeline_id
+        `)
+        .eq('venue_id', t.venue_id)
+        .eq('email', email)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (leadByEmail) lead = leadByEmail as Record<string, unknown>;
+    }
+    if (!lead && c.phone) {
+      const { data: leadByPhone } = await supabaseAdmin
+        .from('leads')
+        .select(`
+          id, first_name, last_name, email, phone, status, lead_source, created_at,
+          ai_state, ai_first_activated_at, ai_expires_at, ai_next_send_at,
+          ai_attempt_count, ai_re_enable_count, ai_re_enabled_at,
+          last_inbound_at, last_outbound_at,
+          stage_id, pipeline_id
+        `)
+        .eq('venue_id', t.venue_id)
+        .eq('phone', c.phone as string)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (leadByPhone) lead = leadByPhone as Record<string, unknown>;
+    }
+  }
+
+  // 4. Pipeline stage (for the lead OR for the customer — same join as elsewhere)
+  let pipelineStage: { id: string; name: string; color: string | null; pipeline_id: string; pipeline_name: string } | null = null;
+  const stageId = (lead?.stage_id as string | null) || (c?.stage_id as string | null) || null;
+  if (stageId) {
+    const { data: stage } = await supabaseAdmin
+      .from('lead_pipeline_stages')
+      .select('id, name, color, pipeline_id')
+      .eq('id', stageId)
+      .eq('venue_id', t.venue_id)
+      .maybeSingle();
+    if (stage) {
+      const s = stage as { id: string; name: string; color: string | null; pipeline_id: string };
+      const { data: p } = await supabaseAdmin
+        .from('lead_pipelines')
+        .select('id, name')
+        .eq('id', s.pipeline_id)
+        .maybeSingle();
+      pipelineStage = {
+        id:           s.id,
+        name:         s.name,
+        color:        s.color,
+        pipeline_id:  s.pipeline_id,
+        pipeline_name: (p as { name?: string } | null)?.name ?? '',
+      };
+    }
+  }
+
+  // 5. Open ticket count
+  const { count: openTicketsCount } = await supabaseAdmin
+    .from('support_threads')
+    .select('id', { count: 'exact', head: true })
+    .eq('venue_id', t.venue_id)
+    .in('status', ['open', 'pending']);
+
+  // 6. Recent lead activities (last 5)
+  let recentActivity: Array<{ action: string; at: string; details: unknown }> = [];
+  if (lead?.id) {
+    const { data: act } = await supabaseAdmin
+      .from('lead_activity_log')
+      .select('action, created_at, details')
+      .eq('lead_id', lead.id as string)
+      .order('created_at', { ascending: false })
+      .limit(5);
+    recentActivity = (act ?? []).map(a => {
+      const r = a as { action: string; created_at: string; details: unknown };
+      return { action: r.action, at: r.created_at, details: r.details };
+    });
+  }
+
+  // 7. AI handoff banner — last ai_state_transitions row to/from 'handoff'
+  let aiHandoff: { at: string; reason: string | null; trigger: string | null } | null = null;
+  if (lead?.id) {
+    const { data: trans } = await supabaseAdmin
+      .from('ai_state_transitions')
+      .select('to_state, reason, trigger_keyword, created_at')
+      .eq('lead_id', lead.id as string)
+      .eq('to_state', 'handoff')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (trans) {
+      const tr = trans as { reason: string | null; trigger_keyword: string | null; created_at: string };
+      aiHandoff = { at: tr.created_at, reason: tr.reason, trigger: tr.trigger_keyword };
+    }
+  }
+
+  // 8. Total messages in this thread (informational)
+  const { count: messageCount } = await supabaseAdmin
+    .from('conversation_messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('thread_id', threadId);
+
+  return NextResponse.json({
+    bride: {
+      first_name:    (c?.first_name as string | null) ?? null,
+      last_name:     (c?.last_name as string | null) ?? null,
+      email:         (c?.customer_email as string | null) ?? null,
+      phone:         (c?.phone as string | null) ?? null,
+      sms_dnd:       Boolean(c?.sms_dnd),
+      conversation_dnd_all: Boolean(c?.conversation_dnd_all),
+      submitted_at:  (lead?.created_at as string | null) ?? (c?.created_at as string | null) ?? null,
+      lead_source:   (lead?.lead_source as string | null) ?? null,
+      lead_status:   (lead?.status as string | null) ?? null,
+      message_count: messageCount ?? 0,
+    },
+    pipeline: pipelineStage,
+    ai: lead ? {
+      state:                 (lead.ai_state as string | null) ?? 'dormant',
+      first_activated_at:    (lead.ai_first_activated_at as string | null) ?? null,
+      expires_at:            (lead.ai_expires_at as string | null) ?? null,
+      next_send_at:          (lead.ai_next_send_at as string | null) ?? null,
+      attempt_count:         (lead.ai_attempt_count as number | null) ?? 0,
+      re_enable_count:       (lead.ai_re_enable_count as number | null) ?? 0,
+      last_inbound_at:       (lead.last_inbound_at as string | null) ?? null,
+      last_outbound_at:      (lead.last_outbound_at as string | null) ?? null,
+    } : null,
+    ai_handoff: aiHandoff,
+    venue: v ? {
+      id:                  v.id as string,
+      name:                v.name as string,
+      notification_email:  (v.notification_email as string | null) ?? null,
+      timezone:            (v.timezone as string | null) ?? null,
+      created_at:          (v.created_at as string | null) ?? null,
+      plan,
+      addons: {
+        concierge: Boolean(v.directory_addon_concierge),
+        verified:  Boolean(v.directory_addon_verified),
+        sponsored: Boolean(v.directory_addon_sponsored),
+      },
+      a2p: {
+        verified:        Boolean(v.a2p_verified),
+        brand_status:    (v.a2p_brand_status as string | null) ?? null,
+        campaign_status: (v.a2p_campaign_status as string | null) ?? null,
+      },
+      ai_concierge_enabled: Boolean(v.ai_concierge_enabled),
+      ai_persona:           (v.ai_assistant_persona_name as string | null) ?? null,
+      open_tickets_count:   openTicketsCount ?? 0,
+      concierge_notify_emails: (v.ai_concierge_notify_emails as string[] | null) ?? [],
+    } : null,
+    recent_activity: recentActivity,
+    lead_id: (lead?.id as string | null) ?? null,
+  });
+}
