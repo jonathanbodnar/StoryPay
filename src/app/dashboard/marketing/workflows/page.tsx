@@ -107,7 +107,7 @@ export default function WorkflowsListPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8">
+    <div className="px-4 py-8">
       {/* Header */}
       <div className="mb-6">
         <Link
