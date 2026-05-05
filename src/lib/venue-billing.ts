@@ -61,6 +61,8 @@ export type DirectoryPlanCatalogEntry = {
    * locked billing page that explains billing is handled directly.
    */
   is_legacy: boolean;
+  /** When true, the plan picker hides the top header so the page renders as a standalone landing page. */
+  hide_header: boolean;
 };
 
 // ── Dynamic addon price loader ─────────────────────────────────────────────
@@ -182,6 +184,7 @@ function mapPlanRow(row: Record<string, unknown>): DirectoryPlanCatalogEntry {
         ? row.highlight_label.trim()
         : null,
     is_legacy: Boolean(row.is_legacy),
+    hide_header: Boolean(row.hide_header),
   };
 }
 
@@ -205,7 +208,7 @@ export async function listDirectoryPlanCatalog(opts?: {
 
   const baseColumns =
     'id, name, slug, description, price_monthly_cents, is_default, sort_order, feature_flags';
-  const fullColumns = `${baseColumns}, trial_period_value, trial_period_unit, is_public, highlight_label, is_legacy`;
+  const fullColumns = `${baseColumns}, trial_period_value, trial_period_unit, is_public, highlight_label, is_legacy, hide_header`;
 
   let rows: Record<string, unknown>[] | null = null;
 

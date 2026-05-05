@@ -56,6 +56,11 @@ export default async function SignupPlanPage() {
   const venueName = (venue as Record<string, unknown>).name as string | null ?? '';
   const ownerFirstName = (venue as Record<string, unknown>).owner_first_name as string | null ?? '';
 
+  // If any public plan has hide_header = true, the picker renders as a
+  // standalone landing page (no step header / logo bar).  Useful for
+  // direct-link marketing campaigns.
+  const hideHeader = plans.some((p) => p.hide_header);
+
   return (
     <PlanPickerClient
       plans={plans}
@@ -63,6 +68,7 @@ export default async function SignupPlanPage() {
       planAddonInclusion={planAddonInclusion}
       venueName={venueName}
       ownerFirstName={ownerFirstName}
+      hideHeader={hideHeader}
     />
   );
 }

@@ -105,11 +105,12 @@ type Props = {
   planAddonInclusion: Record<string, { verified: boolean; sponsored: boolean }>;
   venueName: string;
   ownerFirstName: string;
+  hideHeader?: boolean;
 };
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export function PlanPickerClient({ plans, ownerFirstName }: Props) {
+export function PlanPickerClient({ plans, ownerFirstName, hideHeader }: Props) {
   const router = useRouter();
 
   // Default selection priority:
@@ -141,7 +142,7 @@ export function PlanPickerClient({ plans, ownerFirstName }: Props) {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <SignupStepHeader step={2} />
+      {!hideHeader && <SignupStepHeader step={2} />}
 
       <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
         {/* Hero text */}
