@@ -12,6 +12,7 @@ import {
   LayoutDashboard, Menu, Lightbulb, BookOpen, Star, Globe, Layers,
   Repeat, Wallet, BadgeCheck, Sparkles, CalendarDays, Eye, EyeOff,
   Settings, Database, CheckCircle2, AlertCircle, Heart, CreditCard,
+  Inbox,
 } from 'lucide-react';
 import {
   VenueManagementPortal,
@@ -22,6 +23,7 @@ import { DirectoryPlansAdminPanel } from '@/components/admin/DirectoryPlansAdmin
 import { DirectoryBadgesAdminPanel } from '@/components/admin/DirectoryBadgesAdminPanel';
 import { SubscriptionsAdminPanel } from '@/components/admin/SubscriptionsAdminPanel';
 import { AiConciergeAdminPanel } from '@/components/admin/AiConciergeAdminPanel';
+import { SupportInboxPanel } from '@/components/admin/SupportInboxPanel';
 
 // Lazy-load the WYSIWYG editor so it doesn't affect admin initial load
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
@@ -44,6 +46,7 @@ type AdminTabKey =
   | 'directory-plans'
   | 'directory-badges'
   | 'ai-concierge'
+  | 'support'
   | 'announcements'
   | 'feature-requests'
   | 'changelog'
@@ -63,6 +66,7 @@ const ADMIN_TAB_KEYS: ReadonlySet<string> = new Set<AdminTabKey>([
   'directory-plans',
   'directory-badges',
   'ai-concierge',
+  'support',
   'announcements',
   'feature-requests',
   'changelog',
@@ -499,6 +503,7 @@ const ADMIN_NAV_ITEMS = [
   { key: 'directory-badges', label: 'Verified & Sponsored', icon: BadgeCheck },
   { key: 'directory-plans', label: 'Directory plans', icon: Layers },
   { key: 'ai-concierge', label: 'AI Concierge', icon: Sparkles },
+  { key: 'support', label: 'Support inbox', icon: Inbox },
   { key: 'blog', label: 'Blog Posts', icon: BookOpen },
   { key: 'seo-pages', label: 'SEO / Pages', icon: Globe },
   { key: 'trends', label: 'Google Trends', icon: TrendingUp },
@@ -1709,6 +1714,8 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
         {activeTab === 'subscriptions' && <SubscriptionsAdminPanel />}
 
         {activeTab === 'ai-concierge' && <AiConciergeAdminPanel />}
+
+        {activeTab === 'support' && <SupportInboxPanel />}
 
         {activeTab === 'directory-plans' && <DirectoryPlansAdminPanel />}
 

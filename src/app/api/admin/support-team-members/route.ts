@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { verifyAdminCookie } from '@/lib/admin-auth';
-import { hashSupportPassword } from '@/lib/support/auth';
+import { hashSupportPassword, verifySupportAccess } from '@/lib/support/auth';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+/**
+ * GET — list support team members.
+ * Visible to either the master super admin or any logged-in support agent
+ * (the inbox UI uses it to populate the identity picker / show coworkers).
+ */
 export async function GET() {
-  if (!(await verifyAdminCookie())) {
+  const { isSuperAdmin, agent } = await verifySupportAccess();
+  if (!isSuperAdmin && !agent) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   const { data, error } = await supabaseAdmin
