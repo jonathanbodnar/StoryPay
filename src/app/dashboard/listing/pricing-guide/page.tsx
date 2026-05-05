@@ -5,11 +5,12 @@ import Link from 'next/link';
 import {
   Loader2, Save, CheckCircle2, AlertCircle, ChevronDown, ChevronRight,
   Plus, Trash2, GripVertical, Image as ImageIcon, Sparkles, Star,
-  ArrowLeft, Upload, Eye, Wand2,
+  ArrowLeft, Upload, Eye, Wand2, Download,
 } from 'lucide-react';
 import { AIField } from '@/components/pricing-guide/AIField';
 import PreviewGuideModal from '@/components/pricing-guide/PreviewGuideModal';
 import { VenueMediaPickerModal } from '@/components/venue-media/VenueMediaPickerModal';
+import { generatePricingGuidePdf } from '@/lib/pricing-guide-pdf';
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -126,6 +127,27 @@ export default function PricingGuidePage() {
   const [error, setError] = useState<string>('');
   const [schemaMissing, setSchemaMissing] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState('');
+
+  async function handleDownloadPdf() {
+    if (!guide) return;
+    setDownloading(true);
+    setDownloadProgress('Preparing…');
+    try {
+      await generatePricingGuidePdf(guide, {
+        name: seedData?.venue?.name ?? null,
+        location_city: seedData?.venue?.location_city ?? null,
+        location_state: seedData?.venue?.location_state ?? null,
+        logo_url: seedData?.venue?.logo_url ?? null,
+      }, setDownloadProgress);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'PDF generation failed');
+    } finally {
+      setDownloading(false);
+      setDownloadProgress('');
+    }
+  }
 
   // Media library picker — tracks which field the picker is targeting
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
@@ -409,6 +431,15 @@ export default function PricingGuidePage() {
             className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50"
           >
             <Eye size={14} /> Preview guide
+          </button>
+          <button
+            type="button"
+            onClick={handleDownloadPdf}
+            disabled={downloading}
+            className="inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-60"
+          >
+            {downloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+            {downloading ? downloadProgress || 'Generating…' : 'Download PDF'}
           </button>
         </div>
       </div>
