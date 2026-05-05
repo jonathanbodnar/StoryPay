@@ -231,8 +231,15 @@ async function handlePost(req: NextRequest) {
     const checkoutData: Record<string, unknown> = {
       amount: nextCharge.total_cents / 100,
       description: 'StoryVenue directory — add-ons (monthly)',
+      mode: 'subscription',
+      recurring: { frequency: 'monthly' },
       customer_email: ctx.venue.email || undefined,
       customer_name: ctx.venue.name,
+      payment_methods: ['cc'],
+      metadata: {
+        storypay_venue_id: ctx.venue.id,
+        flow: 'addon_checkout',
+      },
       success_url: `${APP_URL}/dashboard/directory-billing?addons=1`,
       cancel_url: `${APP_URL}/dashboard/directory-billing`,
     };

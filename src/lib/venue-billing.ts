@@ -937,8 +937,16 @@ export async function changeVenuePlan(
   const checkoutData: Record<string, unknown> = {
     amount: amountDollars,
     description: `StoryVenue directory — ${target.name} (monthly)`,
+    mode: 'subscription',
+    recurring: { frequency: 'monthly' },
     customer_email: ctx.venue.email || undefined,
     customer_name: ctx.venue.name,
+    payment_methods: ['cc'],
+    metadata: {
+      storypay_venue_id: venueId,
+      storypay_plan_id: target.id,
+      flow: 'change_plan_checkout',
+    },
     success_url: `${APP_URL}/dashboard/directory-billing`,
     cancel_url: `${APP_URL}/dashboard/directory-billing`,
   };
@@ -974,8 +982,16 @@ export async function resumePendingCheckout(venueId: string): Promise<{ url: str
   const checkoutData: Record<string, unknown> = {
     amount: cents / 100,
     description: `StoryVenue directory — ${ctx.plan.name} (monthly)`,
+    mode: 'subscription',
+    recurring: { frequency: 'monthly' },
     customer_email: ctx.venue.email || undefined,
     customer_name: ctx.venue.name,
+    payment_methods: ['cc'],
+    metadata: {
+      storypay_venue_id: venueId,
+      storypay_plan_id: ctx.plan.id,
+      flow: 'resume_pending',
+    },
     success_url: `${APP_URL}/dashboard/directory-billing`,
     cancel_url: `${APP_URL}/dashboard/directory-billing`,
   };
