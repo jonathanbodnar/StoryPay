@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback, type RefObject } from 'react';
 import {
  Sparkles, X, Send, Loader2, ChevronDown,
- LifeBuoy, RotateCcw, CheckCircle2, AlertCircle,
+ RotateCcw, AlertCircle,
  Mic, MicOff, Smile, Paperclip, ChevronRight, BookOpen,
 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
@@ -17,7 +17,7 @@ interface Message {
 }
 
 const BRAND = '#1b1b1b';
-const AI_BUBBLE = '#525252'; // neutral grey — no blue tint, darker than user white bubble
+const AI_BUBBLE = '#e5e5e5'; // light grey for AI replies
 
 // ─── Emoji Picker ─────────────────────────────────────────────────────────────
 
@@ -92,7 +92,7 @@ function renderLineWithLinks(text: string, onNavigate: (path: string) => void) {
  <button
  key={m.index}
  onClick={() => onNavigate(path)}
- className="inline-flex items-center gap-1 rounded-lg border border-white/30 bg-white/15 px-2.5 py-1 text-xs font-semibold text-white hover:bg-white/25 transition-colors mx-0.5"
+ className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-gray-200/60 px-2.5 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-200 transition-colors mx-0.5"
  >
  {label} →
  </button>
@@ -275,13 +275,8 @@ export default function AskAIWidget() {
  const [messages, setMessages] = useState<Message[]>([]);
  const [input, setInput] = useState('');
  const [loading, setLoading] = useState(false);
- const [escalating, setEscalating] = useState(false);
- const [escalated, setEscalated] = useState(false);
- const [error, setError] = useState('');
- const [showEscalate, setShowEscalate] = useState(false);
- const [unread, setUnread] = useState(0);
- const [supportNote, setSupportNote] = useState('');
- const [showSupportForm, setShowSupportForm] = useState(false);
+const [error, setError] = useState('');
+const [unread, setUnread] = useState(0);
  const [showEmoji, setShowEmoji] = useState(false);
  const [pendingImage, setPendingImage] = useState<string | null>(null);
  const [isListening, setIsListening] = useState(false);
@@ -296,7 +291,7 @@ export default function AskAIWidget() {
  const inputRef = useRef<HTMLTextAreaElement>(null);
  const fileRef = useRef<HTMLInputElement>(null);
 
- const hasInteracted = messages.length >= 2;
+ 
  const isEmpty = messages.length === 0;
 
  // Contextual articles for the current page (up to 3)
@@ -393,7 +388,7 @@ export default function AskAIWidget() {
  };
  const updated = [...messages, userMsg];
  setMessages(updated);
- setInput(''); setPendingImage(null); setLoading(true); setError(''); setShowEscalate(false);
+ setInput(''); setPendingImage(null); setLoading(true); setError('');
 
  const apiMessages = updated.map(m => {
  if (m.image) return {
@@ -413,56 +408,18 @@ export default function AskAIWidget() {
 		 });
  const data = await res.json();
  if (!res.ok) { setError(data.error || 'Something went wrong.'); return; }
- setMessages(prev => [...prev, { role: 'assistant', content: data.reply, timestamp: new Date() }]);
- setShowEscalate(true);
- if (!open) setUnread(n => n + 1);
- } catch {
- setError('Network error. Please try again.');
- } finally {
- setLoading(false);
- }
- }, [input, pendingImage, loading, messages, open, pathname]);
+setMessages(prev => [...prev, { role: 'assistant', content: data.reply, timestamp: new Date() }]);
+if (!open) setUnread(n => n + 1);
+} catch {
+setError('Network error. Please try again.');
+} finally {
+setLoading(false);
+}
+}, [input, pendingImage, loading, messages, open, pathname]);
 
- // ── Escalate ─────────────────────────────────────────────────────────────────
- async function escalate() {
- if (!supportNote.trim()) return;
- setEscalating(true);
- const convo = messages.map(m => ({ role: m.role, content: m.content }));
- const question = messages.find(m => m.role === 'user')?.content || '';
- try {
- const res = await fetch('/api/ai/escalate', {
- method: 'POST', headers: { 'Content-Type': 'application/json' },
- body: JSON.stringify({
- question,
- conversation: convo,
- currentPage: pathname,
- supportNote: supportNote.trim(),
- }),
- });
- const data = await res.json();
- if (!res.ok) { setError(data.error || 'Failed to send support request.'); return; }
- setEscalated(true); setShowSupportForm(false); setSupportNote('');
- setMessages(prev => [...prev, {
- role: 'assistant',
- content:"I've sent your request to our support team with a full summary of our conversation. Someone will follow up with you via email shortly.",
- timestamp: new Date(),
- }]);
- // Fire-and-forget: draft a help article from this unanswered conversation
- fetch('/api/help/suggest-article', {
- method: 'POST', headers: { 'Content-Type': 'application/json' },
- body: JSON.stringify({ conversation: convo }),
- }).catch(() => { /* non-critical */ });
- } catch {
- setError('Could not send request. Please email clients@storyvenuemarketing.com directly.');
- } finally {
- setEscalating(false); setShowEscalate(false);
- }
- }
-
- function reset() {
- setMessages([]); setInput(''); setError('');
- setShowEscalate(false); setEscalated(false);
- setPendingImage(null); setShowEmoji(false);
+function reset() {
+setMessages([]); setInput(''); setError('');
+setPendingImage(null); setShowEmoji(false);
  setInlineArticleId(null);
  }
 
@@ -553,9 +510,9 @@ export default function AskAIWidget() {
  <div className="rounded-2xl bg-white border border-gray-200 p-4">
  <div className="flex items-center gap-2 mb-2">
  <div className="flex h-7 w-7 items-center justify-center rounded-full"style={{ backgroundColor: AI_BUBBLE }}>
- <Sparkles size={13} className="text-white"/>
- </div>
- <span className="text-sm font-semibold text-gray-900">Hi! I&apos;m Ask AI 👋</span>
+<Sparkles size={13} className="text-gray-500"/>
+</div>
+<span className="text-sm font-semibold text-gray-900">Hi! I&apos;m Ask AI 👋</span>
  </div>
  <p className="text-sm text-gray-600 leading-relaxed">
  {pathname?.startsWith('/dashboard/leads')
@@ -578,24 +535,24 @@ export default function AskAIWidget() {
  style={msg.role === 'assistant' ? { backgroundColor: AI_BUBBLE } : {}}>
  {msg.role === 'user'
  ? <span className="text-[10px] font-bold text-gray-500">You</span>
- : <Sparkles size={12} className="text-white"/>}
+ : <Sparkles size={12} className="text-gray-500"/>}
  </div>
  <div
  className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm ${
  msg.role === 'user'
  ? 'bg-white border border-gray-200 text-gray-900 rounded-tr-sm'
- : 'text-white rounded-tl-sm'
+                : 'text-gray-900 rounded-tl-sm'
  }`}
  style={msg.role === 'assistant' ? { backgroundColor: AI_BUBBLE } : {}}>
  {msg.image && (
  // eslint-disable-next-line @next/next/no-img-element
  <img src={msg.image} alt="screenshot"className="rounded-xl max-w-full mb-2 max-h-40 object-contain"/>
  )}
- <div className={msg.role === 'assistant' ? 'text-white/95' : ''}>
- {renderContent(msg.content, (path) => { router.push(path); setOpen(false); })}
+<div className={msg.role === 'assistant' ? 'text-gray-700' : ''}>
+{renderContent(msg.content, (path) => { router.push(path); setOpen(false); })}
  </div>
  {msg.timestamp && (
- <p className={`text-[10px] mt-1.5 ${msg.role === 'user' ? 'text-gray-400 text-right' : 'text-white/60'}`}>
+ <p className={`text-[10px] mt-1.5 ${msg.role === 'user' ? 'text-gray-400 text-right' : 'text-gray-400'}`}>
  {formatTime(msg.timestamp)}
  </p>
  )}
@@ -605,13 +562,13 @@ export default function AskAIWidget() {
 
  {loading && (
  <div className="flex gap-2.5">
- <div className="flex h-7 w-7 items-center justify-center rounded-full"style={{ backgroundColor: AI_BUBBLE }}>
- <Sparkles size={12} className="text-white"/>
- </div>
- <div className="rounded-2xl rounded-tl-sm px-4 py-3"style={{ backgroundColor: AI_BUBBLE }}>
- <div className="flex gap-1 items-center h-3">
- {[0,1,2].map(i => (
- <div key={i} className="h-1.5 w-1.5 rounded-full bg-white/60 animate-bounce"
+<div className="flex h-7 w-7 items-center justify-center rounded-full"style={{ backgroundColor: AI_BUBBLE }}>
+<Sparkles size={12} className="text-gray-500"/>
+</div>
+<div className="rounded-2xl rounded-tl-sm px-4 py-3"style={{ backgroundColor: AI_BUBBLE }}>
+<div className="flex gap-1 items-center h-3">
+{[0,1,2].map(i => (
+<div key={i} className="h-1.5 w-1.5 rounded-full bg-gray-400 animate-bounce"
  style={{ animationDelay: `${i * 0.15}s` }} />
  ))}
  </div>
@@ -619,48 +576,6 @@ export default function AskAIWidget() {
  </div>
  )}
 
- {showEscalate && hasInteracted && !escalated && !loading && !showSupportForm && (
- <div className="flex justify-center">
- <button onClick={() => setShowSupportForm(true)}
- className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-medium text-gray-600 hover:border-gray-300 hover: transition-all">
- <LifeBuoy size={12} />
- Still need help? Contact support →
- </button>
- </div>
- )}
-
- {showSupportForm && !escalated && (
- <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3.5 space-y-2.5">
- <p className="text-xs font-semibold text-amber-900">Tell us what you need help with</p>
- <textarea
- value={supportNote}
- onChange={e => setSupportNote(e.target.value)}
- placeholder="Describe your issue so our team can help quickly…"
- rows={3}
- className="w-full rounded-2xl border border-amber-200 bg-white px-3 py-2 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-amber-400 resize-none"
- style={{ fontSize: 16 }}
- />
- <div className="flex gap-2">
- <button onClick={() => { setShowSupportForm(false); setSupportNote(''); }}
- className="flex-1 rounded-2xl border border-gray-200 bg-white py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
- Cancel
- </button>
- <button onClick={escalate} disabled={!supportNote.trim() || escalating}
- className="flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-bold text-white disabled:opacity-40 transition-all"
- style={{ backgroundColor: BRAND }}>
- {escalating ? <><Loader2 size={11} className="animate-spin"/> Sending…</> : 'Send to Support'}
- </button>
- </div>
- </div>
- )}
-
- {escalated && (
- <div className="flex justify-center">
- <div className="flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1.5 text-xs text-emerald-700 font-medium">
- <CheckCircle2 size={12} /> Support request sent
- </div>
- </div>
- )}
 
  {error && (
  <div className="flex items-center gap-2 rounded-xl bg-red-50 border border-red-100 px-3 py-2.5 text-xs text-red-600">
