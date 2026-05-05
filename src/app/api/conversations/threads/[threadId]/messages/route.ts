@@ -157,8 +157,10 @@ export async function GET(
   }
 
   const memberIds = new Set<string>();
+  const supportIds = new Set<string>();
   for (const m of messages ?? []) {
     if (m.venue_team_member_id) memberIds.add(m.venue_team_member_id as string);
+    if (m.sent_by_support_user_id) supportIds.add(m.sent_by_support_user_id as string);
   }
   const memberNames: Record<string, string> = {};
   if (memberIds.size > 0) {
@@ -178,23 +180,43 @@ export async function GET(
         [row.first_name, row.last_name].filter(Boolean).join(' ') || row.name || 'Team member';
     }
   }
+  const supportNames: Record<string, string> = {};
+  if (supportIds.size > 0) {
+    const { data: supportRows } = await supabaseAdmin
+      .from('support_team_members')
+      .select('id, name')
+      .in('id', [...supportIds]);
+    for (const s of supportRows ?? []) {
+      const r = s as { id: string; name: string };
+      supportNames[r.id] = r.name || 'StoryVenue Support';
+    }
+  }
 
   const enriched = (messages ?? []).map((m) => {
     const tid = m.trigger_link_id as string | null | undefined;
     const tmeta = tid ? triggerById[tid] : undefined;
+    const supportId = m.sent_by_support_user_id as string | null | undefined;
+    const supportAgentName = supportId ? supportNames[supportId] || null : null;
     return {
       ...m,
       trigger_link: tmeta
         ? { short_code: tmeta.short_code, name: tmeta.name }
         : null,
+      support_agent_name: supportAgentName,
       author_label:
-        m.sender_kind === 'owner'
-          ? 'Owner'
+        m.sender_kind === 'concierge'
+          ? supportAgentName
+            ? `StoryVenue Support — ${supportAgentName}`
+            : 'StoryVenue Support'
+          : m.sender_kind === 'ai'
+            ? 'AI Concierge'
+          : m.sender_kind === 'owner'
+            ? 'Owner'
           : m.sender_kind === 'contact'
             ? (m.contact_from_name as string) || 'Contact'
-            : m.sender_kind === 'system'
-              ? 'System'
-              : memberNames[m.venue_team_member_id as string] || 'Team member',
+          : m.sender_kind === 'system'
+            ? 'System'
+          : memberNames[m.venue_team_member_id as string] || 'Team member',
     };
   });
 

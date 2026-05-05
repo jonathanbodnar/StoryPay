@@ -30,6 +30,8 @@ import {
   MailCheck,
   Trash2,
   Smartphone,
+  ShieldCheck,
+  Sparkles,
 } from 'lucide-react';
 import { classNames, toTitleCase, dispatchStageChange, onStageChange } from '@/lib/utils';
 import { EmojiPickerPopover } from '@/components/EmojiPickerPopover';
@@ -102,6 +104,11 @@ interface Msg {
   contact_from_email?: string | null;
   trigger_link?: { short_code: string; name: string | null } | null;
   trigger_link_id?: string | null;
+  /** Set when a StoryVenue support agent replied on behalf of the venue. */
+  sent_on_behalf_of_venue?: boolean | null;
+  sent_by_support_user_id?: string | null;
+  support_agent_name?: string | null;
+  support_internal_note?: string | null;
 }
 
 interface TriggerLinkOpt {
@@ -1420,7 +1427,14 @@ export default function ConversationsPage() {
                     {messages.map((m) => {
                       const isInternal = m.visibility === 'internal';
                       const fromContact = m.sender_kind === 'contact';
-                      const fromUs = m.sender_kind === 'owner' || m.sender_kind === 'team';
+                      const fromSupport =
+                        m.sender_kind === 'concierge' || Boolean(m.sent_on_behalf_of_venue);
+                      const fromAi = m.sender_kind === 'ai';
+                      const fromUs =
+                        m.sender_kind === 'owner' ||
+                        m.sender_kind === 'team' ||
+                        fromSupport ||
+                        fromAi;
                       const alignRight = fromUs && !fromContact;
                       const isEmail = !isInternal && m.channel === 'email';
                       const emailExpanded = expandedEmailIds.has(m.id);
@@ -1601,6 +1615,26 @@ export default function ConversationsPage() {
                                 </div>
                                 <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 px-1 text-[10px] text-gray-400">
                                   <span>{timestamp}</span>
+                                  {fromSupport && (
+                                    <span
+                                      className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700"
+                                      title={
+                                        m.support_agent_name
+                                          ? `Sent by StoryVenue Support — ${m.support_agent_name}`
+                                          : 'Sent by StoryVenue Support'
+                                      }
+                                    >
+                                      <ShieldCheck size={9} /> Sent by Support
+                                    </span>
+                                  )}
+                                  {fromAi && (
+                                    <span
+                                      className="inline-flex items-center gap-1 rounded-full border border-purple-200 bg-purple-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-purple-700"
+                                      title="Sent by AI Concierge"
+                                    >
+                                      <Sparkles size={9} /> AI
+                                    </span>
+                                  )}
                                   {m.visibility === 'external' && m.external_email_sent === false && m.send_error && (
                                     <span className="text-amber-600">
                                       {m.channel === 'sms' ? 'SMS not sent' : 'Email not sent'}: {m.send_error}
@@ -1613,6 +1647,14 @@ export default function ConversationsPage() {
                                         .filter((t) => m.mentioned_member_ids?.includes(t.id))
                                         .map((t) => `@${t.first_name || [t.first_name, t.last_name].filter(Boolean).join(' ')}`)
                                         .join(', ')}
+                                    </span>
+                                  )}
+                                  {m.support_internal_note && (
+                                    <span
+                                      className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-medium text-amber-800"
+                                      title={m.support_internal_note}
+                                    >
+                                      Note from support
                                     </span>
                                   )}
                                 </div>
