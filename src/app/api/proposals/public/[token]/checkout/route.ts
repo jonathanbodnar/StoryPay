@@ -121,12 +121,8 @@ export async function POST(
       }
     }
 
-    // Only restrict to card-only when ACH is explicitly disabled by the venue.
-    // Otherwise omit payment_methods → LunarPay default = cc + ach
-    // (ach tab only appears if the merchant's Fortis account has ACH enabled).
-    if (!acceptAch) {
-      checkoutData.payment_methods = ['cc'];
-    }
+    // Explicitly send payment_methods so LP shows the correct tabs.
+    checkoutData.payment_methods = acceptAch ? ['cc', 'ach'] : ['cc'];
 
     console.log('[checkout] feeRate:', feeRate, '% originalCents:', chargeAmountCents, 'finalCents:', finalCents, 'acceptAch:', acceptAch);
     console.log('[checkout] Creating checkout session:', JSON.stringify(checkoutData));
