@@ -106,6 +106,7 @@ export default function NewProposalPage() {
  const [subAmount, setSubAmount] = useState('');
  const [subFrequency, setSubFrequency] = useState<'monthly' | 'weekly'>('monthly');
  const [subStartDate, setSubStartDate] = useState('');
+ const [acceptAch, setAcceptAch] = useState(true);
 
  useEffect(() => {
  fetch('/api/templates')
@@ -223,18 +224,19 @@ export default function NewProposalPage() {
  }
 
  function buildBody(asDraft: boolean) {
- return {
- templateId,
- customerName: customerName || undefined,
- customerEmail: customerEmail || undefined,
- customerPhone: customerPhone ? toE164(customerPhone) : undefined,
- ghlContactId: selectedCustomer?.id || undefined,
- price: pricePreview,
- paymentType,
- paymentConfig: buildPaymentConfig(),
- asDraft,
- surchargeAmount: surchargeCents,
- };
+  return {
+   templateId,
+   customerName: customerName || undefined,
+   customerEmail: customerEmail || undefined,
+   customerPhone: customerPhone ? toE164(customerPhone) : undefined,
+   ghlContactId: selectedCustomer?.id || undefined,
+   price: pricePreview,
+   paymentType,
+   paymentConfig: buildPaymentConfig(),
+   acceptAch,
+   asDraft,
+   surchargeAmount: surchargeCents,
+  };
  }
 
  async function handleSend(e: React.FormEvent) {
@@ -591,23 +593,39 @@ export default function NewProposalPage() {
 
  {/* Payment Type */}
  <div>
- <label className="block text-sm font-medium text-gray-700 mb-1.5">Payment Type</label>
- <div className="flex gap-2">
- {(['full', 'installment', 'subscription'] as const).map((type) => (
- <button
- key={type}
- type="button"
- onClick={() => setPaymentType(type)}
- className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
- paymentType === type
- ? 'border-brand-900 bg-brand-900/5 text-brand-900'
- : 'border-gray-200 text-gray-600 hover:bg-gray-50'
- }`}
- >
- {type === 'full' ? 'Full Payment' : type === 'installment' ? 'Installment Plan' : 'Subscription'}
- </button>
- ))}
+  <label className="block text-sm font-medium text-gray-700 mb-1.5">Payment Type</label>
+  <div className="flex gap-2">
+   {(['full', 'installment', 'subscription'] as const).map((type) => (
+    <button
+     key={type}
+     type="button"
+     onClick={() => setPaymentType(type)}
+     className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+      paymentType === type
+       ? 'border-brand-900 bg-brand-900/5 text-brand-900'
+       : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+     }`}
+    >
+     {type === 'full' ? 'Full Payment' : type === 'installment' ? 'Installment Plan' : 'Subscription'}
+    </button>
+   ))}
+  </div>
  </div>
+
+ {/* Accept ACH */}
+ <div className="flex items-center gap-3">
+  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer select-none">
+   <input
+    type="checkbox"
+    checked={acceptAch}
+    onChange={(e) => setAcceptAch(e.target.checked)}
+    className="rounded border-gray-300 text-brand-900"
+   />
+   Accept bank account (ACH) payments
+  </label>
+  <span className="text-xs text-gray-400">
+   {acceptAch ? 'Card + ACH' : 'Card only'}
+  </span>
  </div>
 
  {/* Installment Schedule */}

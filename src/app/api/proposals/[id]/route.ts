@@ -62,6 +62,7 @@ export async function PATCH(
   const {
     customerName, customerEmail, customerPhone,
     price, paymentType, paymentConfig,
+    acceptAch,
     sendNow,
   } = body;
 
@@ -80,6 +81,7 @@ export async function PATCH(
   if (price !== undefined) updateData.price = price;
   if (paymentType !== undefined) updateData.payment_type = paymentType;
   if (paymentConfig !== undefined) updateData.payment_config = paymentConfig;
+  if (acceptAch !== undefined) updateData.accept_ach = acceptAch;
 
   if (sendNow) {
     const name = customerName || existing.customer_name;

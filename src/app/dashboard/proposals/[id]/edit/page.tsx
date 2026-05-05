@@ -21,6 +21,7 @@ interface Proposal {
  price: number;
  payment_type: string;
  payment_config: Record<string, unknown>;
+ accept_ach: boolean;
  template_id: string;
  public_token: string;
  sent_at: string | null;
@@ -70,6 +71,7 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
  const [subAmount, setSubAmount] = useState('');
  const [subFrequency, setSubFrequency] = useState<'monthly' | 'weekly'>('monthly');
  const [subStartDate, setSubStartDate] = useState('');
+ const [acceptAch, setAcceptAch] = useState(true);
 
  useEffect(() => {
  async function load() {
@@ -95,11 +97,12 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
  }))
  );
  }
- if (data.payment_type === 'subscription') {
- setSubAmount(config.amount ? ((config.amount as number) / 100).toString() : '');
- setSubFrequency((config.frequency as 'monthly' | 'weekly') || 'monthly');
- setSubStartDate(toDateValue((config.start_date as string) || ''));
- }
+    if (data.payment_type === 'subscription') {
+      setSubAmount(config.amount ? ((config.amount as number) / 100).toString() : '');
+      setSubFrequency((config.frequency as 'monthly' | 'weekly') || 'monthly');
+      setSubStartDate(toDateValue((config.start_date as string) || ''));
+     }
+     setAcceptAch(data.accept_ach !== false);
  } catch {
  setError('Proposal not found');
  } finally {
@@ -133,15 +136,16 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
  }
 
  function buildBody(sendNow: boolean) {
- return {
- customerName: customerName || undefined,
- customerEmail: customerEmail || undefined,
- customerPhone: customerPhone || undefined,
- price: Math.round(parseFloat(priceDollars || '0') * 100),
- paymentType,
- paymentConfig: buildPaymentConfig(),
- sendNow,
- };
+  return {
+   customerName: customerName || undefined,
+   customerEmail: customerEmail || undefined,
+   customerPhone: customerPhone || undefined,
+   price: Math.round(parseFloat(priceDollars || '0') * 100),
+   paymentType,
+   paymentConfig: buildPaymentConfig(),
+   acceptAch,
+   sendNow,
+  };
  }
 
  async function handleSave() {
@@ -397,24 +401,41 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
 
  {/* Payment Type */}
  <div>
- <label className="block text-sm font-medium text-gray-700 mb-1.5">Payment Type</label>
- <div className="flex gap-2">
- {(['full', 'installment', 'subscription'] as const).map((type) => (
- <button
- key={type}
- type="button"
- onClick={() => canEdit && setPaymentType(type)}
- disabled={!canEdit}
- className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
- paymentType === type
- ? 'border-brand-900 bg-brand-900/5 text-brand-900'
- : 'border-gray-200 text-gray-600 hover:bg-gray-50'
- } disabled:cursor-default`}
- >
- {type === 'full' ? 'Full Payment' : type === 'installment' ? 'Installment Plan' : 'Subscription'}
- </button>
- ))}
+  <label className="block text-sm font-medium text-gray-700 mb-1.5">Payment Type</label>
+  <div className="flex gap-2">
+   {(['full', 'installment', 'subscription'] as const).map((type) => (
+    <button
+     key={type}
+     type="button"
+     onClick={() => canEdit && setPaymentType(type)}
+     disabled={!canEdit}
+     className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+      paymentType === type
+       ? 'border-brand-900 bg-brand-900/5 text-brand-900'
+       : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+     } disabled:cursor-default`}
+    >
+     {type === 'full' ? 'Full Payment' : type === 'installment' ? 'Installment Plan' : 'Subscription'}
+    </button>
+   ))}
+  </div>
  </div>
+
+ {/* Accept ACH */}
+ <div className="flex items-center gap-3">
+  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer select-none">
+   <input
+    type="checkbox"
+    checked={acceptAch}
+    onChange={(e) => canEdit && setAcceptAch(e.target.checked)}
+    disabled={!canEdit}
+    className="rounded border-gray-300 text-brand-900 disabled:cursor-default"
+   />
+   Accept bank account (ACH) payments
+  </label>
+  <span className="text-xs text-gray-400">
+   {acceptAch ? 'Card + ACH' : 'Card only'}
+  </span>
  </div>
 
  {/* Installment Schedule */}

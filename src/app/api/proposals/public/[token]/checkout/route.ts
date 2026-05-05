@@ -32,7 +32,7 @@ export async function POST(
 
   const { data: proposal, error } = await supabaseAdmin
     .from('proposals')
-    .select('id, venue_id, status, price, customer_name, customer_email, customer_lunarpay_id, payment_type, payment_config')
+    .select('id, venue_id, status, price, customer_name, customer_email, customer_lunarpay_id, payment_type, payment_config, accept_ach')
     .eq('public_token', token)
     .single();
 
@@ -56,12 +56,10 @@ export async function POST(
 
   const feeRate = Number(venue.service_fee_rate ?? 0);
   const addFee = feeRate > 0;
-  // Only override payment_methods when the venue has explicitly opted OUT
-  // of ACH. When the toggle is ON (or unset), we omit payment_methods so
-  // LunarPay's hosted page falls back to its default (cc + ach when the
-  // Fortis account has both enabled, cc-only otherwise). Sending the field
-  // explicitly was triggering 500s from LunarPay for some merchant configs.
-  const acceptAch = (venue as { accept_ach?: boolean | null }).accept_ach !== false;
+  // Proposal-level accept_ach takes precedence. Falls back to venue-level setting.
+  const proposalAch = (proposal as { accept_ach?: boolean | null }).accept_ach;
+  const venueAch = (venue as { accept_ach?: boolean | null }).accept_ach;
+  const acceptAch = proposalAch !== null && proposalAch !== undefined ? proposalAch !== false : venueAch !== false;
 
   try {
     let chargeAmountCents = proposal.price;
