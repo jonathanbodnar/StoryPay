@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels, type TicketMessageEvent, type TicketStatusEvent } from '@/lib/realtime/channels';
+import { SlaDot, SlaPill } from '@/components/support/SlaIndicator';
 
 const BRAND = '#1b1b1b';
 
@@ -404,7 +405,10 @@ export function SupportPanel({ onClose }: { onClose?: () => void }) {
                 className="w-full text-left px-3 py-3 border-b border-gray-100 last:border-b-0 bg-white hover:bg-gray-50 transition-colors"
               >
                 <div className="flex items-start justify-between gap-2 mb-1">
-                  <p className="text-sm font-medium text-gray-900 truncate flex-1">{t.subject}</p>
+                  <div className="flex items-start gap-1.5 flex-1 min-w-0">
+                    {t.status !== 'closed' && <SlaDot iso={t.last_message_at} className="mt-1.5" />}
+                    <p className="text-sm font-medium text-gray-900 truncate">{t.subject}</p>
+                  </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <PriorityChip priority={t.priority} />
                     <StatusPill status={t.status} />
@@ -513,7 +517,12 @@ export function SupportPanel({ onClose }: { onClose?: () => void }) {
                     <p className="text-sm font-semibold text-gray-900 flex-1">{detail.ticket.subject}</p>
                     <PriorityChip priority={detail.ticket.priority} />
                   </div>
-                  <p className="text-[10px] text-gray-400 mt-0.5">Opened {relTime(detail.ticket.created_at)}</p>
+                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                    <p className="text-[10px] text-gray-400">Opened {relTime(detail.ticket.created_at)}</p>
+                    {detail.ticket.status !== 'closed' && (
+                      <SlaPill iso={detail.ticket.last_message_at} size="sm" />
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">

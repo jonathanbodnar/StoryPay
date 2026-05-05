@@ -194,6 +194,11 @@ export async function GET(
       lead_status:   (lead?.status as string | null) ?? null,
       message_count: messageCount ?? 0,
     },
+    thread: {
+      id:              t.id,
+      last_message_at: t.last_message_at,
+      created_at:      t.created_at,
+    },
     pipeline: pipelineStage,
     ai: lead ? {
       state:                 (lead.ai_state as string | null) ?? 'dormant',

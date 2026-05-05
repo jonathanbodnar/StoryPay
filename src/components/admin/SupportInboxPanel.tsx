@@ -23,6 +23,7 @@ import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels, type BrideMessageEvent, type TicketMessageEvent, type TicketStatusEvent } from '@/lib/realtime/channels';
 import { CannedReplyPicker } from '@/components/support/CannedReplyPicker';
 import { SupportContextSidebar } from '@/components/admin/SupportContextSidebar';
+import { SlaDot, SlaPill } from '@/components/support/SlaIndicator';
 
 const BRAND = '#1b1b1b';
 
@@ -544,13 +545,16 @@ export function SupportInboxPanel() {
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2 mb-1">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">
-                        {fullName(t.contact_first_name, t.contact_last_name, t.contact_email || 'Unknown bride')}
-                      </p>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <Building2 size={11} className="text-gray-400 shrink-0" />
-                        <span className="text-[11px] text-gray-500 truncate">{t.venue_name}</span>
+                    <div className="flex items-start gap-2 flex-1 min-w-0">
+                      <SlaDot iso={t.last_inbound_created_at} className="mt-1.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 truncate">
+                          {fullName(t.contact_first_name, t.contact_last_name, t.contact_email || 'Unknown bride')}
+                        </p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <Building2 size={11} className="text-gray-400 shrink-0" />
+                          <span className="text-[11px] text-gray-500 truncate">{t.venue_name}</span>
+                        </div>
                       </div>
                     </div>
                     <div className="flex flex-col items-end shrink-0 gap-1">
@@ -809,7 +813,8 @@ function ThreadDetailView({
             {detail.customer?.phone && <span>{detail.customer.phone}</span>}
           </div>
         </div>
-        <div className="text-right shrink-0">
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <SlaPill iso={detail.thread.last_message_at} />
           {detail.lead?.status && (
             <span className="inline-block rounded-full bg-gray-100 text-gray-700 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
               {detail.lead.status}
@@ -1435,11 +1440,14 @@ function TicketsView({
               }`}
             >
               <div className="flex items-start justify-between gap-2 mb-1">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 truncate">{t.subject}</p>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <Building2 size={11} className="text-gray-400 shrink-0" />
-                    <span className="text-[11px] text-gray-500 truncate">{t.venue_name}</span>
+                <div className="flex items-start gap-2 flex-1 min-w-0">
+                  {t.status !== 'closed' && <SlaDot iso={t.last_message_at} className="mt-1.5" />}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{t.subject}</p>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <Building2 size={11} className="text-gray-400 shrink-0" />
+                      <span className="text-[11px] text-gray-500 truncate">{t.venue_name}</span>
+                    </div>
                   </div>
                 </div>
                 <div className="flex flex-col items-end shrink-0 gap-1">
@@ -1505,6 +1513,7 @@ function TicketsView({
                     <p className="text-sm font-semibold text-gray-900 truncate">{detail.ticket.subject}</p>
                     <StatusPill status={detail.ticket.status} />
                     <PriorityPill priority={detail.ticket.priority} />
+                    {detail.ticket.status !== 'closed' && <SlaPill iso={detail.ticket.last_message_at} size="sm" />}
                   </div>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-[11px] text-gray-500">
                     {detail.venue && (
