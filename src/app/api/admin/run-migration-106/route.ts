@@ -13,12 +13,12 @@ export async function POST() {
 
   try {
     const sql     = await getDbAsync();
-    const sqlPath = path.join(process.cwd(), 'migrations', '106_directory_plan_hide_header.sql');
+    const sqlPath = path.join(process.cwd(), 'migrations', '106_support_inbox.sql');
     const migSql  = await fs.readFile(sqlPath, 'utf8');
     await sql.unsafe(migSql);
     return NextResponse.json({
       success: true,
-      message: 'Migration 106 applied — hide_header column added to directory_plans.',
+      message: 'Migration 106 applied — support inbox schema installed.',
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
