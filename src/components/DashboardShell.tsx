@@ -108,7 +108,7 @@ export default function DashboardShell({
       >
         <div className="h-14 lg:hidden" />
         <AnnouncementTicker />
-        <main className="mx-auto flex min-h-screen w-full max-w-[960px] flex-col px-6 pb-10 pt-6 sm:px-8 lg:px-10 lg:pt-[68px]">
+        <main className="mx-auto flex min-h-screen w-full max-w-[1024px] flex-col px-6 pb-10 pt-6 sm:px-8 lg:px-10 lg:pt-[68px]">
           {directoryBillingPending ? (
             <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
               <span className="font-semibold">Directory plan payment due.</span>{' '}
