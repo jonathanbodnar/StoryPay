@@ -85,6 +85,17 @@ export default function DashboardShell({
 
   const rail = collapsed;
 
+  // Pages that need full-width content (no max-w constraint)
+  const fullWidthPaths = [
+    '/dashboard/contacts',
+    '/dashboard/conversations',
+    '/dashboard/calendar',
+    '/dashboard/leads',
+    '/dashboard/media',
+    '/dashboard/help',
+  ];
+  const isFullWidth = pathname === '/dashboard' || fullWidthPaths.some((p) => pathname.startsWith(p));
+
   return (
     <div
       className="min-h-screen"
@@ -108,7 +119,7 @@ export default function DashboardShell({
       >
         <div className="h-14 lg:hidden" />
         <AnnouncementTicker />
-        <main className="mx-auto flex min-h-screen w-full max-w-[1024px] flex-col px-6 pb-10 pt-6 sm:px-8 lg:px-10 lg:pt-[68px]">
+        <main className={`mx-auto flex min-h-screen w-full flex-col px-6 pb-10 pt-6 sm:px-8 lg:px-10 lg:pt-[68px] ${isFullWidth ? '' : 'max-w-[1024px]'}`}>
           {directoryBillingPending ? (
             <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
               <span className="font-semibold">Directory plan payment due.</span>{' '}
