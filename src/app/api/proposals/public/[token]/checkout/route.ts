@@ -46,7 +46,7 @@ export async function POST(
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('name, lunarpay_secret_key, service_fee_rate, accept_ach')
+    .select('id, name, lunarpay_secret_key, service_fee_rate, accept_ach')
     .eq('id', proposal.venue_id)
     .single();
 
@@ -85,15 +85,16 @@ export async function POST(
     const finalCents = addFee ? applyFee(chargeAmountCents, feeRate) : chargeAmountCents;
     const amountInDollars = finalCents / 100;
 
-    // Only fields documented by the LunarPay hosted-checkout API.
-    // metadata is documented but is currently broken on LP (May 2026 schema
-    // drift) so we no longer send it. The proposal is identified post-payment
-    // via the token in success_url, which is all verify needs.
     const checkoutData: Record<string, unknown> = {
       amount: amountInDollars,
       description,
       customer_email: proposal.customer_email,
       customer_name: proposal.customer_name,
+      metadata: {
+        storypay_proposal_id: proposal.id,
+        storypay_venue_id: venue.id,
+        public_token: token,
+      },
       success_url: `${APP_URL}/proposal/${token}/success`,
       cancel_url: `${APP_URL}/proposal/${token}`,
     };

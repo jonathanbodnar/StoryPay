@@ -185,17 +185,19 @@ export function createCheckoutSession(
 
   // Documented hosted-checkout fields per the LunarPay API spec.
   //
-  // - customer_id / save_payment_method: never include — undocumented and
-  //   trigger 500.
-  // - metadata: documented but currently 500s on at least one production
-  //   merchant (a checkout_sessions schema drift on LP's side, May 2026).
-  //   We now never send metadata; verify endpoints derive the post-payment
-  //   context from our own DB instead. Re-add to the allowlist if/when LP
-  //   confirms the column is restored on all merchants.
+  // - mode: "subscription" | "installments" | omitted (one-off). When set,
+  //   LP charges the card, vaults it, AND creates the recurring plan in one
+  //   call — no separate createSubscription needed.
+  // - recurring: { frequency: "weekly"|"monthly"|... , start_date?: "YYYY-MM-DD" }
+  //   Required with mode:"subscription".
+  // - installments: { count: N, frequency: "monthly"|... }
+  //   Required with mode:"installments".
+  // - metadata: LP confirmed the checkout_sessions schema fix has shipped
+  //   (May 5 2026); safe to include again.
   const allowedFields = [
     'amount', 'description', 'success_url', 'cancel_url',
     'customer_email', 'customer_name', 'payment_methods',
-    'expires_in',
+    'expires_in', 'mode', 'recurring', 'installments', 'metadata',
   ];
 
   for (const field of allowedFields) {

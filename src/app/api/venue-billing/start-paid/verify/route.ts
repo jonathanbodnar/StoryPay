@@ -5,9 +5,7 @@ import {
   loadVenueDirectoryPlanContext,
   requirePlatformLunarPaySecretKey,
 } from '@/lib/platform-directory-billing';
-import { createSubscription, getCheckoutSession } from '@/lib/lunarpay';
-import { computeMonthlyTotalCents } from '@/lib/directory-addons';
-import { listDirectoryPlanCatalog, loadAddonPrices } from '@/lib/venue-billing';
+import { getCheckoutSession } from '@/lib/lunarpay';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -16,10 +14,10 @@ export const runtime = 'nodejs';
  * POST /api/venue-billing/start-paid/verify
  * Body: { session_id: string }
  *
- * Closes the trial → paid hand-off after the venue enters their card on
- * LunarPay's checkout. Creates a subscription whose `startOn` is the trial
- * end date (or today if the trial already expired) so the first charge fires
- * exactly when expected.
+ * The start-paid checkout now uses mode:"subscription" so LP has already
+ * charged the card, vaulted it, and created the recurring subscription.
+ * All we need to do here is read the subscription_id from the completed
+ * session and persist it locally.
  */
 export async function POST(req: NextRequest) {
   const c = await cookies();
@@ -45,78 +43,24 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // We no longer check session.metadata (LP currently 500s when metadata is
-  // present). The venue cookie + the start-paid route's pre-conditions
-  // already pin this verify to the right venue + flow.
+  // LP subscription-mode sessions include the subscription ID in the
+  // completed response. Try several possible field names.
+  const subId =
+    (session.subscription_id as string | number | null) ??
+    (session.subscriptionId as string | number | null) ??
+    ((session.subscription as Record<string, unknown> | null)?.id as string | number | null | undefined) ??
+    null;
 
   const customerId =
     (session.customer_id as string | number | null) ||
     (session.customerId as string | number | null) ||
     ctx.venue.platform_lunarpay_customer_id;
-  const paymentMethodId =
-    (session.payment_method_id as string | number | null) ||
-    (session.paymentMethodId as string | number | null) ||
-    (session.payment_method as string | number | null);
-  if (!customerId || !paymentMethodId) {
-    return NextResponse.json(
-      { error: 'Missing customer or payment method from checkout session' },
-      { status: 400 },
-    );
-  }
 
-  // Recompute total to make sure we're billing what's currently on file
-  // (addons may have changed during the trial).
-  const { data: row } = await supabaseAdmin
-    .from('venues')
-    .select('directory_addon_verified, directory_addon_sponsored, directory_addon_concierge, directory_trial_ends_at')
-    .eq('id', venueId)
-    .maybeSingle();
-  const r = (row ?? {}) as Record<string, unknown>;
-  const addonVerifiedUser  = Boolean(r.directory_addon_verified);
-  const addonSponsoredUser = Boolean(r.directory_addon_sponsored);
-  const addonConciergeUser = Boolean(r.directory_addon_concierge);
-
-  const [allPlans, addonPrices] = await Promise.all([
-    listDirectoryPlanCatalog(),
-    loadAddonPrices(),
-  ]);
-  const currentPlan = allPlans.find((p) => p.id === ctx.venue.directory_plan_id) ?? null;
-  const charge = computeMonthlyTotalCents({
-    plan: currentPlan,
-    allPlans,
-    addonVerifiedUser,
-    addonSponsoredUser,
-    addonConciergeUser,
-    prices: addonPrices,
-  });
-  if (charge.total_cents <= 0) {
-    return NextResponse.json({ error: 'Total monthly is $0' }, { status: 400 });
-  }
-
-  // Schedule the first charge for trial end if still in the future, else
-  // today (LunarPay will charge immediately).
-  const today = new Date();
-  const trialEndsRaw = (r.directory_trial_ends_at as string | null) ?? null;
-  let startOn = today.toISOString().slice(0, 10);
-  if (trialEndsRaw) {
-    const ends = new Date(trialEndsRaw);
-    if (!Number.isNaN(ends.getTime()) && ends.getTime() > today.getTime()) {
-      startOn = ends.toISOString().slice(0, 10);
-    }
-  }
-
-  const subResult = (await createSubscription(secret, {
-    customerId: Number(customerId),
-    paymentMethodId: Number(paymentMethodId),
-    amount: charge.total_cents,
-    frequency: 'monthly',
-    startOn,
-    description: `StoryVenue directory — ${currentPlan?.name ?? 'subscription'}`,
-  })) as Record<string, unknown>;
-  const sub = (subResult.data as Record<string, unknown>) || subResult;
-  const subId = (sub.id as string | number | undefined) ?? null;
   if (subId === null) {
-    return NextResponse.json({ error: 'LunarPay did not return a subscription id' }, { status: 502 });
+    return NextResponse.json(
+      { error: 'LunarPay session did not return a subscription_id — expected mode:subscription' },
+      { status: 502 },
+    );
   }
 
   await supabaseAdmin
@@ -124,30 +68,26 @@ export async function POST(req: NextRequest) {
     .update({
       directory_subscription_status: 'active',
       directory_subscription_external_id: String(subId),
-      platform_lunarpay_customer_id: String(customerId),
+      platform_lunarpay_customer_id: customerId ? String(customerId) : undefined,
     })
     .eq('id', venueId);
 
   await supabaseAdmin.from('platform_billing_events').insert({
     venue_id: venueId,
-    directory_plan_id: currentPlan?.id ?? null,
-    amount_cents: charge.total_cents,
+    directory_plan_id: ctx.plan.id,
+    amount_cents: ctx.plan.price_monthly_cents ?? 0,
     currency: 'usd',
     external_event_id: `start_paid:${sessionId}`,
     event_type: 'subscription_start_after_trial',
     metadata: {
       session_id: sessionId,
       subscription_id: String(subId),
-      start_on: startOn,
-      addon_verified: addonVerifiedUser,
-      addon_sponsored: addonSponsoredUser,
+      mode: 'subscription',
     },
   });
 
   return NextResponse.json({
     ok: true,
     subscription_id: String(subId),
-    total_cents: charge.total_cents,
-    start_on: startOn,
   });
 }

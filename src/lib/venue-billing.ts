@@ -6,7 +6,6 @@ import {
   getCheckoutSession,
   getSubscription,
   listPaymentMethods,
-  refundCharge,
 } from './lunarpay';
 import {
   getPlatformFortisMerchantId,
@@ -1232,16 +1231,23 @@ export async function startUpdatePaymentMethodCheckout(
   if (cents <= 0) {
     throw new Error('Free plans do not require a payment method on file.');
   }
-  // No metadata: LP currently 500s when checkout sessions include it.
-  // The flow is identified by the success URL's ?payment_update=1 marker;
-  // the venue is identified by cookie at verify time.
   const secret = requirePlatformLunarPaySecretKey();
+  // Use mode:"subscription" so LP vaults the new card and creates a
+  // replacement subscription in one call. The verify route cancels the old
+  // sub and reads the new sub ID from the session.
   const checkoutData: Record<string, unknown> = {
-    amount: 1,
-    description: `StoryVenue — update card ($1 verification, refunded immediately)`,
+    amount: cents / 100,
+    description: `StoryVenue directory — ${ctx.plan.name} (monthly)`,
+    mode: 'subscription',
+    recurring: { frequency: 'monthly' },
     customer_email: ctx.venue.email || undefined,
     customer_name: ctx.venue.name,
     payment_methods: ['cc'],
+    metadata: {
+      storypay_venue_id: venueId,
+      storypay_plan_id: ctx.plan.id,
+      flow: 'update_payment_method',
+    },
     success_url: `${APP_URL}/dashboard/directory-billing?payment_update=1`,
     cancel_url: `${APP_URL}/dashboard/directory-billing`,
   };
@@ -1253,10 +1259,9 @@ export async function startUpdatePaymentMethodCheckout(
 }
 
 /**
- * Finish the update-payment flow: cancel the old subscription, refund the
- * $1 verification charge, and create a replacement sub bound to the freshly
- * saved card with `startOn` preserved from the original sub so the next
- * renewal date does not move.
+ * Finish the update-payment flow: LP has already created a new subscription
+ * (via mode:"subscription" in the checkout session). All we need to do here
+ * is cancel the OLD subscription and persist the new sub ID from the session.
  */
 export async function verifyUpdatePaymentMethod(
   venueId: string,
@@ -1265,7 +1270,6 @@ export async function verifyUpdatePaymentMethod(
   const secret = requirePlatformLunarPaySecretKey();
   const ctx = await loadVenueDirectoryPlanContext(venueId);
   if (!ctx?.plan) throw new Error('No directory plan assigned');
-  // Narrow once so TS doesn't need to re-prove it across awaits below.
   const ctxPlan = ctx.plan;
 
   const result = (await getCheckoutSession(secret, sessionId)) as Record<string, unknown>;
@@ -1274,156 +1278,34 @@ export async function verifyUpdatePaymentMethod(
     throw new Error(`Checkout not completed (status: ${String(session.status)})`);
   }
 
+  // LP subscription-mode sessions include the new subscription ID.
+  const newSubId =
+    (session.subscription_id as string | number | null) ??
+    (session.subscriptionId as string | number | null) ??
+    ((session.subscription as Record<string, unknown> | null)?.id as string | number | null | undefined) ??
+    null;
+
   const customerId =
     (session.customer_id as string | number | null) ||
     (session.customerId as string | number | null) ||
     ctx.venue.platform_lunarpay_customer_id;
-  const paymentMethodId =
-    (session.payment_method_id as string | number | null) ||
-    (session.paymentMethodId as string | number | null) ||
-    (session.payment_method as string | number | null);
-  if (!customerId || !paymentMethodId) {
-    throw new Error('Missing customer or payment method from checkout session');
+
+  if (newSubId === null) {
+    throw new Error('LunarPay session did not return a subscription_id — expected mode:subscription');
   }
 
-  // Read the old sub's nextPaymentOn BEFORE canceling so we can preserve
-  // the renewal cadence on the replacement. Without this we'd reset the
-  // renewal date to today, which would either lose the trial (for trialing
-  // subs) or double-charge the venue this cycle (for active subs).
+  // Cancel the old subscription (the new one was already created by LP
+  // during checkout). Best-effort — the old sub might already be cancelled.
   const oldSubId = ctx.venue.directory_subscription_external_id;
-  let preservedStartOn: string | null = null;
-  if (oldSubId) {
-    try {
-      const oldRaw = (await getSubscription(secret, oldSubId)) as Record<string, unknown>;
-      const oldSub =
-        ((oldRaw as { data?: Record<string, unknown> }).data as Record<string, unknown>) || oldRaw;
-      const nextRenewalRaw =
-        (oldSub.nextPaymentOn as string | null | undefined) ??
-        (oldSub.next_payment_on as string | null | undefined) ??
-        (oldSub.nextChargeAt as string | null | undefined) ??
-        (oldSub.next_charge_at as string | null | undefined) ??
-        (oldSub.nextChargeDate as string | null | undefined) ??
-        (oldSub.next_charge_date as string | null | undefined) ??
-        (oldSub.nextPaymentDate as string | null | undefined) ??
-        (oldSub.next_payment_date as string | null | undefined) ??
-        (oldSub.next_billing_date as string | null | undefined) ??
-        null;
-      if (nextRenewalRaw) {
-        const parsed = new Date(nextRenewalRaw);
-        if (!Number.isNaN(parsed.getTime()) && parsed.getTime() > Date.now()) {
-          preservedStartOn = parsed.toISOString().slice(0, 10);
-        }
-      }
-    } catch (e) {
-      console.warn(
-        '[verifyUpdatePaymentMethod] could not read old sub nextPaymentOn — replacement will start tomorrow',
-        e instanceof Error ? e.message : e,
-      );
-    }
+  if (oldSubId && String(oldSubId) !== String(newSubId)) {
     try {
       await cancelSubscription(secret, oldSubId);
     } catch {
-      // If it's already cancelled we can still proceed.
+      // Already cancelled or invalid — safe to proceed.
     }
   }
 
-  // Refund the $1 card-verification charge from this update flow. Best-
-  // effort — a failure here doesn't invalidate the new card.
-  const sessionCharge = (session.charge as Record<string, unknown> | null) || null;
-  const sessionCharges = Array.isArray(session.charges) ? session.charges : null;
-  const firstCharge = sessionCharges
-    ? (sessionCharges[0] as Record<string, unknown> | undefined)
-    : undefined;
-  const verificationChargeId =
-    (session.charge_id as string | number | null) ??
-    (session.chargeId as string | number | null) ??
-    (sessionCharge?.id as string | number | null | undefined) ??
-    (firstCharge?.id as string | number | null | undefined) ??
-    (session.transaction_id as string | number | null) ??
-    (session.transactionId as string | number | null) ??
-    null;
-  if (verificationChargeId !== null && verificationChargeId !== undefined) {
-    try {
-      await refundCharge(secret, verificationChargeId);
-    } catch (e) {
-      console.warn(
-        '[verifyUpdatePaymentMethod] could not refund $1 verification charge',
-        verificationChargeId,
-        e instanceof Error ? e.message : e,
-      );
-    }
-  }
-
-  // Bill the FULL monthly total (plan + active add-ons), not just the plan
-  // price — otherwise updating the card after addons were enabled would
-  // silently drop the addon billing on the next sub cycle.
-  const { data: addonRow } = await supabaseAdmin
-    .from('venues')
-    .select('directory_addon_verified, directory_addon_sponsored, directory_addon_concierge')
-    .eq('id', venueId)
-    .maybeSingle();
-  const ar = (addonRow ?? {}) as Record<string, unknown>;
-  const [allPlans, addonPrices] = await Promise.all([
-    listDirectoryPlanCatalog(),
-    loadAddonPrices(),
-  ]);
-  const planForMath = allPlans.find((p) => p.id === ctxPlan.id) ?? null;
-  const isLegacy = Boolean(planForMath?.is_legacy);
-  const totalCharge = isLegacy
-    ? { plan_cents: 0, verified_cents: 0, sponsored_cents: 0, concierge_cents: 0, total_cents: 0 }
-    : computeMonthlyTotalCents({
-        plan: planForMath,
-        allPlans,
-        addonVerifiedUser:  Boolean(ar.directory_addon_verified),
-        addonSponsoredUser: Boolean(ar.directory_addon_sponsored),
-        addonConciergeUser: Boolean(ar.directory_addon_concierge),
-        prices: addonPrices,
-      });
-  const cents = totalCharge.total_cents;
-  if (cents <= 0) {
-    // Nothing left to bill (e.g. switched to free plan + no addons mid-flow).
-    // Just clear the sub and return — no new subscription needed.
-    await supabaseAdmin
-      .from('venues')
-      .update({
-        directory_subscription_status: 'active',
-        directory_subscription_external_id: null,
-        platform_lunarpay_customer_id: String(customerId),
-      })
-      .eq('id', venueId);
-    await recordBillingEvent(
-      venueId,
-      ctxPlan.id,
-      0,
-      'payment_method_updated',
-      `pm_update:${sessionId}`,
-      { session_id: sessionId, old_subscription_id: oldSubId, new_subscription_id: null, reason: 'total_zero' },
-    );
-    return;
-  }
-
-  // Preserve the renewal cadence:
-  //  • If the old sub had a future nextPaymentOn, the replacement starts
-  //    on that exact day so the venue isn't billed twice this cycle and
-  //    trialing accounts keep their trial-end date.
-  //  • Otherwise (no old sub, or old sub already past renewal) the
-  //    replacement starts tomorrow.
-  const startOn =
-    preservedStartOn ?? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const subResult = (await createSubscription(secret, {
-    customerId: Number(customerId),
-    paymentMethodId: Number(paymentMethodId),
-    amount: cents,
-    frequency: 'monthly',
-    startOn,
-    description: `StoryVenue directory — ${ctxPlan.name}`,
-  })) as Record<string, unknown>;
-  const sub = (subResult.data as Record<string, unknown>) || subResult;
-  const newSubId = (sub.id as string | number | undefined) ?? null;
-  if (newSubId === null) throw new Error('LunarPay did not return a subscription id');
-
-  // Preserve 'trialing' if the old sub was still trialing — only flip to
-  // 'active' if we're past the trial end date.
+  // Preserve 'trialing' if the old sub was trialing.
   const wasTrialing = String(ctx.venue.directory_subscription_status) === 'trialing';
   const newStatus = wasTrialing ? 'trialing' : 'active';
 
@@ -1432,23 +1314,21 @@ export async function verifyUpdatePaymentMethod(
     .update({
       directory_subscription_status: newStatus,
       directory_subscription_external_id: String(newSubId),
-      platform_lunarpay_customer_id: String(customerId),
+      platform_lunarpay_customer_id: customerId ? String(customerId) : undefined,
     })
     .eq('id', venueId);
 
   await recordBillingEvent(
     venueId,
     ctxPlan.id,
-    cents,
+    ctxPlan.price_monthly_cents ?? 0,
     'payment_method_updated',
     `pm_update:${sessionId}`,
     {
-      session_id:              sessionId,
-      old_subscription_id:     oldSubId,
-      new_subscription_id:     String(newSubId),
-      preserved_start_on:      preservedStartOn,
-      effective_start_on:      startOn,
-      verification_charge_id:  verificationChargeId,
+      session_id:            sessionId,
+      old_subscription_id:   oldSubId,
+      new_subscription_id:   String(newSubId),
+      mode:                  'subscription',
     },
   );
 }

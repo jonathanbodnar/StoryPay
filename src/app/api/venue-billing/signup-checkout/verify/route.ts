@@ -5,9 +5,7 @@ import {
   loadVenueDirectoryPlanContext,
   requirePlatformLunarPaySecretKey,
 } from '@/lib/platform-directory-billing';
-import { createSubscription, getCheckoutSession, refundCharge } from '@/lib/lunarpay';
-import { computeMonthlyTotalCents } from '@/lib/directory-addons';
-import { listDirectoryPlanCatalog, loadAddonPrices } from '@/lib/venue-billing';
+import { getCheckoutSession } from '@/lib/lunarpay';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -17,9 +15,12 @@ export const runtime = 'nodejs';
  * Body: { session_id: string }
  *
  * Called from /signup/plan/complete after LunarPay redirects back.
- * 1. Validates the completed checkout session.
- * 2. Creates a LunarPay subscription with startOn = trial_ends_at (14 days).
- * 3. Writes trial + subscription state to the venues row.
+ *
+ * The signup-checkout now uses mode:"subscription" with a deferred
+ * start_date (= trial_ends_at). LP vaults the card and creates the
+ * subscription automatically — no manual createSubscription call needed.
+ * All we do here is read the subscription_id from the session and persist
+ * the trial + subscription state to the venues row.
  */
 export async function POST(req: NextRequest) {
   const c = await cookies();
@@ -38,151 +39,66 @@ export async function POST(req: NextRequest) {
   const result = (await getCheckoutSession(secret, sessionId)) as Record<string, unknown>;
   const session = (result.data as Record<string, unknown>) || result;
 
-    if (session.status !== 'completed') {
-      return NextResponse.json(
-        { error: `Checkout not completed (status: ${String(session.status)})` },
-        { status: 400 },
-      );
-    }
-
-    // Extract customer and payment method from the completed session.
-    const customerId =
-      (session.customer_id as string | number | null) ||
-      (session.customerId as string | number | null) ||
-      ctx.venue.platform_lunarpay_customer_id;
-    const paymentMethodId =
-      (session.payment_method_id as string | number | null) ||
-      (session.paymentMethodId as string | number | null) ||
-      (session.payment_method as string | number | null);
-
-    if (!customerId || !paymentMethodId) {
-      return NextResponse.json(
-        { error: 'Missing customer or payment method from checkout' },
-        { status: 400 },
-      );
-    }
-
-    // Read context from the venue row instead of session.metadata. The
-    // metadata round-trip via LunarPay is unreliable (LP returns 500 when
-    // metadata is present, May 2026), so signup-checkout writes plan +
-    // addons + trial dates to the venue row before redirecting.
-    const { data: venueRow } = await supabaseAdmin
-      .from('venues')
-      .select(
-        'directory_plan_id, directory_addon_verified, directory_addon_sponsored, directory_addon_concierge, directory_trial_ends_at',
-      )
-      .eq('id', venueId)
-      .maybeSingle();
-    const vr = (venueRow ?? {}) as Record<string, unknown>;
-    const planId         = String(vr.directory_plan_id ?? '');
-    const addonVerified  = Boolean(vr.directory_addon_verified);
-    const addonSponsored = Boolean(vr.directory_addon_sponsored);
-    const addonConcierge = Boolean(vr.directory_addon_concierge);
-    const trialEndsAtRaw = String(vr.directory_trial_ends_at ?? '');
-
-    if (!planId) {
-      return NextResponse.json(
-        { error: 'Plan was not pre-assigned for this venue.' },
-        { status: 400 },
-      );
-    }
-
-  // Compute charge amount with dynamic prices
-  const [allPlans, addonPrices] = await Promise.all([
-    listDirectoryPlanCatalog(),
-    loadAddonPrices(),
-  ]);
-  const targetPlan = allPlans.find((p) => p.id === planId) ?? null;
-  if (!targetPlan) {
-    return NextResponse.json({ error: 'Plan not found' }, { status: 400 });
+  if (session.status !== 'completed') {
+    return NextResponse.json(
+      { error: `Checkout not completed (status: ${String(session.status)})` },
+      { status: 400 },
+    );
   }
 
-  const charge = computeMonthlyTotalCents({
-    plan: targetPlan,
-    allPlans,
-    addonVerifiedUser:  addonVerified,
-    addonSponsoredUser: addonSponsored,
-    addonConciergeUser: addonConcierge,
-    prices: addonPrices,
-  });
-  if (charge.total_cents <= 0) {
-    return NextResponse.json({ error: 'Nothing to bill' }, { status: 400 });
-  }
-
-  // The subscription starts when the trial ends (14 days from signup)
-  const today = new Date();
-  let startOn = today.toISOString().slice(0, 10);
-  if (trialEndsAtRaw) {
-    const endsDate = new Date(trialEndsAtRaw);
-    if (!Number.isNaN(endsDate.getTime()) && endsDate.getTime() > today.getTime()) {
-      startOn = endsDate.toISOString().slice(0, 10);
-    }
-  }
-
-  // Create subscription in LunarPay. startOn = trial_ends_at (today + 14
-  // days) so the first real charge fires on trial end, not today.
-  const subResult = (await createSubscription(secret, {
-    customerId:      Number(customerId),
-    paymentMethodId: Number(paymentMethodId),
-    amount:          charge.total_cents,
-    frequency:       'monthly',
-    startOn,
-    description:     `StoryVenue — ${targetPlan.name}`,
-  })) as Record<string, unknown>;
-  const sub = (subResult.data as Record<string, unknown>) || subResult;
-  const subId = (sub.id as string | number | undefined) ?? null;
-  if (subId === null) {
-    return NextResponse.json({ error: 'LunarPay did not return a subscription id' }, { status: 502 });
-  }
-
-  // Refund the $1 card-verification charge from signup-checkout. The
-  // subscription above defers the real billing to trial end; this refund
-  // means the user pays nothing during the trial. Best-effort: a failure
-  // here doesn't invalidate the trial, we just log and move on.
-  const sessionCharge = (session.charge as Record<string, unknown> | null) || null;
-  const sessionCharges = Array.isArray(session.charges) ? session.charges : null;
-  const firstCharge = sessionCharges
-    ? (sessionCharges[0] as Record<string, unknown> | undefined)
-    : undefined;
-  const verificationChargeId =
-    (session.charge_id as string | number | null) ??
-    (session.chargeId as string | number | null) ??
-    (sessionCharge?.id as string | number | null | undefined) ??
-    (firstCharge?.id as string | number | null | undefined) ??
-    (session.transaction_id as string | number | null) ??
-    (session.transactionId as string | number | null) ??
+  // LP subscription-mode sessions include the subscription ID directly.
+  const subId =
+    (session.subscription_id as string | number | null) ??
+    (session.subscriptionId as string | number | null) ??
+    ((session.subscription as Record<string, unknown> | null)?.id as string | number | null | undefined) ??
     null;
-  if (verificationChargeId !== null && verificationChargeId !== undefined) {
-    try {
-      await refundCharge(secret, verificationChargeId);
-    } catch (e) {
-      console.warn(
-        '[signup-checkout/verify] could not refund $1 verification charge',
-        verificationChargeId,
-        e instanceof Error ? e.message : e,
-      );
-    }
-  } else {
-    console.warn(
-      '[signup-checkout/verify] no charge id on completed session — $1 verification charge NOT refunded. Session keys:',
-      Object.keys(session),
+
+  const customerId =
+    (session.customer_id as string | number | null) ||
+    (session.customerId as string | number | null) ||
+    ctx.venue.platform_lunarpay_customer_id;
+
+  if (subId === null) {
+    return NextResponse.json(
+      { error: 'LunarPay session did not return a subscription_id — expected mode:subscription' },
+      { status: 502 },
+    );
+  }
+
+  // Read trial + plan context from the venue row (pre-assigned by
+  // signup-checkout/route.ts before the LP redirect).
+  const { data: venueRow } = await supabaseAdmin
+    .from('venues')
+    .select(
+      'directory_plan_id, directory_addon_verified, directory_addon_sponsored, directory_addon_concierge, directory_trial_ends_at, directory_trial_started_at',
+    )
+    .eq('id', venueId)
+    .maybeSingle();
+  const vr = (venueRow ?? {}) as Record<string, unknown>;
+  const planId         = String(vr.directory_plan_id ?? '');
+  const addonVerified  = Boolean(vr.directory_addon_verified);
+  const addonSponsored = Boolean(vr.directory_addon_sponsored);
+  const addonConcierge = Boolean(vr.directory_addon_concierge);
+  const trialEndsAt    = String(vr.directory_trial_ends_at ?? '');
+  const trialStartedAt = String(vr.directory_trial_started_at ?? new Date().toISOString());
+
+  if (!planId) {
+    return NextResponse.json(
+      { error: 'Plan was not pre-assigned for this venue.' },
+      { status: 400 },
     );
   }
 
   // Persist all state to venues row
-  const now = new Date();
-  const trialStartedAt = now.toISOString();
-  const trialEndsAt = trialEndsAtRaw || new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString();
-
   await supabaseAdmin
     .from('venues')
     .update({
       directory_plan_id:                  planId,
       directory_subscription_status:      'trialing',
       directory_subscription_external_id: String(subId),
-      platform_lunarpay_customer_id:      String(customerId),
+      platform_lunarpay_customer_id:      customerId ? String(customerId) : undefined,
       directory_trial_started_at:         trialStartedAt,
-      directory_trial_ends_at:            trialEndsAt,
+      directory_trial_ends_at:            trialEndsAt || undefined,
       directory_trial_is_forever:         false,
       directory_trial_plan_id:            planId,
       directory_trial_consumed:           true,
@@ -194,26 +110,26 @@ export async function POST(req: NextRequest) {
 
   // Log the billing event
   await supabaseAdmin.from('platform_billing_events').insert({
-    venue_id:        venueId,
+    venue_id:          venueId,
     directory_plan_id: planId,
-    amount_cents:    charge.total_cents,
-    currency:        'usd',
+    amount_cents:      0,
+    currency:          'usd',
     external_event_id: `signup_plan:${sessionId}`,
-    event_type:      'subscription_signup_trial_start',
+    event_type:        'subscription_signup_trial_start',
     metadata: {
       session_id:      sessionId,
       subscription_id: String(subId),
-      start_on:        startOn,
       trial_ends_at:   trialEndsAt,
+      mode:            'subscription',
       addon_verified:  addonVerified,
       addon_sponsored: addonSponsored,
+      addon_concierge: addonConcierge,
     },
   });
 
   return NextResponse.json({
     ok: true,
     subscription_id: String(subId),
-    total_cents:     charge.total_cents,
-    start_on:        startOn,
+    trial_ends_at:   trialEndsAt,
   });
 }

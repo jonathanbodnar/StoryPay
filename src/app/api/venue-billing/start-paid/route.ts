@@ -77,14 +77,23 @@ export async function POST() {
     );
   }
 
-  // No metadata: LP currently 500s when checkout sessions include it.
-  // The verify endpoint reads plan + addons + trial state from the venue row.
+  // Use mode:"subscription" so LP charges the card, vaults it, and creates
+  // the recurring subscription in one call. The verify route just reads the
+  // subscription ID from the completed session — no manual createSubscription.
   const secret = requirePlatformLunarPaySecretKey();
   const checkoutData: Record<string, unknown> = {
     amount: charge.total_cents / 100,
     description: `StoryVenue directory — ${currentPlan?.name ?? 'subscription'} (monthly)`,
+    mode: 'subscription',
+    recurring: { frequency: 'monthly' },
     customer_email: ctx.venue.email || undefined,
     customer_name: ctx.venue.name,
+    payment_methods: ['cc'],
+    metadata: {
+      storypay_venue_id: venueId,
+      storypay_plan_id: ctx.venue.directory_plan_id,
+      flow: 'start_paid',
+    },
     success_url: `${APP_URL}/dashboard/directory-billing?start_paid=1`,
     cancel_url: `${APP_URL}/dashboard/directory-billing`,
   };

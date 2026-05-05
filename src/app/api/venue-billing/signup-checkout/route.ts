@@ -162,22 +162,25 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 14-day free trial: charge $1 today purely to verify the card and save it
-  // for later. The verify endpoint refunds this charge immediately and then
-  // creates a recurring subscription whose first real charge fires on
-  // trial_ends_at (14 days out). LunarPay's checkout/sessions endpoint
-  // requires a non-zero amount, so $1 is the minimum.
-  //
-  // Restrict to credit card — ACH micro-deposits take 1-3 business days,
-  // which would block trial activation, and a $1 ACH verification refund is
-  // an awkward experience compared to a card auth that drops off the
-  // statement quickly.
+  // 14-day free trial with mode:"subscription" and a deferred start_date.
+  // LP vaults the card at checkout but the recurring subscription only
+  // starts billing on start_date (= trial end). This eliminates the old
+  // $1 verification + manual refund + manual createSubscription pattern.
+  const trialStartDate = trialEndsAt.toISOString().slice(0, 10);
   const checkoutData: Record<string, unknown> = {
-    amount:          1,
-    description:     `StoryVenue — ${targetPlan.name} (14-day free trial — $1 card verification, refunded after signup)`,
+    amount:          charge.total_cents / 100,
+    description:     `StoryVenue — ${targetPlan.name} (14-day free trial, first charge ${trialStartDate})`,
+    mode:            'subscription',
+    recurring:       { frequency: 'monthly', start_date: trialStartDate },
     customer_email:  ctx.venue.email || undefined,
     customer_name:   ctx.venue.name,
     payment_methods: ['cc'],
+    metadata: {
+      storypay_venue_id: venueId,
+      storypay_plan_id:  planId,
+      flow:              'signup_trial',
+      trial_ends_at:     trialEndsAtIso,
+    },
     success_url:     `${APP_URL}/signup/plan/complete?checkout=1`,
     cancel_url:      `${APP_URL}/signup/addons?plan_id=${planId}`,
   };

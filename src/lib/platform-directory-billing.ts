@@ -1,4 +1,4 @@
-import { createCheckoutSession, createSubscription, getCheckoutSession } from '@/lib/lunarpay';
+import { createCheckoutSession, getCheckoutSession } from '@/lib/lunarpay';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getPlatformFortisMerchantId } from '@/lib/platform-billing';
 
@@ -139,8 +139,16 @@ export async function createDirectoryPlatformCheckoutSession(venueId: string): P
   const checkoutData: Record<string, unknown> = {
     amount: amountDollars,
     description: `StoryVenue directory — ${ctx.plan.name} (monthly)`,
+    mode: 'subscription',
+    recurring: { frequency: 'monthly' },
     customer_email: ctx.venue.email || undefined,
     customer_name: ctx.venue.name,
+    payment_methods: ['cc'],
+    metadata: {
+      storypay_venue_id: venueId,
+      storypay_plan_id: ctx.plan.id,
+      flow: 'directory_platform',
+    },
     success_url: `${APP_URL}/dashboard/directory-billing`,
     cancel_url: `${APP_URL}/dashboard/directory-billing`,
   };
@@ -181,35 +189,18 @@ export async function verifyDirectoryPlatformCheckoutAndSubscribe(
     throw new Error(`Checkout not completed (status: ${String(session.status)})`);
   }
 
-  // Note: we used to validate session.metadata here, but LP currently 500s
-  // when metadata is sent in the create call (May 2026 schema drift), so the
-  // saved session has no metadata to read back. The caller binds the session
-  // to a venue via the cookie, and the plan is read from the venue row.
+  // LP subscription-mode sessions include the subscription ID directly.
+  const subId =
+    (session.subscription_id as string | number | null) ??
+    (session.subscriptionId as string | number | null) ??
+    ((session.subscription as Record<string, unknown> | null)?.id as string | number | null | undefined) ??
+    null;
 
   const customerId =
     session.customer_id || session.customerId || ctx.venue.platform_lunarpay_customer_id;
-  const paymentMethodId =
-    session.payment_method_id || session.paymentMethodId || session.payment_method;
 
-  if (!customerId || !paymentMethodId) {
-    throw new Error('Missing customer or payment method from checkout session');
-  }
-
-  const startOn = new Date().toISOString().slice(0, 10);
-  const subPayload = {
-    customerId: Number(customerId),
-    paymentMethodId: Number(paymentMethodId),
-    amount: cents,
-    frequency: 'monthly',
-    startOn,
-    description: `StoryVenue directory — ${ctx.plan.name}`,
-  };
-
-  const subResult = await createSubscription(secret, subPayload as Record<string, unknown>);
-  const sub = (subResult as { data?: { id?: string | number }; id?: string | number }).data || subResult;
-  const subId = (sub as { id?: string | number }).id;
-  if (subId === undefined || subId === null) {
-    throw new Error('LunarPay did not return a subscription id');
+  if (subId === null || subId === undefined) {
+    throw new Error('LunarPay session did not return a subscription_id — expected mode:subscription');
   }
 
   const fortisId = getPlatformFortisMerchantId(ctx.plan.fortis_merchant_id);
@@ -219,7 +210,7 @@ export async function verifyDirectoryPlatformCheckoutAndSubscribe(
     .update({
       directory_subscription_status: 'active',
       directory_subscription_external_id: String(subId),
-      platform_lunarpay_customer_id: String(customerId),
+      platform_lunarpay_customer_id: customerId ? String(customerId) : undefined,
     })
     .eq('id', venueId);
 
@@ -231,7 +222,7 @@ export async function verifyDirectoryPlatformCheckoutAndSubscribe(
     fortis_merchant_id: fortisId,
     external_event_id: `checkout:${sessionId}`,
     event_type: 'subscription_start',
-    metadata: { session_id: sessionId, subscription_id: String(subId) },
+    metadata: { session_id: sessionId, subscription_id: String(subId), mode: 'subscription' },
   });
 
   return { subscriptionId: subId };
