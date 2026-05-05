@@ -1276,7 +1276,7 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* ── Main content ── */}
-      <div className="flex-1 lg:ml-[260px]">
+      <div className="flex-1 lg:ml-[260px] min-w-0 overflow-x-hidden">
         <div className="h-14 lg:hidden" />
         <main className="min-h-screen pt-6 lg:pt-10 px-6 sm:px-8 lg:px-10 pb-10 max-w-7xl mx-auto">
 

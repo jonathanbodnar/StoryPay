@@ -548,7 +548,7 @@ export function SupportInboxPanel() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-3 lg:h-[calc(100vh-80px)]">
+    <div className="flex flex-col gap-3 lg:h-[calc(100vh-80px)] min-w-0 max-w-full">
       <div className="shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center gap-3">
           <div>
@@ -595,9 +595,9 @@ export function SupportInboxPanel() {
       )}
 
       {subTab === 'bride-replies' && (
-        <div className="flex-1 min-h-[500px] lg:min-h-0 grid grid-cols-1 lg:grid-cols-[340px_1fr] xl:grid-cols-[340px_1fr_290px] gap-4">
+        <div className="flex-1 min-h-[500px] lg:min-h-0 grid grid-cols-1 lg:grid-cols-[340px_1fr] xl:grid-cols-[340px_1fr_290px] gap-4 min-w-0 overflow-hidden">
           {/* Thread list */}
-          <div className="rounded-2xl border border-gray-200 bg-white flex flex-col min-h-0">
+          <div className="rounded-2xl border border-gray-200 bg-white flex flex-col min-h-0 min-w-0 overflow-hidden">
             <div className="p-3 border-b border-gray-200 space-y-2">
               <div className="relative">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -686,7 +686,7 @@ export function SupportInboxPanel() {
           </div>
 
           {/* Thread detail */}
-          <div className="rounded-2xl border border-gray-200 bg-white flex flex-col min-h-0">
+          <div className="rounded-2xl border border-gray-200 bg-white flex flex-col min-h-0 min-w-0 overflow-hidden">
             {!activeThreadId && (
               <div className="flex-1 flex flex-col items-center justify-center text-gray-400 text-sm py-16">
                 <MessageSquare size={28} className="mb-2" />
@@ -1333,7 +1333,7 @@ function MessageBubble({
           {supportName && <span className="text-amber-700">— {supportName}</span>}
           <span className="ml-auto text-amber-600">{relativeTime(msg.created_at)}</span>
         </div>
-        <p className="text-sm text-amber-900 whitespace-pre-wrap">{msg.body}</p>
+        <p className="text-sm text-amber-900 whitespace-pre-wrap break-words">{msg.body}</p>
         {mentionedNames.length > 0 && (
           <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[10px]">
             <span className="text-amber-700">Notified:</span>
@@ -1384,7 +1384,7 @@ function MessageBubble({
           )}
           <span className="text-gray-400">{relativeTime(msg.created_at)}</span>
         </div>
-        <div className={`rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${bubbleClass}`}>
+        <div className={`rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words ${bubbleClass}`}>
           {msg.body}
         </div>
         {msg.support_internal_note && (
@@ -1719,9 +1719,9 @@ function TicketsView({
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4 h-full min-h-[500px] lg:min-h-0">
+    <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4 h-full min-h-[500px] lg:min-h-0 min-w-0 overflow-hidden">
       {/* Ticket list */}
-      <div className="rounded-2xl border border-gray-200 bg-white flex flex-col min-h-0">
+      <div className="rounded-2xl border border-gray-200 bg-white flex flex-col min-h-0 min-w-0 overflow-hidden">
         <div className="p-3 border-b border-gray-200 space-y-2">
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -1834,7 +1834,7 @@ function TicketsView({
       </div>
 
       {/* Ticket detail */}
-      <div className="rounded-2xl border border-gray-200 bg-white flex flex-col min-h-0">
+      <div className="rounded-2xl border border-gray-200 bg-white flex flex-col min-h-0 min-w-0 overflow-hidden">
         {!activeTicketId && (
           <div className="flex-1 flex flex-col items-center justify-center text-gray-400 text-sm py-16">
             <LifeBuoy size={28} className="mb-2" />
@@ -1952,7 +1952,7 @@ function TicketsView({
                         <span className="font-semibold">{label}</span>
                         <span className="text-gray-400">{relativeTime(m.created_at)}</span>
                       </div>
-                      <div className={`rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${
+                      <div className={`rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words ${
                         isVenue
                           ? 'bg-white border border-gray-200 text-gray-900'
                           : 'bg-gray-900 text-white'
