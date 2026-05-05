@@ -397,7 +397,7 @@ export default function MarketingAnalyticsPage() {
         <DetailModal config={modal} onClose={() => setModal(null)} />
       )}
 
-      <div className="mx-auto max-w-4xl px-4 py-8">
+      <div className="px-4 py-8">
         <Link
           href="/dashboard"
           className="mb-4 inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900"

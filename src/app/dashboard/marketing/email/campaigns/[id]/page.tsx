@@ -252,7 +252,7 @@ export default function CampaignDetailPage() {
   const editable = campaign.status === 'draft' || campaign.status === 'scheduled';
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
+    <div className="px-4 py-8">
       <Link
         href="/dashboard/marketing/email/campaigns"
         className="mb-4 inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900"

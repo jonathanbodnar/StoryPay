@@ -185,7 +185,7 @@ export default function AiConciergeSettingsPage() {
         </p>
       </div>
 
-      <div className="space-y-6 max-w-3xl">
+      <div className="space-y-6">
 
         {/* Metrics card — shows real engagement once leads start activating */}
         <AiConciergeMetricsCard />

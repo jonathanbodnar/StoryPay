@@ -668,7 +668,7 @@ export default function TriggerLinksPage() {
   }
 
   return (
-    <div className="mx-auto min-h-full max-w-5xl bg-white px-4 py-8">
+    <div className="min-h-full px-4 py-8 bg-white">
       <Link
         href="/dashboard/marketing/analytics"
         className="mb-6 inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900"

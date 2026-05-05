@@ -143,7 +143,7 @@ export default function AudiencesPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
+    <div className="px-4 py-8">
       {/* Header — mirrors the Lead Capture Forms / Emails list pages so all
           three Marketing sub-pages feel like siblings. */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
