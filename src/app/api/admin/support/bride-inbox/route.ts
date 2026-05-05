@@ -12,10 +12,17 @@
  *   limit?     default 50, max 100
  *
  * Response: { threads: BrideInboxRow[]; nextCursor: string | null }
+ *
+ * Implementation note: this endpoint used to run a single CTE over a raw
+ * postgres-js connection. That client routinely hit ENETUNREACH on Vercel
+ * because Supabase's direct host is IPv6-only on the free tier. We've
+ * since rewritten it to use supabaseAdmin (PostgREST HTTP) instead — the
+ * trade-off is N+1-ish queries and JS-side dedupe, but it's bulletproof
+ * across runtimes.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySupportAccess } from '@/lib/support/auth';
-import { getDbAsync } from '@/lib/db';
+import { supabaseAdmin } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -32,10 +39,40 @@ interface BrideInboxRow {
   subject:                 string;
   last_message_at:         string;
   last_message_preview:    string | null;
-  last_inbound_channel:    string;
+  last_inbound_channel:    'sms' | 'email';
   last_inbound_body:       string;
   last_inbound_created_at: string;
   message_count:           number;
+}
+
+interface MessageMeta {
+  thread_id:    string;
+  sender_kind:  string;
+  body:         string;
+  channel:      string;
+  created_at:   string;
+}
+
+interface ThreadRow {
+  id:                   string;
+  venue_id:             string;
+  venue_customer_id:    string;
+  subject:              string | null;
+  last_message_at:      string;
+  last_message_preview: string | null;
+}
+
+interface VenueRow {
+  id:   string;
+  name: string;
+}
+
+interface VenueCustomerRow {
+  id:             string;
+  first_name:     string | null;
+  last_name:      string | null;
+  customer_email: string | null;
+  phone:          string | null;
 }
 
 export async function GET(req: NextRequest) {
@@ -46,78 +83,188 @@ export async function GET(req: NextRequest) {
 
   const url      = new URL(req.url);
   const venueId  = (url.searchParams.get('venue_id') || '').trim();
-  const search   = (url.searchParams.get('search') || '').trim();
+  const search   = (url.searchParams.get('search') || '').trim().toLowerCase();
   const cursor   = (url.searchParams.get('cursor') || '').trim();
   const rawLimit = Number(url.searchParams.get('limit'));
   const limit    = Math.max(1, Math.min(Number.isFinite(rawLimit) ? rawLimit : 50, 100));
 
-  // Decode cursor
+  // Decode cursor: "<ISO>|<threadId>"
   let cursorAt: string | null = null;
   let cursorId: string | null = null;
   if (cursor) {
     const [at, id] = cursor.split('|');
-    if (at && id) {
-      cursorAt = at;
-      cursorId = id;
-    }
+    if (at && id) { cursorAt = at; cursorId = id; }
   }
 
-  const sql = await getDbAsync();
   try {
-    const rows = (await sql`
-      WITH latest_external AS (
-        SELECT DISTINCT ON (m.thread_id)
-               m.thread_id,
-               m.sender_kind,
-               m.body,
-               m.channel,
-               m.created_at
-          FROM public.conversation_messages m
-         WHERE m.visibility = 'external'
-         ORDER BY m.thread_id, m.created_at DESC
-      )
-      SELECT t.id                          AS thread_id,
-             t.venue_id,
-             v.name                        AS venue_name,
-             t.venue_customer_id,
-             vc.first_name                 AS contact_first_name,
-             vc.last_name                  AS contact_last_name,
-             vc.customer_email             AS contact_email,
-             vc.phone                      AS contact_phone,
-             t.subject,
-             t.last_message_at,
-             t.last_message_preview,
-             le.channel                    AS last_inbound_channel,
-             le.body                       AS last_inbound_body,
-             le.created_at                 AS last_inbound_created_at,
-             (SELECT COUNT(*)::int FROM public.conversation_messages cm WHERE cm.thread_id = t.id) AS message_count
-        FROM public.conversation_threads t
-        JOIN latest_external le ON le.thread_id = t.id
-        JOIN public.venues v    ON v.id = t.venue_id
-        JOIN public.venue_customers vc ON vc.id = t.venue_customer_id
-       WHERE le.sender_kind = 'contact'
-         ${venueId ? sql`AND t.venue_id = ${venueId}::uuid` : sql``}
-         ${search
-           ? sql`AND (
-               v.name                ILIKE ${'%' + search + '%'}
-               OR vc.first_name      ILIKE ${'%' + search + '%'}
-               OR vc.last_name       ILIKE ${'%' + search + '%'}
-               OR vc.customer_email  ILIKE ${'%' + search + '%'}
-               OR t.last_message_preview ILIKE ${'%' + search + '%'}
-             )`
-           : sql``}
-         ${cursorAt && cursorId
-           ? sql`AND (le.created_at, t.id) < (${cursorAt}::timestamptz, ${cursorId}::uuid)`
-           : sql``}
-       ORDER BY le.created_at DESC, t.id DESC
-       LIMIT ${limit + 1}
-    `) as unknown as BrideInboxRow[];
+    // --- Step 1 ---------------------------------------------------------
+    // Pull recent inbound (visibility=external, sender_kind=contact)
+    // messages. We want the MOST RECENT inbound per thread; ordering by
+    // created_at DESC then deduping in JS gives us that without needing
+    // a window function.
+    //
+    // Pull a generous slice (limit*4) to give pagination + filtering some
+    // room before falling back to the next page.
+    let inboundQuery = supabaseAdmin
+      .from('conversation_messages')
+      .select('thread_id, sender_kind, body, channel, created_at')
+      .eq('visibility', 'external')
+      .eq('sender_kind', 'contact')
+      .order('created_at', { ascending: false })
+      .limit(Math.max(limit * 8, 200));
+
+    if (cursorAt) inboundQuery = inboundQuery.lt('created_at', cursorAt);
+
+    const { data: inboundRows, error: inboundErr } = await inboundQuery;
+    if (inboundErr) throw new Error(`inbound query: ${inboundErr.message}`);
+
+    const inbound = (inboundRows ?? []) as MessageMeta[];
+
+    // Latest inbound per thread
+    const latestInboundByThread = new Map<string, MessageMeta>();
+    for (const m of inbound) {
+      if (!latestInboundByThread.has(m.thread_id)) {
+        latestInboundByThread.set(m.thread_id, m);
+      }
+    }
+    let candidateThreadIds = Array.from(latestInboundByThread.keys());
+    if (candidateThreadIds.length === 0) {
+      return NextResponse.json({ threads: [], nextCursor: null });
+    }
+
+    // --- Step 2 ---------------------------------------------------------
+    // For each candidate thread, ensure that NO outbound external reply
+    // came in *after* the latest inbound — that's what makes a thread
+    // "needs attention". Fetch latest external message per thread
+    // regardless of sender, and keep only those whose latest external is
+    // still the inbound row from step 1.
+    const { data: latestExternalRows, error: latestExtErr } = await supabaseAdmin
+      .from('conversation_messages')
+      .select('thread_id, sender_kind, created_at')
+      .eq('visibility', 'external')
+      .in('thread_id', candidateThreadIds)
+      .order('created_at', { ascending: false });
+    if (latestExtErr) throw new Error(`latest-external query: ${latestExtErr.message}`);
+
+    const latestExtByThread = new Map<string, { sender_kind: string; created_at: string }>();
+    for (const r of (latestExternalRows ?? []) as Array<{ thread_id: string; sender_kind: string; created_at: string }>) {
+      if (!latestExtByThread.has(r.thread_id)) {
+        latestExtByThread.set(r.thread_id, { sender_kind: r.sender_kind, created_at: r.created_at });
+      }
+    }
+    candidateThreadIds = candidateThreadIds.filter(id => {
+      const last = latestExtByThread.get(id);
+      return last && last.sender_kind === 'contact';
+    });
+    if (candidateThreadIds.length === 0) {
+      return NextResponse.json({ threads: [], nextCursor: null });
+    }
+
+    // --- Step 3 ---------------------------------------------------------
+    // Hydrate threads + venues + venue_customers in three batched queries.
+    let threadQuery = supabaseAdmin
+      .from('conversation_threads')
+      .select('id, venue_id, venue_customer_id, subject, last_message_at, last_message_preview')
+      .in('id', candidateThreadIds);
+    if (venueId) threadQuery = threadQuery.eq('venue_id', venueId);
+
+    const { data: threadRows, error: threadErr } = await threadQuery;
+    if (threadErr) throw new Error(`threads query: ${threadErr.message}`);
+    const threads = ((threadRows ?? []) as ThreadRow[]);
+
+    if (threads.length === 0) {
+      return NextResponse.json({ threads: [], nextCursor: null });
+    }
+
+    const venueIds        = Array.from(new Set(threads.map(t => t.venue_id)));
+    const venueCustomerIds = Array.from(new Set(threads.map(t => t.venue_customer_id)));
+
+    const [{ data: venueRows }, { data: vcRows }] = await Promise.all([
+      supabaseAdmin
+        .from('venues')
+        .select('id, name')
+        .in('id', venueIds),
+      supabaseAdmin
+        .from('venue_customers')
+        .select('id, first_name, last_name, customer_email, phone')
+        .in('id', venueCustomerIds),
+    ]);
+
+    const venueById = new Map<string, VenueRow>();
+    for (const v of (venueRows ?? []) as VenueRow[]) venueById.set(v.id, v);
+    const vcById = new Map<string, VenueCustomerRow>();
+    for (const c of (vcRows ?? []) as VenueCustomerRow[]) vcById.set(c.id, c);
+
+    // --- Step 4 ---------------------------------------------------------
+    // Per-thread message counts. PostgREST exposes count via a HEAD-style
+    // request; we do it batched. For an inbox we don't need exact counts,
+    // so a single grouped query approximates well: pull message counts
+    // via a select that groups in JS.
+    const { data: countRows } = await supabaseAdmin
+      .from('conversation_messages')
+      .select('thread_id')
+      .in('thread_id', candidateThreadIds);
+    const countByThread = new Map<string, number>();
+    for (const r of (countRows ?? []) as Array<{ thread_id: string }>) {
+      countByThread.set(r.thread_id, (countByThread.get(r.thread_id) ?? 0) + 1);
+    }
+
+    // --- Step 5 ---------------------------------------------------------
+    // Assemble rows + apply search filter + cursor pagination.
+    let rows: BrideInboxRow[] = threads.map(t => {
+      const v  = venueById.get(t.venue_id);
+      const c  = vcById.get(t.venue_customer_id);
+      const li = latestInboundByThread.get(t.id);
+      return {
+        thread_id:               t.id,
+        venue_id:                t.venue_id,
+        venue_name:              v?.name ?? '(deleted venue)',
+        venue_customer_id:       t.venue_customer_id,
+        contact_first_name:      c?.first_name ?? null,
+        contact_last_name:       c?.last_name ?? null,
+        contact_email:           c?.customer_email ?? null,
+        contact_phone:           c?.phone ?? null,
+        subject:                 (t.subject ?? '').trim() || 'Conversation',
+        last_message_at:         t.last_message_at,
+        last_message_preview:    t.last_message_preview,
+        last_inbound_channel:    (li?.channel === 'sms' ? 'sms' : 'email'),
+        last_inbound_body:       li?.body ?? '',
+        last_inbound_created_at: li?.created_at ?? t.last_message_at,
+        message_count:           countByThread.get(t.id) ?? 0,
+      };
+    });
+
+    if (search) {
+      rows = rows.filter(r =>
+        r.venue_name.toLowerCase().includes(search) ||
+        (r.contact_first_name ?? '').toLowerCase().includes(search) ||
+        (r.contact_last_name  ?? '').toLowerCase().includes(search) ||
+        (r.contact_email      ?? '').toLowerCase().includes(search) ||
+        (r.last_message_preview ?? '').toLowerCase().includes(search) ||
+        (r.last_inbound_body).toLowerCase().includes(search),
+      );
+    }
+
+    // Cursor tiebreaker (created_at, thread_id) DESC
+    if (cursorAt && cursorId) {
+      rows = rows.filter(r =>
+        r.last_inbound_created_at < cursorAt! ||
+        (r.last_inbound_created_at === cursorAt && r.thread_id < cursorId!),
+      );
+    }
+
+    rows.sort((a, b) => {
+      if (a.last_inbound_created_at !== b.last_inbound_created_at) {
+        return a.last_inbound_created_at < b.last_inbound_created_at ? 1 : -1;
+      }
+      return a.thread_id < b.thread_id ? 1 : -1;
+    });
 
     let nextCursor: string | null = null;
     if (rows.length > limit) {
       const last = rows[limit - 1];
       nextCursor = `${last.last_inbound_created_at}|${last.thread_id}`;
-      rows.length = limit;
+      rows = rows.slice(0, limit);
     }
 
     return NextResponse.json({ threads: rows, nextCursor });

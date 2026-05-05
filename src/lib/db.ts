@@ -22,16 +22,46 @@
 
 import postgres from 'postgres';
 import { lookup } from 'dns/promises';
+import { setDefaultResultOrder } from 'dns';
 
-// Railway (and some other hosts) can't reach Supabase's pooler over IPv6.
-// Resolve the hostname to an IPv4 address first so the postgres driver
-// never attempts an IPv6 TCP connection.
+// Vercel + Railway runtimes routinely fail to reach Supabase's database
+// over IPv6 (ENETUNREACH on 2600:.../5432). Force every Node DNS lookup
+// in this process to prefer IPv4 so the postgres driver picks the v4
+// address whenever one is available. This is a no-op on hosts that only
+// expose IPv6 (e.g. db.<project>.supabase.co on the free tier).
+try {
+  setDefaultResultOrder('ipv4first');
+} catch {
+  // Older Node — no-op
+}
+
+// Best-effort IPv4 resolution. Returns the original host string when no
+// IPv4 record exists so the caller can fall through to the postgres
+// driver's own resolution (which may then fail loudly).
 async function resolveIPv4(host: string): Promise<string> {
   try {
     const { address } = await lookup(host, { family: 4 });
     return address;
   } catch {
     return host;
+  }
+}
+
+/**
+ * Detect a direct-connection Supabase URL (db.<ref>.supabase.co:5432) and
+ * warn loudly. Direct hosts are IPv6-only on the free tier, which is the
+ * #1 cause of ENETUNREACH errors on serverless platforms. The pooler
+ * (aws-0-<region>.pooler.supabase.com:6543) is IPv4-friendly.
+ */
+function warnIfDirectHost(host: string, port: string): void {
+  if (/^db\.[a-z0-9]+\.supabase\.co$/i.test(host) && port === '5432') {
+    console.warn(
+      '[db] DATABASE_URL uses the direct Supabase host (db.*.supabase.co:5432), ' +
+      'which is IPv6-only on free tier and frequently unreachable from serverless ' +
+      'runtimes. Switch to the connection pooler:\n' +
+      '  postgres://postgres.<PROJECT_REF>:<PASSWORD>@aws-0-<REGION>.pooler.supabase.com:6543/postgres\n' +
+      'Find this string under Supabase → Project Settings → Database → Connection string → Transaction pooler.',
+    );
   }
 }
 
@@ -89,11 +119,14 @@ export async function getDbAsync(): Promise<ReturnType<typeof postgres>> {
   let connStr = connectionString;
   try {
     const url = new URL(connectionString);
+    warnIfDirectHost(url.hostname, url.port);
     const ipv4 = await resolveIPv4(url.hostname);
     if (ipv4 !== url.hostname) {
       url.hostname = ipv4;
       connStr = url.toString();
-      console.log(`[db] IPv4 forced: ${ipv4}`);
+      console.log(`[db] IPv4 forced: ${url.hostname.replace(/.*/, '<ip>')} for ${url.host}`);
+    } else {
+      console.warn(`[db] No IPv4 record for ${url.hostname} — connection may fail with ENETUNREACH on IPv6-only runtimes.`);
     }
   } catch { /* leave unchanged */ }
 
