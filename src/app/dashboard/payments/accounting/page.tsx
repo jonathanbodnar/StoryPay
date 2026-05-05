@@ -25,7 +25,7 @@ export default function AccountingExportPage() {
   }, [from, to]);
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
+    <div className="px-4 py-8">
       <Link
         href="/dashboard/transactions"
         className="mb-4 inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900"

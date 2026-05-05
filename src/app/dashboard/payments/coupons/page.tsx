@@ -228,7 +228,7 @@ function CouponsPageInner() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div>
       <Link
         href="/dashboard/payments/new"
         className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-700 mb-4 transition-colors"

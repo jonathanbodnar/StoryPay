@@ -295,8 +295,7 @@ export default function ProfilePage() {
     const subStatus = billing?.subscription_status ?? 'none';
 
     return (
-      <div className="max-w-2xl">
-        {/* Header */}
+      <div>
         <div className="mb-8 flex items-center gap-4">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl text-white text-xl font-bold flex-shrink-0"
             style={{ backgroundColor: '#1b1b1b' }}>

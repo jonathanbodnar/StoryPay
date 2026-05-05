@@ -218,7 +218,7 @@ export default function ListingDirectoryStatusPage() {
   const canApplySponsored = (ss === 'none' || ss === 'rejected') && !sponsoredSubscribed;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 py-2">
+    <div className="space-y-6 py-2">
 
       {/* ── Header ──────────────────────────────────────────────────── */}
       <div>

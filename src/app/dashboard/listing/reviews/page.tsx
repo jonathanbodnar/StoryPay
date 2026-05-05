@@ -449,7 +449,7 @@ export default function ListingReviewsPage() {
           aria-hidden
         />
 
-        <div className="relative mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
+        <div className="relative px-4 py-8 sm:px-6 sm:py-10">
           <Link
             href="/dashboard/listing"
             className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition-colors hover:text-gray-900"
@@ -605,7 +605,7 @@ export default function ListingReviewsPage() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-5xl px-4 pt-8 sm:px-6">
+      <div className="px-4 pt-8 sm:px-6">
         {sourceTab === 'storyvenue' && listingSlug && publicOrigin && (
           <div className="mb-8 rounded-2xl border border-sky-200/80 bg-gradient-to-br from-sky-50/90 to-white px-4 py-4 sm:px-5 sm:py-5">
             <p className="text-sm font-semibold text-sky-950">Show reviews on your website.</p>

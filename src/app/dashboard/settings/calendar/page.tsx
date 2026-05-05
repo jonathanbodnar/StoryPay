@@ -630,7 +630,7 @@ function GeneralTab() {
   if (loading) return <LoadingCard />;
 
   return (
-    <div className="max-w-2xl">
+    <div>
       <Card title="Timezone" description="Set the timezone used to display all appointments and availability.">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
@@ -759,7 +759,7 @@ function ConnectionsTab() {
   if (loading) return <LoadingCard />;
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="space-y-6">
       {successMsg && (
         <div className="flex items-center gap-2 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">
           <CheckCircle2 size={16} />
@@ -996,8 +996,7 @@ function AvailabilityTab() {
   if (loading) return <LoadingCard />;
 
   return (
-    <div className="max-w-3xl space-y-6">
-      {/* Weekly schedule */}
+    <div className="space-y-6">
       <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
           <div>
@@ -1201,8 +1200,7 @@ function BookingRulesTab() {
   if (loading) return <LoadingCard />;
 
   return (
-    <div className="max-w-2xl space-y-6">
-      {/* Global default callout */}
+    <div className="space-y-6">
       <div className="flex items-start gap-3 rounded-xl bg-blue-50 border border-blue-100 px-4 py-3">
         <Globe className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
         <div className="text-sm text-blue-800">
@@ -1455,7 +1453,7 @@ function CalendarsTab() {
   if (loading) return <LoadingCard />;
 
   return (
-    <div className="max-w-2xl space-y-4">
+    <div className="space-y-4">
       <p className="text-sm text-gray-500">
         Create up to 5 calendars (e.g. "Tour Calendar", "Phone Call", "Tasting") each with its own booking rules and notification templates. All appear on one unified calendar view.
       </p>
@@ -1932,7 +1930,7 @@ function NotificationsTab() {
   const selectedCalendar = calendars.find((c) => c.id === selectedCalendarId) ?? null;
 
   return (
-    <div className="max-w-3xl space-y-3">
+    <div className="space-y-3">
       {/* Calendar picker — only shown when venue has multiple calendars */}
       {calendars.length > 0 && (
         <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 flex items-center gap-3">

@@ -459,7 +459,7 @@ export default function DirectoryBillingPage() {
   // ── Legacy plan gate ──────────────────────────────────────────────────────
   if (summary.is_legacy_plan) {
     return (
-      <div className="max-w-2xl">
+      <div>
         <h1 className="font-heading text-2xl text-gray-900 flex items-center gap-2">
           <Lock size={22} className="text-gray-700" /> Plans &amp; billing
         </h1>
@@ -520,7 +520,7 @@ export default function DirectoryBillingPage() {
   const confirmTarget = confirmPlanId ? plans.find((p) => p.id === confirmPlanId) : null;
 
   return (
-    <div className="max-w-5xl space-y-6">
+    <div className="space-y-6">
       <div>
         <h1 className="font-heading text-2xl text-gray-900 flex items-center gap-2">
           <CreditCard size={22} className="text-gray-700" /> Plans &amp; billing

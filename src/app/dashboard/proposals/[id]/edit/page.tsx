@@ -230,7 +230,7 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
 
  if (loading) {
  return (
- <div className="mx-auto max-w-2xl">
+ <div>
  <div className="space-y-4">
  {Array.from({ length: 5 }).map((_, i) => (
  <div key={i} className="h-12 animate-pulse rounded-lg bg-gray-100"/>
@@ -242,7 +242,7 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
 
  if (!proposal) {
  return (
- <div className="mx-auto max-w-2xl text-center py-16">
+ <div>
  <p className="text-gray-500">{error || 'Proposal not found.'}</p>
  <button onClick={() => router.back()} className="mt-4 text-sm text-brand-900 hover:underline">Go back</button>
  </div>
@@ -252,7 +252,7 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
  const statusColor = getStatusColor(proposal.status);
 
  return (
- <div className="mx-auto max-w-2xl">
+ <div>
  <div className="mb-8">
  <button
  onClick={() => router.push('/dashboard/proposals')}

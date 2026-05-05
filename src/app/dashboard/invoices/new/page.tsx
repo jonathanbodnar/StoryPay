@@ -217,7 +217,7 @@ export default function NewInvoicePage() {
  }
 
  return (
- <div className="mx-auto max-w-2xl w-full">
+ <div>
  <div className="mb-8">
  <button
  onClick={() => router.back()}
