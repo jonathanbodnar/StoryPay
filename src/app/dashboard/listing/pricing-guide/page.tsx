@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { AIField } from '@/components/pricing-guide/AIField';
 import PreviewGuideModal from '@/components/pricing-guide/PreviewGuideModal';
+import { VenueMediaPickerModal } from '@/components/venue-media/VenueMediaPickerModal';
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -97,47 +98,6 @@ function Section({
   );
 }
 
-// ─── Image upload helper ─────────────────────────────────────────────────
-
-async function uploadOneImage(file: File): Promise<string> {
-  const signedRes = await fetch('/api/venue-media/sign', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      fileName: file.name,
-      contentType: file.type || 'application/octet-stream',
-      size: file.size,
-    }),
-  });
-  if (!signedRes.ok) {
-    const j = await signedRes.json().catch(() => ({}));
-    throw new Error((j as { error?: string }).error ?? `Failed to prepare upload for ${file.name}`);
-  }
-  const { signedUrl, path, publicUrl } = (await signedRes.json()) as {
-    signedUrl: string; path: string; publicUrl: string;
-  };
-  const putRes = await fetch(signedUrl, {
-    method: 'PUT',
-    headers: { 'Content-Type': file.type || 'application/octet-stream' },
-    body: file,
-  });
-  if (!putRes.ok) throw new Error(`Upload failed for ${file.name}`);
-  // Register in media library — best-effort, never blocks the upload.
-  try {
-    await fetch('/api/venue-media', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        path, publicUrl,
-        fileName: file.name,
-        contentType: file.type || 'application/octet-stream',
-        sizeBytes: file.size,
-      }),
-    });
-  } catch { /* swallow */ }
-  return publicUrl;
-}
-
 // ─── Page component ─────────────────────────────────────────────────────
 
 type VenueMeta = {
@@ -165,6 +125,41 @@ export default function PricingGuidePage() {
   const [error, setError] = useState<string>('');
   const [schemaMissing, setSchemaMissing] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+
+  // Media library picker — tracks which field the picker is targeting
+  const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
+  const [mediaPickerTarget, setMediaPickerTarget] = useState<
+    | { kind: 'cover' }
+    | { kind: 'gallery' }
+    | { kind: 'field'; field: 'accommodations_image_url' | 'availability_image_url' }
+    | { kind: 'space'; spaceId: string }
+    | null
+  >(null);
+
+  function openMediaPicker(target: NonNullable<typeof mediaPickerTarget>) {
+    setMediaPickerTarget(target);
+    setMediaPickerOpen(true);
+  }
+
+  function handleMediaSelect(url: string) {
+    if (!guide || !mediaPickerTarget) return;
+    switch (mediaPickerTarget.kind) {
+      case 'cover':
+        updateParent('cover_image_url', url);
+        break;
+      case 'gallery':
+        if (!guide.gallery.some((g) => g.url === url)) {
+          updateParent('gallery', [...guide.gallery, { url }]);
+        }
+        break;
+      case 'field':
+        updateParent(mediaPickerTarget.field, url);
+        break;
+      case 'space':
+        void patchSpace(mediaPickerTarget.spaceId, { image_url: url });
+        break;
+    }
+  }
 
   // Listing-derived suggestions used by the auto-fill banner and AI extras
   const [seedData, setSeedData] = useState<SeedShape | null>(null);
@@ -270,49 +265,10 @@ export default function PricingGuidePage() {
     await fetch(`/api/listing/pricing-guide/packages/${id}`, { method: 'DELETE' });
   }
 
-  // ── Image uploads (gallery, accommodations, availability, space images) ─
-  const galleryInputRef = useRef<HTMLInputElement>(null);
-  async function handleGalleryUpload(files: FileList | null) {
-    if (!files || !guide) return;
-    setSaving(true);
-    try {
-      const urls: string[] = [];
-      for (const file of Array.from(files)) urls.push(await uploadOneImage(file));
-      const nextGallery: GalleryItem[] = [
-        ...guide.gallery,
-        ...urls.map((url) => ({ url })),
-      ];
-      updateParent('gallery', nextGallery);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Upload failed');
-    } finally {
-      setSaving(false);
-      if (galleryInputRef.current) galleryInputRef.current.value = '';
-    }
-  }
+  // ── Image uploads — now handled by VenueMediaPickerModal ───────────────
   function removeFromGallery(url: string) {
     if (!guide) return;
     updateParent('gallery', guide.gallery.filter((g) => g.url !== url));
-  }
-
-  async function uploadFieldImage(field: 'cover_image_url' | 'accommodations_image_url' | 'availability_image_url', file: File) {
-    setSaving(true);
-    try {
-      const url = await uploadOneImage(file);
-      updateParent(field, url);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Upload failed');
-    } finally { setSaving(false); }
-  }
-
-  async function uploadSpaceImage(spaceId: string, file: File) {
-    setSaving(true);
-    try {
-      const url = await uploadOneImage(file);
-      await patchSpace(spaceId, { image_url: url });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Upload failed');
-    } finally { setSaving(false); }
   }
 
   // ── Auto-fill from listing ─────────────────────────────────────────────
@@ -565,16 +521,14 @@ export default function PricingGuidePage() {
               on your public venue listing and as the first page of your pricing guide.
             </p>
             <div className="flex flex-wrap gap-2">
-              <label className="cursor-pointer inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+              <button
+                type="button"
+                onClick={() => openMediaPicker({ kind: 'cover' })}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
                 <Upload size={15} />
                 {guide.cover_image_url ? 'Replace cover' : 'Upload cover'}
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="sr-only"
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadFieldImage('cover_image_url', f); }}
-                />
-              </label>
+              </button>
               {guide.cover_image_url && (
                 <button
                   type="button"
@@ -647,20 +601,16 @@ export default function PricingGuidePage() {
               </button>
             </div>
           ))}
-          <label className="flex aspect-[4/3] cursor-pointer items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 text-sm text-gray-500 hover:border-gray-300 hover:bg-white">
-            <input
-              ref={galleryInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(e) => handleGalleryUpload(e.target.files)}
-            />
+          <button
+            type="button"
+            onClick={() => openMediaPicker({ kind: 'gallery' })}
+            className="flex aspect-[4/3] cursor-pointer items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 text-sm text-gray-500 hover:border-gray-300 hover:bg-white"
+          >
             <span className="flex flex-col items-center gap-1">
               <Upload size={18} />
               <span>Add photos</span>
             </span>
-          </label>
+          </button>
         </div>
       </Section>
 
@@ -697,7 +647,11 @@ export default function PricingGuidePage() {
             <div key={space.id} className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
               <div className="flex items-start gap-4">
                 {/* Image */}
-                <label className="block aspect-[4/3] w-32 flex-shrink-0 cursor-pointer overflow-hidden rounded-xl border border-gray-200 bg-white">
+                <button
+                  type="button"
+                  onClick={() => openMediaPicker({ kind: 'space', spaceId: space.id })}
+                  className="block aspect-[4/3] w-32 flex-shrink-0 cursor-pointer overflow-hidden rounded-xl border border-gray-200 bg-white text-left"
+                >
                   {space.image_url ? (
                     <img src={space.image_url} alt={space.name ?? ''} className="h-full w-full object-cover" />
                   ) : (
@@ -705,14 +659,7 @@ export default function PricingGuidePage() {
                       Add photo
                     </span>
                   )}
-                  <input
-                    type="file" accept="image/*" className="hidden"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) void uploadSpaceImage(space.id, f);
-                    }}
-                  />
-                </label>
+                </button>
 
                 <div className="flex-1 space-y-3">
                   <input
@@ -788,17 +735,17 @@ export default function PricingGuidePage() {
             )}
           />
           <div className="flex items-start gap-4">
-            <label className="block aspect-[4/3] w-40 flex-shrink-0 cursor-pointer overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
+            <button
+              type="button"
+              onClick={() => openMediaPicker({ kind: 'field', field: 'accommodations_image_url' })}
+              className="block aspect-[4/3] w-40 flex-shrink-0 cursor-pointer overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 text-left"
+            >
               {guide.accommodations_image_url ? (
                 <img src={guide.accommodations_image_url} alt="" className="h-full w-full object-cover" />
               ) : (
                 <span className="flex h-full w-full items-center justify-center text-xs text-gray-400">Add photo</span>
               )}
-              <input
-                type="file" accept="image/*" className="hidden"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadFieldImage('accommodations_image_url', f); }}
-              />
-            </label>
+            </button>
             {guide.accommodations_image_url && (
               <button
                 type="button"
@@ -961,17 +908,17 @@ export default function PricingGuidePage() {
             )}
           />
           <div className="flex items-start gap-4">
-            <label className="block aspect-[4/3] w-40 flex-shrink-0 cursor-pointer overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
+            <button
+              type="button"
+              onClick={() => openMediaPicker({ kind: 'field', field: 'availability_image_url' })}
+              className="block aspect-[4/3] w-40 flex-shrink-0 cursor-pointer overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 text-left"
+            >
               {guide.availability_image_url ? (
                 <img src={guide.availability_image_url} alt="" className="h-full w-full object-cover" />
               ) : (
                 <span className="flex h-full w-full items-center justify-center text-xs text-gray-400">Add image</span>
               )}
-              <input
-                type="file" accept="image/*" className="hidden"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadFieldImage('availability_image_url', f); }}
-              />
-            </label>
+            </button>
             {guide.availability_image_url && (
               <button
                 type="button"
@@ -1058,6 +1005,15 @@ export default function PricingGuidePage() {
           location_state: seedData?.venue?.location_state ?? null,
         }}
         onClose={() => setShowPreview(false)}
+      />
+
+      {/* ── Media library picker ──────────────────────────────────── */}
+      <VenueMediaPickerModal
+        open={mediaPickerOpen}
+        onOpenChange={setMediaPickerOpen}
+        mode="image"
+        title="Select a photo"
+        onSelect={(url) => handleMediaSelect(url)}
       />
     </div>
   );
