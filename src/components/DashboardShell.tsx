@@ -93,6 +93,8 @@ export default function DashboardShell({
     '/dashboard/leads',
     '/dashboard/media',
     '/dashboard/help',
+    '/dashboard/payments',
+    '/dashboard/settings/branding',
   ];
   const isFullWidth = pathname === '/dashboard' || fullWidthPaths.some((p) => pathname.startsWith(p));
 
