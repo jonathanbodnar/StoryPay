@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { X, Star, MapPin, Calendar } from 'lucide-react';
 
 const PLAYFAIR = 'var(--font-playfair), "Playfair Display", serif';
+const OPEN_SANS = 'var(--font-open-sans), "Open Sans", sans-serif';
 
 /**
  * Continuous vertical-scroll preview of the Pricing & Availability Guide.
@@ -52,6 +53,7 @@ interface VenueMeta {
   name: string | null;
   location_city: string | null;
   location_state: string | null;
+  logo_url: string | null;
 }
 
 interface Props {
@@ -81,6 +83,7 @@ export default function PreviewGuideModal({ open, guide, venue, onClose }: Props
 
   const venueName = venue.name ?? 'Our Venue';
   const venueLocation = [venue.location_city, venue.location_state].filter(Boolean).join(', ');
+  const logoUrl = venue.logo_url ?? null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 sm:p-6">
@@ -104,7 +107,7 @@ export default function PreviewGuideModal({ open, guide, venue, onClose }: Props
         <div ref={scrollRef} className="flex-1 overflow-y-auto bg-stone-100">
           <div className="mx-auto w-full" style={{ maxWidth: 480 }}>
             {/* ── Cover ── */}
-            <MagCover guide={guide} venueName={venueName} venueLocation={venueLocation} />
+            <MagCover guide={guide} venueName={venueName} venueLocation={venueLocation} logoUrl={logoUrl} />
 
             {/* ── Welcome ── */}
             {guide.congratulatory_message?.trim() && (
@@ -182,10 +185,10 @@ export default function PreviewGuideModal({ open, guide, venue, onClose }: Props
 
 // ─── Layout primitives ──────────────────────────────────────────────────
 
-/** Wrapper for every section after the cover */
+/** Wrapper for every section after the cover — enforces Open Sans on body text */
 function MagSection({ children }: { children: React.ReactNode }) {
   return (
-    <div className="bg-white shadow-sm">
+    <div className="bg-white shadow-sm" style={{ fontFamily: OPEN_SANS }}>
       {children}
     </div>
   );
@@ -193,10 +196,10 @@ function MagSection({ children }: { children: React.ReactNode }) {
 
 // ─── Page renderers ─────────────────────────────────────────────────────
 
-function CoverPage({ guide, venueName, venueLocation }: { guide: Guide; venueName: string; venueLocation: string }) {
+function CoverPage({ guide, venueName, venueLocation, logoUrl }: { guide: Guide; venueName: string; venueLocation: string; logoUrl: string | null }) {
   const coverSrc = guide.cover_image_url ?? guide.cover_source_image_url ?? guide.gallery[0]?.url ?? null;
   return (
-    <div className="relative w-full" style={{ aspectRatio: '3 / 4' }}>
+    <div className="relative w-full" style={{ aspectRatio: '3 / 4', fontFamily: OPEN_SANS }}>
       {coverSrc ? (
         <img src={coverSrc} alt="" className="absolute inset-0 h-full w-full object-cover" />
       ) : (
@@ -204,7 +207,10 @@ function CoverPage({ guide, venueName, venueLocation }: { guide: Guide; venueNam
       )}
       <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/20 to-black/70" />
       <div className="relative flex h-full w-full flex-col items-center justify-end p-10 text-center text-white">
-        <p className="font-heading text-4xl leading-tight" style={{ fontFamily: PLAYFAIR }}>
+        {logoUrl && (
+          <img src={logoUrl} alt="" className="mb-6 h-16 w-auto object-contain drop-shadow-lg" style={{ filter: 'brightness(0) invert(1)' }} />
+        )}
+        <p className="text-4xl leading-tight" style={{ fontFamily: PLAYFAIR }}>
           {venueName}
         </p>
         {venueLocation && (
@@ -217,10 +223,10 @@ function CoverPage({ guide, venueName, venueLocation }: { guide: Guide; venueNam
   );
 }
 
-function MagCover({ guide, venueName, venueLocation }: { guide: Guide; venueName: string; venueLocation: string }) {
+function MagCover({ guide, venueName, venueLocation, logoUrl }: { guide: Guide; venueName: string; venueLocation: string; logoUrl: string | null }) {
   return (
     <div className="bg-white shadow-sm">
-      <CoverPage guide={guide} venueName={venueName} venueLocation={venueLocation} />
+      <CoverPage guide={guide} venueName={venueName} venueLocation={venueLocation} logoUrl={logoUrl} />
     </div>
   );
 }

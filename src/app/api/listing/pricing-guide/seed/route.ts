@@ -32,7 +32,7 @@ export async function GET() {
     supabaseAdmin
       .from('venues')
       .select(
-        'id, name, description, venue_type, location_city, location_state, capacity_min, capacity_max, indoor_outdoor, features, cover_image_url, gallery_images, availability_notes',
+        'id, name, description, venue_type, location_city, location_state, capacity_min, capacity_max, indoor_outdoor, features, cover_image_url, gallery_images, availability_notes, brand_logo_url',
       )
       .eq('id', venueId)
       .maybeSingle(),
@@ -64,6 +64,7 @@ export async function GET() {
     cover_image_url: string | null;
     gallery_images: string[] | null;
     availability_notes: string | null;
+    brand_logo_url: string | null;
   };
 
   if (!venue) {
@@ -169,6 +170,7 @@ export async function GET() {
       capacity_max: venue.capacity_max,
       indoor_outdoor: venue.indoor_outdoor,
       features: venue.features ?? [],
+      logo_url: venue.brand_logo_url ?? null,
     },
   });
 }

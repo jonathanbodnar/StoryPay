@@ -42,7 +42,7 @@ button, input, select, textarea, optgroup {
 }
 
 .font-heading {
-  font-family: var(--font-body) !important;
+  font-family: var(--font-body);
   font-weight: 600;
   letter-spacing: -0.01em;
 }

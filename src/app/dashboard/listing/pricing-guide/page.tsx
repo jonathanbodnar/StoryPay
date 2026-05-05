@@ -109,6 +109,7 @@ type VenueMeta = {
   capacity_max: number | null;
   indoor_outdoor: string | null;
   features: string[];
+  logo_url: string | null;
 };
 
 type SeedShape = {
@@ -1003,6 +1004,7 @@ export default function PricingGuidePage() {
           name: seedData?.venue?.name ?? null,
           location_city: seedData?.venue?.location_city ?? null,
           location_state: seedData?.venue?.location_state ?? null,
+          logo_url: seedData?.venue?.logo_url ?? null,
         }}
         onClose={() => setShowPreview(false)}
       />
