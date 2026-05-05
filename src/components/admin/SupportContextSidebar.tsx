@@ -10,11 +10,11 @@
  * pipeline stage, AI state, recent activity, etc.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Loader2, AlertCircle, User, Building2, Mail, Phone, ShieldCheck, ShieldAlert,
   Sparkles, CircleDot, AlertTriangle, Calendar, Clock, Tag,
-  Activity, Inbox, BellOff, RefreshCw, ExternalLink,
+  Activity, Inbox, BellOff, RefreshCw, ExternalLink, ChevronDown, X, Plus, CheckCircle2,
 } from 'lucide-react';
 import { SlaPill } from '@/components/support/SlaIndicator';
 
@@ -60,6 +60,14 @@ interface ContextResponse {
   } | null;
   recent_activity: Array<{ action: string; at: string; details: unknown }>;
   lead_id: string | null;
+  pipelines: Array<{
+    id:         string;
+    name:       string;
+    is_default: boolean;
+    stages: Array<{ id: string; name: string; color: string | null; kind: string; position: number }>;
+  }>;
+  tags: Array<{ id: string; name: string; icon: string; color: string | null }>;
+  applied_tag_ids: string[];
 }
 
 function relativeTime(iso: string | null): string {
@@ -116,6 +124,8 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
   const [data, setData] = useState<ContextResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [actionStatus, setActionStatus] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [actionPending, setActionPending] = useState(false);
 
   const load = useCallback(async () => {
     if (!threadId) return;
@@ -137,7 +147,42 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
 
   useEffect(() => {
     setData(null);
+    setActionStatus(null);
     if (threadId) void load();
+  }, [threadId, load]);
+
+  /** Optimistic action runner. On success, refetches context to lock in
+   *  server state; on error, surfaces the message + reverts. */
+  const runAction = useCallback(async (
+    body: Record<string, unknown>,
+    optimistic?: () => void,
+    successMsg?: string,
+  ) => {
+    if (!threadId) return;
+    setActionPending(true);
+    setActionStatus(null);
+    optimistic?.();
+    try {
+      const r = await fetch(`/api/admin/support/bride-thread/${threadId}/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const d = await r.json().catch(() => ({} as { error?: string; blockers?: string[] }));
+      if (!r.ok) {
+        const blockers = (d as { blockers?: string[] }).blockers;
+        throw new Error(((d as { error?: string }).error || 'Action failed') + (blockers?.length ? ` — ${blockers[0]}` : ''));
+      }
+      setActionStatus({ ok: true, msg: successMsg || 'Saved' });
+      // Re-pull authoritative state
+      await load();
+    } catch (e) {
+      setActionStatus({ ok: false, msg: e instanceof Error ? e.message : 'Action failed' });
+      // Refetch to revert any optimistic UI
+      await load();
+    } finally {
+      setActionPending(false);
+    }
   }, [threadId, load]);
 
   if (!threadId) {
@@ -219,19 +264,20 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
             </div>
 
             <div className="flex items-center gap-1 flex-wrap pt-1">
-              {data.pipeline && (
-                <span
-                  className="inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-                  style={{
-                    borderColor: data.pipeline.color || '#e5e7eb',
-                    backgroundColor: (data.pipeline.color || '#f3f4f6') + '20',
-                    color: data.pipeline.color || '#374151',
-                  }}
-                  title={data.pipeline.pipeline_name ? `Pipeline: ${data.pipeline.pipeline_name}` : ''}
-                >
-                  <CircleDot size={9} /> {data.pipeline.name}
-                </span>
-              )}
+              <StagePickerChip
+                pipelines={data.pipelines}
+                currentStageId={data.pipeline?.id ?? null}
+                currentStageName={data.pipeline?.name ?? null}
+                currentStageColor={data.pipeline?.color ?? null}
+                disabled={!data.lead_id || actionPending}
+                onSelect={(stageId, stageName) =>
+                  runAction(
+                    { action: 'set_stage', stageId },
+                    undefined,
+                    `Stage → ${stageName}`,
+                  )
+                }
+              />
               {data.bride.lead_status && (
                 <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-700">
                   {data.bride.lead_status}
@@ -239,6 +285,52 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
               )}
               {data.ai && <AiStatePill state={data.ai.state} />}
             </div>
+
+            {actionStatus && (
+              <div className={`rounded-md px-2 py-1 text-[10px] flex items-center gap-1 ${
+                actionStatus.ok
+                  ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
+                  : 'border border-red-200 bg-red-50 text-red-700'
+              }`}>
+                {actionStatus.ok ? <CheckCircle2 size={10} /> : <AlertCircle size={10} />}
+                {actionStatus.msg}
+              </div>
+            )}
+
+            {/* Tags */}
+            <TagsRow
+              allTags={data.tags}
+              appliedTagIds={data.applied_tag_ids}
+              disabled={!data.lead_id || actionPending}
+              onAdd={(tagId, tagName) =>
+                runAction(
+                  { action: 'add_tag', tagId },
+                  undefined,
+                  `Tagged · ${tagName}`,
+                )
+              }
+              onRemove={(tagId) =>
+                runAction(
+                  { action: 'remove_tag', tagId },
+                  undefined,
+                  'Tag removed',
+                )
+              }
+            />
+
+            {/* AI quick-actions */}
+            {data.ai && (
+              <AiActionRow
+                ai={data.ai}
+                disabled={!data.lead_id || actionPending}
+                onPause={() =>
+                  runAction({ action: 'pause_ai' }, undefined, 'AI paused')
+                }
+                onReEnable={() =>
+                  runAction({ action: 're_enable_ai' }, undefined, 'AI re-enabled (24h cooldown)')
+                }
+              />
+            )}
 
             {data.bride.lead_source && (
               <p className="text-[10px] text-gray-500">
@@ -393,5 +485,265 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
         </div>
       )}
     </aside>
+  );
+}
+
+// ─── Inline pickers ─────────────────────────────────────────────────────────
+
+/**
+ * Stage chip that opens a dropdown of all stages across all pipelines for the
+ * venue. Click a stage to move the lead.
+ */
+function StagePickerChip({
+  pipelines,
+  currentStageId,
+  currentStageName,
+  currentStageColor,
+  disabled,
+  onSelect,
+}: {
+  pipelines: ContextResponse['pipelines'];
+  currentStageId:    string | null;
+  currentStageName:  string | null;
+  currentStageColor: string | null;
+  disabled: boolean;
+  onSelect: (stageId: string, stageName: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (!wrapRef.current) return;
+      if (!wrapRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  if (pipelines.length === 0) {
+    // No pipeline configured — show a static badge if we have one, otherwise nothing
+    if (!currentStageName) return null;
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-700">
+        <CircleDot size={9} /> {currentStageName}
+      </span>
+    );
+  }
+
+  return (
+    <div className="relative" ref={wrapRef}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen(v => !v)}
+        className="inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+        style={{
+          borderColor: currentStageColor || '#e5e7eb',
+          backgroundColor: (currentStageColor || '#f3f4f6') + '20',
+          color: currentStageColor || '#374151',
+        }}
+        title={currentStageId ? 'Click to move stage' : 'Set stage'}
+      >
+        <CircleDot size={9} /> {currentStageName || 'Set stage'} <ChevronDown size={9} />
+      </button>
+      {open && (
+        <div className="absolute z-20 mt-1 left-0 w-64 max-h-72 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+          {pipelines.map(p => (
+            <div key={p.id}>
+              <p className="px-3 py-1.5 text-[9px] font-bold uppercase tracking-wide text-gray-400 border-b border-gray-50">
+                {p.name}{p.is_default ? ' · default' : ''}
+              </p>
+              {p.stages.length === 0 && (
+                <p className="px-3 py-2 text-[10px] text-gray-400">No stages</p>
+              )}
+              {p.stages.map(s => {
+                const isCurrent = s.id === currentStageId;
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => { setOpen(false); onSelect(s.id, s.name); }}
+                    disabled={isCurrent}
+                    className={`w-full flex items-center justify-between gap-2 px-3 py-1.5 text-[11px] text-left hover:bg-gray-50 disabled:cursor-default ${isCurrent ? 'bg-gray-50' : ''}`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span
+                        className="inline-block h-2 w-2 rounded-full"
+                        style={{ backgroundColor: s.color || '#9ca3af' }}
+                      />
+                      <span className={`font-medium ${isCurrent ? 'text-gray-900' : 'text-gray-700'}`}>{s.name}</span>
+                    </span>
+                    {isCurrent && <span className="text-[9px] text-emerald-600 font-semibold">CURRENT</span>}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Renders applied tag chips with "x" buttons + a "+ Add tag" affordance that
+ * opens a dropdown of available tags.
+ */
+function TagsRow({
+  allTags,
+  appliedTagIds,
+  disabled,
+  onAdd,
+  onRemove,
+}: {
+  allTags: ContextResponse['tags'];
+  appliedTagIds: string[];
+  disabled: boolean;
+  onAdd:    (tagId: string, tagName: string) => void;
+  onRemove: (tagId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (!wrapRef.current) return;
+      if (!wrapRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  const byId = useMemo(() => {
+    const m = new Map<string, ContextResponse['tags'][number]>();
+    for (const t of allTags) m.set(t.id, t);
+    return m;
+  }, [allTags]);
+
+  const remaining = useMemo(() => {
+    const set = new Set(appliedTagIds);
+    return allTags.filter(t => !set.has(t.id));
+  }, [allTags, appliedTagIds]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return remaining;
+    return remaining.filter(t => t.name.toLowerCase().includes(q));
+  }, [remaining, query]);
+
+  if (allTags.length === 0 && appliedTagIds.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-1 pt-0.5" ref={wrapRef}>
+      {appliedTagIds.map(id => {
+        const t = byId.get(id);
+        if (!t) return null;
+        return (
+          <span
+            key={id}
+            className="inline-flex items-center gap-1 rounded-full border bg-white px-1.5 py-0.5 text-[10px] font-medium text-gray-800"
+            style={{ borderColor: t.color || '#e5e7eb' }}
+            title={t.name}
+          >
+            <span aria-hidden="true">{t.icon}</span> {t.name}
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => onRemove(id)}
+              className="-mr-0.5 text-gray-400 hover:text-gray-700 disabled:opacity-50"
+              aria-label={`Remove tag ${t.name}`}
+            >
+              <X size={9} />
+            </button>
+          </span>
+        );
+      })}
+      <div className="relative">
+        <button
+          type="button"
+          disabled={disabled || remaining.length === 0}
+          onClick={() => setOpen(v => !v)}
+          className="inline-flex items-center gap-1 rounded-full border border-dashed border-gray-300 text-gray-600 hover:bg-gray-50 px-1.5 py-0.5 text-[10px] font-semibold disabled:opacity-50"
+          title={remaining.length === 0 ? 'No more tags to add' : 'Add tag'}
+        >
+          <Plus size={9} /> Tag
+        </button>
+        {open && (
+          <div className="absolute z-20 mt-1 left-0 w-56 rounded-lg border border-gray-200 bg-white shadow-lg">
+            <div className="p-2 border-b border-gray-100">
+              <input
+                autoFocus
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="Search tags…"
+                className="w-full text-[11px] px-2 py-1 outline-none"
+              />
+            </div>
+            <div className="max-h-48 overflow-y-auto">
+              {filtered.length === 0 && (
+                <p className="px-3 py-2 text-[10px] text-gray-400">
+                  {remaining.length === 0 ? 'All tags applied.' : 'No matches.'}
+                </p>
+              )}
+              {filtered.map(t => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => { setOpen(false); setQuery(''); onAdd(t.id, t.name); }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-[11px] text-left hover:bg-gray-50"
+                >
+                  <span aria-hidden="true">{t.icon}</span>
+                  <span className="font-medium text-gray-800">{t.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AiActionRow({
+  ai,
+  disabled,
+  onPause,
+  onReEnable,
+}: {
+  ai: NonNullable<ContextResponse['ai']>;
+  disabled: boolean;
+  onPause:    () => void;
+  onReEnable: () => void;
+}) {
+  const canPause = ai.state === 'ai_active';
+  const canReEnable = ['paused', 'handoff', 'opted_out', 'exhausted'].includes(ai.state);
+  if (!canPause && !canReEnable) return null;
+
+  return (
+    <div className="flex items-center gap-1 pt-0.5">
+      {canPause && (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={onPause}
+          className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-800 disabled:opacity-50"
+        >
+          <Sparkles size={9} /> Pause AI
+        </button>
+      )}
+      {canReEnable && (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={onReEnable}
+          className="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-violet-50 hover:bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-800 disabled:opacity-50"
+          title="Reset state to dormant; activation cron picks up after 24h cooldown"
+        >
+          <Sparkles size={9} /> Re-enable AI
+        </button>
+      )}
+    </div>
   );
 }

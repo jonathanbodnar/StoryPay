@@ -181,6 +181,55 @@ export async function GET(
     .select('id', { count: 'exact', head: true })
     .eq('thread_id', threadId);
 
+  // 9. Venue's pipelines + stages — feeds the inline stage picker
+  const { data: pipelineRows } = await supabaseAdmin
+    .from('lead_pipelines')
+    .select('id, name, is_default, position')
+    .eq('venue_id', t.venue_id)
+    .order('position', { ascending: true });
+  const pipelineIds = (pipelineRows ?? []).map(p => (p as { id: string }).id);
+  let pipelinesWithStages: Array<{
+    id:         string;
+    name:       string;
+    is_default: boolean;
+    stages: Array<{ id: string; name: string; color: string | null; kind: string; position: number }>;
+  }> = [];
+  if (pipelineIds.length > 0) {
+    const { data: stageRows } = await supabaseAdmin
+      .from('lead_pipeline_stages')
+      .select('id, pipeline_id, name, color, kind, position')
+      .eq('venue_id', t.venue_id)
+      .in('pipeline_id', pipelineIds)
+      .order('position', { ascending: true });
+    const byPipeline = new Map<string, Array<{ id: string; name: string; color: string | null; kind: string; position: number }>>();
+    for (const s of (stageRows ?? []) as Array<{ id: string; pipeline_id: string; name: string; color: string | null; kind: string; position: number }>) {
+      const arr = byPipeline.get(s.pipeline_id) ?? [];
+      arr.push({ id: s.id, name: s.name, color: s.color, kind: s.kind, position: s.position });
+      byPipeline.set(s.pipeline_id, arr);
+    }
+    pipelinesWithStages = (pipelineRows ?? []).map(p => {
+      const pp = p as { id: string; name: string; is_default: boolean };
+      return { id: pp.id, name: pp.name, is_default: !!pp.is_default, stages: byPipeline.get(pp.id) ?? [] };
+    });
+  }
+
+  // 10. Venue's tags + tags applied to this lead
+  const { data: tagRows } = await supabaseAdmin
+    .from('marketing_tags')
+    .select('id, name, icon, color, position')
+    .eq('venue_id', t.venue_id)
+    .order('position', { ascending: true });
+  const venueTags = ((tagRows ?? []) as Array<{ id: string; name: string; icon: string; color: string | null }>);
+
+  let appliedTagIds: string[] = [];
+  if (lead?.id) {
+    const { data: assigns } = await supabaseAdmin
+      .from('lead_tag_assignments')
+      .select('tag_id')
+      .eq('lead_id', lead.id as string);
+    appliedTagIds = ((assigns ?? []) as Array<{ tag_id: string }>).map(a => a.tag_id);
+  }
+
   return NextResponse.json({
     bride: {
       first_name:    (c?.first_name as string | null) ?? null,
@@ -235,5 +284,8 @@ export async function GET(
     } : null,
     recent_activity: recentActivity,
     lead_id: (lead?.id as string | null) ?? null,
+    pipelines: pipelinesWithStages,
+    tags: venueTags,
+    applied_tag_ids: appliedTagIds,
   });
 }
