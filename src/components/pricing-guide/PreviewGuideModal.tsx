@@ -3,6 +3,8 @@
 import { useEffect, useRef } from 'react';
 import { X, Star, MapPin, Calendar } from 'lucide-react';
 
+const PLAYFAIR = 'var(--font-playfair), "Playfair Display", serif';
+
 /**
  * Continuous vertical-scroll preview of the Pricing & Availability Guide.
  * Renders every section as a full-width magazine page stacked vertically,
@@ -202,7 +204,7 @@ function CoverPage({ guide, venueName, venueLocation }: { guide: Guide; venueNam
       )}
       <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/20 to-black/70" />
       <div className="relative flex h-full w-full flex-col items-center justify-end p-10 text-center text-white">
-        <p className="font-heading text-4xl leading-tight" style={{ fontFamily: '"Playfair Display", serif' }}>
+        <p className="font-heading text-4xl leading-tight" style={{ fontFamily: PLAYFAIR }}>
           {venueName}
         </p>
         {venueLocation && (
@@ -227,7 +229,7 @@ function WelcomePage({ guide, venueName }: { guide: Guide; venueName: string }) 
   return (
     <div className="flex w-full flex-col items-center justify-center px-10 py-16 text-center">
       <p className="text-xs uppercase tracking-[0.3em] text-gray-400">A note from</p>
-      <h1 className="mt-3 font-heading text-3xl text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
+      <h1 className="mt-3 font-heading text-3xl text-gray-900" style={{ fontFamily: PLAYFAIR }}>
         {venueName}
       </h1>
       <div className="mt-6 h-px w-16 bg-gray-300" />
@@ -242,7 +244,7 @@ function GalleryPage({ guide }: { guide: Guide }) {
   const items = guide.gallery.slice(0, 6);
   return (
     <div className="flex w-full flex-col px-8 py-10">
-      <h2 className="font-heading text-2xl text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
+      <h2 className="font-heading text-2xl text-gray-900" style={{ fontFamily: PLAYFAIR }}>
         The Property
       </h2>
       <div className="mt-6 grid grid-cols-2 gap-3">
@@ -264,7 +266,7 @@ function AboutPage({ guide, venueName }: { guide: Guide; venueName: string }) {
   return (
     <div className="flex w-full flex-col px-10 py-12">
       <p className="text-xs uppercase tracking-[0.3em] text-gray-400">About</p>
-      <h2 className="mt-3 font-heading text-3xl text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
+      <h2 className="mt-3 font-heading text-3xl text-gray-900" style={{ fontFamily: PLAYFAIR }}>
         {venueName}
       </h2>
       <div className="mt-5 h-px w-16 bg-gray-300" />
@@ -278,7 +280,7 @@ function AboutPage({ guide, venueName }: { guide: Guide; venueName: string }) {
 function SpacesPage({ guide }: { guide: Guide }) {
   return (
     <div className="flex w-full flex-col px-8 py-10">
-      <h2 className="font-heading text-2xl text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
+      <h2 className="font-heading text-2xl text-gray-900" style={{ fontFamily: PLAYFAIR }}>
         Our Spaces
       </h2>
       <div className="mt-6 space-y-5">
@@ -290,7 +292,7 @@ function SpacesPage({ guide }: { guide: Guide }) {
               </div>
             )}
             <div className="flex-1">
-              <h3 className="font-heading text-base text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
+              <h3 className="font-heading text-base text-gray-900" style={{ fontFamily: PLAYFAIR }}>
                 {s.name ?? 'Untitled space'}
               </h3>
               {s.capacity && <p className="mt-0.5 text-xs uppercase tracking-wider text-gray-500">{s.capacity}</p>}
@@ -308,7 +310,7 @@ function SpacesPage({ guide }: { guide: Guide }) {
 function AccommodationsPage({ guide }: { guide: Guide }) {
   return (
     <div className="flex w-full flex-col px-8 py-10">
-      <h2 className="font-heading text-2xl text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
+      <h2 className="font-heading text-2xl text-gray-900" style={{ fontFamily: PLAYFAIR }}>
         Accommodations
       </h2>
       {guide.accommodations_image_url && (
@@ -326,7 +328,7 @@ function AccommodationsPage({ guide }: { guide: Guide }) {
 function PricingPage({ guide }: { guide: Guide }) {
   return (
     <div className="flex w-full flex-col px-8 py-10">
-      <h2 className="font-heading text-2xl text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
+      <h2 className="font-heading text-2xl text-gray-900" style={{ fontFamily: PLAYFAIR }}>
         Pricing &amp; Packages
       </h2>
       {guide.pricing_intro && (
@@ -336,7 +338,7 @@ function PricingPage({ guide }: { guide: Guide }) {
         {guide.packages.map((p) => (
           <div key={p.id} className="rounded-2xl border border-gray-200 bg-stone-50 p-5">
             <div className="flex items-baseline justify-between">
-              <h3 className="font-heading text-lg text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
+              <h3 className="font-heading text-lg text-gray-900" style={{ fontFamily: PLAYFAIR }}>
                 {p.name ?? 'Untitled package'}
               </h3>
               {p.price_label && <span className="ml-3 flex-shrink-0 font-medium text-gray-700">{p.price_label}</span>}
@@ -364,7 +366,7 @@ function PricingPage({ guide }: { guide: Guide }) {
 function ReviewsPage({ guide }: { guide: Guide }) {
   return (
     <div className="flex w-full flex-col px-8 py-10">
-      <h2 className="font-heading text-2xl text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
+      <h2 className="font-heading text-2xl text-gray-900" style={{ fontFamily: PLAYFAIR }}>
         From Our Couples
       </h2>
       <div className="mt-6 space-y-4">
@@ -396,7 +398,7 @@ function AvailabilityPage({ guide }: { guide: Guide }) {
       <div className="flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-gray-400">
         <Calendar size={12} /> Availability
       </div>
-      <h2 className="mt-3 font-heading text-2xl text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
+      <h2 className="mt-3 font-heading text-2xl text-gray-900" style={{ fontFamily: PLAYFAIR }}>
         Find your date
       </h2>
       {guide.availability_image_url && (
@@ -415,7 +417,7 @@ function CtaPage({ guide, venueName }: { guide: Guide; venueName: string }) {
   return (
     <div className="flex w-full flex-col items-center justify-center px-10 py-16 text-center">
       <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Save the date</p>
-      <h2 className="mt-4 max-w-sm font-heading text-3xl leading-tight text-gray-900" style={{ fontFamily: '"Playfair Display", serif' }}>
+      <h2 className="mt-4 max-w-sm font-heading text-3xl leading-tight text-gray-900" style={{ fontFamily: PLAYFAIR }}>
         {guide.cta_headline ?? 'Ready to walk the property?'}
       </h2>
       <p className="mt-6 max-w-sm text-base leading-relaxed text-gray-700 whitespace-pre-wrap">

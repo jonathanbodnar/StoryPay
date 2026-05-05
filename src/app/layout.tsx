@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Open_Sans } from 'next/font/google';
+import { Open_Sans, Playfair_Display } from 'next/font/google';
 import './globals.css';
 import { getPageSeo } from '@/lib/page-seo';
 
@@ -8,6 +8,13 @@ const openSans = Open_Sans({
   subsets: ['latin'],
   weight: ['300', '400', '500', '600', '700'],
   variable: '--font-open-sans',
+  display: 'swap',
+});
+
+const playfairDisplay = Playfair_Display({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-playfair',
   display: 'swap',
 });
 
@@ -115,7 +122,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     // available on every element (including ::before / ::after pseudo-elements
     // and form controls that reset their inherited font). This guarantees
     // Open Sans is the default everywhere.
-    <html lang="en" className={openSans.variable}>
+    <html lang="en" className={`${openSans.variable} ${playfairDisplay.variable}`}>
       <head>
         {/* Explicit favicon links override platform defaults (e.g. Railway) that ignore metadata alone */}
         <link rel="icon" href="/storyvenue-sidebar-mark.png" type="image/png" sizes="any" />
