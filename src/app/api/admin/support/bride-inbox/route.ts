@@ -101,153 +101,199 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // --- Step 1 ---------------------------------------------------------
-    // Pull recent inbound (visibility=external, sender_kind=contact)
-    // messages. We want the MOST RECENT inbound per thread; ordering by
-    // created_at DESC then deduping in JS gives us that without needing
-    // a window function.
-    //
-    // Pull a generous slice (limit*4) to give pagination + filtering some
-    // room before falling back to the next page.
-    let inboundQuery = supabaseAdmin
-      .from('conversation_messages')
-      .select('thread_id, sender_kind, body, channel, created_at')
-      .eq('visibility', 'external')
-      .eq('sender_kind', 'contact')
-      .order('created_at', { ascending: false })
-      .limit(Math.max(limit * 8, 200));
+    // -----------------------------------------------------------------------
+    // For filter=open and filter=closed we need to know the latest external
+    // message per thread. For filter=all we skip the bride-reply-only gate
+    // and pull ALL threads ordered by last_message_at so admins can see
+    // every conversation regardless of who last spoke.
+    // -----------------------------------------------------------------------
 
-    if (cursorAt) inboundQuery = inboundQuery.lt('created_at', cursorAt);
+    let rows: BrideInboxRow[];
 
-    const { data: inboundRows, error: inboundErr } = await inboundQuery;
-    if (inboundErr) throw new Error(`inbound query: ${inboundErr.message}`);
+    if (filter === 'all') {
+      // ── "All" ─────────────────────────────────────────────────────────────
+      // Show every conversation thread across all venues, newest first.
+      let tq = supabaseAdmin
+        .from('conversation_threads')
+        .select('id, venue_id, venue_customer_id, subject, last_message_at, last_message_preview')
+        .order('last_message_at', { ascending: false })
+        .limit(Math.max(limit * 2, 100));
 
-    const inbound = (inboundRows ?? []) as MessageMeta[];
+      if (venueId)  tq = tq.eq('venue_id', venueId);
+      if (cursorAt) tq = tq.lt('last_message_at', cursorAt);
 
-    // Latest inbound per thread
-    const latestInboundByThread = new Map<string, MessageMeta>();
-    for (const m of inbound) {
-      if (!latestInboundByThread.has(m.thread_id)) {
-        latestInboundByThread.set(m.thread_id, m);
+      const { data: tRows, error: tErr } = await tq;
+      if (tErr) throw new Error(`threads-all query: ${tErr.message}`);
+      const allThreads = ((tRows ?? []) as ThreadRow[]);
+
+      if (allThreads.length === 0) return NextResponse.json({ threads: [], nextCursor: null });
+
+      const threadIds       = allThreads.map(t => t.id);
+      const venueIds        = Array.from(new Set(allThreads.map(t => t.venue_id)));
+      const venueCustomerIds = Array.from(new Set(allThreads.map(t => t.venue_customer_id)));
+
+      // Fetch latest inbound per thread (for channel/preview info), venues, customers in parallel
+      const [
+        { data: inboundAllRows },
+        { data: venueAllRows },
+        { data: vcAllRows },
+        { data: countAllRows },
+      ] = await Promise.all([
+        supabaseAdmin
+          .from('conversation_messages')
+          .select('thread_id, sender_kind, body, channel, created_at')
+          .eq('visibility', 'external')
+          .eq('sender_kind', 'contact')
+          .in('thread_id', threadIds)
+          .order('created_at', { ascending: false }),
+        supabaseAdmin.from('venues').select('id, name').in('id', venueIds),
+        supabaseAdmin.from('venue_customers').select('id, first_name, last_name, customer_email, phone').in('id', venueCustomerIds),
+        supabaseAdmin.from('conversation_messages').select('thread_id').in('thread_id', threadIds),
+      ]);
+
+      const latestInboundAll = new Map<string, MessageMeta>();
+      for (const m of (inboundAllRows ?? []) as MessageMeta[]) {
+        if (!latestInboundAll.has(m.thread_id)) latestInboundAll.set(m.thread_id, m);
       }
-    }
-    let candidateThreadIds = Array.from(latestInboundByThread.keys());
-    if (candidateThreadIds.length === 0) {
-      return NextResponse.json({ threads: [], nextCursor: null });
-    }
-
-    // --- Step 2 ---------------------------------------------------------
-    // For each candidate thread, ensure that NO outbound external reply
-    // came in *after* the latest inbound — that's what makes a thread
-    // "needs attention". Fetch latest external message per thread
-    // regardless of sender, and keep only those whose latest external is
-    // still the inbound row from step 1.
-    const { data: latestExternalRows, error: latestExtErr } = await supabaseAdmin
-      .from('conversation_messages')
-      .select('thread_id, sender_kind, created_at')
-      .eq('visibility', 'external')
-      .in('thread_id', candidateThreadIds)
-      .order('created_at', { ascending: false });
-    if (latestExtErr) throw new Error(`latest-external query: ${latestExtErr.message}`);
-
-    const latestExtByThread = new Map<string, { sender_kind: string; created_at: string }>();
-    for (const r of (latestExternalRows ?? []) as Array<{ thread_id: string; sender_kind: string; created_at: string }>) {
-      if (!latestExtByThread.has(r.thread_id)) {
-        latestExtByThread.set(r.thread_id, { sender_kind: r.sender_kind, created_at: r.created_at });
+      const venueAllById = new Map<string, VenueRow>();
+      for (const v of (venueAllRows ?? []) as VenueRow[]) venueAllById.set(v.id, v);
+      const vcAllById = new Map<string, VenueCustomerRow>();
+      for (const c of (vcAllRows ?? []) as VenueCustomerRow[]) vcAllById.set(c.id, c);
+      const countAllByThread = new Map<string, number>();
+      for (const r of (countAllRows ?? []) as Array<{ thread_id: string }>) {
+        countAllByThread.set(r.thread_id, (countAllByThread.get(r.thread_id) ?? 0) + 1);
       }
-    }
-    if (filter === 'open') {
-      // Only threads where the bride is still the last to speak
-      candidateThreadIds = candidateThreadIds.filter(id => {
-        const last = latestExtByThread.get(id);
-        return last && last.sender_kind === 'contact';
+
+      rows = allThreads.map(t => {
+        const v  = venueAllById.get(t.venue_id);
+        const c  = vcAllById.get(t.venue_customer_id);
+        const li = latestInboundAll.get(t.id);
+        return {
+          thread_id:               t.id,
+          venue_id:                t.venue_id,
+          venue_name:              v?.name ?? '(deleted venue)',
+          venue_customer_id:       t.venue_customer_id,
+          contact_first_name:      c?.first_name ?? null,
+          contact_last_name:       c?.last_name ?? null,
+          contact_email:           c?.customer_email ?? null,
+          contact_phone:           c?.phone ?? null,
+          subject:                 (t.subject ?? '').trim() || 'Conversation',
+          last_message_at:         t.last_message_at,
+          last_message_preview:    t.last_message_preview,
+          last_inbound_channel:    (li?.channel === 'sms' ? 'sms' : 'email'),
+          last_inbound_body:       li?.body ?? t.last_message_preview ?? '',
+          last_inbound_created_at: t.last_message_at,
+          message_count:           countAllByThread.get(t.id) ?? 0,
+        };
       });
-    } else if (filter === 'closed') {
-      // Only threads where venue/support has already replied
-      candidateThreadIds = candidateThreadIds.filter(id => {
-        const last = latestExtByThread.get(id);
-        return last && last.sender_kind !== 'contact';
+    } else {
+      // ── "Open + Pending" / "Replied" ──────────────────────────────────────
+      // Gate on threads where there IS at least one bride inbound message.
+      let inboundQuery = supabaseAdmin
+        .from('conversation_messages')
+        .select('thread_id, sender_kind, body, channel, created_at')
+        .eq('visibility', 'external')
+        .eq('sender_kind', 'contact')
+        .order('created_at', { ascending: false })
+        .limit(Math.max(limit * 8, 200));
+
+      if (cursorAt) inboundQuery = inboundQuery.lt('created_at', cursorAt);
+
+      const { data: inboundRows, error: inboundErr } = await inboundQuery;
+      if (inboundErr) throw new Error(`inbound query: ${inboundErr.message}`);
+
+      const inbound = (inboundRows ?? []) as MessageMeta[];
+
+      // Latest inbound per thread
+      const latestInboundByThread = new Map<string, MessageMeta>();
+      for (const m of inbound) {
+        if (!latestInboundByThread.has(m.thread_id)) latestInboundByThread.set(m.thread_id, m);
+      }
+      let candidateThreadIds = Array.from(latestInboundByThread.keys());
+      if (candidateThreadIds.length === 0) return NextResponse.json({ threads: [], nextCursor: null });
+
+      // Keep only threads where the filter matches who last spoke
+      const { data: latestExternalRows, error: latestExtErr } = await supabaseAdmin
+        .from('conversation_messages')
+        .select('thread_id, sender_kind, created_at')
+        .eq('visibility', 'external')
+        .in('thread_id', candidateThreadIds)
+        .order('created_at', { ascending: false });
+      if (latestExtErr) throw new Error(`latest-external query: ${latestExtErr.message}`);
+
+      const latestExtByThread = new Map<string, { sender_kind: string; created_at: string }>();
+      for (const r of (latestExternalRows ?? []) as Array<{ thread_id: string; sender_kind: string; created_at: string }>) {
+        if (!latestExtByThread.has(r.thread_id)) {
+          latestExtByThread.set(r.thread_id, { sender_kind: r.sender_kind, created_at: r.created_at });
+        }
+      }
+      if (filter === 'open') {
+        candidateThreadIds = candidateThreadIds.filter(id => {
+          const last = latestExtByThread.get(id);
+          return last && last.sender_kind === 'contact';
+        });
+      } else if (filter === 'closed') {
+        candidateThreadIds = candidateThreadIds.filter(id => {
+          const last = latestExtByThread.get(id);
+          return last && last.sender_kind !== 'contact';
+        });
+      }
+      if (candidateThreadIds.length === 0) return NextResponse.json({ threads: [], nextCursor: null });
+
+      let threadQuery = supabaseAdmin
+        .from('conversation_threads')
+        .select('id, venue_id, venue_customer_id, subject, last_message_at, last_message_preview')
+        .in('id', candidateThreadIds);
+      if (venueId) threadQuery = threadQuery.eq('venue_id', venueId);
+
+      const { data: threadRows, error: threadErr } = await threadQuery;
+      if (threadErr) throw new Error(`threads query: ${threadErr.message}`);
+      const threads = ((threadRows ?? []) as ThreadRow[]);
+      if (threads.length === 0) return NextResponse.json({ threads: [], nextCursor: null });
+
+      const venueIds        = Array.from(new Set(threads.map(t => t.venue_id)));
+      const venueCustomerIds = Array.from(new Set(threads.map(t => t.venue_customer_id)));
+
+      const [{ data: venueRows }, { data: vcRows }, { data: countRows }] = await Promise.all([
+        supabaseAdmin.from('venues').select('id, name').in('id', venueIds),
+        supabaseAdmin.from('venue_customers').select('id, first_name, last_name, customer_email, phone').in('id', venueCustomerIds),
+        supabaseAdmin.from('conversation_messages').select('thread_id').in('thread_id', candidateThreadIds),
+      ]);
+
+      const venueById = new Map<string, VenueRow>();
+      for (const v of (venueRows ?? []) as VenueRow[]) venueById.set(v.id, v);
+      const vcById = new Map<string, VenueCustomerRow>();
+      for (const c of (vcRows ?? []) as VenueCustomerRow[]) vcById.set(c.id, c);
+      const countByThread = new Map<string, number>();
+      for (const r of (countRows ?? []) as Array<{ thread_id: string }>) {
+        countByThread.set(r.thread_id, (countByThread.get(r.thread_id) ?? 0) + 1);
+      }
+
+      rows = threads.map(t => {
+        const v  = venueById.get(t.venue_id);
+        const c  = vcById.get(t.venue_customer_id);
+        const li = latestInboundByThread.get(t.id);
+        return {
+          thread_id:               t.id,
+          venue_id:                t.venue_id,
+          venue_name:              v?.name ?? '(deleted venue)',
+          venue_customer_id:       t.venue_customer_id,
+          contact_first_name:      c?.first_name ?? null,
+          contact_last_name:       c?.last_name ?? null,
+          contact_email:           c?.customer_email ?? null,
+          contact_phone:           c?.phone ?? null,
+          subject:                 (t.subject ?? '').trim() || 'Conversation',
+          last_message_at:         t.last_message_at,
+          last_message_preview:    t.last_message_preview,
+          last_inbound_channel:    (li?.channel === 'sms' ? 'sms' : 'email'),
+          last_inbound_body:       li?.body ?? '',
+          last_inbound_created_at: li?.created_at ?? t.last_message_at,
+          message_count:           countByThread.get(t.id) ?? 0,
+        };
       });
     }
-    // filter === 'all': keep all candidateThreadIds
-    if (candidateThreadIds.length === 0) {
-      return NextResponse.json({ threads: [], nextCursor: null });
-    }
 
-    // --- Step 3 ---------------------------------------------------------
-    // Hydrate threads + venues + venue_customers in three batched queries.
-    let threadQuery = supabaseAdmin
-      .from('conversation_threads')
-      .select('id, venue_id, venue_customer_id, subject, last_message_at, last_message_preview')
-      .in('id', candidateThreadIds);
-    if (venueId) threadQuery = threadQuery.eq('venue_id', venueId);
-
-    const { data: threadRows, error: threadErr } = await threadQuery;
-    if (threadErr) throw new Error(`threads query: ${threadErr.message}`);
-    const threads = ((threadRows ?? []) as ThreadRow[]);
-
-    if (threads.length === 0) {
-      return NextResponse.json({ threads: [], nextCursor: null });
-    }
-
-    const venueIds        = Array.from(new Set(threads.map(t => t.venue_id)));
-    const venueCustomerIds = Array.from(new Set(threads.map(t => t.venue_customer_id)));
-
-    const [{ data: venueRows }, { data: vcRows }] = await Promise.all([
-      supabaseAdmin
-        .from('venues')
-        .select('id, name')
-        .in('id', venueIds),
-      supabaseAdmin
-        .from('venue_customers')
-        .select('id, first_name, last_name, customer_email, phone')
-        .in('id', venueCustomerIds),
-    ]);
-
-    const venueById = new Map<string, VenueRow>();
-    for (const v of (venueRows ?? []) as VenueRow[]) venueById.set(v.id, v);
-    const vcById = new Map<string, VenueCustomerRow>();
-    for (const c of (vcRows ?? []) as VenueCustomerRow[]) vcById.set(c.id, c);
-
-    // --- Step 4 ---------------------------------------------------------
-    // Per-thread message counts. PostgREST exposes count via a HEAD-style
-    // request; we do it batched. For an inbox we don't need exact counts,
-    // so a single grouped query approximates well: pull message counts
-    // via a select that groups in JS.
-    const { data: countRows } = await supabaseAdmin
-      .from('conversation_messages')
-      .select('thread_id')
-      .in('thread_id', candidateThreadIds);
-    const countByThread = new Map<string, number>();
-    for (const r of (countRows ?? []) as Array<{ thread_id: string }>) {
-      countByThread.set(r.thread_id, (countByThread.get(r.thread_id) ?? 0) + 1);
-    }
-
-    // --- Step 5 ---------------------------------------------------------
-    // Assemble rows + apply search filter + cursor pagination.
-    let rows: BrideInboxRow[] = threads.map(t => {
-      const v  = venueById.get(t.venue_id);
-      const c  = vcById.get(t.venue_customer_id);
-      const li = latestInboundByThread.get(t.id);
-      return {
-        thread_id:               t.id,
-        venue_id:                t.venue_id,
-        venue_name:              v?.name ?? '(deleted venue)',
-        venue_customer_id:       t.venue_customer_id,
-        contact_first_name:      c?.first_name ?? null,
-        contact_last_name:       c?.last_name ?? null,
-        contact_email:           c?.customer_email ?? null,
-        contact_phone:           c?.phone ?? null,
-        subject:                 (t.subject ?? '').trim() || 'Conversation',
-        last_message_at:         t.last_message_at,
-        last_message_preview:    t.last_message_preview,
-        last_inbound_channel:    (li?.channel === 'sms' ? 'sms' : 'email'),
-        last_inbound_body:       li?.body ?? '',
-        last_inbound_created_at: li?.created_at ?? t.last_message_at,
-        message_count:           countByThread.get(t.id) ?? 0,
-      };
-    });
-
+    // ── Common: search, cursor, sort, paginate ─────────────────────────────
     if (search) {
       rows = rows.filter(r =>
         r.venue_name.toLowerCase().includes(search) ||
@@ -259,7 +305,6 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Cursor tiebreaker (created_at, thread_id) DESC
     if (cursorAt && cursorId) {
       rows = rows.filter(r =>
         r.last_inbound_created_at < cursorAt! ||

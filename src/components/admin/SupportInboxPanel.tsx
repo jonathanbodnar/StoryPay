@@ -205,7 +205,7 @@ export function SupportInboxPanel() {
   const [search, setSearch] = useState('');
   const [committedSearch, setCommittedSearch] = useState('');
   const [activeThreadId, setActiveThreadId] = useState<string | null>(initialThread);
-  const [brideStatusFilter, setBrideStatusFilter] = useState<'open' | 'all' | 'closed'>('open');
+  const [brideStatusFilter, setBrideStatusFilter] = useState<'open' | 'all' | 'closed'>('all');
 
   // Group threads by contact (venue_id + venue_customer_id) so a bride with
   // both an SMS and an email thread appears as ONE row in the list. The most-
@@ -708,7 +708,7 @@ export function SupportInboxPanel() {
                       }}
                       className={`px-2.5 py-1 font-medium transition-colors ${brideStatusFilter === opt ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
                     >
-                      {opt === 'open' ? 'Open + Pending' : opt === 'all' ? 'All' : 'Replied'}
+                      {opt === 'open' ? 'Needs Reply' : opt === 'all' ? 'All' : 'Replied'}
                     </button>
                   ))}
                 </div>
@@ -722,8 +722,8 @@ export function SupportInboxPanel() {
               </div>
               <p className="text-[11px] text-gray-500">
                 {brideStatusFilter === 'open'
-                  ? `${groupedThreads.length} contact${groupedThreads.length === 1 ? '' : 's'} need attention`
-                  : `${groupedThreads.length} contact${groupedThreads.length === 1 ? '' : 's'}`}
+                  ? `${groupedThreads.length} contact${groupedThreads.length === 1 ? '' : 's'} need${groupedThreads.length === 1 ? 's' : ''} reply`
+                  : `${groupedThreads.length} conversation${groupedThreads.length === 1 ? '' : 's'}`}
               </p>
             </div>
 
@@ -741,7 +741,11 @@ export function SupportInboxPanel() {
               {!listLoading && !listError && groupedThreads.length === 0 && (
                 <div className="px-4 py-12 text-center text-sm text-gray-400">
                   <CheckCircle2 size={22} className="mx-auto mb-2 text-emerald-400" />
-                  Inbox zero. No bride replies waiting.
+                  {brideStatusFilter === 'open'
+                    ? 'No unanswered replies.'
+                    : brideStatusFilter === 'closed'
+                    ? 'No replied conversations.'
+                    : 'No conversations yet.'}
                 </div>
               )}
               {groupedThreads.map(({ primary: t, channels }) => (
