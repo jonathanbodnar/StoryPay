@@ -13,6 +13,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import {
   Inbox, LifeBuoy, Search, RefreshCw, Send, MessageSquare,
@@ -126,7 +127,12 @@ function fullName(first: string | null, last: string | null, fallback = 'Unknown
 }
 
 export function SupportInboxPanel() {
-  const [subTab, setSubTab] = useState<SupportSubTab>('bride-replies');
+  const searchParams = useSearchParams();
+  // Restore state from URL (e.g. after returning from impersonation)
+  const initialTab = (searchParams.get('tab') === 'tickets' ? 'tickets' : 'bride-replies') as SupportSubTab;
+  const initialThread = searchParams.get('thread') || null;
+
+  const [subTab, setSubTab] = useState<SupportSubTab>(initialTab);
 
   // ── Identity ───────────────────────────────────────────────────────────────
   const [me, setMe] = useState<SupportMe | null>(null);
@@ -198,7 +204,7 @@ export function SupportInboxPanel() {
   const [listError, setListError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [committedSearch, setCommittedSearch] = useState('');
-  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(initialThread);
   const [brideStatusFilter, setBrideStatusFilter] = useState<'open' | 'all' | 'closed'>('open');
 
   // Group threads by contact (venue_id + venue_customer_id) so a bride with

@@ -20,20 +20,25 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  let body: { venueId?: string };
+  let body: { venueId?: string; returnUrl?: string };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
-  const venueId = typeof body.venueId === 'string' ? body.venueId.trim() : '';
+  const venueId   = typeof body.venueId   === 'string' ? body.venueId.trim()   : '';
+  const returnUrl = typeof body.returnUrl === 'string' ? body.returnUrl.trim()  : '/admin/support';
   if (!venueId) return NextResponse.json({ error: 'venueId required' }, { status: 400 });
 
-  const { data: venue, error } = await supabaseAdmin.from('venues').select('id').eq('id', venueId).maybeSingle();
+  const { data: venue, error } = await supabaseAdmin
+    .from('venues')
+    .select('id, name')
+    .eq('id', venueId)
+    .maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!venue) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
 
-  const res = NextResponse.json({ ok: true, redirect: '/dashboard' });
+  const res = NextResponse.json({ ok: true, redirect: '/dashboard', venueName: (venue as { name: string }).name });
 
   res.cookies.set('venue_id', venueId, {
     ...COOKIE_BASE,
@@ -48,6 +53,13 @@ export async function POST(request: NextRequest) {
   });
 
   res.cookies.set('admin_impersonating', '1', {
+    ...COOKIE_BASE,
+    httpOnly: true,
+    maxAge: 60 * 60 * 4,
+  });
+
+  // Store where to return after exiting impersonation
+  res.cookies.set('impersonate_return', returnUrl, {
     ...COOKIE_BASE,
     httpOnly: true,
     maxAge: 60 * 60 * 4,

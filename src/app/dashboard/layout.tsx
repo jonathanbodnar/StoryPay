@@ -1,9 +1,11 @@
 import { redirect } from 'next/navigation';
+import { cookies } from 'next/headers';
 import { getSessionUser } from '@/lib/session';
 import { loadDirectoryNavAccess } from '@/lib/directory-plans-venue';
 import { supabaseAdmin } from '@/lib/supabase';
 import DashboardShell from '@/components/DashboardShell';
 import AskAIWidget from '@/components/AskAIWidget';
+import ImpersonationBanner from '@/components/admin/ImpersonationBanner';
 
 export default async function DashboardLayout({
  children,
@@ -15,6 +17,9 @@ export default async function DashboardLayout({
  if (!user) {
  redirect('/');
  }
+
+ const cookieStore = await cookies();
+ const isImpersonating = cookieStore.get('admin_impersonating')?.value === '1';
 
  const navAccess = await loadDirectoryNavAccess(user.venueId);
 
@@ -31,7 +36,8 @@ export default async function DashboardLayout({
  // they can opt into /setup from the dashboard itself.
 
  return (
- <div className="min-h-screen" style={{ backgroundColor: '#ffffff' }}>
+ <div className={`min-h-screen${isImpersonating ? ' pt-10' : ''}`} style={{ backgroundColor: '#ffffff' }}>
+ {isImpersonating && <ImpersonationBanner venueName={user.venueName} />}
  <DashboardShell
  venue={{ id: user.venueId, name: user.venueName, ghl_location_id: '' }}
  role={user.role}

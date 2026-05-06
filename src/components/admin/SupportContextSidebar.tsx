@@ -120,6 +120,54 @@ function AiStatePill({ state }: { state: string }) {
   );
 }
 
+function ImpersonateButton({
+  venueId,
+  venueName,
+  returnThreadId,
+}: {
+  venueId: string;
+  venueName: string;
+  returnThreadId: string | null;
+}) {
+  const [loading, setLoading] = useState(false);
+
+  async function enter() {
+    setLoading(true);
+    // Build return URL so admin lands back in the exact bride thread after exit
+    const returnUrl = returnThreadId
+      ? `/admin/support?tab=bride-replies&thread=${returnThreadId}`
+      : '/admin/support';
+    try {
+      const res = await fetch('/api/admin/impersonate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ venueId, returnUrl }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      window.location.href = data.redirect || '/dashboard';
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Could not enter venue');
+      setLoading(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => void enter()}
+      disabled={loading}
+      className="inline-flex items-center gap-1.5 rounded-lg border border-gray-900 bg-gray-900 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-gray-800 transition-colors disabled:opacity-50 w-full justify-center"
+    >
+      {loading
+        ? <Loader2 size={11} className="animate-spin" />
+        : <ExternalLink size={11} />
+      }
+      {loading ? 'Entering…' : `Open venue dashboard`}
+    </button>
+  );
+}
+
 export function SupportContextSidebar({ threadId }: { threadId: string | null }) {
   const [data, setData] = useState<ContextResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -450,14 +498,15 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
                 </p>
               </div>
 
-              <div className="pt-1">
+              <div className="pt-1 flex flex-col gap-1.5">
+                <ImpersonateButton venueId={data.venue.id} venueName={data.venue.name} returnThreadId={threadId} />
                 <a
                   href={`/admin/venues?venue=${data.venue.id}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-gray-700 hover:text-gray-900"
+                  className="inline-flex items-center gap-1 text-[10px] font-medium text-gray-500 hover:text-gray-700"
                 >
-                  Open venue page <ExternalLink size={9} />
+                  View in admin <ExternalLink size={9} />
                 </a>
               </div>
             </section>
