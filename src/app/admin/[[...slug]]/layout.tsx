@@ -12,7 +12,7 @@ import {
   LayoutDashboard, Menu, Lightbulb, BookOpen, Star, Globe, Layers,
   Repeat, Wallet, BadgeCheck, Sparkles, CalendarDays, Eye, EyeOff,
   Settings, Database, CheckCircle2, AlertCircle, Heart, CreditCard,
-  Inbox,
+  Inbox, ChevronLeft, ChevronRight, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react';
 import {
   VenueManagementPortal,
@@ -526,21 +526,36 @@ function AdminNavSidebar({
   onMobileClose,
   onLogout,
   frUnreadCount,
+  collapsed,
+  onToggleCollapse,
 }: {
   activeTab: AdminTabKey;
   onMobileClose: () => void;
   onLogout: () => void;
   frUnreadCount: number;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }) {
   return (
     <div className="flex flex-col h-full" style={{ backgroundColor: '#fafaf9' }}>
-      <div className="px-5 pt-5 pb-3 border-b border-gray-100">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/storyvenue-dark-logo.png" alt="StoryVenue Admin" className="h-8 object-contain" />
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mt-1.5">Super Admin</p>
+      {/* Brand header */}
+      <div className={`border-b border-gray-100 flex items-center ${collapsed ? 'px-2 pt-4 pb-3 justify-center' : 'px-5 pt-5 pb-3'}`}>
+        {!collapsed && (
+          <div className="flex-1 min-w-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/storyvenue-dark-logo.png" alt="StoryVenue Admin" className="h-8 object-contain" />
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mt-1.5">Super Admin</p>
+          </div>
+        )}
+        {collapsed && (
+          <div className="flex flex-col items-center gap-1">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/favicon.ico" alt="SV" className="h-7 w-7 object-contain rounded" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          </div>
+        )}
       </div>
 
-      <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
+      <nav className={`flex-1 py-3 space-y-0.5 overflow-y-auto ${collapsed ? 'px-1' : 'px-3'}`}>
         {ADMIN_NAV_ITEMS.map(({ key, label, icon: Icon }) => {
           const active = activeTab === key;
           const href =
@@ -555,28 +570,58 @@ function AdminNavSidebar({
               scroll={false}
               prefetch
               onClick={() => onMobileClose()}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${active ? 'text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+              title={collapsed ? label : undefined}
+              className={`w-full flex items-center rounded-xl text-sm font-medium transition-colors
+                ${collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5'}
+                ${active ? 'text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
               style={active ? { backgroundColor: BRAND } : {}}
             >
               <Icon size={16} className="shrink-0" />
-              <span className="flex-1">{label}</span>
-              {showBadge && (
+              {!collapsed && <span className="flex-1">{label}</span>}
+              {!collapsed && showBadge && (
                 <span className="ml-auto shrink-0 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white tabular-nums">
                   {frUnreadCount > 99 ? '99+' : frUnreadCount}
                 </span>
+              )}
+              {collapsed && showBadge && (
+                <span className="absolute top-0 right-0 h-2 w-2 rounded-full bg-red-500" />
               )}
             </Link>
           );
         })}
       </nav>
 
-      <div className="px-4 py-4 border-t border-gray-100 space-y-1">
-        <Link href="/" className="flex items-center gap-2 text-gray-400 hover:text-gray-700 transition-colors text-sm w-full px-2 py-1.5 rounded-lg hover:bg-gray-50">
-          <Home size={16} /><span>Homepage</span>
-        </Link>
-        <button type="button" onClick={onLogout} className="flex items-center gap-2 text-gray-400 hover:text-gray-700 transition-colors text-sm w-full px-2 py-1.5 rounded-lg hover:bg-gray-50">
-          <LogOut size={16} /><span>Logout</span>
-        </button>
+      <div className={`border-t border-gray-100 space-y-1 ${collapsed ? 'px-1 py-3' : 'px-4 py-4'}`}>
+        {!collapsed && (
+          <>
+            <Link href="/" className="flex items-center gap-2 text-gray-400 hover:text-gray-700 transition-colors text-sm w-full px-2 py-1.5 rounded-lg hover:bg-gray-50">
+              <Home size={16} /><span>Homepage</span>
+            </Link>
+            <button type="button" onClick={onLogout} className="flex items-center gap-2 text-gray-400 hover:text-gray-700 transition-colors text-sm w-full px-2 py-1.5 rounded-lg hover:bg-gray-50">
+              <LogOut size={16} /><span>Logout</span>
+            </button>
+          </>
+        )}
+        {collapsed && (
+          <>
+            <Link href="/" title="Homepage" className="flex justify-center text-gray-400 hover:text-gray-700 transition-colors w-full py-1.5 rounded-lg hover:bg-gray-50">
+              <Home size={16} />
+            </Link>
+            <button type="button" title="Logout" onClick={onLogout} className="flex justify-center text-gray-400 hover:text-gray-700 transition-colors w-full py-1.5 rounded-lg hover:bg-gray-50">
+              <LogOut size={16} />
+            </button>
+          </>
+        )}
+        {onToggleCollapse && (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className={`flex items-center text-gray-400 hover:text-gray-700 transition-colors w-full py-1.5 rounded-lg hover:bg-gray-50 ${collapsed ? 'justify-center' : 'gap-2 px-2'}`}
+          >
+            {collapsed ? <PanelLeftOpen size={16} /> : <><PanelLeftClose size={16} /><span className="text-sm">Collapse</span></>}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -606,6 +651,19 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
     },
     [router],
   );
+
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem('admin_sidebar_collapsed') === 'true';
+  });
+
+  function toggleSidebar() {
+    setSidebarCollapsed(v => {
+      const next = !v;
+      try { window.localStorage.setItem('admin_sidebar_collapsed', String(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }
 
   const [authState, setAuthState]   = useState<AuthState>('loading');
   const [adminEmail, setAdminEmail] = useState('');
@@ -1246,12 +1304,14 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen bg-white flex">
 
       {/* ── Desktop Sidebar ── */}
-      <aside className="hidden lg:block fixed left-0 top-0 bottom-0 w-[260px] border-r border-gray-200 z-30">
+      <aside className={`hidden lg:block fixed left-0 top-0 bottom-0 border-r border-gray-200 z-30 transition-all duration-200 ${sidebarCollapsed ? 'w-16' : 'w-[260px]'}`}>
         <AdminNavSidebar
           activeTab={activeTab}
           onMobileClose={() => {}}
           onLogout={handleLogout}
           frUnreadCount={frUnreadCount}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={toggleSidebar}
         />
       </aside>
 
@@ -1276,7 +1336,7 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* ── Main content ── */}
-      <div className="flex-1 lg:ml-[260px] min-w-0 overflow-x-hidden">
+      <div className={`flex-1 min-w-0 overflow-x-hidden transition-all duration-200 ${sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-[260px]'}`}>
         <div className="h-14 lg:hidden" />
         <main className="min-h-screen pt-6 lg:pt-10 px-6 sm:px-8 lg:px-10 pb-10 max-w-7xl mx-auto">
 

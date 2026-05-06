@@ -13,11 +13,12 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Inbox, LifeBuoy, Search, RefreshCw, Send, MessageSquare,
   Mail, MessageCircle, Building2, Loader2, AlertCircle, CheckCircle2,
   StickyNote, ShieldCheck, AlertTriangle, CircleDot, CircleSlash,
-  UserPlus, Flag, X, Radio, Sparkles, FileText,
+  UserPlus, Flag, X, Radio, Sparkles, FileText, Maximize2, Minimize2,
 } from 'lucide-react';
 import { useBroadcastChannel, useBroadcastChannels } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels, type BrideMessageEvent, type TicketMessageEvent, type TicketStatusEvent } from '@/lib/realtime/channels';
@@ -178,6 +179,9 @@ export function SupportInboxPanel() {
     try { window.localStorage.setItem('support_act_as_id', id); } catch { /* ignore */ }
   }
 
+  // ── Focus mode ─────────────────────────────────────────────────────────────
+  const [focusMode, setFocusMode] = useState(false);
+
   // ── Bride inbox state ──────────────────────────────────────────────────────
   const [threads, setThreads] = useState<BrideInboxRow[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -186,6 +190,25 @@ export function SupportInboxPanel() {
   const [search, setSearch] = useState('');
   const [committedSearch, setCommittedSearch] = useState('');
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+
+  // Group threads by contact (venue_id + venue_customer_id) so a bride with
+  // both an SMS and an email thread appears as ONE row in the list. The most-
+  // recently active thread for the group is the "primary" (used for loading
+  // the detail — which already merges all sibling messages).
+  const groupedThreads = useMemo(() => {
+    const groups = new Map<string, BrideInboxRow[]>();
+    for (const t of threads) {
+      const key = `${t.venue_id}:${t.venue_customer_id}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(t);
+    }
+    return Array.from(groups.values()).map(group => {
+      group.sort((a, b) =>
+        new Date(b.last_inbound_created_at).getTime() - new Date(a.last_inbound_created_at).getTime()
+      );
+      return { primary: group[0], channels: group.length };
+    });
+  }, [threads]);
 
   const fetchInbox = useCallback(async (opts: { append?: boolean; cursor?: string | null } = {}) => {
     setListLoading(true);
@@ -547,8 +570,8 @@ export function SupportInboxPanel() {
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────
-  return (
-    <div className="flex flex-col gap-3 lg:h-[calc(100vh-80px)] min-w-0 max-w-full">
+  const inboxContent = (
+    <div className={`flex flex-col gap-3 min-w-0 max-w-full ${focusMode ? 'h-full' : 'lg:h-[calc(100vh-80px)]'}`}>
       <div className="shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center gap-3">
           <div>
@@ -559,12 +582,23 @@ export function SupportInboxPanel() {
           </div>
           <LiveBadge active={liveBride} />
         </div>
-        <IdentityPicker
-          me={me}
-          teamMembers={teamMembers}
-          actAsId={actAsId}
-          onChange={chooseActAs}
-        />
+        <div className="flex items-center gap-2">
+          <IdentityPicker
+            me={me}
+            teamMembers={teamMembers}
+            actAsId={actAsId}
+            onChange={chooseActAs}
+          />
+          <button
+            type="button"
+            onClick={() => setFocusMode(v => !v)}
+            title={focusMode ? 'Exit focus mode' : 'Focus mode'}
+            className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors shrink-0"
+          >
+            {focusMode ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+            {focusMode ? 'Exit' : 'Focus'}
+          </button>
+        </div>
       </div>
 
       {/* Sub-tabs */}
@@ -574,7 +608,7 @@ export function SupportInboxPanel() {
           onClick={() => setSubTab('bride-replies')}
           icon={<Inbox size={14} />}
           label="Bride replies"
-          count={threads.length}
+          count={groupedThreads.length}
         />
         <SubTabButton
           active={subTab === 'tickets'}
@@ -610,7 +644,7 @@ export function SupportInboxPanel() {
                 />
               </div>
               <div className="flex items-center justify-between text-xs text-gray-500">
-                <span>{threads.length} thread{threads.length === 1 ? '' : 's'} need attention</span>
+                <span>{groupedThreads.length} contact{groupedThreads.length === 1 ? '' : 's'} need attention</span>
                 <button
                   type="button"
                   onClick={() => fetchInbox()}
@@ -632,19 +666,19 @@ export function SupportInboxPanel() {
                   <AlertCircle size={12} className="inline mr-1" /> {listError}
                 </div>
               )}
-              {!listLoading && !listError && threads.length === 0 && (
+              {!listLoading && !listError && groupedThreads.length === 0 && (
                 <div className="px-4 py-12 text-center text-sm text-gray-400">
                   <CheckCircle2 size={22} className="mx-auto mb-2 text-emerald-400" />
                   Inbox zero. No bride replies waiting.
                 </div>
               )}
-              {threads.map(t => (
+              {groupedThreads.map(({ primary: t, channels }) => (
                 <button
                   key={t.thread_id}
                   type="button"
                   onClick={() => setActiveThreadId(t.thread_id)}
                   className={`w-full text-left px-3 py-3 border-b border-gray-100 last:border-b-0 transition-colors ${
-                    activeThreadId === t.thread_id ? 'bg-gray-50' : 'hover:bg-gray-50/60'
+                    activeThreadId === t.thread_id ? 'bg-gray-50 border-l-2 border-l-gray-900' : 'hover:bg-gray-50/60'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2 mb-1">
@@ -662,7 +696,14 @@ export function SupportInboxPanel() {
                     </div>
                     <div className="flex flex-col items-end shrink-0 gap-1">
                       <span className="text-[10px] text-gray-400">{relativeTime(t.last_inbound_created_at)}</span>
-                      <ChannelChip channel={t.last_inbound_channel} />
+                      <div className="flex items-center gap-1">
+                        {channels > 1 && (
+                          <span className="inline-flex items-center gap-0.5 rounded-full bg-gray-100 border border-gray-200 text-gray-500 px-1.5 py-0.5 text-[9px] font-semibold">
+                            {channels} ch
+                          </span>
+                        )}
+                        <ChannelChip channel={t.last_inbound_channel} />
+                      </div>
                     </div>
                   </div>
                   <p className="text-xs text-gray-500 line-clamp-2 mt-1">
@@ -760,6 +801,25 @@ export function SupportInboxPanel() {
       )}
     </div>
   );
+
+  if (focusMode && typeof document !== 'undefined') {
+    return createPortal(
+      <>
+        {/* Dark blurred backdrop */}
+        <div
+          className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm"
+          onClick={() => setFocusMode(false)}
+        />
+        {/* Focus panel — inset 16px for a floating feel */}
+        <div className="fixed inset-4 z-[70] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+          {inboxContent}
+        </div>
+      </>,
+      document.body,
+    );
+  }
+
+  return inboxContent;
 }
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
@@ -1354,7 +1414,7 @@ function MessageBubble({
   if (isInbound) label = msg.contact_from_name || 'Bride';
   else if (msg.sender_kind === 'system') label = 'System';
   else if (isAi) label = 'AI Concierge';
-  else if (isConcierge) label = `StoryVenue Support${supportName ? ` — ${supportName}` : ''}`;
+  else if (isConcierge) label = supportName ? `Support — ${supportName}` : 'Support';
   else if (msg.sender_kind === 'team') label = 'Team member';
   else if (msg.sender_kind === 'owner') label = 'Owner';
 
@@ -1372,7 +1432,7 @@ function MessageBubble({
         <div className="flex items-center gap-2 text-[10px] text-gray-500">
           <span className="font-semibold">{label}</span>
           {isConcierge && (
-            <span className="rounded-full bg-emerald-100 text-emerald-700 px-1.5 py-0.5 text-[9px] font-semibold uppercase">
+            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 px-2 py-0.5 text-[10px] font-medium">
               Sent by Support
             </span>
           )}
