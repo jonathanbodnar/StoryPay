@@ -526,6 +526,7 @@ function AdminNavSidebar({
   onMobileClose,
   onLogout,
   frUnreadCount,
+  supportInboxCount,
   collapsed,
   onToggleCollapse,
 }: {
@@ -533,6 +534,7 @@ function AdminNavSidebar({
   onMobileClose: () => void;
   onLogout: () => void;
   frUnreadCount: number;
+  supportInboxCount?: number;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
 }) {
@@ -562,7 +564,10 @@ function AdminNavSidebar({
             key === 'seo-pages'
               ? adminHref('seo-pages', ['home'])
               : adminHref(key as AdminTabKey);
-          const showBadge = key === 'feature-requests' && frUnreadCount > 0;
+          const isFrBadge      = key === 'feature-requests' && frUnreadCount > 0;
+          const isSupportBadge = key === 'support' && (supportInboxCount ?? 0) > 0;
+          const badgeCount     = isFrBadge ? frUnreadCount : isSupportBadge ? (supportInboxCount ?? 0) : 0;
+          const showBadge      = isFrBadge || isSupportBadge;
           return (
             <Link
               key={key}
@@ -571,7 +576,7 @@ function AdminNavSidebar({
               prefetch
               onClick={() => onMobileClose()}
               title={collapsed ? label : undefined}
-              className={`w-full flex items-center rounded-xl text-sm font-medium transition-colors
+              className={`relative w-full flex items-center rounded-xl text-sm font-medium transition-colors
                 ${collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5'}
                 ${active ? 'text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
               style={active ? { backgroundColor: BRAND } : {}}
@@ -580,11 +585,13 @@ function AdminNavSidebar({
               {!collapsed && <span className="flex-1">{label}</span>}
               {!collapsed && showBadge && (
                 <span className="ml-auto shrink-0 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white tabular-nums">
-                  {frUnreadCount > 99 ? '99+' : frUnreadCount}
+                  {badgeCount > 99 ? '99+' : badgeCount}
                 </span>
               )}
               {collapsed && showBadge && (
-                <span className="absolute top-0 right-0 h-2 w-2 rounded-full bg-red-500" />
+                <span className="absolute top-0.5 right-0.5 h-4 w-4 flex items-center justify-center rounded-full bg-red-500 text-[8px] font-bold text-white leading-none">
+                  {badgeCount > 9 ? '9+' : badgeCount}
+                </span>
               )}
             </Link>
           );
@@ -681,6 +688,19 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
       if (res.ok) {
         const d = await res.json() as { count?: number };
         if (typeof d.count === 'number') setFrUnreadCount(d.count);
+      }
+    } catch { /* non-critical */ }
+  }, []);
+
+  // Support inbox badge (bride replies needing attention + open tickets)
+  const [supportInboxCount, setSupportInboxCount] = useState(0);
+
+  const fetchSupportInboxCount = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/support/inbox-count', { cache: 'no-store' });
+      if (res.ok) {
+        const d = await res.json() as { total?: number };
+        if (typeof d.total === 'number') setSupportInboxCount(d.total);
       }
     } catch { /* non-critical */ }
   }, []);
@@ -875,7 +895,13 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
     router.replace(adminHref('blog'));
   }, [authState, activeTab, tabRest, router]);
 
-  useEffect(() => { if (authState === 'authenticated') { fetchStats(dateRange); fetchAnnouncements(); fetchFrUnreadCount(); } }, [authState, fetchStats, fetchAnnouncements, fetchFrUnreadCount, dateRange]);
+  useEffect(() => { if (authState === 'authenticated') { fetchStats(dateRange); fetchAnnouncements(); fetchFrUnreadCount(); fetchSupportInboxCount(); } }, [authState, fetchStats, fetchAnnouncements, fetchFrUnreadCount, fetchSupportInboxCount, dateRange]);
+  // Refresh support count every 60s so team always sees current numbers
+  useEffect(() => {
+    if (authState !== 'authenticated') return;
+    const id = setInterval(() => void fetchSupportInboxCount(), 60_000);
+    return () => clearInterval(id);
+  }, [authState, fetchSupportInboxCount]);
   useEffect(() => { if (authState === 'authenticated' && activeTab === 'suggested-articles') fetchSuggestedArticles(); }, [authState, activeTab, fetchSuggestedArticles]);
   useEffect(() => { if (authState === 'authenticated' && activeTab === 'search-analytics') fetchSearchAnalytics(); }, [authState, activeTab, fetchSearchAnalytics]);
   useEffect(() => { if (authState === 'authenticated' && activeTab === 'article-ratings') fetchArticleRatings(); }, [authState, activeTab, fetchArticleRatings]);
@@ -1310,6 +1336,7 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
           onMobileClose={() => {}}
           onLogout={handleLogout}
           frUnreadCount={frUnreadCount}
+          supportInboxCount={supportInboxCount}
           collapsed={sidebarCollapsed}
           onToggleCollapse={toggleSidebar}
         />
@@ -1332,6 +1359,7 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
           onMobileClose={() => setMobileSidebarOpen(false)}
           onLogout={handleLogout}
           frUnreadCount={frUnreadCount}
+          supportInboxCount={supportInboxCount}
         />
       </aside>
 
