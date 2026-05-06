@@ -205,7 +205,7 @@ export function SupportInboxPanel() {
   const [search, setSearch] = useState('');
   const [committedSearch, setCommittedSearch] = useState('');
   const [activeThreadId, setActiveThreadId] = useState<string | null>(initialThread);
-  const [brideStatusFilter, setBrideStatusFilter] = useState<'open' | 'all' | 'closed'>('all');
+  const [brideStatusFilter, setBrideStatusFilter] = useState<'open' | 'all' | 'closed'>('open');
 
   // Group threads by contact (venue_id + venue_customer_id) so a bride with
   // both an SMS and an email thread appears as ONE row in the list. The most-
@@ -265,6 +265,7 @@ export function SupportInboxPanel() {
   }
 
   // ── Active thread state ────────────────────────────────────────────────────
+  const THREAD_READS_KEY = 'support_inbox_thread_reads';
   const [detail, setDetail] = useState<ThreadDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -272,20 +273,50 @@ export function SupportInboxPanel() {
   const unreadDividerRef = useRef<HTMLDivElement | null>(null);
   // ISO of when the support agent last read this thread (set just before loading)
   const [threadLastReadAt, setThreadLastReadAt] = useState<string | null>(null);
-
-  const THREAD_READS_KEY = 'support_inbox_thread_reads';
-  function getThreadLastRead(threadId: string): string | null {
+  // Read-state mirror in React state so badge re-renders when threads are opened
+  const [readStates, setReadStates] = useState<Record<string, { readAt: string; msgCount: number }>>(() => {
     try {
-      const map = JSON.parse(localStorage.getItem(THREAD_READS_KEY) || '{}') as Record<string, string>;
-      return map[threadId] ?? null;
+      const raw = typeof window !== 'undefined' ? localStorage.getItem('support_inbox_thread_reads') : null;
+      if (!raw) return {};
+      const map = JSON.parse(raw) as Record<string, { readAt: string; msgCount: number } | string>;
+      const out: Record<string, { readAt: string; msgCount: number }> = {};
+      for (const [k, v] of Object.entries(map)) {
+        out[k] = typeof v === 'string' ? { readAt: v, msgCount: 0 } : v;
+      }
+      return out;
+    } catch { return {}; }
+  });
+
+  type ReadRecord = { readAt: string; msgCount: number };
+  function getThreadReadRecord(threadId: string): ReadRecord | null {
+    try {
+      const map = JSON.parse(localStorage.getItem(THREAD_READS_KEY) || '{}') as Record<string, ReadRecord | string>;
+      const v = map[threadId];
+      if (!v) return null;
+      // Backwards-compat: old entries were plain ISO strings
+      if (typeof v === 'string') return { readAt: v, msgCount: 0 };
+      return v;
     } catch { return null; }
   }
-  function markThreadRead(threadId: string) {
+  function getThreadLastRead(threadId: string): string | null {
+    return getThreadReadRecord(threadId)?.readAt ?? null;
+  }
+  function markThreadRead(threadId: string, msgCount = 0) {
     try {
-      const map = JSON.parse(localStorage.getItem(THREAD_READS_KEY) || '{}') as Record<string, string>;
-      map[threadId] = new Date().toISOString();
+      const map = JSON.parse(localStorage.getItem(THREAD_READS_KEY) || '{}') as Record<string, ReadRecord | string>;
+      const rec = { readAt: new Date().toISOString(), msgCount };
+      map[threadId] = rec;
       localStorage.setItem(THREAD_READS_KEY, JSON.stringify(map));
+      setReadStates(prev => ({ ...prev, [threadId]: rec }));
     } catch { /* ignore */ }
+  }
+  /** Returns unread count for a thread in the list (0 = fully read). */
+  function getUnreadCount(threadId: string, currentMsgCount: number, lastMessageAt: string): number {
+    const rec = getThreadReadRecord(threadId);
+    if (!rec) return currentMsgCount > 0 ? 1 : 0; // never opened
+    if (lastMessageAt <= rec.readAt) return 0;
+    const diff = currentMsgCount - rec.msgCount;
+    return diff > 0 ? diff : 1; // at least 1 if newer
   }
 
   const loadDetail = useCallback(async (threadId: string) => {
@@ -294,7 +325,6 @@ export function SupportInboxPanel() {
     // Capture last-read before updating so we can show the unread divider
     const lastRead = getThreadLastRead(threadId);
     setThreadLastReadAt(lastRead);
-    markThreadRead(threadId);
     try {
       const r = await fetch(`/api/admin/support/bride-thread/${threadId}`, { cache: 'no-store' });
       if (!r.ok) {
@@ -302,6 +332,8 @@ export function SupportInboxPanel() {
         throw new Error(d.error || `Failed (${r.status})`);
       }
       const d = (await r.json()) as ThreadDetail;
+      // Mark read with accurate message count so the unread badge computes correctly
+      markThreadRead(threadId, d.messages.filter(m => !m.support_only).length);
       setDetail(d);
       requestAnimationFrame(() => {
         // Scroll to first unread if available, otherwise bottom
@@ -748,45 +780,58 @@ export function SupportInboxPanel() {
                     : 'No conversations yet.'}
                 </div>
               )}
-              {groupedThreads.map(({ primary: t, channels }) => (
-                <button
-                  key={t.thread_id}
-                  type="button"
-                  onClick={() => setActiveThreadId(t.thread_id)}
-                  className={`w-full text-left px-3 py-3 border-b border-gray-100 last:border-b-0 transition-colors ${
-                    activeThreadId === t.thread_id ? 'bg-gray-50 border-l-2 border-l-gray-900' : 'hover:bg-gray-50/60'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2 mb-1">
-                    <div className="flex items-start gap-2 flex-1 min-w-0">
-                      <SlaDot iso={t.last_inbound_created_at} className="mt-1.5" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-gray-900 truncate">
-                          {fullName(t.contact_first_name, t.contact_last_name, t.contact_email || 'Unknown bride')}
-                        </p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <Building2 size={11} className="text-gray-400 shrink-0" />
-                          <span className="text-[11px] text-gray-500 truncate">{t.venue_name}</span>
+              {groupedThreads.map(({ primary: t, channels }) => {
+                const unread = getUnreadCount(t.thread_id, t.message_count, t.last_message_at);
+                const isActive = activeThreadId === t.thread_id;
+                return (
+                  <button
+                    key={t.thread_id}
+                    type="button"
+                    onClick={() => setActiveThreadId(t.thread_id)}
+                    className={`w-full text-left px-3 py-3 border-b border-gray-100 last:border-b-0 transition-colors ${
+                      isActive
+                        ? 'bg-gray-50 border-l-2 border-l-gray-900'
+                        : unread > 0
+                        ? 'bg-blue-50/50 border-l-2 border-l-blue-500 hover:bg-blue-50/70'
+                        : 'hover:bg-gray-50/60'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <div className="flex items-start gap-2 flex-1 min-w-0">
+                        <SlaDot iso={t.last_inbound_created_at} className="mt-1.5" />
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm truncate ${unread > 0 ? 'font-bold text-gray-900' : 'font-semibold text-gray-900'}`}>
+                            {fullName(t.contact_first_name, t.contact_last_name, t.contact_email || 'Unknown bride')}
+                          </p>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <Building2 size={11} className="text-gray-400 shrink-0" />
+                            <span className="text-[11px] text-gray-500 truncate">{t.venue_name}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end shrink-0 gap-1">
+                        <span className="text-[10px] text-gray-400">{relativeTime(t.last_inbound_created_at)}</span>
+                        <div className="flex items-center gap-1">
+                          {unread > 0 && (
+                            <span className="inline-flex items-center justify-center rounded-full bg-red-500 text-white min-w-[18px] h-[18px] px-1 text-[10px] font-bold leading-none">
+                              {unread > 99 ? '99+' : unread}
+                            </span>
+                          )}
+                          {channels > 1 && (
+                            <span className="inline-flex items-center gap-0.5 rounded-full bg-gray-100 border border-gray-200 text-gray-500 px-1.5 py-0.5 text-[9px] font-semibold">
+                              {channels} ch
+                            </span>
+                          )}
+                          <ChannelChip channel={t.last_inbound_channel} />
                         </div>
                       </div>
                     </div>
-                    <div className="flex flex-col items-end shrink-0 gap-1">
-                      <span className="text-[10px] text-gray-400">{relativeTime(t.last_inbound_created_at)}</span>
-                      <div className="flex items-center gap-1">
-                        {channels > 1 && (
-                          <span className="inline-flex items-center gap-0.5 rounded-full bg-gray-100 border border-gray-200 text-gray-500 px-1.5 py-0.5 text-[9px] font-semibold">
-                            {channels} ch
-                          </span>
-                        )}
-                        <ChannelChip channel={t.last_inbound_channel} />
-                      </div>
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-500 line-clamp-2 mt-1">
-                    {t.last_inbound_body || t.last_message_preview}
-                  </p>
-                </button>
-              ))}
+                    <p className={`text-xs line-clamp-2 mt-1 ${unread > 0 ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>
+                      {t.last_inbound_body || t.last_message_preview}
+                    </p>
+                  </button>
+                );
+              })}
               {nextCursor && (
                 <div className="p-3">
                   <button
