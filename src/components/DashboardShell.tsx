@@ -25,6 +25,7 @@ export default function DashboardShell({
   memberName,
   memberEmail,
   allowedNavIds = null,
+  isLegacyPlan = false,
   directoryBillingPending = false,
   children,
 }: {
@@ -34,6 +35,8 @@ export default function DashboardShell({
   memberEmail: string | null;
   /** null = full access (no directory plan). */
   allowedNavIds?: string[] | null;
+  /** True when the venue is on a legacy/manually-billed plan. */
+  isLegacyPlan?: boolean;
   /** Directory SaaS: priced plan assigned, payment still required. */
   directoryBillingPending?: boolean;
   children: React.ReactNode;
@@ -112,6 +115,7 @@ export default function DashboardShell({
         collapsed={rail}
         onToggleCollapsed={toggleCollapsed}
         allowedNavIds={allowedNavIds}
+        isLegacyPlan={isLegacyPlan}
       />
 
       <div

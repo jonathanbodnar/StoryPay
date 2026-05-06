@@ -45,6 +45,8 @@ interface SidebarProps {
   onToggleCollapsed?: () => void;
   /** From directory plan; null = show all nav targets. */
   allowedNavIds?: string[] | null;
+  /** True when the venue is on a manually-billed legacy plan. */
+  isLegacyPlan?: boolean;
 }
 
 const menuItems: NavItem[] = [
@@ -70,6 +72,7 @@ const paymentsItems: NavItem[] = [
   { label: 'Subscriptions', href: '/dashboard/payments/subscriptions', icon: RefreshCw, navId: 'nav_payments_subscriptions' },
   { label: 'Transactions', href: '/dashboard/transactions', icon: CreditCard, navId: 'nav_transactions' },
   { label: 'Notifications', href: '/dashboard/settings/notifications', icon: Bell, navId: 'nav_settings_notifications' },
+  { label: 'Settings', href: '/dashboard/payments/settings', icon: Settings, navId: 'nav_payments_settings' },
 ];
 
 const marketingItems: NavItem[] = [
@@ -110,6 +113,7 @@ export default function Sidebar({
   collapsed = false,
   onToggleCollapsed,
   allowedNavIds = null,
+  isLegacyPlan = false,
 }: SidebarProps) {
   const isOwner = role === 'owner';
   const isAdmin = role === 'owner' || role === 'admin';
@@ -224,6 +228,14 @@ export default function Sidebar({
     || pathname.startsWith('/dashboard/proposals')
     || isOnPaymentSettings;
 
+  // For legacy plans, filter out the Billing item from Settings and Listing groups
+  const visibleSettingsItems = isLegacyPlan
+    ? settingsItems.filter(item => item.navId !== 'nav_settings_billing')
+    : settingsItems;
+  const visibleListingItems = isLegacyPlan
+    ? listingItems.filter(item => item.navId !== 'nav_listing_directory_billing')
+    : listingItems;
+
   type OpenGroup = 'payments' | 'settings' | 'marketing' | 'listing' | null;
   const initialGroup: OpenGroup = isOnListing
     ? 'listing'
@@ -335,7 +347,7 @@ export default function Sidebar({
 
   // Role-based visibility (these items are completely hidden from members,
   // not just locked — different concern from plan gating).
-  const settingsFiltered = settingsItems.filter((sub) => {
+  const settingsFiltered = visibleSettingsItems.filter((sub) => {
     if (!isOwner && sub.label === 'General') return false;
     if (!isOwner && sub.label === 'Team') return false;
     if (!isOwner && sub.label === 'Integrations') return false;
@@ -344,7 +356,7 @@ export default function Sidebar({
 
   // Plan gating no longer hides items — locked entries render greyed-out
   // with a lock icon and open the upgrade modal on click.
-  const listingFiltered = listingItems;
+  const listingFiltered = visibleListingItems;
   const paymentsFiltered = paymentsItems;
   const marketingFiltered = marketingItems;
 

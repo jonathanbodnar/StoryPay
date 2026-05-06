@@ -7,8 +7,6 @@ import { formatCents, formatDate, getStatusColor, classNames } from '@/lib/utils
 import PaymentGate from '@/components/PaymentGate';
 import RefundModal from '@/components/RefundModal';
 
-type TabKey = 'charges' | 'schedules' | 'subscriptions';
-
 interface Charge {
  id: string;
  description: string;
@@ -22,81 +20,29 @@ interface Charge {
  customerName?: string | null;
 }
 
-interface Schedule {
- id: number;
- description?: string;
- totalAmount?: number;
- amount?: number;
- paymentsCount?: number;
- numberOfPayments?: number;
- status: string;
- customerId?: string | number | null;
- customerName?: string | null;
-}
-
-interface Subscription {
- id: string;
- description: string;
- amount: number;
- frequency: string;
- status: string;
- nextPayment: string | null;
- customerId?: string | number | null;
- customerName?: string | null;
-}
-
-const tabs: { key: TabKey; label: string }[] = [
- { key: 'charges', label: 'Charges' },
- { key: 'schedules', label: 'Installments' },
- { key: 'subscriptions', label: 'Subscriptions' },
-];
-
 function TransactionsPageInner() {
- const [activeTab, setActiveTab] = useState<TabKey>('charges');
  const [charges, setCharges] = useState<Charge[]>([]);
- const [schedules, setSchedules] = useState<Schedule[]>([]);
- const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
  const [loading, setLoading] = useState(true);
  const [selectedCharge, setSelectedCharge] = useState<Charge | null>(null);
  const [refundTarget, setRefundTarget] = useState<Charge | null>(null);
 
  useEffect(() => {
  setLoading(true);
- fetch(`/api/transactions?type=${activeTab}`)
+ fetch('/api/transactions?type=charges')
  .then((res) => (res.ok ? res.json() : []))
  .then((data) => {
  const items = Array.isArray(data) ? data : data.data ?? [];
- if (activeTab === 'charges') setCharges(items);
- else if (activeTab === 'schedules') setSchedules(items);
- else setSubscriptions(items);
+ setCharges(items);
  })
  .catch(() => {})
  .finally(() => setLoading(false));
- }, [activeTab]);
+ }, []);
 
  return (
  <div>
  <div className="mb-8">
  <h1 className="font-heading text-2xl font-semibold text-gray-900">Transactions</h1>
- <p className="mt-1 text-sm text-gray-500">Payment history and installments</p>
- </div>
-
- {/* Tabs */}
- <div className="mb-6 flex gap-1 rounded-lg bg-gray-100 p-1 w-full sm:w-fit overflow-x-auto">
- {tabs.map((tab) => (
- <button
- key={tab.key}
- onClick={() => setActiveTab(tab.key)}
- className={classNames(
- 'rounded-md px-4 py-2 text-sm font-medium transition-colors',
- activeTab === tab.key
- ? 'bg-white text-gray-900 '
- : 'text-gray-500 hover:text-gray-700'
- )}
- >
- {tab.label}
- </button>
- ))}
+ <p className="mt-1 text-sm text-gray-500">Payment history and charge records</p>
  </div>
 
  {loading ? (
@@ -105,8 +51,6 @@ function TransactionsPageInner() {
  </div>
  ) : (
  <div className="rounded-2xl border border-gray-200 overflow-hidden">
- {activeTab === 'charges' && (
- <>
  {charges.length === 0 ? (
  <p className="px-5 py-8 text-center text-gray-400 text-sm">No charges yet</p>
  ) : (
@@ -175,116 +119,6 @@ function TransactionsPageInner() {
  );
  })}
  </div>
- )}
- </>
- )}
-
- {activeTab === 'schedules' && (
- <>
- {schedules.length === 0 ? (
- <p className="px-5 py-8 text-center text-gray-400 text-sm">No installments yet</p>
- ) : (
- <div className="divide-y divide-gray-200">
- <div className="hidden sm:grid grid-cols-[1fr_100px_90px_90px_auto] gap-2 px-5 py-2.5 bg-gray-50/60">
- {['Description','Total','Payments','Status','Actions'].map(h => (
- <span key={h} className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{h}</span>
- ))}
- </div>
- {schedules.map((s) => {
- const color = getStatusColor(s.status);
- return (
- <div key={s.id} className="hover:bg-gray-50/50 transition-colors">
- {/* Mobile */}
- <div className="sm:hidden px-4 py-3.5 space-y-1.5">
- <div className="flex items-start justify-between gap-2">
- <p className="text-sm font-medium text-gray-900 flex-1">{s.description || `Schedule #${s.id}`}</p>
- <span className={classNames('inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize flex-shrink-0', color.bg, color.text)}>{s.status}</span>
- </div>
- <div className="flex items-center justify-between">
- <p className="text-sm font-semibold text-gray-800">{formatCents(s.totalAmount ?? s.amount ?? 0)} <span className="text-xs text-gray-400 font-normal">· {s.paymentsCount ?? s.numberOfPayments ?? '—'} payments</span></p>
- {s.customerId && (
- <Link href={`/dashboard/contacts/${s.customerId}`} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100">
- <User size={12} /> Customer
- </Link>
- )}
- </div>
- </div>
- {/* Desktop */}
- <div className="hidden sm:grid grid-cols-[1fr_100px_90px_90px_auto] gap-2 px-5 py-3.5 items-center">
- <p className="text-sm font-medium text-gray-900">{s.description || `Schedule #${s.id}`}</p>
- <p className="text-sm text-gray-700">{formatCents(s.totalAmount ?? s.amount ?? 0)}</p>
- <p className="text-sm text-gray-700">{s.paymentsCount ?? s.numberOfPayments ?? '—'}</p>
- <span className={classNames('inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize w-fit', color.bg, color.text)}>{s.status}</span>
- <div className="flex justify-end">
- {s.customerId && (
- <Link href={`/dashboard/contacts/${s.customerId}`} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100">
- <User size={13} /> View Customer
- </Link>
- )}
- </div>
- </div>
- </div>
- );
- })}
- </div>
- )}
- </>
- )}
-
- {activeTab === 'subscriptions' && (
- <>
- {subscriptions.length === 0 ? (
- <p className="px-5 py-8 text-center text-gray-400 text-sm">No subscriptions yet</p>
- ) : (
- <div className="divide-y divide-gray-200">
- <div className="hidden sm:grid grid-cols-[1fr_100px_100px_120px_90px_auto] gap-2 px-5 py-2.5 bg-gray-50/60">
- {['Description','Amount','Frequency','Next Payment','Status','Actions'].map(h => (
- <span key={h} className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{h}</span>
- ))}
- </div>
- {subscriptions.map((s) => {
- const color = getStatusColor(s.status);
- return (
- <div key={s.id} className="hover:bg-gray-50/50 transition-colors">
- {/* Mobile */}
- <div className="sm:hidden px-4 py-3.5 space-y-2">
- <div className="flex items-start justify-between gap-2">
- <p className="text-sm font-medium text-gray-900 flex-1">{s.description}</p>
- <span className={classNames('inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize flex-shrink-0', color.bg, color.text)}>{s.status}</span>
- </div>
- <div className="flex items-center justify-between gap-2">
- <div className="text-xs text-gray-500 space-y-0.5">
- <p><span className="font-medium text-gray-800">{formatCents(s.amount)}</span> · <span className="capitalize">{s.frequency}</span></p>
- {s.nextPayment && <p>Next: {formatDate(s.nextPayment)}</p>}
- </div>
- {s.customerId && (
- <Link href={`/dashboard/contacts/${s.customerId}`} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100">
- <User size={12} /> Customer
- </Link>
- )}
- </div>
- </div>
- {/* Desktop */}
- <div className="hidden sm:grid grid-cols-[1fr_100px_100px_120px_90px_auto] gap-2 px-5 py-3.5 items-center">
- <p className="text-sm font-medium text-gray-900">{s.description}</p>
- <p className="text-sm text-gray-700">{formatCents(s.amount)}</p>
- <p className="text-sm text-gray-700 capitalize">{s.frequency}</p>
- <p className="text-sm text-gray-500">{s.nextPayment ? formatDate(s.nextPayment) : '—'}</p>
- <span className={classNames('inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize w-fit', color.bg, color.text)}>{s.status}</span>
- <div className="flex justify-end">
- {s.customerId && (
- <Link href={`/dashboard/contacts/${s.customerId}`} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100">
- <User size={13} /> View Customer
- </Link>
- )}
- </div>
- </div>
- </div>
- );
- })}
- </div>
- )}
- </>
  )}
  </div>
  )}

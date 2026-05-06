@@ -96,8 +96,8 @@ export function computeAllowedNavIdsFromPlan(plan: {
 }
 
 export type DirectoryNavAccess =
-  | { mode: 'full'; allowedNavIds: null }
-  | { mode: 'plan'; allowedNavIds: string[] };
+  | { mode: 'full'; allowedNavIds: null; isLegacyPlan: boolean }
+  | { mode: 'plan'; allowedNavIds: string[]; isLegacyPlan: boolean };
 
 export async function loadDirectoryNavAccess(venueId: string): Promise<DirectoryNavAccess> {
   const { data: venue } = await supabaseAdmin
@@ -107,18 +107,22 @@ export async function loadDirectoryNavAccess(venueId: string): Promise<Directory
     .maybeSingle();
 
   if (!venue?.directory_plan_id) {
-    return { mode: 'full', allowedNavIds: null };
+    return { mode: 'full', allowedNavIds: null, isLegacyPlan: false };
   }
 
   const { data: plan } = await supabaseAdmin
     .from('directory_plans')
-    .select('feature_flags, nav_permissions')
+    .select('feature_flags, nav_permissions, is_legacy, name, slug')
     .eq('id', venue.directory_plan_id)
     .maybeSingle();
 
   if (!plan) {
-    return { mode: 'full', allowedNavIds: null };
+    return { mode: 'full', allowedNavIds: null, isLegacyPlan: false };
   }
+
+  const isLegacyPlan = Boolean((plan as Record<string, unknown>).is_legacy)
+    || String((plan as Record<string, unknown>).name ?? '').toLowerCase().includes('legacy')
+    || String((plan as Record<string, unknown>).slug ?? '').toLowerCase().includes('legacy');
 
   return {
     mode: 'plan',
@@ -126,6 +130,7 @@ export async function loadDirectoryNavAccess(venueId: string): Promise<Directory
       feature_flags: plan.feature_flags as Record<string, boolean> | null,
       nav_permissions: plan.nav_permissions as Record<string, boolean> | null,
     }),
+    isLegacyPlan,
   };
 }
 
