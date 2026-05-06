@@ -304,7 +304,7 @@ export function VenueManagementPortal({
     const res = await fetch('/api/admin/impersonate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ venueId }),
+      body: JSON.stringify({ venueId, returnUrl: '/admin/venues' }),
     });
     if (!res.ok) {
       const j = (await res.json().catch(() => ({}))) as { error?: string };
