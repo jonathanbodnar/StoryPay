@@ -67,8 +67,16 @@ export async function GET(
     }
   }
 
-  // 3. Lead — best-effort match (email > phone). The bride inbox endpoint
-  //    already does this — replicate the heuristic here.
+  // 3. Lead — best-effort match (email > phone). Use case-insensitive email
+  //    matching so leads created via different code paths (where email may be
+  //    stored mixed-case) still link up to the venue_customer record.
+  const LEAD_FIELDS = `
+    id, first_name, last_name, email, phone, status, lead_source, created_at,
+    ai_state, ai_first_activated_at, ai_expires_at, ai_next_send_at,
+    ai_attempt_count, ai_re_enable_count, ai_re_enabled_at,
+    last_inbound_at, last_outbound_at,
+    stage_id, pipeline_id
+  `;
   const c = customer as Record<string, unknown> | null;
   let lead: Record<string, unknown> | null = null;
   if (c) {
@@ -76,15 +84,9 @@ export async function GET(
     if (email) {
       const { data: leadByEmail } = await supabaseAdmin
         .from('leads')
-        .select(`
-          id, first_name, last_name, email, phone, status, lead_source, created_at,
-          ai_state, ai_first_activated_at, ai_expires_at, ai_next_send_at,
-          ai_attempt_count, ai_re_enable_count, ai_re_enabled_at,
-          last_inbound_at, last_outbound_at,
-          stage_id, pipeline_id
-        `)
+        .select(LEAD_FIELDS)
         .eq('venue_id', t.venue_id)
-        .eq('email', email)
+        .ilike('email', email)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -93,13 +95,7 @@ export async function GET(
     if (!lead && c.phone) {
       const { data: leadByPhone } = await supabaseAdmin
         .from('leads')
-        .select(`
-          id, first_name, last_name, email, phone, status, lead_source, created_at,
-          ai_state, ai_first_activated_at, ai_expires_at, ai_next_send_at,
-          ai_attempt_count, ai_re_enable_count, ai_re_enabled_at,
-          last_inbound_at, last_outbound_at,
-          stage_id, pipeline_id
-        `)
+        .select(LEAD_FIELDS)
         .eq('venue_id', t.venue_id)
         .eq('phone', c.phone as string)
         .order('created_at', { ascending: false })
@@ -110,14 +106,16 @@ export async function GET(
   }
 
   // 4. Pipeline stage (for the lead OR for the customer — same join as elsewhere)
+  // We prefer the customer's stage_id since that's the canonical source for
+  // chat threads (the venue conversations page writes there). Fall back to the
+  // matched lead's stage_id if the customer hasn't been assigned one yet.
   let pipelineStage: { id: string; name: string; color: string | null; pipeline_id: string; pipeline_name: string } | null = null;
-  const stageId = (lead?.stage_id as string | null) || (c?.stage_id as string | null) || null;
+  const stageId = (c?.stage_id as string | null) || (lead?.stage_id as string | null) || null;
   if (stageId) {
     const { data: stage } = await supabaseAdmin
       .from('lead_pipeline_stages')
-      .select('id, name, color, pipeline_id')
+      .select('id, name, color, pipeline_id, venue_id')
       .eq('id', stageId)
-      .eq('venue_id', t.venue_id)
       .maybeSingle();
     if (stage) {
       const s = stage as { id: string; name: string; color: string | null; pipeline_id: string };

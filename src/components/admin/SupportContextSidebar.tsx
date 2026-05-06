@@ -340,13 +340,31 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
                 currentStageName={data.pipeline?.name ?? null}
                 currentStageColor={data.pipeline?.color ?? null}
                 disabled={actionPending}
-                onSelect={(stageId, stageName) =>
+                onSelect={(stageId, stageName) => {
+                  // Find the matching pipeline + stage so we can optimistically render
+                  let pipelineId = '';
+                  let stageColor: string | null = null;
+                  for (const p of data.pipelines) {
+                    const s = p.stages.find(st => st.id === stageId);
+                    if (s) { pipelineId = p.id; stageColor = s.color; break; }
+                  }
                   runAction(
                     { action: 'set_stage', stageId },
-                    undefined,
-                    `Stage → ${stageName}`,
-                  )
-                }
+                    () => {
+                      setData(prev => prev ? {
+                        ...prev,
+                        pipeline: {
+                          id:           stageId,
+                          name:         stageName,
+                          color:        stageColor,
+                          pipeline_id:  pipelineId,
+                          pipeline_name: prev.pipeline?.pipeline_name ?? '',
+                        },
+                      } : prev);
+                    },
+                    `Stage updated to ${stageName}`,
+                  );
+                }}
               />
               {data.bride.lead_status && (
                 <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-700">

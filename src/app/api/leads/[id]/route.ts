@@ -9,6 +9,7 @@ import { syncVenueCustomerFromLeadRow } from '@/lib/venue-customer-pipeline-sync
 import { getSessionUser } from '@/lib/session';
 import { insertLeadActivity } from '@/lib/lead-activity';
 import { fetchOpenDuplicateMatchesForLeads, refreshDuplicateCandidatesForLead } from '@/lib/lead-duplicates';
+import { broadcastStageChanged } from '@/lib/realtime/broadcast';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -305,6 +306,50 @@ export async function PATCH(
       pipeline_id: lr.pipeline_id,
       stage_id: lr.stage_id,
     });
+  }
+
+  // Broadcast stage change to admin support context sidebar + venue conversations
+  // page so any open thread tied to this lead's email reflects the new stage live.
+  if (body.stageId !== undefined && previousStageId !== ((leadRow.stage_id as string | null) ?? null)) {
+    void (async () => {
+      try {
+        const stageId = (leadRow.stage_id as string | null) ?? null;
+        if (!stageId || !lr.email) return;
+        const { data: stageRow } = await supabaseAdmin
+          .from('lead_pipeline_stages')
+          .select('name, color, pipeline_id')
+          .eq('id', stageId)
+          .maybeSingle();
+        const sr = stageRow as { name?: string; color?: string | null; pipeline_id?: string } | null;
+        const { data: vcRows } = await supabaseAdmin
+          .from('venue_customers')
+          .select('id')
+          .eq('venue_id', venueId)
+          .ilike('customer_email', lr.email);
+        const vcIds = (vcRows ?? []).map((r: { id: string }) => r.id);
+        if (vcIds.length === 0) return;
+        const { data: threads } = await supabaseAdmin
+          .from('conversation_threads')
+          .select('id, venue_customer_id')
+          .eq('venue_id', venueId)
+          .in('venue_customer_id', vcIds)
+          .limit(50);
+        for (const t of (threads ?? []) as Array<{ id: string; venue_customer_id: string }>) {
+          void broadcastStageChanged({
+            threadId:   t.id,
+            venueId,
+            vcId:       t.venue_customer_id,
+            stageId,
+            stageName:  sr?.name ?? '',
+            stageColor: sr?.color ?? null,
+            pipelineId: sr?.pipeline_id ?? (lr.pipeline_id ?? ''),
+            source:     'venue',
+          });
+        }
+      } catch {
+        // best-effort
+      }
+    })();
   }
 
   if (Object.keys(updates).length > 0) {
