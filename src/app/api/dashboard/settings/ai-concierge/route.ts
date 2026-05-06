@@ -33,8 +33,14 @@ interface VenueRow {
   ghl_connected:               boolean | null;
   notification_email:          string | null;
   email:                       string | null;
-  /** Joined from directory_plans via directory_plan_id */
-  directory_plans:             { feature_flags: Record<string, unknown> | null } | null;
+  directory_plan_id:           string | null;
+}
+
+interface PlanRow {
+  feature_flags: Record<string, unknown> | null;
+  is_legacy:     boolean | null;
+  name:          string | null;
+  slug:          string | null;
 }
 
 interface AiConciergeSettingsPayload {
@@ -54,23 +60,40 @@ interface AiConciergeSettingsPayload {
   resourcesReady:         boolean;
 }
 
-async function loadVenueRow(venueId: string): Promise<VenueRow | null> {
-  const { data } = await supabaseAdmin
+async function loadVenueRow(venueId: string): Promise<{ venue: VenueRow; plan: PlanRow | null } | null> {
+  const { data: venue } = await supabaseAdmin
     .from('venues')
     .select(
-      'id, name, ai_concierge_enabled, a2p_verified, directory_addon_concierge, ai_assistant_persona_name, ai_concierge_notify_emails, ai_concierge_enabled_at, ai_concierge_resources, ghl_connected, notification_email, email, directory_plans(feature_flags)',
+      'id, name, ai_concierge_enabled, a2p_verified, directory_addon_concierge, ai_assistant_persona_name, ai_concierge_notify_emails, ai_concierge_enabled_at, ai_concierge_resources, ghl_connected, notification_email, email, directory_plan_id',
     )
     .eq('id', venueId)
     .maybeSingle();
-  return (data as VenueRow | null) ?? null;
+  if (!venue) return null;
+
+  let plan: PlanRow | null = null;
+  if ((venue as VenueRow).directory_plan_id) {
+    const { data: planRow } = await supabaseAdmin
+      .from('directory_plans')
+      .select('feature_flags, is_legacy, name, slug')
+      .eq('id', (venue as VenueRow).directory_plan_id as string)
+      .maybeSingle();
+    plan = (planRow as PlanRow | null) ?? null;
+  }
+
+  return { venue: venue as VenueRow, plan };
 }
 
-function shapePayload(v: VenueRow): AiConciergeSettingsPayload {
-  // Concierge can be granted via explicit addon purchase OR by plan inclusion
-  // (feature_flags.addon_concierge_included = true on the plan).
-  const planFlags = v.directory_plans?.feature_flags ?? {};
-  const planIncludesConcierge = planFlags['addon_concierge_included'] === true;
-  const addon  = v.directory_addon_concierge === true || planIncludesConcierge;
+function shapePayload(v: VenueRow, plan: PlanRow | null): AiConciergeSettingsPayload {
+  // Concierge is granted when:
+  //  - the venue has the addon purchased (directory_addon_concierge)
+  //  - OR the plan explicitly includes it (feature_flags.addon_concierge_included)
+  //  - OR the plan is a legacy plan (legacy plans include all addons)
+  const flags = plan?.feature_flags ?? {};
+  const planIncludesConcierge = flags['addon_concierge_included'] === true;
+  const isLegacyPlan = plan?.is_legacy === true
+    || String(plan?.name ?? '').toLowerCase().includes('legacy')
+    || String(plan?.slug ?? '').toLowerCase().includes('legacy');
+  const addon  = v.directory_addon_concierge === true || planIncludesConcierge || isLegacyPlan;
   const a2p    = v.a2p_verified === true;
   const eligible = addon && a2p;
 
@@ -101,10 +124,10 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!user.isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const venue = await loadVenueRow(user.venueId);
-  if (!venue) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
+  const result = await loadVenueRow(user.venueId);
+  if (!result) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
 
-  return NextResponse.json(shapePayload(venue));
+  return NextResponse.json(shapePayload(result.venue, result.plan));
 }
 
 // ── PATCH ──────────────────────────────────────────────────────────────────
@@ -148,8 +171,9 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const current = await loadVenueRow(venueId);
-  if (!current) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
+  const currentResult = await loadVenueRow(venueId);
+  if (!currentResult) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
+  const current = currentResult.venue;
 
   const updates: Record<string, unknown> = {};
 
@@ -167,13 +191,11 @@ export async function PATCH(request: Request) {
   // Master enable flag (with eligibility guard)
   if (body.enabled !== undefined) {
     if (body.enabled === true) {
-      const planFlags2 = current.directory_plans?.feature_flags ?? {};
-      const planConcierge = planFlags2['addon_concierge_included'] === true;
-      const eligible = (current.directory_addon_concierge === true || planConcierge) && current.a2p_verified === true;
-      if (!eligible) {
+      const shaped = shapePayload(current, currentResult.plan);
+      if (!shaped.eligibility.eligible) {
         return NextResponse.json({
           error:    'AI Concierge is not eligible to be enabled yet',
-          blockers: shapePayload(current).eligibility.blockers,
+          blockers: shaped.eligibility.blockers,
         }, { status: 422 });
       }
       updates.ai_concierge_enabled    = true;
@@ -212,7 +234,7 @@ export async function PATCH(request: Request) {
     });
   }
 
-  const updated = await loadVenueRow(venueId);
-  if (!updated) return NextResponse.json({ error: 'Venue not found after update' }, { status: 500 });
-  return NextResponse.json(shapePayload(updated));
+  const updatedResult = await loadVenueRow(venueId);
+  if (!updatedResult) return NextResponse.json({ error: 'Venue not found after update' }, { status: 500 });
+  return NextResponse.json(shapePayload(updatedResult.venue, updatedResult.plan));
 }

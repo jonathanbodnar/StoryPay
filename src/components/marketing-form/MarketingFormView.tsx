@@ -639,13 +639,20 @@ export function MarketingFormView({
         setStatus('loading');
         const fd2 = new FormData(form);
         fd2.append('_test', '1');
+        let testOk = true;
         try {
-          await fetch(`/api/public/forms/${embedToken}/submit`, {
+          const testRes = await fetch(`/api/public/forms/${embedToken}/submit`, {
             method: 'POST',
             body: fd2,
           });
+          if (!testRes.ok) testOk = false;
         } catch {
-          // Best-effort — don't block the preview UX if the API fails
+          testOk = false;
+        }
+        if (!testOk) {
+          setStatus('error');
+          setMessage('Test submission failed — make sure the form is saved first, then try again.');
+          return;
         }
         const ps = resolvePostSubmit(definition);
         if (ps.mode === 'inline_message') {
