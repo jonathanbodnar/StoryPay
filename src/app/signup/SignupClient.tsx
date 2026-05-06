@@ -123,9 +123,13 @@ function VenueSignupForm() {
   return (
     <>
       <h1 className="text-xl font-bold text-gray-900 mb-1 text-center">Create your venue account</h1>
-      <p className="text-sm text-gray-500 mb-6 text-center">
+      <p className="text-sm text-gray-500 mb-3 text-center">
         Get your listing on StoryVenue and start collecting leads in minutes.
       </p>
+      <div className="flex items-center justify-center gap-1.5 mb-5">
+        <span className="text-base">🇺🇸</span>
+        <p className="text-xs text-gray-400 text-center">Currently available in the United States only.</p>
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>

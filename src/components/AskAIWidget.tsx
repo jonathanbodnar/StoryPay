@@ -115,12 +115,12 @@ function renderContent(text: string, onNavigate: (path: string) => void) {
  // A line that is purely a nav link becomes a standalone button row
  const trimmed = line.trim();
  const soloMatch = /^\[([^\]]+)\]\((\/dashboard[^)]*)\)$/.exec(trimmed);
- if (soloMatch) {
+    if (soloMatch) {
  return (
  <div key={i} className="mt-1.5 mb-0.5">
  <button
  onClick={() => onNavigate(soloMatch[2])}
- className="inline-flex items-center gap-1.5 rounded-2xl border border-white/30 bg-white/15 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/25 transition-colors"
+ className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
  >
  {soloMatch[1]} →
  </button>

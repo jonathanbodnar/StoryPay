@@ -10,11 +10,22 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { data: templates, error } = await supabaseAdmin
+  // Try ordering by is_starred first (migration: ADD COLUMN IF NOT EXISTS is_starred boolean NOT NULL DEFAULT false)
+  // Fall back to created_at-only sort if the column doesn't exist yet.
+  let { data: templates, error } = await supabaseAdmin
     .from('proposal_templates')
     .select('*, proposal_template_fields(id)')
     .eq('venue_id', venueId)
+    .order('is_starred', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false });
+
+  if (error && /is_starred|column|does not exist/i.test(error.message ?? '')) {
+    ({ data: templates, error } = await supabaseAdmin
+      .from('proposal_templates')
+      .select('*, proposal_template_fields(id)')
+      .eq('venue_id', venueId)
+      .order('created_at', { ascending: false }));
+  }
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -22,6 +33,7 @@ export async function GET() {
 
   const result = (templates ?? []).map((t) => ({
     ...t,
+    is_starred: (t as Record<string, unknown>).is_starred ?? false,
     field_count: t.proposal_template_fields?.length ?? 0,
     proposal_template_fields: undefined,
   }));

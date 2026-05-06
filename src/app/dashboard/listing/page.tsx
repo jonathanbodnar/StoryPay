@@ -47,6 +47,8 @@ interface Listing {
   notification_email: string | null;
   notification_phone: string | null;
   email_notifications: boolean;
+  brand_email: string | null;
+  brand_phone: string | null;
 }
 
 const INPUT = 'w-full rounded-2xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors';
@@ -79,6 +81,7 @@ function emptyListing(): Listing {
     availability_notes: null, is_published: false, onboarding_completed: false,
     social_links: {}, faq: [], show_map: true,
     notification_email: null, notification_phone: null, email_notifications: true,
+    brand_email: null, brand_phone: null,
   };
 }
 
@@ -957,6 +960,44 @@ export default function ListingPage() {
             >
               Manage photos
             </Link>
+          </div>
+        </div>
+      </section>
+
+      <section className={CARD}>
+        <h2 className={SECTION_TITLE}><Store className="inline w-4 h-4 -mt-0.5" /> Contact info</h2>
+        <p className={SECTION_HINT}>Public email and phone shown on your storyvenue.com listing so couples can reach you.</p>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className={LABEL}>Contact email</label>
+            <input
+              type="email"
+              className={INPUT}
+              value={listing.brand_email ?? ''}
+              onChange={(e) => update('brand_email', e.target.value || null)}
+              placeholder="hello@yourvenue.com"
+            />
+          </div>
+          <div>
+            <label className={LABEL}>Contact phone</label>
+            <div className="relative">
+              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-gray-500">
+                +1
+              </span>
+              <input
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel-national"
+                className={`${INPUT} pl-10`}
+                value={formatUsLocal(listing.brand_phone)}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/\D+/g, '').slice(0, 10);
+                  update('brand_phone', digits ? `+1${digits}` : null);
+                }}
+                placeholder="(614) 555-1234"
+              />
+            </div>
+            <p className="mt-1 text-[11px] text-gray-400">USA only — the +1 country code is added automatically.</p>
           </div>
         </div>
       </section>

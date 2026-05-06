@@ -32,6 +32,8 @@ const SELECT_COLUMNS = [
   'notification_email',
   'notification_phone',
   'email_notifications',
+  'brand_email',
+  'brand_phone',
   'social_links',
   'faq',
   'show_map',

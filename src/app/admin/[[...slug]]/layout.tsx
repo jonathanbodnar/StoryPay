@@ -381,8 +381,9 @@ function FeatureRequestsAdminTab({
         const active = requests.filter(r => r.status !== 'completed');
         const completed = requests.filter(r => r.status === 'completed');
 
-        // Sort: unread venue submissions at top, then read venue, then admin-created
+        // Sort: most votes first, then unread (new) submissions, then date desc
         const sortedActive = [...active].sort((a, b) => {
+          if (b.vote_count !== a.vote_count) return b.vote_count - a.vote_count;
           const aUnread = a.venue_id && !a.admin_read_at ? 1 : 0;
           const bUnread = b.venue_id && !b.admin_read_at ? 1 : 0;
           if (bUnread !== aUnread) return bUnread - aUnread;

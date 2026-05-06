@@ -211,7 +211,8 @@ function FeatureRequestsTab() {
    fetch('/api/feature-requests/completed').then(r => r.ok ? r.json() : []),
  ])
  .then(([active, completed]) => {
-   setRequests(Array.isArray(active) ? active : []);
+   const sorted = (Array.isArray(active) ? active : []).sort((a: FeatureRequest, b: FeatureRequest) => b.vote_count - a.vote_count);
+   setRequests(sorted);
    setCompletedRequests(Array.isArray(completed) ? completed : []);
  })
  .catch(() => setError('Failed to load feature requests'))

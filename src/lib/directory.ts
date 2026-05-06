@@ -33,6 +33,10 @@ export const LISTING_WRITABLE_FIELDS = [
   'notification_email',
   'notification_phone',
   'email_notifications',
+  /** Public-facing contact email shown on the directory listing */
+  'brand_email',
+  /** Public-facing contact phone shown on the directory listing */
+  'brand_phone',
   /** { facebook?, instagram?, tiktok?, pinterest?, website? } — full URLs */
   'social_links',
   /** [{ question, answer }, ...] max ~20 */

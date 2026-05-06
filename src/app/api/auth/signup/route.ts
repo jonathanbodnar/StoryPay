@@ -22,6 +22,20 @@ function isEmail(s: string): boolean {
 }
 
 export async function POST(request: NextRequest) {
+  // ── US-only access control ────────────────────────────────────────────────
+  // Check Cloudflare country header; fall back to other CDN headers. We only
+  // block when a header is positively non-US — if no header is present (dev /
+  // proxied requests) we let the request through so local testing still works.
+  const cfCountry    = request.headers.get('CF-IPCountry');
+  const vercelCountry = request.headers.get('X-Vercel-IP-Country');
+  const detectedCountry = cfCountry || vercelCountry;
+  if (detectedCountry && detectedCountry !== 'US' && detectedCountry !== 'XX' && detectedCountry !== 'T1') {
+    return NextResponse.json(
+      { error: 'StoryPay is currently only available in the United States. Stay tuned — we\'re expanding soon!' },
+      { status: 403 }
+    );
+  }
+
   let payload: SignupPayload;
   try {
     payload = await request.json();

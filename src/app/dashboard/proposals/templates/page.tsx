@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
-import { Plus, FileText, Pencil, Eye, X, PenLine, User, CalendarDays, Search, Loader2 } from 'lucide-react';
+import { Plus, FileText, Pencil, Eye, X, PenLine, User, CalendarDays, Search, Loader2, Star } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import PaymentGate from '@/components/PaymentGate';
 
@@ -19,6 +19,7 @@ interface Template {
  content: string;
  field_count: number;
  created_at: string;
+ is_starred?: boolean;
  fields?: Field[];
 }
 
@@ -37,6 +38,28 @@ function TemplatesPageInner() {
  const [loading, setLoading] = useState(true);
  const [search, setSearch] = useState('');
  const [preview, setPreview] = useState<Template | null>(null);
+ const [starBusy, setStarBusy] = useState<string | null>(null);
+
+ async function toggleStar(t: Template) {
+ setStarBusy(t.id);
+ const next = !t.is_starred;
+ // Optimistic update
+ setTemplates(prev => {
+ const updated = prev.map(x => x.id === t.id ? { ...x, is_starred: next } : x);
+ return [...updated].sort((a, b) => {
+ if ((b.is_starred ? 1 : 0) !== (a.is_starred ? 1 : 0)) return (b.is_starred ? 1 : 0) - (a.is_starred ? 1 : 0);
+ return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+ });
+ });
+ try {
+ await fetch(`/api/templates/${t.id}`, {
+ method: 'PATCH',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({ is_starred: next }),
+ });
+ } catch { /* optimistic state is good enough */ }
+ finally { setStarBusy(null); }
+ }
 
  useEffect(() => {
  fetch('/api/templates')
@@ -139,8 +162,30 @@ function TemplatesPageInner() {
  </div>
 
  <div className="flex items-center justify-between pt-4 mt-4 border-t border-gray-200">
+ <div className="flex items-center gap-2">
  <span className="text-[11px] text-gray-400">{formatDate(t.created_at)}</span>
+ {t.is_starred && (
+ <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-600">
+ <Star size={9} className="fill-amber-500 text-amber-500" /> Popular
+ </span>
+ )}
+ </div>
  <div className="flex items-center gap-1.5">
+ <button
+ onClick={() => toggleStar(t)}
+ disabled={starBusy === t.id}
+ title={t.is_starred ? 'Remove star' : 'Mark as popular / pin to top'}
+ className={`flex items-center justify-center rounded-xl border px-2 py-1.5 text-xs transition-colors disabled:opacity-50 ${
+ t.is_starred
+ ? 'border-amber-200 bg-amber-50 text-amber-500 hover:bg-amber-100'
+ : 'border-gray-200 text-gray-400 hover:bg-gray-50 hover:text-amber-500'
+ }`}
+ >
+ {starBusy === t.id
+ ? <Loader2 size={12} className="animate-spin" />
+ : <Star size={12} className={t.is_starred ? 'fill-amber-500' : ''} />
+ }
+ </button>
  <button
  onClick={() => setPreview(t)}
  className="flex items-center gap-1.5 rounded-2xl border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"

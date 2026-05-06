@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import {
   Check,
   DollarSign,
@@ -146,6 +146,22 @@ export default function AddLeadModal({
     const p = pipelines.find((x) => x.id === draft.pipelineId);
     return p?.stages ?? [];
   }, [pipelines, draft.pipelineId]);
+
+  // If the modal opened before pipeline data finished loading, re-initialise
+  // pipelineId + stageId once the data arrives.
+  useEffect(() => {
+    if (pipelines.length === 0) return;
+    if (draft.pipelineId) return; // already set
+    const p = pipelines.find((x) => x.id === defaultPipelineId) ?? pipelines[0];
+    if (!p) return;
+    const first = p.stages?.[0];
+    setDraft((prev) => ({
+      ...prev,
+      pipelineId: p.id,
+      stageId: first?.id ?? NO_PIPELINE_STAGE,
+    }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pipelines]);
 
   async function createSpace() {
     const name = newSpaceName.trim();
