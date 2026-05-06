@@ -54,18 +54,23 @@ export async function POST(req: NextRequest) {
 
   if (!text) return NextResponse.json({ error: 'Message body is required' }, { status: 400 });
 
-  // Create the ticket
+  // Build the insert record. Only include opened_by_member_id when it is
+  // actually set (avoids a PostgREST schema-cache error if migration 107
+  // has not been applied yet — the API will surface a 500 with a helpful
+  // message in that case rather than a cryptic schema error).
+  const ticketInsert: Record<string, unknown> = {
+    venue_id:             attr.venueId,
+    opened_by_profile_id: attr.profileId,
+    subject,
+    status:               'open',
+    priority,
+    last_message_preview: text.slice(0, 240),
+  };
+  if (attr.memberId) ticketInsert.opened_by_member_id = attr.memberId;
+
   const { data: ticket, error: tErr } = await supabaseAdmin
     .from('support_threads')
-    .insert({
-      venue_id:               attr.venueId,
-      opened_by_profile_id:   attr.profileId,
-      opened_by_member_id:    attr.memberId,
-      subject,
-      status:                 'open',
-      priority,
-      last_message_preview:   text.slice(0, 240),
-    })
+    .insert(ticketInsert)
     .select('id, subject, status, priority, created_at, last_message_at')
     .single();
 
@@ -73,16 +78,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: tErr?.message || 'Failed to open ticket' }, { status: 500 });
   }
 
-  // Insert the first message
+  // Insert the first message — same defensive pattern for sender_member_id.
+  const msgInsert: Record<string, unknown> = {
+    support_thread_id: (ticket as { id: string }).id,
+    sender_type:       'venue',
+    sender_profile_id: attr.profileId,
+    body:              text,
+  };
+  if (attr.memberId) msgInsert.sender_member_id = attr.memberId;
+
   const { data: firstMsg, error: mErr } = await supabaseAdmin
     .from('support_thread_messages')
-    .insert({
-      support_thread_id: (ticket as { id: string }).id,
-      sender_type:       'venue',
-      sender_profile_id: attr.profileId,
-      sender_member_id:  attr.memberId,
-      body:              text,
-    })
+    .insert(msgInsert)
     .select('id, created_at')
     .single();
 

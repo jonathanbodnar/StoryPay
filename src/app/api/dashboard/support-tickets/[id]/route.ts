@@ -128,15 +128,17 @@ export async function POST(
     return NextResponse.json({ error: 'Ticket does not belong to this venue' }, { status: 403 });
   }
 
+  const replyInsert: Record<string, unknown> = {
+    support_thread_id: id,
+    sender_type:       'venue',
+    sender_profile_id: attr.profileId,
+    body:              text,
+  };
+  if (attr.memberId) replyInsert.sender_member_id = attr.memberId;
+
   const { data: msg, error: mErr } = await supabaseAdmin
     .from('support_thread_messages')
-    .insert({
-      support_thread_id: id,
-      sender_type:       'venue',
-      sender_profile_id: attr.profileId,
-      sender_member_id:  attr.memberId,
-      body:              text,
-    })
+    .insert(replyInsert)
     .select('id, created_at')
     .single();
 
