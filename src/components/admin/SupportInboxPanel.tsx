@@ -269,10 +269,32 @@ export function SupportInboxPanel() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const unreadDividerRef = useRef<HTMLDivElement | null>(null);
+  // ISO of when the support agent last read this thread (set just before loading)
+  const [threadLastReadAt, setThreadLastReadAt] = useState<string | null>(null);
+
+  const THREAD_READS_KEY = 'support_inbox_thread_reads';
+  function getThreadLastRead(threadId: string): string | null {
+    try {
+      const map = JSON.parse(localStorage.getItem(THREAD_READS_KEY) || '{}') as Record<string, string>;
+      return map[threadId] ?? null;
+    } catch { return null; }
+  }
+  function markThreadRead(threadId: string) {
+    try {
+      const map = JSON.parse(localStorage.getItem(THREAD_READS_KEY) || '{}') as Record<string, string>;
+      map[threadId] = new Date().toISOString();
+      localStorage.setItem(THREAD_READS_KEY, JSON.stringify(map));
+    } catch { /* ignore */ }
+  }
 
   const loadDetail = useCallback(async (threadId: string) => {
     setDetailLoading(true);
     setDetailError(null);
+    // Capture last-read before updating so we can show the unread divider
+    const lastRead = getThreadLastRead(threadId);
+    setThreadLastReadAt(lastRead);
+    markThreadRead(threadId);
     try {
       const r = await fetch(`/api/admin/support/bride-thread/${threadId}`, { cache: 'no-store' });
       if (!r.ok) {
@@ -282,7 +304,12 @@ export function SupportInboxPanel() {
       const d = (await r.json()) as ThreadDetail;
       setDetail(d);
       requestAnimationFrame(() => {
-        messagesEndRef.current?.scrollIntoView({ block: 'end' });
+        // Scroll to first unread if available, otherwise bottom
+        if (unreadDividerRef.current) {
+          unreadDividerRef.current.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        } else {
+          messagesEndRef.current?.scrollIntoView({ block: 'end' });
+        }
       });
     } catch (e) {
       setDetailError(e instanceof Error ? e.message : 'Failed to load thread');
@@ -424,7 +451,12 @@ export function SupportInboxPanel() {
       requestAnimationFrame(() => {
         messagesEndRef.current?.scrollIntoView({ block: 'end' });
       });
-    }, []),
+      // Mark actively-viewed thread as read whenever a new message arrives in it
+      if (evt.threadId === activeThreadId && activeThreadId) {
+        markThreadRead(activeThreadId);
+        setThreadLastReadAt(new Date().toISOString());
+      }
+    }, [activeThreadId]),
   );
 
   // ── Reply box ──────────────────────────────────────────────────────────────
@@ -824,6 +856,8 @@ export function SupportInboxPanel() {
                 }
                 noActorWarning={!me?.member?.id && !actAsId}
                 messagesEndRef={messagesEndRef}
+                unreadDividerRef={unreadDividerRef}
+                threadLastReadAt={threadLastReadAt}
                 drafting={drafting}
                 onDraft={draftReply}
                 draftError={draftError}
@@ -1023,7 +1057,7 @@ function ThreadDetailView({
   onSwitchActiveThread,
   canSend, sending, onSend, sendStatus,
   actAsName, noActorWarning,
-  messagesEndRef,
+  messagesEndRef, unreadDividerRef, threadLastReadAt,
   drafting, onDraft, draftError,
   draftIntent, onDraftIntentChange,
   showIntent, onToggleIntent,
@@ -1049,6 +1083,8 @@ function ThreadDetailView({
   actAsName: string | null;
   noActorWarning: boolean;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
+  unreadDividerRef: React.RefObject<HTMLDivElement | null>;
+  threadLastReadAt: string | null;
   drafting: boolean;
   onDraft: () => void;
   draftError: string | null;
@@ -1108,18 +1144,37 @@ function ThreadDetailView({
         {detail.messages.length === 0 && (
           <p className="text-center text-xs text-gray-400 py-8">No messages yet.</p>
         )}
-        {detail.messages.map(m => (
-          <MessageBubble
-            key={m.id}
-            msg={m}
-            supportName={
-              m.sent_by_support_user_id
-                ? detail.supportUsers[m.sent_by_support_user_id]?.name || 'Support'
-                : null
-            }
-            supportUsers={detail.supportUsers}
-          />
-        ))}
+        {detail.messages.map((m, idx) => {
+          // iMessage-style unread divider: show before the first message after lastReadAt
+          const isFirstUnread = threadLastReadAt !== null
+            && m.created_at > threadLastReadAt
+            && (idx === 0 || detail.messages[idx - 1].created_at <= threadLastReadAt);
+          return (
+            <div key={m.id}>
+              {isFirstUnread && (
+                <div
+                  ref={unreadDividerRef}
+                  className="flex items-center gap-2 py-2 select-none"
+                >
+                  <div className="flex-1 h-px bg-blue-300" />
+                  <span className="text-[10px] font-semibold text-blue-500 uppercase tracking-wide whitespace-nowrap">
+                    New messages
+                  </span>
+                  <div className="flex-1 h-px bg-blue-300" />
+                </div>
+              )}
+              <MessageBubble
+                msg={m}
+                supportName={
+                  m.sent_by_support_user_id
+                    ? detail.supportUsers[m.sent_by_support_user_id]?.name || 'Support'
+                    : null
+                }
+                supportUsers={detail.supportUsers}
+              />
+            </div>
+          );
+        })}
         <div ref={messagesEndRef} />
       </div>
 

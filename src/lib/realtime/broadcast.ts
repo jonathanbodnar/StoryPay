@@ -14,6 +14,7 @@ import {
   type BrideMessageEvent,
   type TicketMessageEvent,
   type TicketStatusEvent,
+  type StageChangedEvent,
 } from './channels';
 
 async function send(channelName: string, event: string, payload: unknown): Promise<void> {
@@ -78,5 +79,13 @@ export async function broadcastTicketStatus(evt: TicketStatusEvent): Promise<voi
     send(supportChannels.ticket(evt.ticketId),                        'status',  evt),
     send(supportChannels.venueTickets(evt.venueId),                   'status',  evt),
     send(supportChannels.venueTicket(evt.venueId, evt.ticketId),      'status',  evt),
+  ]);
+}
+
+/** Broadcast a pipeline stage change on both admin and venue channels so both sides update live. */
+export async function broadcastStageChanged(evt: StageChangedEvent): Promise<void> {
+  await Promise.allSettled([
+    send(supportChannels.brideThread(evt.threadId),                       'stage_changed', evt),
+    send(supportChannels.venueThread(evt.venueId, evt.threadId),          'stage_changed', evt),
   ]);
 }

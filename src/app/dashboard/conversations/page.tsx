@@ -40,7 +40,7 @@ import { classNames, toTitleCase, dispatchStageChange, onStageChange } from '@/l
 import { EmojiPickerPopover } from '@/components/EmojiPickerPopover';
 import ContactProfileDrawer from '@/components/conversations/ContactProfileDrawer';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
-import { supportChannels, type BrideMessageEvent } from '@/lib/realtime/channels';
+import { supportChannels, type BrideMessageEvent, type StageChangedEvent } from '@/lib/realtime/channels';
 import { CannedReplyPicker } from '@/components/support/CannedReplyPicker';
 
 interface ThreadRow {
@@ -531,8 +531,25 @@ export default function ConversationsPage() {
     threadDetail?.venue_id && selectedId
       ? supportChannels.venueThread(threadDetail.venue_id, selectedId)
       : null,
-    ['message'],
+    ['message', 'stage_changed'],
     useCallback((_evt, payload) => {
+      // Handle stage change from support admin side
+      if (_evt === 'stage_changed') {
+        const sc = payload as StageChangedEvent;
+        if (!sc) return;
+        setThreadDetail(prev => prev ? {
+          ...prev,
+          contact_stage: { name: sc.stageName, color: sc.stageColor },
+          contact_stage_id: sc.stageId,
+        } : prev);
+        setThreads(prev => prev.map(t =>
+          t.venue_customer_id === sc.vcId
+            ? { ...t, contact_stage: { name: sc.stageName, color: sc.stageColor }, contact_stage_id: sc.stageId }
+            : t,
+        ));
+        dispatchStageChange({ vcId: sc.vcId, pipelineId: sc.pipelineId, stageId: sc.stageId, stageName: sc.stageName, stageColor: sc.stageColor ?? '' });
+        return;
+      }
       const evt = payload as BrideMessageEvent;
       if (!evt) return;
       setMessages(prev => {

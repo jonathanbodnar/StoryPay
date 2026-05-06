@@ -82,3 +82,16 @@ export interface TicketStatusEvent {
   priority:               'low' | 'normal' | 'high';
   assignedSupportUserId:  string | null;
 }
+
+/** Fired on both bride-thread and venueThread channels when a pipeline stage changes. */
+export interface StageChangedEvent {
+  threadId:   string;
+  venueId:    string;
+  vcId:       string;
+  stageId:    string;
+  stageName:  string;
+  stageColor: string | null;
+  pipelineId: string;
+  /** 'support' = admin changed it, 'venue' = venue changed it */
+  source:     'support' | 'venue';
+}

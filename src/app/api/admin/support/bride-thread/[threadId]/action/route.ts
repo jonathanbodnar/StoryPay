@@ -24,6 +24,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { applyAiTag, removeAiTag } from '@/lib/ai-concierge/pipeline-tag-service';
 import { ensureVenueAiResources } from '@/lib/ai-concierge/venue-resources';
 import { recordAiStateTransition } from '@/lib/ai-concierge/state-transitions';
+import { broadcastStageChanged } from '@/lib/realtime/broadcast';
 import type { AiState } from '@/lib/ai-concierge/types';
 
 export const dynamic = 'force-dynamic';
@@ -160,6 +161,18 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ threadId: 
         action:   'stage_changed_by_support',
         details:  { stage_id: s.id, stage_name: s.name, by: triggeredBy },
       }).then(() => {}, () => {});
+
+      // Broadcast so venue conversations page and support context sidebar both update live
+      void broadcastStageChanged({
+        threadId:   threadId,
+        venueId:    venueId,
+        vcId:       venueCustomerId ?? '',
+        stageId:    s.id,
+        stageName:  s.name,
+        stageColor: (stage as { color?: string | null }).color ?? null,
+        pipelineId: s.pipeline_id,
+        source:     'support',
+      });
 
       return NextResponse.json({ ok: true, stage: { id: s.id, name: s.name } });
     }

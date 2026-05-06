@@ -17,6 +17,8 @@ import {
   Activity, Inbox, BellOff, RefreshCw, ExternalLink, ChevronDown, X, Plus, CheckCircle2,
 } from 'lucide-react';
 import { SlaPill } from '@/components/support/SlaIndicator';
+import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
+import { supportChannels, type StageChangedEvent } from '@/lib/realtime/channels';
 
 interface ContextResponse {
   bride: {
@@ -198,6 +200,26 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
     setActionStatus(null);
     if (threadId) void load();
   }, [threadId, load]);
+
+  // Live stage updates from the venue side — update inline without a full refetch
+  useBroadcastChannel(
+    threadId ? supportChannels.brideThread(threadId) : null,
+    ['stage_changed'],
+    useCallback((_evt, payload) => {
+      const s = payload as StageChangedEvent;
+      if (!s) return;
+      setData(prev => prev ? {
+        ...prev,
+        pipeline: {
+          id:            s.stageId,
+          name:          s.stageName,
+          color:         s.stageColor,
+          pipeline_id:   s.pipelineId,
+          pipeline_name: prev.pipeline?.pipeline_name ?? '',
+        },
+      } : prev);
+    }, []),
+  );
 
   /** Optimistic action runner. On success, refetches context to lock in
    *  server state; on error, surfaces the message + reverts. */

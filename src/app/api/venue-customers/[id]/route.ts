@@ -7,6 +7,7 @@ import {
   slugifyStageLabel,
   syncLeadFromVenueCustomerRow,
 } from '@/lib/venue-customer-pipeline-sync';
+import { broadcastStageChanged } from '@/lib/realtime/broadcast';
 import {
   isMissingVenueCustomerPipelineColumns,
   VENUE_CUSTOMERS_PIPELINE_MIGRATION_HINT,
@@ -211,6 +212,39 @@ export async function PATCH(
       pipeline_id: (rr.pipeline_id as string | null) ?? null,
       stage_id: (rr.stage_id as string | null) ?? null,
     });
+
+    // Broadcast stage change to admin support context sidebar in realtime
+    if ((updates.stage_id || pid !== undefined) && rr.stage_id) {
+      const stageId = rr.stage_id as string;
+      const pipeId  = (rr.pipeline_id as string | null) ?? '';
+      // Fetch stage name/color for broadcast payload
+      const { data: stageRow } = await supabaseAdmin
+        .from('lead_pipeline_stages')
+        .select('name, color')
+        .eq('id', stageId)
+        .maybeSingle();
+      const sr = stageRow as { name?: string; color?: string | null } | null;
+      // Fan out to all active threads for this venue_customer so support sidebar updates live
+      const { data: vcThreads } = await supabaseAdmin
+        .from('conversation_threads')
+        .select('id')
+        .eq('venue_id', venueId)
+        .eq('venue_customer_id', id)
+        .limit(20);
+      for (const t of (vcThreads ?? []) as Array<{ id: string }>) {
+        void broadcastStageChanged({
+          threadId:   t.id,
+          venueId:    venueId,
+          vcId:       id,
+          stageId,
+          stageName:  sr?.name ?? '',
+          stageColor: sr?.color ?? null,
+          pipelineId: pipeId,
+          source:     'venue',
+        });
+      }
+    }
+
     return NextResponse.json(ctx ? { ...refreshed, pipeline_context: ctx } : refreshed);
   } catch (err) {
     console.error('[venue-customers PATCH refetch]', err);
