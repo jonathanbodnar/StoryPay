@@ -16,6 +16,7 @@ import {
   Loader2, AlertCircle, User, Building2, Mail, Phone, ShieldCheck, ShieldAlert,
   Sparkles, CircleDot, AlertTriangle, Calendar, Clock, Tag, Tags,
   Activity, Inbox, BellOff, RefreshCw, ExternalLink, ChevronDown, CheckCircle2,
+  StickyNote, CalendarPlus, Plus, Trash2, X,
 } from 'lucide-react';
 import { SlaPill } from '@/components/support/SlaIndicator';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
@@ -63,6 +64,7 @@ interface ContextResponse {
   } | null;
   recent_activity: Array<{ action: string; at: string; details: unknown }>;
   lead_id: string | null;
+  venue_customer_id: string | null;
   pipelines: Array<{
     id:         string;
     name:       string;
@@ -392,56 +394,51 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
               </div>
             )}
 
-            {/* Applied tag pills — visible at a glance, click to open tag manager */}
-            {(() => {
-              const appliedTags = data.tags.filter(t => data.applied_tag_ids.includes(t.id));
-              return (
-                <div className="flex items-center gap-1 flex-wrap">
-                  {appliedTags.map(t => (
-                    <span
-                      key={t.id}
-                      className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium border"
-                      style={t.color
-                        ? { backgroundColor: `${t.color}20`, borderColor: `${t.color}60`, color: t.color }
-                        : undefined
-                      }
-                    >
-                      {t.icon && <span className="text-[9px]">{t.icon}</span>}
-                      {t.name}
-                    </span>
-                  ))}
-                  <TagsModal
-                    allTags={data.tags}
-                    appliedTagIds={data.applied_tag_ids}
-                    disabled={actionPending}
-                    onAdd={(tagId, tagName) =>
-                      runAction(
-                        { action: 'add_tag', tagId },
-                        () => {
-                          setData(prev => prev ? {
-                            ...prev,
-                            applied_tag_ids: [...new Set([...prev.applied_tag_ids, tagId])],
-                          } : prev);
-                        },
-                        `Tagged · ${tagName}`,
-                      )
-                    }
-                    onRemove={(tagId) =>
-                      runAction(
-                        { action: 'remove_tag', tagId },
-                        () => {
-                          setData(prev => prev ? {
-                            ...prev,
-                            applied_tag_ids: prev.applied_tag_ids.filter(id => id !== tagId),
-                          } : prev);
-                        },
-                        'Tag removed',
-                      )
-                    }
-                  />
-                </div>
-              );
-            })()}
+            {/* Action icons — tags / notes / calendar. The applied tags
+                themselves live inside the tag modal so the contact card stays
+                tight; the icon's badge count tells you how many are on. */}
+            <div className="flex items-center gap-1 flex-wrap">
+              <TagsModal
+                allTags={data.tags}
+                appliedTagIds={data.applied_tag_ids}
+                disabled={actionPending}
+                onAdd={(tagId, tagName) =>
+                  runAction(
+                    { action: 'add_tag', tagId },
+                    () => {
+                      setData(prev => prev ? {
+                        ...prev,
+                        applied_tag_ids: [...new Set([...prev.applied_tag_ids, tagId])],
+                      } : prev);
+                    },
+                    `Tagged · ${tagName}`,
+                  )
+                }
+                onRemove={(tagId) =>
+                  runAction(
+                    { action: 'remove_tag', tagId },
+                    () => {
+                      setData(prev => prev ? {
+                        ...prev,
+                        applied_tag_ids: prev.applied_tag_ids.filter(id => id !== tagId),
+                      } : prev);
+                    },
+                    'Tag removed',
+                  )
+                }
+              />
+              {data.venue && data.venue_customer_id && (
+                <NotesButton venueId={data.venue.id} customerId={data.venue_customer_id} />
+              )}
+              {data.venue && data.venue_customer_id && (
+                <CalendarButton
+                  venueId={data.venue.id}
+                  customerId={data.venue_customer_id}
+                  contactName={[data.bride.first_name, data.bride.last_name].filter(Boolean).join(' ') || data.bride.email || 'Contact'}
+                  contactEmail={data.bride.email}
+                />
+              )}
+            </div>
 
             {/* AI quick-actions */}
             {data.ai && (
@@ -783,27 +780,39 @@ function TagsModal({
       {allTags.length === 0 ? (
         <p className="text-[10px] text-gray-400">No tags yet.</p>
       ) : (
-        <div className="flex flex-wrap gap-1 max-h-[60vh] overflow-y-auto">
-          {allTags.map(t => {
-            const active = appliedSet.has(t.id);
-            return (
-              <button
-                key={t.id}
-                type="button"
-                disabled={disabled}
-                title={t.name}
-                onClick={() => active ? onRemove(t.id) : onAdd(t.id, t.name)}
-                className={`inline-flex max-w-[140px] items-center justify-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors disabled:opacity-50 ${
-                  active
-                    ? 'border-brand-900 bg-brand-900 text-white'
-                    : 'border-gray-200 bg-white text-gray-600 hover:border-brand-900/30 hover:bg-brand-900/5 hover:text-brand-900'
-                }`}
-              >
-                <span className="truncate">{t.name}</span>
-              </button>
-            );
-          })}
-        </div>
+        // Sort applied tags first so the active set is the first thing the
+        // agent sees when they open the modal.
+        (() => {
+          const sorted = [...allTags].sort((a, b) => {
+            const aa = appliedSet.has(a.id) ? 0 : 1;
+            const bb = appliedSet.has(b.id) ? 0 : 1;
+            if (aa !== bb) return aa - bb;
+            return a.name.localeCompare(b.name);
+          });
+          return (
+            <div className="flex flex-wrap gap-1 max-h-[60vh] overflow-y-auto">
+              {sorted.map(t => {
+                const active = appliedSet.has(t.id);
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    disabled={disabled}
+                    title={t.name}
+                    onClick={() => active ? onRemove(t.id) : onAdd(t.id, t.name)}
+                    className={`inline-flex max-w-[140px] items-center justify-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors disabled:opacity-50 ${
+                      active
+                        ? 'border-brand-900 bg-brand-900 text-white'
+                        : 'border-gray-200 bg-white text-gray-600 hover:border-brand-900/30 hover:bg-brand-900/5 hover:text-brand-900'
+                    }`}
+                  >
+                    <span className="truncate">{t.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })()
       )}
     </div>,
     document.body,
@@ -869,5 +878,668 @@ function AiActionRow({
         </button>
       )}
     </div>
+  );
+}
+
+// ─── Notes ──────────────────────────────────────────────────────────────────
+//
+// Notes are written to `customer_notes` on the venue's subaccount, scoped by
+// (venue_id, customer_id). The venue's contact-profile page reads from the
+// same table, so a note added here shows up there automatically — no copies,
+// no syncing job, just one row in one table.
+
+interface ContactNote {
+  id:           string;
+  content:      string;
+  author_name:  string | null;
+  created_at:   string;
+}
+
+function NotesButton({ venueId, customerId }: { venueId: string; customerId: string }) {
+  const [open, setOpen] = useState(false);
+  const [notes, setNotes] = useState<ContactNote[]>([]);
+  const [count, setCount] = useState<number | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  // Lazy-load count only — full list is fetched when the modal opens.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const r = await fetch(`/api/admin/support/contact/${venueId}/${customerId}/notes`, { cache: 'no-store' });
+        if (!r.ok) return;
+        const d = await r.json() as { notes: ContactNote[] };
+        if (cancelled) return;
+        setNotes(d.notes ?? []);
+        setCount((d.notes ?? []).length);
+        setLoaded(true);
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [venueId, customerId]);
+
+  const reload = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/admin/support/contact/${venueId}/${customerId}/notes`, { cache: 'no-store' });
+      if (!r.ok) return;
+      const d = await r.json() as { notes: ContactNote[] };
+      setNotes(d.notes ?? []);
+      setCount((d.notes ?? []).length);
+      setLoaded(true);
+    } catch { /* ignore */ }
+  }, [venueId, customerId]);
+
+  const n = count ?? 0;
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        title={n > 0 ? `${n} note${n === 1 ? '' : 's'} — view & add` : 'Add a note'}
+        className="relative inline-flex items-center justify-center rounded-lg p-1 text-gray-400 hover:bg-amber-50 hover:text-amber-600 transition-colors"
+      >
+        <StickyNote size={14} />
+        {n > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-white leading-none">
+            {n > 9 ? '9+' : n}
+          </span>
+        )}
+      </button>
+      {open && (
+        <NotesModal
+          venueId={venueId}
+          customerId={customerId}
+          initialNotes={loaded ? notes : null}
+          onClose={() => setOpen(false)}
+          onChanged={reload}
+        />
+      )}
+    </>
+  );
+}
+
+function NotesModal({
+  venueId,
+  customerId,
+  initialNotes,
+  onClose,
+  onChanged,
+}: {
+  venueId:      string;
+  customerId:   string;
+  initialNotes: ContactNote[] | null;
+  onClose:      () => void;
+  onChanged:    () => void;
+}) {
+  const [notes, setNotes] = useState<ContactNote[]>(initialNotes ?? []);
+  const [loading, setLoading] = useState(initialNotes === null);
+  const [draft, setDraft] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchNotes = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await fetch(`/api/admin/support/contact/${venueId}/${customerId}/notes`, { cache: 'no-store' });
+      const d = await r.json().catch(() => ({} as { error?: string; notes?: ContactNote[] }));
+      if (!r.ok) throw new Error(d.error || `Failed (${r.status})`);
+      setNotes(d.notes ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load notes');
+    } finally {
+      setLoading(false);
+    }
+  }, [venueId, customerId]);
+
+  useEffect(() => {
+    if (initialNotes === null) void fetchNotes();
+  }, [fetchNotes, initialNotes]);
+
+  const addNote = useCallback(async () => {
+    const content = draft.trim();
+    if (!content) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const r = await fetch(`/api/admin/support/contact/${venueId}/${customerId}/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      });
+      const d = await r.json().catch(() => ({} as { error?: string; note?: ContactNote }));
+      if (!r.ok || !d.note) throw new Error(d.error || `Failed (${r.status})`);
+      setNotes(prev => [d.note as ContactNote, ...prev]);
+      setDraft('');
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save note');
+    } finally {
+      setSaving(false);
+    }
+  }, [draft, venueId, customerId, onChanged]);
+
+  const removeNote = useCallback(async (noteId: string) => {
+    if (!confirm('Delete this note? It will also disappear from the venue\'s contact profile.')) return;
+    try {
+      const r = await fetch(`/api/admin/support/contact/${venueId}/${customerId}/notes?noteId=${encodeURIComponent(noteId)}`, {
+        method: 'DELETE',
+      });
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        throw new Error(d.error || `Failed (${r.status})`);
+      }
+      setNotes(prev => prev.filter(n => n.id !== noteId));
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete note');
+    }
+  }, [venueId, customerId, onChanged]);
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md max-h-[80vh] flex flex-col rounded-2xl bg-white shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+          <div className="flex items-center gap-2">
+            <StickyNote size={16} className="text-amber-500" />
+            <h3 className="text-sm font-semibold text-gray-900">Contact notes</h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+          >
+            <X size={14} />
+          </button>
+        </div>
+
+        <div className="px-4 py-3 border-b border-gray-100 bg-amber-50/40">
+          <p className="text-[11px] text-amber-900">
+            Notes are shared with the venue&apos;s contact profile — anything saved here also appears in their subaccount.
+          </p>
+        </div>
+
+        <div className="px-4 py-3 border-b border-gray-100">
+          <textarea
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            placeholder="Add a note about this contact…"
+            rows={3}
+            className="w-full resize-none rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none"
+            disabled={saving}
+          />
+          <div className="mt-2 flex items-center justify-between">
+            {error ? (
+              <span className="text-[10px] text-red-600">{error}</span>
+            ) : <span />}
+            <button
+              type="button"
+              onClick={addNote}
+              disabled={saving || !draft.trim()}
+              className="inline-flex items-center gap-1 rounded-lg bg-gray-900 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-gray-800 disabled:opacity-50"
+            >
+              {saving ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
+              {saving ? 'Saving…' : 'Add note'}
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+          {loading && (
+            <div className="flex items-center justify-center py-6 text-gray-400">
+              <Loader2 size={16} className="animate-spin" />
+            </div>
+          )}
+          {!loading && notes.length === 0 && (
+            <p className="py-6 text-center text-xs text-gray-400">No notes yet — add the first one above.</p>
+          )}
+          {notes.map(note => (
+            <div key={note.id} className="rounded-lg border border-gray-100 bg-white px-3 py-2">
+              <p className="text-xs text-gray-800 whitespace-pre-wrap break-words">{note.content}</p>
+              <div className="mt-1.5 flex items-center justify-between text-[10px] text-gray-400">
+                <span>
+                  {note.author_name ? `${note.author_name} · ` : ''}{relativeTime(note.created_at)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeNote(note.id)}
+                  className="rounded p-0.5 hover:bg-red-50 hover:text-red-600"
+                  title="Delete note"
+                >
+                  <Trash2 size={10} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+// ─── Calendar ───────────────────────────────────────────────────────────────
+//
+// Events created here go straight into `calendar_events` for the venue, with
+// `customer_email` set to this contact's email. The venue's calendar page
+// reads from the same table, and the post-insert hook pushes the event to
+// the venue owner's connected Google Calendar — so support can book on
+// behalf of the venue without ever leaving the inbox.
+
+interface VenueCalendar {
+  id:         string;
+  name:       string;
+  color:      string;
+  is_default: boolean;
+  sort_order: number;
+}
+
+interface ContactEvent {
+  id:               string;
+  title:            string;
+  start_at:         string;
+  end_at:           string;
+  all_day:          boolean;
+  status:           string;
+  notes:            string | null;
+  calendar_id:      string | null;
+  google_html_link: string | null;
+  customer_email:   string | null;
+}
+
+/** Format an ISO timestamp for a `<input type="datetime-local">` field, in
+ * the user's local timezone. */
+function isoToLocalInput(iso: string): string {
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return '';
+  const off = d.getTimezoneOffset();
+  const local = new Date(d.getTime() - off * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+/** Convert a `datetime-local` value (treated as local time) back to UTC ISO. */
+function localInputToIso(local: string): string {
+  if (!local) return '';
+  // datetime-local has no timezone — treat as local time
+  return new Date(local).toISOString();
+}
+
+function CalendarButton({
+  venueId,
+  customerId,
+  contactName,
+  contactEmail,
+}: {
+  venueId:      string;
+  customerId:   string;
+  contactName:  string;
+  contactEmail: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const [count, setCount] = useState<number | null>(null);
+
+  // Lightweight upcoming-event count for the badge.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const r = await fetch(`/api/admin/support/contact/${venueId}/${customerId}/calendar`, { cache: 'no-store' });
+        if (!r.ok) return;
+        const d = await r.json() as { events: ContactEvent[] };
+        if (cancelled) return;
+        const now = Date.now();
+        const upcoming = (d.events ?? []).filter(e => new Date(e.start_at).getTime() >= now).length;
+        setCount(upcoming);
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [venueId, customerId]);
+
+  const n = count ?? 0;
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        title={n > 0 ? `${n} upcoming event${n === 1 ? '' : 's'} — view & book` : 'View calendar / book event'}
+        className="relative inline-flex items-center justify-center rounded-lg p-1 text-gray-400 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+      >
+        <CalendarPlus size={14} />
+        {n > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-blue-500 text-[9px] font-bold text-white leading-none">
+            {n > 9 ? '9+' : n}
+          </span>
+        )}
+      </button>
+      {open && (
+        <CalendarModal
+          venueId={venueId}
+          customerId={customerId}
+          contactName={contactName}
+          contactEmail={contactEmail}
+          onClose={() => setOpen(false)}
+          onChanged={count => setCount(count)}
+        />
+      )}
+    </>
+  );
+}
+
+function CalendarModal({
+  venueId,
+  customerId,
+  contactName,
+  contactEmail,
+  onClose,
+  onChanged,
+}: {
+  venueId:      string;
+  customerId:   string;
+  contactName:  string;
+  contactEmail: string | null;
+  onClose:      () => void;
+  onChanged:    (upcomingCount: number) => void;
+}) {
+  const [calendars, setCalendars] = useState<VenueCalendar[]>([]);
+  const [events, setEvents] = useState<ContactEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Booking form state — defaults to a 1-hour slot starting in the next half hour.
+  const initialStart = useMemo(() => {
+    const d = new Date(Date.now() + 30 * 60_000);
+    d.setMinutes(0, 0, 0); // round to next hour
+    if (d.getTime() < Date.now()) d.setHours(d.getHours() + 1);
+    return d;
+  }, []);
+  const [title, setTitle] = useState('');
+  const [startLocal, setStartLocal] = useState(isoToLocalInput(initialStart.toISOString()));
+  const [endLocal, setEndLocal] = useState(isoToLocalInput(new Date(initialStart.getTime() + 60 * 60_000).toISOString()));
+  const [calendarId, setCalendarId] = useState<string>('');
+  const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [createMode, setCreateMode] = useState(false);
+
+  const recountUpcoming = useCallback((rows: ContactEvent[]) => {
+    const now = Date.now();
+    onChanged(rows.filter(e => new Date(e.start_at).getTime() >= now).length);
+  }, [onChanged]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await fetch(`/api/admin/support/contact/${venueId}/${customerId}/calendar`, { cache: 'no-store' });
+      const raw = await r.json().catch(() => ({}));
+      const d = raw as { error?: string; calendars?: VenueCalendar[]; events?: ContactEvent[] };
+      if (!r.ok) throw new Error(d.error || `Failed (${r.status})`);
+      const cals = d.calendars ?? [];
+      const evs  = d.events ?? [];
+      setCalendars(cals);
+      setEvents(evs);
+      recountUpcoming(evs);
+      const def = cals.find((c: VenueCalendar) => c.is_default) ?? cals[0];
+      if (def && !calendarId) setCalendarId(def.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load calendar');
+    } finally {
+      setLoading(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [venueId, customerId]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const submit = useCallback(async () => {
+    if (!title.trim()) {
+      setError('Title is required');
+      return;
+    }
+    if (!startLocal || !endLocal) {
+      setError('Start and end times are required');
+      return;
+    }
+    const startIso = localInputToIso(startLocal);
+    const endIso = localInputToIso(endLocal);
+    if (new Date(endIso) <= new Date(startIso)) {
+      setError('End must be after start');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const r = await fetch(`/api/admin/support/contact/${venueId}/${customerId}/calendar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: title.trim(),
+          start_at: startIso,
+          end_at: endIso,
+          calendar_id: calendarId || null,
+          notes: notes.trim() || null,
+        }),
+      });
+      const d = await r.json().catch(() => ({} as { error?: string; event?: ContactEvent }));
+      if (!r.ok || !d.event) throw new Error(d.error || `Failed (${r.status})`);
+      const next = [d.event as ContactEvent, ...events];
+      setEvents(next);
+      recountUpcoming(next);
+      setTitle('');
+      setNotes('');
+      setCreateMode(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to create event');
+    } finally {
+      setSaving(false);
+    }
+  }, [title, startLocal, endLocal, calendarId, notes, venueId, customerId, events, recountUpcoming]);
+
+  const calendarsById = useMemo(() => {
+    const m = new Map<string, VenueCalendar>();
+    for (const c of calendars) m.set(c.id, c);
+    return m;
+  }, [calendars]);
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg max-h-[85vh] flex flex-col rounded-2xl bg-white shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+          <div className="flex items-center gap-2">
+            <CalendarPlus size={16} className="text-blue-500" />
+            <h3 className="text-sm font-semibold text-gray-900">Calendar — {contactName}</h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+          >
+            <X size={14} />
+          </button>
+        </div>
+
+        <div className="px-4 py-3 border-b border-gray-100 bg-blue-50/40">
+          <p className="text-[11px] text-blue-900">
+            Events you book here are written to the venue&apos;s calendar and pushed to their connected Google Calendar — no need to enter their account.
+          </p>
+        </div>
+
+        {!contactEmail && (
+          <div className="mx-4 mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+            <AlertCircle size={11} className="inline mr-1" />
+            This contact doesn&apos;t have an email on file — events can&apos;t be linked until one is added.
+          </div>
+        )}
+
+        {error && (
+          <div className="mx-4 mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700">
+            <AlertCircle size={11} className="inline mr-1" /> {error}
+          </div>
+        )}
+
+        {/* Booking form */}
+        {contactEmail && (
+          <div className="px-4 py-3 border-b border-gray-100">
+            {!createMode ? (
+              <button
+                type="button"
+                onClick={() => setCreateMode(true)}
+                className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-600 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
+              >
+                <Plus size={12} /> Book a new event for this contact
+              </button>
+            ) : (
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  value={title}
+                  onChange={e => setTitle(e.target.value)}
+                  placeholder="Event title (e.g. Tour, Tasting, Discovery call)"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none"
+                  disabled={saving}
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Start</label>
+                    <input
+                      type="datetime-local"
+                      value={startLocal}
+                      onChange={e => setStartLocal(e.target.value)}
+                      className="mt-0.5 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-900 focus:border-gray-400 focus:outline-none"
+                      disabled={saving}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">End</label>
+                    <input
+                      type="datetime-local"
+                      value={endLocal}
+                      onChange={e => setEndLocal(e.target.value)}
+                      className="mt-0.5 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-900 focus:border-gray-400 focus:outline-none"
+                      disabled={saving}
+                    />
+                  </div>
+                </div>
+                {calendars.length > 0 && (
+                  <div>
+                    <label className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Calendar</label>
+                    <select
+                      value={calendarId}
+                      onChange={e => setCalendarId(e.target.value)}
+                      className="mt-0.5 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-900 focus:border-gray-400 focus:outline-none"
+                      disabled={saving}
+                    >
+                      <option value="">— Default —</option>
+                      {calendars.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}{c.is_default ? ' (default)' : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <textarea
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  placeholder="Notes (optional)"
+                  rows={2}
+                  className="w-full resize-none rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none"
+                  disabled={saving}
+                />
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setCreateMode(false); setError(null); }}
+                    disabled={saving}
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={submit}
+                    disabled={saving || !title.trim()}
+                    className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {saving ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
+                    {saving ? 'Booking…' : 'Book event'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Events list */}
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+          {loading && (
+            <div className="flex items-center justify-center py-6 text-gray-400">
+              <Loader2 size={16} className="animate-spin" />
+            </div>
+          )}
+          {!loading && events.length === 0 && (
+            <p className="py-6 text-center text-xs text-gray-400">No events on file for this contact yet.</p>
+          )}
+          {events.map(ev => {
+            const cal = ev.calendar_id ? calendarsById.get(ev.calendar_id) : null;
+            const isPast = new Date(ev.start_at).getTime() < Date.now();
+            return (
+              <div
+                key={ev.id}
+                className={`rounded-lg border px-3 py-2 ${isPast ? 'border-gray-100 bg-gray-50' : 'border-blue-100 bg-blue-50/30'}`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-gray-900 truncate">{ev.title}</p>
+                    <p className="mt-0.5 flex items-center gap-1.5 text-[10px] text-gray-600">
+                      <Clock size={9} />
+                      {new Date(ev.start_at).toLocaleString([], {
+                        weekday: 'short', month: 'short', day: 'numeric',
+                        hour: 'numeric', minute: '2-digit',
+                      })}
+                    </p>
+                    {ev.notes && (
+                      <p className="mt-1 text-[10px] text-gray-600 line-clamp-2">{ev.notes}</p>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    {cal && (
+                      <span
+                        className="inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
+                        style={{ borderColor: cal.color + '60', backgroundColor: cal.color + '20', color: cal.color }}
+                      >
+                        {cal.name}
+                      </span>
+                    )}
+                    {ev.google_html_link && (
+                      <a
+                        href={ev.google_html_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-0.5 text-[10px] text-blue-600 hover:underline"
+                      >
+                        Google <ExternalLink size={9} />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }

@@ -374,6 +374,7 @@ export async function GET(
     } : null,
     recent_activity: recentActivity,
     lead_id: (lead?.id as string | null) ?? null,
+    venue_customer_id: t.venue_customer_id,
     pipelines: pipelinesWithStages,
     tags: venueTags,
     applied_tag_ids: appliedTagIds,
