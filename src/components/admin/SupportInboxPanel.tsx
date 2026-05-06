@@ -13,7 +13,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import {
   Inbox, LifeBuoy, Search, RefreshCw, Send, MessageSquare,
@@ -127,8 +127,11 @@ function fullName(first: string | null, last: string | null, fallback = 'Unknown
 }
 
 export function SupportInboxPanel() {
+  const router       = useRouter();
+  const pathname     = usePathname();
   const searchParams = useSearchParams();
-  // Restore state from URL (e.g. after returning from impersonation)
+  // Restore state from URL (e.g. after returning from impersonation,
+  // or after a hard refresh — preserves which thread was open).
   const initialTab = (searchParams.get('tab') === 'tickets' ? 'tickets' : 'bride-replies') as SupportSubTab;
   const initialThread = searchParams.get('thread') || null;
 
@@ -256,6 +259,29 @@ export function SupportInboxPanel() {
   useEffect(() => {
     if (subTab === 'bride-replies') fetchInbox();
   }, [subTab, fetchInbox]);
+
+  // Sync active thread + tab to the URL so a hard refresh (or a return from
+  // impersonation) lands you back on the same thread you were viewing — and
+  // so the bride-context sidebar refetches the correct row instead of
+  // silently jumping to the first thread in the list.
+  useEffect(() => {
+    if (!pathname) return;
+    const next = new URLSearchParams(searchParams.toString());
+    if (subTab === 'tickets') next.set('tab', 'tickets');
+    else next.delete('tab');
+    if (activeThreadId) next.set('thread', activeThreadId);
+    else next.delete('thread');
+    const qs = next.toString();
+    const target = qs ? `${pathname}?${qs}` : pathname;
+    const current = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
+    if (target !== current) {
+      router.replace(target, { scroll: false });
+    }
+    // We intentionally exclude searchParams from deps so we only push when
+    // our own state (subTab/activeThreadId) changes — searchParams is read
+    // synchronously above to compute the next URL.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeThreadId, subTab, pathname, router]);
 
   function submitSearch() {
     setCommittedSearch(search.trim());
