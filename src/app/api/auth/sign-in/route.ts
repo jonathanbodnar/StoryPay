@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
   const { data: venue } = await supabaseAdmin
     .from('venues')
     .select(
-      'id, name, email, setup_completed, onboarding_status, login_token, password_hash, directory_plan_id, directory_subscription_status',
+      'id, name, email, setup_completed, onboarding_status, login_token, password_hash, directory_plan_id, directory_subscription_status, directory_plans(is_legacy)',
     )
     .ilike('email', normalized)
     .maybeSingle();
@@ -52,14 +52,17 @@ export async function POST(request: NextRequest) {
 
     // Signup-plan gate: a venue owner is only "fully onboarded" once they've
     // picked a plan AND completed (or trial-activated) the subscription.
-    // Anything else routes them back to /signup/plan to finish that step,
-    // otherwise they bounce back into the signup funnel mid-flow on every
-    // login.
+    // Legacy-plan venues bypass this entirely — they are billed externally
+    // and never go through the self-serve subscription flow.
+    const planData = venue.directory_plans as { is_legacy?: boolean } | null;
+    const isLegacy = planData?.is_legacy === true;
     const subStatus = String(venue.directory_subscription_status ?? 'none');
     const needsPlan =
-      !venue.directory_plan_id ||
-      subStatus === 'none' ||
-      subStatus === 'pending';
+      !isLegacy && (
+        !venue.directory_plan_id ||
+        subStatus === 'none' ||
+        subStatus === 'pending'
+      );
     const redirect = needsPlan ? '/signup/plan' : '/dashboard';
 
     const response = NextResponse.json({ redirect });
