@@ -12,7 +12,7 @@ import {
   LayoutDashboard, Menu, Lightbulb, BookOpen, Star, Globe, Layers,
   Repeat, Wallet, BadgeCheck, Sparkles, CalendarDays, Eye, EyeOff,
   Settings, Database, CheckCircle2, AlertCircle, Heart, CreditCard,
-  Inbox, ChevronLeft, ChevronRight, PanelLeftClose, PanelLeftOpen,
+  Inbox, ChevronLeft, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react';
 import {
   VenueManagementPortal,
