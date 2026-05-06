@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
   const { data: venue } = await supabaseAdmin
     .from('venues')
     .select(
-      'id, name, email, setup_completed, onboarding_status, login_token, password_hash, directory_plan_id, directory_subscription_status, directory_plans(is_legacy)',
+      'id, name, email, setup_completed, onboarding_status, login_token, password_hash, directory_plan_id, directory_subscription_status',
     )
     .ilike('email', normalized)
     .maybeSingle();
@@ -54,8 +54,15 @@ export async function POST(request: NextRequest) {
     // picked a plan AND completed (or trial-activated) the subscription.
     // Legacy-plan venues bypass this entirely — they are billed externally
     // and never go through the self-serve subscription flow.
-    const planData = venue.directory_plans as { is_legacy?: boolean } | null;
-    const isLegacy = planData?.is_legacy === true;
+    let isLegacy = false;
+    if (venue.directory_plan_id) {
+      const { data: planRow } = await supabaseAdmin
+        .from('directory_plans')
+        .select('is_legacy')
+        .eq('id', venue.directory_plan_id)
+        .maybeSingle();
+      isLegacy = (planRow as { is_legacy?: boolean } | null)?.is_legacy === true;
+    }
     const subStatus = String(venue.directory_subscription_status ?? 'none');
     const needsPlan =
       !isLegacy && (

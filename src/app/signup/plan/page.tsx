@@ -17,7 +17,7 @@ export default async function SignupPlanPage() {
   const { data: venue } = await supabaseAdmin
     .from('venues')
     .select(
-      'id, name, owner_first_name, email, directory_plan_id, directory_subscription_status, directory_plans(is_legacy)',
+      'id, name, owner_first_name, email, directory_plan_id, directory_subscription_status',
     )
     .eq('id', venueId)
     .maybeSingle();
@@ -25,8 +25,16 @@ export default async function SignupPlanPage() {
   if (!venue) redirect('/signup');
 
   // Legacy-plan venues bypass subscription entirely — send straight to dashboard
-  const planData = (venue as Record<string, unknown>).directory_plans as { is_legacy?: boolean } | null;
-  if (planData?.is_legacy === true) redirect('/dashboard');
+  if ((venue as Record<string, unknown>).directory_plan_id) {
+    const { data: planRow } = await supabaseAdmin
+      .from('directory_plans')
+      .select('is_legacy')
+      .eq('id', (venue as Record<string, unknown>).directory_plan_id as string)
+      .maybeSingle();
+    if ((planRow as { is_legacy?: boolean } | null)?.is_legacy === true) {
+      redirect('/dashboard');
+    }
+  }
 
   // Already has an active subscription → skip ahead to dashboard
   const liveStatus = (venue as Record<string, unknown>).directory_subscription_status as string | null;
