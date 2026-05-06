@@ -19,6 +19,7 @@
 
 import { getDeepSeekClient, DEEPSEEK_MODEL } from '@/lib/ai-client';
 import { supabaseAdmin } from '@/lib/supabase';
+import { stripEmDashes } from '@/lib/ai-text-cleanup';
 
 // ── Public types ──────────────────────────────────────────────────────────
 
@@ -163,6 +164,7 @@ export async function draftBrideReply(input: DraftReplyInput): Promise<DraftRepl
     '- Match the voice samples below (tone, sentence length).',
     '- Address the bride\'s last question/message directly. Don\'t restate it — just answer.',
     '- End with a soft forward-motion question (tour, call, next step) when natural.',
+    '- NEVER use em dashes (—) or en dashes (–). Use commas, periods, or new sentences instead.',
     `- ${channelGuide}`,
     '- Output ONLY the reply text. No prefixes, no quotes, no JSON.',
     voiceBlock,
@@ -193,11 +195,13 @@ export async function draftBrideReply(input: DraftReplyInput): Promise<DraftRepl
     return { ok: false, error: e instanceof Error ? e.message : 'DeepSeek error' };
   }
 
-  const cleaned = raw
-    .replace(/^[\s`'"]+/, '')
-    .replace(/[\s`'"]+$/, '')
-    .replace(/^"|"$/g, '')
-    .trim();
+  const cleaned = stripEmDashes(
+    raw
+      .replace(/^[\s`'"]+/, '')
+      .replace(/[\s`'"]+$/, '')
+      .replace(/^"|"$/g, '')
+      .trim(),
+  );
 
   if (!cleaned) return { ok: false, error: 'Empty draft' };
 

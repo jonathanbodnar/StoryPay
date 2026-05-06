@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { getVenueFromSession } from '@/lib/session';
 import { getDeepSeekClient, DEEPSEEK_MODEL } from '@/lib/ai-client';
+import { stripEmDashes } from '@/lib/ai-text-cleanup';
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
@@ -87,7 +88,7 @@ FORMAT RULES:
       temperature: 0.7,
     });
 
-    const html = completion.choices[0]?.message?.content || '';
+    const html = stripEmDashes(completion.choices[0]?.message?.content || '');
     return NextResponse.json({ html });
   } catch (err) {
     console.error('[ai/proposal] DeepSeek error:', err);

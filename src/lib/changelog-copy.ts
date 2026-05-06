@@ -1,4 +1,5 @@
-import OpenAI from 'openai';
+import { getDeepSeekClient, DEEPSEEK_MODEL } from '@/lib/ai-client';
+import { stripEmDashes } from '@/lib/ai-text-cleanup';
 
 export type ChangelogCopy = {
   title: string;
@@ -26,14 +27,14 @@ export async function generateChangelogCopy(input: GenerateInput): Promise<Chang
   const category = input.category ?? inferCategory(input.requestTitle, input.requestDescription);
   const fallback = buildFallbackCopy(input, category);
 
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  const apiKey = process.env.DEEPSEEK_API_KEY?.trim();
   if (!apiKey) return fallback;
 
   try {
-    const openai = new OpenAI({ apiKey });
+    const deepseek = getDeepSeekClient();
     const prompt = buildPrompt(input, category);
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+    const completion = await deepseek.chat.completions.create({
+      model: DEEPSEEK_MODEL,
       temperature: 0.4,
       max_tokens: 280,
       response_format: { type: 'json_object' },
@@ -42,7 +43,8 @@ export async function generateChangelogCopy(input: GenerateInput): Promise<Chang
           role: 'system',
           content:
             'You are the product marketing writer for StoryVenue, a SaaS for wedding venues. ' +
-            'You turn shipped feature-requests into changelog entries. Always respond with strict JSON.',
+            'You turn shipped feature-requests into changelog entries. Always respond with strict JSON. ' +
+            'NEVER use em dashes (—) or en dashes (–). Use commas, periods, or new sentences instead.',
         },
         { role: 'user', content: prompt },
       ],
@@ -50,11 +52,11 @@ export async function generateChangelogCopy(input: GenerateInput): Promise<Chang
 
     const raw = completion.choices[0]?.message?.content ?? '';
     const parsed = safeParse(raw);
-    const title = sanitizeLine(parsed.title, 80) || fallback.title;
-    const description = sanitizeParagraph(parsed.description, 400) || fallback.description;
+    const title = stripEmDashes(sanitizeLine(parsed.title, 80)) || fallback.title;
+    const description = stripEmDashes(sanitizeParagraph(parsed.description, 400)) || fallback.description;
     return { title, description, category };
   } catch (err) {
-    console.warn('[changelog-copy] OpenAI fallback:', err);
+    console.warn('[changelog-copy] DeepSeek fallback:', err);
     return fallback;
   }
 }

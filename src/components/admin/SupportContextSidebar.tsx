@@ -339,7 +339,7 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
                 currentStageId={data.pipeline?.id ?? null}
                 currentStageName={data.pipeline?.name ?? null}
                 currentStageColor={data.pipeline?.color ?? null}
-                disabled={!data.lead_id || actionPending}
+                disabled={actionPending}
                 onSelect={(stageId, stageName) =>
                   runAction(
                     { action: 'set_stage', stageId },
@@ -371,7 +371,7 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
             <TagsRow
               allTags={data.tags}
               appliedTagIds={data.applied_tag_ids}
-              disabled={!data.lead_id || actionPending}
+              disabled={actionPending}
               onAdd={(tagId, tagName) =>
                 runAction(
                   { action: 'add_tag', tagId },

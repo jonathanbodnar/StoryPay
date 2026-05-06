@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getDeepSeekClient, DEEPSEEK_MODEL } from '@/lib/ai-client';
+import { stripEmDashes } from '@/lib/ai-text-cleanup';
 
 const PLATFORM_DOCS = `
 # StoryVenue Platform Documentation
@@ -1077,7 +1078,10 @@ ${leadsContext ? '\n' + leadsContext + '\n' : ''}
 - Place the link on its own line at the end of the relevant sentence or step, not inline mid-sentence
 
 === TONE ===
-Friendly, professional, calm, helpful, clear. Not robotic. Not salesy.`;
+Friendly, professional, calm, helpful, clear. Not robotic. Not salesy.
+
+=== PUNCTUATION RULES ===
+NEVER use em dashes (—) or en dashes (–). Use commas, periods, parentheses, or new sentences instead. This is non-negotiable.`;
 
   const deepseek = getDeepSeekClient();
 
@@ -1092,7 +1096,8 @@ Friendly, professional, calm, helpful, clear. Not robotic. Not salesy.`;
       temperature: 0.5,
     });
 
-    const reply = completion.choices[0]?.message?.content || 'Sorry, I could not generate a response. Please try again.';
+    const rawReply = completion.choices[0]?.message?.content || 'Sorry, I could not generate a response. Please try again.';
+    const reply = stripEmDashes(rawReply);
     return NextResponse.json({ reply });
   } catch (err) {
     console.error('[ai/chat] DeepSeek error:', err);

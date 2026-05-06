@@ -16,6 +16,7 @@
  */
 
 import { getDeepSeekClient, DEEPSEEK_MODEL } from '@/lib/ai-client';
+import { stripEmDashes } from '@/lib/ai-text-cleanup';
 import { type AiAngleKey, isAiAngleKey } from './types';
 
 // ── Public types ───────────────────────────────────────────────────────────
@@ -137,7 +138,7 @@ export function parseStructuredOutput(raw: string): GenerateSmsResult {
     };
   }
 
-  const smsText = (smsMatch[1] || '').trim();
+  const smsText = stripEmDashes((smsMatch[1] || '').trim());
   if (!smsText) {
     return {
       ok: false,

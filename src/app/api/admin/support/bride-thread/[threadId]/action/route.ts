@@ -49,6 +49,86 @@ interface LeadRow {
   sms_dnd_source:            string | null;
 }
 
+/**
+ * Ensure a `leads` row exists for a venue_customer. Used by support actions
+ * (tag, etc.) that need a lead_id to operate on. Returns the lead id, or null
+ * if we have nothing to identify the contact with (no email, phone, or name).
+ */
+async function ensureLeadForVenueCustomer(
+  venueId: string,
+  venueCustomerId: string,
+): Promise<string | null> {
+  const { data: vc } = await supabaseAdmin
+    .from('venue_customers')
+    .select('first_name, last_name, customer_email, phone, stage_id, pipeline_id')
+    .eq('id', venueCustomerId)
+    .eq('venue_id', venueId)
+    .maybeSingle();
+  const c = vc as {
+    first_name: string | null;
+    last_name: string | null;
+    customer_email: string | null;
+    phone: string | null;
+    stage_id: string | null;
+    pipeline_id: string | null;
+  } | null;
+  if (!c) return null;
+
+  const email = (c.customer_email || '').trim().toLowerCase();
+  const phone = (c.phone || '').trim();
+  const fn    = (c.first_name || '').trim();
+  const ln    = (c.last_name || '').trim();
+
+  // Try to find an existing lead first by email or phone
+  if (email) {
+    const { data: byEmail } = await supabaseAdmin
+      .from('leads')
+      .select('id')
+      .eq('venue_id', venueId)
+      .ilike('email', email)
+      .limit(1);
+    if (byEmail?.[0]) return (byEmail[0] as { id: string }).id;
+  }
+  if (phone) {
+    const { data: byPhone } = await supabaseAdmin
+      .from('leads')
+      .select('id')
+      .eq('venue_id', venueId)
+      .eq('phone', phone)
+      .limit(1);
+    if (byPhone?.[0]) return (byPhone[0] as { id: string }).id;
+  }
+
+  const name = [fn, ln].filter(Boolean).join(' ') || email || phone || null;
+  if (!name) return null;
+
+  const now = new Date().toISOString();
+  const { data: inserted, error } = await supabaseAdmin
+    .from('leads')
+    .insert({
+      venue_id:    venueId,
+      name,
+      first_name:  fn || null,
+      last_name:   ln || null,
+      email:       email || null,
+      phone:       phone || null,
+      source:      'contact',
+      status:      'new',
+      pipeline_id: c.pipeline_id,
+      stage_id:    c.stage_id,
+      position:    0,
+      updated_at:  now,
+    })
+    .select('id')
+    .single();
+
+  if (error || !inserted) {
+    console.error('[ensureLeadForVenueCustomer]', error);
+    return null;
+  }
+  return (inserted as { id: string }).id;
+}
+
 async function resolveLeadForThread(
   threadId: string,
 ): Promise<{ lead: LeadRow | null; venueId: string | null; venueCustomerId: string | null; threadOk: boolean }> {
@@ -185,8 +265,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ threadId: 
     }
 
     case 'add_tag': {
-      if (!lead) return NextResponse.json({ error: 'No lead linked to this thread yet' }, { status: 422 });
       if (!body.tagId) return NextResponse.json({ error: 'tagId required' }, { status: 400 });
+      if (!venueCustomerId) return NextResponse.json({ error: 'No contact linked to this thread' }, { status: 422 });
 
       const { data: tag } = await supabaseAdmin
         .from('marketing_tags')
@@ -196,17 +276,28 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ threadId: 
         .maybeSingle();
       if (!tag) return NextResponse.json({ error: 'Tag not found for this venue' }, { status: 404 });
 
+      // Auto-create a lead from the venue_customer if one doesn't exist yet,
+      // since lead_tag_assignments requires a lead_id.
+      let leadId: string | undefined = lead?.id;
+      if (!leadId) {
+        const created = await ensureLeadForVenueCustomer(venueId, venueCustomerId);
+        if (!created) {
+          return NextResponse.json({ error: 'Could not create a lead for this contact yet, needs at least a name, email, or phone.' }, { status: 422 });
+        }
+        leadId = created;
+      }
+
       const tg = tag as { id: string; name: string };
       const { error: insErr } = await supabaseAdmin
         .from('lead_tag_assignments')
         .upsert(
-          { lead_id: lead.id, tag_id: tg.id, venue_id: venueId },
+          { lead_id: leadId, tag_id: tg.id, venue_id: venueId },
           { onConflict: 'lead_id,tag_id' },
         );
       if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
 
       void supabaseAdmin.from('lead_activity_log').insert({
-        lead_id:  lead.id,
+        lead_id:  leadId,
         venue_id: venueId,
         action:   'tag_added_by_support',
         details:  { tag_id: tg.id, tag_name: tg.name, by: triggeredBy },
@@ -216,8 +307,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ threadId: 
     }
 
     case 'remove_tag': {
-      if (!lead) return NextResponse.json({ error: 'No lead linked to this thread yet' }, { status: 422 });
       if (!body.tagId) return NextResponse.json({ error: 'tagId required' }, { status: 400 });
+      if (!lead) return NextResponse.json({ ok: true }); // nothing to remove
 
       const { error: delErr } = await supabaseAdmin
         .from('lead_tag_assignments')

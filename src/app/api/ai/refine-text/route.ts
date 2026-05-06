@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDeepSeekClient, DEEPSEEK_MODEL } from '@/lib/ai-client';
+import { stripEmDashes } from '@/lib/ai-text-cleanup';
 import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +16,7 @@ export async function POST(req: NextRequest) {
   if (!text?.trim()) return NextResponse.json({ error: 'No text provided' }, { status: 400 });
 
   const variationHint = variation > 0
-    ? ` This is variation #${variation + 1} — use noticeably different phrasing than a typical first attempt.`
+    ? ` This is variation #${variation + 1}, use noticeably different phrasing than a typical first attempt.`
     : '';
 
   const completion = await deepseek.chat.completions.create({
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest) {
     messages: [
       {
         role: 'system',
-        content: `You are a professional copywriter and editor. Rewrite the provided text to be clearer, more polished, and grammatically perfect. Fix any spelling or grammar errors. Never use em dashes (—) or en dashes (–) — replace them with commas or periods. Keep the same meaning, voice, and approximate length.${variationHint} Return ONLY the rewritten text with no explanation, no quotes, no commentary.`,
+        content: `You are a professional copywriter and editor. Rewrite the provided text to be clearer, more polished, and grammatically perfect. Fix any spelling or grammar errors. NEVER use em dashes (—) or en dashes (–). Replace them with commas, periods, or new sentences. Keep the same meaning, voice, and approximate length.${variationHint} Return ONLY the rewritten text with no explanation, no quotes, no commentary.`,
       },
       { role: 'user', content: text },
     ],
@@ -31,6 +32,6 @@ export async function POST(req: NextRequest) {
     max_tokens: 600,
   });
 
-  const refined = completion.choices[0]?.message?.content?.trim() ?? text;
+  const refined = stripEmDashes(completion.choices[0]?.message?.content?.trim() ?? text);
   return NextResponse.json({ refined });
 }
