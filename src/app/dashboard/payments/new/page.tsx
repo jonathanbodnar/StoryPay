@@ -640,7 +640,7 @@ function NewProposalInvoicePageInner() {
  if (!res.ok) { const d=await res.json(); setError(d.error||'Failed'); return; }
  }
 
- router.push('/dashboard/proposals');
+ router.push('/dashboard/payments/proposals');
  } catch { setError('Network error. Please try again.'); }
  finally { setSaving(false); setSubmitting(false); }
  }

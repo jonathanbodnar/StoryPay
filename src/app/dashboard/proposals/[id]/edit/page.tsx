@@ -214,7 +214,7 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
  const data = await res.json();
  throw new Error(data.error || 'Failed to delete');
  }
- router.push('/dashboard/proposals');
+ router.push('/dashboard/payments/proposals');
  } catch (err) {
  setError(err instanceof Error ? err.message : 'Something went wrong');
  } finally {
@@ -259,7 +259,7 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
  <div>
  <div className="mb-8">
  <button
- onClick={() => router.push('/dashboard/proposals')}
+ onClick={() => router.push('/dashboard/payments/proposals')}
  className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-4 transition-colors"
  >
  <ArrowLeft size={14} />
@@ -592,7 +592,7 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
  ) : (
  <div className="flex items-center gap-3 ml-auto">
  <button
- onClick={() => router.push('/dashboard/proposals')}
+ onClick={() => router.push('/dashboard/payments/proposals')}
  className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-5 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
  >
  Back to Proposals

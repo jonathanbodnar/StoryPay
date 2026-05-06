@@ -266,7 +266,7 @@ export default function NewProposalPage() {
  throw new Error(data.error || 'Failed to create proposal');
  }
 
- router.push('/dashboard/proposals');
+ router.push('/dashboard/payments/proposals');
  } catch (err) {
  setError(err instanceof Error ? err.message : 'Something went wrong');
  } finally {
@@ -295,7 +295,7 @@ export default function NewProposalPage() {
  throw new Error(data.error || 'Failed to save draft');
  }
 
- router.push('/dashboard/proposals');
+ router.push('/dashboard/payments/proposals');
  } catch (err) {
  setError(err instanceof Error ? err.message : 'Something went wrong');
  } finally {
@@ -756,7 +756,7 @@ export default function NewProposalPage() {
  </button>
  <button
  type="button"
- onClick={() => router.push('/dashboard/proposals')}
+ onClick={() => router.push('/dashboard/payments/proposals')}
  className="rounded-lg px-5 py-2.5 text-sm font-medium text-gray-500 transition-colors hover:text-gray-700"
  >
  Cancel

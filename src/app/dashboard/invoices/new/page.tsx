@@ -203,7 +203,7 @@ export default function NewInvoicePage() {
  });
 
  if (res.ok) {
- router.push('/dashboard/proposals');
+ router.push('/dashboard/payments/proposals');
  } else {
  const data = await res.json();
  setError(data.error || 'Failed to create invoice');
