@@ -37,7 +37,7 @@ export async function GET(
 
   const t = thread as { id: string; venue_id: string; venue_customer_id: string; last_message_at: string; created_at: string };
 
-  const [{ data: venue }, { data: customer }] = await Promise.all([
+  const [{ data: venue, error: venueErr }, { data: customer, error: customerErr }] = await Promise.all([
     supabaseAdmin.from('venues')
       .select(`
         id, name, notification_email, timezone, created_at,
@@ -47,10 +47,15 @@ export async function GET(
         ai_concierge_notify_emails
       `)
       .eq('id', t.venue_id).maybeSingle(),
+    // Use * so a missing column never silently zeros stage_id/pipeline_id
+    // out of the response (we read those fields below).
     supabaseAdmin.from('venue_customers')
-      .select('id, first_name, last_name, customer_email, phone, created_at, sms_dnd, conversation_dnd_all, stage_id, pipeline_id')
+      .select('*')
       .eq('id', t.venue_customer_id).maybeSingle(),
   ]);
+
+  if (venueErr) console.error('[bride-context] venues select failed', { threadId, err: venueErr.message });
+  if (customerErr) console.error('[bride-context] venue_customers select failed', { threadId, err: customerErr.message });
 
   // 2. Plan
   const v = venue as Record<string, unknown> | null;
@@ -67,9 +72,11 @@ export async function GET(
     }
   }
 
-  // 3. Lead — best-effort match (email > phone). Use case-insensitive email
-  //    matching so leads created via different code paths (where email may be
-  //    stored mixed-case) still link up to the venue_customer record.
+  // 3. Leads — best-effort match (email and/or phone). Use case-insensitive
+  //    matching so leads created via different code paths still link up. We
+  //    collect ALL matching leads (not just the first) so tags from any
+  //    duplicate also appear, and we still pick a single canonical lead for
+  //    everything else (most recent).
   const LEAD_FIELDS = `
     id, first_name, last_name, email, phone, status, lead_source, created_at,
     ai_state, ai_first_activated_at, ai_expires_at, ai_next_send_at,
@@ -78,45 +85,51 @@ export async function GET(
     stage_id, pipeline_id
   `;
   const c = customer as Record<string, unknown> | null;
+  const allMatchingLeadIds = new Set<string>();
   let lead: Record<string, unknown> | null = null;
   if (c) {
     const email = ((c.customer_email as string) || '').trim().toLowerCase();
+    const phone = ((c.phone as string) || '').trim();
     if (email) {
-      const { data: leadByEmail } = await supabaseAdmin
+      const { data: byEmail } = await supabaseAdmin
         .from('leads')
         .select(LEAD_FIELDS)
         .eq('venue_id', t.venue_id)
         .ilike('email', email)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (leadByEmail) lead = leadByEmail as Record<string, unknown>;
+        .order('created_at', { ascending: false });
+      for (const l of (byEmail ?? []) as Array<Record<string, unknown>>) {
+        allMatchingLeadIds.add(l.id as string);
+        if (!lead) lead = l;
+      }
     }
-    if (!lead && c.phone) {
-      const { data: leadByPhone } = await supabaseAdmin
+    if (phone) {
+      const { data: byPhone } = await supabaseAdmin
         .from('leads')
         .select(LEAD_FIELDS)
         .eq('venue_id', t.venue_id)
-        .eq('phone', c.phone as string)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (leadByPhone) lead = leadByPhone as Record<string, unknown>;
+        .eq('phone', phone)
+        .order('created_at', { ascending: false });
+      for (const l of (byPhone ?? []) as Array<Record<string, unknown>>) {
+        allMatchingLeadIds.add(l.id as string);
+        if (!lead) lead = l;
+      }
     }
   }
 
-  // 4. Pipeline stage (for the lead OR for the customer — same join as elsewhere)
-  // We prefer the customer's stage_id since that's the canonical source for
-  // chat threads (the venue conversations page writes there). Fall back to the
-  // matched lead's stage_id if the customer hasn't been assigned one yet.
+  // 4. Pipeline stage. Prefer the customer's stage_id since that's the
+  //    canonical source for chat threads (venue conversations + contacts
+  //    pages write there). Fall back to a matched lead's stage_id.
   let pipelineStage: { id: string; name: string; color: string | null; pipeline_id: string; pipeline_name: string } | null = null;
   const stageId = (c?.stage_id as string | null) || (lead?.stage_id as string | null) || null;
   if (stageId) {
-    const { data: stage } = await supabaseAdmin
+    const { data: stage, error: stageErr } = await supabaseAdmin
       .from('lead_pipeline_stages')
       .select('id, name, color, pipeline_id, venue_id')
       .eq('id', stageId)
       .maybeSingle();
+    if (stageErr) {
+      console.error('[bride-context] stage lookup failed', { threadId, stageId, err: stageErr.message });
+    }
     if (stage) {
       const s = stage as { id: string; name: string; color: string | null; pipeline_id: string };
       const { data: p } = await supabaseAdmin
@@ -131,7 +144,19 @@ export async function GET(
         pipeline_id:  s.pipeline_id,
         pipeline_name: (p as { name?: string } | null)?.name ?? '',
       };
+    } else {
+      console.warn('[bride-context] no stage row for stageId', { threadId, stageId });
     }
+  } else {
+    console.warn('[bride-context] no stageId resolved', {
+      threadId,
+      vc_stage_id: c?.stage_id ?? null,
+      lead_stage_id: lead?.stage_id ?? null,
+      vc_id: t.venue_customer_id,
+      vc_email: c?.customer_email ?? null,
+      vc_phone: c?.phone ?? null,
+      matching_leads: allMatchingLeadIds.size,
+    });
   }
 
   // 5. Open ticket count
@@ -219,13 +244,22 @@ export async function GET(
     .order('position', { ascending: true });
   const venueTags = ((tagRows ?? []) as Array<{ id: string; name: string; icon: string; color: string | null }>);
 
+  // Pull tags from ALL matching leads (handles duplicate-lead scenarios where
+  // the tag was applied to a different row than the one we picked as canonical).
   let appliedTagIds: string[] = [];
-  if (lead?.id) {
+  if (allMatchingLeadIds.size > 0) {
+    const ids = Array.from(allMatchingLeadIds);
     const { data: assigns } = await supabaseAdmin
       .from('lead_tag_assignments')
       .select('tag_id')
-      .eq('lead_id', lead.id as string);
-    appliedTagIds = ((assigns ?? []) as Array<{ tag_id: string }>).map(a => a.tag_id);
+      .in('lead_id', ids);
+    const seen = new Set<string>();
+    for (const a of (assigns ?? []) as Array<{ tag_id: string }>) {
+      if (!seen.has(a.tag_id)) {
+        seen.add(a.tag_id);
+        appliedTagIds.push(a.tag_id);
+      }
+    }
   }
 
   return NextResponse.json({
