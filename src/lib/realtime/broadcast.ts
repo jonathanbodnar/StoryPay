@@ -15,6 +15,7 @@ import {
   type TicketMessageEvent,
   type TicketStatusEvent,
   type StageChangedEvent,
+  type TagsChangedEvent,
 } from './channels';
 
 async function send(channelName: string, event: string, payload: unknown): Promise<void> {
@@ -87,5 +88,13 @@ export async function broadcastStageChanged(evt: StageChangedEvent): Promise<voi
   await Promise.allSettled([
     send(supportChannels.brideThread(evt.threadId),                       'stage_changed', evt),
     send(supportChannels.venueThread(evt.venueId, evt.threadId),          'stage_changed', evt),
+  ]);
+}
+
+/** Broadcast a tag change so the admin context sidebar reflects it without a refresh. */
+export async function broadcastTagsChanged(evt: TagsChangedEvent): Promise<void> {
+  await Promise.allSettled([
+    send(supportChannels.brideThread(evt.threadId),                       'tags_changed', evt),
+    send(supportChannels.venueThread(evt.venueId, evt.threadId),          'tags_changed', evt),
   ]);
 }

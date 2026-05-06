@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { SlaPill } from '@/components/support/SlaIndicator';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
-import { supportChannels, type StageChangedEvent } from '@/lib/realtime/channels';
+import { supportChannels, type StageChangedEvent, type TagsChangedEvent } from '@/lib/realtime/channels';
 
 interface ContextResponse {
   bride: {
@@ -201,23 +201,29 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
     if (threadId) void load();
   }, [threadId, load]);
 
-  // Live stage updates from the venue side — update inline without a full refetch
+  // Live stage + tag updates from the venue side — update inline without a full refetch
   useBroadcastChannel(
     threadId ? supportChannels.brideThread(threadId) : null,
-    ['stage_changed'],
-    useCallback((_evt, payload) => {
-      const s = payload as StageChangedEvent;
-      if (!s) return;
-      setData(prev => prev ? {
-        ...prev,
-        pipeline: {
-          id:            s.stageId,
-          name:          s.stageName,
-          color:         s.stageColor,
-          pipeline_id:   s.pipelineId,
-          pipeline_name: prev.pipeline?.pipeline_name ?? '',
-        },
-      } : prev);
+    ['stage_changed', 'tags_changed'],
+    useCallback((evt, payload) => {
+      if (evt === 'stage_changed') {
+        const s = payload as StageChangedEvent;
+        if (!s) return;
+        setData(prev => prev ? {
+          ...prev,
+          pipeline: {
+            id:            s.stageId,
+            name:          s.stageName,
+            color:         s.stageColor,
+            pipeline_id:   s.pipelineId,
+            pipeline_name: prev.pipeline?.pipeline_name ?? '',
+          },
+        } : prev);
+      } else if (evt === 'tags_changed') {
+        const t = payload as TagsChangedEvent;
+        if (!t) return;
+        setData(prev => prev ? { ...prev, applied_tag_ids: t.appliedTagIds } : prev);
+      }
     }, []),
   );
 

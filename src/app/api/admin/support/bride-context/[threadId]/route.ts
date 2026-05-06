@@ -246,13 +246,21 @@ export async function GET(
 
   // Pull tags from ALL matching leads (handles duplicate-lead scenarios where
   // the tag was applied to a different row than the one we picked as canonical).
-  let appliedTagIds: string[] = [];
+  // We scope to venue_id as a defense-in-depth check, since lead_tag_assignments
+  // has both lead_id and venue_id columns.
+  const appliedTagIds: string[] = [];
   if (allMatchingLeadIds.size > 0) {
     const ids = Array.from(allMatchingLeadIds);
-    const { data: assigns } = await supabaseAdmin
+    const { data: assigns, error: tagErr } = await supabaseAdmin
       .from('lead_tag_assignments')
-      .select('tag_id')
+      .select('tag_id, lead_id')
+      .eq('venue_id', t.venue_id)
       .in('lead_id', ids);
+    if (tagErr) {
+      console.error('[bride-context] lead_tag_assignments lookup failed', {
+        threadId, lead_ids: ids, err: tagErr.message,
+      });
+    }
     const seen = new Set<string>();
     for (const a of (assigns ?? []) as Array<{ tag_id: string }>) {
       if (!seen.has(a.tag_id)) {
@@ -260,6 +268,19 @@ export async function GET(
         appliedTagIds.push(a.tag_id);
       }
     }
+    console.warn('[bride-context] tag lookup result', {
+      threadId,
+      lead_ids: ids,
+      assigns_count: (assigns ?? []).length,
+      tags_returned: appliedTagIds.length,
+    });
+  } else {
+    console.warn('[bride-context] no matching leads for tags', {
+      threadId,
+      vc_id: t.venue_customer_id,
+      vc_email: c?.customer_email ?? null,
+      vc_phone: c?.phone ?? null,
+    });
   }
 
   return NextResponse.json({

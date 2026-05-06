@@ -24,7 +24,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { applyAiTag, removeAiTag } from '@/lib/ai-concierge/pipeline-tag-service';
 import { ensureVenueAiResources } from '@/lib/ai-concierge/venue-resources';
 import { recordAiStateTransition } from '@/lib/ai-concierge/state-transitions';
-import { broadcastStageChanged } from '@/lib/realtime/broadcast';
+import { broadcastStageChanged, broadcastTagsChanged } from '@/lib/realtime/broadcast';
 import type { AiState } from '@/lib/ai-concierge/types';
 
 export const dynamic = 'force-dynamic';
@@ -47,6 +47,62 @@ interface LeadRow {
   ai_re_enable_count:        number | null;
   sms_dnd:                   boolean | null;
   sms_dnd_source:            string | null;
+}
+
+/**
+ * Compute the union of currently-applied tag ids across every lead that
+ * matches this venue_customer's email or phone, then broadcast a
+ * tags_changed event to the active thread + venue thread channels so the
+ * support sidebar (and venue-side conversations page) update without a
+ * refresh. Best-effort — failures are logged but never thrown.
+ */
+async function fanoutTagsChanged(
+  threadId: string,
+  venueId: string,
+  venueCustomerId: string,
+  source: 'support' | 'venue',
+): Promise<void> {
+  try {
+    const { data: vc } = await supabaseAdmin
+      .from('venue_customers')
+      .select('customer_email, phone')
+      .eq('id', venueCustomerId)
+      .maybeSingle();
+    const c = vc as { customer_email: string | null; phone: string | null } | null;
+    const email = (c?.customer_email || '').trim().toLowerCase();
+    const phone = (c?.phone || '').trim();
+    const leadIds = new Set<string>();
+    if (email) {
+      const { data } = await supabaseAdmin
+        .from('leads').select('id')
+        .eq('venue_id', venueId)
+        .ilike('email', email);
+      for (const r of (data ?? []) as Array<{ id: string }>) leadIds.add(r.id);
+    }
+    if (phone) {
+      const { data } = await supabaseAdmin
+        .from('leads').select('id')
+        .eq('venue_id', venueId)
+        .eq('phone', phone);
+      for (const r of (data ?? []) as Array<{ id: string }>) leadIds.add(r.id);
+    }
+    let appliedTagIds: string[] = [];
+    if (leadIds.size > 0) {
+      const { data: assigns } = await supabaseAdmin
+        .from('lead_tag_assignments')
+        .select('tag_id')
+        .eq('venue_id', venueId)
+        .in('lead_id', Array.from(leadIds));
+      const dedup = new Set<string>();
+      for (const a of (assigns ?? []) as Array<{ tag_id: string }>) dedup.add(a.tag_id);
+      appliedTagIds = Array.from(dedup);
+    }
+    void broadcastTagsChanged({
+      threadId, venueId, vcId: venueCustomerId, appliedTagIds, source,
+    });
+  } catch (err) {
+    console.warn('[fanoutTagsChanged] failed', err);
+  }
 }
 
 /**
@@ -347,27 +403,67 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ threadId: 
         details:  { tag_id: tg.id, tag_name: tg.name, by: triggeredBy },
       }).then(() => {}, () => {});
 
+      if (venueCustomerId) {
+        void fanoutTagsChanged(threadId, venueId, venueCustomerId, 'support');
+      }
+
       return NextResponse.json({ ok: true, tag: { id: tg.id, name: tg.name } });
     }
 
     case 'remove_tag': {
       if (!body.tagId) return NextResponse.json({ error: 'tagId required' }, { status: 400 });
-      if (!lead) return NextResponse.json({ ok: true }); // nothing to remove
+
+      // Remove the tag from EVERY lead that matches this venue_customer's
+      // email/phone so duplicate-lead scenarios don't leave a stray copy.
+      // We collect candidate lead ids the same way bride-context does.
+      const candidateLeadIds = new Set<string>();
+      if (lead?.id) candidateLeadIds.add(lead.id);
+      if (venueCustomerId) {
+        const { data: vc } = await supabaseAdmin
+          .from('venue_customers')
+          .select('customer_email, phone')
+          .eq('id', venueCustomerId)
+          .maybeSingle();
+        const c = vc as { customer_email: string | null; phone: string | null } | null;
+        const em = (c?.customer_email || '').trim().toLowerCase();
+        const ph = (c?.phone || '').trim();
+        if (em) {
+          const { data } = await supabaseAdmin
+            .from('leads').select('id')
+            .eq('venue_id', venueId)
+            .ilike('email', em);
+          for (const r of (data ?? []) as Array<{ id: string }>) candidateLeadIds.add(r.id);
+        }
+        if (ph) {
+          const { data } = await supabaseAdmin
+            .from('leads').select('id')
+            .eq('venue_id', venueId)
+            .eq('phone', ph);
+          for (const r of (data ?? []) as Array<{ id: string }>) candidateLeadIds.add(r.id);
+        }
+      }
+      if (candidateLeadIds.size === 0) return NextResponse.json({ ok: true });
 
       const { error: delErr } = await supabaseAdmin
         .from('lead_tag_assignments')
         .delete()
-        .eq('lead_id', lead.id)
+        .in('lead_id', Array.from(candidateLeadIds))
         .eq('tag_id', body.tagId)
         .eq('venue_id', venueId);
       if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
 
-      void supabaseAdmin.from('lead_activity_log').insert({
-        lead_id:  lead.id,
-        venue_id: venueId,
-        action:   'tag_removed_by_support',
-        details:  { tag_id: body.tagId, by: triggeredBy },
-      }).then(() => {}, () => {});
+      if (lead?.id) {
+        void supabaseAdmin.from('lead_activity_log').insert({
+          lead_id:  lead.id,
+          venue_id: venueId,
+          action:   'tag_removed_by_support',
+          details:  { tag_id: body.tagId, by: triggeredBy },
+        }).then(() => {}, () => {});
+      }
+
+      if (venueCustomerId) {
+        void fanoutTagsChanged(threadId, venueId, venueCustomerId, 'support');
+      }
 
       return NextResponse.json({ ok: true });
     }

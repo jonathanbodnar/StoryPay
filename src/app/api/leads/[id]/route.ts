@@ -9,7 +9,7 @@ import { syncVenueCustomerFromLeadRow } from '@/lib/venue-customer-pipeline-sync
 import { getSessionUser } from '@/lib/session';
 import { insertLeadActivity } from '@/lib/lead-activity';
 import { fetchOpenDuplicateMatchesForLeads, refreshDuplicateCandidatesForLead } from '@/lib/lead-duplicates';
-import { broadcastStageChanged } from '@/lib/realtime/broadcast';
+import { broadcastStageChanged, broadcastTagsChanged } from '@/lib/realtime/broadcast';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -297,6 +297,77 @@ export async function PATCH(
         });
       }
     }
+
+    // Broadcast tags-changed to admin context sidebar so any open bride thread
+    // tied to this lead's email/phone reflects the new applied tag set live.
+    void (async () => {
+      try {
+        const leadEmail  = (leadRow as { email?: string | null }).email ?? null;
+        const leadPhone  = (leadRow as { phone?: string | null }).phone ?? null;
+        if (!leadEmail && !leadPhone) return;
+        // Find every venue_customer that shares this lead's email OR phone
+        const vcIds = new Set<string>();
+        if (leadEmail) {
+          const { data } = await supabaseAdmin
+            .from('venue_customers')
+            .select('id')
+            .eq('venue_id', venueId)
+            .ilike('customer_email', leadEmail);
+          for (const r of (data ?? []) as Array<{ id: string }>) vcIds.add(r.id);
+        }
+        if (leadPhone) {
+          const { data } = await supabaseAdmin
+            .from('venue_customers')
+            .select('id')
+            .eq('venue_id', venueId)
+            .eq('phone', leadPhone);
+          for (const r of (data ?? []) as Array<{ id: string }>) vcIds.add(r.id);
+        }
+        if (vcIds.size === 0) return;
+        // Build the union of tag ids across all leads sharing this email/phone
+        const leadIds = new Set<string>([id]);
+        if (leadEmail) {
+          const { data } = await supabaseAdmin
+            .from('leads').select('id')
+            .eq('venue_id', venueId)
+            .ilike('email', leadEmail);
+          for (const r of (data ?? []) as Array<{ id: string }>) leadIds.add(r.id);
+        }
+        if (leadPhone) {
+          const { data } = await supabaseAdmin
+            .from('leads').select('id')
+            .eq('venue_id', venueId)
+            .eq('phone', leadPhone);
+          for (const r of (data ?? []) as Array<{ id: string }>) leadIds.add(r.id);
+        }
+        const { data: assigns } = await supabaseAdmin
+          .from('lead_tag_assignments')
+          .select('tag_id')
+          .eq('venue_id', venueId)
+          .in('lead_id', Array.from(leadIds));
+        const dedup = new Set<string>();
+        for (const a of (assigns ?? []) as Array<{ tag_id: string }>) dedup.add(a.tag_id);
+        const appliedTagIds = Array.from(dedup);
+        // Fan out to every conversation thread for any matching venue_customer
+        const { data: threads } = await supabaseAdmin
+          .from('conversation_threads')
+          .select('id, venue_customer_id')
+          .eq('venue_id', venueId)
+          .in('venue_customer_id', Array.from(vcIds))
+          .limit(50);
+        for (const t of (threads ?? []) as Array<{ id: string; venue_customer_id: string }>) {
+          void broadcastTagsChanged({
+            threadId:    t.id,
+            venueId,
+            vcId:        t.venue_customer_id,
+            appliedTagIds,
+            source:      'venue',
+          });
+        }
+      } catch (err) {
+        console.warn('[leads PATCH] broadcastTagsChanged failed', err);
+      }
+    })();
   }
 
   const lr = leadRow as { email: string | null; pipeline_id: string | null; stage_id: string | null };

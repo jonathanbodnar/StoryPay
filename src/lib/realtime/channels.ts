@@ -95,3 +95,15 @@ export interface StageChangedEvent {
   /** 'support' = admin changed it, 'venue' = venue changed it */
   source:     'support' | 'venue';
 }
+
+/** Fired when tags on a contact's lead(s) change (added or removed). */
+export interface TagsChangedEvent {
+  threadId:    string;
+  venueId:     string;
+  vcId:        string;
+  /** Full set of currently-applied marketing_tags.id values (deduped across
+   *  any duplicate leads sharing this contact's email/phone). The receiver
+   *  should replace its applied_tag_ids with this list, not merge it. */
+  appliedTagIds: string[];
+  source:      'support' | 'venue';
+}
