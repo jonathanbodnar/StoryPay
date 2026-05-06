@@ -1843,6 +1843,7 @@ function PreviewModal({
   definition,
   embedToken,
   onClose,
+  onTestSubmitted,
 }: {
   embedUrl: string;
   formTitle: string;
@@ -1850,6 +1851,7 @@ function PreviewModal({
   definition: MarketingFormDefinition;
   embedToken: string;
   onClose: () => void;
+  onTestSubmitted?: () => void;
 }) {
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
   const frameWidth = device === 'mobile' ? 380 : 720;
@@ -1878,7 +1880,7 @@ function PreviewModal({
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">{formTitle || 'Untitled form'}</p>
             <p className="text-[11px] text-gray-400">
-              Live preview · fill it out to test — submissions don&apos;t persist
+              Live preview · test submissions are saved to your Inbox with a Test badge
             </p>
           </div>
         </div>
@@ -1927,6 +1929,7 @@ function PreviewModal({
             formTitle={formTitle}
             preview
             livePreview
+            onPreviewSubmit={onTestSubmitted}
           />
         </div>
       </div>
@@ -2829,6 +2832,21 @@ export function FormBuilderEditor({
           definition={definition}
           embedToken={embedToken}
           onClose={() => setPreviewOpen(false)}
+          onTestSubmitted={() => {
+            // Refetch submissions in the background so when the user opens
+            // the Settings → Inbox modal, the test entry is already there.
+            void (async () => {
+              try {
+                const res = await fetch(`/api/marketing/forms/${formId}/submissions`);
+                const j = (await res.json()) as {
+                  submissions?: { id: string; payload: unknown; created_at: string }[];
+                };
+                if (j.submissions) setSubmissions(j.submissions);
+              } catch {
+                // Best-effort
+              }
+            })();
+          }}
         />
       )}
 

@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import {
-  Sparkles, Loader2, Save, Check, AlertTriangle, ShieldCheck,
-  ShieldAlert, MessageSquare, UserCircle, BadgeCheck, Lock, ExternalLink,
+  Sparkles, Loader2, Check, AlertTriangle, ShieldCheck,
+  ShieldAlert, MessageSquare, BadgeCheck, ExternalLink,
   TrendingUp, Send, Inbox, UserCheck, UserX, Activity, Pause as PauseIcon,
   AlertOctagon, Gauge,
 } from 'lucide-react';
@@ -25,9 +25,6 @@ interface AiConciergeSettings {
   enabledAt:              string | null;
   resourcesReady:         boolean;
 }
-
-const INPUT =
-  'w-full rounded-2xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors';
 
 function Toggle({
   checked, onChange, disabled,
@@ -55,10 +52,6 @@ export default function AiConciergeSettingsPage() {
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState('');
 
-  // Local edit state for non-toggle fields
-  const [persona, setPersona]           = useState('');
-  const [saving, setSaving]             = useState(false);
-  const [saved, setSaved]               = useState(false);
   const [toggleSaving, setToggleSaving] = useState(false);
 
   async function load() {
@@ -71,7 +64,6 @@ export default function AiConciergeSettingsPage() {
       }
       const json = (await res.json()) as AiConciergeSettings;
       setData(json);
-      setPersona(json.personaName);
     } catch {
       setError('Unable to load AI Concierge settings.');
     } finally {
@@ -108,24 +100,6 @@ export default function AiConciergeSettingsPage() {
     }
   }
 
-  async function saveProfile() {
-    if (!data) return;
-    setSaving(true);
-    setError('');
-    setSaved(false);
-    try {
-      const updated = await patch({ personaName: persona });
-      setData(updated);
-      setPersona(updated.personaName);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Save failed.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -147,8 +121,6 @@ export default function AiConciergeSettingsPage() {
       </div>
     );
   }
-
-  const dirty = persona.trim() !== data.personaName.trim();
 
   return (
     <div>
@@ -266,20 +238,14 @@ export default function AiConciergeSettingsPage() {
                 )}
               </div>
 
-              {data.eligibility.eligible ? (
-                <div className="flex items-center gap-2">
-                  {toggleSaving && <Loader2 size={14} className="animate-spin text-gray-400" />}
-                  <Toggle
-                    checked={data.enabled}
-                    disabled={toggleSaving}
-                    onChange={(v) => void toggleEnabled(v)}
-                  />
-                </div>
-              ) : (
-                <div className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-500">
-                  <Lock size={12} /> Eligibility required
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                {toggleSaving && <Loader2 size={14} className="animate-spin text-gray-400" />}
+                <Toggle
+                  checked={data.enabled}
+                  disabled={toggleSaving}
+                  onChange={(v) => void toggleEnabled(v)}
+                />
+              </div>
             </div>
 
             {data.enabled && data.resourcesReady && (
@@ -300,61 +266,10 @@ export default function AiConciergeSettingsPage() {
           </div>
         </section>
 
-        {/* Persona */}
-        <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-          <div className="flex items-center gap-3 border-b border-gray-200 px-6 py-4">
-            <UserCircle size={18} className="text-gray-400" />
-            <h2 className="font-heading text-base font-semibold text-gray-900">Assistant persona</h2>
-          </div>
-          <div className="px-6 py-5 space-y-4">
-            <div>
-              <label className="text-xs font-medium text-gray-600 mb-1.5 block">First name your AI uses</label>
-              <input
-                type="text"
-                value={persona}
-                onChange={(e) => setPersona(e.target.value)}
-                placeholder="Alison"
-                maxLength={60}
-                className={INPUT}
-              />
-              <p className="mt-1.5 text-[11px] text-gray-400">
-                Brides see this name when the AI introduces itself (e.g. <em>&quot;Hi Sarah, this is Alison from your venue&quot;</em>). Leave blank to use the default <strong>Alison</strong>.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        {/* Save bar — only when there are pending edits */}
-        {dirty && (
-          <div className="sticky bottom-4 rounded-2xl border border-gray-200 bg-white shadow-md px-5 py-3.5 flex items-center justify-between gap-4">
-            <p className="text-xs text-gray-500">You have unsaved changes.</p>
-            <div className="flex items-center gap-3">
-              {error && (
-                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-red-600">
-                  <AlertTriangle size={12} /> {error}
-                </span>
-              )}
-              {saved && !error && (
-                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600">
-                  <Check size={12} /> Saved
-                </span>
-              )}
-              <button
-                onClick={() => { setPersona(data.personaName); setError(''); }}
-                disabled={saving}
-                className="inline-flex items-center gap-1 rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-              >
-                Discard
-              </button>
-              <button
-                onClick={() => void saveProfile()}
-                disabled={saving}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4 py-2 text-xs font-semibold text-white hover:bg-gray-700 disabled:opacity-50"
-              >
-                {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-                {saving ? 'Saving…' : 'Save changes'}
-              </button>
-            </div>
+        {/* Toggle save errors — surfaced inline since there's no save bar */}
+        {error && (
+          <div className="rounded-2xl border border-red-100 bg-red-50 px-5 py-3 flex items-center gap-2 text-sm text-red-700">
+            <AlertTriangle size={14} /> {error}
           </div>
         )}
 

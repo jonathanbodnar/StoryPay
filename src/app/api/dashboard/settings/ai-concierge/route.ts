@@ -188,16 +188,24 @@ export async function PATCH(request: Request) {
     updates.ai_concierge_notify_emails = sanitizeEmails(body.conciergeNotifyEmails);
   }
 
-  // Master enable flag (with eligibility guard)
+  // Master enable flag — venues can toggle freely. The DB CHECK constraint
+  // (migration 098) requires directory_addon_concierge = TRUE and a2p_verified
+  // = TRUE. For legacy plans (or plans that include concierge), we sync the
+  // venue's addon flag so the constraint passes. A2P remains a hard requirement
+  // since it's a carrier-level compliance gate enforced outside our system.
   if (body.enabled !== undefined) {
     if (body.enabled === true) {
-      const shaped = shapePayload(current, currentResult.plan);
-      if (!shaped.eligibility.eligible) {
-        return NextResponse.json({
-          error:    'AI Concierge is not eligible to be enabled yet',
-          blockers: shaped.eligibility.blockers,
-        }, { status: 422 });
+      const flags = currentResult.plan?.feature_flags ?? {};
+      const planIncludesConcierge = flags['addon_concierge_included'] === true;
+      const isLegacyPlan = currentResult.plan?.is_legacy === true
+        || String(currentResult.plan?.name ?? '').toLowerCase().includes('legacy')
+        || String(currentResult.plan?.slug ?? '').toLowerCase().includes('legacy');
+
+      // Sync the addon flag if the plan grants concierge but the column says no
+      if ((planIncludesConcierge || isLegacyPlan) && current.directory_addon_concierge !== true) {
+        updates.directory_addon_concierge = true;
       }
+
       updates.ai_concierge_enabled    = true;
       updates.ai_concierge_enabled_at = new Date().toISOString();
       // ai_concierge_enabled_by is a UUID column — only stamp it if we actually

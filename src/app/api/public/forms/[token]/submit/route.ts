@@ -80,7 +80,48 @@ export async function POST(
     return NextResponse.json({ error: 'Expected multipart form data' }, { status: 400 });
   }
 
+  // Detect test submissions early (from live-preview in the editor) so we can
+  // take a permissive code path that ignores required-field/unknown-field
+  // validation. The editor's in-memory definition can drift from the saved
+  // definition_json (e.g. the user has unsaved field edits) and we never want
+  // a test to silently fail because of that.
+  const isTestSubmission = fd.get('_test') === '1';
+
   const payload: Record<string, unknown> = {};
+
+  // ── Test submission path: just record whatever fields were submitted ──────
+  if (isTestSubmission) {
+    for (const key of new Set(fd.keys())) {
+      const m = key.match(NAME_RE);
+      if (!m) continue;
+      const bid = m[1];
+      const sub = m[2];
+      const all = fd.getAll(key);
+      const stringVals = all
+        .filter((v) => typeof v === 'string')
+        .map((v) => (v as string).trim())
+        .filter((v) => v.length > 0);
+      if (stringVals.length === 0) continue;
+      if (sub) {
+        const existing = (payload[bid] as Record<string, string> | undefined) || {};
+        existing[sub] = stringVals.join(', ');
+        payload[bid] = existing;
+      } else {
+        payload[bid] = stringVals.length > 1 ? stringVals : stringVals[0];
+      }
+    }
+    payload._test = true;
+    const { error: testInsErr } = await supabaseAdmin.from('marketing_form_submissions').insert({
+      form_id: formRow.id,
+      venue_id: formRow.venue_id,
+      payload,
+    });
+    if (testInsErr) {
+      console.error('[form submit insert] test submission failed:', testInsErr);
+      return NextResponse.json({ error: 'Could not save test submission' }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, postSubmit: resolvePostSubmit(definition) });
+  }
 
   for (const block of definition.blocks) {
     if (!INPUT_BLOCK_TYPES.includes(block.type)) continue;
@@ -169,12 +210,6 @@ export async function POST(
     (payload as Record<string, unknown>)._utm = utm;
   }
 
-  // Mark test submissions (from the live-preview in the editor)
-  const isTestSubmission = fd.get('_test') === '1';
-  if (isTestSubmission) {
-    (payload as Record<string, unknown>)._test = true;
-  }
-
   for (const key of new Set(fd.keys())) {
     const m = key.match(NAME_RE);
     if (!m) continue;
@@ -201,12 +236,6 @@ export async function POST(
   if (insErr) {
     console.error('[form submit insert]', insErr);
     return NextResponse.json({ error: 'Could not save submission' }, { status: 500 });
-  }
-
-  // ── Test submissions: just record them — skip all CRM side-effects ──────────
-  if (isTestSubmission) {
-    const ps = resolvePostSubmit(definition);
-    return NextResponse.json({ ok: true, postSubmit: ps });
   }
 
   // ── Extract contact fields from the submission payload ────────────────────
