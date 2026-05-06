@@ -15,7 +15,7 @@ import { createPortal } from 'react-dom';
 import {
   Loader2, AlertCircle, User, Building2, Mail, Phone, ShieldCheck, ShieldAlert,
   Sparkles, CircleDot, AlertTriangle, Calendar, Clock, Tag, Tags,
-  Activity, Inbox, BellOff, RefreshCw, ExternalLink, ChevronDown, X, Plus, CheckCircle2,
+  Activity, Inbox, BellOff, RefreshCw, ExternalLink, ChevronDown, CheckCircle2,
 } from 'lucide-react';
 import { SlaPill } from '@/components/support/SlaIndicator';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
@@ -693,9 +693,11 @@ function StagePickerChip({
 }
 
 /**
- * Tag icon button that opens a full-screen modal overlay showing every tag
- * (active and inactive) so the support team can toggle them freely.
- * Rendered via a portal so it's never clipped by overflow:hidden parents.
+ * Tag icon button + anchored popover — matches the venue-side LeadTagPopover
+ * pixel-for-pixel. Active tags are filled `#1b1b1b` (brand-900) with white
+ * text; inactive tags are an outlined pill with gray text.
+ *
+ * Rendered via createPortal so it's never clipped by overflow:hidden parents.
  */
 function TagsModal({
   allTags,
@@ -711,109 +713,88 @@ function TagsModal({
   onRemove: (tagId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
   const n = appliedTagIds.length;
-
-  const byId = useMemo(() => {
-    const m = new Map<string, ContextResponse['tags'][number]>();
-    for (const t of allTags) m.set(t.id, t);
-    return m;
-  }, [allTags]);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return q ? allTags.filter(t => t.name.toLowerCase().includes(q)) : allTags;
-  }, [allTags, query]);
 
   const appliedSet = useMemo(() => new Set(appliedTagIds), [appliedTagIds]);
 
-  if (allTags.length === 0 && n === 0) return null;
+  // Close on outside click (matching LeadTagPopover behaviour)
+  useEffect(() => {
+    if (!open) return;
+    function onDocDown(e: MouseEvent) {
+      const target = e.target as Node;
+      const portalEl = document.getElementById('admin-tag-popover-portal');
+      if (btnRef.current?.contains(target)) return;
+      if (portalEl?.contains(target)) return;
+      setOpen(false);
+    }
+    document.addEventListener('mousedown', onDocDown);
+    return () => document.removeEventListener('mousedown', onDocDown);
+  }, [open]);
 
-  const modal = open ? createPortal(
+  const handleOpen = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setPos({
+        top:   rect.bottom + window.scrollY + 4,
+        right: window.innerWidth - rect.right,
+      });
+    }
+    setOpen(v => !v);
+  };
+
+  const popup = open && pos ? createPortal(
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4"
-      onClick={() => setOpen(false)}
+      id="admin-tag-popover-portal"
+      style={{ position: 'absolute', top: pos.top, right: pos.right, zIndex: 9999 }}
+      className="w-64 rounded-xl border border-gray-200 bg-white shadow-xl p-2"
+      onClick={(e) => e.stopPropagation()}
     >
-      {/* backdrop */}
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
-      <div
-        className="relative z-10 w-full max-w-sm rounded-2xl border border-gray-200 bg-white shadow-2xl flex flex-col max-h-[80vh]"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-          <div className="flex items-center gap-2">
-            <Tags size={14} className="text-orange-500" />
-            <span className="text-sm font-semibold text-gray-900">Manage tags</span>
-            {n > 0 && (
-              <span className="rounded-full bg-orange-100 text-orange-700 text-[10px] font-bold px-1.5 py-0.5">
-                {n} active
-              </span>
-            )}
-          </div>
-          <button type="button" onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-700">
-            <X size={16} />
-          </button>
-        </div>
-        {/* search */}
-        <div className="px-3 py-2 border-b border-gray-100">
-          <input
-            autoFocus
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder="Search tags…"
-            className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs outline-none focus:border-gray-400"
-          />
-        </div>
-        {/* tag grid — all tags, applied ones shown as filled */}
-        <div className="overflow-y-auto flex-1 p-3">
-          {filtered.length === 0 && (
-            <p className="text-center text-xs text-gray-400 py-4">No matches.</p>
-          )}
-          <div className="flex flex-wrap gap-1.5">
-            {filtered.map(t => {
-              const active = appliedSet.has(t.id);
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => {
-                    if (active) onRemove(t.id);
-                    else onAdd(t.id, t.name);
-                  }}
-                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all disabled:opacity-50 ${
-                    active
-                      ? 'border-transparent text-white shadow-sm'
-                      : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'
-                  }`}
-                  style={active ? { backgroundColor: t.color || '#6b7280', borderColor: t.color || '#6b7280' } : { borderColor: t.color || undefined }}
-                  title={active ? `Remove "${t.name}"` : `Add "${t.name}"`}
-                >
-                  <span aria-hidden="true">{t.icon}</span> {t.name}
-                  {active && <X size={9} className="opacity-70" />}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        {/* current active chips summary */}
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Tags</p>
         {n > 0 && (
-          <div className="border-t border-gray-100 px-3 py-2 text-[10px] text-gray-400">
-            {n} tag{n === 1 ? '' : 's'} active — click a tag above to toggle it
-          </div>
+          <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-bold text-gray-600">
+            {n}
+          </span>
         )}
       </div>
+      {allTags.length === 0 ? (
+        <p className="text-[10px] text-gray-400">No tags yet.</p>
+      ) : (
+        <div className="flex flex-wrap gap-1 max-h-[60vh] overflow-y-auto">
+          {allTags.map(t => {
+            const active = appliedSet.has(t.id);
+            return (
+              <button
+                key={t.id}
+                type="button"
+                disabled={disabled}
+                title={t.name}
+                onClick={() => active ? onRemove(t.id) : onAdd(t.id, t.name)}
+                className={`inline-flex max-w-[140px] items-center justify-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors disabled:opacity-50 ${
+                  active
+                    ? 'border-brand-900 bg-brand-900 text-white'
+                    : 'border-gray-200 bg-white text-gray-600 hover:border-brand-900/30 hover:bg-brand-900/5 hover:text-brand-900'
+                }`}
+              >
+                <span className="truncate">{t.name}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>,
     document.body,
   ) : null;
 
   return (
     <>
-      {/* Icon trigger — matches LeadTagPopover compact style */}
       <button
+        ref={btnRef}
         type="button"
-        onClick={() => { setOpen(v => !v); setQuery(''); }}
+        onClick={handleOpen}
         title={n > 0 ? `${n} tag${n === 1 ? '' : 's'} — manage` : 'Add tags'}
         className="relative inline-flex items-center justify-center rounded-lg p-1 text-gray-400 hover:bg-orange-50 hover:text-orange-500 transition-colors"
       >
@@ -824,7 +805,7 @@ function TagsModal({
           </span>
         )}
       </button>
-      {modal}
+      {popup}
     </>
   );
 }
