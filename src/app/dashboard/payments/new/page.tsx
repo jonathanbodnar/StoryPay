@@ -725,13 +725,49 @@ function NewProposalInvoicePageInner() {
  {customerMode==='search' ? (
  <div ref={searchRef} className="relative">
  {selectedCustomer ? (
- <div className="flex items-center justify-between rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
- <div>
- <p className="text-sm font-semibold text-gray-900">{clientName}</p>
- <p className="text-xs text-gray-500">{clientEmail}</p>
+ <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3.5">
+ <div className="flex items-start justify-between gap-3">
+ <div className="flex items-start gap-3 min-w-0">
+ <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white border border-gray-200">
+ <UserPlus size={14} className="text-gray-400" />
+ </div>
+ <div className="min-w-0">
+ <p className="text-sm font-semibold text-gray-900 truncate">
+ {clientFirst || clientLast
+ ? `${clientFirst}${clientFirst && clientLast ? ' ' : ''}${clientLast}`.trim()
+ : clientName || 'Selected contact'}
+ </p>
+ <div className="mt-1.5 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs">
+ {clientEmail && (
+ <div className="min-w-0">
+ <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Email</p>
+ <p className="text-gray-700 truncate">{clientEmail}</p>
+ </div>
+ )}
+ {clientPhone && (
+ <div className="min-w-0">
+ <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Phone</p>
+ <p className="text-gray-700 truncate">{clientPhone}</p>
+ </div>
+ )}
+ {clientFirst && (
+ <div className="min-w-0">
+ <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">First name</p>
+ <p className="text-gray-700 truncate">{clientFirst}</p>
+ </div>
+ )}
+ {clientLast && (
+ <div className="min-w-0">
+ <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Last name</p>
+ <p className="text-gray-700 truncate">{clientLast}</p>
+ </div>
+ )}
+ </div>
+ </div>
  </div>
  <button onClick={()=>{setSelectedCustomer(null);setClientFirst('');setClientLast('');setClientEmail('');setClientPhone('');setSearchQuery('');}}
- className="text-gray-400 hover:text-gray-600"><X size={15}/></button>
+ className="text-gray-400 hover:text-gray-600 shrink-0" aria-label="Clear selected contact"><X size={15}/></button>
+ </div>
  </div>
  ) : (
  <>

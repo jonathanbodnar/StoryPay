@@ -131,6 +131,11 @@ export async function POST(request: NextRequest) {
   const lineItemsPayload = shouldValidateLineItems ? lineItemsNorm : null;
   const appliedCouponPayload = shouldValidateLineItems ? appliedCouponId : null;
 
+  // Invoices skip the signing flow — they're a one-off bill, not a contract.
+  // We mark them as "signed" up-front so the existing payment checkout
+  // route (which requires status='signed') accepts them without any
+  // changes to the LunarPay checkout flow.
+  const nowIso = new Date().toISOString();
   const { data: proposal, error } = await supabaseAdmin
     .from('proposals')
     .insert({
@@ -143,8 +148,9 @@ export async function POST(request: NextRequest) {
       payment_type: paymentType || 'full',
       payment_config: paymentConfig || {},
       content: invoiceContent,
-      status: asDraft ? 'draft' : 'sent',
-      sent_at: asDraft ? null : new Date().toISOString(),
+      status: asDraft ? 'draft' : 'signed',
+      sent_at: asDraft ? null : nowIso,
+      signed_at: asDraft ? null : nowIso,
       public_token: publicToken,
       line_items: lineItemsPayload,
       applied_coupon_id: appliedCouponPayload,

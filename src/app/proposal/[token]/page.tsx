@@ -35,6 +35,8 @@ interface ProposalData {
   signature_fields: SigningField[] | null;
   signed_at: string | null;
   paid_at: string | null;
+  /** True when this record was created via /api/invoices — no signing flow. */
+  is_invoice?: boolean;
   venue_name: string;
   venue_logo_url: string | null;
   venue_brand: VenueBrand | null;
@@ -303,8 +305,13 @@ export default function ProposalPage() {
 
   if (!proposal) return null;
 
-  const canSign = proposal.status === 'sent' || proposal.status === 'opened';
-  const needsPayment = proposal.status === 'signed';
+  // Invoices skip the signing flow entirely — they go straight to payment
+  // once the customer opens the link.
+  const isInvoice = proposal.is_invoice === true;
+  const canSign = !isInvoice && (proposal.status === 'sent' || proposal.status === 'opened');
+  const needsPayment = isInvoice
+    ? (proposal.status === 'sent' || proposal.status === 'opened' || proposal.status === 'signed')
+    : proposal.status === 'signed';
   const isPaid = proposal.status === 'paid';
   const currentStep = isPaid ? 4 : needsPayment ? 3 : canSign ? 2 : 1;
   const fields: SigningField[] = proposal.signature_fields?.length
@@ -360,13 +367,19 @@ export default function ProposalPage() {
       })()}
 
       <div className="mx-auto max-w-3xl px-4 py-8">
-        {/* Progress Steps */}
+        {/* Progress Steps — invoices skip the signing step */}
         <div className="mb-8 flex items-center justify-center gap-0">
-          {[
-            { step: 1, label: 'Review' },
-            { step: 2, label: 'Sign' },
-            { step: 3, label: 'Pay' },
-          ].map((s, i) => (
+          {(isInvoice
+            ? [
+                { step: 1, label: 'Review' },
+                { step: 3, label: 'Pay' },
+              ]
+            : [
+                { step: 1, label: 'Review' },
+                { step: 2, label: 'Sign' },
+                { step: 3, label: 'Pay' },
+              ]
+          ).map((s, i) => (
             <div key={s.step} className="flex items-center">
               {i > 0 && <div className={`w-16 h-0.5 mx-1 ${currentStep > s.step ? 'bg-emerald-400' : currentStep === s.step ? 'bg-brand-400' : 'bg-gray-200'}`} />}
               <div className="flex flex-col items-center gap-1.5">

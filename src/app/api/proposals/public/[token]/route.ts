@@ -41,6 +41,11 @@ export async function GET(
 
   const venue = proposal.venues as { name: string; logo_url: string | null; service_fee_rate: number; brand_logo_url?: string; brand_tagline?: string; brand_email?: string; brand_phone?: string; brand_website?: string; brand_color?: string; brand_address?: string; brand_city?: string; brand_state?: string; brand_zip?: string; brand_footer_note?: string } | null;
 
+  // Invoice-style records are created via /api/invoices and have no
+  // template_id (and therefore no client signing flow). Surface this so
+  // the public payment page can skip signing entirely for invoices.
+  const isInvoice = !proposal.template_id;
+
   return NextResponse.json({
     customer_name: proposal.customer_name,
     customer_email: proposal.customer_email,
@@ -52,6 +57,7 @@ export async function GET(
     signature_fields: proposal.signature_fields,
     signed_at: proposal.signed_at,
     paid_at: proposal.paid_at,
+    is_invoice: isInvoice,
     venue_name: venue?.name ?? '',
     venue_logo_url: venue?.brand_logo_url || venue?.logo_url || null,
     venue_brand: {
