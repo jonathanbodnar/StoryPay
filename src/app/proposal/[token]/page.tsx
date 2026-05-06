@@ -534,18 +534,20 @@ export default function ProposalPage() {
           {/* Signed confirmation + payment */}
           {needsPayment && (
             <div className="border-t border-gray-100 px-8 py-8">
-              <div className="text-center mb-8">
-                <div className="w-14 h-14 bg-violet-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-7 h-7 text-violet-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
+              {!isInvoice && (
+                <div className="text-center mb-8">
+                  <div className="w-14 h-14 bg-violet-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-7 h-7 text-violet-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <h2 className="text-xl font-semibold text-gray-900 mb-1">Proposal Signed</h2>
+                  <p className="text-sm text-gray-500">
+                    Signed on {proposal.signed_at ? formatDate(proposal.signed_at) : 'just now'}.
+                    Please complete your payment below.
+                  </p>
                 </div>
-                <h2 className="text-xl font-semibold text-gray-900 mb-1">Proposal Signed</h2>
-                <p className="text-sm text-gray-500">
-                  Signed on {proposal.signed_at ? formatDate(proposal.signed_at) : 'just now'}.
-                  Please complete your payment below.
-                </p>
-              </div>
+              )}
 
               {proposal.payment_type === 'installment' && installments && installments.length > 1 ? (() => {
                 const firstAmt = installments[0].amount;
