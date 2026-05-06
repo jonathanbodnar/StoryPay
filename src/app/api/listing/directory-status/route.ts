@@ -47,6 +47,7 @@ export async function GET() {
   let planName: string | null = null;
   let verifiedIncluded = false;
   let sponsoredIncluded = false;
+  let isLegacyPlan = false;
 
   const planId = venue.directory_plan_id as string | null | undefined;
   if (planId) {
@@ -56,7 +57,7 @@ export async function GET() {
     const [{ data: plan }, { data: allPlans }] = await Promise.all([
       supabaseAdmin
         .from('directory_plans')
-        .select('id, name, price_monthly_cents, feature_flags')
+        .select('id, name, slug, price_monthly_cents, feature_flags, is_legacy')
         .eq('id', planId)
         .maybeSingle(),
       supabaseAdmin
@@ -65,7 +66,11 @@ export async function GET() {
     ]);
 
     if (plan) {
-      planName = (plan.name as string | null) ?? null;
+      const planRow = plan as Record<string, unknown>;
+      planName = (planRow.name as string | null) ?? null;
+      isLegacyPlan = Boolean(planRow.is_legacy)
+        || String(planRow.name ?? '').toLowerCase().includes('legacy')
+        || String(planRow.slug ?? '').toLowerCase().includes('legacy');
       const { planIncludesVerified, planIncludesSponsored } = await import('@/lib/directory-addons');
       verifiedIncluded = planIncludesVerified(
         plan as { id: string; price_monthly_cents: number | null; feature_flags: Record<string, unknown> | null },
@@ -75,6 +80,11 @@ export async function GET() {
         plan as { id: string; price_monthly_cents: number | null; feature_flags: Record<string, unknown> | null },
         (allPlans ?? []) as Array<{ id: string; price_monthly_cents: number | null; feature_flags: Record<string, unknown> | null }>,
       );
+      // Legacy plans have everything included.
+      if (isLegacyPlan) {
+        verifiedIncluded = true;
+        sponsoredIncluded = true;
+      }
     }
   }
 
@@ -95,6 +105,7 @@ export async function GET() {
     verifiedIncluded,
     sponsoredIncluded,
     isHighestPlan,
+    isLegacyPlan,
     planName,
   });
 }

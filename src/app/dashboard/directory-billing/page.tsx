@@ -457,56 +457,23 @@ export default function DirectoryBillingPage() {
   }
 
   // ── Legacy plan gate ──────────────────────────────────────────────────────
+  // Legacy clients are billed externally — the entire plan/billing page is
+  // hidden from them. We render a brief notice and bounce to the dashboard.
   if (summary.is_legacy_plan) {
+    if (typeof window !== 'undefined') {
+      // Fire-and-forget hard redirect so the back button doesn't return here.
+      window.setTimeout(() => router.replace('/dashboard'), 1200);
+    }
     return (
-      <div>
+      <div className="max-w-xl py-12">
         <h1 className="font-heading text-2xl text-gray-900 flex items-center gap-2">
-          <Lock size={22} className="text-gray-700" /> Plans &amp; billing
+          <Lock size={22} className="text-gray-700" /> Billing managed directly
         </h1>
-        <p className="mt-1 text-sm text-gray-500">Your account billing overview.</p>
-
-        <div className="mt-6 rounded-2xl border border-gray-200 bg-white overflow-hidden">
-          <div className="bg-gradient-to-r from-gray-900 to-gray-700 px-6 py-5">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10">
-                <Lock size={20} className="text-white" />
-              </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-300">
-                  {summary.current_plan?.name ?? 'Legacy Plan'}
-                </p>
-                <p className="text-lg font-bold text-white">Billing managed directly</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="px-6 py-5 space-y-4">
-            <p className="text-sm text-gray-600 leading-relaxed">
-              Your account is set up as a legacy client. All features and add-ons are included
-              as part of your arrangement — no subscription through the platform is required.
-              Billing is handled directly with your account manager.
-            </p>
-
-            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">What&apos;s included</p>
-              {[
-                'All platform features',
-                'Verified Listing badge',
-                'Sponsored Listing placement',
-                'Venue Concierge (AI + personal follow-up)',
-              ].map((item) => (
-                <div key={item} className="flex items-center gap-2 text-sm text-gray-700">
-                  <Check size={15} className="text-emerald-500 shrink-0" />
-                  {item}
-                </div>
-              ))}
-            </div>
-
-            <p className="text-xs text-gray-400">
-              Questions about your account? Contact your account manager directly.
-            </p>
-          </div>
-        </div>
+        <p className="mt-2 text-sm text-gray-600">
+          Your account is on a legacy plan. Billing is handled directly with your
+          account manager — no subscription page is available here.
+        </p>
+        <p className="mt-3 text-xs text-gray-400">Redirecting you back to your dashboard…</p>
       </div>
     );
   }

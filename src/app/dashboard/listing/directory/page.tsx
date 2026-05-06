@@ -26,6 +26,8 @@ type StatusPayload = {
   verifiedIncluded: boolean;
   sponsoredIncluded: boolean;
   isHighestPlan: boolean;
+  /** Manually-billed legacy plan — all add-ons included, no upgrade path. */
+  isLegacyPlan?: boolean;
   planName: string | null;
 };
 
@@ -210,12 +212,14 @@ export default function ListingDirectoryStatusPage() {
   const verifiedSubscribed = data?.addonVerified ?? false;
   const sponsoredSubscribed = data?.addonSponsored ?? false;
   const isHighestPlan = data?.isHighestPlan ?? false;
+  const isLegacyPlan = data?.isLegacyPlan ?? false;
   const planName = data?.planName;
 
   // The CTA is shown when no signal exists yet (no application, no subscription)
   // — or if the user was rejected and may want to retry.
-  const canApplyVerified = (vs === 'none' || vs === 'rejected') && !verifiedSubscribed;
-  const canApplySponsored = (ss === 'none' || ss === 'rejected') && !sponsoredSubscribed;
+  // Legacy plans have all add-ons bundled and cannot upgrade.
+  const canApplyVerified = !isLegacyPlan && (vs === 'none' || vs === 'rejected') && !verifiedSubscribed;
+  const canApplySponsored = !isLegacyPlan && (ss === 'none' || ss === 'rejected') && !sponsoredSubscribed;
 
   return (
     <div className="space-y-6 py-2">
@@ -238,7 +242,17 @@ export default function ListingDirectoryStatusPage() {
       </div>
 
       {/* ── Plan inclusion banner ──────────────────────────────────── */}
-      {isHighestPlan ? (
+      {isLegacyPlan ? (
+        <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          <Sparkles size={16} className="mt-0.5 shrink-0 text-emerald-600" />
+          <div>
+            <span className="font-semibold">Both add-ons are included in your {planName ?? 'legacy'} plan</span>
+            {' '}— Verified and Sponsored placement are part of your existing arrangement
+            at no extra charge. Our team will keep your badges live; no upgrade or
+            subscription change is needed.
+          </div>
+        </div>
+      ) : isHighestPlan ? (
         <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
           <Sparkles size={16} className="mt-0.5 shrink-0 text-emerald-600" />
           <div>
@@ -302,7 +316,17 @@ export default function ListingDirectoryStatusPage() {
             </div>
           </div>
           <div className="shrink-0 text-right">
-            {verifiedIncluded ? (
+            {isLegacyPlan ? (
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                  <Sparkles size={11} /> Included free
+                </div>
+                <p className="text-xs text-gray-400">
+                  <span className="line-through">${verifiedPriceMonthly}/mo</span>
+                  {' '}value
+                </p>
+              </div>
+            ) : verifiedIncluded ? (
               <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
                 <Sparkles size={11} /> Included
               </div>
@@ -342,7 +366,9 @@ export default function ListingDirectoryStatusPage() {
             ) : null}
           </div>
           <div className="flex items-center gap-2">
-            {vs === 'approved' ? (
+            {isLegacyPlan ? (
+              <p className="text-xs text-gray-500">Managed for you as part of your legacy plan.</p>
+            ) : vs === 'approved' ? (
               <p className="text-xs text-gray-500">Your badge is live on the directory.</p>
             ) : vs === 'pending' || vs === 'draft' ? (
               <p className="text-xs text-gray-500">Our team is reviewing your listing.</p>
@@ -417,7 +443,17 @@ export default function ListingDirectoryStatusPage() {
             </div>
           </div>
           <div className="shrink-0 text-right">
-            {sponsoredIncluded ? (
+            {isLegacyPlan ? (
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                  <Sparkles size={11} /> Included free
+                </div>
+                <p className="text-xs text-gray-400">
+                  <span className="line-through">${sponsoredPriceMonthly}/mo</span>
+                  {' '}value
+                </p>
+              </div>
+            ) : sponsoredIncluded ? (
               <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
                 <Sparkles size={11} /> Included
               </div>
@@ -457,7 +493,9 @@ export default function ListingDirectoryStatusPage() {
             ) : null}
           </div>
           <div className="flex items-center gap-2">
-            {ss === 'approved' ? (
+            {isLegacyPlan ? (
+              <p className="text-xs text-gray-500">Managed for you as part of your legacy plan.</p>
+            ) : ss === 'approved' ? (
               <p className="text-xs text-gray-500">Your sponsored placement is live.</p>
             ) : ss === 'pending' || ss === 'draft' ? (
               <p className="text-xs text-gray-500">Our team is confirming your slot.</p>
@@ -514,8 +552,8 @@ export default function ListingDirectoryStatusPage() {
         </div>
       </div>
 
-      {/* ── Upgrade CTA (only when on a non-highest plan) ─────────── */}
-      {!isHighestPlan && (
+      {/* ── Upgrade CTA (only when on a non-highest plan; never for legacy) ─────────── */}
+      {!isHighestPlan && !isLegacyPlan && (
         <div className="flex items-center justify-between gap-4 rounded-3xl bg-gray-900 px-6 py-5 sm:px-8">
           <div>
             <p className="font-heading text-base text-white">Get both included in your plan</p>
