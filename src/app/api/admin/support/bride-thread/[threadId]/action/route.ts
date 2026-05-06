@@ -120,47 +120,54 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ threadId: 
 
   switch (body.action) {
     case 'set_stage': {
-      if (!lead) return NextResponse.json({ error: 'No lead linked to this thread yet' }, { status: 422 });
+      // Stage is canonical on venue_customers — leads is a best-effort mirror.
+      // We allow updates even without a lead so support agents can move
+      // venue-initiated conversations through the funnel just like the venue can.
       if (!body.stageId) return NextResponse.json({ error: 'stageId required' }, { status: 400 });
+      if (!venueCustomerId) return NextResponse.json({ error: 'No contact linked to this thread' }, { status: 422 });
 
       // Validate stage belongs to this venue
       const { data: stage } = await supabaseAdmin
         .from('lead_pipeline_stages')
-        .select('id, name, pipeline_id, venue_id')
+        .select('id, name, pipeline_id, venue_id, color')
         .eq('id', body.stageId)
         .eq('venue_id', venueId)
         .maybeSingle();
       if (!stage) return NextResponse.json({ error: 'Stage not found for this venue' }, { status: 404 });
 
       const s = stage as { id: string; name: string; pipeline_id: string };
-      const { error: updErr } = await supabaseAdmin
-        .from('leads')
-        .update({
-          stage_id:    s.id,
-          pipeline_id: s.pipeline_id,
-          updated_at:  new Date().toISOString(),
-        })
-        .eq('id', lead.id)
-        .eq('venue_id', venueId);
-      if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
 
-      // Mirror onto the venue_customer the thread is attached to. Many list
-      // endpoints read stage from here as the canonical source.
-      if (venueCustomerId) {
-        await supabaseAdmin
-          .from('venue_customers')
-          .update({ stage_id: s.id })
-          .eq('id', venueCustomerId)
+      // Update lead if one exists
+      if (lead) {
+        const { error: updErr } = await supabaseAdmin
+          .from('leads')
+          .update({
+            stage_id:    s.id,
+            pipeline_id: s.pipeline_id,
+            updated_at:  new Date().toISOString(),
+          })
+          .eq('id', lead.id)
           .eq('venue_id', venueId);
+        if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
       }
 
+      // Mirror onto the venue_customer the thread is attached to (canonical source for chat threads)
+      const { error: vcErr } = await supabaseAdmin
+        .from('venue_customers')
+        .update({ stage_id: s.id, pipeline_id: s.pipeline_id })
+        .eq('id', venueCustomerId)
+        .eq('venue_id', venueId);
+      if (vcErr) return NextResponse.json({ error: vcErr.message }, { status: 500 });
+
       // Activity log (best-effort)
-      void supabaseAdmin.from('lead_activity_log').insert({
-        lead_id:  lead.id,
-        venue_id: venueId,
-        action:   'stage_changed_by_support',
-        details:  { stage_id: s.id, stage_name: s.name, by: triggeredBy },
-      }).then(() => {}, () => {});
+      if (lead) {
+        void supabaseAdmin.from('lead_activity_log').insert({
+          lead_id:  lead.id,
+          venue_id: venueId,
+          action:   'stage_changed_by_support',
+          details:  { stage_id: s.id, stage_name: s.name, by: triggeredBy },
+        }).then(() => {}, () => {});
+      }
 
       // Broadcast so venue conversations page and support context sidebar both update live
       void broadcastStageChanged({

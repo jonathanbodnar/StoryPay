@@ -48,7 +48,7 @@ export async function GET(
       `)
       .eq('id', t.venue_id).maybeSingle(),
     supabaseAdmin.from('venue_customers')
-      .select('id, first_name, last_name, customer_email, phone, created_at, sms_dnd, conversation_dnd_all')
+      .select('id, first_name, last_name, customer_email, phone, created_at, sms_dnd, conversation_dnd_all, stage_id, pipeline_id')
       .eq('id', t.venue_customer_id).maybeSingle(),
   ]);
 
