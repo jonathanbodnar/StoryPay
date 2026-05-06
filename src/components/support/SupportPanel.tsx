@@ -38,17 +38,18 @@ interface TicketListRow {
 }
 
 const READS_KEY = 'support_ticket_reads';
-function getReads(): Record<string, string> {
+export function getReads(): Record<string, string> {
   try { return JSON.parse(localStorage.getItem(READS_KEY) || '{}'); } catch { return {}; }
 }
-function markRead(ticketId: string) {
+export function markRead(ticketId: string) {
   try {
     const reads = getReads();
     reads[ticketId] = new Date().toISOString();
     localStorage.setItem(READS_KEY, JSON.stringify(reads));
   } catch { /* ignore */ }
 }
-function countUnread(tickets: TicketListRow[]): number {
+export interface UnreadableTicket { id: string; last_message_at: string; last_sender_type: 'venue' | 'support' }
+export function countUnreadFromList(tickets: UnreadableTicket[]): number {
   const reads = getReads();
   return tickets.filter(t => {
     if (t.last_sender_type !== 'support') return false;
@@ -56,6 +57,9 @@ function countUnread(tickets: TicketListRow[]): number {
     if (!lastRead) return true;
     return t.last_message_at > lastRead;
   }).length;
+}
+function countUnread(tickets: TicketListRow[]): number {
+  return countUnreadFromList(tickets);
 }
 
 interface TicketMessage {
@@ -233,8 +237,10 @@ export function SupportPanel({ onClose, onUnreadCount }: { onClose?: () => void;
   );
 
   // ── Realtime: active ticket detail ───────────────────────────────────────
+  // Subscribe whenever venueId + activeId are set (even if temporarily on list view)
+  // so the detail updates live without needing to remount the subscription.
   useBroadcastChannel(
-    venueId && activeId && view === 'detail' ? supportChannels.venueTicket(venueId, activeId) : null,
+    venueId && activeId ? supportChannels.venueTicket(venueId, activeId) : null,
     ['message', 'status'],
     useCallback((evt, payload) => {
       if (evt === 'message') {

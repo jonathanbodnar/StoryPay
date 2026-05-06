@@ -1223,11 +1223,13 @@ export default function ConversationsPage() {
                     }}
                     className={classNames(
                       'flex w-full cursor-pointer flex-col gap-0.5 border-b border-gray-100 px-4 py-3 text-left transition-colors',
-                      selectedId === t.thread_id
-                        ? 'bg-white border-l-[3px] border-l-neutral-900'
-                        : unread
-                          ? 'bg-blue-50/60 border-l-[3px] border-l-blue-500 hover:bg-blue-50'
-                          : 'hover:bg-white',
+                      selectedId === t.thread_id && unread
+                        ? 'bg-blue-50 border-l-[3px] border-l-blue-500'
+                        : selectedId === t.thread_id
+                          ? 'bg-white border-l-[3px] border-l-neutral-900'
+                          : unread
+                            ? 'bg-blue-50/60 border-l-[3px] border-l-blue-500 hover:bg-blue-50'
+                            : 'hover:bg-white',
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">

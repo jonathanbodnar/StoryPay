@@ -10,6 +10,9 @@ import {
 import { usePathname, useRouter } from 'next/navigation';
 import { getArticlesForPath, getArticleById } from '@/lib/help-articles';
 import { SupportPanel } from '@/components/support/SupportPanel';
+import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
+import { supportChannels, type TicketMessageEvent } from '@/lib/realtime/channels';
+import { getReads, countUnreadFromList } from '@/components/support/SupportPanel';
 
 interface Message {
  role: 'user' | 'assistant';
@@ -281,6 +284,9 @@ export default function AskAIWidget() {
 const [error, setError] = useState('');
 const [unread, setUnread] = useState(0);
  const [supportUnread, setSupportUnread] = useState(0);
+ const [bgVenueId, setBgVenueId] = useState<string | null>(null);
+ // Tracks lightweight ticket state needed for unread count even when panel is closed
+ const bgTicketsRef = useRef<Array<{ id: string; last_message_at: string; last_sender_type: 'venue' | 'support' }>>([]);
  const [showEmoji, setShowEmoji] = useState(false);
  const [pendingImage, setPendingImage] = useState<string | null>(null);
  const [isListening, setIsListening] = useState(false);
@@ -338,6 +344,27 @@ const [unread, setUnread] = useState(0);
  useEffect(() => {
  if (open) { setUnread(0); setTimeout(() => inputRef.current?.focus(), 100); }
  }, [open]);
+
+ // Background fetch: get venueId + initial unread count even while panel is closed.
+ useEffect(() => {
+   async function init() {
+     try {
+       const res = await fetch('/api/dashboard/support-tickets', { cache: 'no-store' });
+       if (!res.ok) return;
+       const d = await res.json() as { tickets: Array<{ id: string; last_message_at: string; last_sender_type?: 'venue' | 'support' }>; venueId?: string };
+       if (d.venueId) setBgVenueId(d.venueId);
+       const list = (d.tickets || []).map(t => ({
+         id: t.id,
+         last_message_at: t.last_message_at,
+         last_sender_type: t.last_sender_type ?? 'venue',
+       }));
+       bgTicketsRef.current = list;
+       // Only update badge if SupportPanel isn't mounted (it manages its own count)
+       setSupportUnread(prev => prev === 0 ? countUnreadFromList(list) : prev);
+     } catch { /* ignore */ }
+   }
+   void init();
+ }, []);
 
  // When the user switches to support mode, the SupportPanel will mount and
  // call onUnreadCount; no extra clearing needed here.
@@ -432,7 +459,31 @@ setLoading(false);
 }
 }, [input, pendingImage, loading, messages, open, pathname]);
 
-function reset() {
+// Background realtime subscription — keeps badge updated even when panel is closed.
+ useBroadcastChannel(
+   bgVenueId ? supportChannels.venueTickets(bgVenueId) : null,
+   ['message'],
+   useCallback((_, payload) => {
+     const m = payload as TicketMessageEvent;
+     if (!m) return;
+     // Update our lightweight ticket shadow list
+     bgTicketsRef.current = bgTicketsRef.current.map(t =>
+       t.id === m.ticketId
+         ? { ...t, last_message_at: m.createdAt, last_sender_type: m.senderType }
+         : t,
+     );
+     // If SupportPanel isn't open, update the badge directly
+     const panelOpen = open && mode === 'support';
+     if (!panelOpen && m.senderType === 'support') {
+       const reads = getReads();
+       const lastRead = reads[m.ticketId];
+       const isUnread = !lastRead || m.createdAt > lastRead;
+       if (isUnread) setSupportUnread(n => n + 1);
+     }
+   }, [open, mode]),
+ );
+
+ function reset() {
 setMessages([]); setInput(''); setError('');
 setPendingImage(null); setShowEmoji(false);
  setInlineArticleId(null);
