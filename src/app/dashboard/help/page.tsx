@@ -94,7 +94,7 @@ The floating sparkle button (bottom-right) opens Ask AI, which can answer questi
  tags: ['checklist', 'onboarding', 'setup', 'first steps'],
  body: `When you first access your dashboard you'll see a"Get Started"checklist on the Home page. It tracks 6 steps:
 
-1. Payment Processing — connect your LunarPay merchant account (Settings → General)
+1. Payment Processing — connect your StoryPay merchant account (Payments → Settings)
 2. First Contact — add your first contact record
 3. First Proposal — create and send a proposal
 4. Branding — upload your logo and pick brand colors (Settings → Branding)

@@ -13,9 +13,9 @@ export default function PayoutsPage() {
  <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="py-16 text-center">
  <DollarSign size={40} className="mx-auto mb-4 text-gray-200"/>
- <p className="text-sm font-medium text-gray-500">Payouts are managed by LunarPay</p>
- <p className="text-xs text-gray-400 mt-1 max-w-xs mx-auto leading-relaxed">
- Your earnings are automatically transferred to your bank account on your payout schedule. Log in to your LunarPay merchant portal to view payout history and settings.
+ <p className="text-sm font-medium text-gray-500">Payouts are managed by StoryPay&apos;s merchant platform</p>
+ <p className="text-xs text-gray-400 mt-1 max-w-md mx-auto leading-relaxed">
+ Your earnings are automatically transferred to your bank account on your StoryPay payout schedule. Log in to your StoryPay merchant portal to view payout history and bank settings.
  </p>
  <a
  href="https://app.lunarpay.com"
@@ -24,7 +24,7 @@ export default function PayoutsPage() {
  className="mt-6 inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white hover:opacity-90 transition-all"
  style={{ backgroundColor: '#1b1b1b' }}
  >
- Open LunarPay Portal
+ Open StoryPay merchant portal
  </a>
  </div>
  </div>

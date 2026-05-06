@@ -543,7 +543,7 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
           </div>
           <div>
             <h3 className="font-semibold text-gray-900">Apply for StoryPay™ Payments</h3>
-            <p className="text-xs text-gray-500">Powered by LunarPay · PCI-compliant</p>
+            <p className="text-xs text-gray-500">Powered by StoryPay&apos;s merchant platform · PCI-compliant</p>
           </div>
         </div>
 

@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     .single();
 
   if (!venue?.lunarpay_secret_key) {
-    return NextResponse.json({ error: 'LunarPay not configured' }, { status: 400 });
+    return NextResponse.json({ error: 'StoryPay merchant account is not yet configured' }, { status: 400 });
   }
 
   try {

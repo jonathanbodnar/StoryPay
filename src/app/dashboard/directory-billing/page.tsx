@@ -189,7 +189,7 @@ function friendlyError(raw: string): string {
     return 'Billing isn\'t fully configured on the server yet. Please contact support — we\'ll get this resolved quickly.';
   }
   if (lower.includes('lunarpay api error 5')) {
-    return 'LunarPay is temporarily unavailable. Please try again in a moment.';
+    return 'Our payment processor (StoryPay\'s merchant platform) is temporarily unavailable. Please try again in a moment.';
   }
   return raw;
 }
@@ -494,7 +494,7 @@ export default function DirectoryBillingPage() {
         </h1>
         <p className="mt-1 text-sm text-gray-500">
           Manage your StoryVenue plan, update your card on file, and review past invoices.
-          Billing is handled securely by LunarPay.
+          Billing is processed securely by StoryPay&apos;s merchant platform.
         </p>
       </div>
 
@@ -511,7 +511,7 @@ export default function DirectoryBillingPage() {
       ) : null}
       {busy === 'verify_checkout' || busy === 'verify_payment_update' || busy === 'verify_addons' || busy === 'verify_start_paid' ? (
         <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600 flex items-center gap-2">
-          <Loader2 size={14} className="animate-spin" /> Confirming with LunarPay…
+          <Loader2 size={14} className="animate-spin" /> Confirming with our merchant processor…
         </div>
       ) : null}
       {!summary.billing_configured ? (
@@ -1041,7 +1041,7 @@ export default function DirectoryBillingPage() {
           body={
             <>
               Your paid plan will end and your venue will drop back to the free tier. Billing stops
-              immediately with LunarPay — you won&apos;t be charged again. You can resubscribe later.
+              immediately — you won&apos;t be charged again on your card. You can resubscribe later.
             </>
           }
           confirmLabel="Cancel subscription"
@@ -1709,8 +1709,7 @@ function UpgradePlanModal({
               <div className="rounded-xl border border-amber-100 bg-amber-50 p-4 text-sm text-amber-900">
                 <p>
                   You&apos;ll be moved to the <strong>{plan.name}</strong> plan immediately. Your
-                  current paid subscription will be canceled with LunarPay and you won&apos;t be
-                  charged again.
+                  current paid subscription will be canceled and you won&apos;t be charged again.
                 </p>
               </div>
             ) : willPatch ? (
@@ -1725,8 +1724,8 @@ function UpgradePlanModal({
               <div className="space-y-2">
                 <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-700">
                   <p>
-                    You&apos;ll be sent to <strong>LunarPay&apos;s secure checkout</strong> to enter
-                    your card details. Your subscription activates the moment payment succeeds.
+                    You&apos;ll be sent to <strong>StoryPay&apos;s secure merchant checkout</strong> to
+                    enter your card details. Your subscription activates the moment payment succeeds.
                   </p>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-gray-500">

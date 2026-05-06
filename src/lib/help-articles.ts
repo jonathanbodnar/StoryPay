@@ -76,7 +76,7 @@ The browser tab uses the StoryVenue icon (favicon), not the full logo. Hosting p
 The signup is a 3-step flow:
 1. Plan picker — choose a directory plan (Free, Pro, Premium, etc.). Plan cards show all features side by side with a highlighted featured plan in the middle. Highlight badges appear on plans that have them configured.
 2. Add-ons — select optional add-ons like Verified ($19/mo), Sponsored ($99/mo), or Venue Concierge ($499/mo). Each add-on shows its value proposition. Free plans can skip paid add-ons. Venue Concierge is only available on plans that support it.
-3. Payment — enter your payment details via secure LunarPay checkout. Free plans skip this step entirely. If a trial period is configured for your plan, the first charge is deferred.
+3. Payment — enter your payment details via secure StoryPay merchant checkout. Free plans skip this step entirely. If a trial period is configured for your plan, the first charge is deferred.
 
 After completing signup (or selecting a free plan), you are logged straight into a brand-new dashboard with a blank directory listing ready to fill in.
 
@@ -1487,7 +1487,7 @@ Results are paginated (20 per page). Use the Previous / Next buttons at the bott
         id: 'cust-profile',
         title: 'Contact profile — overview and tabs',
         tags: ['contact profile', 'crm', 'profile', 'tabs', 'overview', 'history', 'edit note', 'edit notes', 'new proposal', 'new invoice'],
-        body: `Click a contact's name to open their full profile. Contacts you see on this list come from three sources — storyvenue.com signups, LunarPay integration, and Legacy imports — all unified into one record per person. The profile has six tabs:
+        body: `Click a contact's name to open their full profile. Contacts you see on this list come from three sources — storyvenue.com signups, StoryPay merchant payment records, and Legacy imports — all unified into one record per person. The profile has six tabs:
 
 Overview
 - Edit contact info inline (name, email, phone, address)
@@ -2824,18 +2824,18 @@ Super admins can view, search, and manage all couple accounts from the admin Cou
         id: 'storypay-overview',
         title: 'What is StoryPay™ and how do I apply?',
         tags: ['storypay', 'payment processing', 'lunarpay', 'fortis', 'apply', 'merchant', 'onboarding', 'payments', 'accept payments'],
-        body: `StoryPay™ is the payment processing layer inside StoryVenue, powered by LunarPay (Fortis). It enables you to accept credit card payments, installment plans, and subscriptions for your proposals and invoices.
+        body: `StoryPay™ is the payment processing layer inside StoryVenue. It runs on top of StoryPay's merchant platform (our underlying processor partner) and enables you to accept credit card payments, ACH transfers, installment plans, and subscriptions for your proposals and invoices.
 
 Do I need StoryPay™?
 To collect online payments from clients (proposals/invoices with payment enabled), you must apply for StoryPay™ and complete merchant onboarding. Until then, the proposals and invoices you send won't have an active payment button for your clients.
 
 Applying for StoryPay™
-1. Go to Settings → StoryPay (or click the "Apply for StoryPay™" prompt that appears in payment areas)
-2. The LunarPay onboarding wizard walks you through:
+1. Go to Payments → Settings (or click the "Apply for StoryPay™" prompt that appears in payment areas)
+2. The StoryPay onboarding wizard walks you through:
    - Business information (legal name, address, industry)
    - Owner details (name, date of birth, SSN last 4)
    - Banking details (where payments are deposited)
-3. Submit for review. Fortis processes the application — approval typically takes 1–3 business days.
+3. Submit for review. Our merchant partner processes the application — approval typically takes 1–3 business days.
 
 Once approved
 - The StoryPay™ banner disappears from Settings
@@ -2843,10 +2843,10 @@ Once approved
 - Funds are deposited into the bank account you provided
 
 Security note
-Card numbers from clients go directly to Fortis servers — StoryVenue never sees or stores raw card data. The integration is PCI SAQ-A compliant.
+Card numbers from clients go directly to our PCI-certified merchant processor — StoryVenue never sees or stores raw card data. The integration is PCI SAQ-A compliant.
 
 If payments are showing as unavailable
-Check that your LunarPay/Fortis onboarding status shows as approved in Settings → StoryPay. If you believe it should be active, contact StoryVenue support with your business name and application date.`,
+Check that your StoryPay merchant onboarding shows as approved in Payments → Settings. If you believe it should be active, contact StoryVenue support with your business name and application date.`,
       },
       {
         id: 'storypay-ach',
@@ -2860,7 +2860,7 @@ Why offer ACH
 - Some clients prefer paying directly from their bank, especially for deposits and large balances
 
 Where ACH appears
-When ACH is enabled, the LunarPay-hosted checkout page that opens when a customer clicks "Pay" on a proposal or invoice shows two tabs:
+When ACH is enabled, the StoryPay-hosted checkout page that opens when a customer clicks "Pay" on a proposal or invoice shows two tabs:
 - Card (credit / debit)
 - Bank account (eCheck)
 
@@ -2871,23 +2871,23 @@ Settlement timing
 - ACH: returns "submitted" right away, but takes 3–5 business days to fully settle. The customer-facing success page tells them this. The proposal/invoice in your dashboard is marked paid as soon as the customer confirms the bank info, since they've authorized the transfer.
 
 Enabling ACH on your venue
-1. Go to Settings → Customer Payment Methods (visible once your StoryPay onboarding is approved)
-2. Toggle "ACH / Bank Transfer (eCheck)" ON (enabled by default for new venues)
+1. Go to Payments → Settings → Customer Payment Methods (visible once your StoryPay onboarding is approved)
+2. Toggle "ACH / Bank Transfer" ON (enabled by default for new venues)
 3. Save — change takes effect on the next proposal/invoice your customer opens
 
-Important — ACH must be enabled on your Fortis merchant account too
-Even if you turn the toggle ON in StoryVenue, ACH only appears on checkout if your underlying LunarPay/Fortis merchant account also has ACH activated. Most onboarding flows include both card and ACH, but if ACH didn't get included on your application, contact LunarPay support to have it added. Until then the ACH tab simply won't appear and only the card tab is shown.
+Important — ACH must be enabled on your StoryPay merchant account too
+Even if you turn the toggle ON in StoryVenue, ACH only appears on checkout if your underlying StoryPay merchant account also has ACH activated. Most onboarding flows include both card and ACH, but if ACH didn't get included on your application, contact StoryVenue support to have it added. Until then the ACH tab simply won't appear and only the card tab is shown.
 
 Disabling ACH
-Same place — Settings → Customer Payment Methods — flip the toggle OFF. Your future checkout pages will show card only. Cards are always on.
+Same place — Payments → Settings → Customer Payment Methods — flip the toggle OFF. Your future checkout pages will show card only. Cards are always on.
 
 Refunds
 ACH refunds work the same as card refunds, but each leg takes 3–5 business days to settle. From the StoryVenue dashboard you click "Refund" exactly the same way regardless of payment method.
 
 Common questions
 - Can I require ACH only? Not currently — cards are always offered. If you turn ACH on, both methods appear and the customer chooses.
-- What if an ACH transfer fails (insufficient funds, closed account)? You'll receive a webhook notification from LunarPay. The proposal will need to be marked unpaid manually until the customer pays again. (Card fallback is recommended for time-sensitive deposits.)
-- Are there extra fees? Check your LunarPay dashboard for ACH transaction pricing — typically a flat fee per transaction (vs. a percentage), making it cheaper for amounts above a few hundred dollars.`,
+- What if an ACH transfer fails (insufficient funds, closed account)? You'll receive a notification from your StoryPay merchant account. The proposal will need to be marked unpaid manually until the customer pays again. (Card fallback is recommended for time-sensitive deposits.)
+- Are there extra fees? Check your StoryPay merchant dashboard for ACH transaction pricing — typically a flat fee per transaction (vs. a percentage), making it cheaper for amounts above a few hundred dollars.`,
       },
     ],
   },
@@ -3204,7 +3204,7 @@ Cancellation:
 - Free and legacy plans do not require cancellation
 
 Refunds:
-- Subscription refunds are processed through LunarPay
+- Subscription refunds are processed through your StoryPay merchant account
 - Contact your account manager for refund requests
 - ACH refunds take 3–5 business days to settle (same as card refunds)`,
       },

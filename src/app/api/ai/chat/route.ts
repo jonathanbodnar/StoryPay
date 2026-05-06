@@ -495,19 +495,19 @@ Setup checklist for a venue building their first speed-to-lead funnel:
 - **Super admin couples portal**: the admin dashboard has a Couples tab where admins can view, search, edit, and manage all couple accounts across all venues.
 
 ## StoryPay™ (Payment Processing Tier)
-- StoryPay™ is the payment processing tier within StoryVenue, powered by LunarPay (Fortis).
+- StoryPay™ is the payment processing tier within StoryVenue. It runs on top of StoryPay's underlying merchant platform (our PCI-certified processor partner).
 - Venues must **apply for StoryPay™** and complete merchant onboarding before they can accept payments (proposals/invoices with payment enabled).
-- Until StoryPay™ is active, certain features are gated — a banner in Settings reminds owners to apply.
-- **Apply**: Settings → StoryPay or click the "Apply for StoryPay™" prompt that appears in payment-related areas.
-- The onboarding wizard collects business information, owner details, and banking info for Fortis processing. Card numbers from customers go directly to Fortis (PCI SAQ-A compliant — StoryVenue never stores raw card numbers).
+- Until StoryPay™ is active, certain features are gated — a banner reminds owners to apply.
+- **Apply**: Payments → Settings or click the "Apply for StoryPay™" prompt that appears in payment-related areas.
+- The onboarding wizard collects business information, owner details, and banking info for StoryPay merchant processing. Card numbers from customers go directly to our PCI-certified processor (PCI SAQ-A compliant — StoryVenue never stores raw card numbers).
 - Once approved: proposals and invoices can accept credit card payments, installments, and subscriptions online.
-- If payment processing shows as unavailable: check that your LunarPay/Fortis onboarding is complete. Contact support if you believe it should be active.
+- If payment processing shows as unavailable: check that your StoryPay merchant onboarding is complete. Contact support if you believe it should be active.
 
 ### ACH (Bank Transfer / eCheck) — accepted alongside cards
-- The LunarPay-hosted checkout supports both credit/debit card AND ACH (bank account / eCheck). Customers see two tabs and pick the one they prefer.
+- The StoryPay-hosted checkout supports both credit/debit card AND ACH (bank account / eCheck). Customers see two tabs and pick the one they prefer.
 - ACH is **enabled by default** for new venues. Toggle it on/off at Settings → Customer Payment Methods.
 - Cards: clear instantly. ACH: returns "submitted" immediately, settles in 3–5 business days. The customer-facing success page tells them this; the proposal/invoice in StoryVenue is marked "paid" as soon as bank info is authorized.
-- ACH only appears on checkout if BOTH (a) the venue's StoryVenue toggle is ON AND (b) their LunarPay/Fortis merchant account also has ACH enabled. If you need Fortis to add ACH to an existing account, contact LunarPay support.
+- ACH only appears on checkout if BOTH (a) the venue's StoryVenue toggle is ON AND (b) their StoryPay merchant account also has ACH enabled. If you need ACH added to an existing merchant account, contact StoryVenue support.
 - Use cases: lower fees on big deposits, alternative for customers who don't use cards, fewer card declines.
 - ACH refunds work the same as card refunds (each leg takes 3–5 business days to settle).
 
@@ -579,12 +579,12 @@ When an event is created or updated, StoryVenue automatically schedules one remi
 
 ## Refunds
 - Go to Transactions → Charges → find the charge → click Refund.
-- Confirm the amount and click Issue Refund. Processes immediately through LunarPay.
+- Confirm the amount and click Issue Refund. Processes immediately through your StoryPay merchant account.
 
 ## Payment Processing
-- StoryVenue uses LunarPay (powered by Fortis) for all payment processing.
-- Account must complete Fortis onboarding before accepting payments.
-- Card numbers go directly to Fortis — PCI SAQ-A compliant.
+- StoryVenue uses StoryPay's merchant platform (our PCI-certified processor partner) for all payment processing.
+- Account must complete merchant onboarding before accepting payments.
+- Card numbers go directly to our processor — PCI SAQ-A compliant.
 
 ## Help Center
 - Go to Help Center for searchable documentation.
@@ -596,7 +596,7 @@ When an event is created or updated, StoryVenue automatically schedules one remi
 - How do I create a proposal? Payments → New → select a template → fill in client details → Send.
 - How do I see my revenue? Home dashboard (filter by date) or Reports → Revenue.
 - How do I refund a payment? Transactions → Charges → click Refund.
-- Why can't I accept payments? LunarPay account may be pending. Check Settings → Payment Processing.
+- Why can't I accept payments? Your StoryPay merchant account may still be pending review. Check Payments → Settings.
 - How do I add my logo? Settings → Branding → upload a logo file, or choose an image from Media (JPG/PNG/WebP/AVIF/GIF).
 - How do I manage my email notification templates? Settings → Notifications. Each template has an on/off toggle and a full editor. Payment Reminder lets you configure overdue reminder timing (days after the due date, not before).
 - How do I turn off a specific email notification? Settings → Notifications → click the template in the left list → toggle the switch off. Saved immediately.
@@ -642,7 +642,7 @@ When an event is created or updated, StoryVenue automatically schedules one remi
 - Why do I see an error about conversations migration? Apply 022_conversations.sql in Supabase and set SUPABASE_SERVICE_ROLE_KEY on the host.
 - How do I update my email or password? Click your name/avatar in the sidebar → My Profile. Enter your new email or password and save. No current-password re-entry required.
 - How does client / couple login work? Couples use app.storyvenue.com/couple/login with the email and password they set at signup. They can view their proposals and documents.
-- How do I apply for StoryPay™? Settings → StoryPay (or click the "Apply for StoryPay™" prompt). Complete the LunarPay/Fortis merchant onboarding wizard to activate payment processing.
+- How do I apply for StoryPay™? Payments → Settings (or click the "Apply for StoryPay™" prompt). Complete the StoryPay merchant onboarding wizard to activate payment processing.
 - How do I connect Google Calendar for two-way sync? Settings → Calendar → Connections tab → connect your Google account. Pick which calendar to write new events to, and select any personal/team calendars to use as conflict blockers.
 - How do I set my available hours for bookings? Settings → Calendar → Availability tab. Toggle each weekday on/off and set start/end times. Add date-specific overrides for holidays or special days.
 - How do I set minimum notice for bookings? Settings → Calendar → Booking Rules → Minimum Scheduling Notice. Set to 0 for same-day, up to 72 hours.
@@ -758,7 +758,7 @@ When an event is created or updated, StoryVenue automatically schedules one remi
 - New venue signup at app.storyvenue.com/signup follows a 3-step flow:
   1. **Plan picker**: choose from available directory plans (Free, Pro, Premium, or equivalent). Plan cards show all features with a featured/highlighted middle card. Plans with a configurable highlight badge show a badge label on their card. Only public plans are shown (admin-only plans are hidden).
   2. **Add-ons**: select optional add-ons (Verified, Sponsored, Venue Concierge). Add-on prices are admin-configurable and displayed per-month. Each add-on shows its value proposition. Venue Concierge is restricted to plans that support it.
-  3. **Payment**: enter payment details via LunarPay hosted checkout. Free plans skip this step entirely. Trial periods (if configured) defer the first charge.
+  3. **Payment**: enter payment details via the StoryPay merchant hosted checkout. Free plans skip this step entirely. Trial periods (if configured) defer the first charge.
 - The signup flow uses Suspense boundaries for search params and supports back-navigation between steps.
 - After successful payment (or free plan selection), the venue is created and the owner lands in the dashboard with the Get Started checklist.
 - If the venue already exists and is logged in, the venue is saved in-place without redirecting.
@@ -777,7 +777,7 @@ When an event is created or updated, StoryVenue automatically schedules one remi
 - **Add-on management**: toggle Verified, Sponsored, and Venue Concierge add-ons independently of your plan. Add-on changes also follow the rollover model.
 - **Payment method**: update your card or payment method at any time from the billing page. The "Add/Update Card" option is always available. When swapping payment methods, existing trial periods and renewal dates are preserved.
 - **Free trials**: some plans offer free trials (days, weeks, months, years, or forever). Trials are for new signups only — existing accounts are not retroactively enrolled. During a trial, all plan features are fully accessible.
-- **Refunds**: subscription refunds are processed through LunarPay. Contact your account manager for refund requests. ACH refunds take 3–5 business days to settle (same as card refunds).
+- **Refunds**: subscription refunds are processed through your StoryPay merchant account. Contact your account manager for refund requests. ACH refunds take 3–5 business days to settle (same as card refunds).
 - **Cancellation**: cancel from the billing page. Access continues until the end of the current billing cycle. For free or legacy plans, no cancellation is needed.
 - **Admin extend trial**: StoryVenue admins can extend trial periods for individual venues from the admin dashboard.
 - **Plan visibility**: some plans may be hidden from public pickers (admin-only). Plans can also have a configurable highlight badge that appears on the plan card during signup.
