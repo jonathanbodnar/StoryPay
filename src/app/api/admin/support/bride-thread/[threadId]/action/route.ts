@@ -151,13 +151,16 @@ async function resolveLeadForThread(
   const baseFields =
     'id, venue_id, ai_state, ai_first_activated_at, ai_expires_at, ai_attempt_count, ai_re_enable_count, sms_dnd, sms_dnd_source';
 
+  // Use ilike() for email so mixed-case stored values still match. Same fix
+  // we made in /bride-context — keep the two paths consistent so admin
+  // actions and the displayed sidebar always point at the same lead.
   const email = (c.customer_email || '').trim().toLowerCase();
   if (email) {
     const { data: l } = await supabaseAdmin
       .from('leads')
       .select(baseFields)
       .eq('venue_id', t.venue_id)
-      .eq('email', email)
+      .ilike('email', email)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -217,27 +220,68 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ threadId: 
 
       const s = stage as { id: string; name: string; pipeline_id: string };
 
-      // Update lead if one exists
-      if (lead) {
-        const { error: updErr } = await supabaseAdmin
+      // Mirror onto the venue_customer the thread is attached to (canonical
+      // source for chat threads). This always succeeds even if no lead is
+      // linked, so an admin can stage any conversation.
+      const { error: vcErr } = await supabaseAdmin
+        .from('venue_customers')
+        .update({
+          stage_id:    s.id,
+          pipeline_id: s.pipeline_id,
+          updated_at:  new Date().toISOString(),
+        })
+        .eq('id', venueCustomerId)
+        .eq('venue_id', venueId);
+      if (vcErr) {
+        console.error('[support set_stage] venue_customers update failed', vcErr);
+        return NextResponse.json({ error: vcErr.message }, { status: 500 });
+      }
+
+      // Mirror onto every lead that shares this venue_customer's email/phone.
+      // Duplicates exist for some venues (multiple leads with the same email),
+      // so we update them all instead of relying on the single lead we matched.
+      const { data: vcRow } = await supabaseAdmin
+        .from('venue_customers')
+        .select('customer_email, phone')
+        .eq('id', venueCustomerId)
+        .maybeSingle();
+      const vcr = vcRow as { customer_email: string | null; phone: string | null } | null;
+      const vcEmail = (vcr?.customer_email || '').trim().toLowerCase();
+      const vcPhone = (vcr?.phone || '').trim();
+      const leadIdsToUpdate = new Set<string>();
+      if (lead?.id) leadIdsToUpdate.add(lead.id);
+      if (vcEmail) {
+        const { data: ls } = await supabaseAdmin
+          .from('leads')
+          .select('id')
+          .eq('venue_id', venueId)
+          .ilike('email', vcEmail);
+        for (const l of (ls ?? []) as Array<{ id: string }>) leadIdsToUpdate.add(l.id);
+      }
+      if (vcPhone) {
+        const { data: ls } = await supabaseAdmin
+          .from('leads')
+          .select('id')
+          .eq('venue_id', venueId)
+          .eq('phone', vcPhone);
+        for (const l of (ls ?? []) as Array<{ id: string }>) leadIdsToUpdate.add(l.id);
+      }
+      if (leadIdsToUpdate.size > 0) {
+        const ids = Array.from(leadIdsToUpdate);
+        const { error: leadsErr } = await supabaseAdmin
           .from('leads')
           .update({
             stage_id:    s.id,
             pipeline_id: s.pipeline_id,
             updated_at:  new Date().toISOString(),
           })
-          .eq('id', lead.id)
+          .in('id', ids)
           .eq('venue_id', venueId);
-        if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
+        if (leadsErr) {
+          console.error('[support set_stage] leads update failed', leadsErr);
+          // non-fatal: stage already saved on venue_customer
+        }
       }
-
-      // Mirror onto the venue_customer the thread is attached to (canonical source for chat threads)
-      const { error: vcErr } = await supabaseAdmin
-        .from('venue_customers')
-        .update({ stage_id: s.id, pipeline_id: s.pipeline_id })
-        .eq('id', venueCustomerId)
-        .eq('venue_id', venueId);
-      if (vcErr) return NextResponse.json({ error: vcErr.message }, { status: 500 });
 
       // Activity log (best-effort)
       if (lead) {
