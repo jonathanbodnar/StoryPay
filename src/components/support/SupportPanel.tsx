@@ -32,8 +32,30 @@ interface TicketListRow {
   priority:                 Priority;
   last_message_at:          string;
   last_message_preview:     string | null;
+  last_sender_type:         'venue' | 'support';
   created_at:               string;
   assigned_support_user_id: string | null;
+}
+
+const READS_KEY = 'support_ticket_reads';
+function getReads(): Record<string, string> {
+  try { return JSON.parse(localStorage.getItem(READS_KEY) || '{}'); } catch { return {}; }
+}
+function markRead(ticketId: string) {
+  try {
+    const reads = getReads();
+    reads[ticketId] = new Date().toISOString();
+    localStorage.setItem(READS_KEY, JSON.stringify(reads));
+  } catch { /* ignore */ }
+}
+function countUnread(tickets: TicketListRow[]): number {
+  const reads = getReads();
+  return tickets.filter(t => {
+    if (t.last_sender_type !== 'support') return false;
+    const lastRead = reads[t.id];
+    if (!lastRead) return true;
+    return t.last_message_at > lastRead;
+  }).length;
 }
 
 interface TicketMessage {
@@ -96,7 +118,7 @@ function PriorityChip({ priority }: { priority: Priority }) {
   return null;
 }
 
-export function SupportPanel({ onClose }: { onClose?: () => void }) {
+export function SupportPanel({ onClose, onUnreadCount }: { onClose?: () => void; onUnreadCount?: (n: number) => void }) {
   const [view, setView] = useState<View>('list');
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -116,14 +138,16 @@ export function SupportPanel({ onClose }: { onClose?: () => void }) {
         throw new Error(d.error || `Failed (${r.status})`);
       }
       const d = (await r.json()) as { tickets: TicketListRow[]; venueId?: string };
-      setTickets(d.tickets || []);
+      const list = d.tickets || [];
+      setTickets(list);
       if (d.venueId) setVenueId(d.venueId);
+      onUnreadCount?.(countUnread(list));
     } catch (e) {
       setListError(e instanceof Error ? e.message : 'Failed to load tickets');
     } finally {
       setListLoading(false);
     }
-  }, []);
+  }, [onUnreadCount]);
 
   useEffect(() => {
     if (view === 'list') loadList();
@@ -138,6 +162,13 @@ export function SupportPanel({ onClose }: { onClose?: () => void }) {
   const loadDetail = useCallback(async (id: string) => {
     setDetailLoading(true);
     setDetailError(null);
+    // Mark as read immediately when venue opens the ticket
+    markRead(id);
+    setTickets(prev => {
+      const updated = prev.map(t => t.id === id ? { ...t, last_sender_type: 'venue' as const } : t);
+      onUnreadCount?.(countUnread(updated));
+      return updated;
+    });
     try {
       const r = await fetch(`/api/dashboard/support-tickets/${id}`, { cache: 'no-store' });
       if (!r.ok) {
@@ -154,7 +185,7 @@ export function SupportPanel({ onClose }: { onClose?: () => void }) {
     } finally {
       setDetailLoading(false);
     }
-  }, []);
+  }, [onUnreadCount]);
 
   useEffect(() => {
     if (view === 'detail' && activeId) loadDetail(activeId);
@@ -182,9 +213,11 @@ export function SupportPanel({ onClose }: { onClose?: () => void }) {
             status:               m.status,
             last_message_at:      m.createdAt,
             last_message_preview: m.body.slice(0, 200),
+            last_sender_type:     m.senderType === 'support' ? 'support' : 'venue',
           };
-          const rest = prev.filter((_, i) => i !== idx);
-          return [updated, ...rest];
+          const next = [updated, ...prev.filter((_, i) => i !== idx)];
+          onUnreadCount?.(countUnread(next));
+          return next;
         });
       } else if (evt === 'status') {
         const s = payload as TicketStatusEvent;
@@ -220,6 +253,8 @@ export function SupportPanel({ onClose }: { onClose?: () => void }) {
             attachments:            [],
             created_at:             m.createdAt,
           };
+          // Venue is actively viewing — mark as read immediately
+          if (m.senderType === 'support') markRead(m.ticketId);
           return {
             ...prev,
             ticket: { ...prev.ticket, status: m.status, last_message_at: m.createdAt, last_message_preview: m.body.slice(0, 200) },

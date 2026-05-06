@@ -32,7 +32,34 @@ export async function GET() {
     .limit(100);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ tickets: data ?? [], venueId: attr.venueId });
+
+  const tickets = data ?? [];
+  const threadIds = tickets.map((t: { id: string }) => t.id);
+
+  // Fetch the last message sender_type per thread so the client can determine
+  // which tickets have an unread support reply.
+  let lastSenderByThread: Record<string, 'venue' | 'support'> = {};
+  if (threadIds.length > 0) {
+    const { data: msgRows } = await supabaseAdmin
+      .from('support_thread_messages')
+      .select('support_thread_id, sender_type, created_at')
+      .in('support_thread_id', threadIds)
+      .order('created_at', { ascending: false });
+
+    for (const row of (msgRows ?? []) as Array<{ support_thread_id: string; sender_type: string }>) {
+      if (!lastSenderByThread[row.support_thread_id]) {
+        lastSenderByThread[row.support_thread_id] =
+          row.sender_type === 'support' ? 'support' : 'venue';
+      }
+    }
+  }
+
+  const enriched = tickets.map((t: { id: string }) => ({
+    ...t,
+    last_sender_type: lastSenderByThread[t.id] ?? 'venue',
+  }));
+
+  return NextResponse.json({ tickets: enriched, venueId: attr.venueId });
 }
 
 export async function POST(req: NextRequest) {

@@ -280,7 +280,7 @@ export default function AskAIWidget() {
  const [loading, setLoading] = useState(false);
 const [error, setError] = useState('');
 const [unread, setUnread] = useState(0);
- const [convUnread, setConvUnread] = useState(0);
+ const [supportUnread, setSupportUnread] = useState(0);
  const [showEmoji, setShowEmoji] = useState(false);
  const [pendingImage, setPendingImage] = useState<string | null>(null);
  const [isListening, setIsListening] = useState(false);
@@ -339,22 +339,10 @@ const [unread, setUnread] = useState(0);
  if (open) { setUnread(0); setTimeout(() => inputRef.current?.focus(), 100); }
  }, [open]);
 
- // Sync conversations unread count so FAB shows a badge when there are unread threads
- useEffect(() => {
-   async function fetchConvUnread() {
-     try {
-       const res = await fetch('/api/conversations/unread-count');
-       if (res.ok) {
-         const data = await res.json() as { count: number };
-         setConvUnread(data.count ?? 0);
-       }
-     } catch { /* ignore */ }
-   }
-   void fetchConvUnread();
-   const handler = () => void fetchConvUnread();
-   window.addEventListener('storypay:conversations-unread', handler);
-   return () => window.removeEventListener('storypay:conversations-unread', handler);
- }, []);
+ // When the user switches to support mode, the SupportPanel will mount and
+ // call onUnreadCount; no extra clearing needed here.
+ // When they switch away from support, keep the badge until they re-open.
+
 
  useEffect(() => {
  // scrollIntoView can steal focus / scroll the wrong ancestor on mobile.
@@ -461,7 +449,7 @@ setPendingImage(null); setShowEmoji(false);
  >
  {open ? <ChevronDown size={22} /> : <Sparkles size={22} />}
  {(() => {
-   const totalBadge = (!open ? unread : 0) + convUnread;
+   const totalBadge = (!open ? unread : 0) + supportUnread;
    return totalBadge > 0 ? (
      <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
        {totalBadge > 99 ? '99+' : totalBadge}
@@ -539,9 +527,9 @@ setPendingImage(null); setShowEmoji(false);
    }`}
  >
    <LifeBuoy size={11} /> Contact support
-   {convUnread > 0 && (
+   {supportUnread > 0 && (
      <span className="ml-0.5 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold tabular-nums leading-none">
-       {convUnread > 99 ? '99+' : convUnread}
+       {supportUnread > 99 ? '99+' : supportUnread}
      </span>
    )}
  </button>
@@ -550,7 +538,7 @@ setPendingImage(null); setShowEmoji(false);
  {/* ── Support mode ── */}
  {mode === 'support' && (
  <div className="flex-1 min-h-0 overflow-hidden">
- <SupportPanel />
+ <SupportPanel onUnreadCount={setSupportUnread} />
  </div>
  )}
 
