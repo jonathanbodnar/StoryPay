@@ -571,7 +571,7 @@ export function SupportInboxPanel() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   const inboxContent = (
-    <div className={`flex flex-col gap-3 min-w-0 max-w-full ${focusMode ? 'h-full' : 'lg:h-[calc(100vh-80px)]'}`}>
+    <div className={`flex flex-col gap-3 min-w-0 max-w-full ${focusMode ? 'flex-1 min-h-0' : 'lg:h-[calc(100vh-80px)]'}`}>
       <div className="shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center gap-3">
           <div>
@@ -810,9 +810,11 @@ export function SupportInboxPanel() {
           className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm"
           onClick={() => setFocusMode(false)}
         />
-        {/* Focus panel — inset 16px for a floating feel */}
-        <div className="fixed inset-4 z-[70] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
-          {inboxContent}
+        {/* Focus panel — 16px inset gives floating feel; px/pt add inner breathing room */}
+        <div className="fixed inset-4 z-[70] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+          <div className="flex-1 min-h-0 px-6 pt-5 pb-4 overflow-hidden flex flex-col">
+            {inboxContent}
+          </div>
         </div>
       </>,
       document.body,

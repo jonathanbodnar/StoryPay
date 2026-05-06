@@ -1222,8 +1222,12 @@ export default function ConversationsPage() {
                       }
                     }}
                     className={classNames(
-                      'flex w-full cursor-pointer flex-col gap-0.5 border-b border-gray-100 px-4 py-3 text-left transition-colors hover:bg-white',
-                      selectedId === t.thread_id ? 'bg-white border-l-[3px] border-l-neutral-900' : '',
+                      'flex w-full cursor-pointer flex-col gap-0.5 border-b border-gray-100 px-4 py-3 text-left transition-colors',
+                      selectedId === t.thread_id
+                        ? 'bg-white border-l-[3px] border-l-neutral-900'
+                        : unread
+                          ? 'bg-blue-50/60 border-l-[3px] border-l-blue-500 hover:bg-blue-50'
+                          : 'hover:bg-white',
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -1304,7 +1308,7 @@ export default function ConversationsPage() {
                         ) : null}
                       </span>
                     </div>
-                    <p className="truncate text-xs text-gray-500">
+                    <p className={classNames('truncate text-xs', unread ? 'text-gray-700 font-medium' : 'text-gray-500')}>
                       {t.last_message_preview || t.subject || 'No messages'}
                     </p>
                     <div className="mt-1 flex items-center gap-1.5 text-[10px] text-gray-400">
