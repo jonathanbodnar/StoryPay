@@ -274,7 +274,7 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
     <aside className="hidden xl:flex w-72 shrink-0 rounded-2xl border border-gray-200 bg-white flex-col min-h-0 overflow-hidden">
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-200 bg-gray-50/60">
         <div className="flex items-center gap-2">
-          <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Context</h3>
+          <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Contact Profile</h3>
           {data?.thread?.last_message_at && (
             <SlaPill iso={data.thread.last_message_at} size="sm" />
           )}

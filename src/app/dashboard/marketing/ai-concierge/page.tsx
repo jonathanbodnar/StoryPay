@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import {
-  Sparkles, Loader2, Save, Check, X, Plus, AlertTriangle, ShieldCheck,
-  ShieldAlert, MessageSquare, UserCircle, Mail, BadgeCheck, Lock, ExternalLink,
+  Sparkles, Loader2, Save, Check, AlertTriangle, ShieldCheck,
+  ShieldAlert, MessageSquare, UserCircle, BadgeCheck, Lock, ExternalLink,
   TrendingUp, Send, Inbox, UserCheck, UserX, Activity, Pause as PauseIcon,
   AlertOctagon, Gauge,
 } from 'lucide-react';
@@ -56,12 +56,10 @@ export default function AiConciergeSettingsPage() {
   const [error, setError]       = useState('');
 
   // Local edit state for non-toggle fields
-  const [persona, setPersona]               = useState('');
-  const [draftEmails, setDraftEmails]       = useState<string[]>([]);
-  const [newEmail, setNewEmail]             = useState('');
-  const [saving, setSaving]                 = useState(false);
-  const [saved, setSaved]                   = useState(false);
-  const [toggleSaving, setToggleSaving]     = useState(false);
+  const [persona, setPersona]           = useState('');
+  const [saving, setSaving]             = useState(false);
+  const [saved, setSaved]               = useState(false);
+  const [toggleSaving, setToggleSaving] = useState(false);
 
   async function load() {
     setError('');
@@ -74,7 +72,6 @@ export default function AiConciergeSettingsPage() {
       const json = (await res.json()) as AiConciergeSettings;
       setData(json);
       setPersona(json.personaName);
-      setDraftEmails(json.conciergeNotifyEmails);
     } catch {
       setError('Unable to load AI Concierge settings.');
     } finally {
@@ -117,13 +114,9 @@ export default function AiConciergeSettingsPage() {
     setError('');
     setSaved(false);
     try {
-      const updated = await patch({
-        personaName:           persona,
-        conciergeNotifyEmails: draftEmails,
-      });
+      const updated = await patch({ personaName: persona });
       setData(updated);
       setPersona(updated.personaName);
-      setDraftEmails(updated.conciergeNotifyEmails);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (e) {
@@ -131,21 +124,6 @@ export default function AiConciergeSettingsPage() {
     } finally {
       setSaving(false);
     }
-  }
-
-  function addEmail() {
-    const e = newEmail.trim();
-    if (!e || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return;
-    if (draftEmails.some((x) => x.toLowerCase() === e.toLowerCase())) {
-      setNewEmail('');
-      return;
-    }
-    setDraftEmails((prev) => [...prev, e]);
-    setNewEmail('');
-  }
-
-  function removeEmail(addr: string) {
-    setDraftEmails((prev) => prev.filter((e) => e !== addr));
   }
 
   if (loading) {
@@ -170,9 +148,7 @@ export default function AiConciergeSettingsPage() {
     );
   }
 
-  const dirty =
-    persona.trim() !== data.personaName.trim() ||
-    JSON.stringify(draftEmails) !== JSON.stringify(data.conciergeNotifyEmails);
+  const dirty = persona.trim() !== data.personaName.trim();
 
   return (
     <div>
@@ -186,6 +162,41 @@ export default function AiConciergeSettingsPage() {
       </div>
 
       <div className="space-y-6">
+
+        {/* How it works — first so new users understand the product immediately */}
+        <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+          <div className="flex items-center gap-3 border-b border-gray-200 px-6 py-4">
+            <MessageSquare size={18} className="text-gray-400" />
+            <h2 className="font-heading text-base font-semibold text-gray-900">How AI Concierge works</h2>
+          </div>
+          <div className="px-6 py-5 space-y-3 text-sm text-gray-600">
+            <Step
+              n={1}
+              title="14-day silence triggers activation"
+              body="When a lead doesn't reply to your automated email sequence for 14 days, AI Concierge activates and starts following up via SMS."
+            />
+            <Step
+              n={2}
+              title="Random 1–3 day cadence for up to 60 days"
+              body="The AI sends short, varied SMS messages on a randomized cadence — never spammy, always casual. Each message picks a fresh angle so it never feels repetitive."
+            />
+            <Step
+              n={3}
+              title="Reply = AI stops"
+              body="The moment the bride replies, the AI pauses and you (or your team) take over. We tag the contact and notify you immediately by email."
+            />
+            <Step
+              n={4}
+              title="Quiet hours respected"
+              body="AI never sends outside 9am–8pm in your venue's local timezone. Late replies get queued for the next morning."
+            />
+            <Step
+              n={5}
+              title="60-day hard cap"
+              body="If a bride still hasn't replied after 60 days of follow-up, the AI moves her to your &quot;Not Interested&quot; pipeline and never messages her again automatically."
+            />
+          </div>
+        </section>
 
         {/* Metrics card — shows real engagement once leads start activating */}
         <AiConciergeMetricsCard />
@@ -313,55 +324,6 @@ export default function AiConciergeSettingsPage() {
           </div>
         </section>
 
-        {/* Concierge team notification emails */}
-        <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-          <div className="flex items-center gap-3 border-b border-gray-200 px-6 py-4">
-            <Mail size={18} className="text-gray-400" />
-            <h2 className="font-heading text-base font-semibold text-gray-900">Concierge notification team</h2>
-          </div>
-          <div className="px-6 py-5 space-y-4">
-            <p className="text-xs text-gray-500">
-              When a bride asks about pricing, mentions a lawyer, or escalates to a manager, the AI hands the conversation off to a human. These addresses are CC&apos;d on the urgent escalation emails (alongside the venue owner&apos;s address — <strong>{data.ownerNotificationEmail || 'not set on General settings'}</strong>).
-            </p>
-
-            <div className="space-y-2">
-              {draftEmails.length === 0 && (
-                <p className="text-[11px] text-gray-400 italic py-2">No additional concierge addresses — only the venue owner is notified.</p>
-              )}
-              {draftEmails.map((email) => (
-                <div key={email} className="flex items-center justify-between gap-3 rounded-xl bg-gray-50 px-3.5 py-2">
-                  <span className="text-sm text-gray-900 truncate">{email}</span>
-                  <button
-                    onClick={() => removeEmail(email)}
-                    className="text-gray-400 hover:text-red-500 transition-colors p-1"
-                    aria-label={`Remove ${email}`}
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex gap-2">
-              <input
-                type="email"
-                value={newEmail}
-                onChange={(e) => setNewEmail(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addEmail(); } }}
-                placeholder="concierge@yourvenue.com"
-                className={INPUT}
-              />
-              <button
-                onClick={addEmail}
-                disabled={!newEmail.trim()}
-                className="shrink-0 inline-flex items-center gap-1 rounded-xl bg-gray-900 px-4 py-2 text-xs font-semibold text-white hover:bg-gray-700 disabled:opacity-40 transition-colors"
-              >
-                <Plus size={13} /> Add
-              </button>
-            </div>
-          </div>
-        </section>
-
         {/* Save bar — only when there are pending edits */}
         {dirty && (
           <div className="sticky bottom-4 rounded-2xl border border-gray-200 bg-white shadow-md px-5 py-3.5 flex items-center justify-between gap-4">
@@ -378,7 +340,7 @@ export default function AiConciergeSettingsPage() {
                 </span>
               )}
               <button
-                onClick={() => { setPersona(data.personaName); setDraftEmails(data.conciergeNotifyEmails); setError(''); }}
+                onClick={() => { setPersona(data.personaName); setError(''); }}
                 disabled={saving}
                 className="inline-flex items-center gap-1 rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
               >
@@ -396,40 +358,6 @@ export default function AiConciergeSettingsPage() {
           </div>
         )}
 
-        {/* How it works */}
-        <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-          <div className="flex items-center gap-3 border-b border-gray-200 px-6 py-4">
-            <MessageSquare size={18} className="text-gray-400" />
-            <h2 className="font-heading text-base font-semibold text-gray-900">How AI Concierge works</h2>
-          </div>
-          <div className="px-6 py-5 space-y-3 text-sm text-gray-600">
-            <Step
-              n={1}
-              title="14-day silence triggers activation"
-              body="When a lead doesn't reply to your automated email sequence for 14 days, AI Concierge activates and starts following up via SMS."
-            />
-            <Step
-              n={2}
-              title="Random 1–3 day cadence for up to 60 days"
-              body="The AI sends short, varied SMS messages on a randomized cadence — never spammy, always casual. Each message picks a fresh angle so it never feels repetitive."
-            />
-            <Step
-              n={3}
-              title="Reply = AI stops"
-              body="The moment the bride replies, the AI pauses and you (or your team) take over. We tag the contact and notify you immediately by email."
-            />
-            <Step
-              n={4}
-              title="Quiet hours respected"
-              body="AI never sends outside 9am–8pm in your venue's local timezone. Late replies get queued for the next morning."
-            />
-            <Step
-              n={5}
-              title="60-day hard cap"
-              body="If a bride still hasn't replied after 60 days of follow-up, the AI moves her to your &quot;Not Interested&quot; pipeline and never messages her again automatically."
-            />
-          </div>
-        </section>
       </div>
     </div>
   );

@@ -120,7 +120,7 @@ export default function IntegrationsPage() {
         <div>
           <h1 className="font-heading text-2xl text-gray-900">Integrations</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Connect StoryVenue to thousands of other apps via Zapier — or use the public API directly.
+            Connect StoryVenue to thousands of other apps via Zapier.
           </p>
         </div>
       </div>
@@ -359,18 +359,6 @@ export default function IntegrationsPage() {
         </div>
       </div>
 
-      {/* ── Direct API note ─────────────────────────────────────────── */}
-      <div className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-5">
-        <h3 className="text-sm font-semibold text-gray-900 mb-1">Using the API directly?</h3>
-        <p className="text-xs text-gray-500 leading-relaxed">
-          Send <code className="bg-white px-1.5 py-0.5 rounded border border-gray-200 font-mono">Authorization: Bearer sv_live_…</code> with any request to <code className="bg-white px-1.5 py-0.5 rounded border border-gray-200 font-mono">/api/v1/*</code>.
-          Test your key:
-        </p>
-        <pre className="mt-3 text-xs bg-gray-900 text-emerald-300 rounded-lg p-3 overflow-x-auto">
-{`curl -H "Authorization: Bearer sv_live_..." \\
-  https://app.storyvenue.com/api/v1/me`}
-        </pre>
-      </div>
     </div>
   );
 }
