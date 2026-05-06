@@ -21,6 +21,7 @@ import {
 import { SlaPill } from '@/components/support/SlaIndicator';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels, type StageChangedEvent, type TagsChangedEvent } from '@/lib/realtime/channels';
+import EventEditorModal from '@/components/calendar/EventEditorModal';
 
 interface ContextResponse {
   bride: {
@@ -436,6 +437,7 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
                   customerId={data.venue_customer_id}
                   contactName={[data.bride.first_name, data.bride.last_name].filter(Boolean).join(' ') || data.bride.email || 'Contact'}
                   contactEmail={data.bride.email}
+                  venueTimezone={data.venue.timezone}
                 />
               )}
             </div>
@@ -1127,19 +1129,11 @@ function NotesModal({
 
 // ─── Calendar ───────────────────────────────────────────────────────────────
 //
-// Events created here go straight into `calendar_events` for the venue, with
-// `customer_email` set to this contact's email. The venue's calendar page
-// reads from the same table, and the post-insert hook pushes the event to
-// the venue owner's connected Google Calendar — so support can book on
-// behalf of the venue without ever leaving the inbox.
-
-interface VenueCalendar {
-  id:         string;
-  name:       string;
-  color:      string;
-  is_default: boolean;
-  sort_order: number;
-}
+// Booking is delegated to the shared <EventEditorModal> in act-as-venue mode
+// (see CalendarButton below). The thin admin endpoint
+// /api/admin/support/contact/[venueId]/[customerId]/calendar is still used
+// to fetch upcoming events for the badge count — the modal itself talks
+// directly to the venue's /api/calendar through the X-Acting-As-Venue header.
 
 interface ContactEvent {
   id:               string;
@@ -1154,50 +1148,54 @@ interface ContactEvent {
   customer_email:   string | null;
 }
 
-/** Format an ISO timestamp for a `<input type="datetime-local">` field, in
- * the user's local timezone. */
-function isoToLocalInput(iso: string): string {
-  const d = new Date(iso);
-  if (!Number.isFinite(d.getTime())) return '';
-  const off = d.getTimezoneOffset();
-  const local = new Date(d.getTime() - off * 60_000);
-  return local.toISOString().slice(0, 16);
-}
 
-/** Convert a `datetime-local` value (treated as local time) back to UTC ISO. */
-function localInputToIso(local: string): string {
-  if (!local) return '';
-  // datetime-local has no timezone — treat as local time
-  return new Date(local).toISOString();
-}
-
+/**
+ * CalendarButton — booking entry point for super-admin support agents.
+ *
+ * The button itself shows an upcoming-event count badge (powered by the
+ * thin /api/admin/support/contact/.../calendar endpoint) and, when clicked,
+ * opens the venue's own EventEditorModal in act-as-venue mode. We reuse the
+ * full venue modal — same form, same availability slots, same Google
+ * Calendar push — so a support agent never has to log in as the venue to
+ * book on their behalf.
+ */
 function CalendarButton({
   venueId,
   customerId,
   contactName,
   contactEmail,
+  venueTimezone,
 }: {
-  venueId:      string;
-  customerId:   string;
-  contactName:  string;
-  contactEmail: string | null;
+  venueId:        string;
+  customerId:     string;
+  contactName:    string;
+  contactEmail:   string | null;
+  venueTimezone?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [count, setCount] = useState<number | null>(null);
 
-  // Lightweight upcoming-event count for the badge.
+  const refreshCount = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/admin/support/contact/${venueId}/${customerId}/calendar`, { cache: 'no-store' });
+      if (!r.ok) return;
+      const d = await r.json() as { events: ContactEvent[] };
+      const now = Date.now();
+      const upcoming = (d.events ?? []).filter(e => new Date(e.start_at).getTime() >= now).length;
+      setCount(upcoming);
+    } catch { /* ignore */ }
+  }, [venueId, customerId]);
+
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      try {
-        const r = await fetch(`/api/admin/support/contact/${venueId}/${customerId}/calendar`, { cache: 'no-store' });
-        if (!r.ok) return;
-        const d = await r.json() as { events: ContactEvent[] };
-        if (cancelled) return;
-        const now = Date.now();
-        const upcoming = (d.events ?? []).filter(e => new Date(e.start_at).getTime() >= now).length;
-        setCount(upcoming);
-      } catch { /* ignore */ }
+      const r = await fetch(`/api/admin/support/contact/${venueId}/${customerId}/calendar`, { cache: 'no-store' }).catch(() => null);
+      if (!r || !r.ok || cancelled) return;
+      const d = await r.json().catch(() => null) as { events?: ContactEvent[] } | null;
+      if (cancelled || !d) return;
+      const now = Date.now();
+      const upcoming = (d.events ?? []).filter(e => new Date(e.start_at).getTime() >= now).length;
+      setCount(upcoming);
     })();
     return () => { cancelled = true; };
   }, [venueId, customerId]);
@@ -1219,327 +1217,25 @@ function CalendarButton({
           </span>
         )}
       </button>
-      {open && (
-        <CalendarModal
-          venueId={venueId}
-          customerId={customerId}
-          contactName={contactName}
-          contactEmail={contactEmail}
-          onClose={() => setOpen(false)}
-          onChanged={count => setCount(count)}
-        />
-      )}
+      <EventEditorModal
+        open={open}
+        onClose={() => setOpen(false)}
+        onSaved={() => {
+          // Refresh the upcoming-event count and close. The modal itself wrote
+          // the event into the venue's calendar via the act-as-venue header,
+          // so there's nothing else for us to do here.
+          void refreshCount();
+          setOpen(false);
+        }}
+        actingAsVenueId={venueId}
+        venueTimezone={venueTimezone ?? undefined}
+        prefill={{
+          customerEmail: contactEmail ?? undefined,
+          customerName: contactName,
+          title: contactName ? `Appointment — ${contactName}` : undefined,
+        }}
+      />
     </>
   );
 }
 
-function CalendarModal({
-  venueId,
-  customerId,
-  contactName,
-  contactEmail,
-  onClose,
-  onChanged,
-}: {
-  venueId:      string;
-  customerId:   string;
-  contactName:  string;
-  contactEmail: string | null;
-  onClose:      () => void;
-  onChanged:    (upcomingCount: number) => void;
-}) {
-  const [calendars, setCalendars] = useState<VenueCalendar[]>([]);
-  const [events, setEvents] = useState<ContactEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  // Booking form state — defaults to a 1-hour slot starting in the next half hour.
-  const initialStart = useMemo(() => {
-    const d = new Date(Date.now() + 30 * 60_000);
-    d.setMinutes(0, 0, 0); // round to next hour
-    if (d.getTime() < Date.now()) d.setHours(d.getHours() + 1);
-    return d;
-  }, []);
-  const [title, setTitle] = useState('');
-  const [startLocal, setStartLocal] = useState(isoToLocalInput(initialStart.toISOString()));
-  const [endLocal, setEndLocal] = useState(isoToLocalInput(new Date(initialStart.getTime() + 60 * 60_000).toISOString()));
-  const [calendarId, setCalendarId] = useState<string>('');
-  const [notes, setNotes] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [createMode, setCreateMode] = useState(false);
-
-  const recountUpcoming = useCallback((rows: ContactEvent[]) => {
-    const now = Date.now();
-    onChanged(rows.filter(e => new Date(e.start_at).getTime() >= now).length);
-  }, [onChanged]);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const r = await fetch(`/api/admin/support/contact/${venueId}/${customerId}/calendar`, { cache: 'no-store' });
-      const raw = await r.json().catch(() => ({}));
-      const d = raw as { error?: string; calendars?: VenueCalendar[]; events?: ContactEvent[] };
-      if (!r.ok) throw new Error(d.error || `Failed (${r.status})`);
-      const cals = d.calendars ?? [];
-      const evs  = d.events ?? [];
-      setCalendars(cals);
-      setEvents(evs);
-      recountUpcoming(evs);
-      const def = cals.find((c: VenueCalendar) => c.is_default) ?? cals[0];
-      if (def && !calendarId) setCalendarId(def.id);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load calendar');
-    } finally {
-      setLoading(false);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [venueId, customerId]);
-
-  useEffect(() => { void load(); }, [load]);
-
-  const submit = useCallback(async () => {
-    if (!title.trim()) {
-      setError('Title is required');
-      return;
-    }
-    if (!startLocal || !endLocal) {
-      setError('Start and end times are required');
-      return;
-    }
-    const startIso = localInputToIso(startLocal);
-    const endIso = localInputToIso(endLocal);
-    if (new Date(endIso) <= new Date(startIso)) {
-      setError('End must be after start');
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      const r = await fetch(`/api/admin/support/contact/${venueId}/${customerId}/calendar`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: title.trim(),
-          start_at: startIso,
-          end_at: endIso,
-          calendar_id: calendarId || null,
-          notes: notes.trim() || null,
-        }),
-      });
-      const d = await r.json().catch(() => ({} as { error?: string; event?: ContactEvent }));
-      if (!r.ok || !d.event) throw new Error(d.error || `Failed (${r.status})`);
-      const next = [d.event as ContactEvent, ...events];
-      setEvents(next);
-      recountUpcoming(next);
-      setTitle('');
-      setNotes('');
-      setCreateMode(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create event');
-    } finally {
-      setSaving(false);
-    }
-  }, [title, startLocal, endLocal, calendarId, notes, venueId, customerId, events, recountUpcoming]);
-
-  const calendarsById = useMemo(() => {
-    const m = new Map<string, VenueCalendar>();
-    for (const c of calendars) m.set(c.id, c);
-    return m;
-  }, [calendars]);
-
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-lg max-h-[85vh] flex flex-col rounded-2xl bg-white shadow-2xl"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-          <div className="flex items-center gap-2">
-            <CalendarPlus size={16} className="text-blue-500" />
-            <h3 className="text-sm font-semibold text-gray-900">Calendar — {contactName}</h3>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-          >
-            <X size={14} />
-          </button>
-        </div>
-
-        <div className="px-4 py-3 border-b border-gray-100 bg-blue-50/40">
-          <p className="text-[11px] text-blue-900">
-            Events you book here are written to the venue&apos;s calendar and pushed to their connected Google Calendar — no need to enter their account.
-          </p>
-        </div>
-
-        {!contactEmail && (
-          <div className="mx-4 mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
-            <AlertCircle size={11} className="inline mr-1" />
-            This contact doesn&apos;t have an email on file — events can&apos;t be linked until one is added.
-          </div>
-        )}
-
-        {error && (
-          <div className="mx-4 mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700">
-            <AlertCircle size={11} className="inline mr-1" /> {error}
-          </div>
-        )}
-
-        {/* Booking form */}
-        {contactEmail && (
-          <div className="px-4 py-3 border-b border-gray-100">
-            {!createMode ? (
-              <button
-                type="button"
-                onClick={() => setCreateMode(true)}
-                className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-600 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
-              >
-                <Plus size={12} /> Book a new event for this contact
-              </button>
-            ) : (
-              <div className="space-y-2">
-                <input
-                  type="text"
-                  value={title}
-                  onChange={e => setTitle(e.target.value)}
-                  placeholder="Event title (e.g. Tour, Tasting, Discovery call)"
-                  className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none"
-                  disabled={saving}
-                />
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Start</label>
-                    <input
-                      type="datetime-local"
-                      value={startLocal}
-                      onChange={e => setStartLocal(e.target.value)}
-                      className="mt-0.5 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-900 focus:border-gray-400 focus:outline-none"
-                      disabled={saving}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">End</label>
-                    <input
-                      type="datetime-local"
-                      value={endLocal}
-                      onChange={e => setEndLocal(e.target.value)}
-                      className="mt-0.5 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-900 focus:border-gray-400 focus:outline-none"
-                      disabled={saving}
-                    />
-                  </div>
-                </div>
-                {calendars.length > 0 && (
-                  <div>
-                    <label className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Calendar</label>
-                    <select
-                      value={calendarId}
-                      onChange={e => setCalendarId(e.target.value)}
-                      className="mt-0.5 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-900 focus:border-gray-400 focus:outline-none"
-                      disabled={saving}
-                    >
-                      <option value="">— Default —</option>
-                      {calendars.map(c => (
-                        <option key={c.id} value={c.id}>{c.name}{c.is_default ? ' (default)' : ''}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                <textarea
-                  value={notes}
-                  onChange={e => setNotes(e.target.value)}
-                  placeholder="Notes (optional)"
-                  rows={2}
-                  className="w-full resize-none rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none"
-                  disabled={saving}
-                />
-                <div className="flex items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => { setCreateMode(false); setError(null); }}
-                    disabled={saving}
-                    className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={submit}
-                    disabled={saving || !title.trim()}
-                    className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {saving ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
-                    {saving ? 'Booking…' : 'Book event'}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Events list */}
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
-          {loading && (
-            <div className="flex items-center justify-center py-6 text-gray-400">
-              <Loader2 size={16} className="animate-spin" />
-            </div>
-          )}
-          {!loading && events.length === 0 && (
-            <p className="py-6 text-center text-xs text-gray-400">No events on file for this contact yet.</p>
-          )}
-          {events.map(ev => {
-            const cal = ev.calendar_id ? calendarsById.get(ev.calendar_id) : null;
-            const isPast = new Date(ev.start_at).getTime() < Date.now();
-            return (
-              <div
-                key={ev.id}
-                className={`rounded-lg border px-3 py-2 ${isPast ? 'border-gray-100 bg-gray-50' : 'border-blue-100 bg-blue-50/30'}`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold text-gray-900 truncate">{ev.title}</p>
-                    <p className="mt-0.5 flex items-center gap-1.5 text-[10px] text-gray-600">
-                      <Clock size={9} />
-                      {new Date(ev.start_at).toLocaleString([], {
-                        weekday: 'short', month: 'short', day: 'numeric',
-                        hour: 'numeric', minute: '2-digit',
-                      })}
-                    </p>
-                    {ev.notes && (
-                      <p className="mt-1 text-[10px] text-gray-600 line-clamp-2">{ev.notes}</p>
-                    )}
-                  </div>
-                  <div className="flex flex-col items-end gap-1 shrink-0">
-                    {cal && (
-                      <span
-                        className="inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
-                        style={{ borderColor: cal.color + '60', backgroundColor: cal.color + '20', color: cal.color }}
-                      >
-                        {cal.name}
-                      </span>
-                    )}
-                    {ev.google_html_link && (
-                      <a
-                        href={ev.google_html_link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-0.5 text-[10px] text-blue-600 hover:underline"
-                      >
-                        Google <ExternalLink size={9} />
-                      </a>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
-}

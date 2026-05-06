@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getVenueId } from '@/lib/auth-helpers';
+import { getEffectiveVenueId } from '@/lib/effective-venue';
 import {
   expandEvent,
   isRecurrenceRule,
@@ -39,7 +39,7 @@ const CAL_EVENT_SELECT =
   '*, venue_spaces:space_id(id, name, color), venue_team_members:assigned_team_member_id(id, name, first_name, last_name, email)';
 
 export async function GET(request: NextRequest) {
-  const venueId = await getVenueId();
+  const venueId = await getEffectiveVenueId(request);
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = request.nextUrl;
@@ -134,7 +134,7 @@ function expandRows(rows: Array<Record<string, unknown>>, from: string | null, t
 }
 
 export async function POST(request: NextRequest) {
-  const venueId = await getVenueId();
+  const venueId = await getEffectiveVenueId(request);
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await request.json();

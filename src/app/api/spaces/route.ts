@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getVenueId } from '@/lib/auth-helpers';
+import { getEffectiveVenueId } from '@/lib/effective-venue';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-export async function GET() {
-  const venueId = await getVenueId();
+export async function GET(request: NextRequest) {
+  const venueId = await getEffectiveVenueId(request);
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { data, error } = await supabaseAdmin
@@ -23,7 +23,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const venueId = await getVenueId();
+  const venueId = await getEffectiveVenueId(request);
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { name, color, capacity, description } = await request.json();

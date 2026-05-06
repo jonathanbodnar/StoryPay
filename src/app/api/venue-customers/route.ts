@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
+import { getEffectiveVenueId } from '@/lib/effective-venue';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -22,7 +23,7 @@ function venueCustomerSearchOrFilter(searchRaw: string): string {
 }
 
 export async function GET(request: NextRequest) {
-  const venueId = await getVenueId();
+  const venueId = await getEffectiveVenueId(request);
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const search = request.nextUrl.searchParams.get('search')?.trim() ?? '';

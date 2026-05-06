@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getVenueId } from '@/lib/auth-helpers';
+import { getEffectiveVenueId } from '@/lib/effective-venue';
 
 /**
  * Convert an ISO datetime string to minute-of-day in the given IANA timezone.
@@ -110,7 +110,7 @@ async function fetchGoogleBusyPeriods(
  * 5. Booking rules (duration, interval, buffer times)
  */
 export async function GET(req: NextRequest) {
-  const venueId = await getVenueId();
+  const venueId = await getEffectiveVenueId(req);
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(req.url);

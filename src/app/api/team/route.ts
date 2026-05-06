@@ -2,10 +2,11 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
+import { getEffectiveVenueId } from '@/lib/effective-venue';
 
 export const dynamic = 'force-dynamic';
 
-async function getVenueId() {
+async function getCookieVenueId() {
   const c = await cookies();
   return c.get('venue_id')?.value;
 }
@@ -52,8 +53,8 @@ function inviteEmailHtml({
 </div>`;
 }
 
-export async function GET() {
-  const venueId = await getVenueId();
+export async function GET(request: NextRequest) {
+  const venueId = await getEffectiveVenueId(request);
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { data, error } = await supabaseAdmin
@@ -72,7 +73,10 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const venueId = await getVenueId();
+  // POST (invite team member) intentionally stays venue-cookie scoped — only a
+  // signed-in venue user should ever invite team. Super-admin/support can't
+  // act-as-venue here.
+  const venueId = await getCookieVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await request.json();
