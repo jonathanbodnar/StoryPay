@@ -68,7 +68,7 @@ export async function GET(
   const [{ data: venueRow }, { data: msgs }, { data: profileRow }, { data: memberRow }] = await Promise.all([
     supabaseAdmin
       .from('venues')
-      .select('id, name, notification_email, contact_email, phone, timezone')
+      .select('id, name, email, notification_email, contact_email, phone, timezone')
       .eq('id', ticket.venue_id)
       .maybeSingle(),
     supabaseAdmin
@@ -118,14 +118,26 @@ export async function GET(
   const opener = (() => {
     if (profileRow) {
       const p = profileRow as { id: string; full_name: string | null };
-      return { kind: 'owner' as const, label: p.full_name || 'Venue owner', email: null };
+      const v = venueRow as { email?: string | null } | null;
+      return {
+        kind:  'owner' as const,
+        label: p.full_name || (v?.email ?? null) || 'Venue owner',
+        email: v?.email ?? null,
+      };
     }
     if (memberRow) {
       const m = memberRow as { id: string; first_name: string | null; last_name: string | null; email: string | null };
       const name = [m.first_name, m.last_name].filter(Boolean).join(' ').trim();
       return { kind: 'team_member' as const, label: name || m.email || 'Team member', email: m.email };
     }
-    return { kind: 'unknown' as const, label: 'Venue user', email: null };
+    // Neither profile nor member: venue owner authenticated via password
+    // hash without an auth.users row. Fall back to venue email/name.
+    const v = venueRow as { name?: string | null; email?: string | null } | null;
+    return {
+      kind:  'owner' as const,
+      label: (v?.name ?? null) || (v?.email ?? null) || 'Venue owner',
+      email: v?.email ?? null,
+    };
   })();
 
   return NextResponse.json({

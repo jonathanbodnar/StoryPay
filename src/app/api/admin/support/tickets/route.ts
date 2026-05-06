@@ -95,8 +95,8 @@ export async function GET(req: NextRequest) {
         stm.name AS assigned_support_name,
         t.last_message_at,
         t.last_message_preview,
-        COALESCE(p.full_name, vtm_label.label, 'Venue user') AS opener_label,
-        COALESCE(NULL::text, vtm_label.email) AS opener_email,
+        COALESCE(p.full_name, vtm_label.label, v.name, v.email, 'Venue owner') AS opener_label,
+        COALESCE(vtm_label.email, v.email) AS opener_email,
         (SELECT COUNT(*)::int FROM public.support_thread_messages m WHERE m.support_thread_id = t.id) AS message_count,
         t.created_at
       FROM public.support_threads t
