@@ -119,10 +119,16 @@ export async function POST(
 
   const { data: tRow } = await supabaseAdmin
     .from('support_threads')
-    .select('id, venue_id, status')
+    .select('id, venue_id, status, priority, assigned_support_user_id')
     .eq('id', id)
     .maybeSingle();
-  const ticket = tRow as { id: string; venue_id: string; status: string } | null;
+  const ticket = tRow as {
+    id: string;
+    venue_id: string;
+    status: string;
+    priority?: 'low' | 'normal' | 'high';
+    assigned_support_user_id?: string | null;
+  } | null;
   if (!ticket) return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
   if (ticket.venue_id !== attr.venueId) {
     return NextResponse.json({ error: 'Ticket does not belong to this venue' }, { status: 403 });
@@ -146,12 +152,14 @@ export async function POST(
     return NextResponse.json({ error: mErr?.message || 'Failed to insert message' }, { status: 500 });
   }
 
-  // Bump status back to 'open' (awaiting support response) unless closed.
+  // A venue reply always reopens the ticket — whether it was pending (admin
+  // replied last) or already closed. The only state that stays unchanged is
+  // 'open' (still awaiting support's first response).
   let nextStatus: 'open' | 'pending' | 'closed' = ticket.status as 'open' | 'pending' | 'closed';
-  if (ticket.status !== 'closed' && ticket.status !== 'open') {
+  if (ticket.status !== 'open') {
     await supabaseAdmin
       .from('support_threads')
-      .update({ status: 'open' })
+      .update({ status: 'open', updated_at: new Date().toISOString() })
       .eq('id', id);
     nextStatus = 'open';
   }
@@ -165,6 +173,18 @@ export async function POST(
     createdAt:  (msg as { created_at?: string }).created_at || new Date().toISOString(),
     status:     nextStatus,
   });
+
+  // If the ticket was previously closed, also broadcast a status change so any
+  // open admin/venue UI listening for ticket_status events updates immediately.
+  if (ticket.status === 'closed') {
+    void broadcastTicketStatus({
+      ticketId:              id,
+      venueId:               attr.venueId,
+      status:                'open',
+      priority:              (ticket as { priority?: 'low' | 'normal' | 'high' }).priority ?? 'normal',
+      assignedSupportUserId: (ticket as { assigned_support_user_id?: string | null }).assigned_support_user_id ?? null,
+    });
+  }
 
   return NextResponse.json({ ok: true, messageId: (msg as { id: string }).id });
 }
