@@ -988,7 +988,7 @@ function SubTabButton({
       {icon}
       <span>{label}</span>
       {typeof count === 'number' && count > 0 && (
-        <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-gray-900 text-white text-[10px] font-semibold tabular-nums">
+        <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-semibold tabular-nums">
           {count}
         </span>
       )}

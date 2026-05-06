@@ -312,6 +312,27 @@ export function SupportPanel({ onClose, onUnreadCount }: { onClose?: () => void;
     }
   }
 
+  const [closing, setClosing] = useState(false);
+  async function setTicketStatus(nextStatus: 'open' | 'closed') {
+    if (!detail || closing) return;
+    setClosing(true);
+    try {
+      const r = await fetch(`/api/dashboard/support-tickets/${detail.ticket.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'Failed to update status');
+      await loadDetail(detail.ticket.id);
+      await loadList();
+    } catch (e) {
+      setReplyError(e instanceof Error ? e.message : 'Failed to update status');
+    } finally {
+      setClosing(false);
+    }
+  }
+
   // Create ticket
   const [newSubject, setNewSubject]   = useState('');
   const [newBody, setNewBody]         = useState('');
@@ -562,6 +583,26 @@ export function SupportPanel({ onClose, onUnreadCount }: { onClose?: () => void;
                     <p className="text-[10px] text-gray-400">Opened {relTime(detail.ticket.created_at)}</p>
                     {detail.ticket.status !== 'closed' && (
                       <SlaPill iso={detail.ticket.last_message_at} size="sm" />
+                    )}
+                    <span className="ml-auto" />
+                    {detail.ticket.status === 'closed' ? (
+                      <button
+                        type="button"
+                        onClick={() => void setTicketStatus('open')}
+                        disabled={closing}
+                        className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        {closing ? <Loader2 size={9} className="animate-spin" /> : null} Reopen
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => void setTicketStatus('closed')}
+                        disabled={closing}
+                        className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                      >
+                        {closing ? <Loader2 size={9} className="animate-spin" /> : <CheckCircle2 size={9} />} Mark resolved
+                      </button>
                     )}
                   </div>
                 </div>

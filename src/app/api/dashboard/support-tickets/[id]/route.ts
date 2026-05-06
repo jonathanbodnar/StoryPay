@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { resolveVenueAttribution } from '@/lib/support/venue-attribution';
-import { broadcastTicketMessage } from '@/lib/realtime/broadcast';
+import { broadcastTicketMessage, broadcastTicketStatus } from '@/lib/realtime/broadcast';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -167,4 +167,55 @@ export async function POST(
   });
 
   return NextResponse.json({ ok: true, messageId: (msg as { id: string }).id });
+}
+
+/**
+ * PATCH — venue can close (or reopen) their own ticket.
+ * Body: { status: 'open' | 'closed' }
+ */
+export async function PATCH(
+  req: NextRequest,
+  ctx: { params: Promise<{ id: string }> },
+) {
+  const attr = await resolveVenueAttribution();
+  if ('error' in attr) {
+    return NextResponse.json({ error: attr.error }, { status: 401 });
+  }
+
+  const { id } = await ctx.params;
+  if (!id) return NextResponse.json({ error: 'Missing ticket id' }, { status: 400 });
+
+  let body: { status?: 'open' | 'closed' };
+  try { body = await req.json(); }
+  catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+
+  const status = body.status === 'closed' ? 'closed' : body.status === 'open' ? 'open' : null;
+  if (!status) return NextResponse.json({ error: 'status must be open or closed' }, { status: 400 });
+
+  const { data: tRow } = await supabaseAdmin
+    .from('support_threads')
+    .select('id, venue_id, priority, assigned_support_user_id')
+    .eq('id', id)
+    .maybeSingle();
+  const ticket = tRow as { id: string; venue_id: string; priority: 'low' | 'normal' | 'high'; assigned_support_user_id: string | null } | null;
+  if (!ticket) return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
+  if (ticket.venue_id !== attr.venueId) {
+    return NextResponse.json({ error: 'Ticket does not belong to this venue' }, { status: 403 });
+  }
+
+  const { error: updErr } = await supabaseAdmin
+    .from('support_threads')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
+
+  void broadcastTicketStatus({
+    ticketId:              id,
+    venueId:               attr.venueId,
+    status,
+    priority:              ticket.priority,
+    assignedSupportUserId: ticket.assigned_support_user_id,
+  });
+
+  return NextResponse.json({ ok: true, status });
 }
