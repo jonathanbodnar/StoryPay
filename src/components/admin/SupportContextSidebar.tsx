@@ -11,9 +11,10 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Loader2, AlertCircle, User, Building2, Mail, Phone, ShieldCheck, ShieldAlert,
-  Sparkles, CircleDot, AlertTriangle, Calendar, Clock, Tag,
+  Sparkles, CircleDot, AlertTriangle, Calendar, Clock, Tag, Tags,
   Activity, Inbox, BellOff, RefreshCw, ExternalLink, ChevronDown, X, Plus, CheckCircle2,
 } from 'lucide-react';
 import { SlaPill } from '@/components/support/SlaIndicator';
@@ -391,22 +392,32 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
               </div>
             )}
 
-            {/* Tags */}
-            <TagsRow
+            {/* Tags modal icon — sits next to the stage chip */}
+            <TagsModal
               allTags={data.tags}
               appliedTagIds={data.applied_tag_ids}
               disabled={actionPending}
               onAdd={(tagId, tagName) =>
                 runAction(
                   { action: 'add_tag', tagId },
-                  undefined,
+                  () => {
+                    setData(prev => prev ? {
+                      ...prev,
+                      applied_tag_ids: [...new Set([...prev.applied_tag_ids, tagId])],
+                    } : prev);
+                  },
                   `Tagged · ${tagName}`,
                 )
               }
               onRemove={(tagId) =>
                 runAction(
                   { action: 'remove_tag', tagId },
-                  undefined,
+                  () => {
+                    setData(prev => prev ? {
+                      ...prev,
+                      applied_tag_ids: prev.applied_tag_ids.filter(id => id !== tagId),
+                    } : prev);
+                  },
                   'Tag removed',
                 )
               }
@@ -682,10 +693,11 @@ function StagePickerChip({
 }
 
 /**
- * Renders applied tag chips with "x" buttons + a "+ Add tag" affordance that
- * opens a dropdown of available tags.
+ * Tag icon button that opens a full-screen modal overlay showing every tag
+ * (active and inactive) so the support team can toggle them freely.
+ * Rendered via a portal so it's never clipped by overflow:hidden parents.
  */
-function TagsRow({
+function TagsModal({
   allTags,
   appliedTagIds,
   disabled,
@@ -700,16 +712,7 @@ function TagsRow({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const wrapRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    function onDoc(e: MouseEvent) {
-      if (!wrapRef.current) return;
-      if (!wrapRef.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
-  }, []);
+  const n = appliedTagIds.length;
 
   const byId = useMemo(() => {
     const m = new Map<string, ContextResponse['tags'][number]>();
@@ -717,87 +720,112 @@ function TagsRow({
     return m;
   }, [allTags]);
 
-  const remaining = useMemo(() => {
-    const set = new Set(appliedTagIds);
-    return allTags.filter(t => !set.has(t.id));
-  }, [allTags, appliedTagIds]);
-
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return remaining;
-    return remaining.filter(t => t.name.toLowerCase().includes(q));
-  }, [remaining, query]);
+    return q ? allTags.filter(t => t.name.toLowerCase().includes(q)) : allTags;
+  }, [allTags, query]);
 
-  if (allTags.length === 0 && appliedTagIds.length === 0) return null;
+  const appliedSet = useMemo(() => new Set(appliedTagIds), [appliedTagIds]);
 
-  return (
-    <div className="flex flex-wrap items-center gap-1 pt-0.5" ref={wrapRef}>
-      {appliedTagIds.map(id => {
-        const t = byId.get(id);
-        if (!t) return null;
-        return (
-          <span
-            key={id}
-            className="inline-flex items-center gap-1 rounded-full border bg-white px-1.5 py-0.5 text-[10px] font-medium text-gray-800"
-            style={{ borderColor: t.color || '#e5e7eb' }}
-            title={t.name}
-          >
-            <span aria-hidden="true">{t.icon}</span> {t.name}
-            <button
-              type="button"
-              disabled={disabled}
-              onClick={() => onRemove(id)}
-              className="-mr-0.5 text-gray-400 hover:text-gray-700 disabled:opacity-50"
-              aria-label={`Remove tag ${t.name}`}
-            >
-              <X size={9} />
-            </button>
-          </span>
-        );
-      })}
-      <div className="relative">
-        <button
-          type="button"
-          disabled={disabled || remaining.length === 0}
-          onClick={() => setOpen(v => !v)}
-          className="inline-flex items-center gap-1 rounded-full border border-dashed border-gray-300 text-gray-600 hover:bg-gray-50 px-1.5 py-0.5 text-[10px] font-semibold disabled:opacity-50"
-          title={remaining.length === 0 ? 'No more tags to add' : 'Add tag'}
-        >
-          <Plus size={9} /> Tag
-        </button>
-        {open && (
-          <div className="absolute z-20 mt-1 left-0 w-56 rounded-lg border border-gray-200 bg-white shadow-lg">
-            <div className="p-2 border-b border-gray-100">
-              <input
-                autoFocus
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-                placeholder="Search tags…"
-                className="w-full text-[11px] px-2 py-1 outline-none"
-              />
-            </div>
-            <div className="max-h-48 overflow-y-auto">
-              {filtered.length === 0 && (
-                <p className="px-3 py-2 text-[10px] text-gray-400">
-                  {remaining.length === 0 ? 'All tags applied.' : 'No matches.'}
-                </p>
-              )}
-              {filtered.map(t => (
+  if (allTags.length === 0 && n === 0) return null;
+
+  const modal = open ? createPortal(
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+      onClick={() => setOpen(false)}
+    >
+      {/* backdrop */}
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
+      <div
+        className="relative z-10 w-full max-w-sm rounded-2xl border border-gray-200 bg-white shadow-2xl flex flex-col max-h-[80vh]"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <Tags size={14} className="text-orange-500" />
+            <span className="text-sm font-semibold text-gray-900">Manage tags</span>
+            {n > 0 && (
+              <span className="rounded-full bg-orange-100 text-orange-700 text-[10px] font-bold px-1.5 py-0.5">
+                {n} active
+              </span>
+            )}
+          </div>
+          <button type="button" onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-700">
+            <X size={16} />
+          </button>
+        </div>
+        {/* search */}
+        <div className="px-3 py-2 border-b border-gray-100">
+          <input
+            autoFocus
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Search tags…"
+            className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs outline-none focus:border-gray-400"
+          />
+        </div>
+        {/* tag grid — all tags, applied ones shown as filled */}
+        <div className="overflow-y-auto flex-1 p-3">
+          {filtered.length === 0 && (
+            <p className="text-center text-xs text-gray-400 py-4">No matches.</p>
+          )}
+          <div className="flex flex-wrap gap-1.5">
+            {filtered.map(t => {
+              const active = appliedSet.has(t.id);
+              return (
                 <button
                   key={t.id}
                   type="button"
-                  onClick={() => { setOpen(false); setQuery(''); onAdd(t.id, t.name); }}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-[11px] text-left hover:bg-gray-50"
+                  disabled={disabled}
+                  onClick={() => {
+                    if (active) onRemove(t.id);
+                    else onAdd(t.id, t.name);
+                  }}
+                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all disabled:opacity-50 ${
+                    active
+                      ? 'border-transparent text-white shadow-sm'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
+                  style={active ? { backgroundColor: t.color || '#6b7280', borderColor: t.color || '#6b7280' } : { borderColor: t.color || undefined }}
+                  title={active ? `Remove "${t.name}"` : `Add "${t.name}"`}
                 >
-                  <span aria-hidden="true">{t.icon}</span>
-                  <span className="font-medium text-gray-800">{t.name}</span>
+                  <span aria-hidden="true">{t.icon}</span> {t.name}
+                  {active && <X size={9} className="opacity-70" />}
                 </button>
-              ))}
-            </div>
+              );
+            })}
+          </div>
+        </div>
+        {/* current active chips summary */}
+        {n > 0 && (
+          <div className="border-t border-gray-100 px-3 py-2 text-[10px] text-gray-400">
+            {n} tag{n === 1 ? '' : 's'} active — click a tag above to toggle it
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
+  ) : null;
+
+  return (
+    <>
+      {/* Icon trigger — matches LeadTagPopover compact style */}
+      <button
+        type="button"
+        onClick={() => { setOpen(v => !v); setQuery(''); }}
+        title={n > 0 ? `${n} tag${n === 1 ? '' : 's'} — manage` : 'Add tags'}
+        className="relative inline-flex items-center justify-center rounded-lg p-1 text-gray-400 hover:bg-orange-50 hover:text-orange-500 transition-colors"
+      >
+        <Tags size={14} />
+        {n > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-orange-400 text-[9px] font-bold text-white leading-none">
+            {n > 9 ? '9+' : n}
+          </span>
+        )}
+      </button>
+      {modal}
+    </>
   );
 }
 

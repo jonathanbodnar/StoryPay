@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { createPortal } from 'react-dom';
 import {
   useCallback, useEffect, useMemo, useRef, useState,
   type CSSProperties,
@@ -706,15 +707,12 @@ export default function LeadsPage() {
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
+    <div className="space-y-4">
+      <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-heading text-2xl text-gray-900 flex items-center gap-2">
-            <Inbox className="w-6 h-6" /> Leads
+          <h1 className="font-heading text-xl text-gray-900 flex items-center gap-2">
+            <Inbox className="w-5 h-5" /> Leads
           </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Your sales pipeline. Drag cards between stages, add notes, and schedule appointments.
-          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <PipelineControls
@@ -758,10 +756,8 @@ export default function LeadsPage() {
         />
       )}
 
-      <LeadInsightsStrip data={insights} hideRevenue={hideRevenue} loading={insightsLoading} />
-
       {/* Search + filter bar */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 -mt-1">
         <div className="relative flex-1 min-w-[240px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
@@ -1139,26 +1135,67 @@ function LeadTagPopover({
   compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<{ top: number; left?: number; right?: number } | null>(null);
 
+  // Close on outside click
   useEffect(() => {
     if (!open) return;
     function onDocDown(e: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      const portalEl = document.getElementById('tag-popover-portal');
+      if (btnRef.current?.contains(target)) return;
+      if (portalEl?.contains(target)) return;
+      setOpen(false);
     }
     document.addEventListener('mousedown', onDocDown);
     return () => document.removeEventListener('mousedown', onDocDown);
   }, [open]);
 
+  const handleOpen = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setPos({
+        top: rect.bottom + window.scrollY + 4,
+        ...(align === 'right'
+          ? { right: window.innerWidth - rect.right }
+          : { left: rect.left }),
+      });
+    }
+    setOpen(v => !v);
+  };
+
   const n = (lead.tags ?? []).length;
 
+  const popup = open && pos ? createPortal(
+    <div
+      id="tag-popover-portal"
+      style={{ position: 'absolute', top: pos.top, left: pos.left, right: pos.right, zIndex: 9999 }}
+      className="w-64 rounded-xl border border-gray-200 bg-white shadow-xl p-2"
+    >
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Tags</p>
+      <TagPicker
+        allTags={allTags}
+        selectedIds={new Set((lead.tags ?? []).map((t) => t.id))}
+        onToggle={(tagId) => onToggleTag(lead.id, tagId)}
+        showCreate
+        onCreateTag={async (name) => {
+          await onCreateTagForLead(lead.id, name);
+          setOpen(false);
+        }}
+      />
+    </div>,
+    document.body,
+  ) : null;
+
   return (
-    <div className="relative shrink-0" ref={rootRef} onClick={(e) => e.stopPropagation()}>
+    <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
       {compact ? (
-        /* Icon-only button for action row */
         <button
+          ref={btnRef}
           type="button"
-          onClick={() => setOpen((v) => !v)}
+          onClick={handleOpen}
           title={n > 0 ? `${n} tag${n === 1 ? '' : 's'} — manage` : 'Add tags'}
           className="relative inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-orange-50 hover:text-orange-500 transition-colors"
         >
@@ -1170,10 +1207,10 @@ function LeadTagPopover({
           )}
         </button>
       ) : (
-        /* Pill button for list/drawer views */
         <button
+          ref={btnRef}
           type="button"
-          onClick={() => setOpen((v) => !v)}
+          onClick={handleOpen}
           title="Tags — add or remove"
           className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium transition-colors ${
             n > 0
@@ -1185,25 +1222,7 @@ function LeadTagPopover({
           {n > 0 ? <span className="tabular-nums">{n}</span> : null}
         </button>
       )}
-      {open ? (
-        <div
-          className={`absolute z-[60] mt-1 w-64 rounded-xl border border-gray-200 bg-white p-2 ${
-            align === 'right' ? 'right-0' : 'left-0'
-          }`}
-        >
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Tags</p>
-          <TagPicker
-            allTags={allTags}
-            selectedIds={new Set((lead.tags ?? []).map((t) => t.id))}
-            onToggle={(tagId) => onToggleTag(lead.id, tagId)}
-            showCreate
-            onCreateTag={async (name) => {
-              await onCreateTagForLead(lead.id, name);
-              setOpen(false);
-            }}
-          />
-        </div>
-      ) : null}
+      {popup}
     </div>
   );
 }
@@ -1241,7 +1260,7 @@ function KanbanBoard({
       className="overflow-x-auto -mx-4 sm:-mx-6 px-4 sm:px-6 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       style={{ msOverflowStyle: 'none' } as CSSProperties}
     >
-      <div className="flex gap-3 min-w-max">
+      <div className="flex gap-4 min-w-max">
         {pipeline.stages.map((stage) => {
           const list = leadsByStage.get(stage.id) ?? [];
           const total = totalValueByStage.get(stage.id) ?? 0;
@@ -1253,7 +1272,7 @@ function KanbanBoard({
               key={stage.id}
               onDragOver={(e) => onDragOverStage(e, stage.id)}
               onDrop={(e) => onDropStage(e, stage.id)}
-              className={`w-[300px] shrink-0 rounded-2xl border ${
+              className={`w-[320px] shrink-0 rounded-2xl border ${
                 isOver ? 'border-gray-900 bg-gray-50' : 'border-gray-200 bg-gray-50/60'
               } p-2 transition-colors`}
             >
