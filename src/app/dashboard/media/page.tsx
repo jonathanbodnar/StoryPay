@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  AlertTriangle,
   Check,
   ChevronDown,
   Copy,
@@ -183,6 +184,16 @@ export default function MediaLibraryPage() {
   const [usageLoading, setUsageLoading] = useState(true);
   const [dragActive, setDragActive] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
+  const [storageQuota, setStorageQuota] = useState<{
+    usageBytes: number; limitBytes: number; percentUsed: number; nearLimit: boolean; atLimit: boolean; freePlan: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/venue-storage/quota', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setStorageQuota(d); })
+      .catch(() => {});
+  }, []);
 
   // Persist preferences
   useEffect(() => {
@@ -577,6 +588,49 @@ export default function MediaLibraryPage() {
           </p>
         </div>
       </div>
+
+      {/* Storage quota bar */}
+      {storageQuota && (
+        <div className={`mb-4 rounded-xl border px-4 py-3 ${
+          storageQuota.atLimit
+            ? 'border-red-200 bg-red-50'
+            : storageQuota.nearLimit
+            ? 'border-amber-200 bg-amber-50'
+            : 'border-gray-100 bg-white'
+        }`}>
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center gap-1.5">
+              {(storageQuota.atLimit || storageQuota.nearLimit) && (
+                <AlertTriangle className={`w-3.5 h-3.5 ${storageQuota.atLimit ? 'text-red-500' : 'text-amber-500'}`} />
+              )}
+              <span className={`text-xs font-medium ${
+                storageQuota.atLimit ? 'text-red-700' : storageQuota.nearLimit ? 'text-amber-700' : 'text-gray-700'
+              }`}>
+                {formatBytes(storageQuota.usageBytes)} used of {formatBytes(storageQuota.limitBytes)}
+                {storageQuota.freePlan ? ' (free plan)' : ''}
+              </span>
+            </div>
+            <span className={`text-[10px] font-semibold ${
+              storageQuota.atLimit ? 'text-red-600' : storageQuota.nearLimit ? 'text-amber-600' : 'text-gray-400'
+            }`}>
+              {Math.round(storageQuota.percentUsed * 100)}%
+            </span>
+          </div>
+          <div className="h-1.5 rounded-full bg-gray-200 overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${
+                storageQuota.atLimit ? 'bg-red-500' : storageQuota.nearLimit ? 'bg-amber-400' : 'bg-brand-900'
+              }`}
+              style={{ width: `${Math.min(storageQuota.percentUsed * 100, 100).toFixed(1)}%` }}
+            />
+          </div>
+          {storageQuota.atLimit && (
+            <p className="mt-1.5 text-[11px] text-red-600">
+              Uploads are blocked. Please contact support or upgrade your plan to add more files.
+            </p>
+          )}
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-20 text-gray-400">

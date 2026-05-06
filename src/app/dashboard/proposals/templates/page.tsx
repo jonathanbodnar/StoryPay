@@ -145,12 +145,36 @@ function TemplatesPageInner() {
  ) : (
  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
  {filtered.map(t => (
- <div key={t.id} className="rounded-2xl border border-gray-200 bg-white p-5 flex flex-col justify-between transition-colors hover:border-gray-300 group">
+ <div key={t.id} className={`rounded-2xl border bg-white p-5 flex flex-col justify-between transition-colors hover:border-gray-300 group ${t.is_starred ? 'border-amber-200' : 'border-gray-200'}`}>
  <div className="flex-1 min-w-0">
- {/* Highlight matching name */}
- <h3 className="text-sm font-bold text-gray-900 mb-1 truncate">
+ {/* Title row with star button */}
+ <div className="flex items-start justify-between gap-2 mb-1">
+ <div className="min-w-0">
+ <h3 className="text-sm font-bold text-gray-900 truncate">
  {search ? <HighlightText text={t.name} query={search} /> : t.name}
  </h3>
+ {t.is_starred && (
+ <span className="inline-flex items-center gap-0.5 mt-0.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-600">
+ <Star size={9} className="fill-amber-500 text-amber-500" /> Most popular
+ </span>
+ )}
+ </div>
+ <button
+ onClick={() => toggleStar(t)}
+ disabled={starBusy === t.id}
+ title={t.is_starred ? 'Remove from popular' : 'Mark as popular / pin to top'}
+ className={`shrink-0 flex items-center justify-center rounded-lg border p-1.5 transition-colors disabled:opacity-50 ${
+ t.is_starred
+ ? 'border-amber-200 bg-amber-50 text-amber-500 hover:bg-amber-100'
+ : 'border-gray-200 text-gray-300 hover:border-amber-200 hover:text-amber-400'
+ }`}
+ >
+ {starBusy === t.id
+ ? <Loader2 size={13} className="animate-spin" />
+ : <Star size={13} className={t.is_starred ? 'fill-amber-500' : ''} />
+ }
+ </button>
+ </div>
  <p className="text-xs text-gray-400 mb-2">{t.field_count} signing field{t.field_count !== 1 ? 's' : ''}</p>
  {/* Content snippet with highlight */}
  {t.content && (
@@ -161,40 +185,18 @@ function TemplatesPageInner() {
  )}
  </div>
 
- <div className="flex items-center justify-between pt-4 mt-4 border-t border-gray-200">
- <div className="flex items-center gap-2">
+ <div className="flex items-center justify-between pt-4 mt-4 border-t border-gray-100">
  <span className="text-[11px] text-gray-400">{formatDate(t.created_at)}</span>
- {t.is_starred && (
- <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-600">
- <Star size={9} className="fill-amber-500 text-amber-500" /> Popular
- </span>
- )}
- </div>
  <div className="flex items-center gap-1.5">
  <button
- onClick={() => toggleStar(t)}
- disabled={starBusy === t.id}
- title={t.is_starred ? 'Remove star' : 'Mark as popular / pin to top'}
- className={`flex items-center justify-center rounded-xl border px-2 py-1.5 text-xs transition-colors disabled:opacity-50 ${
- t.is_starred
- ? 'border-amber-200 bg-amber-50 text-amber-500 hover:bg-amber-100'
- : 'border-gray-200 text-gray-400 hover:bg-gray-50 hover:text-amber-500'
- }`}
- >
- {starBusy === t.id
- ? <Loader2 size={12} className="animate-spin" />
- : <Star size={12} className={t.is_starred ? 'fill-amber-500' : ''} />
- }
- </button>
- <button
  onClick={() => setPreview(t)}
- className="flex items-center gap-1.5 rounded-2xl border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+ className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
  >
  <Eye size={12} /> Preview
  </button>
  <Link
  href={`/dashboard/proposals/templates/${t.id}/edit`}
- className="flex items-center gap-1.5 rounded-2xl border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+ className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
  >
  <Pencil size={12} /> Edit
  </Link>

@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { checkUploadQuota } from '@/lib/venue-storage-quota';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -79,6 +80,11 @@ export async function POST(request: NextRequest) {
   }
   if (size > MAX_BYTES) {
     return NextResponse.json({ error: `File exceeds ${MAX_BYTES} bytes` }, { status: 400 });
+  }
+
+  const quotaError = await checkUploadQuota(venueId, size);
+  if (quotaError) {
+    return NextResponse.json({ error: quotaError, quotaExceeded: true }, { status: 413 });
   }
 
   const ensured = await ensureBucket();

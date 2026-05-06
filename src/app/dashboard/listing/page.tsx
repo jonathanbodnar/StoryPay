@@ -587,6 +587,44 @@ export default function ListingPage() {
       </section>
 
       <section className={CARD}>
+        <h2 className={SECTION_TITLE}><Store className="inline w-4 h-4 -mt-0.5" /> Contact info</h2>
+        <p className={SECTION_HINT}>Public email and phone shown on your storyvenue.com listing so couples can reach you.</p>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className={LABEL}>Contact email</label>
+            <input
+              type="email"
+              className={INPUT}
+              value={listing.brand_email ?? ''}
+              onChange={(e) => update('brand_email', e.target.value || null)}
+              placeholder="hello@yourvenue.com"
+            />
+          </div>
+          <div>
+            <label className={LABEL}>Contact phone</label>
+            <div className="relative">
+              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-gray-500">
+                +1
+              </span>
+              <input
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel-national"
+                className={`${INPUT} pl-10`}
+                value={formatUsLocal(listing.brand_phone)}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/\D+/g, '').slice(0, 10);
+                  update('brand_phone', digits ? `+1${digits}` : null);
+                }}
+                placeholder="(614) 555-1234"
+              />
+            </div>
+            <p className="mt-1 text-[11px] text-gray-400">USA only — the +1 country code is added automatically.</p>
+          </div>
+        </div>
+      </section>
+
+      <section className={CARD}>
         <h2 className={SECTION_TITLE}><MapPin className="inline w-4 h-4 -mt-0.5" /> Location</h2>
         <p className={SECTION_HINT}>Where couples will find you.</p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-6">
@@ -960,44 +998,6 @@ export default function ListingPage() {
             >
               Manage photos
             </Link>
-          </div>
-        </div>
-      </section>
-
-      <section className={CARD}>
-        <h2 className={SECTION_TITLE}><Store className="inline w-4 h-4 -mt-0.5" /> Contact info</h2>
-        <p className={SECTION_HINT}>Public email and phone shown on your storyvenue.com listing so couples can reach you.</p>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className={LABEL}>Contact email</label>
-            <input
-              type="email"
-              className={INPUT}
-              value={listing.brand_email ?? ''}
-              onChange={(e) => update('brand_email', e.target.value || null)}
-              placeholder="hello@yourvenue.com"
-            />
-          </div>
-          <div>
-            <label className={LABEL}>Contact phone</label>
-            <div className="relative">
-              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-gray-500">
-                +1
-              </span>
-              <input
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel-national"
-                className={`${INPUT} pl-10`}
-                value={formatUsLocal(listing.brand_phone)}
-                onChange={(e) => {
-                  const digits = e.target.value.replace(/\D+/g, '').slice(0, 10);
-                  update('brand_phone', digits ? `+1${digits}` : null);
-                }}
-                placeholder="(614) 555-1234"
-              />
-            </div>
-            <p className="mt-1 text-[11px] text-gray-400">USA only — the +1 country code is added automatically.</p>
           </div>
         </div>
       </section>

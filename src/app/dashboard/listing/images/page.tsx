@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, FolderOpen, Loader2, Star, Trash2, Upload, Image as ImageIcon } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, FolderOpen, Loader2, Star, Trash2, Upload, Image as ImageIcon } from 'lucide-react';
 import { VenueMediaPickerModal } from '@/components/venue-media/VenueMediaPickerModal';
+import { formatBytes } from '@/lib/venue-storage-quota';
 
 interface Listing {
   cover_image_url: string | null;
@@ -14,24 +15,40 @@ const CARD = 'rounded-3xl border border-gray-200 bg-white p-6 sm:p-8';
 const ACCEPT_IMAGES =
   'image/jpeg,image/jpg,image/png,image/webp,image/avif,image/gif,.jpg,.jpeg,.png,.webp,.avif,.gif';
 
+interface QuotaStatus {
+  usageBytes: number;
+  limitBytes: number;
+  percentUsed: number;
+  nearLimit: boolean;
+  atLimit: boolean;
+  freePlan: boolean;
+}
+
 export default function ListingImagesPage() {
   const [listing, setListing] = useState<Listing>({ cover_image_url: null, gallery_images: [] });
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [quota, setQuota] = useState<QuotaStatus | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   async function load() {
-    const res = await fetch('/api/listing/me', { cache: 'no-store' });
-    if (res.ok) {
-      const data = await res.json();
+    const [listingRes, quotaRes] = await Promise.all([
+      fetch('/api/listing/me', { cache: 'no-store' }),
+      fetch('/api/venue-storage/quota', { cache: 'no-store' }),
+    ]);
+    if (listingRes.ok) {
+      const data = await listingRes.json();
       if (data.listing) {
         setListing({
           cover_image_url: data.listing.cover_image_url ?? null,
           gallery_images: Array.isArray(data.listing.gallery_images) ? data.listing.gallery_images : [],
         });
       }
+    }
+    if (quotaRes.ok) {
+      setQuota(await quotaRes.json());
     }
     setLoading(false);
   }
@@ -54,11 +71,21 @@ export default function ListingImagesPage() {
 
   async function handleUpload(files: FileList | null) {
     if (!files || files.length === 0) return;
+    const MAX_GALLERY = 25;
+    if (listing.gallery_images.length >= MAX_GALLERY) {
+      setError(`Gallery is limited to ${MAX_GALLERY} photos. Remove an existing photo to add more.`);
+      return;
+    }
+    const remaining = MAX_GALLERY - listing.gallery_images.length;
     setUploading(true);
     setError('');
     try {
       const added: string[] = [];
-      for (const file of Array.from(files)) {
+      const filesToUpload = Array.from(files).slice(0, remaining);
+      if (filesToUpload.length < files.length) {
+        setError(`Only ${remaining} more photo${remaining === 1 ? '' : 's'} can be added (gallery limit is ${MAX_GALLERY}). Uploading the first ${filesToUpload.length}.`);
+      }
+      for (const file of filesToUpload) {
         // 1) Sign an upload URL into the shared venue-images bucket, using the
         //    media-library storage prefix so the asset can be registered in
         //    venue_media_assets and appear in the owner's media library.
@@ -180,6 +207,33 @@ export default function ListingImagesPage() {
       {error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
+        </div>
+      )}
+
+      {quota && (quota.nearLimit || quota.atLimit) && (
+        <div className={`rounded-2xl border px-4 py-3 flex items-start gap-3 ${
+          quota.atLimit
+            ? 'border-red-200 bg-red-50 text-red-700'
+            : 'border-amber-200 bg-amber-50 text-amber-700'
+        }`}>
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold">
+              {quota.atLimit ? 'Storage limit reached' : 'Storage almost full'}
+            </p>
+            <p className="text-xs mt-0.5">
+              {formatBytes(quota.usageBytes)} used of {formatBytes(quota.limitBytes)}
+              {quota.atLimit
+                ? ' — Uploads are blocked. Please contact support or upgrade your plan to continue uploading.'
+                : ' — You\'re approaching your storage limit.'}
+            </p>
+            <div className="mt-2 h-1.5 rounded-full bg-current/20 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-current"
+                style={{ width: `${Math.min(quota.percentUsed * 100, 100).toFixed(1)}%` }}
+              />
+            </div>
+          </div>
         </div>
       )}
 

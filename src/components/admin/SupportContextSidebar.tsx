@@ -392,36 +392,56 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
               </div>
             )}
 
-            {/* Tags modal icon — sits next to the stage chip */}
-            <TagsModal
-              allTags={data.tags}
-              appliedTagIds={data.applied_tag_ids}
-              disabled={actionPending}
-              onAdd={(tagId, tagName) =>
-                runAction(
-                  { action: 'add_tag', tagId },
-                  () => {
-                    setData(prev => prev ? {
-                      ...prev,
-                      applied_tag_ids: [...new Set([...prev.applied_tag_ids, tagId])],
-                    } : prev);
-                  },
-                  `Tagged · ${tagName}`,
-                )
-              }
-              onRemove={(tagId) =>
-                runAction(
-                  { action: 'remove_tag', tagId },
-                  () => {
-                    setData(prev => prev ? {
-                      ...prev,
-                      applied_tag_ids: prev.applied_tag_ids.filter(id => id !== tagId),
-                    } : prev);
-                  },
-                  'Tag removed',
-                )
-              }
-            />
+            {/* Applied tag pills — visible at a glance, click to open tag manager */}
+            {(() => {
+              const appliedTags = data.tags.filter(t => data.applied_tag_ids.includes(t.id));
+              return (
+                <div className="flex items-center gap-1 flex-wrap">
+                  {appliedTags.map(t => (
+                    <span
+                      key={t.id}
+                      className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium border"
+                      style={t.color
+                        ? { backgroundColor: `${t.color}20`, borderColor: `${t.color}60`, color: t.color }
+                        : undefined
+                      }
+                    >
+                      {t.icon && <span className="text-[9px]">{t.icon}</span>}
+                      {t.name}
+                    </span>
+                  ))}
+                  <TagsModal
+                    allTags={data.tags}
+                    appliedTagIds={data.applied_tag_ids}
+                    disabled={actionPending}
+                    onAdd={(tagId, tagName) =>
+                      runAction(
+                        { action: 'add_tag', tagId },
+                        () => {
+                          setData(prev => prev ? {
+                            ...prev,
+                            applied_tag_ids: [...new Set([...prev.applied_tag_ids, tagId])],
+                          } : prev);
+                        },
+                        `Tagged · ${tagName}`,
+                      )
+                    }
+                    onRemove={(tagId) =>
+                      runAction(
+                        { action: 'remove_tag', tagId },
+                        () => {
+                          setData(prev => prev ? {
+                            ...prev,
+                            applied_tag_ids: prev.applied_tag_ids.filter(id => id !== tagId),
+                          } : prev);
+                        },
+                        'Tag removed',
+                      )
+                    }
+                  />
+                </div>
+              );
+            })()}
 
             {/* AI quick-actions */}
             {data.ai && (

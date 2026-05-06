@@ -7,6 +7,7 @@ import {
   validateVenueMediaUpload,
   VENUE_IMAGES_BUCKET,
 } from '@/lib/venue-images-bucket';
+import { checkUploadQuota } from '@/lib/venue-storage-quota';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -38,6 +39,24 @@ export async function POST(request: NextRequest) {
   const invalid = validateVenueMediaUpload(contentType, size);
   if (invalid) {
     return NextResponse.json({ error: invalid }, { status: 400 });
+  }
+
+  const quotaError = await checkUploadQuota(venueId, size);
+  if (quotaError) {
+    return NextResponse.json({ error: quotaError, quotaExceeded: true }, { status: 413 });
+  }
+
+  // 50-file limit for the media library
+  const { count: mediaCount } = await supabaseAdmin
+    .from('venue_media_assets')
+    .select('id', { count: 'exact', head: true })
+    .eq('venue_id', venueId);
+
+  if ((mediaCount ?? 0) >= 50) {
+    return NextResponse.json(
+      { error: 'Media library is limited to 50 files. Delete existing files to upload new ones.', quotaExceeded: true },
+      { status: 413 },
+    );
   }
 
   const ensured = await ensureVenueImagesBucket();

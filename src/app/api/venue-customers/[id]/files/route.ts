@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId, getMemberName } from '@/lib/auth-helpers';
+import { checkUploadQuota, PER_FILE_MAX_BYTES } from '@/lib/venue-storage-quota';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -60,6 +61,29 @@ export async function POST(
   const fileStatus = (formData.get('file_status') as string) || 'pending';
 
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+
+  if (file.size > PER_FILE_MAX_BYTES) {
+    return NextResponse.json({ error: 'File exceeds the 10 MB per-file limit.' }, { status: 413 });
+  }
+
+  // 5-file limit per lead/customer
+  const { count: existingCount } = await supabaseAdmin
+    .from('customer_files')
+    .select('id', { count: 'exact', head: true })
+    .eq('customer_id', customerId)
+    .eq('venue_id', venueId);
+
+  if ((existingCount ?? 0) >= 5) {
+    return NextResponse.json(
+      { error: 'Lead attachments are limited to 5 files. Please remove an existing file to upload a new one.' },
+      { status: 413 },
+    );
+  }
+
+  const quotaError = await checkUploadQuota(venueId, file.size);
+  if (quotaError) {
+    return NextResponse.json({ error: quotaError, quotaExceeded: true }, { status: 413 });
+  }
 
   try { await ensureBucket(); } catch (err) {
     console.error('[customer-files POST] ensureBucket', err);
