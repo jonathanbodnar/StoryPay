@@ -28,12 +28,15 @@ export default async function SignupPlanPage() {
   if ((venue as Record<string, unknown>).directory_plan_id) {
     const { data: planRow } = await supabaseAdmin
       .from('directory_plans')
-      .select('is_legacy')
+      .select('is_legacy, name, slug')
       .eq('id', (venue as Record<string, unknown>).directory_plan_id as string)
       .maybeSingle();
-    if ((planRow as { is_legacy?: boolean } | null)?.is_legacy === true) {
-      redirect('/dashboard');
-    }
+    const p = planRow as { is_legacy?: boolean; name?: string | null; slug?: string | null } | null;
+    const isLegacy =
+      p?.is_legacy === true ||
+      /legacy/i.test(p?.name ?? '') ||
+      /legacy/i.test(p?.slug ?? '');
+    if (isLegacy) redirect('/dashboard');
   }
 
   // Already has an active subscription → skip ahead to dashboard

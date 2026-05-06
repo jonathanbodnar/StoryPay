@@ -58,10 +58,16 @@ export async function POST(request: NextRequest) {
     if (venue.directory_plan_id) {
       const { data: planRow } = await supabaseAdmin
         .from('directory_plans')
-        .select('is_legacy')
+        .select('is_legacy, name, slug')
         .eq('id', venue.directory_plan_id)
         .maybeSingle();
-      isLegacy = (planRow as { is_legacy?: boolean } | null)?.is_legacy === true;
+      const p = planRow as { is_legacy?: boolean; name?: string | null; slug?: string | null } | null;
+      // Primary check: is_legacy column. Fall back to name/slug containing "legacy"
+      // in case migration 105 hasn't been run yet on this database.
+      isLegacy =
+        p?.is_legacy === true ||
+        /legacy/i.test(p?.name ?? '') ||
+        /legacy/i.test(p?.slug ?? '');
     }
     const subStatus = String(venue.directory_subscription_status ?? 'none');
     const needsPlan =
