@@ -6,7 +6,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import AnnouncementTicker from '@/components/AnnouncementTicker';
-import ImpersonationBanner from '@/components/ImpersonationBanner';
+// ImpersonationBanner rendered server-side in layout.tsx (black bar)
 import { DirectoryRouteGuard } from '@/components/DirectoryRouteGuard';
 
 const STORAGE_KEY = 'storypay.dashboard.sidebarCollapsed';
@@ -103,7 +103,7 @@ export default function DashboardShell({
       className="min-h-screen"
       style={{ backgroundColor: '#ffffff', '--sidebar-w': rail ? '60px' : '216px' } as React.CSSProperties}
     >
-      <ImpersonationBanner />
+      {/* ImpersonationBanner removed — rendered once in layout.tsx */}
       <Sidebar
         venue={venue}
         role={role}
