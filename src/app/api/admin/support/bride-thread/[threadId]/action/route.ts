@@ -25,6 +25,7 @@ import { applyAiTag, removeAiTag } from '@/lib/ai-concierge/pipeline-tag-service
 import { ensureVenueAiResources } from '@/lib/ai-concierge/venue-resources';
 import { recordAiStateTransition } from '@/lib/ai-concierge/state-transitions';
 import { broadcastStageChanged, broadcastTagsChanged } from '@/lib/realtime/broadcast';
+import { findMatchingLeadIds } from '@/lib/find-matching-leads';
 import type { AiState } from '@/lib/ai-concierge/types';
 
 export const dynamic = 'force-dynamic';
@@ -69,23 +70,11 @@ async function fanoutTagsChanged(
       .eq('id', venueCustomerId)
       .maybeSingle();
     const c = vc as { customer_email: string | null; phone: string | null } | null;
-    const email = (c?.customer_email || '').trim().toLowerCase();
-    const phone = (c?.phone || '').trim();
-    const leadIds = new Set<string>();
-    if (email) {
-      const { data } = await supabaseAdmin
-        .from('leads').select('id')
-        .eq('venue_id', venueId)
-        .ilike('email', email);
-      for (const r of (data ?? []) as Array<{ id: string }>) leadIds.add(r.id);
-    }
-    if (phone) {
-      const { data } = await supabaseAdmin
-        .from('leads').select('id')
-        .eq('venue_id', venueId)
-        .eq('phone', phone);
-      for (const r of (data ?? []) as Array<{ id: string }>) leadIds.add(r.id);
-    }
+    const leadIds = await findMatchingLeadIds({
+      venueId,
+      email: c?.customer_email ?? null,
+      phone: c?.phone ?? null,
+    });
     let appliedTagIds: string[] = [];
     if (leadIds.size > 0) {
       const { data: assigns } = await supabaseAdmin
@@ -415,7 +404,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ threadId: 
 
       // Remove the tag from EVERY lead that matches this venue_customer's
       // email/phone so duplicate-lead scenarios don't leave a stray copy.
-      // We collect candidate lead ids the same way bride-context does.
+      // Uses the shared matcher (incl. phone-digits fallback).
       const candidateLeadIds = new Set<string>();
       if (lead?.id) candidateLeadIds.add(lead.id);
       if (venueCustomerId) {
@@ -425,22 +414,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ threadId: 
           .eq('id', venueCustomerId)
           .maybeSingle();
         const c = vc as { customer_email: string | null; phone: string | null } | null;
-        const em = (c?.customer_email || '').trim().toLowerCase();
-        const ph = (c?.phone || '').trim();
-        if (em) {
-          const { data } = await supabaseAdmin
-            .from('leads').select('id')
-            .eq('venue_id', venueId)
-            .ilike('email', em);
-          for (const r of (data ?? []) as Array<{ id: string }>) candidateLeadIds.add(r.id);
-        }
-        if (ph) {
-          const { data } = await supabaseAdmin
-            .from('leads').select('id')
-            .eq('venue_id', venueId)
-            .eq('phone', ph);
-          for (const r of (data ?? []) as Array<{ id: string }>) candidateLeadIds.add(r.id);
-        }
+        const matched = await findMatchingLeadIds({
+          venueId,
+          email: c?.customer_email ?? null,
+          phone: c?.phone ?? null,
+        });
+        for (const r of matched) candidateLeadIds.add(r);
       }
       if (candidateLeadIds.size === 0) return NextResponse.json({ ok: true });
 

@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySupportAccess } from '@/lib/support/auth';
 import { supabaseAdmin } from '@/lib/supabase';
+import { findMatchingLeadIds } from '@/lib/find-matching-leads';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -121,36 +122,28 @@ export async function GET(
     last_inbound_at, last_outbound_at,
     stage_id, pipeline_id
   `;
-  const allMatchingLeadIds = new Set<string>();
+  // Use the shared matcher (handles email + phone + last-10-digits fallback)
+  // so a tag applied on the venue side always shows up here, even when the
+  // bride's phone format differs between leads and venue_customers.
+  const matchedIds = c
+    ? await findMatchingLeadIds({
+        venueId: t.venue_id,
+        email:   c.customer_email as string | null,
+        phone:   c.phone as string | null,
+      })
+    : new Set<string>();
+  const allMatchingLeadIds = new Set<string>(matchedIds);
   let lead: Record<string, unknown> | null = null;
-  if (c) {
-    const email = ((c.customer_email as string) || '').trim().toLowerCase();
-    const phone = ((c.phone as string) || '').trim();
-    if (email) {
-      const { data: byEmail } = await supabaseAdmin
-        .from('leads')
-        .select(LEAD_FIELDS)
-        .eq('venue_id', t.venue_id)
-        .ilike('email', email)
-        .order('created_at', { ascending: false });
-      for (const l of (byEmail ?? []) as Array<Record<string, unknown>>) {
-        allMatchingLeadIds.add(l.id as string);
-        // Prefer a lead that actually has a stage; fall back to the most
-        // recent one if none have a stage yet.
-        if (!lead || (!lead.stage_id && l.stage_id)) lead = l;
-      }
-    }
-    if (phone) {
-      const { data: byPhone } = await supabaseAdmin
-        .from('leads')
-        .select(LEAD_FIELDS)
-        .eq('venue_id', t.venue_id)
-        .eq('phone', phone)
-        .order('created_at', { ascending: false });
-      for (const l of (byPhone ?? []) as Array<Record<string, unknown>>) {
-        allMatchingLeadIds.add(l.id as string);
-        if (!lead || (!lead.stage_id && l.stage_id)) lead = l;
-      }
+  if (allMatchingLeadIds.size > 0) {
+    const { data: rows } = await supabaseAdmin
+      .from('leads')
+      .select(LEAD_FIELDS)
+      .eq('venue_id', t.venue_id)
+      .in('id', Array.from(allMatchingLeadIds))
+      .order('created_at', { ascending: false });
+    for (const l of (rows ?? []) as Array<Record<string, unknown>>) {
+      // Prefer a lead with a stage; fall back to the most recent one
+      if (!lead || (!lead.stage_id && l.stage_id)) lead = l;
     }
   }
 

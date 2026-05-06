@@ -10,6 +10,7 @@ import { getSessionUser } from '@/lib/session';
 import { insertLeadActivity } from '@/lib/lead-activity';
 import { fetchOpenDuplicateMatchesForLeads, refreshDuplicateCandidatesForLead } from '@/lib/lead-duplicates';
 import { broadcastStageChanged, broadcastTagsChanged } from '@/lib/realtime/broadcast';
+import { findMatchingLeadIds, findMatchingVenueCustomerIds } from '@/lib/find-matching-leads';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -300,54 +301,30 @@ export async function PATCH(
 
     // Broadcast tags-changed to admin context sidebar so any open bride thread
     // tied to this lead's email/phone reflects the new applied tag set live.
+    // Uses the shared matcher so format differences (e.g. phone "(555) 555-5555"
+    // vs "+15555555555") still resolve to the same person.
     void (async () => {
       try {
-        const leadEmail  = (leadRow as { email?: string | null }).email ?? null;
-        const leadPhone  = (leadRow as { phone?: string | null }).phone ?? null;
+        const leadEmail = (leadRow as { email?: string | null }).email ?? null;
+        const leadPhone = (leadRow as { phone?: string | null }).phone ?? null;
         if (!leadEmail && !leadPhone) return;
-        // Find every venue_customer that shares this lead's email OR phone
-        const vcIds = new Set<string>();
-        if (leadEmail) {
-          const { data } = await supabaseAdmin
-            .from('venue_customers')
-            .select('id')
-            .eq('venue_id', venueId)
-            .ilike('customer_email', leadEmail);
-          for (const r of (data ?? []) as Array<{ id: string }>) vcIds.add(r.id);
-        }
-        if (leadPhone) {
-          const { data } = await supabaseAdmin
-            .from('venue_customers')
-            .select('id')
-            .eq('venue_id', venueId)
-            .eq('phone', leadPhone);
-          for (const r of (data ?? []) as Array<{ id: string }>) vcIds.add(r.id);
-        }
+
+        const [vcIds, leadIdSet] = await Promise.all([
+          findMatchingVenueCustomerIds({ venueId, email: leadEmail, phone: leadPhone }),
+          findMatchingLeadIds({ venueId, email: leadEmail, phone: leadPhone }),
+        ]);
         if (vcIds.size === 0) return;
-        // Build the union of tag ids across all leads sharing this email/phone
-        const leadIds = new Set<string>([id]);
-        if (leadEmail) {
-          const { data } = await supabaseAdmin
-            .from('leads').select('id')
-            .eq('venue_id', venueId)
-            .ilike('email', leadEmail);
-          for (const r of (data ?? []) as Array<{ id: string }>) leadIds.add(r.id);
-        }
-        if (leadPhone) {
-          const { data } = await supabaseAdmin
-            .from('leads').select('id')
-            .eq('venue_id', venueId)
-            .eq('phone', leadPhone);
-          for (const r of (data ?? []) as Array<{ id: string }>) leadIds.add(r.id);
-        }
+        leadIdSet.add(id);
+
         const { data: assigns } = await supabaseAdmin
           .from('lead_tag_assignments')
           .select('tag_id')
           .eq('venue_id', venueId)
-          .in('lead_id', Array.from(leadIds));
+          .in('lead_id', Array.from(leadIdSet));
         const dedup = new Set<string>();
         for (const a of (assigns ?? []) as Array<{ tag_id: string }>) dedup.add(a.tag_id);
         const appliedTagIds = Array.from(dedup);
+
         // Fan out to every conversation thread for any matching venue_customer
         const { data: threads } = await supabaseAdmin
           .from('conversation_threads')
