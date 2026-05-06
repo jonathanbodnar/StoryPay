@@ -532,13 +532,18 @@ setPendingImage(null); setShowEmoji(false);
  <button
    type="button"
    onClick={() => setMode('support')}
-   className={`flex items-center gap-1.5 rounded-t-lg px-3 py-1.5 text-xs font-semibold transition-colors -mb-px border-b-2 ${
+   className={`relative flex items-center gap-1.5 rounded-t-lg px-3 py-1.5 text-xs font-semibold transition-colors -mb-px border-b-2 ${
      mode === 'support'
        ? 'border-gray-900 text-gray-900'
        : 'border-transparent text-gray-500 hover:text-gray-800'
    }`}
  >
    <LifeBuoy size={11} /> Contact support
+   {convUnread > 0 && (
+     <span className="ml-0.5 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold tabular-nums leading-none">
+       {convUnread > 99 ? '99+' : convUnread}
+     </span>
+   )}
  </button>
  </div>
 
