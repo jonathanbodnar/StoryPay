@@ -33,6 +33,8 @@ interface VenueRow {
   ghl_connected:               boolean | null;
   notification_email:          string | null;
   email:                       string | null;
+  /** Joined from directory_plans via directory_plan_id */
+  directory_plans:             { feature_flags: Record<string, unknown> | null } | null;
 }
 
 interface AiConciergeSettingsPayload {
@@ -56,7 +58,7 @@ async function loadVenueRow(venueId: string): Promise<VenueRow | null> {
   const { data } = await supabaseAdmin
     .from('venues')
     .select(
-      'id, name, ai_concierge_enabled, a2p_verified, directory_addon_concierge, ai_assistant_persona_name, ai_concierge_notify_emails, ai_concierge_enabled_at, ai_concierge_resources, ghl_connected, notification_email, email',
+      'id, name, ai_concierge_enabled, a2p_verified, directory_addon_concierge, ai_assistant_persona_name, ai_concierge_notify_emails, ai_concierge_enabled_at, ai_concierge_resources, ghl_connected, notification_email, email, directory_plans(feature_flags)',
     )
     .eq('id', venueId)
     .maybeSingle();
@@ -64,7 +66,11 @@ async function loadVenueRow(venueId: string): Promise<VenueRow | null> {
 }
 
 function shapePayload(v: VenueRow): AiConciergeSettingsPayload {
-  const addon  = v.directory_addon_concierge === true;
+  // Concierge can be granted via explicit addon purchase OR by plan inclusion
+  // (feature_flags.addon_concierge_included = true on the plan).
+  const planFlags = v.directory_plans?.feature_flags ?? {};
+  const planIncludesConcierge = planFlags['addon_concierge_included'] === true;
+  const addon  = v.directory_addon_concierge === true || planIncludesConcierge;
   const a2p    = v.a2p_verified === true;
   const eligible = addon && a2p;
 
@@ -161,7 +167,9 @@ export async function PATCH(request: Request) {
   // Master enable flag (with eligibility guard)
   if (body.enabled !== undefined) {
     if (body.enabled === true) {
-      const eligible = current.directory_addon_concierge === true && current.a2p_verified === true;
+      const planFlags2 = current.directory_plans?.feature_flags ?? {};
+      const planConcierge = planFlags2['addon_concierge_included'] === true;
+      const eligible = (current.directory_addon_concierge === true || planConcierge) && current.a2p_verified === true;
       if (!eligible) {
         return NextResponse.json({
           error:    'AI Concierge is not eligible to be enabled yet',

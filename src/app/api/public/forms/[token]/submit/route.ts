@@ -169,6 +169,12 @@ export async function POST(
     (payload as Record<string, unknown>)._utm = utm;
   }
 
+  // Mark test submissions (from the live-preview in the editor)
+  const isTestSubmission = fd.get('_test') === '1';
+  if (isTestSubmission) {
+    (payload as Record<string, unknown>)._test = true;
+  }
+
   for (const key of new Set(fd.keys())) {
     const m = key.match(NAME_RE);
     if (!m) continue;
@@ -195,6 +201,12 @@ export async function POST(
   if (insErr) {
     console.error('[form submit insert]', insErr);
     return NextResponse.json({ error: 'Could not save submission' }, { status: 500 });
+  }
+
+  // ── Test submissions: just record them — skip all CRM side-effects ──────────
+  if (isTestSubmission) {
+    const ps = resolvePostSubmit(definition);
+    return NextResponse.json({ ok: true, postSubmit: ps });
   }
 
   // ── Extract contact fields from the submission payload ────────────────────

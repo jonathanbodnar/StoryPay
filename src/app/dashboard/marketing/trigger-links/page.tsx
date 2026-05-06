@@ -772,7 +772,7 @@ export default function TriggerLinksPage() {
         label="Tags"
         title="Lead Tags"
         count={tags.length}
-        defaultOpen={true}
+        defaultOpen={false}
       >
         <TagsBody
           tags={tags}

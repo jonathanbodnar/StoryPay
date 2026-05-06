@@ -102,14 +102,32 @@ const nextConfig: NextConfig = {
           },
         ],
       },
-      // ── Embed iframes ─────────────────────────────────────────────────────
+      // ── Embed iframes (listing reviews) ───────────────────────────────────
       {
-        source: "/embed/:path*",
+        source: "/embed/listing-reviews/:path*",
         headers: [
           {
             key: "Content-Security-Policy",
             value:
               "frame-ancestors 'self' https://storyvenue.com https://www.storyvenue.com http://localhost:* http://127.0.0.1:*",
+          },
+          {
+            key: "Cache-Control",
+            value: "public, s-maxage=30, stale-while-revalidate=120",
+          },
+        ],
+      },
+      // ── Embeddable forms — allow any domain to iframe (that's the point) ──
+      {
+        source: "/embed/form/:path*",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value: "frame-ancestors *",
+          },
+          {
+            key: "X-Frame-Options",
+            value: "ALLOWALL",
           },
           {
             key: "Cache-Control",

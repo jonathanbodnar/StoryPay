@@ -5,7 +5,7 @@ import {
   Sparkles, Loader2, Save, Check, X, Plus, AlertTriangle, ShieldCheck,
   ShieldAlert, MessageSquare, UserCircle, Mail, BadgeCheck, Lock, ExternalLink,
   TrendingUp, Send, Inbox, UserCheck, UserX, Activity, Pause as PauseIcon,
-  AlertOctagon, Gauge, Smartphone,
+  AlertOctagon, Gauge,
 } from 'lucide-react';
 
 interface Eligibility {
@@ -201,10 +201,10 @@ export default function AiConciergeSettingsPage() {
             <EligibilityRow
               label="Venue Concierge add-on"
               ok={data.eligibility.addonPurchased}
-              okLabel="Active on this plan"
-              failLabel="Not on this plan — upgrade or add the add-on to use AI follow-up"
+              okLabel="Active on this account"
+              failLabel="Not active — upgrade your plan or add the Venue Concierge add-on"
               actionUrl={!data.eligibility.addonPurchased ? '/dashboard/directory-billing' : undefined}
-              actionLabel="Add to plan"
+              actionLabel="View plans"
             />
 
             <EligibilityRow
@@ -312,12 +312,6 @@ export default function AiConciergeSettingsPage() {
             </div>
           </div>
         </section>
-
-        {/* Test SMS — try the AI before going live */}
-        <TestSmsCard
-          eligible={data.eligibility.addonPurchased && data.ghlConnected}
-          a2pVerified={data.eligibility.a2pVerified}
-        />
 
         {/* Concierge team notification emails */}
         <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
@@ -495,166 +489,6 @@ function Step({ n, title, body }: { n: number; title: string; body: string }) {
 }
 
 // ── Test SMS card ──────────────────────────────────────────────────────────
-
-interface TestSmsResult {
-  ok:                boolean;
-  generatedMessage:  string;
-  sentMessage?:      string;
-  angle?:            string;
-  providerMessageId?: string;
-  a2pVerified?:      boolean;
-  a2pWarning?:       string | null;
-  error?:            string;
-  detail?:           string;
-}
-
-function TestSmsCard({ eligible, a2pVerified }: { eligible: boolean; a2pVerified: boolean }) {
-  const [phone, setPhone]       = useState('');
-  const [bride, setBride]       = useState('Sarah');
-  const [busy, setBusy]         = useState(false);
-  const [result, setResult]     = useState<TestSmsResult | null>(null);
-  const [showAdvanced, setShowAdvanced] = useState(false);
-
-  async function send() {
-    const trimmed = phone.trim();
-    if (!trimmed) return;
-    setBusy(true);
-    setResult(null);
-    try {
-      const res = await fetch('/api/dashboard/ai-concierge/test-sms', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ phone: trimmed, brideFirstName: bride.trim() || undefined }),
-      });
-      const j = (await res.json().catch(() => ({}))) as TestSmsResult;
-      if (!res.ok) {
-        setResult({ ok: false, generatedMessage: j.generatedMessage || '', error: j.error || `HTTP ${res.status}`, detail: j.detail });
-      } else {
-        setResult({ ...j, ok: true });
-      }
-    } catch (e) {
-      setResult({
-        ok: false,
-        generatedMessage: '',
-        error: e instanceof Error ? e.message : 'Test send failed',
-      });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-      <div className="flex items-center gap-3 border-b border-gray-200 px-6 py-4">
-        <Smartphone size={18} className="text-gray-400" />
-        <h2 className="font-heading text-base font-semibold text-gray-900">Test the AI on your phone</h2>
-      </div>
-      <div className="px-6 py-5 space-y-4">
-        <p className="text-xs text-gray-500">
-          Send yourself a single AI-generated message using your active prompt config and a sample bride profile (Sarah Johnson, 14 days since inquiry, wedding ~6 months out). Messages are prefixed <code className="rounded bg-gray-100 px-1 py-0.5 font-mono text-[10px]">[TEST]</code> and don&apos;t count toward your daily cap.
-        </p>
-
-        {!eligible && (
-          <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800 flex items-start gap-2">
-            <AlertTriangle size={12} className="mt-0.5 shrink-0" />
-            <span>You need the Venue Concierge add-on AND a connected GHL account before you can send a test.</span>
-          </div>
-        )}
-
-        {eligible && !a2pVerified && (
-          <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800 flex items-start gap-2">
-            <AlertTriangle size={12} className="mt-0.5 shrink-0" />
-            <span>A2P isn&apos;t verified yet — we&apos;ll attempt the test, but carriers may filter it. The test still works for previewing the AI&apos;s tone.</span>
-          </div>
-        )}
-
-        <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-          <input
-            type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="Your phone, e.g. (555) 123-4567"
-            disabled={busy || !eligible}
-            className={INPUT}
-          />
-          <button
-            onClick={() => void send()}
-            disabled={busy || !eligible || !phone.trim()}
-            className="shrink-0 inline-flex items-center justify-center gap-1.5 rounded-2xl bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-purple-700 disabled:opacity-40 transition-colors"
-          >
-            {busy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-            {busy ? 'Sending…' : 'Send test SMS'}
-          </button>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setShowAdvanced((v) => !v)}
-          className="text-[11px] font-medium text-gray-500 hover:text-gray-700"
-        >
-          {showAdvanced ? '▾ Hide' : '▸ Customize'} sample bride name
-        </button>
-
-        {showAdvanced && (
-          <div>
-            <label className="text-xs font-medium text-gray-600 mb-1.5 block">Sample bride first name</label>
-            <input
-              type="text"
-              value={bride}
-              onChange={(e) => setBride(e.target.value)}
-              placeholder="Sarah"
-              maxLength={40}
-              disabled={busy}
-              className={INPUT}
-            />
-          </div>
-        )}
-
-        {result && (
-          <div className={`rounded-xl border px-4 py-3 ${
-            result.ok ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200 bg-rose-50'
-          }`}>
-            {result.ok ? (
-              <>
-                <div className="flex items-center gap-2 text-sm font-medium text-emerald-800">
-                  <Check size={14} /> Sent to your phone
-                </div>
-                {result.angle && (
-                  <p className="mt-1 text-[11px] text-emerald-700/80">
-                    Angle picked: <strong>{result.angle}</strong>
-                  </p>
-                )}
-                {result.a2pWarning && (
-                  <p className="mt-1.5 text-[11px] text-amber-800 bg-amber-100/60 rounded-md px-2 py-1">
-                    {result.a2pWarning}
-                  </p>
-                )}
-              </>
-            ) : (
-              <>
-                <div className="flex items-center gap-2 text-sm font-medium text-rose-800">
-                  <X size={14} /> Couldn&apos;t send
-                </div>
-                <p className="mt-1 text-xs text-rose-700">{result.error}</p>
-                {result.detail && (
-                  <p className="mt-0.5 text-[11px] text-rose-700/80 font-mono">{result.detail}</p>
-                )}
-              </>
-            )}
-            {result.generatedMessage && (
-              <div className="mt-3 rounded-lg bg-white border border-gray-200 px-3 py-2">
-                <div className="text-[10px] uppercase tracking-wider font-semibold text-gray-400 mb-1">
-                  AI generated this:
-                </div>
-                <p className="text-sm text-gray-800 whitespace-pre-wrap">{result.generatedMessage}</p>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
 
 // ── Metrics card ───────────────────────────────────────────────────────────
 

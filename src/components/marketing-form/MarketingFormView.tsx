@@ -631,28 +631,31 @@ export function MarketingFormView({
         }
       }
 
-      // Live-preview path: simulate the configured post-submit flow without
-      // hitting the API so we don't persist a fake submission, route a fake
-      // lead into a pipeline, or fire notification emails. The user gets the
-      // exact UX their visitors will see.
+      // Live-preview path: submit to the real API with a _test flag so the
+      // venue owner can see test submissions in their Inbox. We skip redirect
+      // post-submit behavior (would navigate away from the editor) and show
+      // the thank-you UX inline instead.
       if (livePreview) {
+        setStatus('loading');
+        const fd2 = new FormData(form);
+        fd2.append('_test', '1');
+        try {
+          await fetch(`/api/public/forms/${embedToken}/submit`, {
+            method: 'POST',
+            body: fd2,
+          });
+        } catch {
+          // Best-effort — don't block the preview UX if the API fails
+        }
         const ps = resolvePostSubmit(definition);
-        if (ps.mode === 'redirect') {
-          setStatus('success');
-          setSuccessHtml(null);
-          setMessage(
-            ps.redirectUrl
-              ? `Preview only — would redirect to ${ps.redirectUrl}.`
-              : 'Preview only — would redirect (no URL set).',
-          );
-        } else if (ps.mode === 'inline_message') {
+        if (ps.mode === 'inline_message') {
           setStatus('success');
           setMessage(null);
           setSuccessHtml(ps.messageHtml || '<p>Thanks — your response was recorded.</p>');
         } else {
           setStatus('success');
           setSuccessHtml(null);
-          setMessage('Thanks — your response was recorded.');
+          setMessage('Test submitted — check the Inbox tab in Form Settings to see it.');
         }
         form.reset();
         onPreviewSubmit?.();

@@ -1614,11 +1614,19 @@ function SubmissionsInbox({
             })
             .filter((f) => f.value);
 
+          const isTest = p._test === true;
           return (
-            <li key={s.id} className="overflow-hidden rounded-xl border border-gray-200/80 bg-white">
+            <li key={s.id} className={`overflow-hidden rounded-xl border bg-white ${isTest ? 'border-amber-200' : 'border-gray-200/80'}`}>
               <div className="flex items-start justify-between gap-3 p-3">
                 <div className="min-w-0">
-                  <p className="truncate text-[13px] font-semibold text-gray-900">{fullName || '—'}</p>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <p className="truncate text-[13px] font-semibold text-gray-900">{fullName || '—'}</p>
+                    {isTest && (
+                      <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 uppercase tracking-wide">
+                        Test
+                      </span>
+                    )}
+                  </div>
                   {email && <p className="mt-0.5 truncate text-[12px] text-gray-500">{email}</p>}
                   {phone && <p className="mt-0.5 text-[12px] text-gray-400">{phone}</p>}
                 </div>
