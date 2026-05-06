@@ -178,24 +178,24 @@ function OfferingsPageInner() {
   return (
     <div>
       <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+        <div className="min-w-0 flex-1">
           <h1 className="font-heading text-2xl text-gray-900">Packages</h1>
           <p className="mt-1 text-sm text-gray-500">
             Everything your venue sells — simple items and bundled packages. Use them on invoices and proposals.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex shrink-0 flex-row items-center gap-2 self-stretch sm:self-auto">
           <button
             type="button"
             onClick={() => openNew('item')}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-800 transition hover:bg-gray-50"
+            className="inline-flex flex-1 sm:flex-none shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-800 transition hover:bg-gray-50"
           >
             <Plus size={18} /> New item
           </button>
           <button
             type="button"
             onClick={() => openNew('bundle')}
-            className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"
+            className="inline-flex flex-1 sm:flex-none shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"
           >
             <Plus size={18} /> New bundle
           </button>
