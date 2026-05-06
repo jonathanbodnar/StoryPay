@@ -157,6 +157,14 @@ export function SupportInboxPanel() {
   useEffect(() => {
     loadMe();
     loadTeamMembers();
+    // Pre-fetch open ticket count so the Venue support tab dot is visible
+    // immediately, even before the user clicks to that tab.
+    fetch('/api/admin/support/tickets?status=open,pending&limit=200', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { tickets?: TicketListRow[] } | null) => {
+        if (d?.tickets) setTicketOpenCount(d.tickets.filter(t => t.status !== 'closed').length);
+      })
+      .catch(() => {});
   }, [loadMe, loadTeamMembers]);
 
   // Persist actAsId for super-admin sessions across reloads. Real support
@@ -181,6 +189,7 @@ export function SupportInboxPanel() {
 
   // ── Focus mode ─────────────────────────────────────────────────────────────
   const [focusMode, setFocusMode] = useState(false);
+  const [ticketOpenCount, setTicketOpenCount] = useState(0);
 
   // ── Bride inbox state ──────────────────────────────────────────────────────
   const [threads, setThreads] = useState<BrideInboxRow[]>([]);
@@ -190,6 +199,7 @@ export function SupportInboxPanel() {
   const [search, setSearch] = useState('');
   const [committedSearch, setCommittedSearch] = useState('');
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [brideStatusFilter, setBrideStatusFilter] = useState<'open' | 'all' | 'closed'>('open');
 
   // Group threads by contact (venue_id + venue_customer_id) so a bride with
   // both an SMS and an email thread appears as ONE row in the list. The most-
@@ -217,6 +227,7 @@ export function SupportInboxPanel() {
       const params = new URLSearchParams();
       if (committedSearch) params.set('search', committedSearch);
       if (opts.cursor) params.set('cursor', opts.cursor);
+      params.set('filter', brideStatusFilter);
       params.set('limit', '50');
       const r = await fetch(`/api/admin/support/bride-inbox?${params.toString()}`, { cache: 'no-store' });
       if (!r.ok) {
@@ -234,7 +245,7 @@ export function SupportInboxPanel() {
     } finally {
       setListLoading(false);
     }
-  }, [committedSearch, activeThreadId]);
+  }, [committedSearch, activeThreadId, brideStatusFilter]);
 
   useEffect(() => {
     if (subTab === 'bride-replies') fetchInbox();
@@ -615,6 +626,7 @@ export function SupportInboxPanel() {
           onClick={() => setSubTab('tickets')}
           icon={<LifeBuoy size={14} />}
           label="Venue support"
+          dot={ticketOpenCount}
         />
       </div>
 
@@ -624,6 +636,7 @@ export function SupportInboxPanel() {
             me={me}
             teamMembers={teamMembers}
             actAsId={actAsId}
+            onOpenCount={setTicketOpenCount}
           />
         </div>
       )}
@@ -643,16 +656,37 @@ export function SupportInboxPanel() {
                   className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-900/10 focus:border-gray-300 outline-none"
                 />
               </div>
-              <div className="flex items-center justify-between text-xs text-gray-500">
-                <span>{groupedThreads.length} contact{groupedThreads.length === 1 ? '' : 's'} need attention</span>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex rounded-lg border border-gray-200 overflow-hidden text-[11px]">
+                  {(['open', 'all', 'closed'] as const).map(opt => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => {
+                        setBrideStatusFilter(opt);
+                        setActiveThreadId(null);
+                        setThreads([]);
+                        setNextCursor(null);
+                      }}
+                      className={`px-2.5 py-1 font-medium transition-colors ${brideStatusFilter === opt ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      {opt === 'open' ? 'Open + Pending' : opt === 'all' ? 'All' : 'Replied'}
+                    </button>
+                  ))}
+                </div>
                 <button
                   type="button"
                   onClick={() => fetchInbox()}
-                  className="flex items-center gap-1 hover:text-gray-800"
+                  className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-800"
                 >
                   <RefreshCw size={12} /> Refresh
                 </button>
               </div>
+              <p className="text-[11px] text-gray-500">
+                {brideStatusFilter === 'open'
+                  ? `${groupedThreads.length} contact${groupedThreads.length === 1 ? '' : 's'} need attention`
+                  : `${groupedThreads.length} contact${groupedThreads.length === 1 ? '' : 's'}`}
+              </p>
             </div>
 
             <div className="flex-1 overflow-y-auto">
@@ -843,19 +877,20 @@ function LiveBadge({ active }: { active: boolean }) {
 }
 
 function SubTabButton({
-  active, onClick, icon, label, count,
+  active, onClick, icon, label, count, dot,
 }: {
   active: boolean;
   onClick: () => void;
   icon: React.ReactNode;
   label: string;
   count?: number;
+  dot?: number;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+      className={`relative flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
         active
           ? 'border-gray-900 text-gray-900'
           : 'border-transparent text-gray-500 hover:text-gray-800'
@@ -866,6 +901,11 @@ function SubTabButton({
       {typeof count === 'number' && count > 0 && (
         <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-gray-900 text-white text-[10px] font-semibold tabular-nums">
           {count}
+        </span>
+      )}
+      {typeof dot === 'number' && dot > 0 && (
+        <span className="ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[9px] font-bold tabular-nums">
+          {dot > 99 ? '99+' : dot}
         </span>
       )}
     </button>
@@ -1545,11 +1585,12 @@ function PriorityPill({ priority }: { priority: 'low' | 'normal' | 'high' }) {
 }
 
 function TicketsView({
-  me, teamMembers, actAsId,
+  me, teamMembers, actAsId, onOpenCount,
 }: {
   me: SupportMe | null;
   teamMembers: SupportTeamMember[];
   actAsId: string;
+  onOpenCount?: (n: number) => void;
 }) {
   const [tickets, setTickets] = useState<TicketListRow[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -1578,16 +1619,32 @@ function TicketsView({
         throw new Error(d.error || `Failed (${r.status})`);
       }
       const d = (await r.json()) as { tickets: TicketListRow[]; nextCursor: string | null };
-      setTickets(prev => (opts.append ? [...prev, ...d.tickets] : d.tickets));
+      const merged = opts.append ? [...tickets, ...d.tickets] : d.tickets;
+      setTickets(merged);
       setNextCursor(d.nextCursor);
       if (!opts.append && d.tickets.length > 0 && !activeTicketId) {
         setActiveTicketId(d.tickets[0].id);
+      }
+      // Count open+pending across all loaded tickets for the tab dot indicator.
+      // When viewing the open filter this equals merged.length; when viewing
+      // other filters we do a quick separate count via a lightweight fetch.
+      if (statusFilter === 'open') {
+        onOpenCount?.(merged.filter(t => t.status !== 'closed').length);
+      } else {
+        // Fire-and-forget lightweight open count
+        fetch('/api/admin/support/tickets?status=open,pending&limit=1', { cache: 'no-store' })
+          .then(res => res.ok ? res.json() : null)
+          .then((data: { tickets?: TicketListRow[] } | null) => {
+            if (data?.tickets) onOpenCount?.(data.tickets.length);
+          })
+          .catch(() => {});
       }
     } catch (e) {
       setListError(e instanceof Error ? e.message : 'Failed to load tickets');
     } finally {
       setListLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter, committedSearch, activeTicketId]);
 
   useEffect(() => { fetchTickets(); }, [fetchTickets]);

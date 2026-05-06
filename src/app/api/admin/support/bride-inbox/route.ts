@@ -87,6 +87,10 @@ export async function GET(req: NextRequest) {
   const cursor   = (url.searchParams.get('cursor') || '').trim();
   const rawLimit = Number(url.searchParams.get('limit'));
   const limit    = Math.max(1, Math.min(Number.isFinite(rawLimit) ? rawLimit : 50, 100));
+  // 'open' = bride replied + unanswered (default)
+  // 'all'  = all threads
+  // 'closed' = venue/support replied last
+  const filter   = (url.searchParams.get('filter') || 'open') as 'open' | 'all' | 'closed';
 
   // Decode cursor: "<ISO>|<threadId>"
   let cursorAt: string | null = null;
@@ -152,10 +156,20 @@ export async function GET(req: NextRequest) {
         latestExtByThread.set(r.thread_id, { sender_kind: r.sender_kind, created_at: r.created_at });
       }
     }
-    candidateThreadIds = candidateThreadIds.filter(id => {
-      const last = latestExtByThread.get(id);
-      return last && last.sender_kind === 'contact';
-    });
+    if (filter === 'open') {
+      // Only threads where the bride is still the last to speak
+      candidateThreadIds = candidateThreadIds.filter(id => {
+        const last = latestExtByThread.get(id);
+        return last && last.sender_kind === 'contact';
+      });
+    } else if (filter === 'closed') {
+      // Only threads where venue/support has already replied
+      candidateThreadIds = candidateThreadIds.filter(id => {
+        const last = latestExtByThread.get(id);
+        return last && last.sender_kind !== 'contact';
+      });
+    }
+    // filter === 'all': keep all candidateThreadIds
     if (candidateThreadIds.length === 0) {
       return NextResponse.json({ threads: [], nextCursor: null });
     }
