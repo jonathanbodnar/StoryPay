@@ -72,11 +72,48 @@ export async function GET(
     }
   }
 
-  // 3. Leads — best-effort match (email and/or phone). Use case-insensitive
-  //    matching so leads created via different code paths still link up. We
-  //    collect ALL matching leads (not just the first) so tags from any
-  //    duplicate also appear, and we still pick a single canonical lead for
-  //    everything else (most recent).
+  // 3a. Sister venue_customers (same email/phone, same venue). When duplicates
+  //     existed and were merged, the thread can still point at a row whose
+  //     stage_id is null while another sister row holds the canonical stage.
+  //     Collecting ALL of them means stage/tag resolution survives that.
+  const c = customer as Record<string, unknown> | null;
+  const allMatchingVcIds = new Set<string>();
+  if (c?.id) allMatchingVcIds.add(c.id as string);
+  let canonicalVc: Record<string, unknown> | null = c;
+  if (c) {
+    const vcEmail = ((c.customer_email as string) || '').trim().toLowerCase();
+    const vcPhone = ((c.phone as string) || '').trim();
+    if (vcEmail) {
+      const { data: vcByEmail } = await supabaseAdmin
+        .from('venue_customers')
+        .select('*')
+        .eq('venue_id', t.venue_id)
+        .ilike('customer_email', vcEmail)
+        .order('updated_at', { ascending: false });
+      for (const row of (vcByEmail ?? []) as Array<Record<string, unknown>>) {
+        allMatchingVcIds.add(row.id as string);
+        if (row.stage_id && !(canonicalVc?.stage_id)) canonicalVc = row;
+      }
+    }
+    if (vcPhone) {
+      const { data: vcByPhone } = await supabaseAdmin
+        .from('venue_customers')
+        .select('*')
+        .eq('venue_id', t.venue_id)
+        .eq('phone', vcPhone)
+        .order('updated_at', { ascending: false });
+      for (const row of (vcByPhone ?? []) as Array<Record<string, unknown>>) {
+        allMatchingVcIds.add(row.id as string);
+        if (row.stage_id && !(canonicalVc?.stage_id)) canonicalVc = row;
+      }
+    }
+  }
+
+  // 3b. Leads — best-effort match (email and/or phone). Use case-insensitive
+  //     matching so leads created via different code paths still link up. We
+  //     collect ALL matching leads (not just the first) so tags from any
+  //     duplicate also appear, and we still pick a single canonical lead for
+  //     everything else (most recent).
   const LEAD_FIELDS = `
     id, first_name, last_name, email, phone, status, lead_source, created_at,
     ai_state, ai_first_activated_at, ai_expires_at, ai_next_send_at,
@@ -84,7 +121,6 @@ export async function GET(
     last_inbound_at, last_outbound_at,
     stage_id, pipeline_id
   `;
-  const c = customer as Record<string, unknown> | null;
   const allMatchingLeadIds = new Set<string>();
   let lead: Record<string, unknown> | null = null;
   if (c) {
@@ -99,7 +135,9 @@ export async function GET(
         .order('created_at', { ascending: false });
       for (const l of (byEmail ?? []) as Array<Record<string, unknown>>) {
         allMatchingLeadIds.add(l.id as string);
-        if (!lead) lead = l;
+        // Prefer a lead that actually has a stage; fall back to the most
+        // recent one if none have a stage yet.
+        if (!lead || (!lead.stage_id && l.stage_id)) lead = l;
       }
     }
     if (phone) {
@@ -111,16 +149,22 @@ export async function GET(
         .order('created_at', { ascending: false });
       for (const l of (byPhone ?? []) as Array<Record<string, unknown>>) {
         allMatchingLeadIds.add(l.id as string);
-        if (!lead) lead = l;
+        if (!lead || (!lead.stage_id && l.stage_id)) lead = l;
       }
     }
   }
 
-  // 4. Pipeline stage. Prefer the customer's stage_id since that's the
-  //    canonical source for chat threads (venue conversations + contacts
-  //    pages write there). Fall back to a matched lead's stage_id.
+  // 4. Pipeline stage. Prefer ANY sister venue_customer's stage_id (canonical
+  //    source for chat threads — venue conversations + contacts pages write
+  //    there). Fall back to a matched lead's stage_id. This survives the
+  //    "thread linked to a customer row whose stage is null but a duplicate
+  //    has it" scenario.
   let pipelineStage: { id: string; name: string; color: string | null; pipeline_id: string; pipeline_name: string } | null = null;
-  const stageId = (c?.stage_id as string | null) || (lead?.stage_id as string | null) || null;
+  const stageId =
+    (canonicalVc?.stage_id as string | null) ||
+    (c?.stage_id as string | null) ||
+    (lead?.stage_id as string | null) ||
+    null;
   if (stageId) {
     const { data: stage, error: stageErr } = await supabaseAdmin
       .from('lead_pipeline_stages')

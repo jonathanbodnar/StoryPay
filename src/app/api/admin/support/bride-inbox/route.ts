@@ -132,13 +132,21 @@ export async function GET(req: NextRequest) {
       const venueIds        = Array.from(new Set(allThreads.map(t => t.venue_id)));
       const venueCustomerIds = Array.from(new Set(allThreads.map(t => t.venue_customer_id)));
 
-      // Fetch latest inbound per thread (for channel/preview info), venues, customers in parallel
+      // Fetch latest external message (ANY sender) per thread for channel/preview,
+      // plus latest contact-sent message for body fallback. Venue+customer in parallel.
       const [
-        { data: inboundAllRows },
+        { data: latestExtRowsAll },
+        { data: latestInboundRowsAll },
         { data: venueAllRows },
         { data: vcAllRows },
         { data: countAllRows },
       ] = await Promise.all([
+        supabaseAdmin
+          .from('conversation_messages')
+          .select('thread_id, sender_kind, body, channel, created_at')
+          .eq('visibility', 'external')
+          .in('thread_id', threadIds)
+          .order('created_at', { ascending: false }),
         supabaseAdmin
           .from('conversation_messages')
           .select('thread_id, sender_kind, body, channel, created_at')
@@ -151,8 +159,15 @@ export async function GET(req: NextRequest) {
         supabaseAdmin.from('conversation_messages').select('thread_id').in('thread_id', threadIds),
       ]);
 
+      // The CHANNEL displayed on the contact card should reflect the medium
+      // most recently used in the thread, regardless of who spoke last (so
+      // an outbound SMS isn't mis-labelled "EMAIL").
+      const latestExtAll = new Map<string, MessageMeta>();
+      for (const m of (latestExtRowsAll ?? []) as MessageMeta[]) {
+        if (!latestExtAll.has(m.thread_id)) latestExtAll.set(m.thread_id, m);
+      }
       const latestInboundAll = new Map<string, MessageMeta>();
-      for (const m of (inboundAllRows ?? []) as MessageMeta[]) {
+      for (const m of (latestInboundRowsAll ?? []) as MessageMeta[]) {
         if (!latestInboundAll.has(m.thread_id)) latestInboundAll.set(m.thread_id, m);
       }
       const venueAllById = new Map<string, VenueRow>();
@@ -165,9 +180,13 @@ export async function GET(req: NextRequest) {
       }
 
       rows = allThreads.map(t => {
-        const v  = venueAllById.get(t.venue_id);
-        const c  = vcAllById.get(t.venue_customer_id);
-        const li = latestInboundAll.get(t.id);
+        const v   = venueAllById.get(t.venue_id);
+        const c   = vcAllById.get(t.venue_customer_id);
+        const li  = latestInboundAll.get(t.id);
+        const ext = latestExtAll.get(t.id);
+        // Use latest message of ANY sender to determine the channel pill,
+        // falling back to inbound (older code path) just in case.
+        const channelSource = ext ?? li;
         return {
           thread_id:               t.id,
           venue_id:                t.venue_id,
@@ -180,7 +199,7 @@ export async function GET(req: NextRequest) {
           subject:                 (t.subject ?? '').trim() || 'Conversation',
           last_message_at:         t.last_message_at,
           last_message_preview:    t.last_message_preview,
-          last_inbound_channel:    (li?.channel === 'sms' ? 'sms' : 'email'),
+          last_inbound_channel:    (channelSource?.channel === 'sms' ? 'sms' : 'email'),
           last_inbound_body:       li?.body ?? t.last_message_preview ?? '',
           last_inbound_created_at: t.last_message_at,
           message_count:           countAllByThread.get(t.id) ?? 0,
@@ -254,10 +273,23 @@ export async function GET(req: NextRequest) {
       const venueIds        = Array.from(new Set(threads.map(t => t.venue_id)));
       const venueCustomerIds = Array.from(new Set(threads.map(t => t.venue_customer_id)));
 
-      const [{ data: venueRows }, { data: vcRows }, { data: countRows }] = await Promise.all([
+      const [
+        { data: venueRows },
+        { data: vcRows },
+        { data: countRows },
+        { data: latestExtAnyRows },
+      ] = await Promise.all([
         supabaseAdmin.from('venues').select('id, name').in('id', venueIds),
         supabaseAdmin.from('venue_customers').select('id, first_name, last_name, customer_email, phone').in('id', venueCustomerIds),
         supabaseAdmin.from('conversation_messages').select('thread_id').in('thread_id', candidateThreadIds),
+        // Latest external message of ANY sender per thread — drives the
+        // channel pill so an outbound SMS isn't labelled EMAIL.
+        supabaseAdmin
+          .from('conversation_messages')
+          .select('thread_id, sender_kind, body, channel, created_at')
+          .eq('visibility', 'external')
+          .in('thread_id', candidateThreadIds)
+          .order('created_at', { ascending: false }),
       ]);
 
       const venueById = new Map<string, VenueRow>();
@@ -268,11 +300,17 @@ export async function GET(req: NextRequest) {
       for (const r of (countRows ?? []) as Array<{ thread_id: string }>) {
         countByThread.set(r.thread_id, (countByThread.get(r.thread_id) ?? 0) + 1);
       }
+      const latestExtAnyByThread = new Map<string, MessageMeta>();
+      for (const m of (latestExtAnyRows ?? []) as MessageMeta[]) {
+        if (!latestExtAnyByThread.has(m.thread_id)) latestExtAnyByThread.set(m.thread_id, m);
+      }
 
       rows = threads.map(t => {
-        const v  = venueById.get(t.venue_id);
-        const c  = vcById.get(t.venue_customer_id);
-        const li = latestInboundByThread.get(t.id);
+        const v   = venueById.get(t.venue_id);
+        const c   = vcById.get(t.venue_customer_id);
+        const li  = latestInboundByThread.get(t.id);
+        const ext = latestExtAnyByThread.get(t.id);
+        const channelSource = ext ?? li;
         return {
           thread_id:               t.id,
           venue_id:                t.venue_id,
@@ -285,7 +323,7 @@ export async function GET(req: NextRequest) {
           subject:                 (t.subject ?? '').trim() || 'Conversation',
           last_message_at:         t.last_message_at,
           last_message_preview:    t.last_message_preview,
-          last_inbound_channel:    (li?.channel === 'sms' ? 'sms' : 'email'),
+          last_inbound_channel:    (channelSource?.channel === 'sms' ? 'sms' : 'email'),
           last_inbound_body:       li?.body ?? '',
           last_inbound_created_at: li?.created_at ?? t.last_message_at,
           message_count:           countByThread.get(t.id) ?? 0,

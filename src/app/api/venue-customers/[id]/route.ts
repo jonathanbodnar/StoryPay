@@ -213,29 +213,49 @@ export async function PATCH(
       stage_id: (rr.stage_id as string | null) ?? null,
     });
 
-    // Broadcast stage change to admin support context sidebar in realtime
+    // Broadcast stage change to admin support context sidebar in realtime.
+    // We fan out to threads tied to ANY venue_customer with the same email
+    // or phone (defensive: a thread can outlive a merged duplicate).
     if ((updates.stage_id || pid !== undefined) && rr.stage_id) {
       const stageId = rr.stage_id as string;
       const pipeId  = (rr.pipeline_id as string | null) ?? '';
-      // Fetch stage name/color for broadcast payload
+      const email = String(rr.customer_email ?? '').trim().toLowerCase();
+      const phone = String(rr.phone ?? '').trim();
       const { data: stageRow } = await supabaseAdmin
         .from('lead_pipeline_stages')
         .select('name, color')
         .eq('id', stageId)
         .maybeSingle();
       const sr = stageRow as { name?: string; color?: string | null } | null;
-      // Fan out to all active threads for this venue_customer so support sidebar updates live
+
+      const sisterVcIds = new Set<string>([id]);
+      if (email) {
+        const { data: vcByEmail } = await supabaseAdmin
+          .from('venue_customers')
+          .select('id')
+          .eq('venue_id', venueId)
+          .ilike('customer_email', email);
+        for (const v of (vcByEmail ?? []) as Array<{ id: string }>) sisterVcIds.add(v.id);
+      }
+      if (phone) {
+        const { data: vcByPhone } = await supabaseAdmin
+          .from('venue_customers')
+          .select('id')
+          .eq('venue_id', venueId)
+          .eq('phone', phone);
+        for (const v of (vcByPhone ?? []) as Array<{ id: string }>) sisterVcIds.add(v.id);
+      }
       const { data: vcThreads } = await supabaseAdmin
         .from('conversation_threads')
-        .select('id')
+        .select('id, venue_customer_id')
         .eq('venue_id', venueId)
-        .eq('venue_customer_id', id)
-        .limit(20);
-      for (const t of (vcThreads ?? []) as Array<{ id: string }>) {
+        .in('venue_customer_id', Array.from(sisterVcIds))
+        .limit(50);
+      for (const tt of (vcThreads ?? []) as Array<{ id: string; venue_customer_id: string }>) {
         void broadcastStageChanged({
-          threadId:   t.id,
+          threadId:   tt.id,
           venueId:    venueId,
-          vcId:       id,
+          vcId:       tt.venue_customer_id,
           stageId,
           stageName:  sr?.name ?? '',
           stageColor: sr?.color ?? null,
