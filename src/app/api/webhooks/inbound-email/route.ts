@@ -5,8 +5,10 @@ import {
   firstEmailFromList,
   hashInboundDedupeFallback,
   insertInboundConversationEmail,
+  insertInboundVenueDirectEmail,
   parseFromHeader,
   parseReplyLocalPart,
+  parseVenueDirectLocalPart,
   pickReplyRoutingAddressFromInboundEmail,
   verifyReplySignature,
 } from '@/lib/conversations-inbound-email';
@@ -144,7 +146,9 @@ async function ingestFromParsedFields(params: {
 
   const toEmail = firstEmailFromList(toRaw);
   const local = toEmail.split('@')[0] ?? '';
-  const parsed = parseReplyLocalPart(local);
+  const parsedBride = parseReplyLocalPart(local);
+  const parsedVD = !parsedBride ? parseVenueDirectLocalPart(local) : null;
+  const parsed = parsedBride ?? parsedVD;
   if (!parsed) {
     console.warn('[inbound-email] skipped: not_reply_address', { local: local.slice(0, 72) });
     return NextResponse.json({ ok: true, skipped: 'not_reply_address' });
@@ -168,6 +172,31 @@ async function ingestFromParsedFields(params: {
   const smtpId =
     mid ||
     (text ? hashInboundDedupeFallback(fromEmail, subject ?? '', text, toRaw) : null);
+
+  // Venue Direct path: replies from venue staff to a `vd+...@` address are
+  // routed into the venue_direct audience so they show up in the support
+  // inbox + the venue's Concierge tab.
+  if (parsedVD) {
+    const r = await insertInboundVenueDirectEmail({
+      threadId:      parsedVD.threadId,
+      venueId,
+      fromEmail,
+      fromName,
+      subject,
+      bodyText:      text || '(no body)',
+      smtpMessageId: smtpId,
+    });
+    if (!r.ok) {
+      const skippable = new Set(['sender_not_authorized', 'thread_not_found']);
+      if (r.error && skippable.has(r.error)) {
+        console.warn('[inbound-email] vd skipped:', r.error, { threadId: parsedVD.threadId });
+        return NextResponse.json({ ok: true, skipped: r.error });
+      }
+      console.error('[inbound-email] vd ingest', r.error);
+      return NextResponse.json({ error: r.error ?? 'insert_failed' }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, inserted: r.inserted ?? false, audience: 'venue_direct' });
+  }
 
   const r = await insertInboundConversationEmail({
     threadId: parsed.threadId,

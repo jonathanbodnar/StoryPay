@@ -23,11 +23,41 @@ export function buildConversationsReplyToEmail(threadId: string, venueId: string
   return `reply+${threadId}+${sig}@${domain}`;
 }
 
+/**
+ * Reply-To address for a "Venue Direct" email (concierge ↔ venue staff).
+ * Local part: vd+{threadId}+{sig16}.
+ *
+ * Same signing scheme as the bride-conversation reply-to, but a different
+ * prefix so the inbound webhook can route the reply to the venue_direct
+ * audience (visible to concierge + venue, hidden from bride) instead of
+ * inserting it as an external bride message.
+ */
+export function buildVenueDirectReplyToEmail(threadId: string, venueId: string): string | null {
+  const secret = process.env.CONVERSATIONS_INBOUND_SECRET?.trim();
+  const domain = process.env.CONVERSATIONS_INBOUND_DOMAIN?.trim();
+  if (!secret || !domain) return null;
+  const sig = inboundReplySignature(threadId, venueId, secret);
+  return `vd+${threadId}+${sig}@${domain}`;
+}
+
 export function parseReplyLocalPart(
   localPart: string,
 ): { threadId: string; sig: string } | null {
   const parts = localPart.split('+');
   if (parts.length !== 3 || parts[0] !== 'reply') return null;
+  const threadId = parts[1];
+  const sig = parts[2];
+  if (!/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(threadId)) return null;
+  if (!/^[a-f0-9]{16}$/i.test(sig)) return null;
+  return { threadId, sig: sig.toLowerCase() };
+}
+
+/** Like {@link parseReplyLocalPart} but for the `vd+...` venue-direct prefix. */
+export function parseVenueDirectLocalPart(
+  localPart: string,
+): { threadId: string; sig: string } | null {
+  const parts = localPart.split('+');
+  if (parts.length !== 3 || parts[0] !== 'vd') return null;
   const threadId = parts[1];
   const sig = parts[2];
   if (!/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(threadId)) return null;
@@ -130,7 +160,7 @@ export function pickReplyRoutingAddressFromInboundEmail(email: {
   for (const raw of chunks) {
     const addr = firstEmailFromList(raw);
     const local = addr.split('@')[0] ?? '';
-    if (parseReplyLocalPart(local)) return raw.trim();
+    if (parseReplyLocalPart(local) || parseVenueDirectLocalPart(local)) return raw.trim();
   }
   return '';
 }
@@ -253,4 +283,142 @@ export async function insertInboundConversationEmail(params: {
 
 export function hashInboundDedupeFallback(from: string, subject: string, body: string, dateHint: string): string {
   return `no-msgid:${createHash('sha256').update([from, subject, body, dateHint].join('\0')).digest('hex').slice(0, 40)}`;
+}
+
+/**
+ * Ingest an inbound email reply to a Venue Direct thread.
+ *
+ * The sender MUST be either the venue's billing/owner email OR an active
+ * venue_team_members.email for the venue that owns the thread. Otherwise we
+ * reject the email so a stranger can't poison a venue_direct stream just
+ * because they got CC'd on the original.
+ *
+ * Inserts a conversation_messages row with:
+ *   audience='venue_direct', visibility='internal', sender_kind='owner'|'team',
+ *   support_only=false, contact_from_name/email recorded for display.
+ */
+export async function insertInboundVenueDirectEmail(params: {
+  threadId: string;
+  venueId: string;
+  fromEmail: string;
+  fromName: string | null;
+  subject: string | null;
+  bodyText: string;
+  smtpMessageId: string | null;
+}): Promise<{ ok: boolean; error?: string; inserted?: boolean; messageId?: string; venueCustomerId?: string }> {
+  const { threadId, venueId, fromEmail, fromName, subject, bodyText, smtpMessageId } = params;
+  const body = bodyText.trim();
+  if (!body) return { ok: true, inserted: false };
+
+  if (smtpMessageId) {
+    const { data: dup } = await supabaseAdmin
+      .from('conversation_messages')
+      .select('id')
+      .eq('smtp_message_id', smtpMessageId)
+      .maybeSingle();
+    if (dup) return { ok: true, inserted: false };
+  }
+
+  const { data: thread, error: tErr } = await supabaseAdmin
+    .from('conversation_threads')
+    .select('id, venue_id, venue_customer_id')
+    .eq('id', threadId)
+    .eq('venue_id', venueId)
+    .maybeSingle();
+
+  if (tErr || !thread) return { ok: false, error: 'thread_not_found' };
+
+  // Resolve sender: check venue owner email first, then team members
+  const fromNorm = fromEmail.trim().toLowerCase();
+  const { data: venueRow } = await supabaseAdmin
+    .from('venues')
+    .select('id, email, notification_email')
+    .eq('id', venueId)
+    .maybeSingle();
+  const v = venueRow as { email?: string | null; notification_email?: string | null } | null;
+  const ownerEmails = [v?.email, v?.notification_email]
+    .filter(Boolean)
+    .map(e => (e as string).trim().toLowerCase());
+
+  let isOwner = ownerEmails.some(e => e === fromNorm);
+  let memberId: string | null = null;
+  if (!isOwner) {
+    const { data: members } = await supabaseAdmin
+      .from('venue_team_members')
+      .select('id, email, status')
+      .eq('venue_id', venueId);
+    type MemberRow = { id: string; email: string | null; status: string | null };
+    const m = ((members ?? []) as MemberRow[])
+      .filter(x => x.email && x.email.trim().toLowerCase() === fromNorm)
+      .find(x => x.status !== 'inactive');
+    if (m) memberId = m.id;
+  }
+  if (!isOwner && !memberId) {
+    return { ok: false, error: 'sender_not_authorized' };
+  }
+  // Soft check (not a real security boundary; the HMAC signature is): only
+  // count owner if no team match.
+  if (memberId) isOwner = false;
+
+  const row: Record<string, unknown> = {
+    thread_id:               threadId,
+    visibility:              'internal',
+    channel:                 'email',
+    body,
+    sender_kind:             memberId ? 'team' : 'owner',
+    venue_team_member_id:    memberId,
+    contact_from_name:       fromName?.trim() || null,
+    contact_from_email:      fromEmail.trim().toLowerCase(),
+    audience:                'venue_direct',
+    support_only:            false,
+    email_subject:           subject?.trim() || null,
+    smtp_message_id:         smtpMessageId || null,
+    external_email_sent:     false,
+    send_error:              null,
+  };
+
+  const { data: inserted, error: insErr } = await supabaseAdmin
+    .from('conversation_messages')
+    .insert(row)
+    .select('id, created_at')
+    .single();
+
+  if (insErr) {
+    if (insErr.code === '23505') return { ok: true, inserted: false };
+    console.error('[venue-direct-inbound] insert', insErr);
+    return { ok: false, error: insErr.message };
+  }
+
+  const t = thread as { venue_customer_id: string };
+  if (inserted) {
+    void (async () => {
+      try {
+        const { broadcastBrideMessageAdminOnly } = await import('@/lib/realtime/broadcast');
+        await broadcastBrideMessageAdminOnly({
+          inbound:                 false,
+          threadId,
+          venueId,
+          venueCustomerId:         t.venue_customer_id,
+          messageId:               (inserted as { id: string }).id,
+          body,
+          channel:                 'email',
+          senderKind:              memberId ? 'team' : 'owner',
+          sentByVenueSupport:      false,
+          supportAgentId:          null,
+          createdAt:               (inserted as { created_at?: string }).created_at || new Date().toISOString(),
+          supportOnly:             false,
+          mentionedSupportUserIds: [],
+        });
+      } catch (e) {
+        console.warn('[venue-direct-inbound] broadcast failed', e);
+      }
+    })();
+  }
+
+  return {
+    ok: true,
+    inserted: true,
+    messageId: (inserted as { id: string }).id,
+    venueCustomerId: t.venue_customer_id,
+  };
 }

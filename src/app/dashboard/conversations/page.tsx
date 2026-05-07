@@ -31,6 +31,7 @@ import {
   Trash2,
   Smartphone,
   ShieldCheck,
+  Building2,
   Sparkles,
   Wand2,
   AlertCircle,
@@ -116,6 +117,9 @@ interface Msg {
   sent_by_support_user_id?: string | null;
   support_agent_name?: string | null;
   support_internal_note?: string | null;
+  /** Migration 114 — distinguishes 'external' bride messages from 'venue_direct'
+   *  concierge↔venue side-channel messages on the same thread. */
+  audience?: 'external' | 'support_only' | 'venue_direct' | null;
 }
 
 interface TriggerLinkOpt {
@@ -131,7 +135,7 @@ interface TeamMember {
   email: string | null;
 }
 
-type ComposerTab = 'team' | 'email' | 'sms';
+type ComposerTab = 'team' | 'email' | 'sms' | 'concierge';
 type ThreadListFilter = 'all' | 'unread' | 'starred' | 'pinned' | 'team_contacts';
 
 interface TeamContact {
@@ -653,6 +657,26 @@ export default function ConversationsPage() {
     scrollToBottomNow();
   }, [messages, selectedId, composerExpanded, loadingThread, scrollToBottomNow]);
 
+  // Whenever a thread with venue_direct messages is opened (or those
+  // messages arrive via poll), mark them read for the current viewer so the
+  // sidebar Concierge bell badge clears. Cheap server call; debounced via
+  // the dependency on selectedId (we re-run only on thread switch, not on
+  // every individual message update).
+  useEffect(() => {
+    if (!selectedId) return;
+    const hasVenueDirect = messages.some(m => m.audience === 'venue_direct');
+    if (!hasVenueDirect) return;
+    void fetch(`/api/conversations/threads/${selectedId}/venue-direct/mark-read`, {
+      method: 'POST',
+    })
+      .then(() => {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('storypay:concierge-unread'));
+        }
+      })
+      .catch(() => {});
+  }, [selectedId, messages]);
+
   // Background poll — silently fetch new messages every 5 s. For SMS threads
   // we hit the full endpoint (no nosync) so the GHL→DB sync runs server-side
   // and pulls in any new replies that arrived since the last tick. The DB
@@ -833,6 +857,39 @@ export default function ConversationsPage() {
     e.preventDefault();
     if (!selectedId) return;
     if (composerTab !== 'team' && mentionedIds.length > 0) return;
+
+    if (composerTab === 'concierge') {
+      if (!body.trim()) return;
+      setSending(true);
+      setSendError('');
+      try {
+        const res = await fetch(`/api/conversations/threads/${selectedId}/venue-direct`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ body: body.trim() }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setSendError(data.error || 'Failed to send');
+          return;
+        }
+        setBody('');
+        setComposerExpanded(false);
+        // Reload messages so the new venue_direct bubble renders correctly.
+        // (We don't append optimistically here because the GET endpoint is
+        // already cheap and the audience-based styling depends on extra
+        // fields we'd otherwise have to backfill.)
+        try {
+          const r = await fetch(`/api/conversations/threads/${selectedId}/messages`, { cache: 'no-store' });
+          const msgs = (await r.json()) as Msg[];
+          if (Array.isArray(msgs)) setMessages(msgs);
+        } catch { /* non-fatal */ }
+        void loadThreads();
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
 
     const canSendExternal = body.trim() || !!selectedTriggerLinkId;
     if (composerTab === 'team' && !body.trim()) return;
@@ -1533,6 +1590,36 @@ export default function ConversationsPage() {
                 ) : (
                   <div className="mx-auto flex w-full max-w-2xl flex-col gap-2">
                     {messages.map((m) => {
+                      // Venue Direct (concierge ↔ venue side-channel) renders
+                      // as a full-width violet card that's visually distinct
+                      // from bride conversation bubbles. The contact never
+                      // sees these — they're a private thread between this
+                      // venue and the StoryVenue Concierge team.
+                      if (m.audience === 'venue_direct') {
+                        const isFromConcierge = m.sender_kind === 'concierge';
+                        const ts = new Date(m.created_at).toLocaleString(undefined, {
+                          month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+                        });
+                        return (
+                          <div key={m.id} className="rounded-xl border border-violet-300 bg-violet-50 px-3 py-2 shadow-sm">
+                            <div className="flex items-center gap-2 text-[10px] text-violet-800 mb-1 flex-wrap">
+                              <Building2 size={11} />
+                              <span className="font-semibold uppercase tracking-wide">
+                                {isFromConcierge ? 'StoryVenue Concierge team' : 'You · to Concierge'}
+                              </span>
+                              <span className="rounded-full bg-violet-100 border border-violet-300 px-1.5 py-0.5 text-[9px] font-semibold">
+                                Venue Direct · contact hidden
+                              </span>
+                              {m.support_agent_name && isFromConcierge && (
+                                <span className="text-violet-700">— {m.support_agent_name}</span>
+                              )}
+                              <span className="ml-auto text-violet-600">{ts}</span>
+                            </div>
+                            <p className="text-sm text-violet-950 whitespace-pre-wrap break-words">{m.body}</p>
+                          </div>
+                        );
+                      }
+
                       const isInternal = m.visibility === 'internal';
                       const fromContact = m.sender_kind === 'contact';
                       const fromSupport =
@@ -1850,6 +1937,23 @@ export default function ConversationsPage() {
                       <Lock size={14} className="hidden shrink-0 sm:inline" />
                       <span className="truncate">Team only</span>
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setComposerTab('concierge');
+                        setMentionedIds([]);
+                        setSendError('');
+                      }}
+                      className={classNames(
+                        'flex min-w-0 flex-1 items-center justify-center gap-1 rounded-xl py-2 text-[11px] font-semibold transition-colors sm:text-xs',
+                        composerTab === 'concierge'
+                          ? 'bg-white text-violet-800 border border-violet-300'
+                          : 'text-gray-600 hover:text-violet-700',
+                      )}
+                    >
+                      <Building2 size={14} className="hidden shrink-0 sm:inline" />
+                      <span className="truncate">Concierge</span>
+                    </button>
                     </div>
                     <button
                       type="button"
@@ -1872,6 +1976,11 @@ export default function ConversationsPage() {
                   {composerTab === 'team' && (
                     <p className="mb-2 text-[11px] text-gray-500">
                       Visible only to your team. @mentions notify teammates.
+                    </p>
+                  )}
+                  {composerTab === 'concierge' && (
+                    <p className="mb-2 text-[11px] text-violet-700 inline-flex items-center gap-1.5 rounded-md bg-violet-50 px-2.5 py-1 border border-violet-200 w-fit">
+                      <Building2 size={11} /> Direct line to the StoryVenue Concierge team. The contact never sees these messages.
                     </p>
                   )}
 
@@ -2825,11 +2934,18 @@ function CollapsedComposer({
   onExpand: () => void;
   onInputChange: (value: string) => void;
 }) {
-  const CurrentIcon = composerTab === 'team' ? Lock : composerTab === 'email' ? Mail : MessageSquare;
+  const CurrentIcon = composerTab === 'team'
+    ? Lock
+    : composerTab === 'email'
+      ? Mail
+      : composerTab === 'concierge'
+        ? Building2
+        : MessageSquare;
   const options: Array<{ id: ComposerTab; label: string; icon: typeof Lock }> = [
     { id: 'sms', label: 'SMS', icon: MessageSquare },
     { id: 'email', label: 'Email', icon: Mail },
     { id: 'team', label: 'Team only', icon: Lock },
+    { id: 'concierge', label: 'Concierge', icon: Building2 },
   ];
 
   return (
@@ -2839,7 +2955,7 @@ function CollapsedComposer({
         onClick={onToggleMenu}
         className="flex h-8 items-center gap-1 rounded-xl px-2 text-gray-600 transition-colors hover:bg-gray-100"
         aria-label="Change channel"
-        title={`Channel: ${composerTab === 'team' ? 'Team only' : composerTab === 'email' ? 'Email' : 'SMS'}`}
+        title={`Channel: ${composerTab === 'team' ? 'Team only' : composerTab === 'email' ? 'Email' : composerTab === 'concierge' ? 'Concierge' : 'SMS'}`}
       >
         <CurrentIcon size={16} className="text-sky-600" />
         <ChevronDown size={12} className="text-gray-400" />

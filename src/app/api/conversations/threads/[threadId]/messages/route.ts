@@ -129,18 +129,16 @@ export async function GET(
     });
   }
 
-  // Hide:
-  //   - support-team-only internal notes (concierge scratchpad)
-  //   - venue_direct messages (rendered in the dedicated "Venue Direct" panel)
-  // The bride conversation thread should only show messages the bride can see
-  // (`audience='external'`). The legacy `support_only` filter is kept as a
-  // safety net for rows inserted before migration 114 backfilled `audience`.
+  // Hide ONLY support-team-only internal notes (concierge scratchpad).
+  // Both `external` (bride-facing) and `venue_direct` (concierge↔venue
+  // private side-channel) messages are visible to the venue here. The UI
+  // styles venue_direct distinctly so it can't be confused with bride
+  // messages.
   const { data: messages, error } = await supabaseAdmin
     .from('conversation_messages')
     .select('*')
     .eq('thread_id', threadId)
     .eq('support_only', false)
-    .or('audience.is.null,audience.eq.external')
     .order('created_at', { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

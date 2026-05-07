@@ -30,8 +30,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifySupportAccess } from '@/lib/support/auth';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
-import { broadcastBrideMessageAdminOnly } from '@/lib/realtime/broadcast';
+import { broadcastBrideMessage, broadcastBrideMessageAdminOnly } from '@/lib/realtime/broadcast';
 import { ensureSuperAdminSupportMember, SUPER_ADMIN_SUPPORT_USER_ID } from '@/lib/support/super-admin-member';
+import { buildVenueDirectReplyToEmail } from '@/lib/conversations-inbound-email';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -52,10 +53,11 @@ interface ThreadRow {
 }
 
 interface VenueRow {
-  id:    string;
-  name:  string | null;
-  slug:  string | null;
-  email: string | null;
+  id:                 string;
+  name:               string | null;
+  slug:               string | null;
+  email:              string | null;
+  notification_email: string | null;
 }
 
 interface VenueCustomerRow {
@@ -119,7 +121,7 @@ export async function POST(req: NextRequest) {
   const [{ data: venue }, { data: customer }, { data: agent }] = await Promise.all([
     supabaseAdmin
       .from('venues')
-      .select('id, name, slug, email')
+      .select('id, name, slug, email, notification_email')
       .eq('id', t.venue_id)
       .maybeSingle(),
     supabaseAdmin
@@ -139,7 +141,10 @@ export async function POST(req: NextRequest) {
   const a  = (agent    ?? null) as { id: string; name: string | null; email: string | null } | null;
 
   // Resolve recipient venue team members.
-  // Default: all active members of the venue's team. Caller may narrow with recipientIds.
+  // Default: all active members of the venue's team + the account holder
+  // (the venue's billing/owner email). Caller may narrow with recipientIds
+  // — when explicit, the owner is only included if their email matches an
+  // explicit selection.
   let recipientQuery = supabaseAdmin
     .from('venue_team_members')
     .select('id, name, email, role')
@@ -150,7 +155,25 @@ export async function POST(req: NextRequest) {
   if (explicit.length > 0) recipientQuery = recipientQuery.in('id', explicit);
 
   const { data: recipientsRaw } = await recipientQuery;
-  const recipients = ((recipientsRaw ?? []) as TeamMemberRow[]).filter(r => !!r.email);
+  const teamRecipients = ((recipientsRaw ?? []) as TeamMemberRow[]).filter(r => !!r.email);
+
+  // Always also email the account holder (venue.email or notification_email)
+  // unless an explicit narrowed recipient list excludes everyone.
+  const ownerEmail = (v?.notification_email || v?.email || '').trim();
+  const ownerIncluded = explicit.length === 0; // when not narrowed, include owner
+  type EmailRecipient = { email: string; name: string | null; isOwner: boolean };
+  const dedup = new Map<string, EmailRecipient>();
+  for (const m of teamRecipients) {
+    const key = (m.email || '').toLowerCase();
+    if (key) dedup.set(key, { email: m.email!, name: m.name, isOwner: false });
+  }
+  if (ownerIncluded && ownerEmail) {
+    const key = ownerEmail.toLowerCase();
+    if (!dedup.has(key)) {
+      dedup.set(key, { email: ownerEmail, name: v?.name ?? null, isOwner: true });
+    }
+  }
+  const recipients = Array.from(dedup.values());
 
   // Insert the message. audience='venue_direct' is the new gating field.
   // We also keep visibility='internal' so the bride-facing send path
@@ -178,8 +201,24 @@ export async function POST(req: NextRequest) {
   }
   const msg = inserted as { id: string; created_at: string };
 
-  // Realtime broadcast (admin-only channel — venue's conversations channel
-  // gets fanned out from a dedicated venue-side realtime broadcast below).
+  // Realtime broadcast — fan out to admin inbox + thread + venue's conversations
+  // channel so the venue's open Conversations page also picks up the new
+  // venue_direct bubble in real-time without a refresh.
+  void broadcastBrideMessage({
+    inbound:                 false,
+    threadId,
+    venueId:                 t.venue_id,
+    venueCustomerId:         t.venue_customer_id,
+    messageId:               msg.id,
+    body:                    text,
+    channel:                 'email',
+    senderKind:              'concierge',
+    sentByVenueSupport:      true,
+    supportAgentId:          actingAgentId,
+    createdAt:               msg.created_at,
+  });
+  // Also fire the admin-only event (with supportOnly=false + venue_direct
+  // metadata) so the support inbox can update its unread/replied state.
   void broadcastBrideMessageAdminOnly({
     inbound:                 false,
     threadId,
@@ -196,25 +235,34 @@ export async function POST(req: NextRequest) {
     mentionedSupportUserIds: [],
   });
 
-  // Send email to each recipient. Failures don't fail the API call.
+  // Build email
   const brideName = [vc?.customer_first_name, vc?.customer_last_name].filter(Boolean).join(' ').trim() || vc?.customer_email || 'a contact';
   const venueName = v?.name || 'your venue';
   const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com').replace(/\/+$/, '');
   const contactUrl = `${baseUrl}/dashboard/contacts/${t.venue_customer_id}?tab=concierge`;
-  const fromName  = a?.name ? `${a.name} (StoryVenue Support)` : 'StoryVenue Support';
+  const fromDisplayName = a?.name
+    ? `${a.name} · StoryVenue Concierge team`
+    : 'StoryVenue Concierge team';
   const fromEmail = process.env.SUPPORT_FROM_EMAIL?.trim() || 'support@storyvenue.com';
-  const replyTo   = process.env.SUPPORT_REPLY_TO?.trim() || 'hello@storyvenue.com';
+  // Reply-To is the threaded venue-direct address — replies route back into
+  // this same conversation thread via /api/webhooks/inbound-email.
+  const replyTo = buildVenueDirectReplyToEmail(threadId, t.venue_id)
+    || process.env.SUPPORT_REPLY_TO?.trim()
+    || undefined;
   const previewSnippet = text.length > 280 ? `${text.slice(0, 280)}…` : text;
+  const replyHint = replyTo
+    ? 'You can reply to this email <strong style="color:#111827;">or</strong> click the button to reply in your dashboard — either way it lands in the same thread.'
+    : 'Click the button to reply in your dashboard.';
 
   const emailHtml = `<!doctype html>
-<html><head><meta charset="utf-8"><title>Message from StoryVenue Support</title></head>
+<html><head><meta charset="utf-8"><title>Message from StoryVenue Concierge</title></head>
 <body style="margin:0;padding:0;background:#f6f7f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f7f9;padding:24px 12px;">
     <tr><td align="center">
       <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
         <tr><td style="padding:24px 28px 0;">
-          <p style="margin:0;font-size:11px;letter-spacing:1.5px;color:#7c3aed;text-transform:uppercase;font-weight:700;">StoryVenue Support &middot; Venue Direct</p>
-          <h1 style="margin:10px 0 4px;font-size:18px;color:#111827;font-weight:600;">${escapeHtml(fromName)} sent you a message</h1>
+          <p style="margin:0;font-size:11px;letter-spacing:1.5px;color:#7c3aed;text-transform:uppercase;font-weight:700;">StoryVenue Concierge team &middot; Venue Direct</p>
+          <h1 style="margin:10px 0 4px;font-size:18px;color:#111827;font-weight:600;">${escapeHtml(fromDisplayName)} sent you a message</h1>
           <p style="margin:0;font-size:13px;color:#6b7280;">About <strong style="color:#111827;">${escapeHtml(brideName)}</strong> at ${escapeHtml(venueName)}</p>
         </td></tr>
         <tr><td style="padding:18px 28px;">
@@ -222,12 +270,15 @@ export async function POST(req: NextRequest) {
             ${escapeHtml(previewSnippet)}
           </blockquote>
         </td></tr>
-        <tr><td align="center" style="padding:0 28px 28px;">
+        <tr><td align="center" style="padding:0 28px 8px;">
           <a href="${contactUrl}" style="display:inline-block;background:#1b1b1b;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">View &amp; reply in dashboard</a>
         </td></tr>
-        <tr><td style="padding:0 28px 24px;border-top:1px solid #f3f4f6;">
-          <p style="margin:14px 0 0;font-size:12px;color:#9ca3af;line-height:1.55;">
-            This is a private message between StoryVenue Support and your venue team. The bride does not see it.
+        <tr><td style="padding:8px 28px 24px;">
+          <p style="margin:0;font-size:13px;color:#374151;line-height:1.55;">
+            ${replyHint}
+          </p>
+          <p style="margin:14px 0 0;padding-top:14px;border-top:1px solid #f3f4f6;font-size:12px;color:#9ca3af;line-height:1.55;">
+            This is a private message between the StoryVenue Concierge team and your venue. The contact never sees it.
           </p>
         </td></tr>
       </table>
@@ -235,14 +286,15 @@ export async function POST(req: NextRequest) {
   </table>
 </body></html>`;
 
+  // Send to each unique recipient (team members + owner, deduped).
   await Promise.allSettled(
     recipients.map(r =>
       sendEmail({
-        to: r.email!,
+        to: r.email,
         subject: `[Venue Direct] Message about ${brideName}`,
         html: emailHtml,
         replyTo,
-        from: { email: fromEmail, name: fromName },
+        from: { email: fromEmail, name: 'StoryVenue Concierge team' },
         headers: { 'X-Entity-Ref-ID': `storyvenue-venue-direct-${msg.id}` },
       })
         .then(res => {
@@ -252,21 +304,10 @@ export async function POST(req: NextRequest) {
     ),
   );
 
-  // Also CC the venue's billing email if no team members exist yet
-  if (recipients.length === 0 && v?.email) {
-    await sendEmail({
-      to: v.email,
-      subject: `[Venue Direct] Message about ${brideName}`,
-      html: emailHtml,
-      replyTo,
-      from: { email: fromEmail, name: fromName },
-      headers: { 'X-Entity-Ref-ID': `storyvenue-venue-direct-${msg.id}` },
-    }).catch(err => console.warn('[venue-direct] fallback email exception', err));
-  }
-
   return NextResponse.json({
     ok: true,
     messageId: msg.id,
     recipientsNotified: recipients.length,
+    ownerIncluded: recipients.some(r => r.isOwner),
   });
 }
