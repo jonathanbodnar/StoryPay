@@ -273,31 +273,35 @@ function InviteModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
   async function submit() {
     setBusy(true);
     setErr(null);
-    const res = await fetch('/api/admin/team-members', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        first_name: firstName,
-        last_name: lastName,
-        email,
-        password,
-        is_super_admin: isSuperAdmin,
-        admin_tabs_allowed: tabs,
-      }),
-    });
-    setBusy(false);
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({})) as { error?: string };
-      setErr(j.error || 'Failed to invite');
-      return;
+    try {
+      const res = await fetch('/api/admin/team-members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          first_name: firstName,
+          last_name: lastName,
+          email,
+          password,
+          is_super_admin: isSuperAdmin,
+          admin_tabs_allowed: tabs,
+        }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({})) as { error?: string };
+        setErr(j.error || 'Failed to invite');
+        return;
+      }
+      onSaved();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Network error — please try again');
+    } finally {
+      setBusy(false);
     }
-    onSaved();
   }
 
   return (
     <ModalShell onClose={onClose} title="Invite team member" widthClass="max-w-xl">
       <div className="space-y-4">
-        {err && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-600">{err}</p>}
         <div className="grid grid-cols-2 gap-3">
           <Field label="First name">
             <input
@@ -344,6 +348,8 @@ function InviteModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 
         {!isSuperAdmin && <TabAccessEditor tabs={tabs} setTabs={setTabs} />}
 
+        {err && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-600">{err}</p>}
+
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className="text-sm text-gray-500 hover:underline">
             Cancel
@@ -382,30 +388,34 @@ function EditModal({ member, onClose, onSaved }: { member: TeamMember; onClose: 
   async function submit() {
     setBusy(true);
     setErr(null);
-    const res = await fetch(`/api/admin/team-members/${member.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        first_name: firstName,
-        last_name: lastName,
-        email,
-        is_super_admin: isSuperAdmin,
-        admin_tabs_allowed: tabs,
-      }),
-    });
-    setBusy(false);
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({})) as { error?: string };
-      setErr(j.error || 'Save failed');
-      return;
+    try {
+      const res = await fetch(`/api/admin/team-members/${member.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          first_name: firstName,
+          last_name: lastName,
+          email,
+          is_super_admin: isSuperAdmin,
+          admin_tabs_allowed: tabs,
+        }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({})) as { error?: string };
+        setErr(j.error || 'Save failed');
+        return;
+      }
+      onSaved();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Network error — please try again');
+    } finally {
+      setBusy(false);
     }
-    onSaved();
   }
 
   return (
     <ModalShell onClose={onClose} title="Edit team member" widthClass="max-w-xl">
       <div className="space-y-4">
-        {err && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-600">{err}</p>}
         <div className="grid grid-cols-2 gap-3">
           <Field label="First name">
             <input
@@ -441,6 +451,8 @@ function EditModal({ member, onClose, onSaved }: { member: TeamMember; onClose: 
         </label>
 
         {!isSuperAdmin && <TabAccessEditor tabs={tabs} setTabs={setTabs} />}
+
+        {err && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-600">{err}</p>}
 
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className="text-sm text-gray-500 hover:underline">Cancel</button>
