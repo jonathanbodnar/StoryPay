@@ -1,5 +1,6 @@
 import {
   DIRECTORY_LEGACY_FEATURE_TO_NAV_IDS,
+  DIRECTORY_NAV_REGISTRY,
   allDirectoryNavIds,
   defaultNavPermissionsAllTrue,
   navIdsFromLegacyFeatureFlags,
@@ -134,7 +135,14 @@ export async function loadDirectoryNavAccess(venueId: string): Promise<Directory
   };
 }
 
-/** Merge explicit nav checkboxes: full map with every registry id, then overlay saved plan. */
+/** Merge explicit nav checkboxes: full map with every registry id, then overlay saved plan.
+ *
+ * When a saved plan's nav_permissions doesn't contain a key (because the nav ID
+ * was added to the registry after the plan was last saved), we infer access from
+ * the group: if the plan already has at least one other nav ID in that group
+ * checked, the new ID defaults to true. This prevents newly-added nav items from
+ * silently losing access on plans that should include them (e.g. legacy plans).
+ */
 export function mergeNavPermissionsForEditor(
   saved: Record<string, boolean> | null | undefined,
   featureFlags: Record<string, boolean> | null | undefined,
@@ -142,8 +150,23 @@ export function mergeNavPermissionsForEditor(
   const base: Record<string, boolean> = Object.fromEntries(allDirectoryNavIds().map((id) => [id, false]));
 
   if (saved && typeof saved === 'object' && Object.keys(saved).length > 0) {
+    // Build a group→hasAccess lookup from already-saved IDs
+    const groupAccess: Record<string, boolean> = {};
     for (const id of allDirectoryNavIds()) {
-      if (saved[id] === true) base[id] = true;
+      if (saved[id] === true) {
+        const group = DIRECTORY_NAV_REGISTRY.find((e) => e.id === id)?.group;
+        if (group) groupAccess[group] = true;
+      }
+    }
+
+    for (const id of allDirectoryNavIds()) {
+      if (saved[id] === true) {
+        base[id] = true;
+      } else if (!(id in saved)) {
+        // New nav ID not yet in this plan's saved permissions — inherit from group.
+        const group = DIRECTORY_NAV_REGISTRY.find((e) => e.id === id)?.group;
+        if (group && groupAccess[group]) base[id] = true;
+      }
     }
     return base;
   }
