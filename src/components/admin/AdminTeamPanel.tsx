@@ -12,6 +12,7 @@ import {
   Mail,
   CheckCircle2,
   AlertCircle,
+  Send,
 } from 'lucide-react';
 import {
   ADMIN_TABS,
@@ -105,6 +106,26 @@ export function AdminTeamPanel() {
     await load();
   }
 
+  async function handleResendInvite(m: TeamMember) {
+    if (!confirm(`Resend invite email to ${m.email}? This will generate a new temporary password.`)) return;
+    setErr(null);
+    try {
+      const res = await fetch(`/api/admin/team-members/${m.id}/resend-invite`, { method: 'POST' });
+      const j = await res.json().catch(() => ({})) as { emailSent?: boolean; emailError?: string; password?: string };
+      if (!res.ok) {
+        setErr(j.emailError || 'Resend failed');
+        return;
+      }
+      if (j.emailSent === false) {
+        setErr(`Email could not be sent${j.emailError ? `: ${j.emailError}` : ''}.${j.password ? ` New password: ${j.password}` : ''}`);
+      } else {
+        flash(`Invite email resent to ${m.email}`);
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Network error');
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -191,6 +212,14 @@ export function AdminTeamPanel() {
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="inline-flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => void handleResendInvite(m)}
+                        title="Resend invite email (generates new password)"
+                        className="rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-blue-600"
+                      >
+                        <Send size={14} />
+                      </button>
                       <button
                         type="button"
                         onClick={() => setEditingId(m.id)}
