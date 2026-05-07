@@ -11,6 +11,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { hashSupportPassword } from '@/lib/support/auth';
 import { getAdminIdentity } from '@/lib/admin-identity';
 import { ADMIN_TAB_KEY_SET } from '@/lib/admin-tabs-registry';
+import { ensureAdminTeamSchema } from '@/lib/admin-team-schema-ensure';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -42,6 +43,9 @@ export async function PATCH(
   const me = await getAdminIdentity();
   if (!me.canManageTeam) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  try { await ensureAdminTeamSchema(); } catch (e) {
+    return NextResponse.json({ error: `Schema setup failed: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 });
   }
 
   const { id } = await params;

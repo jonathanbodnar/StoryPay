@@ -12,11 +12,15 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getAdminIdentity } from '@/lib/admin-identity';
 import { hashSupportPassword, verifySupportPassword } from '@/lib/support/auth';
 import { ADMIN_TABS } from '@/lib/admin-tabs-registry';
+import { ensureAdminTeamSchema } from '@/lib/admin-team-schema-ensure';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 export async function GET() {
+  // Self-heal schema before identity resolution touches the new columns.
+  try { await ensureAdminTeamSchema(); } catch { /* fall through; identity may still resolve for master admin */ }
+
   const id = await getAdminIdentity();
   if (!id.isMasterSuperAdmin && !id.member) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

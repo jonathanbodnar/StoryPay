@@ -10,6 +10,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { hashSupportPassword } from '@/lib/support/auth';
 import { getAdminIdentity } from '@/lib/admin-identity';
 import { ADMIN_TAB_KEY_SET } from '@/lib/admin-tabs-registry';
+import { ensureAdminTeamSchema } from '@/lib/admin-team-schema-ensure';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -39,6 +40,9 @@ export async function GET() {
   if (!id.canManageTeam) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  try { await ensureAdminTeamSchema(); } catch (e) {
+    return NextResponse.json({ error: `Schema setup failed: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 });
+  }
   const { data, error } = await supabaseAdmin
     .from('support_team_members')
     .select(
@@ -58,6 +62,9 @@ export async function POST(request: NextRequest) {
   const id = await getAdminIdentity();
   if (!id.canManageTeam) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  try { await ensureAdminTeamSchema(); } catch (e) {
+    return NextResponse.json({ error: `Schema setup failed: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 });
   }
 
   let body: CreateBody = {};

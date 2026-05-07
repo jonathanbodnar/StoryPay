@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getAdminIdentity } from '@/lib/admin-identity';
+import { ensureAdminTeamSchema } from '@/lib/admin-team-schema-ensure';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -17,6 +18,7 @@ const AVATAR_BUCKET = 'admin-avatars';
 const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
 
 export async function POST(request: NextRequest) {
+  try { await ensureAdminTeamSchema(); } catch { /* fall through */ }
   const id = await getAdminIdentity();
   if (id.isMasterSuperAdmin) {
     return NextResponse.json(
