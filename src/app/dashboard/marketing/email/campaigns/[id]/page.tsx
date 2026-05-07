@@ -72,13 +72,14 @@ export default function CampaignDetailPage() {
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
-    const [cRes, tRes, tagRes, pipeRes, tlRes, segRes] = await Promise.all([
+    const [cRes, tRes, tagRes, pipeRes, tlRes, segRes, venueRes] = await Promise.all([
       fetch(`/api/marketing/campaigns/${id}`, { cache: 'no-store' }),
       fetch('/api/marketing/email-templates', { cache: 'no-store' }),
       fetch('/api/marketing/tags', { cache: 'no-store' }),
       fetch('/api/pipelines', { cache: 'no-store' }),
       fetch('/api/marketing/trigger-links', { cache: 'no-store' }),
       fetch('/api/marketing/segments', { cache: 'no-store' }),
+      fetch('/api/venues/me', { cache: 'no-store' }),
     ]);
     if (cRes.ok) {
       const j = await cRes.json();
@@ -112,6 +113,11 @@ export default function CampaignDetailPage() {
       setSavedSegments(
         (d.segments ?? []).map((s) => ({ id: s.id, name: s.name, description: s.description })),
       );
+    }
+    if (venueRes.ok) {
+      const d = (await venueRes.json()) as { venue?: { brand_email?: string; email?: string } };
+      const prefill = d.venue?.brand_email?.trim() || d.venue?.email?.trim() || '';
+      if (prefill) setTestEmail((prev) => prev || prefill);
     }
 
     setLoading(false);
