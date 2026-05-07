@@ -8,6 +8,46 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifySupportAccess } from '@/lib/support/auth';
 import { supabaseAdmin } from '@/lib/supabase';
 
+/**
+ * PATCH /api/admin/support/bride-thread/[threadId]
+ *
+ * Update a bride conversation thread's status (open/closed).
+ * Used by the "Close" button in the thread detail header.
+ */
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ threadId: string }> },
+) {
+  const auth = await verifySupportAccess();
+  if (!auth.isSuperAdmin && !auth.agent) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const { threadId } = await params;
+  if (!threadId) return NextResponse.json({ error: 'threadId required' }, { status: 400 });
+
+  let body: { status?: string };
+  try { body = (await req.json()) as { status?: string }; }
+  catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+
+  const allowed = new Set(['open', 'closed', 'pending']);
+  if (!body.status || !allowed.has(body.status)) {
+    return NextResponse.json({ error: 'status must be open, closed, or pending' }, { status: 400 });
+  }
+
+  const { error } = await supabaseAdmin
+    .from('conversation_threads')
+    .update({ status: body.status, updated_at: new Date().toISOString() })
+    .eq('id', threadId);
+
+  if (error) {
+    // If the column doesn't exist yet, treat as ok (graceful degradation)
+    if (error.code === '42703') return NextResponse.json({ ok: true, skipped: 'no_status_column' });
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true, status: body.status });
+}
+
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 

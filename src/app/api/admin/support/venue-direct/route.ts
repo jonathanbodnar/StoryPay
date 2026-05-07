@@ -58,12 +58,14 @@ interface VenueRow {
   slug:               string | null;
   email:              string | null;
   notification_email: string | null;
+  owner_id:           string | null;
 }
 
 interface VenueCustomerRow {
   customer_email:      string | null;
   customer_first_name: string | null;
   customer_last_name:  string | null;
+  phone:               string | null;
 }
 
 interface TeamMemberRow {
@@ -118,15 +120,15 @@ export async function POST(req: NextRequest) {
   if (!thread) return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
   const t = thread as ThreadRow;
 
-  const [{ data: venue }, { data: customer }, { data: agent }] = await Promise.all([
+  const [{ data: venue }, { data: customer }, { data: agent }, { data: lastBrideMsgs }] = await Promise.all([
     supabaseAdmin
       .from('venues')
-      .select('id, name, slug, email, notification_email')
+      .select('id, name, slug, email, notification_email, owner_id')
       .eq('id', t.venue_id)
       .maybeSingle(),
     supabaseAdmin
       .from('venue_customers')
-      .select('customer_email, customer_first_name, customer_last_name')
+      .select('customer_email, customer_first_name, customer_last_name, phone')
       .eq('id', t.venue_customer_id)
       .maybeSingle(),
     supabaseAdmin
@@ -134,17 +136,40 @@ export async function POST(req: NextRequest) {
       .select('id, name, email')
       .eq('id', actingAgentId)
       .maybeSingle(),
+    // Fetch the bride's most recent inbound message for email context
+    supabaseAdmin
+      .from('conversation_messages')
+      .select('body, created_at')
+      .eq('thread_id', threadId)
+      .eq('sender_kind', 'contact')
+      .order('created_at', { ascending: false })
+      .limit(1),
   ]);
 
   const v  = (venue    ?? null) as VenueRow | null;
   const vc = (customer ?? null) as VenueCustomerRow | null;
   const a  = (agent    ?? null) as { id: string; name: string | null; email: string | null } | null;
+  const lastBrideMessage = ((lastBrideMsgs ?? []) as Array<{ body: string; created_at: string }>)[0] ?? null;
+
+  // Resolve the account owner's login email from auth.users via owner_id.
+  // This is the email they use to sign in, which may differ from the business
+  // notification email stored in venues.notification_email/email.
+  let ownerAuthEmail: string | null = null;
+  if (v?.owner_id) {
+    try {
+      const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(v.owner_id);
+      ownerAuthEmail = authUser?.user?.email?.trim() || null;
+    } catch (e) {
+      console.warn('[venue-direct] could not fetch owner auth email', e);
+    }
+  }
+  // Fall back to notification_email then venues.email if auth lookup fails
+  const ownerEmail = ownerAuthEmail || (v?.notification_email || v?.email || '').trim();
 
   // Resolve recipient venue team members.
-  // Default: all active members of the venue's team + the account holder
-  // (the venue's billing/owner email). Caller may narrow with recipientIds
-  // — when explicit, the owner is only included if their email matches an
-  // explicit selection.
+  // Default: all active members of the venue's team + the account holder.
+  // Caller may narrow with recipientIds — when explicit, the owner is only
+  // included if their email matches an explicit selection.
   let recipientQuery = supabaseAdmin
     .from('venue_team_members')
     .select('id, name, email, role')
@@ -157,9 +182,6 @@ export async function POST(req: NextRequest) {
   const { data: recipientsRaw } = await recipientQuery;
   const teamRecipients = ((recipientsRaw ?? []) as TeamMemberRow[]).filter(r => !!r.email);
 
-  // Always also email the account holder (venue.email or notification_email)
-  // unless an explicit narrowed recipient list excludes everyone.
-  const ownerEmail = (v?.notification_email || v?.email || '').trim();
   const ownerIncluded = explicit.length === 0; // when not narrowed, include owner
   type EmailRecipient = { email: string; name: string | null; isOwner: boolean };
   const dedup = new Map<string, EmailRecipient>();
@@ -249,38 +271,74 @@ export async function POST(req: NextRequest) {
   const replyTo = buildVenueDirectReplyToEmail(threadId, t.venue_id)
     || process.env.SUPPORT_REPLY_TO?.trim()
     || undefined;
-  const previewSnippet = text.length > 280 ? `${text.slice(0, 280)}…` : text;
+  const previewSnippet = text.length > 600 ? `${text.slice(0, 600)}…` : text;
   const replyHint = replyTo
     ? 'You can reply to this email <strong style="color:#111827;">or</strong> click the button to reply in your dashboard — either way it lands in the same thread.'
     : 'Click the button to reply in your dashboard.';
+
+  // Bride info snapshot rows
+  const brideInfoRows = [
+    ['Name',  brideName !== 'a contact' ? brideName : null],
+    ['Email', vc?.customer_email || null],
+    ['Phone', vc?.phone || null],
+    ['Last message', lastBrideMessage?.body ? (lastBrideMessage.body.length > 200 ? `${lastBrideMessage.body.slice(0, 200)}…` : lastBrideMessage.body) : null],
+  ].filter(([, val]) => val) as [string, string][];
+
+  const brideInfoHtml = brideInfoRows.length > 0 ? `
+    <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:20px;">
+      ${brideInfoRows.map(([label, val], i) => `
+      <tr style="background:${i % 2 === 0 ? '#f9fafb' : '#ffffff'};">
+        <td style="padding:8px 12px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;width:110px;">${escapeHtml(label)}</td>
+        <td style="padding:8px 12px;font-size:13px;color:#111827;">${escapeHtml(val)}</td>
+      </tr>`).join('')}
+    </table>` : '';
 
   const emailHtml = `<!doctype html>
 <html><head><meta charset="utf-8"><title>Message from StoryVenue Concierge</title></head>
 <body style="margin:0;padding:0;background:#f6f7f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f7f9;padding:24px 12px;">
     <tr><td align="center">
-      <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
-        <tr><td style="padding:24px 28px 0;">
-          <p style="margin:0;font-size:11px;letter-spacing:1.5px;color:#7c3aed;text-transform:uppercase;font-weight:700;">StoryVenue Concierge team &middot; Venue Direct</p>
-          <h1 style="margin:10px 0 4px;font-size:18px;color:#111827;font-weight:600;">${escapeHtml(fromDisplayName)} sent you a message</h1>
+      <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
+
+        <!-- Header -->
+        <tr><td style="padding:24px 28px 16px;">
+          <p style="margin:0 0 6px;font-size:11px;letter-spacing:1.5px;color:#7c3aed;text-transform:uppercase;font-weight:700;">StoryVenue Concierge Team &middot; Venue Direct</p>
+          <h1 style="margin:0 0 4px;font-size:18px;color:#111827;font-weight:600;">${escapeHtml(fromDisplayName)} sent you a message</h1>
           <p style="margin:0;font-size:13px;color:#6b7280;">About <strong style="color:#111827;">${escapeHtml(brideName)}</strong> at ${escapeHtml(venueName)}</p>
         </td></tr>
-        <tr><td style="padding:18px 28px;">
-          <blockquote style="margin:0;border-left:3px solid #7c3aed;padding:10px 14px;background:#f5f3ff;color:#1f2937;white-space:pre-wrap;font-size:14px;line-height:1.55;border-radius:0 6px 6px 0;">
+
+        <!-- Divider -->
+        <tr><td style="padding:0 28px;"><div style="height:1px;background:#f3f4f6;"></div></td></tr>
+
+        <!-- Bride snapshot -->
+        ${brideInfoRows.length > 0 ? `<tr><td style="padding:16px 28px 0;">
+          <p style="margin:0 0 10px;font-size:12px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:0.5px;">Contact snapshot</p>
+          ${brideInfoHtml}
+        </td></tr>` : ''}
+
+        <!-- Concierge message -->
+        <tr><td style="padding:${brideInfoRows.length > 0 ? '4px' : '16px'} 28px 16px;">
+          <p style="margin:0 0 10px;font-size:12px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:0.5px;">Message from concierge team</p>
+          <div style="border-left:3px solid #7c3aed;padding:12px 16px;background:#f5f3ff;color:#1f2937;white-space:pre-wrap;font-size:14px;line-height:1.6;border-radius:0 8px 8px 0;">
             ${escapeHtml(previewSnippet)}
-          </blockquote>
+          </div>
         </td></tr>
-        <tr><td align="center" style="padding:0 28px 8px;">
+
+        <!-- CTA -->
+        <tr><td style="padding:4px 28px 16px;">
           <a href="${contactUrl}" style="display:inline-block;background:#1b1b1b;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">View &amp; reply in dashboard</a>
         </td></tr>
-        <tr><td style="padding:8px 28px 24px;">
-          <p style="margin:0;font-size:13px;color:#374151;line-height:1.55;">
+
+        <!-- Footer -->
+        <tr><td style="padding:0 28px 24px;">
+          <p style="margin:0 0 12px;font-size:13px;color:#374151;line-height:1.55;">
             ${replyHint}
           </p>
-          <p style="margin:14px 0 0;padding-top:14px;border-top:1px solid #f3f4f6;font-size:12px;color:#9ca3af;line-height:1.55;">
+          <p style="margin:0;padding-top:14px;border-top:1px solid #f3f4f6;font-size:12px;color:#9ca3af;line-height:1.55;">
             This is a private message between the StoryVenue Concierge team and your venue. The contact never sees it.
           </p>
         </td></tr>
+
       </table>
     </td></tr>
   </table>

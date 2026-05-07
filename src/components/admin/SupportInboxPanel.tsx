@@ -1082,7 +1082,20 @@ export function SupportInboxPanel() {
                   teamMembers.find(m => m.id === actAsId)?.name ||
                   null
                 }
-                onDismiss={() => setActiveThreadId(null)}
+                onDismiss={async () => {
+                  if (detail) {
+                    // Mark the thread closed so it drops out of the "open" list
+                    // (clears the red dot). It remains visible under "All" / "Closed".
+                    await fetch(`/api/admin/support/bride-thread/${detail.thread.id}`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ status: 'closed' }),
+                    }).catch(() => {/* best effort */});
+                    // Drop the thread from the open list locally without a full refetch
+                    setThreads(prev => prev.filter(t => t.thread_id !== detail.thread.id));
+                  }
+                  setActiveThreadId(null);
+                }}
                 noActorWarning={!me?.member?.id && !actAsId}
                 messagesEndRef={messagesEndRef}
                 unreadDividerRef={unreadDividerRef}
@@ -1294,7 +1307,7 @@ function ThreadDetailView({
   showIntent, onToggleIntent,
 }: {
   detail: ThreadDetail;
-  onDismiss: () => void;
+  onDismiss: () => void | Promise<void>;
   composerMode: 'reply' | 'note' | 'venue_direct';
   onComposerModeChange: (m: 'reply' | 'note' | 'venue_direct') => void;
   replyBody: string; onReplyBodyChange: (v: string) => void;

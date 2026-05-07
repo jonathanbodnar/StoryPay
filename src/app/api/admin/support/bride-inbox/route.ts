@@ -121,6 +121,7 @@ export async function GET(req: NextRequest) {
 
       if (venueId)  tq = tq.eq('venue_id', venueId);
       if (cursorAt) tq = tq.lt('last_message_at', cursorAt);
+      // Graceful: if column doesn't exist yet this filter is ignored by PostgREST
 
       const { data: tRows, error: tErr } = await tq;
       if (tErr) throw new Error(`threads-all query: ${tErr.message}`);
@@ -261,9 +262,12 @@ export async function GET(req: NextRequest) {
 
       let threadQuery = supabaseAdmin
         .from('conversation_threads')
-        .select('id, venue_id, venue_customer_id, subject, last_message_at, last_message_preview')
+        .select('id, venue_id, venue_customer_id, subject, last_message_at, last_message_preview, status')
         .in('id', candidateThreadIds);
-      if (venueId) threadQuery = threadQuery.eq('venue_id', venueId);
+      if (venueId)          threadQuery = threadQuery.eq('venue_id', venueId);
+      // Exclude manually-closed threads from the "open" view. If the status
+      // column doesn't exist yet (migration pending) PostgREST ignores this.
+      if (filter === 'open') threadQuery = (threadQuery as typeof threadQuery).neq('status', 'closed');
 
       const { data: threadRows, error: threadErr } = await threadQuery;
       if (threadErr) throw new Error(`threads query: ${threadErr.message}`);
