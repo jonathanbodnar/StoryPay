@@ -255,6 +255,16 @@ export async function insertInboundConversationEmail(params: {
     return { ok: false, error: insErr.message };
   }
 
+  // Auto-reopen: if the support team previously closed this thread but the
+  // bride is replying again, surface it back in the Needs Reply inbox.
+  // Best-effort — silently ignore if the status column isn't present yet.
+  void supabaseAdmin
+    .from('conversation_threads')
+    .update({ status: 'open' })
+    .eq('id', threadId)
+    .eq('status', 'closed')
+    .then(() => undefined, () => undefined);
+
   if (inserted) {
     void (async () => {
       try {

@@ -385,6 +385,17 @@ export async function insertInboundGhlSms(params: {
     return { ok: false, error: insErr.message };
   }
 
+  // Auto-reopen: if the support team had previously closed this thread but
+  // the bride is now replying again, the thread needs to come back into the
+  // "Needs Reply" inbox. Best-effort — ignore the error if the status column
+  // doesn't exist yet (older DB without migration 115).
+  void supabaseAdmin
+    .from('conversation_threads')
+    .update({ status: 'open' })
+    .eq('id', threadId)
+    .eq('status', 'closed')
+    .then(() => undefined, () => undefined);
+
   // Realtime broadcast — bride inbox + active thread + venue conversations
   if (inserted) {
     const broadcastInbound = async () => {
