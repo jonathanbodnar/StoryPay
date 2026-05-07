@@ -149,6 +149,13 @@ async function ingestFromParsedFields(params: {
   const parsedBride = parseReplyLocalPart(local);
   const parsedVD = !parsedBride ? parseVenueDirectLocalPart(local) : null;
   const parsed = parsedBride ?? parsedVD;
+  console.warn('[inbound-email] parse', {
+    fromRawPreview: fromRaw.slice(0, 80),
+    toRawPreview: toRaw.slice(0, 120),
+    local: local.slice(0, 72),
+    matchedBride: !!parsedBride,
+    matchedVD: !!parsedVD,
+  });
   if (!parsed) {
     console.warn('[inbound-email] skipped: not_reply_address', { local: local.slice(0, 72) });
     return NextResponse.json({ ok: true, skipped: 'not_reply_address' });
@@ -161,8 +168,16 @@ async function ingestFromParsedFields(params: {
     .maybeSingle();
 
   const venueId = (thread as { venue_id?: string } | null)?.venue_id;
-  if (!venueId || !verifyReplySignature(parsed.threadId, venueId, parsed.sig)) {
-    console.warn('[inbound-email] bad signature or thread', parsed.threadId);
+  if (!venueId) {
+    console.warn('[inbound-email] thread venueId missing', { threadId: parsed.threadId });
+    return NextResponse.json({ ok: true, skipped: 'thread_not_found' });
+  }
+  if (!verifyReplySignature(parsed.threadId, venueId, parsed.sig)) {
+    console.warn('[inbound-email] bad signature', {
+      threadId: parsed.threadId,
+      venueId,
+      receivedSig: parsed.sig,
+    });
     return NextResponse.json({ ok: true, skipped: 'bad_token' });
   }
 
@@ -305,6 +320,18 @@ export async function POST(request: NextRequest) {
   const toRaw =
     replyRoute ||
     (Array.isArray(email.to) && email.to.length ? String(email.to[0]) : '');
+  console.warn('[inbound-email] webhook received', {
+    emailId,
+    fromRawPreview: fromRaw.slice(0, 80),
+    toCount: Array.isArray(email.to) ? email.to.length : 0,
+    toFirst: Array.isArray(email.to) && email.to.length ? String(email.to[0]).slice(0, 120) : '',
+    ccCount: Array.isArray(email.cc) ? email.cc.length : 0,
+    foundReplyRoute: !!replyRoute,
+    replyRoutePreview: replyRoute.slice(0, 120),
+    headerKeys: email.headers && typeof email.headers === 'object'
+      ? Object.keys(email.headers as Record<string, unknown>).slice(0, 20)
+      : [],
+  });
   if (toRaw) {
     const local = firstEmailFromList(toRaw).split('@')[0] ?? '';
     if (!parseReplyLocalPart(local)) {

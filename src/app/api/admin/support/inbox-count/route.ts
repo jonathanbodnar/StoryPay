@@ -2,7 +2,9 @@
  * GET /api/admin/support/inbox-count
  *
  * Returns the number of items that need attention in the support inbox:
- *   brideReplies  – threads where the bride was the last to speak (needs reply)
+ *   brideReplies  – threads where the bride was the last to speak
+ *   venueReplies  – venue_direct threads where the venue (or owner) replied
+ *                   and the concierge hasn't responded since
  *   openTickets   – venue-support tickets with status 'open' or 'pending'
  *   total         – sum of the above
  *
@@ -37,7 +39,23 @@ export async function GET() {
     }
     const brideReplies = Array.from(latestByThread.values()).filter(s => s === 'contact').length;
 
-    // ── 2. Open/pending venue support tickets ────────────────────────────────
+    // ── 2. Venue Direct replies that need concierge attention ────────────────
+    // Look at the most recent venue_direct message per thread. If sender_kind
+    // is anything other than 'concierge' (i.e. owner/team), the concierge
+    // team is the last one expected to respond.
+    const { data: recentVdRows } = await supabaseAdmin
+      .from('conversation_messages')
+      .select('thread_id, sender_kind, created_at')
+      .eq('audience', 'venue_direct')
+      .order('created_at', { ascending: false })
+      .limit(400);
+    const latestVdByThread = new Map<string, string>();
+    for (const r of (recentVdRows ?? []) as Array<{ thread_id: string; sender_kind: string }>) {
+      if (!latestVdByThread.has(r.thread_id)) latestVdByThread.set(r.thread_id, r.sender_kind);
+    }
+    const venueReplies = Array.from(latestVdByThread.values()).filter(s => s !== 'concierge').length;
+
+    // ── 3. Open/pending venue support tickets ────────────────────────────────
     const { count: openTickets } = await supabaseAdmin
       .from('support_threads')
       .select('id', { count: 'exact', head: true })
@@ -45,11 +63,12 @@ export async function GET() {
 
     return NextResponse.json({
       brideReplies,
+      venueReplies,
       openTickets:  openTickets ?? 0,
-      total:        brideReplies + (openTickets ?? 0),
+      total:        brideReplies + venueReplies + (openTickets ?? 0),
     });
   } catch (err) {
     console.error('[inbox-count]', err);
-    return NextResponse.json({ brideReplies: 0, openTickets: 0, total: 0 });
+    return NextResponse.json({ brideReplies: 0, venueReplies: 0, openTickets: 0, total: 0 });
   }
 }

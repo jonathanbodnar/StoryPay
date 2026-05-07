@@ -30,7 +30,19 @@ import { SupportMentionPicker } from '@/components/support/SupportMentionPicker'
 
 const BRAND = '#1b1b1b';
 
-type SupportSubTab = 'bride-replies' | 'tickets';
+type SupportSubTab = 'bride-replies' | 'venue-direct' | 'tickets';
+
+interface VenueDirectInboxRow {
+  threadId:        string;
+  venueId:         string | null;
+  venueName:       string;
+  contactId:       string | null;
+  contactName:     string;
+  latestBody:      string;
+  latestAuthor:    string;
+  latestAt:        string;
+  latestFromVenue: boolean;
+}
 
 interface BrideInboxRow {
   thread_id:               string;
@@ -133,7 +145,12 @@ export function SupportInboxPanel() {
   const searchParams = useSearchParams();
   // Restore state from URL (e.g. after returning from impersonation,
   // or after a hard refresh — preserves which thread was open).
-  const initialTab = (searchParams.get('tab') === 'tickets' ? 'tickets' : 'bride-replies') as SupportSubTab;
+  const initialTab = ((): SupportSubTab => {
+    const t = searchParams.get('tab');
+    if (t === 'tickets')      return 'tickets';
+    if (t === 'venue-direct') return 'venue-direct';
+    return 'bride-replies';
+  })();
   const initialThread = searchParams.get('thread') || null;
 
   const [subTab, setSubTab] = useState<SupportSubTab>(initialTab);
@@ -200,6 +217,7 @@ export function SupportInboxPanel() {
   // ── Focus mode ─────────────────────────────────────────────────────────────
   const [focusMode, setFocusMode] = useState(false);
   const [ticketOpenCount, setTicketOpenCount] = useState(0);
+  const [venueDirectUnreadCount, setVenueDirectUnreadCount] = useState(0);
 
   // ── Bride inbox state ──────────────────────────────────────────────────────
   const [threads, setThreads] = useState<BrideInboxRow[]>([]);
@@ -270,6 +288,24 @@ export function SupportInboxPanel() {
     }
   }, [brideStatusFilter, groupedThreads]);
 
+  // Background fetch of venue_direct unread count so the tab badge reflects
+  // reality even when the user is on a different sub-tab. Cheap query.
+  useEffect(() => {
+    let cancelled = false;
+    const fetchCount = () => {
+      void fetch('/api/admin/support/inbox-count', { cache: 'no-store' })
+        .then(r => r.ok ? r.json() : null)
+        .then((d: { venueReplies?: number } | null) => {
+          if (cancelled) return;
+          if (d && typeof d.venueReplies === 'number') setVenueDirectUnreadCount(d.venueReplies);
+        })
+        .catch(() => {});
+    };
+    fetchCount();
+    const id = setInterval(fetchCount, 30_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
   // When viewing a non-open filter, fetch a live open count in the background
   // so the badge reflects reality (e.g. a new bride message arrives while
   // the team is browsing the Replied list).
@@ -295,8 +331,9 @@ export function SupportInboxPanel() {
   useEffect(() => {
     if (!pathname) return;
     const next = new URLSearchParams(searchParams.toString());
-    if (subTab === 'tickets') next.set('tab', 'tickets');
-    else next.delete('tab');
+    if (subTab === 'tickets')           next.set('tab', 'tickets');
+    else if (subTab === 'venue-direct') next.set('tab', 'venue-direct');
+    else                                next.delete('tab');
     if (activeThreadId) next.set('thread', activeThreadId);
     else next.delete('thread');
     const qs = next.toString();
@@ -787,6 +824,13 @@ export function SupportInboxPanel() {
           count={needsReplyCount}
         />
         <SubTabButton
+          active={subTab === 'venue-direct'}
+          onClick={() => setSubTab('venue-direct')}
+          icon={<Building2 size={14} />}
+          label="Venue Direct"
+          count={venueDirectUnreadCount}
+        />
+        <SubTabButton
           active={subTab === 'tickets'}
           onClick={() => setSubTab('tickets')}
           icon={<LifeBuoy size={14} />}
@@ -802,6 +846,18 @@ export function SupportInboxPanel() {
             teamMembers={teamMembers}
             actAsId={actAsId}
             onOpenCount={setTicketOpenCount}
+          />
+        </div>
+      )}
+
+      {subTab === 'venue-direct' && (
+        <div className="flex-1 min-h-0">
+          <VenueDirectInboxView
+            onUnreadCount={setVenueDirectUnreadCount}
+            onOpenThread={(threadId) => {
+              setActiveThreadId(threadId);
+              setSubTab('bride-replies');
+            }}
           />
         </div>
       )}
@@ -1861,6 +1917,177 @@ function PriorityPill({ priority }: { priority: 'low' | 'normal' | 'high' }) {
     );
   }
   return null;
+}
+
+function VenueDirectInboxView({
+  onUnreadCount,
+  onOpenThread,
+}: {
+  onUnreadCount: (n: number) => void;
+  onOpenThread: (threadId: string) => void;
+}) {
+  const [rows, setRows] = useState<VenueDirectInboxRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<'awaiting' | 'all'>('awaiting');
+
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      const r = await fetch('/api/admin/support/venue-direct-inbox', { cache: 'no-store' });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || `Failed (${r.status})`);
+      const list = (d.threads ?? []) as VenueDirectInboxRow[];
+      setRows(list);
+      onUnreadCount(typeof d.unreadCount === 'number' ? d.unreadCount : list.filter(r => r.latestFromVenue).length);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load');
+    } finally {
+      setLoading(false);
+    }
+  }, [onUnreadCount]);
+
+  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const id = setInterval(load, 30_000);
+    return () => clearInterval(id);
+  }, [load]);
+
+  const visible = useMemo(
+    () => filter === 'awaiting' ? rows.filter(r => r.latestFromVenue) : rows,
+    [rows, filter],
+  );
+  const awaitingCount = useMemo(() => rows.filter(r => r.latestFromVenue).length, [rows]);
+
+  function relativeTime(iso: string): string {
+    try {
+      const d = new Date(iso);
+      const diff = Date.now() - d.getTime();
+      const min = Math.floor(diff / 60000);
+      if (min < 1)  return 'just now';
+      if (min < 60) return `${min}m ago`;
+      const hrs = Math.floor(min / 60);
+      if (hrs < 24) return `${hrs}h ago`;
+      const days = Math.floor(hrs / 24);
+      if (days < 7) return `${days}d ago`;
+      return d.toLocaleDateString();
+    } catch { return iso; }
+  }
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 mt-4 space-y-3">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h3 className="font-heading text-base text-gray-900 inline-flex items-center gap-2">
+            <Building2 size={16} className="text-violet-700" />
+            Venue Direct
+            {awaitingCount > 0 && (
+              <span className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full bg-red-500 text-white text-[11px] font-bold">
+                {awaitingCount}
+              </span>
+            )}
+          </h3>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Private venue↔concierge threads about specific brides. Venue replies needing response show up here first.
+          </p>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setFilter('awaiting')}
+            className={`rounded-md border px-2.5 py-1 text-[11px] font-semibold ${
+              filter === 'awaiting' ? 'bg-violet-700 text-white border-violet-700' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            Awaiting reply ({awaitingCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilter('all')}
+            className={`rounded-md border px-2.5 py-1 text-[11px] font-semibold ${
+              filter === 'all' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            All ({rows.length})
+          </button>
+          <button
+            type="button"
+            onClick={load}
+            className="rounded-md border border-gray-200 bg-white px-2 py-1 text-gray-500 hover:bg-gray-50"
+            title="Refresh"
+          >
+            <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 flex items-center gap-2">
+          <AlertCircle size={12} /> {error}
+        </div>
+      )}
+
+      {loading && rows.length === 0 ? (
+        <div className="flex items-center gap-2 text-xs text-gray-500 py-6 justify-center">
+          <Loader2 size={14} className="animate-spin" /> Loading…
+        </div>
+      ) : visible.length === 0 ? (
+        <div className="text-center py-10 px-4 border border-dashed border-gray-200 rounded-xl">
+          <Building2 size={28} className="mx-auto text-gray-300 mb-2" />
+          <p className="text-sm font-semibold text-gray-700">
+            {filter === 'awaiting' ? 'No venues waiting for a reply' : 'No Venue Direct activity yet'}
+          </p>
+          <p className="text-xs text-gray-500 mt-1">
+            {filter === 'awaiting'
+              ? 'When a venue replies to a Venue Direct message, it shows up here so the team can respond fast.'
+              : 'Send a Venue Direct from any bride thread to start a conversation with the venue team.'}
+          </p>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-gray-100 divide-y divide-gray-100 overflow-hidden">
+          {visible.map(row => (
+            <button
+              key={row.threadId}
+              type="button"
+              onClick={() => onOpenThread(row.threadId)}
+              className="w-full text-left flex items-start gap-3 px-3 py-2.5 hover:bg-gray-50"
+            >
+              <div className={`mt-0.5 w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-sm font-semibold ${
+                row.latestFromVenue
+                  ? 'bg-violet-100 text-violet-700'
+                  : 'bg-gray-100 text-gray-500'
+              }`}>
+                {(row.contactName.match(/\b\w/g) || []).slice(0, 2).join('').toUpperCase() || '?'}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className={`text-sm truncate ${row.latestFromVenue ? 'font-bold text-gray-900' : 'font-semibold text-gray-700'}`}>
+                    {row.contactName}
+                  </p>
+                  <span className="text-[11px] text-gray-400">·</span>
+                  <p className="text-[11px] text-gray-500 truncate">{row.venueName}</p>
+                  {row.latestFromVenue && (
+                    <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-red-100 text-red-700 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide">
+                      Awaiting reply
+                    </span>
+                  )}
+                  <span className={`text-[10px] text-gray-400 ${row.latestFromVenue ? '' : 'ml-auto'}`}>
+                    {relativeTime(row.latestAt)}
+                  </span>
+                </div>
+                <p className="text-[11px] text-violet-700 font-medium mt-0.5">
+                  {row.latestAuthor}
+                </p>
+                <p className={`text-xs truncate mt-0.5 ${row.latestFromVenue ? 'text-gray-800' : 'text-gray-500'}`}>
+                  {row.latestBody}
+                </p>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function TicketsView({

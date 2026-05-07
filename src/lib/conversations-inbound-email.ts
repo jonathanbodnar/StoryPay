@@ -326,9 +326,16 @@ export async function insertInboundVenueDirectEmail(params: {
     .eq('venue_id', venueId)
     .maybeSingle();
 
-  if (tErr || !thread) return { ok: false, error: 'thread_not_found' };
+  if (tErr || !thread) {
+    console.warn('[venue-direct-inbound] thread_not_found', { threadId, venueId });
+    return { ok: false, error: 'thread_not_found' };
+  }
 
-  // Resolve sender: check venue owner email first, then team members
+  // Resolve sender: check venue owner email first, then team members.
+  // The HMAC-signed Reply-To address is the real security boundary here —
+  // having the address means you received the original outbound email. So
+  // we accept any reply that hits this address, but tag it with the
+  // strongest match we can find (owner / team member / generic email).
   const fromNorm = fromEmail.trim().toLowerCase();
   const { data: venueRow } = await supabaseAdmin
     .from('venues')
@@ -348,24 +355,35 @@ export async function insertInboundVenueDirectEmail(params: {
       .select('id, email, status')
       .eq('venue_id', venueId);
     type MemberRow = { id: string; email: string | null; status: string | null };
-    const m = ((members ?? []) as MemberRow[])
-      .filter(x => x.email && x.email.trim().toLowerCase() === fromNorm)
-      .find(x => x.status !== 'inactive');
+    const matches = ((members ?? []) as MemberRow[])
+      .filter(x => x.email && x.email.trim().toLowerCase() === fromNorm);
+    const m = matches.find(x => x.status !== 'inactive') ?? matches[0] ?? null;
     if (m) memberId = m.id;
   }
-  if (!isOwner && !memberId) {
-    return { ok: false, error: 'sender_not_authorized' };
-  }
-  // Soft check (not a real security boundary; the HMAC signature is): only
-  // count owner if no team match.
   if (memberId) isOwner = false;
+
+  // Choose sender_kind: 'owner' if matched venue.email, 'team' if matched a
+  // team member, otherwise default to 'team' (the email reached us via the
+  // signed venue_direct address, so it's coming from someone the venue
+  // looped in — treat as team for display purposes). The actual identity is
+  // preserved in contact_from_email for the support agent to verify.
+  const senderKind = memberId ? 'team' : (isOwner ? 'owner' : 'team');
+
+  console.warn('[venue-direct-inbound] accepting', {
+    threadId,
+    venueId,
+    fromEmail: fromNorm,
+    matchedOwner: isOwner,
+    matchedMemberId: memberId,
+    senderKind,
+  });
 
   const row: Record<string, unknown> = {
     thread_id:               threadId,
     visibility:              'internal',
     channel:                 'email',
     body,
-    sender_kind:             memberId ? 'team' : 'owner',
+    sender_kind:             senderKind,
     venue_team_member_id:    memberId,
     contact_from_name:       fromName?.trim() || null,
     contact_from_email:      fromEmail.trim().toLowerCase(),
