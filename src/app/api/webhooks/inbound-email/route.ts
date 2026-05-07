@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 import {
@@ -13,6 +14,62 @@ import {
   verifyReplySignature,
 } from '@/lib/conversations-inbound-email';
 import { haltAutomationEnrollmentsForReply } from '@/lib/marketing-email-worker';
+
+/**
+ * Resend webhooks are signed using the Svix scheme:
+ *   svix-id           – unique event id
+ *   svix-timestamp    – unix seconds
+ *   svix-signature    – space-separated list of "v1,base64hmac" entries
+ *
+ * To verify, take the secret (a string like `whsec_...`), strip the prefix,
+ * base64-decode the remainder to get the HMAC key, then compute
+ * HMAC-SHA256("${id}.${timestamp}.${rawBody}") and compare base64-encoded.
+ */
+function verifySvixSignature(
+  rawBody: string,
+  headers: Headers,
+  secret: string,
+): { ok: true } | { ok: false; reason: string } {
+  const id  = headers.get('svix-id')        ?? headers.get('webhook-id');
+  const ts  = headers.get('svix-timestamp') ?? headers.get('webhook-timestamp');
+  const sig = headers.get('svix-signature') ?? headers.get('webhook-signature');
+  if (!id || !ts || !sig) {
+    return { ok: false, reason: 'missing_svix_headers' };
+  }
+  // Reject events outside a 5-minute tolerance window.
+  const tsNum = Number(ts);
+  if (!Number.isFinite(tsNum)) return { ok: false, reason: 'bad_timestamp' };
+  const ageSec = Math.abs(Math.floor(Date.now() / 1000) - tsNum);
+  if (ageSec > 5 * 60) return { ok: false, reason: 'stale_timestamp' };
+
+  const cleanSecret = secret.startsWith('whsec_') ? secret.slice('whsec_'.length) : secret;
+  let keyBytes: Buffer;
+  try {
+    keyBytes = Buffer.from(cleanSecret, 'base64');
+  } catch {
+    return { ok: false, reason: 'bad_secret_format' };
+  }
+  if (keyBytes.length === 0) return { ok: false, reason: 'empty_key' };
+
+  const mac      = createHmac('sha256', keyBytes);
+  const signed   = `${id}.${ts}.${rawBody}`;
+  const expected = mac.update(signed).digest('base64');
+
+  // Header may contain multiple sigs separated by spaces, each prefixed with
+  // its scheme version (e.g. "v1,abcdef= v1,xyz="). Accept if any match.
+  const candidates = sig.split(' ').map(part => part.split(',')[1] ?? '').filter(Boolean);
+  if (candidates.length === 0) return { ok: false, reason: 'no_sig_candidates' };
+
+  const expectedBuf = Buffer.from(expected, 'base64');
+  for (const c of candidates) {
+    let candBuf: Buffer;
+    try { candBuf = Buffer.from(c, 'base64'); }
+    catch { continue; }
+    if (candBuf.length !== expectedBuf.length) continue;
+    if (timingSafeEqual(candBuf, expectedBuf)) return { ok: true };
+  }
+  return { ok: false, reason: 'signature_mismatch' };
+}
 
 function escapeHtml(s: string): string {
   return s
@@ -257,15 +314,39 @@ async function ingestFromParsedFields(params: {
 }
 
 export async function POST(request: NextRequest) {
-  const token = process.env.INBOUND_EMAIL_WEBHOOK_TOKEN?.trim();
-  if (token) {
+  // Read raw body once — needed for Svix signature verification AND parsing.
+  const raw = await request.text();
+
+  // Auth: prefer Resend's Svix signature (RESEND_WEBHOOK_SECRET set in env),
+  // fall back to a shared `?token=` query for any environments configured the
+  // old way. Either ONE valid auth path is enough.
+  const svixSecret = process.env.RESEND_WEBHOOK_SECRET?.trim();
+  const queryToken = process.env.INBOUND_EMAIL_WEBHOOK_TOKEN?.trim();
+  let authed = false;
+  let lastReason = '';
+
+  if (svixSecret) {
+    const r = verifySvixSignature(raw, request.headers, svixSecret);
+    if (r.ok) authed = true;
+    else lastReason = `svix:${r.reason}`;
+  }
+  if (!authed && queryToken) {
     const q = request.nextUrl.searchParams.get('token') ?? '';
-    if (q !== token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (q === queryToken) authed = true;
+    else lastReason = lastReason ? `${lastReason}; query:mismatch` : 'query:mismatch';
   }
 
-  const raw = await request.text();
+  // If neither secret is configured, accept (dev mode). At least one MUST
+  // match in production.
+  if (!authed && (svixSecret || queryToken)) {
+    console.warn('[inbound-email] auth failed', {
+      reason: lastReason,
+      hasSvix: !!request.headers.get('svix-id'),
+      hasQuery: !!request.nextUrl.searchParams.get('token'),
+    });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   let event: { type?: string; data?: { email_id?: string } };
   try {
     event = JSON.parse(raw) as typeof event;
