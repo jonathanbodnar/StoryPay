@@ -362,6 +362,10 @@ export function SupportInboxPanel() {
   const [detailError, setDetailError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const unreadDividerRef = useRef<HTMLDivElement | null>(null);
+  // When opening a thread from the Venue Direct inbox, this asks loadDetail
+  // to scroll to the most recent venue-side venue_direct reply instead of
+  // the bottom — like iMessage opening to the unread message.
+  const pendingScrollTargetRef = useRef<'venue-direct-latest' | null>(null);
   // ISO of when the support agent last read this thread (set just before loading)
   const [threadLastReadAt, setThreadLastReadAt] = useState<string | null>(null);
   // Read-state mirror in React state so badge re-renders when threads are opened
@@ -426,8 +430,29 @@ export function SupportInboxPanel() {
       // Mark read with accurate message count so the unread badge computes correctly
       markThreadRead(threadId, d.messages.filter(m => !m.support_only && m.audience !== 'venue_direct').length);
       setDetail(d);
+
+      // If the user just clicked a row in the Venue Direct inbox, jump to the
+      // newest venue-side venue_direct reply (iMessage-style "scroll to last
+      // unread"). Falls back to the unread divider, then to bottom.
+      const scrollIntent = pendingScrollTargetRef.current;
+      pendingScrollTargetRef.current = null;
       requestAnimationFrame(() => {
-        // Scroll to first unread if available, otherwise bottom
+        if (scrollIntent === 'venue-direct-latest') {
+          const venueLatest = [...d.messages]
+            .reverse()
+            .find(m => m.audience === 'venue_direct' && m.sender_kind !== 'concierge');
+          if (venueLatest) {
+            const el = document.querySelector<HTMLElement>(`[data-msg-id="${venueLatest.id}"]`);
+            if (el) {
+              el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+              el.classList.add('ring-2', 'ring-violet-400', 'rounded-xl');
+              setTimeout(() => {
+                el.classList.remove('ring-2', 'ring-violet-400', 'rounded-xl');
+              }, 2000);
+              return;
+            }
+          }
+        }
         if (unreadDividerRef.current) {
           unreadDividerRef.current.scrollIntoView({ block: 'start', behavior: 'smooth' });
         } else {
@@ -855,6 +880,7 @@ export function SupportInboxPanel() {
           <VenueDirectInboxView
             onUnreadCount={setVenueDirectUnreadCount}
             onOpenThread={(threadId) => {
+              pendingScrollTargetRef.current = 'venue-direct-latest';
               setActiveThreadId(threadId);
               setSubTab('bride-replies');
             }}
@@ -1355,7 +1381,7 @@ function ThreadDetailView({
             && m.created_at > threadLastReadAt
             && (idx === 0 || detail.messages[idx - 1].created_at <= threadLastReadAt);
           return (
-            <div key={m.id}>
+            <div key={m.id} data-msg-id={m.id}>
               {isFirstUnread && (
                 <div
                   ref={unreadDividerRef}
