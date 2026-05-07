@@ -1082,6 +1082,7 @@ export function SupportInboxPanel() {
                   teamMembers.find(m => m.id === actAsId)?.name ||
                   null
                 }
+                onDismiss={() => setActiveThreadId(null)}
                 noActorWarning={!me?.member?.id && !actAsId}
                 messagesEndRef={messagesEndRef}
                 unreadDividerRef={unreadDividerRef}
@@ -1284,6 +1285,7 @@ function ThreadDetailView({
   venueDirectBody, onVenueDirectBodyChange,
   teamMembers, selfId,
   onSwitchActiveThread,
+  onDismiss,
   canSend, sending, onSend, sendStatus,
   actAsName, noActorWarning,
   messagesEndRef, unreadDividerRef, threadLastReadAt,
@@ -1292,6 +1294,7 @@ function ThreadDetailView({
   showIntent, onToggleIntent,
 }: {
   detail: ThreadDetail;
+  onDismiss: () => void;
   composerMode: 'reply' | 'note' | 'venue_direct';
   onComposerModeChange: (m: 'reply' | 'note' | 'venue_direct') => void;
   replyBody: string; onReplyBodyChange: (v: string) => void;
@@ -1348,8 +1351,18 @@ function ThreadDetailView({
             {detail.customer?.phone && <span>{detail.customer.phone}</span>}
           </div>
         </div>
-        <div className="flex flex-col items-end gap-1 shrink-0">
-          <SlaPill iso={detail.thread.last_message_at} />
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
+          <div className="flex items-center gap-1.5">
+            <SlaPill iso={detail.thread.last_message_at} />
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+              title="Close thread"
+            >
+              <X size={11} /> Close
+            </button>
+          </div>
           {detail.lead?.status && (
             <span className="inline-block rounded-full bg-gray-100 text-gray-700 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
               {detail.lead.status}
