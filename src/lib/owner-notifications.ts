@@ -32,6 +32,7 @@ interface VenueRow {
   id: string;
   name: string | null;
   email: string | null;
+  notification_email: string | null;
   notification_phone: string | null;
   ghl_access_token: string | null;
   ghl_location_id: string | null;
@@ -46,7 +47,7 @@ interface NotificationSettings {
 async function loadVenue(venueId: string): Promise<VenueRow | null> {
   const { data } = await supabaseAdmin
     .from('venues')
-    .select('id, name, email, notification_phone, ghl_access_token, ghl_location_id, brand_color, brand_logo_url')
+    .select('id, name, email, notification_email, notification_phone, ghl_access_token, ghl_location_id, brand_color, brand_logo_url')
     .eq('id', venueId)
     .maybeSingle();
   return (data as VenueRow | null) ?? null;
@@ -203,27 +204,30 @@ export async function notifyOwner(args: NotifyArgs): Promise<void> {
     // ── Owner-side email ──────────────────────────────────────────────────
     // Gate 1: per-scenario notification toggle (settings[emailKey] defaults to true when unset).
     // Gate 2: the email template's own enabled flag — if the venue has disabled the
-    //         template, getVenueEmailTemplate returns null and we skip the send entirely.
+    //         template, getVenueEmailTemplate returns null and we skip the email send.
+    //
+    // Recipient: prefer notification_email (set in venue settings) and fall
+    // back to email (account email). Both fields live on the venues row.
+    const recipientEmail = venue.notification_email || venue.email;
     const emailToggleOn = settings[meta.emailKey] !== false;
-    if (emailToggleOn && venue.email) {
+    if (emailToggleOn && recipientEmail) {
       try {
         const tmpl = await getVenueEmailTemplate(args.venueId, meta.templateType);
-        if (!tmpl) {
-          // Template disabled by the venue — honour their preference and skip.
-          return;
+        if (tmpl) {
+          await sendEmail({
+            to:      recipientEmail,
+            subject: fillTemplate(tmpl.subject, vars),
+            html:    buildEmailHtml({
+              template:   tmpl,
+              vars,
+              actionUrl:  args.actionUrl,
+              brandColor: venue.brand_color   || '#1b1b1b',
+              logoUrl:    venue.brand_logo_url || undefined,
+              venueName,
+            }),
+          });
         }
-        await sendEmail({
-          to:      venue.email,
-          subject: fillTemplate(tmpl.subject, vars),
-          html:    buildEmailHtml({
-            template:   tmpl,
-            vars,
-            actionUrl:  args.actionUrl,
-            brandColor: venue.brand_color   || '#1b1b1b',
-            logoUrl:    venue.brand_logo_url || undefined,
-            venueName,
-          }),
-        });
+        // If tmpl is null the venue disabled this email type — skip silently.
       } catch (err) {
         console.error('[notifyOwner email]', args.scenario, err instanceof Error ? err.message : err);
       }
