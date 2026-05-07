@@ -54,6 +54,7 @@ const menuItems: NavItem[] = [
   { label: 'Home', href: '/dashboard', icon: LayoutDashboard, navId: 'nav_main_home' },
   { label: 'Contacts', href: '/dashboard/contacts', icon: Users, navId: 'nav_main_contacts' },
   { label: 'Conversations', href: '/dashboard/conversations', icon: MessageCircle, navId: 'nav_main_conversations' },
+  { label: 'Concierge', href: '/dashboard/concierge', icon: Bell, navId: 'nav_main_concierge' },
   { label: 'Calendar', href: '/dashboard/calendar', icon: Calendar, navId: 'nav_main_calendar' },
   { label: 'Leads', href: '/dashboard/leads', icon: Inbox, navId: 'nav_main_leads' },
   { label: 'Media', href: '/dashboard/media', icon: Images, navId: 'nav_main_media' },
@@ -132,6 +133,7 @@ export default function Sidebar({
   const [mounted, setMounted] = useState(false);
   const [convUnread, setConvUnread] = useState(0);
   const [updatesUnread, setUpdatesUnread] = useState(0);
+  const [conciergeUnread, setConciergeUnread] = useState(0);
   const [paymentsActive, setPaymentsActive] = useState<boolean | null>(null); // null = loading
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
   /** Locked-feature upgrade modal (opened when a locked menu item is clicked). */
@@ -155,6 +157,15 @@ export default function Sidebar({
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { count?: number } | null) => {
         if (d && typeof d.count === 'number') setUpdatesUnread(d.count);
+      })
+      .catch(() => {});
+  }, []);
+
+  const refreshConciergeUnread = useCallback(() => {
+    void fetch('/api/conversations/venue-direct/unread-count')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { count?: number } | null) => {
+        if (d && typeof d.count === 'number') setConciergeUnread(d.count);
       })
       .catch(() => {});
   }, []);
@@ -188,6 +199,31 @@ export default function Sidebar({
   useEffect(() => {
     if (pathname.startsWith('/dashboard/updates')) setUpdatesUnread(0);
   }, [pathname]);
+
+  useEffect(() => {
+    refreshConciergeUnread();
+    const t = setInterval(refreshConciergeUnread, 45000);
+    const onEvt = () => refreshConciergeUnread();
+    window.addEventListener('storypay:concierge-unread', onEvt);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener('storypay:concierge-unread', onEvt);
+    };
+  }, [refreshConciergeUnread]);
+
+  // Refresh whenever we land on a page that may have just consumed unread
+  // venue_direct messages (the inline panel on /dashboard/contacts/[id] and
+  // the dedicated /dashboard/concierge inbox both call mark-read on view).
+  useEffect(() => {
+    if (
+      pathname.startsWith('/dashboard/concierge') ||
+      pathname.startsWith('/dashboard/contacts/')
+    ) {
+      // Small delay so the read-write completes before we refetch the count.
+      const t = setTimeout(refreshConciergeUnread, 1500);
+      return () => clearTimeout(t);
+    }
+  }, [pathname, refreshConciergeUnread]);
 
   // Fetch payments active status once on mount (and after onboarding completes).
   const refreshPaymentsActive = useCallback(() => {
@@ -491,14 +527,18 @@ export default function Sidebar({
           const isHelpCenter = item.label === 'Help Center';
           const isConversations = item.href === '/dashboard/conversations';
           const isUpdates = item.href === '/dashboard/updates';
+          const isConcierge = item.href === '/dashboard/concierge';
           const showConvBadge = isConversations && convUnread > 0;
           const showUpdatesBadge = isUpdates && updatesUnread > 0;
+          const showConciergeBadge = isConcierge && conciergeUnread > 0;
           const badgeCount = showConvBadge
             ? convUnread
             : showUpdatesBadge
               ? updatesUnread
-              : 0;
-          const showBadge = showConvBadge || showUpdatesBadge;
+              : showConciergeBadge
+                ? conciergeUnread
+                : 0;
+          const showBadge = showConvBadge || showUpdatesBadge || showConciergeBadge;
           const locked = !navOk(item.navId);
           // Locked items can't be active; their grey style overrides the
           // selected highlight even on the route they "would" match.

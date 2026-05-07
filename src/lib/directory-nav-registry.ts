@@ -27,6 +27,7 @@ export const DIRECTORY_NAV_REGISTRY: DirectoryNavRegistryEntry[] = [
   { id: 'nav_main_home', label: 'Home', pathPrefix: '/dashboard', group: 'main' },
   { id: 'nav_main_contacts', label: 'Contacts', pathPrefix: '/dashboard/contacts', group: 'main' },
   { id: 'nav_main_conversations', label: 'Conversations', pathPrefix: '/dashboard/conversations', group: 'main' },
+  { id: 'nav_main_concierge', label: 'Concierge', pathPrefix: '/dashboard/concierge', group: 'main' },
   { id: 'nav_main_calendar', label: 'Calendar', pathPrefix: '/dashboard/calendar', group: 'main' },
   { id: 'nav_main_leads', label: 'Leads', pathPrefix: '/dashboard/leads', group: 'main' },
   { id: 'nav_main_reports', label: 'Reports', pathPrefix: '/dashboard/reports', group: 'main' },

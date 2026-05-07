@@ -14,8 +14,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
-import { getSessionUser } from '@/lib/session';
+import { getSessionUser, type SessionUser } from '@/lib/session';
 import { broadcastBrideMessageAdminOnly } from '@/lib/realtime/broadcast';
+
+/** Reader ref for venue_direct read-state. Prefixed `vd:` so it's independent
+ *  from bride-conversation read state on the same thread. */
+function vdReaderRef(user: SessionUser): string {
+  return user.memberId ? `vd:m:${user.memberId}` : 'vd:owner';
+}
+
+async function markThreadReadForViewer(threadId: string, user: SessionUser): Promise<void> {
+  await supabaseAdmin
+    .from('conversation_thread_reads')
+    .upsert(
+      {
+        thread_id:    threadId,
+        reader_ref:   vdReaderRef(user),
+        last_read_at: new Date().toISOString(),
+      },
+      { onConflict: 'thread_id,reader_ref' },
+    );
+}
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -63,6 +82,8 @@ export async function GET(
 ) {
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const user = await getSessionUser();
+  if (!user)    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { contactId } = await params;
   const t = await resolveThreadId(contactId, venueId);
@@ -72,6 +93,10 @@ export async function GET(
     if (t.status === 404) return NextResponse.json({ messages: [], threadId: null });
     return NextResponse.json({ error: t.error }, { status: t.status });
   }
+
+  // Opening the panel = "I read these". Mark all venue_direct messages on
+  // this thread as read for the current viewer so the bell-badge clears.
+  await markThreadReadForViewer(t.thread.id, user);
 
   const { data: msgs, error } = await supabaseAdmin
     .from('conversation_messages')
@@ -169,6 +194,11 @@ export async function POST(
     console.error('[venue-direct/venue] insert', insErr);
     return NextResponse.json({ error: insErr.message }, { status: 500 });
   }
+
+  // The act of replying is itself "reading", so mark the thread read for
+  // this viewer too. This also ensures their own outbound message doesn't
+  // look like an unread message back to them on next load.
+  await markThreadReadForViewer(t.thread.id, user);
 
   // Realtime fan-out so the concierge support inbox sees the reply live.
   void broadcastBrideMessageAdminOnly({

@@ -61,6 +61,11 @@ export default function VenueDirectPanel({ contactId, contactName }: { contactId
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || `Failed (${r.status})`);
       setMessages((d.messages ?? []) as VenueDirectMessage[]);
+      // The GET endpoint marks this thread as read for the current viewer.
+      // Tell the sidebar so the bell badge updates instantly.
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('storypay:concierge-unread'));
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
@@ -97,6 +102,9 @@ export default function VenueDirectPanel({ contactId, contactName }: { contactId
       setBody('');
       setSendStatus({ ok: true, msg: 'Sent to StoryVenue Support' });
       await load();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('storypay:concierge-unread'));
+      }
     } catch (e) {
       setSendStatus({ ok: false, msg: e instanceof Error ? e.message : 'Send failed' });
     } finally {

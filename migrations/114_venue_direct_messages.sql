@@ -47,18 +47,15 @@ CREATE INDEX IF NOT EXISTS idx_conversation_messages_venue_direct_thread
   ON public.conversation_messages (thread_id, created_at)
   WHERE audience = 'venue_direct';
 
--- 4. Track who has read venue_direct messages on each thread.
---    Used to power the "X new messages from StoryVenue Support" badge in the
---    venue dashboard. One row per (thread, venue_team_member) — created lazily
---    the first time the member opens the inline panel.
-CREATE TABLE IF NOT EXISTS public.venue_direct_thread_reads (
-  thread_id              UUID        NOT NULL REFERENCES public.conversation_threads(id) ON DELETE CASCADE,
-  venue_team_member_id   UUID        NOT NULL REFERENCES public.venue_team_members(id)    ON DELETE CASCADE,
-  last_read_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
-  PRIMARY KEY (thread_id, venue_team_member_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_venue_direct_thread_reads_member
-  ON public.venue_direct_thread_reads (venue_team_member_id, last_read_at);
+-- 4. Read state.
+--    We deliberately re-use the existing `conversation_thread_reads` table to
+--    track who has seen venue_direct messages — no new table needed. To keep
+--    venue_direct read-state separate from the main bride conversation
+--    read-state on the same thread, we prefix `reader_ref` with `vd:`:
+--        "vd:owner"      → the venue's account holder
+--        "vd:m:<uuid>"   → a venue_team_members.id
+--    A thread is "unread venue_direct" for a reader when the reader has at
+--    least one venue_direct message with created_at > last_read_at (or no row
+--    in conversation_thread_reads for that reader_ref at all).
 
 NOTIFY pgrst, 'reload schema';
