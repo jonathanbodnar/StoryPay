@@ -1086,15 +1086,26 @@ export function SupportInboxPanel() {
                 }
                 onDismiss={async () => {
                   if (detail) {
-                    // Mark the thread closed so it drops out of the "open" list
-                    // (clears the red dot). It remains visible under "All" / "Closed".
-                    await fetch(`/api/admin/support/bride-thread/${detail.thread.id}`, {
+                    const tid = detail.thread.id;
+                    // Mark bride thread closed (clears the Bride replies badge)
+                    void fetch(`/api/admin/support/bride-thread/${tid}`, {
                       method: 'PATCH',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ status: 'closed' }),
-                    }).catch(() => {/* best effort */});
-                    // Drop the thread from the open list locally without a full refetch
-                    setThreads(prev => prev.filter(t => t.thread_id !== detail.thread.id));
+                    }).catch(() => {});
+                    // Mark Venue Direct thread as acknowledged so the "Awaiting reply"
+                    // badge clears too — even if no reply was sent to the venue.
+                    void fetch('/api/admin/support/venue-direct-inbox/acknowledge', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ threadId: tid }),
+                    }).catch(() => {});
+                    // Drop from the open list immediately
+                    setThreads(prev => prev.filter(t => t.thread_id !== tid));
+                    // Tell VenueDirectInboxView to remove the row instantly
+                    window.dispatchEvent(
+                      new CustomEvent('storypay:vd-acknowledge', { detail: { threadId: tid } }),
+                    );
                   }
                   setActiveThreadId(null);
                 }}
@@ -2007,11 +2018,28 @@ function VenueDirectInboxView({
     return () => clearInterval(id);
   }, [load]);
 
+  // When the Close button on a bride reply thread fires, it dispatches
+  // 'storypay:vd-acknowledge' so we can instantly clear the "Awaiting reply"
+  // badge for that thread without waiting for the next 30s poll.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { threadId } = (e as CustomEvent<{ threadId: string }>).detail ?? {};
+      if (!threadId) return;
+      setRows(prev =>
+        prev.map(r => r.threadId === threadId ? { ...r, latestFromVenue: false } : r),
+      );
+    };
+    window.addEventListener('storypay:vd-acknowledge', handler);
+    return () => window.removeEventListener('storypay:vd-acknowledge', handler);
+  }, []);
+
   const visible = useMemo(
     () => filter === 'awaiting' ? rows.filter(r => r.latestFromVenue) : rows,
     [rows, filter],
   );
   const awaitingCount = useMemo(() => rows.filter(r => r.latestFromVenue).length, [rows]);
+  // Keep the parent badge in sync with our optimistic row updates
+  useEffect(() => { onUnreadCount(awaitingCount); }, [awaitingCount, onUnreadCount]);
 
   function relativeTime(iso: string): string {
     try {

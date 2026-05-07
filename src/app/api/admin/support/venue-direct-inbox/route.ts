@@ -127,13 +127,21 @@ export async function GET() {
     }
   }
 
-  // Read receipts: fetch who on the venue side has read each thread and when.
-  // reader_ref format: 'vd:owner' | 'vd:m:{memberId}'
+  // Read receipts + concierge acknowledgments: fetch who on the venue side
+  // has read each thread and when, plus any 'vd:concierge' ack timestamps.
   const { data: readRows } = await supabaseAdmin
     .from('conversation_thread_reads')
     .select('thread_id, reader_ref, last_read_at')
     .in('thread_id', threadIds)
     .like('reader_ref', 'vd:%');
+
+  // Index concierge acknowledgment timestamps per thread
+  const conciergeAckAt: Record<string, string> = {};
+  for (const rr of (readRows ?? []) as Array<{ thread_id: string; reader_ref: string; last_read_at: string }>) {
+    if (rr.reader_ref === 'vd:concierge') {
+      conciergeAckAt[rr.thread_id] = rr.last_read_at;
+    }
+  }
   interface ReadRow { thread_id: string; reader_ref: string; last_read_at: string }
   const readsByThread: Record<string, Array<{ label: string; readAt: string }>> = {};
   for (const rr of (readRows ?? []) as ReadRow[]) {
@@ -166,7 +174,11 @@ export async function GET() {
       || c?.customer_email
       || 'Unknown contact';
     const isFromConcierge = latest.sender_kind === 'concierge';
-    const isFromVenue = !isFromConcierge;
+    // If the concierge acknowledged this thread at or after the last venue
+    // message, treat it as "handled" — remove the "Awaiting reply" badge.
+    const ackAt = conciergeAckAt[threadId];
+    const isAcknowledged = !!ackAt && ackAt >= latest.created_at;
+    const isFromVenue = !isFromConcierge && !isAcknowledged;
     if (isFromVenue) unreadCount += 1;
 
     const author = isFromConcierge
