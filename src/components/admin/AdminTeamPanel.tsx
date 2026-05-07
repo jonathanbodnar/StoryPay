@@ -271,8 +271,15 @@ function InviteModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
   const [err, setErr] = useState<string | null>(null);
 
   async function submit() {
-    setBusy(true);
     setErr(null);
+    if (!firstName.trim()) { setErr('First name is required'); return; }
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setErr('Please enter a valid email address');
+      return;
+    }
+    if (password.length < 8) { setErr('Password must be at least 8 characters'); return; }
+
+    setBusy(true);
     try {
       const res = await fetch('/api/admin/team-members', {
         method: 'POST',
@@ -355,7 +362,7 @@ function InviteModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
             Cancel
           </button>
           <button
-            type="button" disabled={busy || !firstName.trim() || !email.trim() || password.length < 8}
+            type="button" disabled={busy}
             onClick={() => void submit()}
             className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
           >
