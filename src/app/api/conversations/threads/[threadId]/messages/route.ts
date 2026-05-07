@@ -129,13 +129,18 @@ export async function GET(
     });
   }
 
-  // Hide support-team-only internal notes from the venue's view; they're
-  // visible only to super admin / support agents in the admin support inbox.
+  // Hide:
+  //   - support-team-only internal notes (concierge scratchpad)
+  //   - venue_direct messages (rendered in the dedicated "Venue Direct" panel)
+  // The bride conversation thread should only show messages the bride can see
+  // (`audience='external'`). The legacy `support_only` filter is kept as a
+  // safety net for rows inserted before migration 114 backfilled `audience`.
   const { data: messages, error } = await supabaseAdmin
     .from('conversation_messages')
     .select('*')
     .eq('thread_id', threadId)
     .eq('support_only', false)
+    .or('audience.is.null,audience.eq.external')
     .order('created_at', { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

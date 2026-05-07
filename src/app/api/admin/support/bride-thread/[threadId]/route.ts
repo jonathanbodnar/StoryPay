@@ -54,6 +54,7 @@ interface MessageRow {
   sent_on_behalf_of_venue:     boolean | null;
   support_internal_note:       string | null;
   support_only:                boolean | null;
+  audience:                    'external' | 'support_only' | 'venue_direct' | null;
   mentioned_support_user_ids:  string[] | null;
   created_at:                  string;
 }
@@ -126,7 +127,7 @@ export async function GET(
       id, thread_id, visibility, channel, body, sender_kind, venue_team_member_id,
       contact_from_name, contact_from_email, external_email_sent, send_error,
       sent_by_support_user_id, sent_on_behalf_of_venue, support_internal_note,
-      support_only, mentioned_support_user_ids, created_at
+      support_only, audience, mentioned_support_user_ids, created_at
     `)
     .in('thread_id', allThreadIds)
     .order('created_at', { ascending: true });

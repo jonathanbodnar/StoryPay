@@ -1,17 +1,18 @@
 'use client';
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, Mail, Phone, MapPin, FileText, Loader2, ExternalLink,
   Receipt, Pencil, Copy, RefreshCw, RotateCcw, X as XIcon,
   Plus, Check, Trash2, Upload, Calendar, ClipboardList,
   FileCheck, Activity, User, Heart, ChevronDown, ChevronUp, Info,
-  AlertCircle, Undo2, Smartphone,
+  AlertCircle, Undo2, Smartphone, Building2,
 } from 'lucide-react';
 import RefundModal from '@/components/RefundModal';
 import ContactAiControls from '@/components/ai-concierge/ContactAiControls';
+import VenueDirectPanel from '@/components/dashboard/VenueDirectPanel';
 import { formatCents, formatDate, formatDateTime, getStatusColor, classNames, toTitleCase, dispatchStageChange, onStageChange } from '@/lib/utils';
 import { slugifyStageLabel } from '@/lib/pipeline-stage-slug';
 
@@ -129,13 +130,21 @@ const FILE_STATUS_COLORS: Record<string, string> = {
   approved: 'bg-emerald-100 text-emerald-700',
 };
 
-type Tab = 'overview' | 'notes' | 'timeline' | 'payments' | 'tasks' | 'documents';
+type Tab = 'overview' | 'notes' | 'concierge' | 'timeline' | 'payments' | 'tasks' | 'documents';
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function CustomerDetailPage() {
-  const params     = useParams();
-  const router     = useRouter();
-  const customerId = params.id as string;
+  const params       = useParams();
+  const router       = useRouter();
+  const searchParams = useSearchParams();
+  const customerId   = params.id as string;
+  const initialTabFromUrl = ((): Tab => {
+    const t = (searchParams?.get('tab') || '').toLowerCase();
+    if (t === 'concierge' || t === 'notes' || t === 'timeline' || t === 'payments' || t === 'tasks' || t === 'documents') {
+      return t as Tab;
+    }
+    return 'overview';
+  })();
 
   // Core data
   const [customer,      setCustomer]      = useState<Customer | null>(null);
@@ -150,7 +159,7 @@ export default function CustomerDetailPage() {
 
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState('');
-  const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const [activeTab, setActiveTab] = useState<Tab>(initialTabFromUrl);
   const [pipelineActionError, setPipelineActionError] = useState('');
 
   // Contact edit
@@ -1113,6 +1122,7 @@ export default function CustomerDetailPage() {
       <div className="flex flex-wrap gap-1 mb-6 border-b border-gray-200">
         {([
           { id: 'overview',   label: 'Overview',                                                      icon: User },
+          { id: 'concierge',  label: 'Concierge',                                                     icon: Building2 },
           { id: 'notes',      label: `Notes${notes.length > 0 ? ` (${notes.length})` : ''}`,         icon: ClipboardList },
           { id: 'timeline',   label: 'Activity',                                                      icon: Activity },
           { id: 'payments',   label: 'Payments',                                                      icon: Receipt },
@@ -1502,6 +1512,14 @@ export default function CustomerDetailPage() {
             </div>
           ) : null}
         </div>
+      )}
+
+      {/* ── CONCIERGE TAB ── */}
+      {activeTab === 'concierge' && venueCustomer && (
+        <VenueDirectPanel
+          contactId={venueCustomer.id}
+          contactName={[venueCustomer.first_name, venueCustomer.last_name].filter(Boolean).join(' ') || venueCustomer.customer_email || 'this contact'}
+        />
       )}
 
       {/* ── NOTES TAB ── */}

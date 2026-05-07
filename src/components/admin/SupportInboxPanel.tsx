@@ -66,6 +66,7 @@ interface ThreadMessage {
   sent_on_behalf_of_venue:     boolean | null;
   support_internal_note:       string | null;
   support_only?:               boolean | null;
+  audience?:                   'external' | 'support_only' | 'venue_direct' | null;
   mentioned_support_user_ids?: string[] | null;
   created_at:                  string;
 }
@@ -386,7 +387,7 @@ export function SupportInboxPanel() {
       }
       const d = (await r.json()) as ThreadDetail;
       // Mark read with accurate message count so the unread badge computes correctly
-      markThreadRead(threadId, d.messages.filter(m => !m.support_only).length);
+      markThreadRead(threadId, d.messages.filter(m => !m.support_only && m.audience !== 'venue_direct').length);
       setDetail(d);
       requestAnimationFrame(() => {
         // Scroll to first unread if available, otherwise bottom
@@ -546,15 +547,17 @@ export function SupportInboxPanel() {
 
   // ── Reply box ──────────────────────────────────────────────────────────────
   // Composer has two modes:
-  //   'reply' — outbound message to the bride (existing flow)
-  //   'note'  — internal "support-team-only" note with @-mentions
-  const [composerMode, setComposerMode] = useState<'reply' | 'note'>('reply');
+  //   'reply'        — outbound message to the bride (existing flow)
+  //   'note'         — internal "support-team-only" note with @-mentions
+  //   'venue_direct' — message to venue staff (concierge ↔ venue, hidden from bride)
+  const [composerMode, setComposerMode] = useState<'reply' | 'note' | 'venue_direct'>('reply');
   const [replyBody, setReplyBody] = useState('');
   const [replyChannel, setReplyChannel] = useState<'auto' | 'sms' | 'email'>('auto');
   const [internalNote, setInternalNote] = useState('');
   const [showInternalNote, setShowInternalNote] = useState(false);
   const [noteBody, setNoteBody] = useState('');
   const [noteMentionIds, setNoteMentionIds] = useState<string[]>([]);
+  const [venueDirectBody, setVenueDirectBody] = useState('');
   const [sending, setSending] = useState(false);
   const [sendStatus, setSendStatus] = useState<{ ok: boolean; msg: string } | null>(null);
   const [drafting, setDrafting] = useState(false);
@@ -570,6 +573,7 @@ export function SupportInboxPanel() {
     setShowInternalNote(false);
     setNoteBody('');
     setNoteMentionIds([]);
+    setVenueDirectBody('');
     setSendStatus(null);
     setDrafting(false);
     setDraftIntent('');
@@ -618,16 +622,19 @@ export function SupportInboxPanel() {
     if (!detail || sending) return false;
     if (composerMode === 'note') {
       if (!noteBody.trim()) return false;
+    } else if (composerMode === 'venue_direct') {
+      if (!venueDirectBody.trim()) return false;
     } else {
       if (!replyBody.trim()) return false;
     }
     if (me?.member?.id) return true;
     return Boolean(actAsId);
-  }, [detail, replyBody, noteBody, sending, me, actAsId, composerMode]);
+  }, [detail, replyBody, noteBody, venueDirectBody, sending, me, actAsId, composerMode]);
 
   async function send() {
     if (!detail || !canSend) return;
     if (composerMode === 'note') return saveNote();
+    if (composerMode === 'venue_direct') return sendVenueDirect();
     setSending(true);
     setSendStatus(null);
     try {
@@ -698,6 +705,41 @@ export function SupportInboxPanel() {
       await loadDetail(detail.thread.id);
     } catch (e) {
       setSendStatus({ ok: false, msg: e instanceof Error ? e.message : 'Save failed' });
+    } finally {
+      setSending(false);
+    }
+  }
+
+  /** POST a "Venue Direct" message — visible to the venue's team but hidden
+   *  from the bride. Used to ask the venue questions about a bride contact
+   *  without ever logging into their subaccount. */
+  async function sendVenueDirect() {
+    if (!detail) return;
+    setSending(true);
+    setSendStatus(null);
+    try {
+      const r = await fetch('/api/admin/support/venue-direct', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          threadId:      detail.thread.id,
+          body:          venueDirectBody.trim(),
+          supportUserId: me?.superAdmin ? (actAsId || me?.member?.id) : undefined,
+        }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || `Send failed (${r.status})`);
+      const n = typeof d.recipientsNotified === 'number' ? d.recipientsNotified : 0;
+      setSendStatus({
+        ok: true,
+        msg: n > 0
+          ? `Sent to ${n} venue ${n === 1 ? 'teammate' : 'teammates'}`
+          : 'Sent — no active venue teammates yet, billing email used as fallback',
+      });
+      setVenueDirectBody('');
+      await loadDetail(detail.thread.id);
+    } catch (e) {
+      setSendStatus({ ok: false, msg: e instanceof Error ? e.message : 'Send failed' });
     } finally {
       setSending(false);
     }
@@ -937,6 +979,8 @@ export function SupportInboxPanel() {
                 onNoteBodyChange={setNoteBody}
                 noteMentionIds={noteMentionIds}
                 onNoteMentionIdsChange={setNoteMentionIds}
+                venueDirectBody={venueDirectBody}
+                onVenueDirectBodyChange={setVenueDirectBody}
                 teamMembers={teamMembers}
                 selfId={(me?.superAdmin ? actAsId : null) || me?.member?.id || null}
                 onSwitchActiveThread={setActiveThreadId}
@@ -1155,6 +1199,7 @@ function ThreadDetailView({
   showInternalNote, onToggleInternalNote,
   noteBody, onNoteBodyChange,
   noteMentionIds, onNoteMentionIdsChange,
+  venueDirectBody, onVenueDirectBodyChange,
   teamMembers, selfId,
   onSwitchActiveThread,
   canSend, sending, onSend, sendStatus,
@@ -1165,8 +1210,8 @@ function ThreadDetailView({
   showIntent, onToggleIntent,
 }: {
   detail: ThreadDetail;
-  composerMode: 'reply' | 'note';
-  onComposerModeChange: (m: 'reply' | 'note') => void;
+  composerMode: 'reply' | 'note' | 'venue_direct';
+  onComposerModeChange: (m: 'reply' | 'note' | 'venue_direct') => void;
   replyBody: string; onReplyBodyChange: (v: string) => void;
   replyChannel: 'auto' | 'sms' | 'email';
   onReplyChannelChange: (v: 'auto' | 'sms' | 'email') => void;
@@ -1176,6 +1221,7 @@ function ThreadDetailView({
   showInternalNote: boolean; onToggleInternalNote: () => void;
   noteBody: string; onNoteBodyChange: (v: string) => void;
   noteMentionIds: string[]; onNoteMentionIdsChange: (ids: string[]) => void;
+  venueDirectBody: string; onVenueDirectBodyChange: (v: string) => void;
   teamMembers: SupportTeamMember[];
   selfId: string | null;
   onSwitchActiveThread: (threadId: string) => void;
@@ -1202,6 +1248,7 @@ function ThreadDetailView({
     detail.customer?.customer_email || 'Unknown bride',
   );
   const isNoteMode = composerMode === 'note';
+  const isVenueDirectMode = composerMode === 'venue_direct';
 
   return (
     <>
@@ -1281,11 +1328,17 @@ function ThreadDetailView({
       </div>
 
       {/* Composer */}
-      <div className={`border-t bg-white p-3 space-y-2 ${isNoteMode ? 'border-amber-200 bg-amber-50/40' : 'border-gray-200'}`}>
+      <div className={`border-t bg-white p-3 space-y-2 ${
+        isNoteMode
+          ? 'border-amber-200 bg-amber-50/40'
+          : isVenueDirectMode
+            ? 'border-violet-200 bg-violet-50/30'
+            : 'border-gray-200'
+      }`}>
         {/* Mode tabs */}
         <div className="flex items-center gap-1 -mt-1">
           <ComposerTabButton
-            active={!isNoteMode}
+            active={composerMode === 'reply'}
             onClick={() => onComposerModeChange('reply')}
             icon={<Send size={11} />}
             label="Reply"
@@ -1298,9 +1351,21 @@ function ThreadDetailView({
             label="Internal note"
             tone="note"
           />
+          <ComposerTabButton
+            active={isVenueDirectMode}
+            onClick={() => onComposerModeChange('venue_direct')}
+            icon={<Building2 size={11} />}
+            label="Venue Direct"
+            tone="venue_direct"
+          />
           {isNoteMode && (
             <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
               <ShieldCheck size={10} /> Support team only
+            </span>
+          )}
+          {isVenueDirectMode && (
+            <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-violet-100 text-violet-800 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
+              <Building2 size={10} /> Venue staff only · bride hidden
             </span>
           )}
         </div>
@@ -1321,7 +1386,7 @@ function ThreadDetailView({
           </div>
         )}
 
-        {!isNoteMode && (
+        {composerMode === 'reply' && (
           <>
             <div className="flex items-center gap-2 text-[11px] text-gray-500 flex-wrap">
               <span>Reply via</span>
@@ -1456,29 +1521,57 @@ function ThreadDetailView({
           </>
         )}
 
+        {isVenueDirectMode && (
+          <>
+            <div className="rounded-lg border border-violet-200 bg-violet-50/40 px-3 py-2 text-[11px] text-violet-900 leading-relaxed">
+              <div className="font-semibold mb-0.5 inline-flex items-center gap-1">
+                <Building2 size={11} /> Messaging the venue team about{' '}
+                <span className="font-semibold">{contactName}</span>
+              </div>
+              All active teammates on the venue&apos;s team page (and the account owner) get an email
+              with a link to reply in their dashboard. The bride never sees this.
+            </div>
+            <textarea
+              value={venueDirectBody}
+              onChange={e => onVenueDirectBodyChange(e.target.value)}
+              placeholder={`Ask the venue team about ${contactName}… e.g. "We booked a tour Saturday 2pm — anything we should mention?"`}
+              rows={4}
+              className="w-full text-sm border border-violet-200 bg-white rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300"
+            />
+          </>
+        )}
+
         <div className="flex items-center justify-between">
           <p className="text-[11px] text-gray-500">
             {isNoteMode
               ? (actAsName
                   ? <>Saving as <span className="font-semibold text-gray-700">{actAsName}</span></>
                   : 'Pick an identity to save.')
-              : (actAsName
-                  ? <>Sending as <span className="font-semibold text-gray-700">{actAsName}</span> on behalf of <span className="font-semibold text-gray-700">{detail.venue?.name || 'venue'}</span></>
-                  : 'Pick an identity to send.')}
+              : isVenueDirectMode
+                ? (actAsName
+                    ? <>Sending as <span className="font-semibold text-gray-700">{actAsName}</span> · StoryVenue Support</>
+                    : 'Pick an identity to send.')
+                : (actAsName
+                    ? <>Sending as <span className="font-semibold text-gray-700">{actAsName}</span> on behalf of <span className="font-semibold text-gray-700">{detail.venue?.name || 'venue'}</span></>
+                    : 'Pick an identity to send.')}
           </p>
           <button
             type="button"
             onClick={onSend}
             disabled={!canSend}
             className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ backgroundColor: isNoteMode ? '#b45309' : BRAND }}
+            style={{ backgroundColor: isNoteMode ? '#b45309' : isVenueDirectMode ? '#7c3aed' : BRAND }}
           >
             {sending
               ? <Loader2 size={12} className="animate-spin" />
-              : (isNoteMode ? <StickyNote size={12} /> : <Send size={12} />)}
+              : (isNoteMode ? <StickyNote size={12} /> : isVenueDirectMode ? <Building2 size={12} /> : <Send size={12} />)}
             {sending
-              ? (isNoteMode ? 'Saving…' : 'Sending…')
-              : (isNoteMode ? 'Save note' : `Send ${effectiveChannel.toUpperCase()}`)}
+              ? (isNoteMode ? 'Saving…' : isVenueDirectMode ? 'Sending…' : 'Sending…')
+              : (isNoteMode
+                  ? 'Save note'
+                  : isVenueDirectMode
+                    ? `Send to venue team`
+                    : `Send ${effectiveChannel.toUpperCase()}`)}
           </button>
         </div>
       </div>
@@ -1549,11 +1642,13 @@ function ComposerTabButton({
   onClick: () => void;
   icon: React.ReactNode;
   label: string;
-  tone: 'reply' | 'note';
+  tone: 'reply' | 'note' | 'venue_direct';
 }) {
   const activeCls = tone === 'reply'
     ? 'border-gray-900 text-gray-900 bg-white'
-    : 'border-amber-500 text-amber-800 bg-white';
+    : tone === 'note'
+      ? 'border-amber-500 text-amber-800 bg-white'
+      : 'border-violet-500 text-violet-800 bg-white';
   const idleCls = 'border-transparent text-gray-500 hover:text-gray-700';
   return (
     <button
@@ -1580,6 +1675,27 @@ function MessageBubble({
   const isAi = msg.sender_kind === 'ai';
   const isConcierge = msg.sender_kind === 'concierge' || msg.sent_on_behalf_of_venue;
   const isSupportNote = msg.support_only === true;
+  const isVenueDirect = msg.audience === 'venue_direct';
+
+  // Venue Direct messages render full-width with a distinctive violet style
+  // so they're clearly separate from bride conversation bubbles. They're a
+  // private side-channel between the concierge and the venue's team.
+  if (isVenueDirect) {
+    return (
+      <div className="rounded-xl border border-violet-300 bg-violet-50 px-3 py-2 shadow-sm">
+        <div className="flex items-center gap-2 text-[10px] text-violet-800 mb-1">
+          <Building2 size={11} />
+          <span className="font-semibold uppercase tracking-wide">Venue Direct</span>
+          <span className="rounded-full bg-violet-100 border border-violet-300 px-1.5 py-0.5 text-[9px] font-semibold">
+            Concierge ↔ Venue · bride hidden
+          </span>
+          {supportName && <span className="text-violet-700">— {supportName}</span>}
+          <span className="ml-auto text-violet-600">{relativeTime(msg.created_at)}</span>
+        </div>
+        <p className="text-sm text-violet-900 whitespace-pre-wrap break-words">{msg.body}</p>
+      </div>
+    );
+  }
 
   // Support-only notes always render full-width with sticky-note styling so
   // they read as "scratchpad for the team" rather than a conversation bubble.
