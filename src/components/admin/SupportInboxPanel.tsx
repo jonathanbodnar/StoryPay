@@ -20,6 +20,7 @@ import {
   Mail, MessageCircle, Building2, Loader2, AlertCircle, CheckCircle2,
   StickyNote, ShieldCheck, AlertTriangle, CircleDot, CircleSlash,
   UserPlus, Flag, X, Radio, Sparkles, FileText, Maximize2, Minimize2,
+  Eye, EyeOff,
 } from 'lucide-react';
 import { useBroadcastChannel, useBroadcastChannels } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels, type BrideMessageEvent, type TicketMessageEvent, type TicketStatusEvent } from '@/lib/realtime/channels';
@@ -91,6 +92,7 @@ interface ThreadDetail {
     subject: string; last_message_at: string;
     last_message_preview: string | null;
     external_reply_channel: string | null;
+    status: 'open' | 'pending' | 'closed' | null;
   };
   venue: { id: string; name: string; notification_email: string | null; timezone: string | null } | null;
   customer: {
@@ -1102,6 +1104,11 @@ export function SupportInboxPanel() {
                     }).catch(() => {});
                     // Drop from the open list immediately
                     setThreads(prev => prev.filter(t => t.thread_id !== tid));
+                    // Reflect the new status in detail so the toggle button flips
+                    // to "Mark unread" without waiting for a re-fetch.
+                    setDetail(prev => prev
+                      ? { ...prev, thread: { ...prev.thread, status: 'closed' } }
+                      : prev);
                     // Tell VenueDirectInboxView to remove the row instantly
                     window.dispatchEvent(
                       new CustomEvent('storypay:vd-acknowledge', { detail: { threadId: tid } }),
@@ -1111,6 +1118,24 @@ export function SupportInboxPanel() {
                     window.dispatchEvent(new Event('storypay:support-count-refresh'));
                   }
                   setActiveThreadId(null);
+                }}
+                onMarkUnread={async () => {
+                  if (!detail) return;
+                  const tid = detail.thread.id;
+                  // Re-open the thread so it shows up in Needs Reply again.
+                  void fetch(`/api/admin/support/bride-thread/${tid}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'open' }),
+                  }).catch(() => {});
+                  // Optimistically flip the toggle button back.
+                  setDetail(prev => prev
+                    ? { ...prev, thread: { ...prev.thread, status: 'open' } }
+                    : prev);
+                  // Refresh the inbox list so the row reappears in "Needs Reply".
+                  void fetchInbox();
+                  // Refresh the sidebar badge immediately.
+                  window.dispatchEvent(new Event('storypay:support-count-refresh'));
                 }}
                 noActorWarning={!me?.member?.id && !actAsId}
                 messagesEndRef={messagesEndRef}
@@ -1315,6 +1340,7 @@ function ThreadDetailView({
   teamMembers, selfId,
   onSwitchActiveThread,
   onDismiss,
+  onMarkUnread,
   canSend, sending, onSend, sendStatus,
   actAsName, noActorWarning,
   messagesEndRef, unreadDividerRef, threadLastReadAt,
@@ -1324,6 +1350,7 @@ function ThreadDetailView({
 }: {
   detail: ThreadDetail;
   onDismiss: () => void | Promise<void>;
+  onMarkUnread: () => void | Promise<void>;
   composerMode: 'reply' | 'note' | 'venue_direct';
   onComposerModeChange: (m: 'reply' | 'note' | 'venue_direct') => void;
   replyBody: string; onReplyBodyChange: (v: string) => void;
@@ -1383,14 +1410,25 @@ function ThreadDetailView({
         <div className="flex flex-col items-end gap-1.5 shrink-0">
           <div className="flex items-center gap-1.5">
             <SlaPill iso={detail.thread.last_message_at} />
-            <button
-              type="button"
-              onClick={onDismiss}
-              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-              title="Close thread"
-            >
-              <X size={11} /> Close
-            </button>
+            {detail.thread.status === 'closed' ? (
+              <button
+                type="button"
+                onClick={onMarkUnread}
+                className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800 hover:bg-amber-100"
+                title="Bring this thread back to Needs Reply"
+              >
+                <EyeOff size={11} /> Mark unread
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onDismiss}
+                className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                title="Mark this thread as read — clears the badge until the bride replies again"
+              >
+                <Eye size={11} /> Mark read
+              </button>
+            )}
           </div>
           {detail.lead?.status && (
             <span className="inline-block rounded-full bg-gray-100 text-gray-700 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">

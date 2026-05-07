@@ -60,6 +60,7 @@ interface ThreadRow {
   last_message_preview:   string | null;
   last_message_visibility: string | null;
   external_reply_channel: string | null;
+  status:                 'open' | 'pending' | 'closed' | null;
 }
 
 interface VenueRow {
@@ -126,7 +127,7 @@ export async function GET(
 
   const { data: tRow, error: tErr } = await supabaseAdmin
     .from('conversation_threads')
-    .select('id, venue_id, venue_customer_id, subject, last_message_at, last_message_preview, last_message_visibility, external_reply_channel')
+    .select('id, venue_id, venue_customer_id, subject, last_message_at, last_message_preview, last_message_visibility, external_reply_channel, status')
     .eq('id', threadId)
     .maybeSingle();
 
