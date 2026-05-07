@@ -25,6 +25,8 @@ import { SubscriptionsAdminPanel } from '@/components/admin/SubscriptionsAdminPa
 import { AiConciergeAdminPanel } from '@/components/admin/AiConciergeAdminPanel';
 import { SupportInboxPanel } from '@/components/admin/SupportInboxPanel';
 import { CannedRepliesPanel } from '@/components/admin/CannedRepliesPanel';
+import { AdminTeamPanel } from '@/components/admin/AdminTeamPanel';
+import { AdminProfilePanel } from '@/components/admin/AdminProfilePanel';
 
 // Lazy-load the WYSIWYG editor so it doesn't affect admin initial load
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
@@ -58,7 +60,9 @@ type AdminTabKey =
   | 'blog'
   | 'seo-pages'
   | 'trends'
-  | 'system';
+  | 'system'
+  | 'team'
+  | 'profile';
 
 const ADMIN_TAB_KEYS: ReadonlySet<string> = new Set<AdminTabKey>([
   'dashboard',
@@ -80,6 +84,8 @@ const ADMIN_TAB_KEYS: ReadonlySet<string> = new Set<AdminTabKey>([
   'seo-pages',
   'trends',
   'system',
+  'team',
+  'profile',
 ]);
 
 const PAGE_LABELS: Record<string, { label: string; url: string; description: string }> = {
@@ -519,6 +525,8 @@ const ADMIN_NAV_ITEMS = [
   { key: 'search-analytics', label: 'Search Analytics', icon: BarChart2 },
   { key: 'article-ratings', label: 'Article Ratings', icon: Star },
   { key: 'system', label: 'System / Migrations', icon: Settings },
+  { key: 'team', label: 'Team', icon: Users },
+  { key: 'profile', label: 'My profile', icon: Settings },
 ] as const;
 
 /** Module-level component so React does not remount the sidebar on every parent render. */
@@ -530,6 +538,10 @@ function AdminNavSidebar({
   supportInboxCount,
   collapsed,
   onToggleCollapse,
+  allowedTabs,
+  canManageTeam,
+  identityName,
+  identityAvatarUrl,
 }: {
   activeTab: AdminTabKey;
   onMobileClose: () => void;
@@ -538,7 +550,16 @@ function AdminNavSidebar({
   supportInboxCount?: number;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  allowedTabs: Set<string>;
+  canManageTeam: boolean;
+  identityName: string;
+  identityAvatarUrl: string | null;
 }) {
+  const visibleNavItems = ADMIN_NAV_ITEMS.filter((item) => {
+    if (item.key === 'team') return canManageTeam;
+    if (item.key === 'profile') return true;
+    return allowedTabs.has(item.key);
+  });
   return (
     <div className="flex flex-col h-full" style={{ backgroundColor: '#fafaf9' }}>
       {/* Brand header */}
@@ -558,8 +579,33 @@ function AdminNavSidebar({
         )}
       </div>
 
+      {/* Identity strip — clickable, opens My Profile */}
+      <Link
+        href={adminHref('profile')}
+        scroll={false}
+        prefetch
+        onClick={() => onMobileClose()}
+        className={`mx-3 mt-3 mb-1 flex items-center gap-2 rounded-lg px-2 py-2 hover:bg-gray-100 transition-colors ${collapsed ? 'justify-center mx-1 px-1' : ''}`}
+        title={collapsed ? identityName : undefined}
+      >
+        {identityAvatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={identityAvatarUrl} alt="" className="h-7 w-7 rounded-full object-cover shrink-0" />
+        ) : (
+          <div className="h-7 w-7 rounded-full bg-gray-200 text-xs font-medium text-gray-600 flex items-center justify-center shrink-0">
+            {identityName ? identityName[0].toUpperCase() : '?'}
+          </div>
+        )}
+        {!collapsed && (
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-gray-800 truncate">{identityName}</p>
+            <p className="text-[10px] text-gray-500">View profile</p>
+          </div>
+        )}
+      </Link>
+
       <nav className={`flex-1 py-3 space-y-0.5 overflow-y-auto ${collapsed ? 'px-1' : 'px-3'}`}>
-        {ADMIN_NAV_ITEMS.map(({ key, label, icon: Icon }) => {
+        {visibleNavItems.map(({ key, label, icon: Icon }) => {
           const active = activeTab === key;
           const href =
             key === 'seo-pages'
@@ -679,6 +725,41 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
   const [showAdminPass, setShowAdminPass] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  // Admin identity (master super admin OR team member) and tab access set.
+  // Set by fetchMe() on initial load and after login.
+  const [allowedTabs, setAllowedTabs] = useState<Set<string>>(new Set());
+  const [canManageTeam, setCanManageTeam] = useState(false);
+  const [identityName, setIdentityName] = useState('Super Admin');
+  const [identityAvatarUrl, setIdentityAvatarUrl] = useState<string | null>(null);
+
+  const fetchMe = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/me', { cache: 'no-store' });
+      if (res.status === 401) { setAuthState('unauthenticated'); return; }
+      if (!res.ok) { setAuthState('unauthenticated'); return; }
+      const j = await res.json() as {
+        isMasterSuperAdmin: boolean;
+        canManageTeam: boolean;
+        allowedTabs: string[];
+        member: {
+          id: string; email: string; name: string;
+          avatar_url: string | null;
+          is_super_admin: boolean;
+        } | null;
+      };
+      setAllowedTabs(new Set(j.allowedTabs));
+      setCanManageTeam(j.canManageTeam);
+      setIdentityName(
+        j.isMasterSuperAdmin ? 'Super Admin'
+          : j.member?.name || j.member?.email || 'Team member'
+      );
+      setIdentityAvatarUrl(j.member?.avatar_url ?? null);
+      setAuthState('authenticated');
+    } catch {
+      setAuthState('unauthenticated');
+    }
+  }, []);
 
   // Feature request unread badge
   const [frUnreadCount, setFrUnreadCount] = useState(0);
@@ -852,8 +933,8 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
     try {
       const res = await fetch('/api/admin/venues');
       if (res.status === 401) { setAuthState('unauthenticated'); return; }
-      if (res.ok) { const d = await res.json(); setVenues(d.venues || []); setAuthState('authenticated'); }
-    } catch { setAuthState('unauthenticated'); }
+      if (res.ok) { const d = await res.json(); setVenues(d.venues || []); }
+    } catch { /* non-critical — auth state is managed by fetchMe */ }
     finally { setVenuesLoading(false); }
   }, []);
 
@@ -865,7 +946,34 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
     } finally { setAnnLoading(false); }
   }, []);
 
-  useEffect(() => { fetchVenues(); }, [fetchVenues]);
+  // Establish auth state once on mount via /api/admin/me. Tab-specific data
+  // (venues, etc.) is fetched separately by each tab.
+  useEffect(() => { void fetchMe(); }, [fetchMe]);
+
+  // Once authed, prefetch venues (needed by Dashboard + Venue management tabs).
+  useEffect(() => {
+    if (authState === 'authenticated' && allowedTabs.has('venues')) {
+      void fetchVenues();
+    }
+  }, [authState, allowedTabs, fetchVenues]);
+
+  // Redirect to a permitted tab if the user has navigated to a tab they
+  // don't have access to. Profile is always allowed; team requires canManageTeam.
+  useEffect(() => {
+    if (authState !== 'authenticated') return;
+    if (activeTab === 'profile') return;
+    if (activeTab === 'team' && canManageTeam) return;
+    if (allowedTabs.has(activeTab)) return;
+
+    // Find the first tab the user can access; otherwise send to profile.
+    const fallback =
+      ADMIN_NAV_ITEMS.find((item) => {
+        if (item.key === 'team') return canManageTeam;
+        if (item.key === 'profile') return true;
+        return allowedTabs.has(item.key);
+      })?.key ?? 'profile';
+    router.replace(adminHref(fallback as AdminTabKey));
+  }, [authState, activeTab, allowedTabs, canManageTeam, router]);
 
   useEffect(() => {
     if (authState !== 'authenticated') return;
@@ -1215,7 +1323,8 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
       body: JSON.stringify({ email: adminEmail.trim(), password: adminPass }),
     });
     if (!res.ok) { setLoginError('Invalid email or password.'); return; }
-    setAdminEmail(''); setAdminPass(''); fetchVenues();
+    setAdminEmail(''); setAdminPass('');
+    await fetchMe();
   }
 
   async function handleLogout() {
@@ -1340,6 +1449,10 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
           supportInboxCount={supportInboxCount}
           collapsed={sidebarCollapsed}
           onToggleCollapse={toggleSidebar}
+          allowedTabs={allowedTabs}
+          canManageTeam={canManageTeam}
+          identityName={identityName}
+          identityAvatarUrl={identityAvatarUrl}
         />
       </aside>
 
@@ -1361,6 +1474,10 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
           onLogout={handleLogout}
           frUnreadCount={frUnreadCount}
           supportInboxCount={supportInboxCount}
+          allowedTabs={allowedTabs}
+          canManageTeam={canManageTeam}
+          identityName={identityName}
+          identityAvatarUrl={identityAvatarUrl}
         />
       </aside>
 
@@ -2581,6 +2698,17 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
 
         {/* ── System / Migrations Tab ── */}
         {activeTab === 'system' && <SystemTab />}
+
+        {/* ── Team management ── */}
+        {activeTab === 'team' && canManageTeam && <AdminTeamPanel />}
+        {activeTab === 'team' && !canManageTeam && (
+          <div className="rounded-xl border border-gray-200 bg-white p-12 text-center">
+            <p className="text-sm text-gray-500">You don&apos;t have access to team management.</p>
+          </div>
+        )}
+
+        {/* ── My Profile ── */}
+        {activeTab === 'profile' && <AdminProfilePanel />}
 
         {/* ── Blog Posts Tab ── */}
         {activeTab === 'blog' && <BlogTab subSegments={tabRest} onNavigate={goBlog} />}
