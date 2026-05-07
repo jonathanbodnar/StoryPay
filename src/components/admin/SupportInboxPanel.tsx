@@ -1455,11 +1455,24 @@ function ThreadDetailView({
         {detail.messages.length === 0 && (
           <p className="text-center text-xs text-gray-400 py-8">No messages yet.</p>
         )}
-        {detail.messages.map((m, idx) => {
-          // iMessage-style unread divider: show before the first message after lastReadAt
-          const isFirstUnread = threadLastReadAt !== null
-            && m.created_at > threadLastReadAt
-            && (idx === 0 || detail.messages[idx - 1].created_at <= threadLastReadAt);
+        {(() => {
+          // Find the first inbound (non-concierge-authored) message that arrived
+          // after the agent last read the thread. We skip concierge-authored
+          // messages (replies, internal notes, venue-direct messages the agent
+          // sent themselves) so coming back to a thread you just posted to
+          // scrolls to the bottom — not above your own outbound message.
+          let firstUnreadIdx = -1;
+          if (threadLastReadAt !== null) {
+            for (let i = 0; i < detail.messages.length; i++) {
+              const mm = detail.messages[i];
+              if (mm.created_at <= threadLastReadAt) continue;
+              if (mm.sender_kind === 'concierge') continue;
+              firstUnreadIdx = i;
+              break;
+            }
+          }
+          return detail.messages.map((m, idx) => {
+          const isFirstUnread = idx === firstUnreadIdx;
           return (
             <div key={m.id} data-msg-id={m.id}>
               {isFirstUnread && (
@@ -1485,7 +1498,8 @@ function ThreadDetailView({
               />
             </div>
           );
-        })}
+          });
+        })()}
         <div ref={messagesEndRef} />
       </div>
 
