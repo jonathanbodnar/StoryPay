@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getVenueId } from '@/lib/auth-helpers';
 import { supabaseAdmin } from '@/lib/supabase';
-import { sendEmail } from '@/lib/email';
+import { sendEmail, buildBulkEmailHeaders, htmlToPlainText } from '@/lib/email';
 import { parseEmailDefinition } from '@/lib/marketing-email-schema';
 import { renderMarketingEmailHtml, mergeMarketingFields } from '@/lib/marketing-email-render';
 import { injectVenueDataIntoDefinition } from '@/lib/marketing-email-injection';
@@ -61,12 +61,19 @@ export async function POST(
   };
   const mode = cfg.mode === 'quick' ? 'quick' : (cfg.mode === 'template' ? 'template' : 'template');
 
-  // Load venue (for default from-name + injection)
+  // Load venue (for default from-name + injection + Reply-To)
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('name, location_full, location_city, location_state')
+    .select('name, location_full, location_city, location_state, brand_email, email')
     .eq('id', venueId)
     .maybeSingle();
+  const venueReplyTo = (venue?.brand_email as string | null)?.trim() || (venue?.email as string | null)?.trim() || undefined;
+  // Test-send unsubscribe URL is non-tokenized — clicking it can't suppress
+  // a real recipient. Still expose it via List-Unsubscribe so testers can
+  // verify Gmail's one-click button shows up.
+  const appOrigin = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
+  const previewUnsub = `${appOrigin.replace(/\/$/, '')}/api/public/marketing/unsubscribe?token=preview`;
+  const bulkHeaders = buildBulkEmailHeaders(previewUnsub);
 
   // Placeholder merge vars for preview — keys cover both canonical
   // ({{contact.x}}) and legacy flat ({{x}}) styles via renderMergeVars.
@@ -118,9 +125,12 @@ export async function POST(
       to: toEmail.trim(),
       subject: `[TEST] ${subject || '(no subject)'}`,
       html,
+      text: htmlToPlainText(html),
+      replyTo: venueReplyTo,
       from: fromEmail
-        ? { name: fromName || (venue?.name as string) || 'Venue', email: fromEmail }
-        : { name: fromName || `${(venue?.name as string) || 'Venue'} via StoryVenue` },
+        ? { name: fromName || (venue?.name as string) || 'Your venue', email: fromEmail }
+        : { name: fromName || (venue?.name as string) || 'Your venue' },
+      headers: bulkHeaders,
     });
     void logTestExecution({
       automation_id: id,
@@ -156,6 +166,10 @@ export async function POST(
     to: toEmail.trim(),
     subject: `[TEST] ${tmpl.subject as string}`,
     html,
+    text: htmlToPlainText(html),
+    replyTo: venueReplyTo,
+    from: { name: (venue?.name as string) || 'Your venue' },
+    headers: bulkHeaders,
   });
   void logTestExecution({
     automation_id: id,

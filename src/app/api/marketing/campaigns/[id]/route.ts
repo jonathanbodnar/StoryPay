@@ -5,7 +5,7 @@ import type { CampaignSegment } from '@/lib/marketing-email-schema';
 import { parseEmailDefinition } from '@/lib/marketing-email-schema';
 import { mergeMarketingFields, renderMarketingEmailHtml, type MergeFieldRecord } from '@/lib/marketing-email-render';
 import { injectVenueDataIntoDefinition } from '@/lib/marketing-email-injection';
-import { sendEmail } from '@/lib/email';
+import { sendEmail, buildBulkEmailHeaders, htmlToPlainText } from '@/lib/email';
 import { buildMergeVars } from '@/lib/marketing-email-worker';
 
 export const dynamic = 'force-dynamic';
@@ -226,7 +226,7 @@ export async function POST(
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('name, location_full, location_city, location_state, brand_socials')
+    .select('name, location_full, location_city, location_state, brand_socials, brand_email, email')
     .eq('id', venueId)
     .single();
   const appOrigin = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
@@ -274,8 +274,22 @@ export async function POST(
   const fullHtml = pre.trim()
     ? `<!-- preheader: ${pre.replace(/<!--/g, '').slice(0, 200)} -->\n${html}`
     : html;
-  const fromName = `${(venue?.name as string) || 'Venue'} via StoryVenue`;
-  const r = await sendEmail({ to, subject, html: fullHtml, from: { name: `${fromName} (preview)` } });
+  // Test sends use the same deliverability headers as production sends so
+  // testers can verify Gmail's "unsubscribe" button, Reply-To routing, and
+  // multipart/alternative rendering. The display name appends "(preview)"
+  // and the body uses a non-tokenized unsubscribe URL so accidental clicks
+  // don't suppress real recipients.
+  const fromName = `${(venue?.name as string) || 'Your venue'} (preview)`;
+  const replyTo = (venue?.brand_email as string | null)?.trim() || (venue?.email as string | null)?.trim() || undefined;
+  const r = await sendEmail({
+    to,
+    subject,
+    html: fullHtml,
+    text: htmlToPlainText(fullHtml),
+    replyTo,
+    from: { name: fromName },
+    headers: buildBulkEmailHeaders(previewUnsub),
+  });
   if (!r.success) return NextResponse.json({ error: r.error ?? 'Send failed' }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

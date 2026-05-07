@@ -4,6 +4,77 @@
 /** Used when `RESEND_DEFAULT_FROM` is unset (e.g. local). Production: set env to your verified address. */
 export const RESEND_FROM_FALLBACK = 'StoryVenue <noreply@storyvenue.com>';
 
+/**
+ * Convert HTML to a reasonable plain-text alternative for the email's `text`
+ * part. Spam filters heavily downrank multipart/alternative messages that
+ * have no text body, so we always include one — auto-generated when the
+ * caller doesn't provide one.
+ *
+ * The output is intentionally minimal: drop `<style>`/`<script>` blocks,
+ * preserve link URLs, convert headings/paragraphs to newlines, and collapse
+ * whitespace. Not perfect — but dramatically better than no text part.
+ */
+export function htmlToPlainText(html: string): string {
+  if (!html) return '';
+  return html
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<head[\s\S]*?<\/head>/gi, ' ')
+    .replace(/<a\s+[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (_m, url, label) => {
+      const text = String(label || '').replace(/<[^>]+>/g, '').trim();
+      return text && text !== url ? `${text} (${url})` : url;
+    })
+    .replace(/<\/(p|div|h[1-6]|li|tr|table)>/gi, '\n')
+    .replace(/<br\s*\/?>(?:\s*<br\s*\/?>)+/gi, '\n\n')
+    .replace(/<br\s*\/?>(?=)/gi, '\n')
+    .replace(/<li[^>]*>/gi, ' • ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n[ \t]+/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
+ * Build the deliverability header bag for a marketing/bulk email.
+ *
+ * - `List-Unsubscribe` (RFC 2369) — both `mailto:` and `https:` variants are
+ *   provided; Gmail/Yahoo strongly prefer messages that expose at least one
+ *   of these (the HTTPS one is required for the one-click flow below).
+ * - `List-Unsubscribe-Post` (RFC 8058) — the "one-click" magic value Gmail
+ *   uses to render the inbox-level "Unsubscribe" button. Without this header
+ *   the button is hidden and the message is more likely to be flagged as
+ *   bulk by ML filters.
+ * - `Precedence: bulk` — long-standing convention that tells receiving MTAs
+ *   "this is a bulk message; don't bounce vacation auto-replies back to me."
+ *
+ * Pass the result through `sendEmail({ headers })`.
+ */
+export function buildBulkEmailHeaders(unsubscribeUrl: string | null | undefined, mailtoUnsub?: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Precedence': 'bulk',
+    'X-Entity-Ref-ID': `storyvenue-${Date.now()}`,
+  };
+  const parts: string[] = [];
+  if (mailtoUnsub) parts.push(`<mailto:${mailtoUnsub}?subject=unsubscribe>`);
+  if (unsubscribeUrl) parts.push(`<${unsubscribeUrl}>`);
+  if (parts.length) {
+    headers['List-Unsubscribe'] = parts.join(', ');
+    if (unsubscribeUrl) {
+      // RFC 8058 one-click. Only add when an HTTPS endpoint is present.
+      headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
+    }
+  }
+  return headers;
+}
+
 function normalizeEmailList(list: string[] | undefined): string[] {
   if (!list?.length) return [];
   const seen = new Set<string>();
@@ -56,7 +127,9 @@ export async function sendEmail({
   replyTo,
   subject,
   html,
+  text,
   from,
+  headers,
 }: {
   to: string;
   cc?: string[];
@@ -64,8 +137,13 @@ export async function sendEmail({
   replyTo?: string;
   subject: string;
   html: string;
+  /** Plain-text alternative. When omitted we auto-generate one from `html` so
+   *  every message ships as multipart/alternative — major deliverability win. */
+  text?: string;
   /** Overrides default from; use a domain you verified in Resend (e.g. `Acme <mail@yourdomain.com>`). */
   from?: { email?: string; name?: string };
+  /** Custom headers (e.g. List-Unsubscribe, Precedence). */
+  headers?: Record<string, string>;
 }): Promise<{ success: boolean; error?: string }> {
   const resendKey = process.env.RESEND_API_KEY?.trim();
   if (!resendKey) {
@@ -91,16 +169,23 @@ export async function sendEmail({
   const ccList = normalizeEmailList(cc);
   const bccList = normalizeEmailList(bcc);
 
+  // Always ship a plain-text alternative. Major spam filters (Gmail, Outlook,
+  // SpamAssassin) penalize HTML-only messages because legitimate marketing
+  // and transactional senders virtually always include both parts.
+  const textBody = (text && text.trim().length > 0) ? text : htmlToPlainText(html);
+
   try {
     const body: Record<string, unknown> = {
       from: fromHeader,
       to: [to.trim()],
       subject,
       html,
+      text: textBody,
     };
     if (ccList.length) body.cc = ccList;
     if (bccList.length) body.bcc = bccList;
     if (replyTo?.trim()) body.reply_to = replyTo.trim();
+    if (headers && Object.keys(headers).length > 0) body.headers = headers;
 
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
