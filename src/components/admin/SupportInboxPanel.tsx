@@ -209,6 +209,8 @@ export function SupportInboxPanel() {
   const [committedSearch, setCommittedSearch] = useState('');
   const [activeThreadId, setActiveThreadId] = useState<string | null>(initialThread);
   const [brideStatusFilter, setBrideStatusFilter] = useState<'open' | 'all' | 'closed'>('open');
+  // Tracks only needs-reply threads for the tab badge, regardless of which filter is active.
+  const [needsReplyCount, setNeedsReplyCount] = useState(0);
 
   // Group threads by contact (venue_id + venue_customer_id) so a bride with
   // both an SMS and an email thread appears as ONE row in the list. The most-
@@ -259,6 +261,31 @@ export function SupportInboxPanel() {
   useEffect(() => {
     if (subTab === 'bride-replies') fetchInbox();
   }, [subTab, fetchInbox]);
+
+  // Keep the "needs reply" badge accurate regardless of which filter is active.
+  useEffect(() => {
+    if (brideStatusFilter === 'open') {
+      setNeedsReplyCount(groupedThreads.length);
+    }
+  }, [brideStatusFilter, groupedThreads]);
+
+  // When viewing a non-open filter, fetch a live open count in the background
+  // so the badge reflects reality (e.g. a new bride message arrives while
+  // the team is browsing the Replied list).
+  useEffect(() => {
+    if (brideStatusFilter === 'open' || subTab !== 'bride-replies') return;
+    const ctrl = new AbortController();
+    fetch('/api/admin/support/bride-inbox?filter=open&limit=200', { cache: 'no-store', signal: ctrl.signal })
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { threads?: BrideInboxRow[] } | null) => {
+        if (!d?.threads) return;
+        const groups = new Set(d.threads.map(t => `${t.venue_id}:${t.venue_customer_id}`));
+        setNeedsReplyCount(groups.size);
+      })
+      .catch(() => {});
+    return () => ctrl.abort();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brideStatusFilter, subTab]);
 
   // Sync active thread + tab to the URL so a hard refresh (or a return from
   // impersonation) lands you back on the same thread you were viewing — and
@@ -715,7 +742,7 @@ export function SupportInboxPanel() {
           onClick={() => setSubTab('bride-replies')}
           icon={<Inbox size={14} />}
           label="Bride replies"
-          count={groupedThreads.length}
+          count={needsReplyCount}
         />
         <SubTabButton
           active={subTab === 'tickets'}
