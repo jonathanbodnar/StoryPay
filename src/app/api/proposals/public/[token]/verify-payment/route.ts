@@ -74,7 +74,9 @@ export async function POST(
 
     if (session.status !== 'completed') {
       // Notify the venue owner that a payment attempt failed (gated by toggles).
-      void notifyOwner({
+      // Awaited because serverless runtimes can cancel fire-and-forget promises
+      // after the response is returned.
+      await notifyOwner({
         venueId: proposal.venue_id as string,
         scenario: 'payment_failed',
         vars: {
@@ -331,6 +333,12 @@ export async function POST(
     }
 
     // ── Owner-side notifications (email + SMS), gated by /dashboard/settings/notifications toggles
+    //
+    // All notifyOwner calls are awaited (not fire-and-forget) because in
+    // serverless runtimes any unfinished promises after the response returns
+    // can be suspended/cancelled, silently dropping the email/SMS. notifyOwner
+    // internally wraps everything in try/catch and never throws, so awaiting
+    // is safe.
     try {
       const { data: fp } = await supabaseAdmin
         .from('proposals')
@@ -345,7 +353,7 @@ export async function POST(
       // 1. Subscription created
       if (proposal.payment_type === 'subscription' && proposal.payment_config) {
         const cfg = proposal.payment_config as SubscriptionConfig;
-        void notifyOwner({
+        await notifyOwner({
           venueId: proposal.venue_id as string,
           scenario: 'subscription_created',
           vars: {
@@ -358,7 +366,7 @@ export async function POST(
       }
 
       // 2. Payment received (always for full / installment first payment / subscription start)
-      void notifyOwner({
+      await notifyOwner({
         venueId: proposal.venue_id as string,
         scenario: 'payment_received',
         vars: {
@@ -371,7 +379,7 @@ export async function POST(
 
       // 3. Separate high-value SMS scenario (gated by sms_high_value_payment)
       if (amountCents >= HIGH_VALUE_THRESHOLD_CENTS) {
-        void notifyOwner({
+        await notifyOwner({
           venueId: proposal.venue_id as string,
           scenario: 'high_value_payment',
           vars: {

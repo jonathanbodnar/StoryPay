@@ -187,11 +187,17 @@ interface NotifyArgs {
 /**
  * Send owner-side notifications (email + SMS) for a scenario, gated by the
  * venue's saved toggles. Best-effort — never throws.
+ *
+ * Logs every decision (toggle off, no recipient, template disabled, send result)
+ * so production logs make it obvious *why* an expected email didn't go out.
  */
 export async function notifyOwner(args: NotifyArgs): Promise<void> {
   try {
     const [venue, settings] = await Promise.all([loadVenue(args.venueId), loadSettings(args.venueId)]);
-    if (!venue) return;
+    if (!venue) {
+      console.warn('[notifyOwner]', args.scenario, 'no venue row for', args.venueId);
+      return;
+    }
     const venueName = venue.name || 'Your Venue';
     const vars: Record<string, string> = {
       organization: venueName,
@@ -199,7 +205,10 @@ export async function notifyOwner(args: NotifyArgs): Promise<void> {
     };
 
     const meta = SCENARIO_META[args.scenario];
-    if (!meta) return;
+    if (!meta) {
+      console.warn('[notifyOwner]', args.scenario, 'no scenario meta');
+      return;
+    }
 
     // ── Owner-side email ──────────────────────────────────────────────────
     // Gate 1: per-scenario notification toggle (settings[emailKey] defaults to true when unset).
@@ -210,11 +219,18 @@ export async function notifyOwner(args: NotifyArgs): Promise<void> {
     // back to email (account email). Both fields live on the venues row.
     const recipientEmail = venue.notification_email || venue.email;
     const emailToggleOn = settings[meta.emailKey] !== false;
-    if (emailToggleOn && recipientEmail) {
+
+    if (!emailToggleOn) {
+      console.log('[notifyOwner]', args.scenario, 'email toggle off:', meta.emailKey);
+    } else if (!recipientEmail) {
+      console.warn('[notifyOwner]', args.scenario, 'no recipient email (notification_email and email are both blank) for venue', args.venueId);
+    } else {
       try {
         const tmpl = await getVenueEmailTemplate(args.venueId, meta.templateType);
-        if (tmpl) {
-          await sendEmail({
+        if (!tmpl) {
+          console.log('[notifyOwner]', args.scenario, 'template disabled or missing:', meta.templateType);
+        } else {
+          const result = await sendEmail({
             to:      recipientEmail,
             subject: fillTemplate(tmpl.subject, vars),
             html:    buildEmailHtml({
@@ -226,8 +242,12 @@ export async function notifyOwner(args: NotifyArgs): Promise<void> {
               venueName,
             }),
           });
+          if (result.success) {
+            console.log('[notifyOwner]', args.scenario, 'email sent to', recipientEmail);
+          } else {
+            console.error('[notifyOwner]', args.scenario, 'email send failed:', result.error);
+          }
         }
-        // If tmpl is null the venue disabled this email type — skip silently.
       } catch (err) {
         console.error('[notifyOwner email]', args.scenario, err instanceof Error ? err.message : err);
       }

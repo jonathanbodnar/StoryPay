@@ -27,8 +27,13 @@ export async function GET(
     proposal.opened_at = new Date().toISOString();
 
     // Notify the venue owner once, on first open.
+    //
+    // Awaited (not fire-and-forget) because in serverless runtimes
+    // unfinished promises can be cancelled when the response returns,
+    // which was silently dropping the document_viewed email. notifyOwner
+    // swallows its own errors, so this never blocks the response.
     if (proposal.venue_id) {
-      void notifyOwner({
+      await notifyOwner({
         venueId: proposal.venue_id as string,
         scenario: 'document_viewed',
         vars: {

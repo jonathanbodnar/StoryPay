@@ -45,9 +45,16 @@ export async function POST(
   void syncPaymentRemindersForProposal(proposal.id);
 
   // Notify the venue owner that a proposal was signed (gated by toggles).
+  //
+  // We `await` notifyOwner here (rather than fire-and-forget) because in
+  // serverless runtimes (Vercel/Railway) any unfinished promises after the
+  // response is returned can be suspended/cancelled — which was silently
+  // dropping the proposal_signed email. notifyOwner internally swallows all
+  // errors, so awaiting is safe and never blocks the success response from
+  // shipping.
   if (proposal.venue_id) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.storypay.io';
-    void notifyOwner({
+    await notifyOwner({
       venueId: proposal.venue_id as string,
       scenario: 'proposal_signed',
       vars: {
@@ -57,8 +64,9 @@ export async function POST(
       actionUrl: `${appUrl}/dashboard/payments/proposals`,
     });
 
-    // Fan out to Zapier / external integrations
-    void dispatchIntegrationEvent(proposal.venue_id as string, 'proposal.signed', {
+    // Fan out to Zapier / external integrations (also awaited for the same
+    // serverless-cancellation reason above).
+    await dispatchIntegrationEvent(proposal.venue_id as string, 'proposal.signed', {
       proposal: {
         id: proposal.id,
         customer_name: (proposal.customer_name as string | null) || '',
@@ -69,7 +77,7 @@ export async function POST(
         payment_type: (proposal.payment_type as string | null) || 'full',
         signed_at: new Date().toISOString(),
       },
-    });
+    }).catch(err => console.error('[proposal-sign] dispatchIntegrationEvent', err));
   }
 
   return NextResponse.json({ success: true });
