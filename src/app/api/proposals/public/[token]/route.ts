@@ -18,6 +18,8 @@ export async function GET(
     return NextResponse.json({ error: 'Proposal not found' }, { status: 404 });
   }
 
+  console.log('[proposal-public-get] entry', { id: proposal.id, status: proposal.status, venueId: proposal.venue_id });
+
   if (proposal.status === 'sent') {
     await supabaseAdmin
       .from('proposals')
@@ -33,6 +35,7 @@ export async function GET(
     // which was silently dropping the document_viewed email. notifyOwner
     // swallows its own errors, so this never blocks the response.
     if (proposal.venue_id) {
+      console.log('[proposal-public-get] firing document_viewed for venue', proposal.venue_id);
       await notifyOwner({
         venueId: proposal.venue_id as string,
         scenario: 'document_viewed',
@@ -42,6 +45,10 @@ export async function GET(
         },
       });
     }
+  } else {
+    // Already opened — document_viewed was (or should have been) fired previously.
+    // We don't re-fire on subsequent views to avoid spamming the owner.
+    console.log('[proposal-public-get] not firing document_viewed — proposal already in state:', proposal.status);
   }
 
   const venue = proposal.venues as { name: string; logo_url: string | null; service_fee_rate: number; brand_logo_url?: string; brand_tagline?: string; brand_email?: string; brand_phone?: string; brand_website?: string; brand_color?: string; brand_address?: string; brand_city?: string; brand_state?: string; brand_zip?: string; brand_footer_note?: string } | null;

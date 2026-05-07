@@ -22,10 +22,18 @@ export async function POST(
     .single();
 
   if (error || !proposal) {
+    console.warn('[proposal-sign] proposal not found for token', token);
     return NextResponse.json({ error: 'Proposal not found' }, { status: 404 });
   }
 
+  console.log('[proposal-sign] entry', { id: proposal.id, status: proposal.status, venueId: proposal.venue_id });
+
   if (proposal.status !== 'sent' && proposal.status !== 'opened') {
+    // IMPORTANT: if the proposal is already 'signed' or 'paid', we skip the
+    // signature insert AND the proposal_signed notification. This is by
+    // design — re-signing the same proposal shouldn't re-fire the email.
+    // Logged here to make it obvious in the Vercel logs why nothing was sent.
+    console.warn('[proposal-sign] skipped — already in state:', proposal.status);
     return NextResponse.json({ error: 'Proposal cannot be signed in current state' }, { status: 400 });
   }
 

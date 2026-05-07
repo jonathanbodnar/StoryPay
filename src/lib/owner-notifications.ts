@@ -45,11 +45,39 @@ interface NotificationSettings {
 }
 
 async function loadVenue(venueId: string): Promise<VenueRow | null> {
-  const { data } = await supabaseAdmin
+  // First attempt: the canonical column set. If any column is missing in this
+  // environment (e.g. the schema is out of date), Supabase returns an error
+  // and the entire query fails — which silently broke owner notifications
+  // for an extended period. Fall back to a slim safe set on error so
+  // notifications keep firing.
+  const { data, error } = await supabaseAdmin
     .from('venues')
     .select('id, name, email, notification_email, notification_phone, ghl_access_token, ghl_location_id, brand_color, brand_logo_url')
     .eq('id', venueId)
     .maybeSingle();
+
+  if (error) {
+    console.warn('[notifyOwner loadVenue] full-column query failed:', error.message, '— retrying with slim column set');
+    const { data: slim, error: slimErr } = await supabaseAdmin
+      .from('venues')
+      .select('id, name, email, brand_color, brand_logo_url')
+      .eq('id', venueId)
+      .maybeSingle();
+    if (slimErr || !slim) {
+      console.error('[notifyOwner loadVenue] slim query also failed:', slimErr?.message);
+      return null;
+    }
+    // Synthesize the optional columns as null — owner SMS will be skipped,
+    // but the email path keeps working off `email`.
+    return {
+      ...(slim as Omit<VenueRow, 'notification_email' | 'notification_phone' | 'ghl_access_token' | 'ghl_location_id'>),
+      notification_email: null,
+      notification_phone: null,
+      ghl_access_token:   null,
+      ghl_location_id:    null,
+    };
+  }
+
   return (data as VenueRow | null) ?? null;
 }
 
@@ -192,12 +220,19 @@ interface NotifyArgs {
  * so production logs make it obvious *why* an expected email didn't go out.
  */
 export async function notifyOwner(args: NotifyArgs): Promise<void> {
+  console.log('[notifyOwner]', args.scenario, 'invoked for venue', args.venueId);
   try {
     const [venue, settings] = await Promise.all([loadVenue(args.venueId), loadSettings(args.venueId)]);
     if (!venue) {
-      console.warn('[notifyOwner]', args.scenario, 'no venue row for', args.venueId);
+      console.warn('[notifyOwner]', args.scenario, 'no venue row for', args.venueId, '— check that the venues query columns match the production schema');
       return;
     }
+    console.log('[notifyOwner]', args.scenario, 'venue loaded', {
+      id: venue.id,
+      hasNotificationEmail: !!venue.notification_email,
+      hasEmail: !!venue.email,
+      hasNotificationPhone: !!venue.notification_phone,
+    });
     const venueName = venue.name || 'Your Venue';
     const vars: Record<string, string> = {
       organization: venueName,
