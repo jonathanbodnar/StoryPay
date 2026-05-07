@@ -56,6 +56,7 @@ export const DIRECTORY_NAV_REGISTRY: DirectoryNavRegistryEntry[] = [
   { id: 'nav_payments_invoices', label: 'Payments — Invoices', pathPrefix: '/dashboard/payments/invoices', group: 'payments' },
   { id: 'nav_payments_payment_links', label: 'Payments — Payment links', pathPrefix: '/dashboard/payments/payment-links', group: 'payments' },
   { id: 'nav_payments_payouts', label: 'Payments — Payouts', pathPrefix: '/dashboard/payments/payouts', group: 'payments' },
+  { id: 'nav_payments_settings', label: 'Payments — Settings', pathPrefix: '/dashboard/payments/settings', group: 'payments' },
   { id: 'nav_proposals_hub', label: 'Proposals — Hub', pathPrefix: '/dashboard/proposals', group: 'payments' },
   { id: 'nav_invoices_new', label: 'Invoices — New', pathPrefix: '/dashboard/invoices/new', group: 'payments' },
   { id: 'nav_transactions', label: 'Transactions', pathPrefix: '/dashboard/transactions', group: 'payments' },
@@ -80,6 +81,7 @@ export const DIRECTORY_NAV_REGISTRY: DirectoryNavRegistryEntry[] = [
   { id: 'nav_settings_integrations', label: 'Settings — Integrations', pathPrefix: '/dashboard/settings/integrations', group: 'settings' },
   { id: 'nav_settings_team', label: 'Settings — Team', pathPrefix: '/dashboard/settings/team', group: 'settings' },
   { id: 'nav_settings_notifications', label: 'Settings — Notifications', pathPrefix: '/dashboard/settings/notifications', group: 'settings' },
+  { id: 'nav_settings_billing', label: 'Settings — Plans & billing', pathPrefix: '/dashboard/directory-billing', group: 'settings' },
 ];
 
 const NAV_IDS = DIRECTORY_NAV_REGISTRY.map((e) => e.id);
