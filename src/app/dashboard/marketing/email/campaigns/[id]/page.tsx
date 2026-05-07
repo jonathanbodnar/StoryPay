@@ -60,7 +60,6 @@ export default function CampaignDetailPage() {
   const [segment, setSegment] = useState<CampaignSegment>({ type: 'all_leads' });
   const [scheduleLocal, setScheduleLocal] = useState('');
   const [testEmail, setTestEmail] = useState('');
-  const [testLeadId, setTestLeadId] = useState('');
   const [testModal, setTestModal] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -217,13 +216,12 @@ export default function CampaignDetailPage() {
       setErr('Enter an email');
       return;
     }
-    const lid = testLeadId.trim();
     setBusy(true);
     setErr(null);
     const res = await fetch(`/api/marketing/campaigns/${id}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to, ...(lid ? { leadId: lid } : {}) }),
+      body: JSON.stringify({ to }),
     });
     setBusy(false);
     const j = await res.json().catch(() => ({}));
@@ -400,8 +398,7 @@ export default function CampaignDetailPage() {
           <div className="w-full max-w-sm rounded-xl border border-gray-200 bg-white p-5">
             <h3 className="font-semibold text-gray-900">Test send</h3>
             <p className="mt-1 text-xs text-gray-500">
-              Optional: enter a lead id to merge real wedding date, guest count, and names (email still sends to the address
-              below).
+              Send a test of this campaign to any inbox. Merge fields render with sample data.
             </p>
             <input
               className="mt-3 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
@@ -409,12 +406,6 @@ export default function CampaignDetailPage() {
               placeholder="you@example.com"
               value={testEmail}
               onChange={(e) => setTestEmail(e.target.value)}
-            />
-            <input
-              className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 font-mono text-xs"
-              placeholder="Lead UUID (optional)"
-              value={testLeadId}
-              onChange={(e) => setTestLeadId(e.target.value)}
             />
             <div className="mt-4 flex justify-end gap-2">
               <button type="button" className="text-sm text-gray-600 hover:underline" onClick={() => setTestModal(false)}>

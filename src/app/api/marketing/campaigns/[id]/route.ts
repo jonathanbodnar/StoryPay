@@ -5,7 +5,7 @@ import type { CampaignSegment } from '@/lib/marketing-email-schema';
 import { parseEmailDefinition } from '@/lib/marketing-email-schema';
 import { mergeMarketingFields, renderMarketingEmailHtml, type MergeFieldRecord } from '@/lib/marketing-email-render';
 import { injectVenueDataIntoDefinition } from '@/lib/marketing-email-injection';
-import { sendEmail, buildBulkEmailHeaders, htmlToPlainText } from '@/lib/email';
+import { sendEmail, buildBulkEmailHeaders, htmlToPlainText, injectPreheaderHtml } from '@/lib/email';
 import { buildMergeVars } from '@/lib/marketing-email-worker';
 
 export const dynamic = 'force-dynamic';
@@ -271,15 +271,14 @@ export async function POST(
   const html = renderMarketingEmailHtml(def, vars);
   const subject = mergeMarketingFields(tmpl.subject as string, vars);
   const pre = mergeMarketingFields((tmpl.preheader as string) || '', vars);
-  const fullHtml = pre.trim()
-    ? `<!-- preheader: ${pre.replace(/<!--/g, '').slice(0, 200)} -->\n${html}`
-    : html;
+  const fullHtml = injectPreheaderHtml(html, pre);
   // Test sends use the same deliverability headers as production sends so
   // testers can verify Gmail's "unsubscribe" button, Reply-To routing, and
-  // multipart/alternative rendering. The display name appends "(preview)"
-  // and the body uses a non-tokenized unsubscribe URL so accidental clicks
-  // don't suppress real recipients.
-  const fromName = `${(venue?.name as string) || 'Your venue'} (preview)`;
+  // multipart/alternative rendering. We send under the venue name only — no
+  // "(preview)" suffix — so the inbox view matches what real recipients see.
+  // The body uses a non-tokenized unsubscribe URL so accidental clicks don't
+  // suppress real recipients.
+  const fromName = (venue?.name as string) || 'Your venue';
   const replyTo = (venue?.brand_email as string | null)?.trim() || (venue?.email as string | null)?.trim() || undefined;
   const r = await sendEmail({
     to,
@@ -288,7 +287,7 @@ export async function POST(
     text: htmlToPlainText(fullHtml),
     replyTo,
     from: { name: fromName },
-    headers: buildBulkEmailHeaders(previewUnsub),
+    headers: buildBulkEmailHeaders(previewUnsub, { listId: venueId }),
   });
   if (!r.success) return NextResponse.json({ error: r.error ?? 'Send failed' }, { status: 500 });
   return NextResponse.json({ ok: true });
