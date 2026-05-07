@@ -44,33 +44,30 @@ export async function POST(request: NextRequest) {
   const arrayBuffer = await file.arrayBuffer();
   const buffer = new Uint8Array(arrayBuffer);
 
+  // Make sure the bucket exists FIRST. createBucket is idempotent enough for
+  // our needs and avoids the "upload then fall back to create" dance that
+  // sometimes hangs when the underlying storage table is in a weird state.
+  try {
+    const created = await supabaseAdmin.storage.createBucket(AVATAR_BUCKET, {
+      public: true,
+      fileSizeLimit: AVATAR_MAX_BYTES,
+    });
+    if (created.error && !/already exists/i.test(created.error.message ?? '')) {
+      console.warn('[admin-avatar] createBucket warning:', created.error);
+    }
+  } catch (e) {
+    console.warn('[admin-avatar] createBucket threw (continuing):', e);
+  }
+
   const upload = await supabaseAdmin.storage
     .from(AVATAR_BUCKET)
     .upload(path, buffer, { contentType: file.type, upsert: true });
 
   if (upload.error) {
-    // Auto-create the bucket if it doesn't exist yet.
-    const msg = upload.error.message ?? '';
-    if (msg.includes('not found') || msg.includes('does not exist') || msg.includes('Bucket')) {
-      const created = await supabaseAdmin.storage.createBucket(AVATAR_BUCKET, {
-        public: true,
-        fileSizeLimit: AVATAR_MAX_BYTES,
-      });
-      if (created.error && !created.error.message?.includes('already exists')) {
-        console.error('[admin-avatar] bucket create failed:', created.error);
-        return NextResponse.json({ error: 'Storage not available' }, { status: 500 });
-      }
-      const retry = await supabaseAdmin.storage
-        .from(AVATAR_BUCKET)
-        .upload(path, buffer, { contentType: file.type, upsert: true });
-      if (retry.error) {
-        console.error('[admin-avatar] retry upload failed:', retry.error);
-        return NextResponse.json({ error: retry.error.message }, { status: 500 });
-      }
-    } else {
-      console.error('[admin-avatar] upload failed:', upload.error);
-      return NextResponse.json({ error: upload.error.message }, { status: 500 });
-    }
+    console.error('[admin-avatar] upload failed:', upload.error);
+    return NextResponse.json({
+      error: `Image upload failed: ${upload.error.message}. Make sure the 'admin-avatars' Supabase Storage bucket exists and is public.`,
+    }, { status: 500 });
   }
 
   const { data: urlData } = supabaseAdmin.storage.from(AVATAR_BUCKET).getPublicUrl(path);
@@ -82,7 +79,11 @@ export async function POST(request: NextRequest) {
     .eq('id', id.member.id);
 
   if (dbErr) {
-    return NextResponse.json({ error: dbErr.message }, { status: 500 });
+    console.error('[admin-avatar] db update failed:', dbErr);
+    return NextResponse.json({
+      error: `Image uploaded but profile update failed: ${dbErr.message}. ` +
+             `Try refreshing the page; if it persists, run "NOTIFY pgrst, 'reload schema'" in Supabase SQL editor.`,
+    }, { status: 500 });
   }
 
   return NextResponse.json({ url: publicUrl });

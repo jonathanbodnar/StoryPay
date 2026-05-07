@@ -37,7 +37,25 @@ export async function GET(req: NextRequest) {
   }
 
   const { data, error } = await query;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    // Gracefully handle the case where migration 109 hasn't been applied yet —
+    // return an empty list so the saved-replies page shows the "create your
+    // first template" empty state rather than a scary error banner.
+    const msg = error.message ?? '';
+    const code = (error as { code?: string }).code;
+    if (
+      code === '42P01' ||
+      /support_canned_replies/i.test(msg) ||
+      /schema cache/i.test(msg) ||
+      /relation .* does not exist/i.test(msg)
+    ) {
+      return NextResponse.json({
+        templates: [],
+        warning: 'Saved-replies table not initialized yet. Run migration 109 in your Supabase SQL editor.',
+      });
+    }
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
   return NextResponse.json({ templates: data ?? [] });
 }
 

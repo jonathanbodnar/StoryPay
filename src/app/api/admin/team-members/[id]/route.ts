@@ -133,7 +133,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const me = await getAdminIdentity();
@@ -144,9 +144,41 @@ export async function DELETE(
   const { id } = await params;
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
 
-  // Soft delete: set active=false instead of removing the row, so any
-  // FK references (sent_by_support_user_id on conversation_messages, etc.)
-  // remain valid for historical attribution.
+  // ?permanent=true → hard delete the row (only allowed for currently
+  // inactive members so the inviter has consciously paused them first).
+  const url = new URL(request.url);
+  if (url.searchParams.get('permanent') === 'true') {
+    const { data: member } = await supabaseAdmin
+      .from('support_team_members')
+      .select('id, active')
+      .eq('id', id)
+      .maybeSingle();
+    if (!member) return NextResponse.json({ error: 'Team member not found' }, { status: 404 });
+    if (member.active) {
+      return NextResponse.json(
+        { error: 'Pause this team member first before permanently deleting.' },
+        { status: 400 },
+      );
+    }
+    const { error: delErr } = await supabaseAdmin
+      .from('support_team_members')
+      .delete()
+      .eq('id', id);
+    if (delErr) {
+      // FK violation — fall back to keeping the row but with a clearer message.
+      if (/foreign key|violates/i.test(delErr.message)) {
+        return NextResponse.json({
+          error: 'Cannot permanently delete — this member has historical activity (sent messages, etc.). They are paused and will remain inaccessible.',
+        }, { status: 409 });
+      }
+      return NextResponse.json({ error: delErr.message }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, hardDeleted: true });
+  }
+
+  // Soft delete (pause): set active=false instead of removing the row, so
+  // any FK references (sent_by_support_user_id on conversation_messages,
+  // etc.) remain valid for historical attribution.
   const { error } = await supabaseAdmin
     .from('support_team_members')
     .update({ active: false })

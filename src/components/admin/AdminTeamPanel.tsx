@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Send,
+  PauseCircle,
 } from 'lucide-react';
 import {
   ADMIN_TABS,
@@ -79,15 +80,28 @@ export function AdminTeamPanel() {
     setTimeout(() => setMsg(null), 3000);
   }
 
-  async function handleDeactivate(m: TeamMember) {
-    if (!confirm(`Deactivate ${m.name || m.email}? They will lose access immediately.`)) return;
+  async function handlePause(m: TeamMember) {
+    if (!confirm(`Pause ${m.name || m.email}? They'll lose access immediately. You can reactivate them later.`)) return;
     const res = await fetch(`/api/admin/team-members/${m.id}`, { method: 'DELETE' });
     if (!res.ok) {
       const j = await res.json().catch(() => ({})) as { error?: string };
-      setErr(j.error || 'Deactivation failed');
+      setErr(j.error || 'Pause failed');
       return;
     }
-    flash('Team member deactivated');
+    flash('Team member paused');
+    await load();
+  }
+
+  async function handleHardDelete(m: TeamMember) {
+    if (!confirm(`Permanently delete ${m.name || m.email}? This cannot be undone.`)) return;
+    if (!confirm(`Are you absolutely sure? Their record will be removed from the database.`)) return;
+    const res = await fetch(`/api/admin/team-members/${m.id}?permanent=true`, { method: 'DELETE' });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({})) as { error?: string };
+      setErr(j.error || 'Delete failed');
+      return;
+    }
+    flash('Team member permanently deleted');
     await load();
   }
 
@@ -239,20 +253,30 @@ export function AdminTeamPanel() {
                       {m.active ? (
                         <button
                           type="button"
-                          onClick={() => void handleDeactivate(m)}
-                          title="Deactivate"
-                          className="rounded p-1.5 text-red-500 hover:bg-red-50"
+                          onClick={() => void handlePause(m)}
+                          title="Pause (revoke access; can be reactivated later)"
+                          className="rounded p-1.5 text-amber-600 hover:bg-amber-50"
                         >
-                          <Trash2 size={14} />
+                          <PauseCircle size={14} />
                         </button>
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => void handleReactivate(m)}
-                          className="text-xs text-blue-600 hover:underline"
-                        >
-                          Reactivate
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => void handleReactivate(m)}
+                            className="text-xs text-blue-600 hover:underline"
+                          >
+                            Reactivate
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleHardDelete(m)}
+                            title="Permanently delete"
+                            className="rounded p-1.5 text-red-500 hover:bg-red-50"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </>
                       )}
                     </div>
                   </td>

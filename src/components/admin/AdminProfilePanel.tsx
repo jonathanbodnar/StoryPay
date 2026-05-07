@@ -227,7 +227,8 @@ export function AdminProfilePanel() {
         </Field>
         <button
           type="button" disabled={busy} onClick={() => void saveProfile()}
-          className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
+          style={{ backgroundColor: '#1b1b1b' }}
+          className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors hover:opacity-90 disabled:opacity-50"
         >
           {busy ? <Loader2 size={14} className="animate-spin" /> : null}
           Save changes
@@ -251,9 +252,10 @@ export function AdminProfilePanel() {
           </Field>
         </div>
         <button
-          type="button" disabled={pwBusy || !currentPw || newPw.length < 8 || newPw !== confirmPw}
+          type="button" disabled={pwBusy}
           onClick={() => void savePassword()}
-          className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
+          style={{ backgroundColor: '#1b1b1b' }}
+          className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors hover:opacity-90 disabled:opacity-50"
         >
           {pwBusy ? <Loader2 size={14} className="animate-spin" /> : null}
           Update password
