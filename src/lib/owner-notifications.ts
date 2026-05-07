@@ -86,7 +86,7 @@ const SCENARIO_META: Record<OwnerScenario, {
   payment_failed: {
     emailKey: 'email_payment_failed',
     smsKey:   'sms_payment_failed',
-    templateType: 'payment_notification',
+    templateType: 'payment_failed',
     defaultSmsTemplate: '⚠️ Payment failed: {{amount}} from {{customer_name}} — {{organization}}. Reason: {{reason}}',
     defaultEmailSubject: 'Payment failed: {{customer_name}} — {{amount}}',
     defaultEmailHeading: 'Payment Failed',

@@ -239,11 +239,13 @@ export async function POST(
 
     console.log('[verify-payment] Proposal updated:', JSON.stringify(updateData));
 
-    // Send payment confirmation email using the venue's saved template
+    // Send customer receipt email using the venue's saved template.
+    // Subscription payments get the dedicated subscription_confirmation template;
+    // all other payment types (full, installment) get the payment_confirmation template.
     try {
       const { data: fullProposal } = await supabaseAdmin
         .from('proposals')
-        .select('customer_email, customer_name, price, public_token')
+        .select('customer_email, customer_name, price, public_token, payment_type, payment_config')
         .eq('id', proposal.id)
         .single();
 
@@ -254,34 +256,74 @@ export async function POST(
           .eq('id', venue.id)
           .single();
 
-        const tmpl = await getVenueEmailTemplate(venue.id, 'payment_confirmation');
-        if (tmpl) {
-          const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.storypay.io';
-          const venueName = venue.name || 'Your Venue';
-          const amountFormatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
-            .format((fullProposal.price || 0) / 100);
-          const invoiceUrl = `${appUrl}/proposal/${fullProposal.public_token}`;
-          const vars: Record<string, string> = {
-            organization:   venueName,
-            customer_name:  fullProposal.customer_name || 'there',
-            amount:         amountFormatted,
-            date:           new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-            payment_method: '',
-          };
+        const appUrl      = process.env.NEXT_PUBLIC_APP_URL || 'https://www.storypay.io';
+        const venueName   = venue.name || 'Your Venue';
+        const invoiceUrl  = `${appUrl}/proposal/${fullProposal.public_token}`;
+        const brandColor  = brandData?.brand_color   || '#1b1b1b';
+        const logoUrl     = brandData?.brand_logo_url || undefined;
+        const amountFormatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
+          .format((fullProposal.price || 0) / 100);
 
-          await directSendEmail({
-            to: fullProposal.customer_email,
-            subject: fillTemplate(tmpl.subject, vars),
-            html: buildEmailHtml({
-              template:   tmpl,
-              vars,
-              actionUrl:  invoiceUrl,
-              brandColor: brandData?.brand_color   || '#1b1b1b',
-              logoUrl:    brandData?.brand_logo_url || undefined,
-              venueName,
-            }),
-          });
-          console.log('[verify-payment] Receipt email sent to', fullProposal.customer_email);
+        const isSubscription = (fullProposal.payment_type as string) === 'subscription';
+
+        if (isSubscription) {
+          // ── Subscription confirmation to customer ──────────────────────────
+          const subCfg = (fullProposal.payment_config as { amount?: number; frequency?: string; start_date?: string } | null) ?? {};
+          const subAmountFormatted = subCfg.amount
+            ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(subCfg.amount / 100)
+            : amountFormatted;
+          const nextPaymentDate = subCfg.start_date
+            ? new Date(subCfg.start_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+            : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+          const subTmpl = await getVenueEmailTemplate(venue.id, 'subscription_confirmation');
+          if (subTmpl) {
+            const vars: Record<string, string> = {
+              organization:      venueName,
+              customer_name:     fullProposal.customer_name || 'there',
+              amount:            subAmountFormatted,
+              frequency:         subCfg.frequency || 'recurring',
+              next_payment_date: nextPaymentDate,
+            };
+            await directSendEmail({
+              to:      fullProposal.customer_email,
+              subject: fillTemplate(subTmpl.subject, vars),
+              html:    buildEmailHtml({
+                template:   subTmpl,
+                vars,
+                actionUrl:  invoiceUrl,
+                brandColor,
+                logoUrl,
+                venueName,
+              }),
+            });
+            console.log('[verify-payment] Subscription confirmation email sent to', fullProposal.customer_email);
+          }
+        } else {
+          // ── Standard payment confirmation to customer ──────────────────────
+          const tmpl = await getVenueEmailTemplate(venue.id, 'payment_confirmation');
+          if (tmpl) {
+            const vars: Record<string, string> = {
+              organization:   venueName,
+              customer_name:  fullProposal.customer_name || 'there',
+              amount:         amountFormatted,
+              date:           new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+              payment_method: '',
+            };
+            await directSendEmail({
+              to:      fullProposal.customer_email,
+              subject: fillTemplate(tmpl.subject, vars),
+              html:    buildEmailHtml({
+                template:   tmpl,
+                vars,
+                actionUrl:  invoiceUrl,
+                brandColor,
+                logoUrl,
+                venueName,
+              }),
+            });
+            console.log('[verify-payment] Receipt email sent to', fullProposal.customer_email);
+          }
         }
       }
     } catch (emailErr) {
