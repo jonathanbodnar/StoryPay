@@ -237,7 +237,15 @@ export function AdminTeamPanel() {
       {inviteOpen && (
         <InviteModal
           onClose={() => setInviteOpen(false)}
-          onSaved={() => { setInviteOpen(false); flash('Team member invited'); void load(); }}
+          onSaved={(emailWarning) => {
+            setInviteOpen(false);
+            if (emailWarning) {
+              setErr(emailWarning);
+            } else {
+              flash('Team member invited — credentials sent to their email');
+            }
+            void load();
+          }}
         />
       )}
       {editingId && (
@@ -260,7 +268,7 @@ export function AdminTeamPanel() {
 
 // ─── Invite modal ────────────────────────────────────────────────────────────
 
-function InviteModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+function InviteModal({ onClose, onSaved }: { onClose: () => void; onSaved: (emailWarning?: string) => void }) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -298,7 +306,10 @@ function InviteModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
         setErr(j.error || 'Failed to invite');
         return;
       }
-      onSaved();
+      const j = await res.json().catch(() => ({})) as { emailSent?: boolean; emailError?: string };
+      onSaved(j.emailSent === false
+        ? `Team member created, but invite email could not be sent${j.emailError ? `: ${j.emailError}` : ''}. Send their credentials manually.`
+        : undefined);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Network error — please try again');
     } finally {
