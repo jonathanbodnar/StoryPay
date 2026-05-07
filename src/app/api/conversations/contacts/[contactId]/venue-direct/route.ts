@@ -146,7 +146,7 @@ export async function GET(
         : (m.venue_team_member_id && memberNames[m.venue_team_member_id]) || 'Venue team',
   }));
 
-  return NextResponse.json({ messages: enriched, threadId: t.thread.id });
+  return NextResponse.json({ messages: enriched, threadId: t.thread.id, venueId });
 }
 
 export async function POST(

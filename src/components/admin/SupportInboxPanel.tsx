@@ -33,15 +33,17 @@ const BRAND = '#1b1b1b';
 type SupportSubTab = 'bride-replies' | 'venue-direct' | 'tickets';
 
 interface VenueDirectInboxRow {
-  threadId:        string;
-  venueId:         string | null;
-  venueName:       string;
-  contactId:       string | null;
-  contactName:     string;
-  latestBody:      string;
-  latestAuthor:    string;
-  latestAt:        string;
-  latestFromVenue: boolean;
+  threadId:             string;
+  venueId:              string | null;
+  venueName:            string;
+  contactId:            string | null;
+  contactName:          string;
+  latestBody:           string;
+  latestAuthor:         string;
+  latestAt:             string;
+  latestFromVenue:      boolean;
+  lastConciergeSentAt:  string | null;
+  readReceipts:         Array<{ label: string; readAt: string }>;
 }
 
 interface BrideInboxRow {
@@ -2129,10 +2131,21 @@ function VenueDirectInboxView({
                 </div>
                 <p className="text-[11px] text-violet-700 font-medium mt-0.5">
                   {row.latestAuthor}
+                  {row.latestFromVenue && row.lastConciergeSentAt && (
+                    <span className="ml-2 inline-flex items-center gap-0.5 rounded-full bg-violet-50 border border-violet-200 text-violet-600 px-1.5 py-0.5 text-[9px] font-semibold">
+                      asked {relativeTime(row.lastConciergeSentAt)}
+                    </span>
+                  )}
                 </p>
                 <p className={`text-xs truncate mt-0.5 ${row.latestFromVenue ? 'text-gray-800' : 'text-gray-500'}`}>
-                  {row.latestBody}
+                  {row.latestFromVenue ? '' : 'You: '}{row.latestBody}
                 </p>
+                {!row.latestFromVenue && row.readReceipts.length > 0 && (
+                  <p className="text-[10px] text-gray-400 mt-0.5 truncate">
+                    Seen by {row.readReceipts.map(r => r.label).join(', ')}
+                    {' · '}{relativeTime(row.readReceipts[0].readAt)}
+                  </p>
+                )}
               </div>
             </button>
           ))}

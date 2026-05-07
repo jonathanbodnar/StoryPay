@@ -109,19 +109,50 @@ export async function GET() {
     }
   }
 
-  // Resolve venue team member names for venue-replied messages
+  // Resolve venue team member names for venue-replied messages + read receipts
   const memberIds = Array.from(new Set(
     allMsgs.map(m => m.venue_team_member_id).filter((x): x is string => !!x),
   ));
   const memberNames: Record<string, string> = {};
+  const memberById: Record<string, { id: string; name: string }> = {};
   if (memberIds.length > 0) {
     const { data: rows } = await supabaseAdmin
       .from('venue_team_members')
       .select('id, name, first_name, last_name')
       .in('id', memberIds);
     for (const r of (rows ?? []) as Array<{ id: string; name: string | null; first_name: string | null; last_name: string | null }>) {
-      memberNames[r.id] =
-        [r.first_name, r.last_name].filter(Boolean).join(' ') || r.name || 'Team member';
+      const displayName = [r.first_name, r.last_name].filter(Boolean).join(' ') || r.name || 'Team member';
+      memberNames[r.id]  = displayName;
+      memberById[r.id]   = { id: r.id, name: displayName };
+    }
+  }
+
+  // Read receipts: fetch who on the venue side has read each thread and when.
+  // reader_ref format: 'vd:owner' | 'vd:m:{memberId}'
+  const { data: readRows } = await supabaseAdmin
+    .from('conversation_thread_reads')
+    .select('thread_id, reader_ref, last_read_at')
+    .in('thread_id', threadIds)
+    .like('reader_ref', 'vd:%');
+  interface ReadRow { thread_id: string; reader_ref: string; last_read_at: string }
+  const readsByThread: Record<string, Array<{ label: string; readAt: string }>> = {};
+  for (const rr of (readRows ?? []) as ReadRow[]) {
+    const ref = rr.reader_ref;
+    let label = 'Venue owner';
+    if (ref.startsWith('vd:m:')) {
+      const mId = ref.slice('vd:m:'.length);
+      label = memberById[mId]?.name ?? 'Team member';
+    }
+    if (!readsByThread[rr.thread_id]) readsByThread[rr.thread_id] = [];
+    readsByThread[rr.thread_id].push({ label, readAt: rr.last_read_at });
+  }
+
+  // For each thread, also find the last concierge-sent message (for "last contacted" chip)
+  // and all venue-side messages after the last concierge message (for read receipt calculation).
+  const lastConciergeMsgByThread = new Map<string, MsgRow>();
+  for (const m of allMsgs) {
+    if (m.sender_kind === 'concierge' && !lastConciergeMsgByThread.has(m.thread_id)) {
+      lastConciergeMsgByThread.set(m.thread_id, m);
     }
   }
 
@@ -145,16 +176,22 @@ export async function GET() {
         || latest.contact_from_email
         || (latest.sender_kind === 'owner' ? 'Venue owner' : 'Venue team');
 
+    const lastConciergeSentAt = lastConciergeMsgByThread.get(threadId)?.created_at ?? null;
+
     return {
       threadId,
-      venueId:        t?.venue_id ?? null,
+      venueId:              t?.venue_id ?? null,
       venueName,
-      contactId:      t?.venue_customer_id ?? null,
+      contactId:            t?.venue_customer_id ?? null,
       contactName,
-      latestBody:     latest.body,
-      latestAuthor:   author,
-      latestAt:       latest.created_at,
-      latestFromVenue: isFromVenue,
+      latestBody:           latest.body,
+      latestAuthor:         author,
+      latestAt:             latest.created_at,
+      latestFromVenue:      isFromVenue,
+      lastConciergeSentAt,
+      readReceipts: (readsByThread[threadId] ?? [])
+                      .sort((a, b) => +new Date(b.readAt) - +new Date(a.readAt))
+                      .slice(0, 3),
     };
   }).sort((a, b) => +new Date(b.latestAt) - +new Date(a.latestAt));
 

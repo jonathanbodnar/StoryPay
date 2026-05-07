@@ -40,6 +40,8 @@ const PAGE_SIZE = 20;
 
 export default function ContactsPage() {
   const [contacts, setContacts] = useState<ContactRow[]>([]);
+  // contactIds that have unread Venue Direct messages for the current viewer
+  const [vdUnreadIds, setVdUnreadIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -106,6 +108,18 @@ export default function ContactsPage() {
   useEffect(() => {
     fetchContacts('', 1);
   }, [fetchContacts]);
+
+  // Fetch set of contactIds with unread Venue Direct messages once on mount.
+  useEffect(() => {
+    void fetch('/api/conversations/venue-direct/threads', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { threads?: Array<{ contactId: string; unreadCount: number }> } | null) => {
+        if (!d?.threads) return;
+        const ids = new Set(d.threads.filter(t => t.unreadCount > 0).map(t => t.contactId));
+        setVdUnreadIds(ids);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -272,9 +286,15 @@ export default function ContactsPage() {
                   <td className="px-5 py-3.5">
                     <Link
                       href={`/dashboard/contacts/${encodeURIComponent(String(c.id))}`}
-                      className="font-medium text-gray-900 hover:text-brand-900 hover:underline"
+                      className="inline-flex items-center gap-1.5 font-medium text-gray-900 hover:text-brand-900 hover:underline"
                     >
                       {capitalizeName(c.name || '')}
+                      {vdUnreadIds.has(String(c.id)) && (
+                        <span
+                          className="inline-block w-2 h-2 rounded-full bg-violet-500 shrink-0"
+                          title="Unread message from StoryVenue Support"
+                        />
+                      )}
                     </Link>
                   </td>
                   <td className="hidden sm:table-cell px-5 py-3.5 text-gray-700">{c.email || '---'}</td>

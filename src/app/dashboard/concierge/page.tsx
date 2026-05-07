@@ -14,7 +14,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Building2, Loader2, AlertCircle, RefreshCw, ChevronRight, Inbox } from 'lucide-react';
+import { Building2, Loader2, AlertCircle, RefreshCw, ChevronRight, Inbox, CheckCheck, Circle, CheckCircle2 } from 'lucide-react';
 
 interface ThreadRow {
   threadId:            string;
@@ -26,6 +26,7 @@ interface ThreadRow {
   latestAt:            string;
   latestFromConcierge: boolean;
   unreadCount:         number;
+  resolved?:           boolean;
 }
 
 function relativeTime(iso: string): string {
@@ -44,10 +45,11 @@ function relativeTime(iso: string): string {
 }
 
 export default function ConciergeInboxPage() {
-  const [threads, setThreads] = useState<ThreadRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState<string | null>(null);
-  const [filter, setFilter]   = useState<'all' | 'unread'>('all');
+  const [threads, setThreads]       = useState<ThreadRow[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState<string | null>(null);
+  const [filter, setFilter]         = useState<'all' | 'unread' | 'resolved'>('all');
+  const [markingAll, setMarkingAll] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -69,14 +71,39 @@ export default function ConciergeInboxPage() {
     return () => clearInterval(id);
   }, [load]);
 
-  const visible = useMemo(
-    () => filter === 'unread' ? threads.filter(t => t.unreadCount > 0) : threads,
-    [threads, filter],
-  );
+  const visible = useMemo(() => {
+    if (filter === 'unread')   return threads.filter(t => t.unreadCount > 0);
+    if (filter === 'resolved') return threads.filter(t => t.resolved);
+    return threads.filter(t => !t.resolved);
+  }, [threads, filter]);
   const totalUnread = useMemo(
     () => threads.reduce((s, t) => s + t.unreadCount, 0),
     [threads],
   );
+
+  const markAllRead = useCallback(async () => {
+    setMarkingAll(true);
+    try {
+      await fetch('/api/conversations/venue-direct/mark-all-read', { method: 'POST' });
+      // Optimistically clear unread counts in state
+      setThreads(prev => prev.map(t => ({ ...t, unreadCount: 0 })));
+      window.dispatchEvent(new Event('storypay:concierge-unread'));
+    } catch { /* non-critical */ }
+    finally { setMarkingAll(false); }
+  }, []);
+
+  const toggleResolved = useCallback(async (t: ThreadRow, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const next = !t.resolved;
+    setThreads(prev => prev.map(r => r.threadId === t.threadId ? { ...r, resolved: next } : r));
+    await fetch(`/api/conversations/threads/${t.threadId}/venue-direct/mark-read`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resolved: next }),
+    }).catch(() => {});
+    if (next) window.dispatchEvent(new Event('storypay:concierge-unread'));
+  }, []);
 
   return (
     <div className="space-y-5">
@@ -97,14 +124,27 @@ export default function ConciergeInboxPage() {
             the support team and your venue — the contact never sees these threads.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={load}
-          disabled={loading}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-        >
-          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          {totalUnread > 0 && (
+            <button
+              type="button"
+              onClick={markAllRead}
+              disabled={markingAll}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-50"
+            >
+              <CheckCheck size={12} className={markingAll ? 'animate-pulse' : ''} />
+              Mark all read
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={load}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -126,6 +166,15 @@ export default function ConciergeInboxPage() {
           }`}
         >
           Unread ({totalUnread})
+        </button>
+        <button
+          type="button"
+          onClick={() => setFilter('resolved')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${
+            filter === 'resolved' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+          }`}
+        >
+          Resolved ({threads.filter(t => t.resolved).length})
         </button>
       </div>
 
@@ -185,7 +234,21 @@ export default function ConciergeInboxPage() {
                   {t.latestFromConcierge ? '' : 'You: '}{t.latestBody}
                 </p>
               </div>
-              <ChevronRight size={16} className="text-gray-300 shrink-0 mt-2" />
+              <div className="flex items-center gap-1 shrink-0 mt-1.5">
+                <button
+                  type="button"
+                  onClick={(e) => toggleResolved(t, e)}
+                  title={t.resolved ? 'Mark open' : 'Mark resolved'}
+                  className={`rounded-full p-1 transition-colors ${
+                    t.resolved
+                      ? 'text-emerald-500 hover:text-emerald-700'
+                      : 'text-gray-300 hover:text-emerald-400'
+                  }`}
+                >
+                  {t.resolved ? <CheckCircle2 size={16} /> : <Circle size={16} />}
+                </button>
+                <ChevronRight size={16} className="text-gray-300" />
+              </div>
             </Link>
           ))}
         </div>

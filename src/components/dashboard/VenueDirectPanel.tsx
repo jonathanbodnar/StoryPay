@@ -6,15 +6,12 @@
  * Shows every venue_direct message exchanged between the StoryVenue concierge
  * team and this venue's staff, scoped to a single contact (bride). Lets venue
  * staff reply back without ever exposing the conversation to the bride.
- *
- * The thread is automatically attached to the most-recent conversation_thread
- * for the contact — the concierge always opens the bride's thread first when
- * they want to message the venue, so there's exactly one venue_direct stream
- * per contact.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Building2, Loader2, Send, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
+import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
+import { supportChannels, type BrideMessageEvent } from '@/lib/realtime/channels';
 
 interface VenueDirectMessage {
   id:                      string;
@@ -52,6 +49,8 @@ export default function VenueDirectPanel({ contactId, contactName }: { contactId
   const [body,     setBody]     = useState('');
   const [sending,  setSending]  = useState(false);
   const [sendStatus, setSendStatus] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [threadId,  setThreadId]  = useState<string | null>(null);
+  const [venueId,   setVenueId]   = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
 
   const load = useCallback(async () => {
@@ -61,7 +60,8 @@ export default function VenueDirectPanel({ contactId, contactName }: { contactId
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || `Failed (${r.status})`);
       setMessages((d.messages ?? []) as VenueDirectMessage[]);
-      // The GET endpoint marks this thread as read for the current viewer.
+      if (d.threadId) setThreadId(d.threadId as string);
+      if (d.venueId)  setVenueId(d.venueId as string);
       // Tell the sidebar so the bell badge updates instantly.
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('storypay:concierge-unread'));
@@ -75,11 +75,22 @@ export default function VenueDirectPanel({ contactId, contactName }: { contactId
 
   useEffect(() => { void load(); }, [load]);
 
-  // Light polling so new concierge messages appear without manual refresh.
-  useEffect(() => {
-    const id = setInterval(load, 30_000);
-    return () => clearInterval(id);
-  }, [load]);
+  // ── Realtime: subscribe to the venue thread channel so new concierge
+  //    messages appear instantly (replaces the 30-second poll). ─────────────
+  const realtimeChannel = useMemo(
+    () => (threadId && venueId) ? supportChannels.venueThread(venueId, threadId) : null,
+    [threadId, venueId],
+  );
+  useBroadcastChannel(
+    realtimeChannel,
+    ['bride:message'],
+    (_evt, payload) => {
+      const p = payload as BrideMessageEvent;
+      // Only refresh on venue_direct messages arriving on this thread
+      if (!p || p.threadId !== threadId) return;
+      void load();
+    },
+  );
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
