@@ -20,7 +20,7 @@ import {
   Mail, MessageCircle, Building2, Loader2, AlertCircle, CheckCircle2,
   StickyNote, ShieldCheck, AlertTriangle, CircleDot, CircleSlash,
   UserPlus, Flag, X, Radio, Sparkles, FileText, Maximize2, Minimize2,
-  Eye, EyeOff,
+  Eye, EyeOff, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { useBroadcastChannel, useBroadcastChannels } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels, type BrideMessageEvent, type TicketMessageEvent, type TicketStatusEvent } from '@/lib/realtime/channels';
@@ -1837,6 +1837,58 @@ function ComposerTabButton({
   );
 }
 
+/**
+ * Body text for a message that collapses long emails into a clickable preview.
+ *
+ * Email replies frequently include signatures, quoted history, and disclaimers,
+ * which makes the concierge thread long and noisy. SMS messages don't have this
+ * problem so we only collapse `email` channel messages above the threshold.
+ */
+function CollapsibleBody({
+  body,
+  channel,
+  className,
+  toneClass,
+}: {
+  body: string;
+  channel: 'email' | 'sms';
+  className: string;
+  toneClass: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  // Only collapse email messages (SMS are short by nature). 320 chars ≈ a
+  // few short paragraphs, which is roughly where signatures start to push
+  // useful content off-screen.
+  const COLLAPSE_THRESHOLD = 320;
+  const shouldCollapse = channel === 'email' && body.length > COLLAPSE_THRESHOLD;
+
+  if (!shouldCollapse) {
+    return <p className={`whitespace-pre-wrap break-words ${className}`}>{body}</p>;
+  }
+
+  // Prefer cutting on a newline near the threshold so the preview ends on a
+  // clean line rather than mid-sentence.
+  const newlineIdx = body.lastIndexOf('\n', COLLAPSE_THRESHOLD);
+  const sliceEnd = newlineIdx > COLLAPSE_THRESHOLD * 0.5 ? newlineIdx : COLLAPSE_THRESHOLD;
+  const preview = body.slice(0, sliceEnd).trimEnd() + '…';
+
+  return (
+    <div>
+      <p className={`whitespace-pre-wrap break-words ${className}`}>
+        {expanded ? body : preview}
+      </p>
+      <button
+        type="button"
+        onClick={() => setExpanded(v => !v)}
+        className={`mt-1.5 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${toneClass}`}
+      >
+        {expanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+        {expanded ? 'Show less' : `Show full email (+${body.length - sliceEnd} chars)`}
+      </button>
+    </div>
+  );
+}
+
 function MessageBubble({
   msg,
   supportName,
@@ -1868,7 +1920,12 @@ function MessageBubble({
           {supportName && <span className="text-violet-700">— {supportName}</span>}
           <span className="ml-auto text-violet-600">{relativeTime(msg.created_at)}</span>
         </div>
-        <p className="text-sm text-violet-900 whitespace-pre-wrap break-words">{msg.body}</p>
+        <CollapsibleBody
+          body={msg.body}
+          channel={msg.channel}
+          className="text-sm text-violet-900"
+          toneClass="border-violet-300 bg-violet-100 text-violet-800 hover:bg-violet-200"
+        />
       </div>
     );
   }
@@ -1941,8 +1998,23 @@ function MessageBubble({
           )}
           <span className="text-gray-400">{relativeTime(msg.created_at)}</span>
         </div>
-        <div className={`rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words ${bubbleClass}`}>
-          {msg.body}
+        <div className={`rounded-2xl px-3 py-2 text-sm ${bubbleClass}`}>
+          <CollapsibleBody
+            body={msg.body}
+            channel={msg.channel}
+            className=""
+            toneClass={
+              isInbound
+                ? 'border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100'
+                : isAi
+                  ? 'border-purple-300 bg-purple-100 text-purple-800 hover:bg-purple-200'
+                  : isConcierge
+                    ? 'border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                    : isInternal
+                      ? 'border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200'
+                      : 'border-white/30 bg-white/10 text-white hover:bg-white/20'
+            }
+          />
         </div>
         {msg.support_internal_note && (
           <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-2.5 py-1.5 text-[11px] text-amber-800">
