@@ -2,7 +2,7 @@
 // Requires RESEND_API_KEY. Set RESEND_DEFAULT_FROM on the host (e.g. Railway) — verified in Resend.
 
 /** Used when `RESEND_DEFAULT_FROM` is unset (e.g. local). Production: set env to your verified address. */
-export const RESEND_FROM_FALLBACK = 'StoryVenue <noreply@storyvenue.com>';
+export const RESEND_FROM_FALLBACK = 'StoryVenue <hello@storyvenue.com>';
 
 /**
  * Convert HTML to a reasonable plain-text alternative for the email's `text`
@@ -54,25 +54,78 @@ export function htmlToPlainText(html: string): string {
  *   bulk by ML filters.
  * - `Precedence: bulk` — long-standing convention that tells receiving MTAs
  *   "this is a bulk message; don't bounce vacation auto-replies back to me."
+ * - `List-Id` (RFC 2919) — uniquely identifies this mailing list to inbox
+ *   providers, enabling Gmail to group messages and apply consistent routing.
+ *   Format: `<venue-{venueId}.mail.storyvenue.com>`.
  *
  * Pass the result through `sendEmail({ headers })`.
  */
-export function buildBulkEmailHeaders(unsubscribeUrl: string | null | undefined, mailtoUnsub?: string): Record<string, string> {
+export function buildBulkEmailHeaders(
+  unsubscribeUrl: string | null | undefined,
+  opts?: {
+    mailtoUnsub?: string;
+    /** venueId — used to build a stable List-Id per sender (RFC 2919). */
+    listId?: string;
+    /** venueId attached as X-Venue-Id for Resend bounce/complaint webhook correlation. */
+    venueId?: string;
+    /** leadId attached as X-Lead-Id for Resend bounce/complaint webhook correlation. */
+    leadId?: string;
+  },
+): Record<string, string> {
   const headers: Record<string, string> = {
     'Precedence': 'bulk',
     'X-Entity-Ref-ID': `storyvenue-${Date.now()}`,
   };
+
   const parts: string[] = [];
-  if (mailtoUnsub) parts.push(`<mailto:${mailtoUnsub}?subject=unsubscribe>`);
+  if (opts?.mailtoUnsub) parts.push(`<mailto:${opts.mailtoUnsub}?subject=unsubscribe>`);
   if (unsubscribeUrl) parts.push(`<${unsubscribeUrl}>`);
   if (parts.length) {
     headers['List-Unsubscribe'] = parts.join(', ');
     if (unsubscribeUrl) {
-      // RFC 8058 one-click. Only add when an HTTPS endpoint is present.
       headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
     }
   }
+
+  // RFC 2919 — stable per-venue identifier; enables Gmail to classify this as
+  // a known mailing list rather than ad-hoc bulk, improving folder routing.
+  if (opts?.listId) {
+    const safe = opts.listId.replace(/[^a-z0-9-]/gi, '').toLowerCase();
+    headers['List-Id'] = `<venue-${safe}.mail.storyvenue.com>`;
+  }
+
+  // Correlation headers — returned by Resend's bounce/complaint webhooks so
+  // we can suppress the right lead without a separate DB lookup by email.
+  if (opts?.venueId) headers['X-Venue-Id'] = opts.venueId;
+  if (opts?.leadId) headers['X-Lead-Id'] = opts.leadId;
+
   return headers;
+}
+
+/**
+ * Inject a preheader string as a visually-hidden element immediately after
+ * the opening `<body>` tag. This is the only correct way to set inbox preview
+ * text — putting it in an HTML comment (the previous approach) is a no-op.
+ *
+ * The preheader is padded with zero-width characters so preview panes that
+ * read past the preheader don't bleed email body content into the snippet.
+ */
+export function injectPreheaderHtml(html: string, preheader: string): string {
+  const text = (preheader ?? '').trim().slice(0, 200);
+  if (!text) return html;
+  const escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  // Zero-width padding so the preview snippet doesn't spill into body text.
+  const padding = '\u200C\u200B\u200D\uFEFF'.repeat(50);
+  const div =
+    `<div style="display:none;max-height:0;overflow:hidden;font-size:1px;` +
+    `line-height:1px;color:#ffffff;mso-hide:all;" aria-hidden="true">` +
+    `${escaped}${padding}</div>`;
+  const injected = html.replace(/(<body[^>]*>)/i, `$1${div}`);
+  // If the template has no <body> tag (rare), prepend it.
+  return injected === html ? `${div}${html}` : injected;
 }
 
 function normalizeEmailList(list: string[] | undefined): string[] {

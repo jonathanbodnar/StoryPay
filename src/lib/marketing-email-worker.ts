@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase';
-import { sendEmail, buildBulkEmailHeaders, htmlToPlainText } from '@/lib/email';
+import { sendEmail, buildBulkEmailHeaders, htmlToPlainText, injectPreheaderHtml } from '@/lib/email';
 import { findOrCreateContact, getGhlToken, normalizePhone, sendSms } from '@/lib/ghl';
 import {
   parseEmailDefinition,
@@ -632,10 +632,8 @@ async function sendQuickEmailToLead(
   const bodyHtml = looksLikeHtml
     ? mergedBody
     : escapeHtml(mergedBody).replace(/\n/g, '<br>');
-  const preheaderComment = mergedPreheader.trim()
-    ? `<!-- preheader: ${mergedPreheader.replace(/<!--/g, '').slice(0, 200)} -->\n`
-    : '';
-  const html = `${preheaderComment}<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(mergedSubject)}</title></head><body style="margin:0;padding:0;background:#f6f7f9;font-family:Helvetica,Arial,sans-serif;color:#1f2937;line-height:1.55;"><div style="max-width:600px;margin:0 auto;padding:24px;background:#ffffff;">${bodyHtml}</div></body></html>`;
+  const rawHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(mergedSubject)}</title></head><body style="margin:0;padding:0;background:#f6f7f9;font-family:Helvetica,Arial,sans-serif;color:#1f2937;line-height:1.55;"><div style="max-width:600px;margin:0 auto;padding:24px;background:#ffffff;">${bodyHtml}</div></body></html>`;
+  const html = injectPreheaderHtml(rawHtml, mergedPreheader);
 
   // Pull a few extra venue fields needed for proper deliverability:
   //   - `brand_email` / `email` → Reply-To so customer replies route back
@@ -652,7 +650,11 @@ async function sendQuickEmailToLead(
   // name, and adding it manually doubles up + looks templated/spammy.
   const fromName = mergedFromName || (venue?.name as string) || 'Your venue';
   const replyTo = (venue?.brand_email as string | null)?.trim() || (venue?.email as string | null)?.trim() || undefined;
-  const headers = buildBulkEmailHeaders(vars.unsubscribe_url ?? null);
+  const headers = buildBulkEmailHeaders(vars.unsubscribe_url ?? null, {
+    listId: venueId,
+    venueId,
+    leadId,
+  });
 
   const r = await sendEmail({
     to: vars.email,
@@ -717,10 +719,7 @@ async function sendTemplateToLead(
   }
   const mergedSubject = mergeMarketingFields(subject, vars);
   const mergedPre = mergeMarketingFields(preheader, vars);
-  const fullHtml =
-    mergedPre.trim() ?
-      `<!-- preheader: ${mergedPre.replace(/<!--/g, '').slice(0, 200)} -->\n${html}`
-    : html;
+  const fullHtml = injectPreheaderHtml(html, mergedPre);
   // Same deliverability headers as quick compose (Reply-To, List-Unsubscribe,
   // bulk precedence, plain-text alt). Marketing campaigns are the most
   // exposed to spam scoring so we apply the full bag here too.
@@ -731,7 +730,11 @@ async function sendTemplateToLead(
     .maybeSingle();
   const fromName = (venue?.name as string) || 'Your venue';
   const replyTo = (venue?.brand_email as string | null)?.trim() || (venue?.email as string | null)?.trim() || undefined;
-  const headers = buildBulkEmailHeaders(vars.unsubscribe_url ?? null);
+  const headers = buildBulkEmailHeaders(vars.unsubscribe_url ?? null, {
+    listId: venueId,
+    venueId,
+    leadId,
+  });
 
   const r = await sendEmail({
     to: vars.email,

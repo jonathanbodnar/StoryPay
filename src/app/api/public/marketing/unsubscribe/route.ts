@@ -6,6 +6,34 @@ import { applySystemTag, ensureSystemTagsForVenue } from '@/lib/system-tags';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+/**
+ * RFC 8058 one-click unsubscribe — called by Gmail/Yahoo when the user clicks
+ * the inbox-level "Unsubscribe" button. The request is a POST with body
+ * `List-Unsubscribe=One-Click`. We accept the same `?token=` param as the
+ * GET flow so the same URL works for both human clicks and machine posts.
+ */
+export async function POST(request: NextRequest) {
+  const token = request.nextUrl.searchParams.get('token')?.trim() ?? '';
+  const parsed = verifyMarketingUnsubscribeToken(token);
+  if (!parsed) return new NextResponse(null, { status: 400 });
+
+  await supabaseAdmin.from('marketing_email_suppressions').upsert(
+    { lead_id: parsed.leadId, venue_id: parsed.venueId, reason: 'one_click_unsubscribe' },
+    { onConflict: 'lead_id,venue_id' },
+  );
+  await supabaseAdmin
+    .from('leads')
+    .update({ marketing_email_opt_in: false })
+    .eq('id', parsed.leadId)
+    .eq('venue_id', parsed.venueId);
+
+  ensureSystemTagsForVenue(parsed.venueId)
+    .then(() => applySystemTag(parsed.venueId, parsed.leadId, 'campaign_unsubscribed'))
+    .catch(() => {});
+
+  return new NextResponse(null, { status: 200 });
+}
+
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get('token')?.trim() ?? '';
   const parsed = verifyMarketingUnsubscribeToken(token);
