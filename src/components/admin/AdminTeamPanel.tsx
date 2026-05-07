@@ -584,15 +584,17 @@ function TabAccessEditor({ tabs, setTabs }: { tabs: Record<string, boolean>; set
 
 function ModalShell({ children, onClose, title, widthClass }: { children: React.ReactNode; onClose: () => void; title: string; widthClass: string }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-y-auto" role="dialog">
-      <div className={`w-full ${widthClass} rounded-xl border border-gray-200 bg-white p-6 my-8`}>
-        <div className="flex items-center justify-between mb-4">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/40 p-4" role="dialog">
+      <div className={`w-full ${widthClass} max-h-[90vh] rounded-xl border border-gray-200 bg-white shadow-xl flex flex-col`}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
           <h2 className="font-semibold text-gray-900">{title}</h2>
           <button type="button" onClick={onClose} className="rounded p-1 text-gray-400 hover:bg-gray-100">
             <X size={16} />
           </button>
         </div>
-        {children}
+        <div className="px-6 py-5 overflow-y-auto">
+          {children}
+        </div>
       </div>
     </div>
   );
