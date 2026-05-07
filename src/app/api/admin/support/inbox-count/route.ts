@@ -2,13 +2,18 @@
  * GET /api/admin/support/inbox-count
  *
  * Returns the number of items that need attention in the support inbox:
- *   brideReplies  – threads where the bride was the last to speak
+ *   brideReplies  – open threads where the bride was the last to speak
  *   venueReplies  – venue_direct threads where the venue (or owner) replied
- *                   and the concierge hasn't responded since
+ *                   and the concierge hasn't responded *or* acknowledged
  *   openTickets   – venue-support tickets with status 'open' or 'pending'
  *   total         – sum of the above
  *
- * Used to drive the sidebar badge on the super-admin side.
+ * Drives the sidebar badge on the super-admin side. Stays in sync with
+ * the in-panel sub-tab badges by applying the same close/ack rules
+ * those sub-tabs use:
+ *   - bride threads with status='closed' are excluded from brideReplies
+ *   - venue_direct threads with a 'vd:concierge' read row at or after the
+ *     latest message are excluded from venueReplies
  */
 import { NextResponse } from 'next/server';
 import { verifyAdminCookie } from '@/lib/admin-auth';
@@ -23,9 +28,10 @@ export async function GET() {
 
   try {
     // ── 1. Bride replies that need attention ─────────────────────────────────
-    // We look at the most recent external message per thread. If it's from
-    // 'contact' (the bride), that thread is "open / needs reply".
-    // Pull a generous recent window (400 msgs) then dedupe in JS.
+    // Keep only the latest external message per thread; flag threads where
+    // the bride was the last to speak. Then filter out any thread that's
+    // been manually closed (status='closed') so the close button truly
+    // clears the badge.
     const { data: recentExtRows } = await supabaseAdmin
       .from('conversation_messages')
       .select('thread_id, sender_kind, created_at')
@@ -37,23 +43,63 @@ export async function GET() {
     for (const r of (recentExtRows ?? []) as Array<{ thread_id: string; sender_kind: string; created_at: string }>) {
       if (!latestByThread.has(r.thread_id)) latestByThread.set(r.thread_id, r.sender_kind);
     }
-    const brideReplies = Array.from(latestByThread.values()).filter(s => s === 'contact').length;
+    const brideReplyThreadIds = Array.from(latestByThread.entries())
+      .filter(([, kind]) => kind === 'contact')
+      .map(([tid]) => tid);
+
+    let brideReplies = brideReplyThreadIds.length;
+    if (brideReplyThreadIds.length > 0) {
+      // Subtract closed threads (the column may not exist on older DBs;
+      // PostgREST returns 42703 in that case, which we treat as no rows).
+      const { data: closedRows } = await supabaseAdmin
+        .from('conversation_threads')
+        .select('id')
+        .in('id', brideReplyThreadIds)
+        .eq('status', 'closed');
+      const closedSet = new Set(((closedRows ?? []) as Array<{ id: string }>).map(r => r.id));
+      brideReplies = brideReplyThreadIds.filter(id => !closedSet.has(id)).length;
+    }
 
     // ── 2. Venue Direct replies that need concierge attention ────────────────
-    // Look at the most recent venue_direct message per thread. If sender_kind
-    // is anything other than 'concierge' (i.e. owner/team), the concierge
-    // team is the last one expected to respond.
+    // Look at the latest venue_direct message per thread. If sender_kind is
+    // not 'concierge' the concierge is expected to respond — UNLESS the
+    // concierge has already acknowledged it via 'vd:concierge' in
+    // conversation_thread_reads (which the Close button on a bride thread
+    // also sets, so the badge clears in lockstep).
     const { data: recentVdRows } = await supabaseAdmin
       .from('conversation_messages')
       .select('thread_id, sender_kind, created_at')
       .eq('audience', 'venue_direct')
       .order('created_at', { ascending: false })
       .limit(400);
-    const latestVdByThread = new Map<string, string>();
-    for (const r of (recentVdRows ?? []) as Array<{ thread_id: string; sender_kind: string }>) {
-      if (!latestVdByThread.has(r.thread_id)) latestVdByThread.set(r.thread_id, r.sender_kind);
+    const latestVdByThread = new Map<string, { kind: string; at: string }>();
+    for (const r of (recentVdRows ?? []) as Array<{ thread_id: string; sender_kind: string; created_at: string }>) {
+      if (!latestVdByThread.has(r.thread_id)) {
+        latestVdByThread.set(r.thread_id, { kind: r.sender_kind, at: r.created_at });
+      }
     }
-    const venueReplies = Array.from(latestVdByThread.values()).filter(s => s !== 'concierge').length;
+    const awaitingVdThreadIds = Array.from(latestVdByThread.entries())
+      .filter(([, v]) => v.kind !== 'concierge')
+      .map(([tid]) => tid);
+
+    let venueReplies = 0;
+    if (awaitingVdThreadIds.length > 0) {
+      const { data: ackRows } = await supabaseAdmin
+        .from('conversation_thread_reads')
+        .select('thread_id, last_read_at')
+        .in('thread_id', awaitingVdThreadIds)
+        .eq('reader_ref', 'vd:concierge');
+      const ackByThread = new Map<string, string>();
+      for (const r of (ackRows ?? []) as Array<{ thread_id: string; last_read_at: string }>) {
+        ackByThread.set(r.thread_id, r.last_read_at);
+      }
+      venueReplies = awaitingVdThreadIds.filter(tid => {
+        const latest = latestVdByThread.get(tid);
+        const ack    = ackByThread.get(tid);
+        if (!latest) return false;
+        return !ack || ack < latest.at;
+      }).length;
+    }
 
     // ── 3. Open/pending venue support tickets ────────────────────────────────
     const { count: openTickets } = await supabaseAdmin

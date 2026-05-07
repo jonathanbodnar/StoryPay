@@ -1011,6 +1011,14 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
     const id = setInterval(() => void fetchSupportInboxCount(), 60_000);
     return () => clearInterval(id);
   }, [authState, fetchSupportInboxCount]);
+  // Allow any panel (e.g. SupportInboxPanel after Close) to force-refresh the
+  // sidebar badge instantly, without waiting for the 60s tick.
+  useEffect(() => {
+    if (authState !== 'authenticated') return;
+    const handler = () => void fetchSupportInboxCount();
+    window.addEventListener('storypay:support-count-refresh', handler);
+    return () => window.removeEventListener('storypay:support-count-refresh', handler);
+  }, [authState, fetchSupportInboxCount]);
   useEffect(() => { if (authState === 'authenticated' && activeTab === 'suggested-articles') fetchSuggestedArticles(); }, [authState, activeTab, fetchSuggestedArticles]);
   useEffect(() => { if (authState === 'authenticated' && activeTab === 'search-analytics') fetchSearchAnalytics(); }, [authState, activeTab, fetchSearchAnalytics]);
   useEffect(() => { if (authState === 'authenticated' && activeTab === 'article-ratings') fetchArticleRatings(); }, [authState, activeTab, fetchArticleRatings]);

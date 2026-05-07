@@ -1106,6 +1106,9 @@ export function SupportInboxPanel() {
                     window.dispatchEvent(
                       new CustomEvent('storypay:vd-acknowledge', { detail: { threadId: tid } }),
                     );
+                    // Force the sidebar Support inbox badge to refresh now
+                    // instead of waiting for the 60s polling tick.
+                    window.dispatchEvent(new Event('storypay:support-count-refresh'));
                   }
                   setActiveThreadId(null);
                 }}

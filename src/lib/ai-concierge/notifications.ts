@@ -71,6 +71,7 @@ interface VenueRow {
   name:                        string | null;
   email:                       string | null;
   notification_email:          string | null;
+  owner_id:                    string | null;
   ai_concierge_notify_emails:  string[] | null;
   brand_color:                 string | null;
   brand_logo_url:              string | null;
@@ -171,7 +172,7 @@ export async function notifyAiOwner(input: AiOwnerNotifyInput): Promise<void> {
     const meta = SCENARIOS[input.scenario];
     if (!meta) return;
 
-    const ownerEmail = (venue.notification_email?.trim() || venue.email?.trim() || '');
+    const ownerEmail = await resolveOwnerEmail(venue);
     const conciergeEmails = (venue.ai_concierge_notify_emails ?? [])
       .map((e) => (e || '').trim())
       .filter((e) => e.includes('@'));
@@ -212,7 +213,17 @@ export async function notifyAiOwner(input: AiOwnerNotifyInput): Promise<void> {
     const subject = meta.emailSubject(input.brideName, venueName);
     const html = renderHtml({ meta, input, venue, venueName });
 
-    await sendEmail({ to, cc, subject, html });
+    // Brand from "StoryVenue Concierge team" so the venue owner immediately
+    // recognises this as a managed-service alert (matches the Venue Direct
+    // emails). Honour SUPPORT_FROM_EMAIL if configured.
+    const fromEmail = process.env.SUPPORT_FROM_EMAIL?.trim() || 'support@storyvenue.com';
+    await sendEmail({
+      to,
+      cc,
+      subject,
+      html,
+      from: { email: fromEmail, name: 'StoryVenue Concierge team' },
+    });
   } catch (e) {
     console.error('[ai-concierge] notifyAiOwner failed:', e);
   }
@@ -223,10 +234,29 @@ export async function notifyAiOwner(input: AiOwnerNotifyInput): Promise<void> {
 async function loadVenue(venueId: string): Promise<VenueRow | null> {
   const { data } = await supabaseAdmin
     .from('venues')
-    .select('id, name, email, notification_email, ai_concierge_notify_emails, brand_color, brand_logo_url')
+    .select('id, name, email, notification_email, owner_id, ai_concierge_notify_emails, brand_color, brand_logo_url')
     .eq('id', venueId)
     .maybeSingle();
   return (data as VenueRow | null) ?? null;
+}
+
+/**
+ * Resolve the venue's account-owner email. Prefer the actual sign-in email
+ * from auth.users (linked via venues.owner_id) — that's the address the owner
+ * recognizes. Fall back to the legacy notification_email/email columns if the
+ * auth lookup fails.
+ */
+async function resolveOwnerEmail(venue: VenueRow): Promise<string> {
+  if (venue.owner_id) {
+    try {
+      const { data } = await supabaseAdmin.auth.admin.getUserById(venue.owner_id);
+      const authEmail = data?.user?.email?.trim();
+      if (authEmail) return authEmail;
+    } catch (e) {
+      console.warn('[ai-concierge] owner auth lookup failed', e);
+    }
+  }
+  return (venue.notification_email?.trim() || venue.email?.trim() || '');
 }
 
 /**
