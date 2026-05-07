@@ -587,6 +587,57 @@ async function sendAutomationSmsToLead(
 }
 
 /**
+ * Resolve the from address for a marketing email.
+ *
+ * If the venue has a verified custom domain, use their configured
+ * from_email + from_name. Otherwise fall back to the shared StoryVenue
+ * sending address with the venue display name.
+ *
+ * `overrideName` is used by the quick-compose workflow step (venues can
+ * customise per-step from_name / from_email there).
+ */
+async function resolveVenueFromAddress(
+  venueId: string,
+  overrideName?: string,
+  overrideEmail?: string,
+): Promise<{ fromName: string; fromEmail: string | undefined; replyTo: string | undefined }> {
+  const { data: venue } = await supabaseAdmin
+    .from('venues')
+    .select('name, brand_email, email, custom_from_email, custom_from_name, custom_domain_status')
+    .eq('id', venueId)
+    .maybeSingle();
+
+  const replyTo =
+    (venue?.brand_email as string | null)?.trim() ||
+    (venue?.email as string | null)?.trim() ||
+    undefined;
+
+  // Per-step override wins first (quick-compose workflow).
+  if (overrideEmail?.trim()) {
+    return { fromName: overrideName?.trim() || (venue?.name as string) || 'Your venue', fromEmail: overrideEmail.trim(), replyTo };
+  }
+
+  // Use custom verified domain if available.
+  if (
+    venue?.custom_domain_status === 'verified' &&
+    (venue?.custom_from_email as string | null)?.trim()
+  ) {
+    return {
+      fromName: (venue.custom_from_name as string | null)?.trim() || (venue.name as string) || 'Your venue',
+      fromEmail: (venue.custom_from_email as string).trim(),
+      replyTo,
+    };
+  }
+
+  // Shared StoryVenue domain fallback.
+  return {
+    fromName: overrideName?.trim() || (venue?.name as string) || 'Your venue',
+    fromEmail: undefined,
+    replyTo,
+  };
+}
+
+/**
  * Send a "quick compose" email — used by workflow send_email steps in quick
  * mode. Renders subject + body inline (merge vars resolved) and wraps the body
  * in a minimal HTML shell so newlines render correctly across email clients.
@@ -635,21 +686,11 @@ async function sendQuickEmailToLead(
   const rawHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(mergedSubject)}</title></head><body style="margin:0;padding:0;background:#f6f7f9;font-family:Helvetica,Arial,sans-serif;color:#1f2937;line-height:1.55;"><div style="max-width:600px;margin:0 auto;padding:24px;background:#ffffff;">${bodyHtml}</div></body></html>`;
   const html = injectPreheaderHtml(rawHtml, mergedPreheader);
 
-  // Pull a few extra venue fields needed for proper deliverability:
-  //   - `brand_email` / `email` → Reply-To so customer replies route back
-  //     to the venue inbox instead of bouncing off our noreply address.
-  //     Senders without a Reply-To get downranked by Gmail.
-  const { data: venue } = await supabaseAdmin
-    .from('venues')
-    .select('name, brand_email, email')
-    .eq('id', venueId)
-    .maybeSingle();
-  // Display the venue name cleanly. We deliberately do NOT append "via
-  // StoryVenue" — Gmail already shows that attribution automatically when
-  // the DKIM-signing domain (storyvenue.com) differs from the friendly
-  // name, and adding it manually doubles up + looks templated/spammy.
-  const fromName = mergedFromName || (venue?.name as string) || 'Your venue';
-  const replyTo = (venue?.brand_email as string | null)?.trim() || (venue?.email as string | null)?.trim() || undefined;
+  const { fromName, fromEmail, replyTo } = await resolveVenueFromAddress(
+    venueId,
+    mergedFromName || undefined,
+    mergedFromEmail || undefined,
+  );
   const headers = buildBulkEmailHeaders(vars.unsubscribe_url ?? null, {
     listId: venueId,
     venueId,
@@ -662,9 +703,7 @@ async function sendQuickEmailToLead(
     html,
     text: htmlToPlainText(html),
     replyTo,
-    from: mergedFromEmail
-      ? { name: fromName, email: mergedFromEmail }
-      : { name: fromName },
+    from: fromEmail ? { name: fromName, email: fromEmail } : { name: fromName },
     cc:  mergedCc  ? mergedCc.split(/[,\s;]+/).filter(Boolean)  : undefined,
     bcc: mergedBcc ? mergedBcc.split(/[,\s;]+/).filter(Boolean) : undefined,
     headers,
@@ -723,13 +762,7 @@ async function sendTemplateToLead(
   // Same deliverability headers as quick compose (Reply-To, List-Unsubscribe,
   // bulk precedence, plain-text alt). Marketing campaigns are the most
   // exposed to spam scoring so we apply the full bag here too.
-  const { data: venue } = await supabaseAdmin
-    .from('venues')
-    .select('name, brand_email, email')
-    .eq('id', venueId)
-    .maybeSingle();
-  const fromName = (venue?.name as string) || 'Your venue';
-  const replyTo = (venue?.brand_email as string | null)?.trim() || (venue?.email as string | null)?.trim() || undefined;
+  const { fromName, fromEmail, replyTo } = await resolveVenueFromAddress(venueId);
   const headers = buildBulkEmailHeaders(vars.unsubscribe_url ?? null, {
     listId: venueId,
     venueId,
@@ -742,7 +775,7 @@ async function sendTemplateToLead(
     html: fullHtml,
     text: htmlToPlainText(fullHtml),
     replyTo,
-    from: { name: fromName },
+    from: fromEmail ? { name: fromName, email: fromEmail } : { name: fromName },
     headers,
   });
   return r.success ? { ok: true, mergedSubject } : { ok: false, error: r.error };
