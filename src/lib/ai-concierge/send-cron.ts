@@ -73,6 +73,12 @@ export interface RunSendCronOptions {
   /** Reservation window: how long the lead is locked while we generate+send.
    *  Default 15 minutes; bump if DeepSeek is slow. */
   reservationMinutes?: number;
+  /** Super-admin force-send: bypass ai_next_send_at timing for this specific
+   *  lead. Used by the AI Concierge monitor "Send Now" action. */
+  leadIdFilter?: string;
+  /** When true, skip the quiet-hours guard. Only set alongside leadIdFilter
+   *  for admin-triggered force-sends so testing works any time of day. */
+  bypassQuietHours?: boolean;
 }
 
 export interface SendCronResult {
@@ -136,7 +142,7 @@ export async function runAiSendCron(
   const sql = await getDbAsync();
 
   // 1. Reserve leads
-  const reserved = await reserveDueLeads(sql, maxLeads, reservMin);
+  const reserved = await reserveDueLeads(sql, maxLeads, reservMin, opts.leadIdFilter);
 
   let sent     = 0;
   let expired  = 0;
@@ -146,7 +152,7 @@ export async function runAiSendCron(
 
   for (const row of reserved) {
     try {
-      const result = await processOneLead(sql, row);
+      const result = await processOneLead(sql, row, opts.bypassQuietHours);
       switch (result.kind) {
         case 'sent':       sent     += 1; break;
         case 'expired':    expired  += 1; break;
@@ -197,7 +203,33 @@ async function reserveDueLeads(
   sql: postgres.Sql,
   limit: number,
   reservMin: number,
+  leadIdFilter?: string,
 ): Promise<ReservedLeadRow[]> {
+  // Force-send path: reserve a specific lead regardless of ai_next_send_at
+  if (leadIdFilter) {
+    const rows = await sql<ReservedLeadRow[]>`
+      UPDATE public.leads l
+         SET ai_next_send_at = NOW() + (${reservMin} || ' minutes')::interval,
+             updated_at      = NOW()
+        FROM public.venues v
+       WHERE l.id = ${leadIdFilter}
+         AND l.ai_state = 'ai_active'
+         AND COALESCE(l.sms_dnd, false) = false
+         AND v.id = l.venue_id
+      RETURNING
+        l.id,
+        l.venue_id,
+        l.ai_first_activated_at,
+        l.ai_expires_at,
+        l.ai_attempt_count,
+        l.ai_angles_used,
+        v.timezone,
+        v.ai_assistant_persona_name
+    `;
+    return rows;
+  }
+
+  // Normal batch path: only pick up leads whose scheduled time has arrived
   const rows = await sql<ReservedLeadRow[]>`
     UPDATE public.leads l
        SET ai_next_send_at = NOW() + (${reservMin} || ' minutes')::interval,
@@ -245,6 +277,7 @@ type LeadResult =
 async function processOneLead(
   sql: postgres.Sql,
   row: ReservedLeadRow,
+  bypassQuietHours = false,
 ): Promise<LeadResult> {
   const tz = resolveVenueTimezone(row.timezone);
 
@@ -254,8 +287,8 @@ async function processOneLead(
     return { kind: 'expired' };
   }
 
-  // 3. Quiet hours guard
-  if (isInsideQuietHours(new Date(), tz)) {
+  // 3. Quiet hours guard (skipped for admin force-sends so testing works any time)
+  if (!bypassQuietHours && isInsideQuietHours(new Date(), tz)) {
     const nextWindow = enforceQuietHours(new Date(), tz);
     await rescheduleLead(row.id, nextWindow);
     await logAiRun({
