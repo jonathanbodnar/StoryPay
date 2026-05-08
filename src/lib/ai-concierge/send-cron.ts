@@ -551,7 +551,7 @@ async function markOptedOut(
       venueId:     row.venue_id,
       fromState:   'ai_active',
       toState:     'opted_out',
-      reason:      outcome === 'dnd' ? 'inbound_tcpa_opt_out' : 'admin_force_reset',
+      reason:      outcome === 'dnd' ? 'inbound_tcpa_opt_out' : 'send_permanent_failure',
       triggeredBy: 'cron:ai-send',
       metadata:    { send_outcome: outcome, detail: detail.slice(0, 500) },
     });

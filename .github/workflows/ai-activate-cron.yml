@@ -1,0 +1,54 @@
+# AI Concierge activation cron — runs once per hour.
+# Pings /api/cron/ai-activate which flips leads from dormant → ai_active
+# after the 24-hour re-enable cooldown elapses (manual re-enables only).
+# First-time AI activation comes exclusively from the Booking System workflow
+# "Activate AI Concierge" step — this cron handles re-enables only.
+#
+# Required GitHub repo secrets (Settings → Secrets → Actions):
+#   MARKETING_CRON_URL    = https://your-app.up.railway.app  (no trailing slash)
+#   MARKETING_CRON_SECRET = same value as MARKETING_CRON_SECRET on Railway
+
+name: AI Concierge activation cron
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit /api/cron/ai-activate
+        env:
+          MARKETING_CRON_URL: ${{ secrets.MARKETING_CRON_URL }}
+          MARKETING_CRON_SECRET: ${{ secrets.MARKETING_CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${MARKETING_CRON_URL:-}" ] || [ -z "${MARKETING_CRON_SECRET:-}" ]; then
+            echo "::error::Missing secrets. Add MARKETING_CRON_URL and MARKETING_CRON_SECRET on THIS repo (Settings → Secrets → Actions)."
+            exit 1
+          fi
+          ORIGIN="${MARKETING_CRON_URL#\"}"
+          ORIGIN="${ORIGIN%\"}"
+          ORIGIN="$(printf '%s' "$ORIGIN" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          ORIGIN="${ORIGIN%/}"
+          SECRET="$(printf '%s' "$MARKETING_CRON_SECRET" | tr -d '\r\n')"
+          SECRET="$(printf '%s' "$SECRET" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          URL="${ORIGIN}/api/cron/ai-activate"
+          echo "Requesting (host only): $(echo "$ORIGIN" | sed -E 's#^https?://##')"
+          TMP="$(mktemp)"
+          HTTP=$(curl -sS -o "$TMP" -w "%{http_code}" -H "Authorization: Bearer ${SECRET}" "$URL")
+          BODY="$(cat "$TMP")"
+          rm -f "$TMP"
+          echo "HTTP status: $HTTP"
+          echo "Response body: $BODY"
+          if [ "$HTTP" != "200" ]; then
+            echo "::error::Expected HTTP 200, got $HTTP."
+            exit 1
+          fi
+          if ! echo "$BODY" | grep -q '"ok"'; then
+            echo "::error::Response missing ok:true"
+            exit 1
+          fi
+          echo "AI activate cron OK."

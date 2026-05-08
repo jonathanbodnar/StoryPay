@@ -1,34 +1,30 @@
 /**
  * AI Concierge — activation cron.
  *
- * Runs hourly (see `src/app/api/cron/ai-activate/route.ts`). Two activation
- * paths share this entry point:
+ * Runs hourly (see `src/app/api/cron/ai-activate/route.ts`). Handles ONE path:
  *
- *   1. First-time activation
- *      - Lead is `ai_state='dormant'`, never replied (`last_inbound_at IS NULL`),
- *        and got an outbound automation email more than 14 days ago.
- *      - On activation: ai_first_activated_at = NOW(), ai_expires_at = NOW()+60d,
- *        next send queued for the upcoming send-window (quiet-hours-aware).
+ *   Manual re-enable (after 24-hour cooldown elapsed)
+ *   - A human pressed "Re-enable AI" on a contact whose state had moved to
+ *     paused / handoff / opted_out / exhausted. The button reset state to
+ *     'dormant' and set `ai_next_send_at = NOW() + 24h` and
+ *     `ai_re_enabled_at = NOW()`. The cooldown has now elapsed.
+ *   - On activation: ai_first_activated_at and ai_expires_at are PRESERVED
+ *     (60-day cap is global, no resets). Just flip back to ai_active and
+ *     let the send cron pick it up on the next quiet-hours-allowed tick.
  *
- *   2. Manual re-enable (after 24-hour cooldown elapsed)
- *      - A human pressed "Re-enable AI" on a contact whose state had moved to
- *        paused / handoff / opted_out / exhausted. The button reset state to
- *        'dormant' and set `ai_next_send_at = NOW() + 24h` and
- *        `ai_re_enabled_at = NOW()`. The cooldown has now elapsed.
- *      - On activation: ai_first_activated_at and ai_expires_at are PRESERVED
- *        (60-day cap is global, no resets). Just flip back to ai_active and
- *        let the send cron pick it up on the next quiet-hours-allowed tick.
+ * IMPORTANT: First-time AI activation is handled EXCLUSIVELY by the Booking
+ * System workflow "Activate AI Concierge" step in marketing-email-worker.ts.
+ * This cron does NOT auto-activate new leads — it only resumes leads that a
+ * human has manually re-enabled after a pause/stop.
  *
- * Eligibility filters apply in BOTH paths:
+ * Eligibility filters:
  *   - venues.ai_concierge_enabled = TRUE
  *   - venues.directory_addon_concierge = TRUE
  *   - venues.a2p_verified = TRUE
  *   - leads.sms_dnd = FALSE
  *
- * For each eligible row we run an idempotent UPDATE that re-checks the entire
- * eligibility predicate, so two concurrent cron ticks can't double-activate a
- * lead. Pipeline-stage move + tag application are best-effort: if they fail
- * the lead still ends up in `ai_active` and the send cron will keep moving.
+ * Each update is idempotent — re-checks the full eligibility predicate inside
+ * the WHERE clause so concurrent ticks can't double-activate a lead.
  */
 
 import type postgres from 'postgres';
@@ -127,7 +123,6 @@ export async function runAiActivationCron(
     try {
       const tz = resolveVenueTimezone(row.timezone);
       const nextSend = enforceQuietHours(new Date(), tz);
-      const isReEnable = row.ai_first_activated_at !== null;
 
       const updated = await activateLead(sql, row, nextSend, opts.bypassEligibility ?? false);
       if (!updated) {
@@ -147,7 +142,7 @@ export async function runAiActivationCron(
         venueId:     row.venue_id,
         fromState:   'dormant',
         toState:     'ai_active',
-        reason:      isReEnable ? 'manually_re_enabled' : 'first_activation',
+        reason:      'manually_re_enabled',
         triggeredBy: 'cron:ai-activate',
         metadata: {
           ai_next_send_at:       updated.ai_next_send_at.toISOString(),
@@ -157,7 +152,7 @@ export async function runAiActivationCron(
         },
       });
 
-      if (isReEnable) reEnabled += 1; else activated += 1;
+      reEnabled += 1;
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'unknown error';
       console.error(`[ai-activate] lead ${row.id}: ${msg}`);
@@ -186,14 +181,9 @@ export async function runAiActivationCron(
 // ── Eligibility query ──────────────────────────────────────────────────────
 
 /**
- * Find dormant leads whose AI follow-up is due to start (or restart after
- * the 24-hour re-enable cooldown).
- *
- * The AI Concierge is venue-level: if the venue has it enabled and the lead
- * has been silent for 14 days, AI activates. Workflow enrollment is
- * irrelevant — the AI's only job is to re-engage silent leads and fire a
- * notification the moment they reply. Workflow automations handle everything
- * else (sequences, content delivery, etc.) independently.
+ * Find dormant leads whose 24-hour manual re-enable cooldown has elapsed.
+ * First-time activation is handled exclusively by the Booking System workflow
+ * "Activate AI Concierge" step — never by this cron.
  */
 async function fetchEligibleLeads(
   sql: postgres.Sql,
@@ -221,22 +211,12 @@ async function fetchEligibleLeads(
     WHERE l.ai_state = 'dormant'
       AND COALESCE(l.sms_dnd, false) = false
       AND ${venueGuard}
-      -- Skip leads that were activated directly by the Booking System workflow
-      -- (start_ai_concierge step). Those are managed by the worker, not this cron.
-      AND COALESCE(l.ai_booking_system_activated, false) = false
-      AND (
-        -- First-time path: outbound went out 14+ days ago, no inbound yet
-        (l.ai_first_activated_at IS NULL
-          AND l.last_inbound_at IS NULL
-          AND l.last_outbound_at IS NOT NULL
-          AND l.last_outbound_at < NOW() - INTERVAL '14 days')
-        OR
-        -- Re-enable path: 24h cooldown has elapsed
-        (l.ai_re_enabled_at IS NOT NULL
-          AND l.ai_next_send_at IS NOT NULL
-          AND l.ai_next_send_at <= NOW())
-      )
-    ORDER BY COALESCE(l.ai_re_enabled_at, l.last_outbound_at) ASC
+      -- Re-enable path only: 24h cooldown has elapsed after a human pressed
+      -- "Re-enable AI". ai_re_enabled_at is set by the re-enable API endpoint.
+      AND l.ai_re_enabled_at IS NOT NULL
+      AND l.ai_next_send_at IS NOT NULL
+      AND l.ai_next_send_at <= NOW()
+    ORDER BY l.ai_re_enabled_at ASC
     LIMIT ${limit}
   `;
 
@@ -274,6 +254,7 @@ async function activateLead(
   const updated = await sql<UpdateActivationRow[]>`
     UPDATE public.leads
        SET ai_state              = 'ai_active',
+           -- Preserve original activation timestamps (60-day cap is not reset on re-enable)
            ai_first_activated_at = COALESCE(ai_first_activated_at, NOW()),
            ai_expires_at         = COALESCE(ai_expires_at, NOW() + INTERVAL '60 days'),
            ai_next_send_at       = ${nextSendAt.toISOString()},
@@ -281,18 +262,11 @@ async function activateLead(
      WHERE id = ${row.id}
        AND ai_state = 'dormant'
        AND COALESCE(sms_dnd, false) = false
-       AND COALESCE(ai_booking_system_activated, false) = false
        AND ${venueGuardSubquery}
-       AND (
-         (ai_first_activated_at IS NULL
-           AND last_inbound_at IS NULL
-           AND last_outbound_at IS NOT NULL
-           AND last_outbound_at < NOW() - INTERVAL '14 days')
-         OR
-         (ai_re_enabled_at IS NOT NULL
-           AND ai_next_send_at IS NOT NULL
-           AND ai_next_send_at <= NOW())
-       )
+       -- Re-enable path only: cooldown must still be elapsed at update time
+       AND ai_re_enabled_at IS NOT NULL
+       AND ai_next_send_at IS NOT NULL
+       AND ai_next_send_at <= NOW()
      RETURNING id, ai_first_activated_at, ai_expires_at, ai_next_send_at
   `;
 
