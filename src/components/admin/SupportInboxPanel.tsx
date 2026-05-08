@@ -1495,6 +1495,7 @@ function ThreadDetailView({
                     : null
                 }
                 supportUsers={detail.supportUsers}
+                isLatest={idx === detail.messages.length - 1}
               />
             </div>
           );
@@ -1838,52 +1839,64 @@ function ComposerTabButton({
 }
 
 /**
- * Body text for a message that collapses long emails into a clickable preview.
+ * Email-aware body that fully collapses an email reply to a single-line
+ * clickable snippet (like an email client). Click to expand the full message,
+ * click again to collapse. SMS messages render unchanged.
  *
- * Email replies frequently include signatures, quoted history, and disclaimers,
- * which makes the concierge thread long and noisy. SMS messages don't have this
- * problem so we only collapse `email` channel messages above the threshold.
+ * `defaultExpanded` is set by the parent — the latest message in a thread
+ * defaults expanded so the concierge always sees the newest reply, while
+ * older emails stay tidy until clicked.
  */
 function CollapsibleBody({
   body,
   channel,
   className,
   toneClass,
+  defaultExpanded,
 }: {
   body: string;
   channel: 'email' | 'sms';
   className: string;
   toneClass: string;
+  defaultExpanded: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  // Only collapse email messages (SMS are short by nature). 320 chars ≈ a
-  // few short paragraphs, which is roughly where signatures start to push
-  // useful content off-screen.
-  const COLLAPSE_THRESHOLD = 320;
-  const shouldCollapse = channel === 'email' && body.length > COLLAPSE_THRESHOLD;
+  const [expanded, setExpanded] = useState(defaultExpanded);
 
-  if (!shouldCollapse) {
+  if (channel !== 'email') {
     return <p className={`whitespace-pre-wrap break-words ${className}`}>{body}</p>;
   }
 
-  // Prefer cutting on a newline near the threshold so the preview ends on a
-  // clean line rather than mid-sentence.
-  const newlineIdx = body.lastIndexOf('\n', COLLAPSE_THRESHOLD);
-  const sliceEnd = newlineIdx > COLLAPSE_THRESHOLD * 0.5 ? newlineIdx : COLLAPSE_THRESHOLD;
-  const preview = body.slice(0, sliceEnd).trimEnd() + '…';
+  // Strip whitespace and pull a 110-char single-line preview for the
+  // collapsed row — enough to convey topic without dominating the thread.
+  const oneLine = body.replace(/\s+/g, ' ').trim();
+  const SNIPPET_LEN = 110;
+  const snippet = oneLine.length > SNIPPET_LEN
+    ? oneLine.slice(0, SNIPPET_LEN).trimEnd() + '…'
+    : oneLine || '(empty email)';
+
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className={`group flex w-full items-center gap-2 rounded-md border px-2 py-1.5 text-left text-[12px] font-medium ${toneClass}`}
+        title="Click to expand the full email"
+      >
+        <ChevronDown size={12} className="shrink-0 opacity-70 group-hover:opacity-100" />
+        <span className={`truncate ${className}`}>{snippet}</span>
+      </button>
+    );
+  }
 
   return (
     <div>
-      <p className={`whitespace-pre-wrap break-words ${className}`}>
-        {expanded ? body : preview}
-      </p>
+      <p className={`whitespace-pre-wrap break-words ${className}`}>{body}</p>
       <button
         type="button"
-        onClick={() => setExpanded(v => !v)}
-        className={`mt-1.5 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${toneClass}`}
+        onClick={() => setExpanded(false)}
+        className={`mt-2 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${toneClass}`}
       >
-        {expanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
-        {expanded ? 'Show less' : `Show full email (+${body.length - sliceEnd} chars)`}
+        <ChevronUp size={11} /> Hide
       </button>
     </div>
   );
@@ -1893,10 +1906,13 @@ function MessageBubble({
   msg,
   supportName,
   supportUsers,
+  isLatest,
 }: {
   msg: ThreadMessage;
   supportName: string | null;
   supportUsers: Record<string, { id: string; name: string; email: string }>;
+  /** True for the most recent message — defaults email bodies to expanded. */
+  isLatest: boolean;
 }) {
   const isInbound = msg.sender_kind === 'contact';
   const isInternal = msg.visibility === 'internal';
@@ -1925,6 +1941,7 @@ function MessageBubble({
           channel={msg.channel}
           className="text-sm text-violet-900"
           toneClass="border-violet-300 bg-violet-100 text-violet-800 hover:bg-violet-200"
+          defaultExpanded={isLatest}
         />
       </div>
     );
@@ -2014,6 +2031,7 @@ function MessageBubble({
                       ? 'border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200'
                       : 'border-white/30 bg-white/10 text-white hover:bg-white/20'
             }
+            defaultExpanded={isLatest}
           />
         </div>
         {msg.support_internal_note && (
