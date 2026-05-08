@@ -461,13 +461,9 @@ export async function buildMergeVars(
     'marketing.preferences_url': prefs,
     'system.date':               now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
     'system.year':               String(now.getFullYear()),
-    // Pricing guide — points to the venue's public listing page (pricing section)
-    pricing_guide_url: venue?.slug
-      ? `${base}/venue/${venue.slug}#pricing`
-      : `${base}`,
-    'venue.pricing_guide_url': venue?.slug
-      ? `${base}/venue/${venue.slug}#pricing`
-      : `${base}`,
+    // Pricing guide — on-demand server-generated PDF (always latest version)
+    pricing_guide_url:         `${appOrigin}/api/public/venue/${venueId}/pricing-guide`,
+    'venue.pricing_guide_url': `${appOrigin}/api/public/venue/${venueId}/pricing-guide`,
   };
 }
 

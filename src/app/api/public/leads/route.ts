@@ -4,7 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 import { recordDuplicateCandidatesForNewLead } from '@/lib/lead-duplicates';
 import { ensureDefaultPipeline, legacyStatusForStageName } from '@/lib/pipelines';
-import { onMarketingFormSubmitted } from '@/lib/marketing-email-worker';
+import { onMarketingFormSubmitted, sendBookingSystemGuide } from '@/lib/marketing-email-worker';
 import { dispatchIntegrationEvent } from '@/lib/integration-events';
 import { syncVenueCustomerFromLeadRow } from '@/lib/venue-customer-pipeline-sync';
 
@@ -362,6 +362,13 @@ export async function POST(request: NextRequest) {
   } catch (e) {
     console.error('[public/leads] attach default pipeline', e);
   }
+
+  // Phase 1 — Booking System guide delivery (email + SMS), fire-and-forget.
+  // This sends the pricing guide PDF link immediately after form submission,
+  // independent of the Phase 2 automation sequence below.
+  void sendBookingSystemGuide(venue.id, lr.id).catch((e) =>
+    console.error('[public/leads] sendBookingSystemGuide error:', e),
+  );
 
   // Fire form-submitted workflow trigger then kick the cron so any delay steps
   // that were just scheduled get picked up automatically.
