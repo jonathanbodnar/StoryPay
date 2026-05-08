@@ -137,27 +137,29 @@ export default function ContactsPage() {
   async function deleteContact(c: ContactRow) {
     if (!confirm(`Delete ${c.name || c.email}? This cannot be undone.`)) return;
 
-    // Prefer a known venue_customers UUID. If we only have a GHL/LunarPay ID,
-    // look up the matching venue_customers row by email first so the delete
-    // also cascades away threads, tasks, notes, etc.
-    let vcId = c.venueCustomerId ?? null;
-    if (!vcId && c.email) {
-      try {
-        const lkp = await fetch('/api/venue-customers/lookup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: c.email }),
-        });
-        if (lkp.ok) {
-          const d = (await lkp.json()) as { id?: string } | null;
-          if (d?.id) vcId = d.id;
-        }
-      } catch {/* ignore, fall through */}
-    }
-    // Last resort: use the raw id (may be a GHL id; the server will 404 gracefully)
-    if (!vcId) vcId = String(c.id);
+    // Resolve source from the contact row id when we don't have an explicit field.
+    // - UUID → 'storypay' (native venue_customers row)
+    // - 'lp_*' → 'lunarpay'
+    // - anything else → 'ghl' (GHL contact id format)
+    const idStr = String(c.id);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idStr);
+    const source: 'ghl' | 'lunarpay' | 'storypay' = isUuid
+      ? 'storypay'
+      : idStr.startsWith('lp_')
+        ? 'lunarpay'
+        : 'ghl';
 
-    const res = await fetch(`/api/venue-customers/${vcId}`, { method: 'DELETE' });
+    const res = await fetch('/api/contacts/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        // Always send venue_customers UUID when known so server skips the lookup.
+        id:     c.venueCustomerId || idStr,
+        email:  c.email || undefined,
+        source,
+      }),
+    });
+
     if (res.ok) {
       setContacts((prev) => prev.filter((x) => String(x.id) !== String(c.id)));
       setImportMessage('Contact deleted.');

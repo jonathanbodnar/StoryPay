@@ -255,6 +255,40 @@ export async function getGhlContact(accessToken: string, locationId: string, con
   return ghlRequest(`/contacts/${encodeURIComponent(contactId)}`, token, { locationId });
 }
 
+/**
+ * Delete a contact from GHL. Used when the venue owner manually removes a
+ * contact from StoryVenue — without this the contact would resync back from
+ * GHL the next time we read contacts.
+ *
+ * Returns `true` on a 200/204 (or 404 — already gone is fine), `false`
+ * otherwise. Never throws so callers can treat it as best-effort cleanup.
+ */
+export async function deleteGhlContact(
+  accessToken: string,
+  locationId: string,
+  contactId: string,
+): Promise<boolean> {
+  try {
+    const token = await resolveLocationToken(accessToken, locationId);
+    const res = await fetch(
+      `${GHL_API_BASE}/contacts/${encodeURIComponent(contactId)}`,
+      {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+          Version: '2021-07-28',
+          'X-Location-Id': locationId,
+        },
+      },
+    );
+    return res.ok || res.status === 404;
+  } catch (err) {
+    console.warn('[deleteGhlContact] error:', err);
+    return false;
+  }
+}
+
 export async function findOrCreateContact(
   accessToken: string,
   locationId: string,
