@@ -31,12 +31,23 @@ export async function POST(
 
   console.log(`[ai-monitor] force-send triggered for lead ${leadId}`);
 
-  const result = await runAiSendCron({
-    maxLeads:         1,
-    reservationMinutes: 15,
-    leadIdFilter:     leadId,
-    bypassQuietHours: true,
-  });
+  let result;
+  try {
+    result = await runAiSendCron({
+      maxLeads:         1,
+      reservationMinutes: 15,
+      leadIdFilter:     leadId,
+      bypassQuietHours: true,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'unknown error';
+    const stack = e instanceof Error ? e.stack : undefined;
+    console.error(`[ai-monitor] force-send threw for lead ${leadId}:`, msg, stack);
+    return NextResponse.json({
+      ok: false,
+      message: `Server error: ${msg}`,
+    }, { status: 500 });
+  }
 
   if (result.killSwitchEngaged) {
     return NextResponse.json({
