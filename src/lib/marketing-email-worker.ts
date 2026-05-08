@@ -269,17 +269,36 @@ export async function sendBookingSystemGuide(
       if (rawBody) {
         const vars = await buildMergeVars(venueId, leadId, appOrigin, { forSms: false });
         if (vars) {
-          const body    = mergeMarketingFields(rawBody, vars);
+          // Create or find an email-channel thread BEFORE sending so we can
+          // wire a routing reply-to address. Bride email replies will then
+          // land directly in this thread instead of the venue owner's inbox.
+          const emailThread = await findOrCreateChannelThreadForLead(venueId, leadId, 'email');
+          const { buildConversationsReplyToEmail } = await import('@/lib/conversations-inbound-email');
+          const { fromName, fromEmail, replyTo: venueReplyTo } = await resolveVenueFromAddress(venueId);
+          const replyTo =
+            (emailThread ? buildConversationsReplyToEmail(emailThread.threadId, venueId) : null)
+            ?? venueReplyTo;
+
+          const body     = mergeMarketingFields(rawBody, vars);
           const htmlBody = body.replace(/\n/g, '<br>');
-          const { fromName, fromEmail, replyTo } = await resolveVenueFromAddress(venueId);
           const { sendEmail } = await import('@/lib/email');
-          await sendEmail({
+          const sent = await sendEmail({
             to:      vars.email,
             from:    { name: fromName, email: fromEmail },
             replyTo: replyTo,
             subject: `Your pricing guide from ${vars.venue_name}`,
             html:    `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;color:#1b1b1b;line-height:1.6">${htmlBody}</div>`,
-          }).catch((e) => console.warn('[booking-guide] email failed:', e));
+          }).catch((e) => { console.warn('[booking-guide] email failed:', e); return null; });
+
+          // Log the outbound email so the contact trail starts here
+          if (sent !== null && emailThread) {
+            void logToConversationThread({
+              threadId: emailThread.threadId,
+              venueId,
+              channel: 'email',
+              body: `📧 Guide sent via email:\n${body.slice(0, 600)}`,
+            });
+          }
         }
       }
     }
@@ -288,8 +307,21 @@ export async function sendBookingSystemGuide(
     if (smsOn) {
       const rawSms = ((v.booking_guide_sms_body as string | null) || '').trim();
       if (rawSms) {
-        await sendAutomationSmsToLead(venueId, leadId, rawSms)
-          .catch((e) => console.warn('[booking-guide] SMS failed:', e));
+        // Create or find an SMS-channel thread before sending so we have a
+        // threadId ready to log to. GHL inbound webhooks will look up the
+        // venue_customer by email or ghl_contact_id and find this same thread.
+        const smsThread = await findOrCreateChannelThreadForLead(venueId, leadId, 'sms');
+        const smsResult = await sendAutomationSmsToLead(venueId, leadId, rawSms)
+          .catch((e) => { console.warn('[booking-guide] SMS failed:', e); return { ok: false as const }; });
+
+        if (smsResult.ok && (smsResult as { mergedBody?: string }).mergedBody && smsThread) {
+          void logToConversationThread({
+            threadId: smsThread.threadId,
+            venueId,
+            channel: 'sms',
+            body: `📱 Guide sent via SMS:\n${(smsResult as { mergedBody: string }).mergedBody}`,
+          });
+        }
       }
     }
   } catch (e) {
@@ -462,10 +494,11 @@ export async function buildMergeVars(
     'system.date':               now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
     'system.year':               String(now.getFullYear()),
     // Pricing guide — links to the branded preview page (/venue/[id]/guide).
-    // The preview page shows the PDF inline and has a Download button.
-    // ?dl=1 on the underlying API route forces an attachment download.
-    pricing_guide_url:         `${appOrigin}/venue/${venueId}/guide`,
-    'venue.pricing_guide_url': `${appOrigin}/venue/${venueId}/guide`,
+    // ?l={leadId} is appended so the preview page can log the view as a
+    // system message in the contact's conversation thread (full audit trail).
+    // ?dl=1 on the underlying /pricing-guide API route forces a download.
+    pricing_guide_url:         `${appOrigin}/venue/${venueId}/guide?l=${encodeURIComponent(leadId)}`,
+    'venue.pricing_guide_url': `${appOrigin}/venue/${venueId}/guide?l=${encodeURIComponent(leadId)}`,
   };
 }
 
@@ -491,6 +524,102 @@ async function resolvePhoneForLead(venueId: string, leadId: string): Promise<str
 }
 
 // ─── Conversation thread helpers ─────────────────────────────────────────────
+
+/**
+ * Finds or creates a venue_customer + a channel-specific conversation thread
+ * for a lead. Returns both IDs so callers can log messages and build reply-to
+ * addresses. Never throws — returns null on any error.
+ */
+async function findOrCreateChannelThreadForLead(
+  venueId: string,
+  leadId: string,
+  channel: 'email' | 'sms',
+): Promise<{ threadId: string; venueCustomerId: string } | null> {
+  try {
+    const { data: lead } = await supabaseAdmin
+      .from('leads')
+      .select('email, first_name, last_name, name, phone')
+      .eq('id', leadId)
+      .eq('venue_id', venueId)
+      .maybeSingle();
+    if (!lead) return null;
+
+    const email = String(lead.email || '').trim().toLowerCase();
+    if (!email) return null;
+
+    // Find or create venue_customer by email.
+    // If a GHL webhook later upserts the same contact it will hit the 23505
+    // unique-email constraint and patch ghl_contact_id onto our row, so the
+    // SMS inbound routing always ends up on the right thread.
+    let vcId: string | null = null;
+    const { data: existingVc } = await supabaseAdmin
+      .from('venue_customers')
+      .select('id')
+      .eq('venue_id', venueId)
+      .ilike('customer_email', email)
+      .maybeSingle();
+    if (existingVc?.id) {
+      vcId = existingVc.id as string;
+    } else {
+      const fn = (lead.first_name as string | null)?.trim() || (lead.name as string | null)?.split(/\s+/)[0] || '';
+      const ln = (lead.last_name as string | null)?.trim() || '';
+      const { data: createdVc, error: vcErr } = await supabaseAdmin
+        .from('venue_customers')
+        .insert({
+          venue_id: venueId,
+          customer_email: email,
+          first_name: fn || null,
+          last_name: ln || null,
+          phone: (lead.phone as string | null) || null,
+        })
+        .select('id')
+        .single();
+      if (vcErr?.code === '23505') {
+        // Race — another request inserted first; re-fetch
+        const { data: raceVc } = await supabaseAdmin
+          .from('venue_customers')
+          .select('id')
+          .eq('venue_id', venueId)
+          .ilike('customer_email', email)
+          .maybeSingle();
+        vcId = (raceVc as { id: string } | null)?.id ?? null;
+      } else {
+        vcId = (createdVc as { id: string } | null)?.id ?? null;
+      }
+    }
+    if (!vcId) return null;
+
+    // Find existing channel-specific thread
+    const { data: existingThread } = await supabaseAdmin
+      .from('conversation_threads')
+      .select('id')
+      .eq('venue_id', venueId)
+      .eq('venue_customer_id', vcId)
+      .eq('external_reply_channel', channel)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (existingThread) return { threadId: (existingThread as { id: string }).id, venueCustomerId: vcId };
+
+    // Create a new thread — set status='open' so it surfaces in the bride inbox
+    const { data: newThread } = await supabaseAdmin
+      .from('conversation_threads')
+      .insert({
+        venue_id: venueId,
+        venue_customer_id: vcId,
+        subject: channel === 'email' ? 'Pricing Guide' : 'SMS',
+        external_reply_channel: channel,
+        status: 'open',
+      })
+      .select('id')
+      .single();
+    if (!newThread) return null;
+    return { threadId: (newThread as { id: string }).id, venueCustomerId: vcId };
+  } catch (e) {
+    console.error('[worker] findOrCreateChannelThreadForLead error (non-fatal):', e);
+    return null;
+  }
+}
 
 /**
  * Given a lead, finds (or creates) a venue_customer record and a conversation

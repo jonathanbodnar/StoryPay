@@ -267,7 +267,11 @@ export async function GET(req: NextRequest) {
       if (venueId)          threadQuery = threadQuery.eq('venue_id', venueId);
       // Exclude manually-closed threads from the "open" view. If the status
       // column doesn't exist yet (migration pending) PostgREST ignores this.
-      if (filter === 'open') threadQuery = (threadQuery as typeof threadQuery).neq('status', 'closed');
+      // IMPORTANT: PostgreSQL's != operator does NOT match NULLs, so threads
+      // with status=NULL (newly created, never explicitly set) would be
+      // excluded by a plain .neq(). We must also include IS NULL so
+      // brand-new threads from guide delivery or GHL webhook show up here.
+      if (filter === 'open') threadQuery = (threadQuery as typeof threadQuery).or('status.neq.closed,status.is.null');
 
       const { data: threadRows, error: threadErr } = await threadQuery;
       if (threadErr) throw new Error(`threads query: ${threadErr.message}`);

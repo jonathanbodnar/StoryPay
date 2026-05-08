@@ -24,6 +24,7 @@ import { DirectoryBadgesAdminPanel } from '@/components/admin/DirectoryBadgesAdm
 import { SubscriptionsAdminPanel } from '@/components/admin/SubscriptionsAdminPanel';
 import { AiConciergeAdminPanel } from '@/components/admin/AiConciergeAdminPanel';
 import { SupportInboxPanel } from '@/components/admin/SupportInboxPanel';
+import { BrideInboxBadgeSync } from '@/components/admin/BrideInboxBadgeSync';
 import { CannedRepliesPanel } from '@/components/admin/CannedRepliesPanel';
 import { AdminTeamPanel } from '@/components/admin/AdminTeamPanel';
 import { AdminProfilePanel } from '@/components/admin/AdminProfilePanel';
@@ -1932,6 +1933,9 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
         {activeTab === 'subscriptions' && <SubscriptionsAdminPanel />}
 
         {activeTab === 'ai-concierge' && <AiConciergeAdminPanel />}
+
+        {/* Always-on: refreshes badge the moment any inbound bride message arrives. */}
+        {authState === 'authenticated' && <BrideInboxBadgeSync />}
 
         {activeTab === 'support' && <SupportInboxPanel />}
 

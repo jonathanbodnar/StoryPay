@@ -15,9 +15,11 @@
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { supabaseAdmin } from '@/lib/supabase';
+import { GuideViewTracker } from '@/components/public/GuideViewTracker';
 
 interface Props {
   params: Promise<{ venueId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -34,8 +36,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function GuidePage({ params }: Props) {
+export default async function GuidePage({ params, searchParams }: Props) {
   const { venueId } = await params;
+  const sp = await searchParams;
+  const leadId = typeof sp.l === 'string' ? sp.l.trim() : '';
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
@@ -52,6 +56,8 @@ export default async function GuidePage({ params }: Props) {
 
   return (
     <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif', background: '#f5f5f4', minHeight: '100vh' }}>
+      {/* Client-side tracker — logs guide view to the contact's thread */}
+      {leadId && <GuideViewTracker venueId={venueId} leadId={leadId} />}
 
       {/* Top bar */}
       <header style={{
