@@ -43,7 +43,7 @@ The main areas:
 - Leads — Kanban/list pipeline for inquiries; editable stages and pipelines
 - Reports — financial exports (owners and admins)
 - Payments flyout — new proposal/invoice, proposals list, templates, installments, subscriptions, transactions
-- Marketing flyout — analytics, lead capture forms, email tools, Workflows (visual automation builder with 60+ smart triggers, 50 canonical merge variables, 8 step types incl. Notify Venue Owner), Trigger Links, Tags & Variables (system tags + canonical merge variables + trigger links)
+- Marketing flyout — analytics, lead capture forms, email tools, Workflows (visual automation builder with 60+ smart triggers, 60+ canonical merge variables, 8 step types incl. Notify Venue Owner), Trigger Links, Tags & Variables (system tags + canonical merge variables + trigger links)
 - Help Center — searchable docs and Ask AI–style help
 - Settings flyout — general, branding, email templates, integrations, team, notifications
 
@@ -824,6 +824,38 @@ Read / unread status
 - If you send a new reply on a closed thread it reopens automatically so the Concierge team sees it again.`,
       },
       {
+        id: 'conversations-concierge-inbox',
+        title: 'Concierge Inbox — your dedicated Venue Direct thread list',
+        tags: ['concierge inbox', 'venue direct', 'inbox', 'unread', 'mark read', 'needs reply', 'concierge messages', 'support', 'filter', 'resolved'],
+        body: `The Concierge Inbox (/dashboard/concierge) is a dedicated page that shows only your Venue Direct threads — messages between your venue and the StoryVenue Concierge team. It is separate from your main Conversations inbox (which shows all contact threads).
+
+How to access it
+Sidebar → Concierge (the icon that looks like a headset or support agent). A red dot badge appears on the icon whenever you have unread Venue Direct messages.
+
+What you see
+- A list of all Venue Direct threads sorted by most recent activity
+- Each thread shows the contact name, a message snippet, and the timestamp of the last message
+- Unread threads are highlighted or badged so you can spot them immediately
+
+Filtering threads
+Three filter tabs let you focus on what matters:
+- All — every thread, read and unread
+- Unread — threads with messages you haven't read yet
+- Resolved — threads that have been closed/marked read by the Concierge team
+
+Marking as read / unread
+- Open a thread and use the "Mark read" button (when a thread has unread messages) to clear the alert — or "Mark unread" to flag it for follow-up later
+- Marking a thread read also clears the badge on the sidebar icon for that thread
+
+Replying
+- Open any thread and type in the reply composer at the bottom. Your reply goes directly to the Concierge team's support inbox.
+- You can also reply by email — just reply to the notification email you received and it routes back into the thread automatically.
+
+When a new Venue Direct message arrives
+- A badge appears on the Concierge Inbox menu item in the sidebar
+- A notification email is sent to your registered venue email address`,
+      },
+      {
         id: 'conversations-inbound',
         title: 'Replies from contacts land back in the thread',
         tags: ['inbound', 'reply', 'email reply', 'sms reply', 'resend', 'ghl', 'webhook', 'two way', 'threading'],
@@ -1500,7 +1532,7 @@ If the field looks missing
 
 The lead stays in your Leads inbox as a permanent record of where this customer came from, even after they become a paying customer.
 
-Note: auto-conversion of a lead into a customer profile with a single click is a planned enhancement — for now, create the customer manually. All the lead info is visible in the expanded view for easy copy/paste.`,
+Tip: once a lead becomes a paying customer, keep their lead record in your inbox as a permanent record of the original inquiry source — it stays linked to the contact profile so you always have the full history in one place.`,
       },
     ],
   },
@@ -1542,7 +1574,7 @@ Results are paginated (20 per page). Use the Previous / Next buttons at the bott
         id: 'cust-profile',
         title: 'Contact profile — overview and tabs',
         tags: ['contact profile', 'crm', 'profile', 'tabs', 'overview', 'history', 'edit note', 'edit notes', 'new proposal', 'new invoice'],
-        body: `Click a contact's name to open their full profile. Contacts you see on this list come from three sources — storyvenue.com signups, StoryPay merchant payment records, and Legacy imports — all unified into one record per person. The profile has six tabs:
+        body: `Click a contact's name to open their full profile. Contacts you see on this list come from three sources — storyvenue.com signups, StoryPay merchant payment records, and Legacy imports — all unified into one record per person. The profile has seven tabs:
 
 Overview
 - Edit contact info inline (name, email, phone, address)
@@ -1572,6 +1604,11 @@ Documents
 - Upload files: contracts, floor plans, vendor agreements, insurance certificates, photos, or other
 - Each file has a type and a status (Pending / Received / Approved)
 - Click a filename to download; update status inline; delete files
+
+Schedule
+- Book a new appointment for this contact directly from their profile — no need to navigate to the Calendar
+- See all upcoming and past appointments linked to this contact's email in one view
+- Click any appointment to open the event detail and edit or cancel it
 
 Below the main header row, the Pipeline section lets you choose which sales pipeline applies (same pipelines you manage under Leads — e.g. default "Sales Pipeline") and shows stage pills for that pipeline. Click a pill to move the contact to that stage; the selection saves to the server and the UI updates right away. If a lead exists with the same email, you may see a note that the profile is linked to a lead and stages can stay in sync both ways.
 
@@ -2329,9 +2366,9 @@ The public submission endpoint and the existing embed code are unchanged — the
       },
       {
         id: 'me-workflows',
-        title: 'Workflows — visual automation builder with 60+ smart triggers and 50 merge variables',
+        title: 'Workflows — visual automation builder with 60+ smart triggers and 60+ merge variables',
         tags: ['workflow', 'workflows', 'automation', 'speed to lead', 'follow up', 'sequence', 'drip', 'funnel', 'auto-reply', 'reply halt', 'form submitted', 'trigger', 'cron', 'smart triggers', 'merge variables', 'notify owner', 'notify venue owner', 'system tags'],
-        body: `Marketing → Workflows is the visual builder for fully automated, multi-step contact journeys. It powers everything from the first auto-reply to long-term anniversary touches — and as of the April 2026 update, it has tight, two-way integration with the platform's 65 sitewide system tags and 50 canonical merge variables.
+        body: `Marketing → Workflows is the visual builder for fully automated, multi-step contact journeys. It powers everything from the first auto-reply to long-term anniversary touches — and as of the May 2026 update, it has tight, two-way integration with the platform's 65 sitewide system tags and 60+ canonical merge variables.
 
 What you can build today
 
@@ -2356,8 +2393,8 @@ Steps (drag-and-drop palette, four categories)
 - Contact Actions: Add Tag, Remove Tag, Change Pipeline Stage, Open Conversation thread
 - Internal Alerts: Notify Venue Owner — sends an email and/or SMS to the venue's primary email and notification phone (uses StoryVenue Legacy messaging for SMS). The body and subject support the full merge-variable system, so you can do things like: subject = "[Hot Lead] {{contact.name}} just signed the proposal", body = "Phone: {{contact.phone}}, wedding date: {{lead.wedding_date}}".
 
-Merge Variables (50, used everywhere)
-Every step that takes free-form text — Send SMS, Notify Venue Owner — has a "Variables" button next to the editor. Click it to open a categorized, searchable popover with all 50 canonical variables ({{contact.first_name}}, {{venue.name}}, {{appointment.start_time}}, {{lead.wedding_date}}, {{marketing.unsubscribe_url}}, etc.) grouped by Contact / Venue / Lead / Appointment / Proposal / Invoice / Subscription / Marketing / System. Click any variable to insert it at the cursor.
+Merge Variables (60+, used everywhere)
+Every step that takes free-form text — Send Email, Send SMS, Notify Venue Owner — has a "Variables" button next to the editor. Click it to open a categorized, searchable popover with all 60+ canonical variables ({{contact.first_name}}, {{contact.notes}}, {{contact.referral_source}}, {{venue.name}}, {{venue.description}}, {{appointment.start_time}}, {{appointment.type}}, {{appointment.notes}}, {{appointment.space_name}}, {{lead.wedding_date}}, {{lead.created_at}}, {{lead.time_since_inquiry}}, {{marketing.unsubscribe_url}}, {{system.workflow_name}}, etc.) grouped by Contact / Venue / Lead / Appointment / Proposal / Invoice / Subscription / Marketing / AI / System. Click any variable to insert it at the cursor.
 
 Status: Draft (does nothing), Active (enrolls and runs), Paused (existing enrollments freeze, no new ones).
 
@@ -2416,7 +2453,7 @@ Click "Lead Tags" to expand the tags panel. You'll see two groups:
 Use the search bar at the top of the tags panel to filter by name. Filter buttons let you narrow by category (Lifecycle, Payments, Marketing, Calendar, etc.).
 
 3. Merge Variables (accordion)
-Click "Merge Variables" to expand the variables panel. All 50 system merge variables are listed here, organized by category. These are read-only — you cannot create or delete variables, only use them in your templates.
+Click "Merge Variables" to expand the variables panel. All 60+ system merge variables are listed here, organized by category. These are read-only — you cannot create or delete variables, only use them in your templates.
 
 Use the search bar to find a variable by name or key. Category filter buttons let you browse by Contact, Venue, Appointment, Proposal, System, and more.`,
       },
@@ -2604,21 +2641,24 @@ Troubleshooting:
         id: 'email-types',
         title: 'Email template types',
         tags: ['email', 'templates', 'automated', 'notification', 'test email', 'preview'],
-        body: `StoryVenue sends automated emails on your behalf. Customize each one at Settings → Email Templates.
+        body: `StoryVenue sends automated transactional emails on your behalf. Customize each one at Settings → Notifications (the "Email Templates" section lives inside the Notifications settings page, not a separate page).
 
-The 7 template types are:
-1. Invoice — sent when you send an invoice to a customer
-2. Proposal — sent when you send a proposal
+There are 10 template types:
+1. Invoice — sent to the customer when you send them an invoice
+2. Proposal — sent to the customer when you send them a proposal
 3. Payment Confirmation — receipt sent to the customer after a successful payment
-4. Payment Notification — alert sent to you when you receive a payment
-5. Subscription Confirmation — sent to the customer when a subscription starts
+4. Payment Notification — alert sent to you (the venue) when you receive a payment
+5. Subscription Confirmation — sent to the customer when a recurring subscription starts
 6. Subscription Cancelled — sent to the customer when a subscription ends
-7. Payment Failed — sent when a payment attempt fails
+7. Payment Failed — sent when a payment attempt is declined
+8. Payment Reminder — sent automatically before a scheduled installment or subscription charge
+9. Proposal / Invoice Viewed — sent to you when a customer opens their proposal or invoice link
+10. Proposal Signed — sent to you when a customer e-signs a proposal or contract
 
 Each template has:
 - Subject Line
 - Email Heading
-- Body Text (supports merge variables like {{customer_name}} and {{amount}})
+- Body Text (supports merge variables like {{contact.first_name}}, {{venue.name}}, {{payment.amount}}, {{invoice.number}})
 - Button Text (optional — the action button in the email)
 - Footer Text (optional — e.g. your cancellation policy)
 - Enable/Disable toggle
@@ -2629,7 +2669,7 @@ To test a template: click "Send Test" and enter any email address. The test emai
 
 To preview: click "Preview" for a live mock-up inside the editor.
 
-Tip: Send a test email to yourself before sending a real proposal to ensure everything looks correct.`,
+Tip: Send a test email to yourself before sending a real proposal to ensure the template looks correct with your branding.`,
       },
       {
         id: 'email-variables',
@@ -2650,7 +2690,7 @@ The variable list is shown on the right side of each template editor. Click a va
 Preview your template using the Preview button — it shows a sample email with dummy data filled in.
 
 Canonical system variables
-StoryVenue uses a unified, dot-notation variable system sitewide. The same variables work across calendar notifications, marketing emails, email templates, and workflows. See Marketing → Trigger Links, Tags & Variables → Merge Variables accordion for the full list of all 50 canonical variables.`,
+StoryVenue uses a unified, dot-notation variable system sitewide. The same variables work across calendar notifications, marketing emails, email templates, and workflows. See Marketing → Trigger Links, Tags & Variables → Merge Variables accordion for the full list of all 60+ canonical variables.`,
       },
     ],
   },
@@ -3504,6 +3544,7 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
 
   // Conversations (unified inbox)
   '/dashboard/conversations': ['conversations-overview', 'conversations-venue-direct', 'conversations-inbound', 'conversations-profile-drawer', 'cust-profile'],
+  '/dashboard/concierge':     ['conversations-concierge-inbox', 'conversations-venue-direct', 'conversations-overview'],
 
   // Calendar
   '/dashboard/calendar': ['cal-overview', 'cal-add-event', 'cal-ai-search', 'cal-multi-calendar', 'cal-event-actions', 'cal-spaces', 'cal-conflicts', 'cal-multi-day', 'cal-recurring'],
