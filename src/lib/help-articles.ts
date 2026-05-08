@@ -2464,68 +2464,79 @@ You can still create custom tags for venue-specific needs (e.g. "VIP Client", "R
       },
       {
         id: 'mkt-system-vars',
-        title: 'System merge variables — 50 canonical variables',
+        title: 'System merge variables — canonical variables reference',
         tags: ['merge variables', 'system variables', 'canonical variables', 'placeholders', 'template variables', 'contact variables', 'venue variables', 'appointment variables', 'proposal variables', 'dynamic content'],
-        body: `StoryVenue has 50 canonical system merge variables that work consistently across every template type — email templates, calendar notifications, marketing emails, SMS messages, and workflows. All variables use dot-notation (e.g. {{contact.name}}).
+        body: `StoryVenue has 60+ canonical system merge variables that work consistently across every template type — email templates, calendar notifications, marketing emails, SMS messages, and workflows. All variables use dot-notation (e.g. {{contact.name}}).
 
 Where to find them
 Marketing → Trigger Links, Tags & Variables → expand the "Merge Variables" accordion. Search by name or filter by category.
 
-Contact variables
+Contact variables (available in marketing emails, SMS, and workflows)
 {{contact.name}} — full name
 {{contact.first_name}} — first name only
 {{contact.last_name}} — last name only
 {{contact.email}} — email address
 {{contact.phone}} — phone number
-{{contact.address}} — full street address
-{{contact.city}} — city
-{{contact.state}} — state / province
-{{contact.zip}} — ZIP / postal code
-{{contact.partner_name}} — partner/second contact name
-{{contact.wedding_date}} — wedding date (formatted)
-{{contact.ceremony_type}} — ceremony type
-{{contact.guest_count}} — guest count
-{{contact.referral_source}} — how they found you
+{{contact.notes}} — free-form notes / inquiry message from the lead
+{{contact.referral_source}} — how they found you (e.g. "Google search")
+
+Lead / event variables (available in marketing)
+{{lead.wedding_date}} — wedding date (formatted, e.g. "October 15, 2027")
+{{lead.wedding_month}} — wedding month name only (e.g. "October")
+{{lead.guest_count}} — estimated guest count
+{{lead.created_at}} — date the lead first inquired (e.g. "April 16, 2026"). Flat alias: {{initial_inquiry_date}}
+{{lead.time_since_inquiry}} — humanized time since inquiry (e.g. "14 days ago"). Flat alias: {{time_since_initial_inquiry}}
 
 Venue variables
 {{venue.name}} — your venue / business name
-{{venue.address}} — venue address
+{{venue.address}} — venue full address
 {{venue.city}} — venue city
 {{venue.state}} — venue state
-{{venue.zip}} — venue ZIP
 {{venue.phone}} — venue phone
 {{venue.email}} — venue contact email
 {{venue.website}} — venue website URL
-{{venue.owner_name}} — venue owner's name
-{{venue.logo_url}} — venue logo URL
-{{venue.pricing_guide_url}} — direct download link for your Pricing and Availability Guide PDF; always generates the latest saved version in real time. Short alias: {{pricing_guide_url}}. Use this in Booking System email and SMS templates so brides get a clickable PDF download link the moment they submit your listing form.
+{{venue.owner_name}} — venue owner's full name
+{{venue.owner_first_name}} — owner's first name only
+{{venue.description}} — short venue style description (used in AI Concierge prompts)
+{{venue.pricing_guide_url}} — link to branded Pricing & Availability Guide preview page (always latest version). Short alias: {{pricing_guide_url}}. Use this in Booking System email and SMS templates.
 
 Appointment variables (calendar notifications only)
 {{appointment.title}} — event title
-{{appointment.type}} — event type (e.g. Tour, Call)
+{{appointment.type}} — appointment type (e.g. tour, call)
 {{appointment.start_time}} — formatted start date & time
-{{appointment.end_time}} — formatted end time
+{{appointment.end_time}} — formatted end date & time
+{{appointment.date}} — date only (e.g. "Monday, May 5, 2026")
+{{appointment.time}} — time only (e.g. "2:00 PM")
 {{appointment.timezone}} — timezone abbreviation (e.g. EST)
-{{appointment.meeting_location}} — meeting link or address
-{{appointment.notes}} — event notes
+{{appointment.duration}} — duration (e.g. "1 hour")
+{{appointment.meeting_location}} — meeting link or physical address
+{{appointment.notes}} — free-form notes added to the event
 {{appointment.calendar_name}} — which calendar the event belongs to
-{{appointment.space_name}} — venue space assigned
+{{appointment.space_name}} — venue space assigned to this appointment
+{{appointment.status}} — status (confirmed / cancelled)
 
-Proposal & payment variables
+Payment & invoice variables (transactional emails only)
+{{payment.amount}} — payment amount
+{{payment.method}} — payment method (e.g. Visa ••••4242)
+{{payment.date}} — payment date
+{{payment.reason}} — failure reason (failed-payment emails)
+{{invoice.number}} — invoice number
+{{invoice.amount}} — invoice total
+{{invoice.due_date}} — invoice due date
+{{invoice.payment_method}} — payment method on this invoice
 {{proposal.title}} — proposal title
-{{proposal.amount}} — total proposal amount
-{{proposal.deposit_amount}} — deposit amount
-{{proposal.balance_due}} — remaining balance
-{{proposal.due_date}} — next payment due date
-{{proposal.status}} — proposal status
+{{proposal.amount}} — proposal total
 
-System variables (auto-injected)
-{{system.date}} — today's date (formatted)
+System variables (auto-injected at send time)
+{{system.date}} — today's date (formatted, e.g. "April 30, 2026")
 {{system.year}} — current year (e.g. 2026)
-{{system.unsubscribe_url}} — one-click unsubscribe link (auto-added to marketing emails)
+{{system.workflow_name}} — name of the automation workflow (notify_owner steps only)
+{{marketing.unsubscribe_url}} — one-click unsubscribe link (auto-added to marketing emails). Short alias: {{unsubscribe_url}}
+{{marketing.resubscribe_url}} — re-subscribe link
+{{marketing.preferences_url}} — manage email preferences link
 
 Backwards compatibility
-Older variable names like {{contact_name}}, {{customer_name}}, {{organization}}, {{appointment_title}}, etc. still work everywhere — they are automatically mapped to the canonical equivalents. You do not need to update existing templates unless you want to migrate to the new naming convention.`,
+Older variable names like {{first_name}}, {{customer_name}}, {{organization}}, {{venue_name}}, {{wedding_date}}, {{initial_inquiry_date}}, etc. still work everywhere — they are automatically mapped to the canonical equivalents. You do not need to update existing templates unless you want to migrate to the new naming convention.`,
       },
       {
         id: 'mkt-ai-concierge',

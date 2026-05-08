@@ -407,12 +407,12 @@ export async function buildMergeVars(
   const forSms = opts?.forSms === true;
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('name, email, location_full, location_city, location_state, owner_first_name, owner_last_name, notification_phone, brand_website, slug')
+    .select('name, email, location_full, location_city, location_state, owner_first_name, owner_last_name, notification_phone, brand_website, slug, description')
     .eq('id', venueId)
     .maybeSingle();
   const { data: lead } = await supabaseAdmin
     .from('leads')
-    .select('id, email, phone, first_name, last_name, name, wedding_date, guest_count, marketing_email_opt_in, sms_dnd')
+    .select('id, email, phone, first_name, last_name, name, wedding_date, guest_count, marketing_email_opt_in, sms_dnd, created_at, notes, referral_source')
     .eq('id', leadId)
     .eq('venue_id', venueId)
     .maybeSingle();
@@ -469,6 +469,28 @@ export async function buildMergeVars(
   const ownerName   = [ownerFirst, ownerLast].filter(Boolean).join(' ');
   const now         = new Date();
   const fullName    = [fn, ln].filter(Boolean).join(' ');
+  const venueDesc   = (venue?.description as string | null)?.trim() || '';
+  const leadNotes   = (lead.notes as string | null)?.trim() || '';
+  const referralSrc = (lead.referral_source as string | null)?.trim() || '';
+  // created_at → formatted date + humanized "X days ago"
+  const createdAtRaw = (lead.created_at as string | null) || '';
+  let initialInquiryDate = '';
+  let timeSinceInquiry   = '';
+  if (createdAtRaw) {
+    try {
+      const d = new Date(createdAtRaw);
+      initialInquiryDate = d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      const diffMs   = now.getTime() - d.getTime();
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      if (diffDays === 0)       timeSinceInquiry = 'today';
+      else if (diffDays === 1)  timeSinceInquiry = 'yesterday';
+      else if (diffDays < 7)    timeSinceInquiry = `${diffDays} days ago`;
+      else if (diffDays < 14)   timeSinceInquiry = '1 week ago';
+      else if (diffDays < 30)   timeSinceInquiry = `${Math.floor(diffDays / 7)} weeks ago`;
+      else if (diffDays < 60)   timeSinceInquiry = '1 month ago';
+      else                      timeSinceInquiry = `${Math.floor(diffDays / 30)} months ago`;
+    } catch { /* keep empty */ }
+  }
   return {
     // ── Flat legacy keys (kept for all existing templates) ────────────────
     first_name:         fn,
@@ -504,6 +526,17 @@ export async function buildMergeVars(
     'lead.wedding_date':         wedding_date_nice || wd || '',
     'lead.wedding_month':        wedding_month || '',
     'lead.guest_count':          gc != null ? String(gc) : '',
+    'lead.created_at':           initialInquiryDate,
+    'lead.time_since_inquiry':   timeSinceInquiry,
+    'lead.notes':                leadNotes,
+    'contact.notes':             leadNotes,
+    'contact.referral_source':   referralSrc,
+    'venue.description':         venueDesc,
+    // Flat aliases for the new fields
+    initial_inquiry_date:        initialInquiryDate,
+    time_since_initial_inquiry:  timeSinceInquiry,
+    bride_notes_or_none:         leadNotes || 'No notes provided',
+    referral_source:             referralSrc,
     'marketing.unsubscribe_url': unsub,
     'marketing.resubscribe_url': resub,
     'marketing.preferences_url': prefs,

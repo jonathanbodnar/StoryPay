@@ -241,6 +241,9 @@ export async function PATCH(
               start_at: String(updates.start_at ?? eventRow.start_at),
               end_at: String(updates.end_at ?? eventRow.end_at ?? ''),
               customer_email: customerEmail,
+              appointment_type: (eventRow.appointment_type as string | null) ?? null,
+              notes: (eventRow.notes as string | null) ?? null,
+              space_id: (eventRow.space_id as string | null) ?? null,
             },
             tz ?? undefined,
           );

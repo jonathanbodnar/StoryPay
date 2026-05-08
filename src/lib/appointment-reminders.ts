@@ -443,6 +443,9 @@ async function sendNotificationForReminder(
     start_at: String((ev as { start_at: string }).start_at),
     end_at: (ev as { end_at?: string }).end_at,
     customer_email: customerEmail,
+    appointment_type: (ev as { appointment_type?: string | null }).appointment_type ?? null,
+    notes: (ev as { notes?: string | null }).notes ?? null,
+    space_id: (ev as { space_id?: string | null }).space_id ?? null,
   };
 
   const notifVars = await buildNotifVarsForEvent(eventForVars, tz);

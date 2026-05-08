@@ -273,7 +273,14 @@ export async function POST(request: NextRequest) {
 
       if ((status ?? 'confirmed') === 'confirmed' && customer_email) {
         const vars = await buildNotifVarsForEvent(
-          { id: eventId, venue_id: venueId, title: (title as string).trim(), start_at: start_at as string, end_at: end_at as string, customer_email: customer_email as string },
+          {
+            id: eventId, venue_id: venueId, title: (title as string).trim(),
+            start_at: start_at as string, end_at: end_at as string,
+            customer_email: customer_email as string,
+            appointment_type: (body.event_type as string | null) ?? null,
+            notes: (body.notes as string | null) ?? null,
+            space_id: (body.space_id as string | null) ?? null,
+          },
           tz ?? undefined,
         );
         if (vars) await dispatchCalendarNotification(venueId, 'booked_confirmed', vars, undefined, (calendar_id as string | null) ?? null);

@@ -63,6 +63,12 @@ export interface CalendarNotifVars {
   appointment_calendar_name?: string | null;
   /** Appointment status */
   appointment_status?: string | null;
+  /** Appointment type, e.g. "tour", "call" */
+  appointment_type?: string | null;
+  /** Free-form notes on the event */
+  appointment_notes?: string | null;
+  /** Venue space name (e.g. "Garden Room") */
+  appointment_space_name?: string | null;
 }
 
 interface TemplateRow {
@@ -279,6 +285,9 @@ function buildVarMap(venue: VenueRow, vars: CalendarNotifVars): Record<string, s
     'appointment.meeting_location':    vars.appointment_meeting_location || '',
     'appointment.calendar_name':       vars.appointment_calendar_name || '',
     'appointment.status':              vars.appointment_status || '',
+    'appointment.type':                vars.appointment_type || '',
+    'appointment.notes':               vars.appointment_notes || '',
+    'appointment.space_name':          vars.appointment_space_name || '',
     // ── Venue (canonical) ────────────────────────────────────────────────
     'venue.name':                      venue.name || 'Us',
     'venue.owner_name':                ownerName,
@@ -685,6 +694,9 @@ export async function buildNotifVarsForEvent(
     customer_email?: string | null;
     calendar_id?: string | null;
     status?: string | null;
+    appointment_type?: string | null;
+    notes?: string | null;
+    space_id?: string | null;
   },
   tz?: string,
 ): Promise<CalendarNotifVars | null> {
@@ -759,6 +771,17 @@ export async function buildNotifVarsForEvent(
     calendarName = (cal as { name?: string } | null)?.name ?? null;
   }
 
+  // Space name lookup
+  let spaceName: string | null = null;
+  if (ev.space_id) {
+    const { data: sp } = await supabaseAdmin
+      .from('venue_spaces')
+      .select('name')
+      .eq('id', ev.space_id)
+      .maybeSingle();
+    spaceName = (sp as { name?: string } | null)?.name ?? null;
+  }
+
   return {
     contact_name:               contactName,
     contact_first_name:         contactFirstName || null,
@@ -778,5 +801,8 @@ export async function buildNotifVarsForEvent(
     appointment_meeting_location: null,
     appointment_calendar_name:  calendarName,
     appointment_status:         ev.status ?? null,
+    appointment_type:           ev.appointment_type ?? null,
+    appointment_notes:          ev.notes ?? null,
+    appointment_space_name:     spaceName,
   };
 }

@@ -47,7 +47,8 @@ export const SYSTEM_MERGE_VARIABLES: SystemMergeVar[] = [
   { key: 'contact.name',                tag: '{{contact.name}}',                description: "Contact's full name (alias)",            example: 'Sarah Johnson',                  category: 'contact',      usedIn: ['calendar', 'marketing', 'transactional', 'ai_concierge'] },
   { key: 'contact.email',               tag: '{{contact.email}}',               description: "Contact's email address",                example: 'sarah@example.com',              category: 'contact',      usedIn: ['calendar', 'marketing', 'transactional'] },
   { key: 'contact.phone',               tag: '{{contact.phone}}',               description: "Contact's phone number",                 example: '+1 555-123-4567',                category: 'contact',      usedIn: ['calendar', 'marketing', 'transactional'] },
-  { key: 'contact.notes',               tag: '{{contact.notes}}',               description: 'Free-form notes about the contact',      example: 'Outdoor ceremony, ~150 guests',  category: 'contact',      usedIn: ['ai_concierge'] },
+  { key: 'contact.notes',               tag: '{{contact.notes}}',               description: 'Free-form notes / inquiry message',       example: 'Outdoor ceremony, ~150 guests',  category: 'contact',      usedIn: ['marketing', 'ai_concierge'] },
+  { key: 'contact.referral_source',     tag: '{{contact.referral_source}}',     description: 'How the contact found you',               example: 'Google search',                  category: 'contact',      usedIn: ['marketing', 'ai_concierge'] },
   // Appointment
   { key: 'appointment.title',           tag: '{{appointment.title}}',           description: 'Appointment title',                      example: 'Venue Tour',                     category: 'appointment',  usedIn: ['calendar'] },
   { key: 'appointment.date',            tag: '{{appointment.date}}',            description: 'Date only (e.g. Monday, May 5, 2026)',    example: 'Monday, May 5, 2026',            category: 'appointment',  usedIn: ['calendar'] },
@@ -59,6 +60,9 @@ export const SYSTEM_MERGE_VARIABLES: SystemMergeVar[] = [
   { key: 'appointment.meeting_location',tag: '{{appointment.meeting_location}}',description: 'Meeting link or physical address',        example: 'https://zoom.us/j/123456',       category: 'appointment',  usedIn: ['calendar'] },
   { key: 'appointment.calendar_name',   tag: '{{appointment.calendar_name}}',   description: 'Calendar name (e.g. Tour Calendar)',      example: 'Tour Calendar',                  category: 'appointment',  usedIn: ['calendar'] },
   { key: 'appointment.status',          tag: '{{appointment.status}}',          description: 'Status (confirmed / cancelled)',          example: 'confirmed',                      category: 'appointment',  usedIn: ['calendar'] },
+  { key: 'appointment.type',            tag: '{{appointment.type}}',            description: 'Appointment type (tour / call)',          example: 'tour',                           category: 'appointment',  usedIn: ['calendar'] },
+  { key: 'appointment.notes',           tag: '{{appointment.notes}}',           description: 'Free-form notes added to the event',     example: 'Bring floor plan printout',      category: 'appointment',  usedIn: ['calendar'] },
+  { key: 'appointment.space_name',      tag: '{{appointment.space_name}}',      description: 'Venue space assigned to this appointment', example: 'Garden Room',                  category: 'appointment',  usedIn: ['calendar'] },
   // Venue
   { key: 'venue.name',                  tag: '{{venue.name}}',                  description: 'Venue / business name',                  example: 'The Grand Ballroom',             category: 'venue',        usedIn: ['calendar', 'marketing', 'transactional', 'ai_concierge'] },
   { key: 'venue.owner_name',            tag: '{{venue.owner_name}}',            description: "Owner's full name",                      example: 'Jason Westbrook',                category: 'venue',        usedIn: ['calendar', 'marketing', 'transactional'] },
@@ -117,6 +121,7 @@ export const SYSTEM_MERGE_VARIABLES: SystemMergeVar[] = [
   // System
   { key: 'system.date',                 tag: '{{system.date}}',                 description: "Today's date at send time",              example: 'April 30, 2026',                 category: 'system',       usedIn: ['calendar', 'marketing', 'transactional', 'ai_concierge'] },
   { key: 'system.year',                 tag: '{{system.year}}',                 description: 'Current year at send time',              example: '2026',                           category: 'system',       usedIn: ['calendar', 'marketing', 'transactional', 'ai_concierge'] },
+  { key: 'system.workflow_name',        tag: '{{system.workflow_name}}',        description: 'Name of the automation that triggered this step (notify_owner steps only)', example: 'New Lead Follow-Up', category: 'system', usedIn: ['marketing'] },
 ];
 
 // ── Legacy flat alias bridges ─────────────────────────────────────────────────
@@ -158,6 +163,7 @@ export const FLAT_TO_CANONICAL: Record<string, string> = {
   invoice_amount:           'invoice.amount',
   due_date:                 'invoice.due_date',
   invoice_date:             'invoice.date',
+  invoice_payment_method:   'invoice.payment_method',
   // ── Subscription ─────────────────────────────────────────────────────────
   frequency:                'subscription.frequency',
   next_payment_date:        'subscription.next_payment_date',
@@ -175,6 +181,7 @@ export const FLAT_TO_CANONICAL: Record<string, string> = {
   initial_inquiry_date:     'lead.created_at',
   time_since_initial_inquiry: 'lead.time_since_inquiry',
   bride_notes_or_none:      'lead.notes',
+  referral_source:          'contact.referral_source',
   // ── AI Concierge legacy aliases ───────────────────────────────────────────
   // Pre-2026-05 prompts used flat snake_case names; map them to the canonical
   // dot-notation so old prompt versions keep rendering after the unification.
