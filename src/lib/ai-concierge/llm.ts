@@ -122,15 +122,27 @@ export function parseStructuredOutput(raw: string): GenerateSmsResult {
   }
 
   // Tolerant sms tag: matches <<sms>> or <sms> (and their closing variants)
+  let smsContent: string | null = null;
   const smsMatch = /<<?\s*sms\s*>>([\s\S]*?)<<?\s*\/sms\s*>>/i.exec(cleaned);
-  if (!smsMatch) {
-    console.warn('[ai-llm] missing_sms_tag — raw output:', raw.slice(0, 500));
-    return {
-      ok: false,
-      error: 'missing_sms_tag',
-      detail: 'Could not find <<sms>> tag in model output',
-      rawModelOutput: raw,
-    };
+  if (smsMatch) {
+    smsContent = (smsMatch[1] || '').trim();
+  } else {
+    // Fallback: if angle tag found but no sms tags at all, treat everything
+    // after the closing angle tag as the SMS body (DeepSeek plain-text output).
+    const angleEnd = cleaned.indexOf(angleMatch[0]) + angleMatch[0].length;
+    const remainder = cleaned.slice(angleEnd).trim();
+    if (remainder) {
+      console.warn('[ai-llm] sms_tag_missing — using plain-text fallback. raw:', raw.slice(0, 500));
+      smsContent = remainder;
+    } else {
+      console.warn('[ai-llm] missing_sms_tag (no fallback) — raw output:', raw.slice(0, 500));
+      return {
+        ok: false,
+        error: 'missing_sms_tag',
+        detail: 'Could not find <<sms>> tag in model output',
+        rawModelOutput: raw,
+      };
+    }
   }
 
   const angleRaw = (angleMatch[1] || '').trim().toLowerCase();
@@ -143,7 +155,7 @@ export function parseStructuredOutput(raw: string): GenerateSmsResult {
     };
   }
 
-  const smsText = stripEmDashes((smsMatch[1] || '').trim());
+  const smsText = stripEmDashes(smsContent);
   if (!smsText) {
     return {
       ok: false,
