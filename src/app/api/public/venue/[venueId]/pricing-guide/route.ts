@@ -22,9 +22,12 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 25;
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ venueId: string }> },
 ) {
+  // ?dl=1  → force download (Content-Disposition: attachment)
+  // default → inline (browser opens its native PDF viewer / preview)
+  const forceDownload = req.nextUrl.searchParams.get('dl') === '1';
   const { venueId } = await params;
 
   if (!venueId) {
@@ -105,12 +108,15 @@ export async function GET(
     const pdfBuffer = await generatePricingGuidePdfServer(guideData, venueInfo);
 
     const safeName = (venue.name ?? 'venue').replace(/[^a-zA-Z0-9]/g, '_');
+    const disposition = forceDownload
+      ? `attachment; filename="${safeName}_Pricing_Guide.pdf"`
+      : `inline; filename="${safeName}_Pricing_Guide.pdf"`;
 
     return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,
       headers: {
         'Content-Type':        'application/pdf',
-        'Content-Disposition': `attachment; filename="${safeName}_Pricing_Guide.pdf"`,
+        'Content-Disposition': disposition,
         // No caching — always freshly generated
         'Cache-Control':       'no-store',
       },

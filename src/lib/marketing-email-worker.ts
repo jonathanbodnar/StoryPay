@@ -461,9 +461,11 @@ export async function buildMergeVars(
     'marketing.preferences_url': prefs,
     'system.date':               now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
     'system.year':               String(now.getFullYear()),
-    // Pricing guide — on-demand server-generated PDF (always latest version)
-    pricing_guide_url:         `${appOrigin}/api/public/venue/${venueId}/pricing-guide`,
-    'venue.pricing_guide_url': `${appOrigin}/api/public/venue/${venueId}/pricing-guide`,
+    // Pricing guide — links to the branded preview page (/venue/[id]/guide).
+    // The preview page shows the PDF inline and has a Download button.
+    // ?dl=1 on the underlying API route forces an attachment download.
+    pricing_guide_url:         `${appOrigin}/venue/${venueId}/guide`,
+    'venue.pricing_guide_url': `${appOrigin}/venue/${venueId}/guide`,
   };
 }
 
