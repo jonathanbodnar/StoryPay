@@ -14,7 +14,7 @@ import {
   resolvePostSubmit,
   type AddressFieldKey,
 } from '@/lib/marketing-form-schema';
-import { onMarketingFormSubmitted } from '@/lib/marketing-email-worker';
+import { onMarketingFormSubmitted, sendBookingSystemGuide } from '@/lib/marketing-email-worker';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -339,7 +339,64 @@ export async function POST(
     }
   }
 
-  // ── Speed-to-lead: enroll into any active `form_submitted` workflow ───────
+  // ── Speed-to-lead: create a lead fallback + fire guide delivery + enroll ──
+  //
+  // If the form has no pipeline stage configured (or the stage lookup failed),
+  // but the venue has an active Booking System automation, still create a bare
+  // lead row so the sequence can enroll. Without a lead row the worker has
+  // nothing to attach the enrollment to.
+  if (!createdLeadId && emailVal && isEmail(emailVal)) {
+    try {
+      const { data: bookingAuto } = await supabaseAdmin
+        .from('marketing_automations')
+        .select('id')
+        .eq('venue_id', formRow.venue_id)
+        .eq('name', 'Speed to Lead — Booking System')
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (bookingAuto) {
+        const { data: fallbackLead, error: flErr } = await supabaseAdmin
+          .from('leads')
+          .insert({
+            venue_id:   formRow.venue_id,
+            name:       [firstNameVal, lastNameVal].filter(Boolean).join(' ') || emailVal,
+            first_name: firstNameVal || null,
+            last_name:  lastNameVal  || null,
+            email:      emailVal,
+            phone:      phoneVal || null,
+            source:     'form',
+            status:     'lead',
+          })
+          .select('id')
+          .maybeSingle();
+        if (flErr) {
+          // Duplicate email — try to find existing
+          const { data: dup } = await supabaseAdmin
+            .from('leads')
+            .select('id')
+            .eq('venue_id', formRow.venue_id)
+            .ilike('email', emailVal)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (dup?.id) createdLeadId = dup.id as string;
+        } else if (fallbackLead?.id) {
+          createdLeadId = fallbackLead.id as string;
+        }
+      }
+    } catch (e) {
+      console.warn('[form submit] booking-system lead fallback failed:', e);
+    }
+  }
+
+  // Phase 1 — Booking System guide delivery (email + SMS, fires immediately)
+  if (createdLeadId) {
+    void sendBookingSystemGuide(formRow.venue_id, createdLeadId)
+      .catch((e) => console.warn('[form submit] guide delivery failed:', e));
+  }
+
+  // Phase 2 — Enroll in the sequence automation
   if (createdLeadId) {
     try {
       await onMarketingFormSubmitted(formRow.venue_id, createdLeadId, formRow.id);

@@ -232,6 +232,72 @@ export async function onMarketingFormSubmitted(
 }
 
 /**
+ * Phase 1 — Booking System Guide Delivery.
+ *
+ * Called immediately after a form submit (before the sequence enrollment).
+ * Reads the venue's booking system config and sends the guide email and/or
+ * SMS using the same merge-var and GHL infrastructure as the sequence worker.
+ *
+ * Safe to call even if the booking system is disabled — it no-ops silently.
+ */
+export async function sendBookingSystemGuide(
+  venueId: string,
+  leadId: string,
+): Promise<void> {
+  try {
+    const { data: vr } = await supabaseAdmin
+      .from('venues')
+      .select('booking_system_enabled, booking_guide_email_enabled, booking_guide_sms_enabled, booking_guide_email_body, booking_guide_sms_body, name, notification_email, email')
+      .eq('id', venueId)
+      .maybeSingle();
+
+    const v = vr as Record<string, unknown> | null;
+    if (!v) return;
+
+    const systemOn = (v.booking_system_enabled as boolean | null) ?? true;
+    if (!systemOn) return;
+
+    const emailOn = (v.booking_guide_email_enabled as boolean | null) ?? true;
+    const smsOn   = (v.booking_guide_sms_enabled   as boolean | null) ?? true;
+    if (!emailOn && !smsOn) return;
+
+    const appOrigin = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
+
+    // ── Email guide ───────────────────────────────────────────────────────
+    if (emailOn) {
+      const rawBody = ((v.booking_guide_email_body as string | null) || '').trim();
+      if (rawBody) {
+        const vars = await buildMergeVars(venueId, leadId, appOrigin, { forSms: false });
+        if (vars) {
+          const body    = mergeMarketingFields(rawBody, vars);
+          const htmlBody = body.replace(/\n/g, '<br>');
+          const { fromName, fromEmail, replyTo } = await resolveVenueFromAddress(venueId);
+          const { sendEmail } = await import('@/lib/email');
+          await sendEmail({
+            to:      vars.email,
+            from:    { name: fromName, email: fromEmail },
+            replyTo: replyTo,
+            subject: `Your pricing guide from ${vars.venue_name}`,
+            html:    `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;color:#1b1b1b;line-height:1.6">${htmlBody}</div>`,
+          }).catch((e) => console.warn('[booking-guide] email failed:', e));
+        }
+      }
+    }
+
+    // ── SMS guide ─────────────────────────────────────────────────────────
+    if (smsOn) {
+      const rawSms = ((v.booking_guide_sms_body as string | null) || '').trim();
+      if (rawSms) {
+        await sendAutomationSmsToLead(venueId, leadId, rawSms)
+          .catch((e) => console.warn('[booking-guide] SMS failed:', e));
+      }
+    }
+  } catch (e) {
+    console.warn('[booking-guide] sendBookingSystemGuide error (non-fatal):', e);
+  }
+}
+
+/**
  * Halt all active automation enrollments for a lead because they replied
  * (email reply detected by the inbound webhook, or SMS reply later).
  * Returns the number of enrollments that were halted so the caller can
@@ -293,7 +359,7 @@ export async function buildMergeVars(
   const forSms = opts?.forSms === true;
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('name, email, location_full, location_city, location_state, owner_first_name, owner_last_name, notification_phone, brand_website')
+    .select('name, email, location_full, location_city, location_state, owner_first_name, owner_last_name, notification_phone, brand_website, slug')
     .eq('id', venueId)
     .maybeSingle();
   const { data: lead } = await supabaseAdmin
@@ -395,6 +461,13 @@ export async function buildMergeVars(
     'marketing.preferences_url': prefs,
     'system.date':               now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
     'system.year':               String(now.getFullYear()),
+    // Pricing guide — points to the venue's public listing page (pricing section)
+    pricing_guide_url: venue?.slug
+      ? `${base}/venue/${venue.slug}#pricing`
+      : `${base}`,
+    'venue.pricing_guide_url': venue?.slug
+      ? `${base}/venue/${venue.slug}#pricing`
+      : `${base}`,
   };
 }
 
