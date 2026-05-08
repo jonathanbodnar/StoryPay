@@ -22,9 +22,14 @@ jobs:
 
       - name: Build changelog entry from commit
         id: build_entry
+        # Untrusted inputs (commit message, sha) are passed via env so the
+        # shell never sees them through `${{ }}` interpolation, which would
+        # be vulnerable to script injection. See:
+        # https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          COMMIT_SHA: ${{ github.sha }}
         run: |
-          COMMIT_MSG="${{ github.event.head_commit.message }}"
-          COMMIT_SHA="${{ github.sha }}"
           SHORT_SHA="${COMMIT_SHA:0:7}"
 
           # Determine category from conventional commit prefix
@@ -52,25 +57,40 @@ jobs:
           TITLE_JSON=$(echo "$TITLE" | python3 -c "import sys,json; print(json.dumps(sys.stdin.read().strip()))")
           DESC_JSON=$(echo "$DESCRIPTION" | python3 -c "import sys,json; print(json.dumps(sys.stdin.read().strip()))")
 
-          echo "title=$TITLE_JSON" >> $GITHUB_OUTPUT
-          echo "description=$DESC_JSON" >> $GITHUB_OUTPUT
-          echo "category=$CATEGORY" >> $GITHUB_OUTPUT
+          echo "title=$TITLE_JSON" >> "$GITHUB_OUTPUT"
+          echo "description=$DESC_JSON" >> "$GITHUB_OUTPUT"
+          echo "category=$CATEGORY" >> "$GITHUB_OUTPUT"
 
       - name: Post to changelog API
+        # Pass step outputs and secrets via env so shell metacharacters that
+        # may have survived the JSON encoding (e.g. backticks, $()) inside
+        # the commit-derived title cannot be evaluated by bash.
+        env:
+          TITLE_JSON:        ${{ steps.build_entry.outputs.title }}
+          DESCRIPTION_JSON:  ${{ steps.build_entry.outputs.description }}
+          CATEGORY:          ${{ steps.build_entry.outputs.category }}
+          COMMIT_SHA:        ${{ github.sha }}
+          APP_URL:           ${{ secrets.APP_URL }}
+          CHANGELOG_SECRET:  ${{ secrets.CHANGELOG_WEBHOOK_SECRET }}
         run: |
-          TITLE=${{ steps.build_entry.outputs.title }}
-          DESCRIPTION=${{ steps.build_entry.outputs.description }}
-          CATEGORY=${{ steps.build_entry.outputs.category }}
+          # Build the JSON payload with python so every value is properly
+          # quoted/escaped — never interpolate untrusted strings into a JSON
+          # string by hand.
+          PAYLOAD=$(python3 -c '
+          import json, os
+          # title and description are already JSON-encoded strings (e.g. "foo").
+          # We need the unwrapped value so we can drop them into the payload dict.
+          print(json.dumps({
+              "title":       json.loads(os.environ["TITLE_JSON"]),
+              "description": json.loads(os.environ["DESCRIPTION_JSON"]),
+              "category":    os.environ["CATEGORY"],
+              "version":     os.environ["COMMIT_SHA"],
+          }))')
 
-          curl -s -X POST "${{ secrets.APP_URL }}/api/admin/changelog" \
+          curl -s -X POST "$APP_URL/api/admin/changelog" \
             -H "Content-Type: application/json" \
-            -H "x-changelog-secret: ${{ secrets.CHANGELOG_WEBHOOK_SECRET }}" \
-            -d "{
-              \"title\": $TITLE,
-              \"description\": $DESCRIPTION,
-              \"category\": \"$CATEGORY\",
-              \"version\": \"${{ github.sha }}\"
-            }" \
+            -H "x-changelog-secret: $CHANGELOG_SECRET" \
+            -d "$PAYLOAD" \
             --fail \
             --retry 3 \
             --retry-delay 5 \
