@@ -1,29 +1,21 @@
-import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { exchangeCode } from '@/lib/ghl';
-
-function getBaseUrl(request: Request): string {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-  if (appUrl) return appUrl;
-  const url = new URL(request.url);
-  const host = request.headers.get('x-forwarded-host') || request.headers.get('host');
-  const proto = request.headers.get('x-forwarded-proto') || 'https';
-  return host ? `${proto}://${host}` : url.origin;
-}
+import { safeRedirect, getTrustedAppOrigin } from '@/lib/safe-redirect';
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
   const venueId = url.searchParams.get('state');
-  const base = getBaseUrl(request);
 
   if (!code || !venueId) {
-    return NextResponse.redirect(`${base}/setup?error=missing_params`);
+    return safeRedirect('/setup?error=missing_params');
   }
 
   const clientId = process.env.GHL_CLIENT_ID!;
   const clientSecret = process.env.GHL_CLIENT_SECRET!;
-  const redirectUri = `${base}/api/messaging/callback`;
+  // The redirect URI must match exactly what was registered with GHL.
+  // Build it from our trusted origin — never request headers.
+  const redirectUri = `${getTrustedAppOrigin()}/api/messaging/callback`;
 
   try {
     const tokens = await exchangeCode(code, clientId, clientSecret, redirectUri);
@@ -39,9 +31,9 @@ export async function GET(request: Request) {
       })
       .eq('id', venueId);
 
-    return NextResponse.redirect(`${base}/dashboard/settings`);
+    return safeRedirect('/dashboard/settings');
   } catch (err) {
     console.error('OAuth callback error:', err);
-    return NextResponse.redirect(`${base}/setup?error=oauth_failed`);
+    return safeRedirect('/setup?error=oauth_failed');
   }
 }

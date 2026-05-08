@@ -1,21 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-
-function getBaseUrl(request: NextRequest): string {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-  if (appUrl) return appUrl;
-
-  const host = request.headers.get('x-forwarded-host') || request.headers.get('host');
-  const proto = request.headers.get('x-forwarded-proto') || 'https';
-  return host ? `${proto}://${host}` : 'https://storypay.io';
-}
+import { safeRedirect } from '@/lib/safe-redirect';
 
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params;
-  const base = getBaseUrl(request);
 
   try {
     const { data: venue, error: tokenError } = await supabaseAdmin
@@ -25,7 +16,7 @@ export async function GET(
       .single();
 
     if (tokenError || !venue) {
-      return NextResponse.redirect(`${base}/login/invalid`);
+      return safeRedirect('/login/invalid');
     }
 
     // Always go to the dashboard — StoryPay application is optional.
@@ -34,14 +25,13 @@ export async function GET(
     const isFirstLogin = !venue.setup_completed;
     const destination = isFirstLogin ? '/dashboard?welcome=1' : '/dashboard';
 
-    // Mark setup complete so we never show the /setup page again.
     if (isFirstLogin) {
       await supabaseAdmin
         .from('venues')
         .update({ setup_completed: true })
         .eq('id', venue.id);
     }
-    const response = NextResponse.redirect(`${base}${destination}`);
+    const response = safeRedirect(destination);
 
     response.cookies.set('venue_id', venue.id, {
       path: '/',
@@ -54,8 +44,6 @@ export async function GET(
     return response;
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
-    return NextResponse.redirect(
-      `${base}/login/error?msg=${encodeURIComponent(msg)}`
-    );
+    return safeRedirect(`/login/error?msg=${encodeURIComponent(msg)}`);
   }
 }
