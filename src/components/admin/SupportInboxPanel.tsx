@@ -1941,7 +1941,7 @@ function MessageBubble({
           channel={msg.channel}
           className="text-sm text-violet-900"
           toneClass="border-violet-300 bg-violet-100 text-violet-800 hover:bg-violet-200"
-          defaultExpanded={isLatest}
+          defaultExpanded={msg.channel !== 'email'}
         />
       </div>
     );
@@ -2031,7 +2031,7 @@ function MessageBubble({
                       ? 'border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200'
                       : 'border-white/30 bg-white/10 text-white hover:bg-white/20'
             }
-            defaultExpanded={isLatest}
+            defaultExpanded={msg.channel !== 'email'}
           />
         </div>
         {msg.support_internal_note && (
