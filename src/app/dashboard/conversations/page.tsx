@@ -1600,6 +1600,21 @@ export default function ConversationsPage() {
                         const ts = new Date(m.created_at).toLocaleString(undefined, {
                           month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
                         });
+                        const isVdEmail = m.channel === 'email';
+                        const vdExpanded = expandedEmailIds.has(m.id);
+                        const toggleVd = () =>
+                          setExpandedEmailIds((prev) => {
+                            const n = new Set(prev);
+                            n.has(m.id) ? n.delete(m.id) : n.add(m.id);
+                            return n;
+                          });
+                        // 110-char single-line snippet for collapsed email VD messages
+                        const SNIPPET = 110;
+                        const oneLine = m.body.replace(/\s+/g, ' ').trim();
+                        const snippet = oneLine.length > SNIPPET
+                          ? oneLine.slice(0, SNIPPET).trimEnd() + '…'
+                          : oneLine || '(empty)';
+
                         return (
                           <div key={m.id} className="rounded-xl border border-violet-300 bg-violet-50 px-3 py-2 shadow-sm">
                             <div className="flex items-center gap-2 text-[10px] text-violet-800 mb-1 flex-wrap">
@@ -1615,7 +1630,32 @@ export default function ConversationsPage() {
                               )}
                               <span className="ml-auto text-violet-600">{ts}</span>
                             </div>
-                            <p className="text-sm text-violet-950 whitespace-pre-wrap break-words">{m.body}</p>
+                            {isVdEmail ? (
+                              vdExpanded ? (
+                                <div>
+                                  <p className="text-sm text-violet-950 whitespace-pre-wrap break-words">{m.body}</p>
+                                  <button
+                                    type="button"
+                                    onClick={toggleVd}
+                                    className="mt-2 inline-flex items-center gap-1 rounded-full border border-violet-300 bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-800 hover:bg-violet-200"
+                                  >
+                                    <ChevronUp size={11} /> Hide
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={toggleVd}
+                                  className="group flex w-full items-center gap-2 rounded-md border border-violet-300 bg-violet-100 px-2 py-1.5 text-left text-[12px] font-medium text-violet-800 hover:bg-violet-200"
+                                  title="Click to expand email"
+                                >
+                                  <ChevronDown size={12} className="shrink-0 opacity-70 group-hover:opacity-100" />
+                                  <span className="truncate">{snippet}</span>
+                                </button>
+                              )
+                            ) : (
+                              <p className="text-sm text-violet-950 whitespace-pre-wrap break-words">{m.body}</p>
+                            )}
                           </div>
                         );
                       }
