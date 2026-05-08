@@ -40,6 +40,7 @@ export const DIRECTORY_NAV_REGISTRY: DirectoryNavRegistryEntry[] = [
 
   { id: 'nav_listing_dashboard', label: 'Listing — Dashboard', pathPrefix: '/dashboard/listing', group: 'listing' },
   { id: 'nav_listing_pricing_guide', label: 'Listing — Pricing Guide', pathPrefix: '/dashboard/listing/pricing-guide', group: 'listing' },
+  { id: 'nav_listing_booking_system', label: 'Listing — Booking System', pathPrefix: '/dashboard/listing/booking-system', group: 'listing' },
   { id: 'nav_listing_media', label: 'Listing — Media library', pathPrefix: '/dashboard/listing/media', group: 'listing' },
   { id: 'nav_listing_images', label: 'Listing — Images (legacy)', pathPrefix: '/dashboard/listing/images', group: 'listing' },
   { id: 'nav_listing_analytics', label: 'Listing — Analytics', pathPrefix: '/dashboard/listing/analytics', group: 'listing' },

@@ -858,6 +858,26 @@ async function processOneEnrollment(en: {
   lead_id: string;
   current_step_index: number;
 }): Promise<StepResult> {
+  // Stop-on-reply: if the lead has replied (last_inbound_at is set), stop the sequence.
+  const { data: leadRow } = await supabaseAdmin
+    .from('leads')
+    .select('last_inbound_at')
+    .eq('id', en.lead_id)
+    .maybeSingle();
+  if ((leadRow as { last_inbound_at?: string | null } | null)?.last_inbound_at) {
+    // Mark the enrollment as completed — she replied, no more automated messages needed.
+    await supabaseAdmin
+      .from('marketing_automation_enrollments')
+      .update({ status: 'completed', completed_at: new Date().toISOString(), last_error: 'stopped_on_reply' })
+      .eq('id', en.id);
+    void logStepExecution({
+      automation_id: en.automation_id, enrollment_id: en.id,
+      venue_id: en.venue_id, lead_id: en.lead_id,
+      step_order: en.current_step_index, step_type: 'stop_on_reply', status: 'success',
+    });
+    return 'completed';
+  }
+
   const { data: steps, error: se } = await supabaseAdmin
     .from('marketing_automation_steps')
     .select('id, step_order, step_type, config_json')
