@@ -193,7 +193,7 @@ export async function PATCH(req: NextRequest) {
       .maybeSingle();
 
     if (!auto) {
-      const { data: created } = await supabaseAdmin
+      const { data: created, error: createErr } = await supabaseAdmin
         .from('marketing_automations')
         .insert({
           venue_id:      venueId,
@@ -204,12 +204,17 @@ export async function PATCH(req: NextRequest) {
         })
         .select('id')
         .single();
+      if (createErr) {
+        console.error('[booking-system] failed to create automation:', createErr);
+        return NextResponse.json({ error: `Failed to create automation: ${createErr.message}` }, { status: 500 });
+      }
       auto = created;
     } else if (body.sequenceEnabled !== undefined) {
-      await supabaseAdmin
+      const { error: statusErr } = await supabaseAdmin
         .from('marketing_automations')
         .update({ status })
         .eq('id', auto.id);
+      if (statusErr) console.warn('[booking-system] sequence status update failed:', statusErr);
     }
 
     if (!auto) return NextResponse.json({ error: 'Could not create automation' }, { status: 500 });
@@ -218,10 +223,14 @@ export async function PATCH(req: NextRequest) {
 
     if (body.steps !== undefined) {
       // Delete all existing steps then re-insert in order.
-      await supabaseAdmin
+      const { error: delErr } = await supabaseAdmin
         .from('marketing_automation_steps')
         .delete()
         .eq('automation_id', autoId);
+      if (delErr) {
+        console.error('[booking-system] failed to clear existing steps:', delErr);
+        return NextResponse.json({ error: `Failed to clear existing steps: ${delErr.message}` }, { status: 500 });
+      }
 
       if (body.steps.length > 0) {
         const inserts = body.steps.map((s, i) => ({
@@ -236,7 +245,21 @@ export async function PATCH(req: NextRequest) {
             mode:          s.step_type === 'send_email' ? 'quick' : undefined,
           },
         }));
-        await supabaseAdmin.from('marketing_automation_steps').insert(inserts);
+        const { error: insErr } = await supabaseAdmin
+          .from('marketing_automation_steps')
+          .insert(inserts);
+        if (insErr) {
+          console.error('[booking-system] failed to insert steps:', insErr);
+          // Detect the missing-migration case so we can give a clear hint
+          const msg = insErr.message || 'Unknown insert error';
+          const hint = /step_type_check|violates check constraint/i.test(msg)
+            ? 'Database migration 119 has not been applied yet — please run migrations/119_booking_system_step_types.sql in Supabase.'
+            : null;
+          return NextResponse.json({
+            error: `Failed to save steps: ${msg}`,
+            hint,
+          }, { status: 500 });
+        }
       }
     }
   }

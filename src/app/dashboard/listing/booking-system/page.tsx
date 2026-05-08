@@ -618,8 +618,9 @@ export default function BookingSystemPage() {
         body: JSON.stringify(patch),
       });
       if (!r.ok) {
-        const d = await r.json().catch(() => ({})) as { error?: string };
-        throw new Error(d.error || 'Save failed');
+        const d = await r.json().catch(() => ({})) as { error?: string; hint?: string };
+        const msg = [d.error, d.hint].filter(Boolean).join(' — ');
+        throw new Error(msg || 'Save failed');
       }
       setSaved(true);
       saveTimer.current = setTimeout(() => setSaved(false), 2500);
