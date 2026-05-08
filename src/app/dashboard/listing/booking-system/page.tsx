@@ -1,14 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Zap, Mail, MessageSquare, Bot, ChevronDown, ChevronUp,
   Plus, Trash2, Loader2, CheckCircle2, AlertTriangle, GripVertical,
-  Clock, Send, Pencil, X, Check,
+  Clock, Send, Pencil, Check,
 } from 'lucide-react';
 import type { BookingSystemConfig, StepConfig } from '@/app/api/listing/booking-system/route';
 
-// ─── Tiny helpers ──────────────────────────────────────────────────────────
+// ─── Shared primitives ────────────────────────────────────────────────────
 
 function Toggle({
   checked, onChange, disabled,
@@ -47,9 +47,7 @@ function PhaseCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold tracking-widest text-gray-400 uppercase">Phase {number}</span>
-              </div>
+              <span className="text-[10px] font-bold tracking-widest text-gray-400 uppercase">Phase {number}</span>
               <h3 className="text-[15px] font-semibold text-gray-900 leading-tight">{title}</h3>
               <p className="mt-0.5 text-[12px] text-gray-500">{subtitle}</p>
             </div>
@@ -98,88 +96,107 @@ function InlineInput({
   );
 }
 
-// ─── Step editor ──────────────────────────────────────────────────────────
+// ─── Individual step blocks ───────────────────────────────────────────────
 
-const DAY_OPTIONS = [0.5, 1, 2, 3, 4, 5, 7, 10, 14];
-
-function StepRow({
-  step, index, total, onChange, onRemove,
+// Wait block — inline, no expand needed
+function WaitBlock({
+  step, onRemove, onChange, dragHandleProps,
 }: {
-  step: StepConfig; index: number; total: number;
-  onChange: (s: StepConfig) => void;
+  step: StepConfig;
   onRemove: () => void;
+  onChange: (s: StepConfig) => void;
+  dragHandleProps: React.HTMLAttributes<HTMLSpanElement>;
+}) {
+  const days = step.delay_minutes ? Math.round(step.delay_minutes / 1440) : undefined;
+  return (
+    <div className="flex items-center gap-2.5 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5">
+      <span {...dragHandleProps} className="cursor-grab text-gray-300 hover:text-gray-400 active:cursor-grabbing shrink-0">
+        <GripVertical size={14} />
+      </span>
+      <Clock size={13} className="text-gray-400 shrink-0" />
+      <span className="text-[12px] text-gray-500 flex-1">Wait</span>
+      <select
+        value={days ?? ''}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (!v) return;
+          onChange({ ...step, delay_minutes: Number(v) * 1440, label: `Wait ${v} day${v === '1' ? '' : 's'}` });
+        }}
+        className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-[12px] text-gray-700 focus:outline-none focus:border-violet-400"
+      >
+        <option value="" disabled>choose days…</option>
+        <option value="1">1 day</option>
+        <option value="2">2 days</option>
+        <option value="3">3 days</option>
+      </select>
+      <button type="button" onClick={onRemove} className="text-gray-300 hover:text-red-400 transition-colors ml-1 shrink-0">
+        <Trash2 size={13} />
+      </button>
+    </div>
+  );
+}
+
+// SMS / Email block — collapsible
+function MessageBlock({
+  step, onRemove, onChange, dragHandleProps,
+}: {
+  step: StepConfig;
+  onRemove: () => void;
+  onChange: (s: StepConfig) => void;
+  dragHandleProps: React.HTMLAttributes<HTMLSpanElement>;
 }) {
   const [expanded, setExpanded] = useState(false);
-
-  const dayLabel = step.delay_minutes
-    ? step.delay_minutes >= 1440
-      ? `Day ${Math.round(step.delay_minutes / 1440)}`
-      : `${Math.round(step.delay_minutes / 60)}h`
-    : 'Day 1';
-
-  if (step.step_type === 'delay') {
-    return (
-      <div className="flex items-center gap-3 py-2 px-3 rounded-xl bg-gray-50 border border-gray-100">
-        <Clock size={14} className="text-gray-400 shrink-0" />
-        <span className="text-[12px] text-gray-500 flex-1">Wait</span>
-        <select
-          value={step.delay_minutes ?? 1440}
-          onChange={(e) => onChange({ ...step, delay_minutes: Number(e.target.value) })}
-          className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-[12px] text-gray-700 focus:outline-none focus:border-violet-400"
-        >
-          {[1440, 2880, 4320, 5760, 7200, 10080, 14400, 20160].map((m) => (
-            <option key={m} value={m}>{Math.round(m / 1440)} day{Math.round(m / 1440) !== 1 ? 's' : ''}</option>
-          ))}
-        </select>
-        <button type="button" onClick={onRemove} className="text-gray-300 hover:text-red-400 transition-colors ml-1">
-          <X size={13} />
-        </button>
-      </div>
-    );
-  }
-
-  const isSms   = step.step_type === 'send_sms';
-  const accent  = isSms ? 'text-violet-600' : 'text-blue-500';
-  const Icon    = isSms ? MessageSquare : Mail;
+  const isSms = step.step_type === 'send_sms';
+  const Icon  = isSms ? MessageSquare : Mail;
+  const color = isSms ? 'text-violet-600' : 'text-blue-500';
+  const preview = step.body?.trim().slice(0, 60);
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+    <div className={`rounded-xl border bg-white overflow-hidden ${expanded ? 'border-gray-300 shadow-sm' : 'border-gray-200'}`}>
       <button
         type="button"
-        className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 transition-colors"
+        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-gray-50 transition-colors"
         onClick={() => setExpanded(v => !v)}
       >
-        <GripVertical size={13} className="text-gray-300 shrink-0" />
-        <Icon size={13} className={`${accent} shrink-0`} />
-        <span className="text-[12px] font-medium text-gray-700 flex-1 truncate">
-          {step.label || (isSms ? 'SMS' : 'Email')}
-          {step.body ? <span className="ml-1.5 font-normal text-gray-400 truncate">{step.body.slice(0, 50)}{step.body.length > 50 ? '…' : ''}</span> : null}
+        <span
+          {...dragHandleProps}
+          className="cursor-grab text-gray-300 hover:text-gray-400 active:cursor-grabbing shrink-0"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <GripVertical size={14} />
         </span>
-        <span className="text-[11px] text-gray-400 shrink-0">{dayLabel}</span>
-        <div className="flex items-center gap-1 ml-1">
-          {expanded ? <ChevronUp size={13} className="text-gray-400" /> : <ChevronDown size={13} className="text-gray-400" />}
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onRemove(); }}
-            className="text-gray-300 hover:text-red-400 transition-colors p-0.5"
-          >
-            <Trash2 size={12} />
-          </button>
-        </div>
+        <Icon size={13} className={`${color} shrink-0`} />
+        <span className="flex-1 min-w-0 text-[12px] font-medium text-gray-700 truncate">
+          {step.label || (isSms ? 'SMS message' : 'Email message')}
+          {!expanded && preview
+            ? <span className="ml-1.5 font-normal text-gray-400">{preview}{(step.body?.length ?? 0) > 60 ? '…' : ''}</span>
+            : null}
+        </span>
+        {expanded
+          ? <ChevronUp size={13} className="text-gray-400 shrink-0" />
+          : <ChevronDown size={13} className="text-gray-400 shrink-0" />}
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onRemove(); }}
+          className="text-gray-300 hover:text-red-400 transition-colors p-0.5 shrink-0"
+        >
+          <Trash2 size={13} />
+        </button>
       </button>
+
       {expanded && (
         <div className="border-t border-gray-100 px-3 pb-3 pt-2.5 space-y-2">
           <InlineInput
             value={step.label}
             onChange={(v) => onChange({ ...step, label: v })}
-            placeholder="Step label (e.g. Day 1 intro)"
+            placeholder={isSms ? 'e.g. Day 1 — intro text' : 'e.g. Day 3 — follow-up email'}
             className="w-full"
           />
           {!isSms && (
             <InlineInput
               value={step.subject ?? ''}
               onChange={(v) => onChange({ ...step, subject: v })}
-              placeholder="Email subject line"
+              placeholder="Subject line"
               className="w-full"
             />
           )}
@@ -187,10 +204,177 @@ function StepRow({
             value={step.body ?? ''}
             onChange={(v) => onChange({ ...step, body: v })}
             rows={4}
-            placeholder={isSms ? 'SMS message text… Use {{first_name}}, {{venue_name}}' : 'Email body… Use {{first_name}}, {{venue_name}}'}
+            placeholder={isSms
+              ? 'SMS body… {{first_name}}, {{venue_name}}'
+              : 'Email body… {{first_name}}, {{venue_name}}'}
           />
         </div>
       )}
+    </div>
+  );
+}
+
+// AI Concierge handoff block — terminal, no expand
+function AiHandoffBlock({
+  onRemove, dragHandleProps,
+}: {
+  onRemove: () => void;
+  dragHandleProps: React.HTMLAttributes<HTMLSpanElement>;
+}) {
+  return (
+    <div className="flex items-center gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3">
+      <span {...dragHandleProps} className="cursor-grab text-emerald-300 hover:text-emerald-400 active:cursor-grabbing shrink-0">
+        <GripVertical size={14} />
+      </span>
+      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-emerald-600">
+        <Bot size={13} className="text-white" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-[12px] font-semibold text-emerald-800">Activate AI Concierge</p>
+        <p className="text-[11px] text-emerald-600">AI takes over from this point and continues outreach automatically.</p>
+      </div>
+      <button type="button" onClick={onRemove} className="text-emerald-300 hover:text-red-400 transition-colors shrink-0">
+        <Trash2 size={13} />
+      </button>
+    </div>
+  );
+}
+
+// ─── Sequence editor (Phase 2 body) ──────────────────────────────────────
+
+function SequenceEditor({
+  steps,
+  onStepsChange,
+}: {
+  steps: StepConfig[];
+  onStepsChange: (s: StepConfig[]) => void;
+}) {
+  const dragSrc = useRef<number | null>(null);
+  const [overIdx, setOverIdx] = useState<number | null>(null);
+
+  function handleDragStart(e: React.DragEvent, i: number) {
+    dragSrc.current = i;
+    e.dataTransfer.effectAllowed = 'move';
+  }
+  function handleDragOver(e: React.DragEvent, i: number) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setOverIdx(i);
+  }
+  function handleDrop(i: number) {
+    if (dragSrc.current === null || dragSrc.current === i) { reset(); return; }
+    const next = [...steps];
+    const [moved] = next.splice(dragSrc.current, 1);
+    next.splice(i, 0, moved);
+    onStepsChange(next.map((s, idx) => ({ ...s, step_order: idx })));
+    reset();
+  }
+  function reset() { dragSrc.current = null; setOverIdx(null); }
+
+  function updateStep(i: number, s: StepConfig) {
+    const next = [...steps]; next[i] = s; onStepsChange(next);
+  }
+  function removeStep(i: number) {
+    onStepsChange(steps.filter((_, idx) => idx !== i).map((s, idx) => ({ ...s, step_order: idx })));
+  }
+  function addStep(type: StepConfig['step_type']) {
+    const newStep: StepConfig = {
+      step_order: steps.length,
+      step_type: type,
+      label: '',
+      body: '',
+      subject: '',
+      delay_minutes: type === 'delay' ? undefined : 0,
+    };
+    onStepsChange([...steps, newStep]);
+  }
+
+  const dragHandleFor = (i: number): React.HTMLAttributes<HTMLSpanElement> => ({
+    draggable: true,
+    onDragStart: (e) => handleDragStart(e as unknown as React.DragEvent, i),
+    onDragEnd:   reset,
+  });
+
+  return (
+    <div className="space-y-2">
+      {steps.length === 0 && (
+        <p className="rounded-xl border border-dashed border-gray-200 py-6 text-center text-[12px] text-gray-400">
+          No steps yet. Add your first touchpoint below.
+        </p>
+      )}
+
+      {steps.map((step, i) => {
+        const isOver = overIdx === i && dragSrc.current !== null && dragSrc.current !== i;
+        return (
+          <div
+            key={i}
+            onDragOver={(e) => handleDragOver(e, i)}
+            onDrop={() => handleDrop(i)}
+            className={`transition-all ${isOver ? 'ring-2 ring-violet-400 ring-offset-1 rounded-xl' : ''}`}
+          >
+            {step.step_type === 'delay' && (
+              <WaitBlock
+                step={step}
+                onRemove={() => removeStep(i)}
+                onChange={(s) => updateStep(i, s)}
+                dragHandleProps={dragHandleFor(i)}
+              />
+            )}
+            {(step.step_type === 'send_sms' || step.step_type === 'send_email') && (
+              <MessageBlock
+                step={step}
+                onRemove={() => removeStep(i)}
+                onChange={(s) => updateStep(i, s)}
+                dragHandleProps={dragHandleFor(i)}
+              />
+            )}
+            {step.step_type === 'start_ai_concierge' && (
+              <AiHandoffBlock
+                onRemove={() => removeStep(i)}
+                dragHandleProps={dragHandleFor(i)}
+              />
+            )}
+          </div>
+        );
+      })}
+
+      {/* Add buttons */}
+      <div className="flex flex-wrap gap-2 pt-1">
+        <button
+          type="button"
+          onClick={() => addStep('send_sms')}
+          className="flex items-center gap-1.5 rounded-xl border border-dashed border-violet-200 px-3 py-2 text-[12px] font-medium text-violet-600 hover:bg-violet-50 transition-colors"
+        >
+          <Plus size={13} /> SMS
+        </button>
+        <button
+          type="button"
+          onClick={() => addStep('send_email')}
+          className="flex items-center gap-1.5 rounded-xl border border-dashed border-blue-200 px-3 py-2 text-[12px] font-medium text-blue-500 hover:bg-blue-50 transition-colors"
+        >
+          <Plus size={13} /> Email
+        </button>
+        <button
+          type="button"
+          onClick={() => addStep('delay')}
+          className="flex items-center gap-1.5 rounded-xl border border-dashed border-gray-200 px-3 py-2 text-[12px] font-medium text-gray-500 hover:bg-gray-50 transition-colors"
+        >
+          <Plus size={13} /> Wait
+        </button>
+        {!steps.some(s => s.step_type === 'start_ai_concierge') && (
+          <button
+            type="button"
+            onClick={() => addStep('start_ai_concierge')}
+            className="flex items-center gap-1.5 rounded-xl border border-dashed border-emerald-200 px-3 py-2 text-[12px] font-medium text-emerald-600 hover:bg-emerald-50 transition-colors"
+          >
+            <Plus size={13} /> <Bot size={12} /> AI Concierge
+          </button>
+        )}
+      </div>
+
+      <p className="text-[11px] text-gray-400 pt-1">
+        Drag <GripVertical size={11} className="inline mb-0.5 text-gray-400" /> to reorder. Sequence stops automatically when the bride replies.
+      </p>
     </div>
   );
 }
@@ -205,15 +389,10 @@ function AiMessageList({
 
   function startEdit(i: number) { setEditing(i); setDraft(messages[i]); }
   function saveEdit(i: number) {
-    if (draft.trim()) { const n = [...messages]; n[i] = draft.trim(); onChange(n); }
-    setEditing(null);
+    const n = [...messages]; n[i] = draft.trim(); onChange(n); setEditing(null);
   }
   function remove(i: number) { onChange(messages.filter((_, idx) => idx !== i)); }
-  function add() {
-    onChange([...messages, '']);
-    setEditing(messages.length);
-    setDraft('');
-  }
+  function add() { onChange([...messages, '']); setEditing(messages.length); setDraft(''); }
 
   return (
     <div className="space-y-2">
@@ -221,7 +400,7 @@ function AiMessageList({
         <div key={i} className="rounded-xl border border-gray-200 bg-white">
           {editing === i ? (
             <div className="p-3 space-y-2">
-              <TextArea value={draft} onChange={setDraft} rows={3} placeholder="Message text… Use {{first_name}}, {{venue_name}}" />
+              <TextArea value={draft} onChange={setDraft} rows={3} placeholder="{{first_name}}, {{venue_name}}" />
               <div className="flex gap-2">
                 <button type="button" onClick={() => saveEdit(i)} className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-violet-700">
                   <Check size={12} /> Save
@@ -254,7 +433,7 @@ function AiMessageList({
 // ─── Main page ────────────────────────────────────────────────────────────
 
 export default function BookingSystemPage() {
-  const [cfg, setCfg]       = useState<BookingSystemConfig | null>(null);
+  const [cfg, setCfg]         = useState<BookingSystemConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
   const [saved, setSaved]     = useState(false);
@@ -272,51 +451,28 @@ export default function BookingSystemPage() {
 
   useEffect(() => { void load(); }, [load]);
 
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   async function save(patch: Partial<BookingSystemConfig>) {
     if (!cfg) return;
-    const next = { ...cfg, ...patch };
-    setCfg(next);
-    setSaving(true);
-    setSaved(false);
-    setError('');
+    setCfg(prev => prev ? { ...prev, ...patch } : prev);
+    setSaving(true); setSaved(false); setError('');
+    if (saveTimer.current) clearTimeout(saveTimer.current);
     try {
       const r = await fetch('/api/listing/booking-system', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patch),
       });
-      if (!r.ok) { const d = await r.json().catch(() => ({})) as { error?: string }; throw new Error(d.error || 'Save failed'); }
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({})) as { error?: string };
+        throw new Error(d.error || 'Save failed');
+      }
       setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
+      saveTimer.current = setTimeout(() => setSaved(false), 2500);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed');
     } finally { setSaving(false); }
-  }
-
-  function addStep(type: StepConfig['step_type']) {
-    if (!cfg) return;
-    const order = cfg.steps.length;
-    const newStep: StepConfig = {
-      step_order: order,
-      step_type: type,
-      label: type === 'delay' ? 'Wait 1 day' : type === 'send_sms' ? 'Follow-up SMS' : 'Follow-up Email',
-      body: '',
-      subject: '',
-      delay_minutes: type === 'delay' ? 1440 : 0,
-    };
-    void save({ steps: [...cfg.steps, newStep] });
-  }
-
-  function updateStep(i: number, updated: StepConfig) {
-    if (!cfg) return;
-    const next = [...cfg.steps];
-    next[i] = updated;
-    void save({ steps: next });
-  }
-
-  function removeStep(i: number) {
-    if (!cfg) return;
-    void save({ steps: cfg.steps.filter((_, idx) => idx !== i) });
   }
 
   if (loading) return (
@@ -324,7 +480,6 @@ export default function BookingSystemPage() {
       <Loader2 className="h-6 w-6 animate-spin text-gray-300" />
     </div>
   );
-
   if (!cfg) return (
     <div className="flex min-h-[400px] items-center justify-center text-sm text-gray-500">
       {error || 'Unable to load settings.'}
@@ -356,10 +511,7 @@ export default function BookingSystemPage() {
             <span className="text-[12px] font-medium text-gray-700">
               {cfg.masterEnabled ? 'System on' : 'System off'}
             </span>
-            <Toggle
-              checked={cfg.masterEnabled}
-              onChange={(v) => void save({ masterEnabled: v })}
-            />
+            <Toggle checked={cfg.masterEnabled} onChange={(v) => void save({ masterEnabled: v })} />
           </div>
         </div>
       </div>
@@ -369,7 +521,6 @@ export default function BookingSystemPage() {
           <AlertTriangle size={14} className="shrink-0" /> {error}
         </div>
       )}
-
       {!cfg.masterEnabled && (
         <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
           The Booking System is off. New leads won't receive any automated follow-up until you turn it back on.
@@ -378,24 +529,23 @@ export default function BookingSystemPage() {
 
       <div className="space-y-4">
 
-        {/* ── Phase 1: Guide Delivery ────────────────────────────────────── */}
+        {/* Phase 1 — Guide Delivery */}
         <PhaseCard
           number={1}
           title="Guide Delivery"
-          subtitle="Send your pricing guide the moment a bride fills out your listing form."
+          subtitle="Send your pricing guide the moment a bride submits your listing form."
           icon={<Send size={18} className="text-blue-600" />}
           accent="bg-blue-50"
           enabled={cfg.guideEmailEnabled || cfg.guideSmsEnabled}
           onToggle={(v) => void save({ guideEmailEnabled: v, guideSmsEnabled: v })}
         >
           <div className="space-y-4">
-            {/* Email toggle */}
             <div className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
               <div className="flex items-center gap-2">
                 <Mail size={14} className="text-blue-500" />
                 <div>
                   <p className="text-[13px] font-medium text-gray-800">Email</p>
-                  <p className="text-[11px] text-gray-500">Sends immediately on form submit</p>
+                  <p className="text-[11px] text-gray-500">Sent immediately on form submit</p>
                 </div>
               </div>
               <Toggle checked={cfg.guideEmailEnabled} onChange={(v) => void save({ guideEmailEnabled: v })} />
@@ -412,7 +562,6 @@ export default function BookingSystemPage() {
               </div>
             )}
 
-            {/* SMS toggle */}
             <div className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
               <div className="flex items-center gap-2">
                 <MessageSquare size={14} className="text-violet-500" />
@@ -435,83 +584,41 @@ export default function BookingSystemPage() {
               </div>
             )}
             <p className="text-[11px] text-gray-400">
-              Available merge tags: <code className="rounded bg-gray-100 px-1">{'{{first_name}}'}</code> <code className="rounded bg-gray-100 px-1">{'{{venue_name}}'}</code> <code className="rounded bg-gray-100 px-1">{'{{pricing_guide_url}}'}</code>
+              Tags: <code className="rounded bg-gray-100 px-1">{'{{first_name}}'}</code>{' '}
+              <code className="rounded bg-gray-100 px-1">{'{{venue_name}}'}</code>{' '}
+              <code className="rounded bg-gray-100 px-1">{'{{pricing_guide_url}}'}</code>
             </p>
           </div>
         </PhaseCard>
 
-        {/* ── Phase 2: 14-Day Sequence ───────────────────────────────────── */}
+        {/* Phase 2 — Sequence */}
         <PhaseCard
           number={2}
-          title="14-Day Follow-up Sequence"
-          subtitle="A series of SMS and email touchpoints to get the bride to respond. Stops the moment she replies."
+          title="Follow-up Sequence"
+          subtitle="SMS and email touchpoints that fire until she replies. Drag to reorder."
           icon={<MessageSquare size={18} className="text-violet-600" />}
           accent="bg-violet-50"
           enabled={cfg.sequenceEnabled}
           onToggle={(v) => void save({ sequenceEnabled: v })}
         >
-          <div className="space-y-2">
-            {cfg.steps.length === 0 && (
-              <p className="rounded-xl border border-dashed border-gray-200 py-6 text-center text-[12px] text-gray-400">
-                No steps yet. Add your first touchpoint below.
-              </p>
-            )}
-            {cfg.steps.map((step, i) => (
-              <StepRow
-                key={i}
-                step={step}
-                index={i}
-                total={cfg.steps.length}
-                onChange={(s) => updateStep(i, s)}
-                onRemove={() => removeStep(i)}
-              />
-            ))}
-            <div className="flex gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => addStep('send_sms')}
-                className="flex items-center gap-1.5 rounded-xl border border-dashed border-violet-200 px-3 py-2 text-[12px] font-medium text-violet-600 hover:bg-violet-50 transition-colors"
-              >
-                <Plus size={13} /> SMS
-              </button>
-              <button
-                type="button"
-                onClick={() => addStep('send_email')}
-                className="flex items-center gap-1.5 rounded-xl border border-dashed border-blue-200 px-3 py-2 text-[12px] font-medium text-blue-500 hover:bg-blue-50 transition-colors"
-              >
-                <Plus size={13} /> Email
-              </button>
-              <button
-                type="button"
-                onClick={() => addStep('delay')}
-                className="flex items-center gap-1.5 rounded-xl border border-dashed border-gray-200 px-3 py-2 text-[12px] font-medium text-gray-500 hover:bg-gray-50 transition-colors"
-              >
-                <Plus size={13} /> Wait
-              </button>
-            </div>
-            <p className="text-[11px] text-gray-400 pt-1">
-              The sequence stops automatically when the bride replies. Build it top-down — add a "Wait" before each follow-up.
-            </p>
-          </div>
+          <SequenceEditor
+            steps={cfg.steps}
+            onStepsChange={(steps) => void save({ steps })}
+          />
         </PhaseCard>
 
-        {/* ── Phase 3: AI Concierge ──────────────────────────────────────── */}
+        {/* Phase 3 — AI Concierge */}
         <PhaseCard
           number={3}
           title="AI Long-tail Outreach"
-          subtitle="After 14 days with no reply, the AI keeps reaching out — up to 60 days. It stops the moment she replies."
+          subtitle="After the sequence ends with no reply, the AI keeps reaching out until she responds."
           icon={<Bot size={18} className="text-emerald-600" />}
           accent="bg-emerald-50"
           enabled={cfg.aiEnabled}
-          onToggle={(v) => {
-            if (v && aiBlocked) return;
-            void save({ aiEnabled: v });
-          }}
+          onToggle={(v) => { if (v && aiBlocked) return; void save({ aiEnabled: v }); }}
           disabled={aiBlocked}
         >
           <div className="space-y-5">
-
-            {/* Cadence */}
             <div>
               <SectionLabel>Outreach cadence</SectionLabel>
               <div className="flex items-center gap-3 flex-wrap">
@@ -535,7 +642,6 @@ export default function BookingSystemPage() {
               </div>
             </div>
 
-            {/* Max days */}
             <div>
               <SectionLabel>Stop after</SectionLabel>
               <div className="flex items-center gap-3">
@@ -546,17 +652,15 @@ export default function BookingSystemPage() {
                 >
                   {[30,45,60,90].map(d => <option key={d} value={d}>{d} days with no reply</option>)}
                 </select>
-                <span className="text-[11px] text-gray-400">→ moves to Not Interested automatically</span>
+                <span className="text-[11px] text-gray-400">→ auto-marks as Not Interested</span>
               </div>
             </div>
 
-            {/* Message pool */}
             <div>
               <SectionLabel>Message pool <span className="normal-case font-normal text-gray-400">— AI rotates through these</span></SectionLabel>
               <AiMessageList messages={cfg.aiMessages} onChange={(msgs) => void save({ aiMessages: msgs })} />
             </div>
 
-            {/* Notify emails */}
             <div>
               <SectionLabel>Notify when bride replies</SectionLabel>
               <InlineInput
@@ -579,7 +683,6 @@ export default function BookingSystemPage() {
             </span>
           </div>
         )}
-
       </div>
     </div>
   );

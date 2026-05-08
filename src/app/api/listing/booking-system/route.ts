@@ -29,12 +29,12 @@ const STL_NAME = 'Speed to Lead — Booking System';
 export interface StepConfig {
   id?:          string;   // existing step row id (undefined for new rows)
   step_order:   number;
-  step_type:    'send_sms' | 'send_email' | 'delay';
+  step_type:    'send_sms' | 'send_email' | 'delay' | 'start_ai_concierge';
   label:        string;   // friendly label shown in the UI
   // send_sms / send_email
   body?:        string;
   subject?:     string;
-  // delay
+  // delay (1-3 days only for booking system)
   delay_minutes?: number;
 }
 
