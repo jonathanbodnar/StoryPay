@@ -136,11 +136,37 @@ export default function ContactsPage() {
 
   async function deleteContact(c: ContactRow) {
     if (!confirm(`Delete ${c.name || c.email}? This cannot be undone.`)) return;
-    // Prefer deleting via venue-customer ID (also cleans up lead row).
-    const vcId = c.venueCustomerId ?? String(c.id);
+
+    // Prefer a known venue_customers UUID. If we only have a GHL/LunarPay ID,
+    // look up the matching venue_customers row by email first so the delete
+    // also cascades away threads, tasks, notes, etc.
+    let vcId = c.venueCustomerId ?? null;
+    if (!vcId && c.email) {
+      try {
+        const lkp = await fetch('/api/venue-customers/lookup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: c.email }),
+        });
+        if (lkp.ok) {
+          const d = (await lkp.json()) as { id?: string } | null;
+          if (d?.id) vcId = d.id;
+        }
+      } catch {/* ignore, fall through */}
+    }
+    // Last resort: use the raw id (may be a GHL id; the server will 404 gracefully)
+    if (!vcId) vcId = String(c.id);
+
     const res = await fetch(`/api/venue-customers/${vcId}`, { method: 'DELETE' });
     if (res.ok) {
       setContacts((prev) => prev.filter((x) => String(x.id) !== String(c.id)));
+      setImportMessage('Contact deleted.');
+      setTimeout(() => setImportMessage(''), 3000);
+    } else {
+      const body = await res.json().catch(() => ({})) as { error?: string };
+      const msg = body.error || `Delete failed (${res.status})`;
+      setImportMessage(`Error: ${msg}`);
+      setTimeout(() => setImportMessage(''), 6000);
     }
   }
 
@@ -224,7 +250,7 @@ export default function ContactsPage() {
       {importMessage && (
         <div
           className={`mb-4 rounded-lg px-4 py-3 text-sm ${
-            importMessage.startsWith('Imported') ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-700'
+            importMessage.startsWith('Error:') ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-800'
           }`}
         >
           {importMessage}
