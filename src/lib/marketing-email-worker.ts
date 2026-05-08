@@ -497,8 +497,8 @@ export async function buildMergeVars(
     // ?l={leadId} is appended so the preview page can log the view as a
     // system message in the contact's conversation thread (full audit trail).
     // ?dl=1 on the underlying /pricing-guide API route forces a download.
-    pricing_guide_url:         `${appOrigin}/venue/${venueId}/guide?l=${encodeURIComponent(leadId)}`,
-    'venue.pricing_guide_url': `${appOrigin}/venue/${venueId}/guide?l=${encodeURIComponent(leadId)}`,
+    pricing_guide_url:         `${appOrigin}/guide/${venueId}?l=${encodeURIComponent(leadId)}`,
+    'venue.pricing_guide_url': `${appOrigin}/guide/${venueId}?l=${encodeURIComponent(leadId)}`,
   };
 }
 
