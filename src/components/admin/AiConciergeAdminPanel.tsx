@@ -23,10 +23,12 @@ import {
   CheckCircle2, XCircle, Pause, Play, Shield, ShieldOff,
   ExternalLink, BadgeCheck, Activity, MessageSquare, Filter,
   Workflow, FileCode2, DollarSign, RefreshCw, Stethoscope,
+  Radio,
   X as XIcon,
 } from 'lucide-react';
 import AiConciergeHandoffRulesEditor from './AiConciergeHandoffRulesEditor';
 import AiConciergeConfigEditor from './AiConciergeConfigEditor';
+import AiConciergeMonitorTab from './AiConciergeMonitorTab';
 
 const BRAND = '#1b1b1b';
 
@@ -152,7 +154,7 @@ interface VenuesPayload {
   };
 }
 
-type TabKey = 'runs' | 'transitions' | 'venues' | 'handoff-rules' | 'prompt-config';
+type TabKey = 'monitor' | 'runs' | 'transitions' | 'venues' | 'handoff-rules' | 'prompt-config';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -225,7 +227,7 @@ function StatePill({ state }: { state: string | null }) {
 // ── Main panel ────────────────────────────────────────────────────────────
 
 export function AiConciergeAdminPanel() {
-  const [tab, setTab] = useState<TabKey>('runs');
+  const [tab, setTab] = useState<TabKey>('monitor');
   const [killSwitch, setKillSwitch] = useState<KillSwitch | null>(null);
   const [killSwitchSaving, setKillSwitchSaving] = useState(false);
   const [killSwitchReason, setKillSwitchReason] = useState('');
@@ -328,6 +330,7 @@ export function AiConciergeAdminPanel() {
       {/* Tab bar */}
       <div className="flex items-center gap-1 border-b border-gray-200">
         {([
+          { key: 'monitor',        label: 'Active Leads',      icon: Radio        },
           { key: 'runs',           label: 'Live runs',         icon: Activity     },
           { key: 'transitions',    label: 'State transitions', icon: MessageSquare },
           { key: 'venues',         label: 'Venues',            icon: BadgeCheck   },
@@ -353,6 +356,7 @@ export function AiConciergeAdminPanel() {
         })}
       </div>
 
+      {tab === 'monitor'       && <AiConciergeMonitorTab />}
       {tab === 'runs'          && <RunsTable />}
       {tab === 'transitions'   && <TransitionsTable />}
       {tab === 'venues'        && <VenuesTable />}
