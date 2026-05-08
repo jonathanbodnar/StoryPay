@@ -271,8 +271,19 @@ export async function PATCH(
           await ensureSystemTagsForVenue(venueId);
           if (isCancelled) {
             applySystemTagByEmail(venueId, customerEmail, 'appointment_cancelled').catch(() => {});
+            // Also tour_cancelled for tour-type events
+            if ((eventRow.appointment_type as string | null) === 'tour') {
+              applySystemTagByEmail(venueId, customerEmail, 'tour_cancelled').catch(() => {});
+            }
           } else if (updates.status === 'confirmed') {
             applySystemTagByEmail(venueId, customerEmail, 'appointment_confirmed').catch(() => {});
+          } else if (updates.status === 'completed') {
+            const apptType = (eventRow.appointment_type as string | null) ?? '';
+            if (apptType === 'tour') {
+              applySystemTagByEmail(venueId, customerEmail, 'tour_completed').catch(() => {});
+            } else if (apptType === 'call') {
+              applySystemTagByEmail(venueId, customerEmail, 'call_completed').catch(() => {});
+            }
           }
           if (isRescheduled) {
             applySystemTagByEmail(venueId, customerEmail, 'appointment_rescheduled').catch(() => {});

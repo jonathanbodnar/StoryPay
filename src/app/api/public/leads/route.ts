@@ -7,6 +7,7 @@ import { ensureDefaultPipeline, legacyStatusForStageName } from '@/lib/pipelines
 import { onMarketingFormSubmitted, sendBookingSystemGuide } from '@/lib/marketing-email-worker';
 import { dispatchIntegrationEvent } from '@/lib/integration-events';
 import { syncVenueCustomerFromLeadRow } from '@/lib/venue-customer-pipeline-sync';
+import { applySystemTags, ensureSystemTagsForVenue } from '@/lib/system-tags';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -228,6 +229,16 @@ export async function POST(request: NextRequest) {
   if (!(venue as { is_demo?: boolean }).is_demo) {
     void recordDuplicateCandidatesForNewLead(venue.id, lr.id, lr.email, lr.phone, lr.created_at);
   }
+
+  // Apply new_lead, inquiry_received, form_submitted, directory_lead system tags (fire-and-forget)
+  void ensureSystemTagsForVenue(venue.id)
+    .then(() => applySystemTags(venue.id, lr.id, [
+      'new_lead',
+      'inquiry_received',
+      'form_submitted',
+      'directory_lead',
+    ]))
+    .catch(() => {});
 
   // Fan out to Zapier / external integrations subscribed to lead.created
   void dispatchIntegrationEvent(venue.id, 'lead.created', {

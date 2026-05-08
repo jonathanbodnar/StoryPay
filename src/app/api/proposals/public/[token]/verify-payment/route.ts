@@ -86,6 +86,12 @@ export async function POST(
         },
         actionUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://www.storypay.io'}/dashboard/transactions`,
       });
+      // Apply payment_failed system tag (fire-and-forget)
+      if (proposal.venue_id && proposal.customer_email) {
+        ensureSystemTagsForVenue(proposal.venue_id as string)
+          .then(() => applySystemTagByEmail(proposal.venue_id as string, proposal.customer_email as string, 'payment_failed'))
+          .catch(() => {});
+      }
       return NextResponse.json(
         { error: 'Payment not completed', status: session.status },
         { status: 400 }
@@ -212,13 +218,18 @@ export async function POST(
     if (proposal.venue_id && proposal.customer_email) {
       const vId = proposal.venue_id as string;
       const cEmail = proposal.customer_email as string;
-      const isFullPayment = proposal.payment_type === 'full';
+      const payType = (proposal.payment_type as string | null) || 'full';
+      const isFullPayment = payType === 'full';
+      const isPaymentPlan = payType === 'subscription' || payType === 'installment';
       ensureSystemTagsForVenue(vId).then(() => {
         applySystemTagByEmail(vId, cEmail, 'deposit_paid').catch(() => {});
         if (isFullPayment) {
           applySystemTagByEmail(vId, cEmail, 'paid_in_full').catch(() => {});
           applySystemTagByEmail(vId, cEmail, 'closed_won').catch(() => {});
           applySystemTagByEmail(vId, cEmail, 'date_confirmed').catch(() => {});
+        }
+        if (isPaymentPlan) {
+          applySystemTagByEmail(vId, cEmail, 'payment_plan_active').catch(() => {});
         }
       }).catch(() => {});
     }

@@ -1,16 +1,17 @@
 /**
- * Resend bounce + complaint webhook
+ * Resend event webhook
  *
  * Setup in Resend dashboard → Webhooks → Add endpoint:
  *   URL:    https://app.storyvenue.com/api/webhooks/resend?secret=<RESEND_WEBHOOK_SECRET>
- *   Events: email.bounced, email.complained
+ *   Events: email.bounced, email.complained, email.opened, email.clicked
  *
  * Required env var: RESEND_WEBHOOK_SECRET (any random string you generate)
  *
- * Why this matters: hard bounces and spam complaints from ANY venue using the
- * shared storyvenue.com sending domain hurt our aggregate reputation with
- * Gmail/Yahoo. This handler auto-suppresses bad addresses immediately so the
- * next cron run skips them.
+ * Handles:
+ *   email.bounced    → suppress address, disable marketing opt-in
+ *   email.complained → suppress address as spam complaint
+ *   email.opened     → apply email_opened system tag to matching lead
+ *   email.clicked    → apply email_clicked system tag to matching lead
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -137,6 +138,34 @@ export async function POST(request: NextRequest) {
       await suppressByEmail(recipient, 'spam_complaint', venueId, leadId);
       console.log(`[webhooks/resend] suppressed complaint: ${recipient}`);
     }
+    return NextResponse.json({ ok: true });
+  }
+
+  if (type === 'email.opened' || type === 'email.clicked') {
+    const tagKey = type === 'email.opened' ? 'email_opened' : 'email_clicked';
+    if (venueId && leadId) {
+      // Fast path: headers carry the exact venue + lead
+      const { applySystemTag, ensureSystemTagsForVenue } = await import('@/lib/system-tags');
+      ensureSystemTagsForVenue(venueId)
+        .then(() => applySystemTag(venueId, leadId, tagKey))
+        .catch(() => {});
+    } else if (recipient) {
+      // Fallback: look up lead by email across all venues
+      const { data: leads } = await supabaseAdmin
+        .from('leads')
+        .select('id, venue_id')
+        .ilike('email', recipient.toLowerCase())
+        .limit(10);
+      if (leads?.length) {
+        const { applySystemTag, ensureSystemTagsForVenue } = await import('@/lib/system-tags');
+        for (const l of leads) {
+          ensureSystemTagsForVenue(l.venue_id as string)
+            .then(() => applySystemTag(l.venue_id as string, l.id as string, tagKey))
+            .catch(() => {});
+        }
+      }
+    }
+    console.log(`[webhooks/resend] ${tagKey} applied for ${recipient}`);
     return NextResponse.json({ ok: true });
   }
 

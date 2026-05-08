@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { syncPaymentRemindersForProposal } from '@/lib/payment-reminders';
 import { notifyOwner, formatAmount } from '@/lib/owner-notifications';
 import { dispatchIntegrationEvent } from '@/lib/integration-events';
+import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
 
 export async function POST(
   request: Request,
@@ -86,6 +87,17 @@ export async function POST(
         signed_at: new Date().toISOString(),
       },
     }).catch(err => console.error('[proposal-sign] dispatchIntegrationEvent', err));
+
+    // Apply proposal_signed + contract_signed system tags (fire-and-forget)
+    const signerEmail = (proposal.customer_email as string | null)?.trim();
+    if (signerEmail) {
+      ensureSystemTagsForVenue(proposal.venue_id as string)
+        .then(() => Promise.all([
+          applySystemTagByEmail(proposal.venue_id as string, signerEmail, 'proposal_signed'),
+          applySystemTagByEmail(proposal.venue_id as string, signerEmail, 'contract_signed'),
+        ]))
+        .catch(() => {});
+    }
   }
 
   return NextResponse.json({ success: true });

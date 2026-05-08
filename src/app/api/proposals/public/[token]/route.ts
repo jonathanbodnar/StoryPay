@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { notifyOwner } from '@/lib/owner-notifications';
+import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
 
 export async function GET(
   _request: Request,
@@ -44,6 +45,18 @@ export async function GET(
           customer_email: String(proposal.customer_email || ''),
         },
       });
+
+      // Apply proposal_viewed or invoice_viewed system tag (fire-and-forget)
+      if (proposal.customer_email) {
+        const isInvoice = !proposal.template_id;
+        ensureSystemTagsForVenue(proposal.venue_id as string)
+          .then(() => applySystemTagByEmail(
+            proposal.venue_id as string,
+            String(proposal.customer_email),
+            isInvoice ? 'invoice_viewed' : 'proposal_viewed',
+          ))
+          .catch(() => {});
+      }
     }
   } else {
     // Already opened — document_viewed was (or should have been) fired previously.

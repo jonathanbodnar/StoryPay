@@ -119,4 +119,13 @@ export async function clearSmsDndForVenueCustomer(params: {
       }
     }
   }
+
+  // Apply sms_opted_in system tag when DND is cleared (fire-and-forget)
+  if (email && !email.endsWith(PLACEHOLDER_SMS_EMAIL)) {
+    void import('@/lib/system-tags').then(({ applySystemTagByEmail, ensureSystemTagsForVenue }) =>
+      ensureSystemTagsForVenue(venueId)
+        .then(() => applySystemTagByEmail(venueId, email, 'sms_opted_in'))
+        .catch(() => {}),
+    );
+  }
 }

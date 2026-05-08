@@ -405,6 +405,17 @@ export async function syncSingleGhlContact(
     const c = result.contact;
     if (!c?.id) return false;
     const r = await upsertContact(venue.id, c);
+    if (r.kind !== 'error') {
+      // Apply ghl_synced system tag whenever a contact is created or linked (fire-and-forget)
+      const contactEmail = (c.email ?? '').trim().toLowerCase();
+      if (contactEmail && (r.kind === 'created' || r.kind === 'linked')) {
+        void import('@/lib/system-tags').then(({ applySystemTagByEmail, ensureSystemTagsForVenue }) =>
+          ensureSystemTagsForVenue(venue.id)
+            .then(() => applySystemTagByEmail(venue.id, contactEmail, 'ghl_synced'))
+            .catch(() => {}),
+        );
+      }
+    }
     return r.kind !== 'error';
   } catch (err) {
     console.error('[ghl-contacts-sync] single contact fetch failed', contactId, err);

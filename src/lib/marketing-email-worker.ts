@@ -32,7 +32,14 @@ async function enrollIfNew(automationId: string, venueId: string, leadId: string
     .single();
   if (error?.code === '23505') return null; // already enrolled
   if (error) { console.error('[marketing enroll]', error); return null; }
-  return (data as { id: string }).id;
+  const enrollmentId = (data as { id: string }).id;
+  // Fire campaign_enrolled tag (fire-and-forget)
+  void import('@/lib/system-tags').then(({ applySystemTag, ensureSystemTagsForVenue }) =>
+    ensureSystemTagsForVenue(venueId)
+      .then(() => applySystemTag(venueId, leadId, 'campaign_enrolled'))
+      .catch(() => {}),
+  );
+  return enrollmentId;
 }
 
 /** All trigger sources (primary + extras) for a workflow row, normalized to a flat shape. */
@@ -324,6 +331,15 @@ export async function sendBookingSystemGuide(
         }
       }
     }
+    // Apply contacted + awaiting_response tags after first outreach (fire-and-forget)
+    void import('@/lib/system-tags').then(({ applySystemTag, ensureSystemTagsForVenue }) =>
+      ensureSystemTagsForVenue(venueId)
+        .then(() => Promise.all([
+          applySystemTag(venueId, leadId, 'contacted'),
+          applySystemTag(venueId, leadId, 'awaiting_response'),
+        ]))
+        .catch(() => {}),
+    );
   } catch (e) {
     console.warn('[booking-guide] sendBookingSystemGuide error (non-fatal):', e);
   }
@@ -1097,6 +1113,12 @@ async function processOneEnrollment(en: {
       .from('marketing_automation_enrollments')
       .update({ status: 'completed', completed_at: new Date().toISOString(), next_run_at: new Date().toISOString() })
       .eq('id', en.id);
+    // Fire campaign_completed tag (fire-and-forget)
+    void import('@/lib/system-tags').then(({ applySystemTag, ensureSystemTagsForVenue }) =>
+      ensureSystemTagsForVenue(en.venue_id)
+        .then(() => applySystemTag(en.venue_id, en.lead_id, 'campaign_completed'))
+        .catch(() => {}),
+    );
     return 'completed';
   }
   const step = sorted[idx] as { step_type: string; config_json: Record<string, unknown> };
@@ -1174,6 +1196,15 @@ async function processOneEnrollment(en: {
       void findOrCreateThreadForLead(en.venue_id, en.lead_id).then((threadId) => {
         if (threadId) void logToConversationThread({ threadId, venueId: en.venue_id, channel: 'email', body: `[Email] ${send.mergedSubject}` });
       });
+      // Tag lead as contacted + awaiting response when email is sent
+      void import('@/lib/system-tags').then(({ applySystemTag, ensureSystemTagsForVenue }) =>
+        ensureSystemTagsForVenue(en.venue_id)
+          .then(() => Promise.all([
+            applySystemTag(en.venue_id, en.lead_id, 'contacted'),
+            applySystemTag(en.venue_id, en.lead_id, 'awaiting_response'),
+          ]))
+          .catch(() => {}),
+      );
     }
     const nextIdx = idx + 1;
     if (nextIdx >= sorted.length) {
@@ -1214,6 +1245,15 @@ async function processOneEnrollment(en: {
       void findOrCreateThreadForLead(en.venue_id, en.lead_id).then((threadId) => {
         if (threadId) void logToConversationThread({ threadId, venueId: en.venue_id, channel: 'sms', body: send.mergedBody! });
       });
+      // Tag lead as contacted + awaiting response when SMS is sent
+      void import('@/lib/system-tags').then(({ applySystemTag, ensureSystemTagsForVenue }) =>
+        ensureSystemTagsForVenue(en.venue_id)
+          .then(() => Promise.all([
+            applySystemTag(en.venue_id, en.lead_id, 'contacted'),
+            applySystemTag(en.venue_id, en.lead_id, 'awaiting_response'),
+          ]))
+          .catch(() => {}),
+      );
     }
     const nextIdx = idx + 1;
     if (nextIdx >= sorted.length) {

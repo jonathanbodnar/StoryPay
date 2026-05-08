@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { refundCharge } from '@/lib/lunarpay';
+import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest) {
 
   const { data: proposal } = await supabaseAdmin
     .from('proposals')
-    .select('id, status, charge_id, transaction_id, price')
+    .select('id, status, charge_id, transaction_id, price, customer_email')
     .eq('id', proposalId)
     .eq('venue_id', venueId)
     .single();
@@ -56,6 +57,14 @@ export async function POST(request: NextRequest) {
     const isFullRefund = !amountCents || amountCents >= (proposal.price ?? 0);
     if (isFullRefund) {
       await supabaseAdmin.from('proposals').update({ status: 'refunded' }).eq('id', proposalId);
+    }
+
+    // Apply refunded system tag (fire-and-forget)
+    const refundEmail = (proposal.customer_email as string | null)?.trim();
+    if (refundEmail) {
+      ensureSystemTagsForVenue(venueId)
+        .then(() => applySystemTagByEmail(venueId, refundEmail, 'refunded'))
+        .catch(() => {});
     }
 
     return NextResponse.json({
