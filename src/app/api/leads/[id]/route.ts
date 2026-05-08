@@ -11,6 +11,7 @@ import { insertLeadActivity } from '@/lib/lead-activity';
 import { fetchOpenDuplicateMatchesForLeads, refreshDuplicateCandidatesForLead } from '@/lib/lead-duplicates';
 import { broadcastStageChanged, broadcastTagsChanged } from '@/lib/realtime/broadcast';
 import { findMatchingLeadIds, findMatchingVenueCustomerIds } from '@/lib/find-matching-leads';
+import { applyAiStateFromTagAdds } from '@/lib/ai-concierge/state-control';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -291,6 +292,12 @@ export async function PATCH(
     const added = arr.filter((tid) => !previousTagIds.has(tid));
     if (added.length) {
       void onMarketingTagAdded(venueId, id, added);
+      // If any of the newly-added tags is one of the reserved AI control
+      // system tags (ai_active / ai_paused / ai_handoff), drive the lead's
+      // ai_state through the canonical state-control path. This is what
+      // lets an operator turn AI follow-ups on/off by simply tagging the
+      // lead from the contact view.
+      void applyAiStateFromTagAdds(id, venueId, added, 'venue_dashboard:tag');
       for (const tagId of added) {
         void dispatchIntegrationEvent(venueId, 'tag.added', {
           lead_id: id,
