@@ -103,13 +103,16 @@ export async function generateSmsWithDeepSeek(
  *   - Missing trailing tag if the SMS body has it inline (defensive fallback)
  */
 export function parseStructuredOutput(raw: string): GenerateSmsResult {
+  // Strip all markdown code fences (may be nested or repeated)
   const cleaned = raw
-    .replace(/^\s*```[a-zA-Z0-9]*\s*/m, '')
-    .replace(/```\s*$/m, '')
+    .replace(/```[a-zA-Z0-9]*\n?/g, '')
+    .replace(/```/g, '')
     .trim();
 
-  const angleMatch = /<<angle>>([\s\S]*?)<<\/angle>>/i.exec(cleaned);
+  // Tolerant angle tag: matches <<angle>> or <angle> (and their closing variants)
+  const angleMatch = /<<?\s*angle\s*>>([\s\S]*?)<<?\s*\/angle\s*>>/i.exec(cleaned);
   if (!angleMatch) {
+    console.warn('[ai-llm] missing_angle_tag — raw output:', raw.slice(0, 500));
     return {
       ok: false,
       error: 'missing_angle_tag',
@@ -118,8 +121,10 @@ export function parseStructuredOutput(raw: string): GenerateSmsResult {
     };
   }
 
-  const smsMatch = /<<sms>>([\s\S]*?)<<\/sms>>/i.exec(cleaned);
+  // Tolerant sms tag: matches <<sms>> or <sms> (and their closing variants)
+  const smsMatch = /<<?\s*sms\s*>>([\s\S]*?)<<?\s*\/sms\s*>>/i.exec(cleaned);
   if (!smsMatch) {
+    console.warn('[ai-llm] missing_sms_tag — raw output:', raw.slice(0, 500));
     return {
       ok: false,
       error: 'missing_sms_tag',

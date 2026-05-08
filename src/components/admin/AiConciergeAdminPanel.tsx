@@ -54,6 +54,7 @@ interface RunRow {
   outcome:             string;
   error_detail:        string | null;
   final_sent_text:     string | null;
+  model_output:        string | null;
   created_at:          string;
   venue_name:          string | null;
   lead_first_name:     string | null;
@@ -609,7 +610,17 @@ function RunsTable() {
                 <td className="px-4 py-2.5 align-top"><OutcomePill outcome={r.outcome} /></td>
                 <td className="px-4 py-2.5 align-top text-xs text-gray-600 max-w-md">
                   {r.error_detail
-                    ? <span className="text-rose-600">{r.error_detail}</span>
+                    ? (
+                      <div>
+                        <span className="text-rose-600">{r.error_detail}</span>
+                        {r.model_output && (
+                          <details className="mt-1">
+                            <summary className="cursor-pointer text-[10px] text-gray-400 hover:text-gray-600">Raw model output</summary>
+                            <pre className="mt-1 whitespace-pre-wrap break-words rounded bg-gray-50 p-2 text-[10px] text-gray-700 max-h-32 overflow-y-auto">{r.model_output}</pre>
+                          </details>
+                        )}
+                      </div>
+                    )
                     : (r.final_sent_text
                         ? <span className="line-clamp-2 italic text-gray-700">{r.final_sent_text}</span>
                         : <span className="text-gray-400">—</span>)}

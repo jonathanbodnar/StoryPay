@@ -33,6 +33,7 @@ interface RawAiRun {
   outcome:             string;
   error_detail:        string | null;
   final_sent_text:     string | null;
+  model_output:        string | null;
   created_at:          string;
 }
 
@@ -66,7 +67,7 @@ export async function GET(request: NextRequest) {
   // Build the runs query
   let q = supabaseAdmin
     .from('ai_runs')
-    .select('id, lead_id, venue_id, ai_config_version, attempt_number, angle_used, sms_provider, provider_message_id, outcome, error_detail, final_sent_text, created_at')
+    .select('id, lead_id, venue_id, ai_config_version, attempt_number, angle_used, sms_provider, provider_message_id, outcome, error_detail, final_sent_text, model_output, created_at')
     .order('created_at', { ascending: false })
     .limit(limit + 1);
 
