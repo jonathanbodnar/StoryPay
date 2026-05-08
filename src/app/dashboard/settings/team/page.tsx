@@ -68,6 +68,7 @@ export default function TeamPage() {
  const [editError, setEditError] = useState('');
  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
  const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
+ const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
  const [venueOwnerSession, setVenueOwnerSession] = useState(false);
 
  const [form, setForm] = useState({ first_name: '', last_name: '', email: '', role: 'member' });
@@ -88,8 +89,11 @@ export default function TeamPage() {
 
  useEffect(() => {
  function handleClick(e: MouseEvent) {
- const target = e.target as HTMLElement;
- if (!target.closest('[data-menu]')) setMenuOpenId(null);
+  const target = e.target as HTMLElement;
+  if (!target.closest('[data-menu]')) {
+   setMenuOpenId(null);
+   setConfirmDeleteId(null);
+  }
  }
  document.addEventListener('click', handleClick);
  return () => document.removeEventListener('click', handleClick);
@@ -172,17 +176,23 @@ export default function TeamPage() {
  }
 
  async function removeMember(id: string) {
- if (!confirm('Remove this team member? This action cannot be undone.')) return;
- setDeletingId(id);
- setMenuOpenId(null);
- try {
- const res = await fetch(`/api/team/${id}`, { method: 'DELETE' });
- if (res.ok) {
- setMembers(prev => prev.filter(m => m.id !== id));
- showSaved('Member removed');
- }
- } catch { /* swallow */ }
- finally { setDeletingId(null); }
+  setDeletingId(id);
+  setConfirmDeleteId(null);
+  setMenuOpenId(null);
+  try {
+   const res = await fetch(`/api/team/${id}`, { method: 'DELETE' });
+   if (res.ok) {
+    setMembers(prev => prev.filter(m => m.id !== id));
+    showSaved('Member removed');
+   } else {
+    const data = await res.json().catch(() => ({}));
+    setError((data as { error?: string }).error || 'Failed to remove member — please try again');
+   }
+  } catch {
+   setError('Network error — please try again');
+  } finally {
+   setDeletingId(null);
+  }
  }
 
  async function resendInvite(id: string) {
@@ -235,13 +245,19 @@ export default function TeamPage() {
  <h1 className="font-heading text-2xl text-gray-900">Team</h1>
  <p className="mt-1 text-sm text-gray-500">Manage who has access to your StoryVenue account</p>
  </div>
- <div className="flex items-center gap-3">
- {saved && (
- <div className="flex items-center gap-1.5 text-sm text-emerald-600 font-medium animate-fade-in">
- <CheckCircle2 size={15} /> {saved}
- </div>
- )}
- <button
+  <div className="flex items-center gap-3">
+   {saved && (
+    <div className="flex items-center gap-1.5 text-sm text-emerald-600 font-medium animate-fade-in">
+     <CheckCircle2 size={15} /> {saved}
+    </div>
+   )}
+   {error && !showForm && (
+    <div className="flex items-center gap-1.5 text-sm text-red-600 bg-red-50 px-3 py-1.5 rounded-lg animate-fade-in">
+     {error}
+     <button onClick={() => setError('')} className="ml-1 text-red-400 hover:text-red-600"><X size={13}/></button>
+    </div>
+   )}
+   <button
  onClick={() => { setShowForm(v => !v); setError(''); }}
  className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"
  >
@@ -462,15 +478,36 @@ export default function TeamPage() {
  Resend Invite
  </button>
  )}
- <div className="border-t border-gray-200 my-1"/>
- <button
- onClick={() => removeMember(m.id)}
- disabled={deletingId === m.id}
- className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
- >
- {deletingId === m.id ? <Loader2 size={14} className="animate-spin"/> : <Trash2 size={14} />}
- Remove Member
- </button>
+              <div className="border-t border-gray-200 my-1"/>
+              {confirmDeleteId === m.id ? (
+               <div className="px-4 py-2.5">
+                <p className="text-xs text-gray-600 mb-2">Remove this member?</p>
+                <div className="flex gap-2">
+                 <button
+                  onClick={() => removeMember(m.id)}
+                  disabled={deletingId === m.id}
+                  className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 transition-colors disabled:opacity-50"
+                 >
+                  {deletingId === m.id ? <Loader2 size={12} className="animate-spin"/> : null}
+                  Yes, remove
+                 </button>
+                 <button
+                  onClick={() => setConfirmDeleteId(null)}
+                  className="flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                 >
+                  Cancel
+                 </button>
+                </div>
+               </div>
+              ) : (
+               <button
+                onClick={() => setConfirmDeleteId(m.id)}
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+               >
+                <Trash2 size={14} />
+                Remove Member
+               </button>
+              )}
  </div>
  );
  })()}
@@ -548,13 +585,14 @@ export default function TeamPage() {
  {/* Actions menu trigger */}
  <div className="flex-shrink-0" data-menu>
  <button
- onClick={(e) => {
- e.stopPropagation();
- if (menuOpenId === m.id) { setMenuOpenId(null); return; }
- const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
- setMenuPos({ top: rect.bottom + window.scrollY + 4, right: window.innerWidth - rect.right });
- setMenuOpenId(m.id);
- }}
+             onClick={(e) => {
+               e.stopPropagation();
+               if (menuOpenId === m.id) { setMenuOpenId(null); setConfirmDeleteId(null); return; }
+               const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
+               setMenuPos({ top: rect.bottom + window.scrollY + 4, right: window.innerWidth - rect.right });
+               setMenuOpenId(m.id);
+               setConfirmDeleteId(null);
+              }}
  className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
  >
  <MoreHorizontal size={16} />
