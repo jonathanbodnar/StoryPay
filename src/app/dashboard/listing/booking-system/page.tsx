@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Zap, Mail, MessageSquare, Bot, ChevronDown, ChevronUp,
   Plus, Trash2, Loader2, CheckCircle2, AlertTriangle, GripVertical,
-  Clock, Send, Pencil, Check,
+  Clock, Send,
 } from 'lucide-react';
 import type { BookingSystemConfig, StepConfig } from '@/app/api/listing/booking-system/route';
 
@@ -379,57 +379,6 @@ function SequenceEditor({
   );
 }
 
-// ─── AI Message editor ────────────────────────────────────────────────────
-
-function AiMessageList({
-  messages, onChange,
-}: { messages: string[]; onChange: (msgs: string[]) => void }) {
-  const [editing, setEditing] = useState<number | null>(null);
-  const [draft, setDraft] = useState('');
-
-  function startEdit(i: number) { setEditing(i); setDraft(messages[i]); }
-  function saveEdit(i: number) {
-    const n = [...messages]; n[i] = draft.trim(); onChange(n); setEditing(null);
-  }
-  function remove(i: number) { onChange(messages.filter((_, idx) => idx !== i)); }
-  function add() { onChange([...messages, '']); setEditing(messages.length); setDraft(''); }
-
-  return (
-    <div className="space-y-2">
-      {messages.map((msg, i) => (
-        <div key={i} className="rounded-xl border border-gray-200 bg-white">
-          {editing === i ? (
-            <div className="p-3 space-y-2">
-              <TextArea value={draft} onChange={setDraft} rows={3} placeholder="{{first_name}}, {{venue_name}}" />
-              <div className="flex gap-2">
-                <button type="button" onClick={() => saveEdit(i)} className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-violet-700">
-                  <Check size={12} /> Save
-                </button>
-                <button type="button" onClick={() => setEditing(null)} className="rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] text-gray-500 hover:bg-gray-50">Cancel</button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-start gap-2 px-3 py-2.5">
-              <p className="flex-1 text-[12px] text-gray-700 leading-relaxed">{msg || <span className="italic text-gray-400">Empty message</span>}</p>
-              <div className="flex shrink-0 gap-1 mt-0.5">
-                <button type="button" onClick={() => startEdit(i)} className="text-gray-400 hover:text-violet-600 transition-colors"><Pencil size={12} /></button>
-                <button type="button" onClick={() => remove(i)} className="text-gray-300 hover:text-red-400 transition-colors"><Trash2 size={12} /></button>
-              </div>
-            </div>
-          )}
-        </div>
-      ))}
-      <button
-        type="button"
-        onClick={add}
-        className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-gray-200 py-2.5 text-[12px] font-medium text-gray-400 hover:border-violet-300 hover:text-violet-600 transition-colors"
-      >
-        <Plus size={13} /> Add message
-      </button>
-    </div>
-  );
-}
-
 // ─── Main page ────────────────────────────────────────────────────────────
 
 export default function BookingSystemPage() {
@@ -607,82 +556,20 @@ export default function BookingSystemPage() {
           />
         </PhaseCard>
 
-        {/* Phase 3 — AI Concierge */}
-        <PhaseCard
-          number={3}
-          title="AI Long-tail Outreach"
-          subtitle="After the sequence ends with no reply, the AI keeps reaching out until she responds."
-          icon={<Bot size={18} className="text-emerald-600" />}
-          accent="bg-emerald-50"
-          enabled={cfg.aiEnabled}
-          onToggle={(v) => { if (v && aiBlocked) return; void save({ aiEnabled: v }); }}
-          disabled={aiBlocked}
-        >
-          <div className="space-y-5">
-            <div>
-              <SectionLabel>Outreach cadence</SectionLabel>
-              <div className="flex items-center gap-3 flex-wrap">
-                <span className="text-[13px] text-gray-600">Send every</span>
-                <select
-                  value={cfg.aiMinGapDays}
-                  onChange={(e) => void save({ aiMinGapDays: Number(e.target.value) })}
-                  className="rounded-lg border border-gray-200 px-2 py-1.5 text-[13px] focus:outline-none focus:border-violet-400"
-                >
-                  {[1,2,3].map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
-                <span className="text-[13px] text-gray-600">to</span>
-                <select
-                  value={cfg.aiMaxGapDays}
-                  onChange={(e) => void save({ aiMaxGapDays: Number(e.target.value) })}
-                  className="rounded-lg border border-gray-200 px-2 py-1.5 text-[13px] focus:outline-none focus:border-violet-400"
-                >
-                  {[2,3,5,7].map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
-                <span className="text-[13px] text-gray-600">days (randomized)</span>
-              </div>
-            </div>
-
-            <div>
-              <SectionLabel>Stop after</SectionLabel>
-              <div className="flex items-center gap-3">
-                <select
-                  value={cfg.aiMaxDays}
-                  onChange={(e) => void save({ aiMaxDays: Number(e.target.value) })}
-                  className="rounded-lg border border-gray-200 px-2 py-1.5 text-[13px] focus:outline-none focus:border-violet-400"
-                >
-                  {[30,45,60,90].map(d => <option key={d} value={d}>{d} days with no reply</option>)}
-                </select>
-                <span className="text-[11px] text-gray-400">→ auto-marks as Not Interested</span>
-              </div>
-            </div>
-
-            <div>
-              <SectionLabel>Message pool <span className="normal-case font-normal text-gray-400">— AI rotates through these</span></SectionLabel>
-              <AiMessageList messages={cfg.aiMessages} onChange={(msgs) => void save({ aiMessages: msgs })} />
-            </div>
-
-            <div>
-              <SectionLabel>Notify when bride replies</SectionLabel>
-              <InlineInput
-                value={cfg.aiNotifyEmails.join(', ')}
-                onChange={(v) => void save({ aiNotifyEmails: v.split(',').map(e => e.trim()).filter(Boolean) })}
-                placeholder="email@venue.com, concierge@storyvenue.com"
-                className="w-full"
-              />
-              <p className="mt-1 text-[11px] text-gray-400">Separate multiple emails with commas.</p>
-            </div>
+        {/* AI Concierge info callout */}
+        <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-600 mt-0.5">
+            <Bot size={16} className="text-white" />
           </div>
-        </PhaseCard>
-
-        {aiBlocked && (
-          <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] text-amber-800">
-            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-            <span>
-              Phase 3 requires <strong>A2P 10DLC verification</strong> and a connected <strong>GHL / LeadConnector account</strong>.
-              Once both are active, Phase 3 will unlock automatically.
-            </span>
+          <div>
+            <p className="text-[13px] font-semibold text-emerald-900">AI Concierge takes over here</p>
+            <p className="mt-0.5 text-[12px] text-emerald-700 leading-relaxed">
+              When the <span className="font-medium">Activate AI Concierge</span> block fires in your sequence, 
+              the AI picks up the conversation and keeps reaching out on your behalf.
+              Cadence, messages, and controls are managed by your StoryVenue account team.
+            </p>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
