@@ -504,6 +504,11 @@ export function SupportInboxPanel() {
       // status — never bump or drop the inbox row for those.
       if (evt.supportOnly) return;
 
+      // Venue Direct messages are a side-channel between the concierge and the
+      // venue — they are NOT a reply to the bride. The bride alert must stay
+      // active until the bride actually receives a direct reply via email or SMS.
+      if (evt.venueDirectMessage) return;
+
       if (evt.inbound) {
         // Bride replied — bump existing row to top with new preview, or fetch
         // a fresh list to pull in a brand-new thread.
@@ -526,7 +531,7 @@ export function SupportInboxPanel() {
           return [updated, ...rest];
         });
       } else {
-        // Outbound (any sender) — thread is now answered, drop from list
+        // Outbound reply TO the bride — thread is answered, drop from list.
         setThreads(prev => prev.filter(t => t.thread_id !== evt.threadId));
       }
     }, [debouncedInboxRefresh]),

@@ -226,8 +226,12 @@ export async function POST(req: NextRequest) {
   // Realtime broadcast — fan out to admin inbox + thread + venue's conversations
   // channel so the venue's open Conversations page also picks up the new
   // venue_direct bubble in real-time without a refresh.
+  // IMPORTANT: venueDirectMessage=true tells the SupportInboxPanel NOT to drop
+  // the thread from "Needs Reply" — a VD message is a side-channel to the venue,
+  // not a reply to the bride, so the bride alert must stay active.
   void broadcastBrideMessage({
     inbound:                 false,
+    venueDirectMessage:      true,
     threadId,
     venueId:                 t.venue_id,
     venueCustomerId:         t.venue_customer_id,
@@ -239,10 +243,10 @@ export async function POST(req: NextRequest) {
     supportAgentId:          actingAgentId,
     createdAt:               msg.created_at,
   });
-  // Also fire the admin-only event (with supportOnly=false + venue_direct
-  // metadata) so the support inbox can update its unread/replied state.
+  // Also fire the admin-only event so the thread detail view updates live.
   void broadcastBrideMessageAdminOnly({
     inbound:                 false,
+    venueDirectMessage:      true,
     threadId,
     venueId:                 t.venue_id,
     venueCustomerId:         t.venue_customer_id,

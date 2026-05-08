@@ -57,6 +57,10 @@ export interface BrideMessageEvent {
    *  When true, the inbox list MUST NOT bump/drop on this event because a note
    *  doesn't change the bride's "needs attention" status. */
   supportOnly?:          boolean;
+  /** True when the outbound message is a Venue Direct message (concierge → venue
+   *  side channel, invisible to the bride). The bride inbox list MUST NOT drop
+   *  or bump the thread on this event — the bride still needs a reply. */
+  venueDirectMessage?:   boolean;
   /** Optional list of support_team_members.id mentioned in a note. */
   mentionedSupportUserIds?: string[];
 }
