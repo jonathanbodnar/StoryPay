@@ -77,6 +77,7 @@ export function getDb(): ReturnType<typeof postgres> {
   if (!_sql) {
     const connectionString =
       process.env.DATABASE_URL ||
+      process.env.SUPABASE_DB_URL ||
       process.env.POSTGRES_URL ||
       process.env.POSTGRES_PRISMA_URL;
 
@@ -109,6 +110,7 @@ export async function getDbAsync(): Promise<ReturnType<typeof postgres>> {
 
   const connectionString =
     process.env.DATABASE_URL ||
+    process.env.SUPABASE_DB_URL ||
     process.env.POSTGRES_URL ||
     process.env.POSTGRES_PRISMA_URL;
 
