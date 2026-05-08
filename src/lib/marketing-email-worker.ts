@@ -1234,8 +1234,26 @@ async function processOneEnrollment(en: {
     const cfg = step.config_json as { tag_ids?: string[] };
     const tagIds = (cfg.tag_ids ?? []).filter(Boolean);
     if (tagIds.length > 0) {
-      const rows = tagIds.map((tagId) => ({ lead_id: en.lead_id, tag_id: tagId }));
+      // Fetch which tags are actually new so we only cascade for additions
+      const { data: existing } = await supabaseAdmin
+        .from('lead_tag_assignments')
+        .select('tag_id')
+        .eq('lead_id', en.lead_id)
+        .in('tag_id', tagIds);
+      const existingSet = new Set((existing ?? []).map((r: { tag_id: string }) => r.tag_id));
+      const newTagIds = tagIds.filter((id) => !existingSet.has(id));
+
+      const rows = tagIds.map((tagId) => ({ lead_id: en.lead_id, tag_id: tagId, venue_id: en.venue_id }));
       await supabaseAdmin.from('lead_tag_assignments').upsert(rows, { onConflict: 'lead_id,tag_id', ignoreDuplicates: true });
+
+      // Cascade: fire tag-added triggers so other automations whose trigger
+      // is 'tag_added' pick this up, and drive AI state if any of the new
+      // tags is an AI control system tag.
+      if (newTagIds.length > 0) {
+        void onMarketingTagAdded(en.venue_id, en.lead_id, newTagIds);
+        const { applyAiStateFromTagAdds } = await import('@/lib/ai-concierge/state-control');
+        void applyAiStateFromTagAdds(en.lead_id, en.venue_id, newTagIds, 'automation:add_tag');
+      }
     }
     const nextIdx = idx + 1;
     const done = nextIdx >= sorted.length;
@@ -1433,30 +1451,35 @@ async function processOneEnrollment(en: {
   // won't try to independently re-activate this lead via the 14-day timer.
   if (step.step_type === 'start_ai_concierge') {
     try {
-      const now     = new Date();
-      const expires = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000); // 60 days
+      // Route through setLeadAiState so we get the audit row in
+      // ai_state_transitions, the syncAiStateTag side-effect, and the
+      // correct side-effect timestamps (60-day window, ai_next_send_at).
+      // The idempotency guard (only activate if dormant) lives inside
+      // setLeadAiState via the noop check on fromState.
+      const { setLeadAiState } = await import('@/lib/ai-concierge/state-control');
+      const result = await setLeadAiState({
+        leadId:      en.lead_id,
+        venueId:     en.venue_id,
+        newState:    'ai_active',
+        reason:      'booking_system_workflow',
+        triggeredBy: 'automation:start_ai_concierge',
+      });
 
-      // Only activate if still dormant — prevents double-activation if this
-      // step runs twice (e.g. a retry after a transient error).
-      await supabaseAdmin
-        .from('leads')
-        .update({
-          ai_state:               'ai_active',
-          ai_first_activated_at:  now.toISOString(),
-          ai_expires_at:          expires.toISOString(),
-          ai_next_send_at:        now.toISOString(),
-          ai_booking_system_activated: true,
-          updated_at:             now.toISOString(),
-        })
-        .eq('id', en.lead_id)
-        .eq('ai_state', 'dormant');   // idempotency guard
+      // Stamp the booking-system flag (this is additive — setLeadAiState does
+      // not know about this column, so we patch it separately).
+      if (!result.noop) {
+        await supabaseAdmin
+          .from('leads')
+          .update({ ai_booking_system_activated: true })
+          .eq('id', en.lead_id);
+      }
 
-      // Apply the "AI Active" system tag so the lead's tag list reflects status.
-      const { syncAiStateTag } = await import('@/lib/ai-concierge/state-tag-sync');
-      void syncAiStateTag(en.lead_id, en.venue_id, 'ai_active');
+      if (!result.ok) {
+        console.error('[worker] start_ai_concierge: setLeadAiState failed for', en.lead_id, result.error);
+        void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'start_ai_concierge', status: 'failed', error_text: result.error });
+      }
     } catch (e) {
       console.error('[worker] start_ai_concierge: failed to activate lead', en.lead_id, e);
-      // Non-fatal — mark the step as having errored but still complete the enrollment
       void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'start_ai_concierge', status: 'failed', error_text: e instanceof Error ? e.message : 'unknown' });
     }
 
