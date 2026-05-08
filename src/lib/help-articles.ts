@@ -805,6 +805,25 @@ Tips:
 - If something fails to send, check that the contact has an email address (for Email) or a valid phone number (for SMS) and that your Legacy messaging integration is connected.`,
       },
       {
+        id: 'conversations-venue-direct',
+        title: 'Venue Direct — messages from the StoryVenue Concierge team',
+        tags: ['venue direct', 'concierge', 'support inbox', 'concierge message', 'storvenue team', 'two-way', 'mark read', 'unread', 'collapsible', 'reply'],
+        body: `Venue Direct is the two-way channel between the StoryVenue Concierge team and your venue.
+
+When the Concierge team sends you a message you will see it in your Conversations inbox (Conversations in the sidebar). A notification email is also sent to your registered email address.
+
+Replying
+- Open the thread in Conversations and type your reply in the composer. Your reply routes back to the Concierge team's support inbox automatically.
+- You can also reply directly to the notification email — your reply is routed into the thread via the inbound email system (no need to log in).
+
+Collapsible email messages
+- Long email replies in the thread are collapsed by default. You see a short snippet with a "Show full email" link. Click it to expand the full message inline.
+
+Read / unread status
+- The Concierge team marks threads as read or unread to manage follow-up. When they mark a thread read (closed) the alert badge clears.
+- If you send a new reply on a closed thread it reopens automatically so the Concierge team sees it again.`,
+      },
+      {
         id: 'conversations-inbound',
         title: 'Replies from contacts land back in the thread',
         tags: ['inbound', 'reply', 'email reply', 'sms reply', 'resend', 'ghl', 'webhook', 'two way', 'threading'],
@@ -1093,6 +1112,42 @@ How it works:
 - Data refreshes automatically in the background while you have the analytics page open.
 
 Privacy: only approximate location data (city-level) is captured. No names, emails, or device identifiers are linked to map markers.`,
+      },
+      {
+        id: 'listing-booking-system',
+        title: 'Speed to Lead Booking System — automated guide delivery and follow-up sequence',
+        tags: ['booking system', 'speed to lead', 'guide delivery', 'pricing guide', 'pdf', 'sms guide', 'email guide', 'follow-up sequence', 'automation', 'bride', 'lead form', 'public listing', 'pricing_guide_url', 'merge variable', 'ai concierge trigger'],
+        body: `The Speed to Lead Booking System (Venue listing → Booking System) automates everything that happens the moment a bride submits the inquiry form on your public storyvenue.com listing.
+
+Overview
+The system has two phases:
+1. Guide Delivery (instant) — sends the bride an email and/or SMS the moment she submits the form, with a direct download link to your Pricing and Availability Guide as a PDF.
+2. 14-Day Follow-up Sequence — a customizable sequence of Send Email, Send SMS, and Wait steps that runs in the background on a schedule.
+
+The Booking System is completely independent of GHL (GoHighLevel). GHL is used only for A2P SMS delivery. All email and all template variables are handled natively by StoryVenue.
+
+Guide Delivery (Phase 1)
+- Toggle "Send email guide" and/or "Send SMS guide" on.
+- Write the email body and SMS body. Use the {{venue.pricing_guide_url}} merge variable (or its alias {{pricing_guide_url}}) to insert the PDF download link.
+- The PDF link is live — every click generates the current version of your pricing guide in real time. If you update your Pricing Guide page, the next time someone clicks the link they get the new version. No stale PDFs.
+
+14-Day Follow-up Sequence (Phase 2)
+- Add steps using the "+" button: Send Email, Send SMS, or Wait.
+- Wait steps allow 1, 2, or 3 days only.
+- Drag and drop to reorder steps.
+- Add an "Activate AI Concierge" block to hand the lead off to the AI Concierge automatically at any point in the sequence.
+
+Stop on reply
+If the bride replies to any message (email or SMS) before the sequence finishes, the enrollment stops automatically so a human can take over. The venue is notified.
+
+Activate AI Concierge block
+Adding this block to your sequence triggers the AI Concierge for the lead at that step. Leads activated this way are excluded from the 14-day AI cron timer so there is no double-activation.
+
+Showing / hiding the menu item
+A checkbox on your directory plan controls whether the Booking System menu item is visible. Contact your account manager if you cannot see it.
+
+Pricing guide PDF
+The PDF is generated from your current Venue listing → Pricing Guide page content every time the link is clicked. Edit your pricing guide page and the updated version is what brides receive — no publish step or re-upload required.`,
       },
       {
         id: 'listing-analytics-retention',
@@ -2443,6 +2498,7 @@ Venue variables
 {{venue.website}} — venue website URL
 {{venue.owner_name}} — venue owner's name
 {{venue.logo_url}} — venue logo URL
+{{venue.pricing_guide_url}} — direct download link for your Pricing and Availability Guide PDF; always generates the latest saved version in real time. Short alias: {{pricing_guide_url}}. Use this in Booking System email and SMS templates so brides get a clickable PDF download link the moment they submit your listing form.
 
 Appointment variables (calendar notifications only)
 {{appointment.title}} — event title
@@ -3436,7 +3492,7 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/contacts': ['cust-add', 'cust-search', 'cust-profile', 'cust-pipeline', 'cust-tasks', 'cust-documents', 'cust-dnd'],
 
   // Conversations (unified inbox)
-  '/dashboard/conversations': ['conversations-overview', 'conversations-inbound', 'cust-profile', 'gs-overview'],
+  '/dashboard/conversations': ['conversations-overview', 'conversations-venue-direct', 'conversations-inbound', 'conversations-profile-drawer', 'cust-profile'],
 
   // Calendar
   '/dashboard/calendar': ['cal-overview', 'cal-add-event', 'cal-ai-search', 'cal-multi-calendar', 'cal-event-actions', 'cal-spaces', 'cal-conflicts', 'cal-multi-day', 'cal-recurring'],
@@ -3447,6 +3503,7 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/listing/images': ['listing-photos', 'listing-media-library', 'listing-overview', 'listing-publish'],
   '/dashboard/listing/reviews': ['listing-reviews', 'listing-google-reviews', 'listing-overview', 'listing-publish'],
   '/dashboard/listing/analytics': ['listing-analytics-realtime', 'listing-analytics-retention', 'listing-overview', 'listing-publish'],
+  '/dashboard/listing/booking-system': ['listing-booking-system', 'mkt-system-vars', 'billing-pricing-guide', 'mkt-ai-concierge'],
   '/dashboard/listing':        ['listing-overview', 'listing-media-library', 'listing-reviews', 'listing-google-reviews', 'listing-analytics-realtime', 'listing-autosave', 'listing-photos', 'listing-publish', 'listing-slug'],
 
   // Leads

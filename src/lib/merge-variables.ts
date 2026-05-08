@@ -69,6 +69,7 @@ export const SYSTEM_MERGE_VARIABLES: SystemMergeVar[] = [
   { key: 'venue.city',                  tag: '{{venue.city}}',                  description: 'Venue city',                             example: 'Nashville',                      category: 'venue',        usedIn: ['calendar', 'marketing', 'ai_concierge'] },
   { key: 'venue.state',                 tag: '{{venue.state}}',                 description: 'Venue state',                            example: 'TN',                             category: 'venue',        usedIn: ['calendar', 'marketing', 'ai_concierge'] },
   { key: 'venue.website',               tag: '{{venue.website}}',               description: 'Venue website URL',                      example: 'https://yourvenue.com',          category: 'venue',        usedIn: ['calendar', 'marketing'] },
+  { key: 'venue.pricing_guide_url',     tag: '{{venue.pricing_guide_url}}',     description: 'Direct download link for the venue\'s Pricing & Availability Guide PDF (always latest version)', example: 'https://app.storyvenue.com/api/public/venue/abc123/pricing-guide', category: 'venue', usedIn: ['marketing'] },
   { key: 'venue.description',           tag: '{{venue.description}}',           description: 'Short venue style description',          example: 'Restored 1920s ballroom in downtown Nashville', category: 'venue', usedIn: ['ai_concierge'] },
   // Lead
   { key: 'lead.wedding_date',           tag: '{{lead.wedding_date}}',           description: 'Wedding date (formatted)',                example: 'October 15, 2027',               category: 'lead',         usedIn: ['marketing', 'ai_concierge'] },
@@ -143,6 +144,7 @@ export const FLAT_TO_CANONICAL: Record<string, string> = {
   venue_website:            'venue.website',
   venue_owner_name:         'venue.owner_name',
   venue_owner_first_name:   'venue.owner_first_name',
+  pricing_guide_url:        'venue.pricing_guide_url',
   // ── Payment (transactional) ───────────────────────────────────────────────
   amount:                   'payment.amount',
   net_amount:               'payment.net_amount',
