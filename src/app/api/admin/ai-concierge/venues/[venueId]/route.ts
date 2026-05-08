@@ -104,6 +104,14 @@ export async function PATCH(
     void supabaseAdmin.from('ai_state_transitions').insert(auditRows)
       .then(() => {}, (e: unknown) => { console.error('[admin/ai-concierge] pause_all_leads audit failed:', e); });
 
+    // Sync the AI state tag for each paused lead. Best-effort; fire-and-forget.
+    void (async () => {
+      const { syncAiStateTag } = await import('@/lib/ai-concierge/state-tag-sync');
+      for (const leadId of activeIds) {
+        await syncAiStateTag(leadId, venueId, 'paused');
+      }
+    })().catch((e) => console.warn('[admin/ai-concierge] pause_all_leads tag sync failed:', e));
+
     return NextResponse.json({ ok: true, paused: activeIds.length });
   }
 

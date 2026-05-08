@@ -70,13 +70,24 @@ export async function generateSmsWithDeepSeek(
 
   let raw = '';
   try {
+    // Append an output-format reminder to the system prompt at runtime so we
+    // always reinforce the tag contract regardless of how the venue/admin has
+    // edited the template. Belt-and-suspenders against the model emitting
+    // plain prose without the <<sms>> wrapper.
+    const formatReminder =
+      '\n\n' +
+      'IMPORTANT — OUTPUT FORMAT (must follow exactly, nothing else):\n' +
+      '<<angle>>angle_key_here<</angle>>\n' +
+      '<<sms>>The actual SMS text here.<</sms>>\n' +
+      'Do NOT include any other text, explanations, prefaces, or sign-offs outside these two tags.';
+
     const completion = await client.chat.completions.create({
       model: DEEPSEEK_MODEL,
       temperature: input.temperature ?? 0.85,
       max_tokens: input.maxTokens ?? 220,
       messages: [
-        { role: 'system', content: input.systemPrompt },
-        { role: 'user',   content: input.userMessage ?? 'Write the next SMS.' },
+        { role: 'system', content: input.systemPrompt + formatReminder },
+        { role: 'user',   content: input.userMessage ?? 'Write the next SMS, wrapped in the required <<angle>> and <<sms>> tags.' },
       ],
     });
     raw = completion.choices?.[0]?.message?.content ?? '';
@@ -144,6 +155,16 @@ export function parseStructuredOutput(raw: string): GenerateSmsResult {
       };
     }
   }
+
+  // Defensive cleanup: strip any orphaned tag fragments DeepSeek may have left
+  // behind even after our tolerant tag matching (e.g. a leading "<<sms>>" with
+  // no matching close tag, or a trailing "<</sms>>", or stray "<<angle>>...<</angle>>").
+  smsContent = smsContent
+    .replace(/^<<?\s*sms\s*>>\s*/i, '')
+    .replace(/\s*<<?\s*\/sms\s*>>\s*$/i, '')
+    .replace(/<<?\s*angle\s*>>[\s\S]*?<<?\s*\/angle\s*>>/gi, '')
+    .replace(/<<?\s*\/?\s*sms\s*>>/gi, '')
+    .trim();
 
   const angleRaw = (angleMatch[1] || '').trim().toLowerCase();
   if (!isAiAngleKey(angleRaw)) {

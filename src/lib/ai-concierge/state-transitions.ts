@@ -9,6 +9,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase';
 import type { AiState, AiTransitionReason } from './types';
+import { syncAiStateTag } from './state-tag-sync';
 
 export interface RecordStateTransitionInput {
   leadId:       string;
@@ -37,4 +38,8 @@ export async function recordAiStateTransition(input: RecordStateTransitionInput)
   } catch (e) {
     console.error('[ai-concierge] recordAiStateTransition failed:', e);
   }
+
+  // Side-effect: keep the lead's visible AI state tag in sync. Best-effort,
+  // never throws (see state-tag-sync.ts).
+  void syncAiStateTag(input.leadId, input.venueId, input.toState);
 }

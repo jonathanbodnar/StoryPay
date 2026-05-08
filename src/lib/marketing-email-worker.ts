@@ -1450,6 +1450,10 @@ async function processOneEnrollment(en: {
         })
         .eq('id', en.lead_id)
         .eq('ai_state', 'dormant');   // idempotency guard
+
+      // Apply the "AI Active" system tag so the lead's tag list reflects status.
+      const { syncAiStateTag } = await import('@/lib/ai-concierge/state-tag-sync');
+      void syncAiStateTag(en.lead_id, en.venue_id, 'ai_active');
     } catch (e) {
       console.error('[worker] start_ai_concierge: failed to activate lead', en.lead_id, e);
       // Non-fatal — mark the step as having errored but still complete the enrollment
