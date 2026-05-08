@@ -1218,6 +1218,54 @@ async function processOneEnrollment(en: {
     return done ? 'completed' : 'advanced';
   }
 
+  // ── start_ai_concierge: immediately activate the AI Concierge for this lead
+  //
+  // This is the terminal step added by the Booking System "Activate AI Concierge"
+  // block. It sets the lead's ai_state to 'ai_active' right now, bypassing the
+  // activation cron's 14-day automatic timer.
+  //
+  // The AI send cron will pick the lead up on its next tick as long as:
+  //   - venues.ai_concierge_enabled = true  (Phase 3 toggle on the Booking System page)
+  //   - venues.a2p_verified = true
+  //   - leads.sms_dnd = false
+  //
+  // We also stamp ai_booking_system_activated = true so the activation cron
+  // won't try to independently re-activate this lead via the 14-day timer.
+  if (step.step_type === 'start_ai_concierge') {
+    try {
+      const now     = new Date();
+      const expires = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000); // 60 days
+
+      // Only activate if still dormant — prevents double-activation if this
+      // step runs twice (e.g. a retry after a transient error).
+      await supabaseAdmin
+        .from('leads')
+        .update({
+          ai_state:               'ai_active',
+          ai_first_activated_at:  now.toISOString(),
+          ai_expires_at:          expires.toISOString(),
+          ai_next_send_at:        now.toISOString(),
+          ai_booking_system_activated: true,
+          updated_at:             now.toISOString(),
+        })
+        .eq('id', en.lead_id)
+        .eq('ai_state', 'dormant');   // idempotency guard
+    } catch (e) {
+      console.error('[worker] start_ai_concierge: failed to activate lead', en.lead_id, e);
+      // Non-fatal — mark the step as having errored but still complete the enrollment
+      void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'start_ai_concierge', status: 'failed', error_text: e instanceof Error ? e.message : 'unknown' });
+    }
+
+    // Complete the enrollment — this is always a terminal step.
+    const completedAt = new Date().toISOString();
+    await supabaseAdmin
+      .from('marketing_automation_enrollments')
+      .update({ status: 'completed', current_step_index: idx + 1, completed_at: completedAt, next_run_at: completedAt })
+      .eq('id', en.id);
+    void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'start_ai_concierge', status: 'success' });
+    return 'completed';
+  }
+
   return 'unknown';
 }
 

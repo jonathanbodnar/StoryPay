@@ -221,6 +221,9 @@ async function fetchEligibleLeads(
     WHERE l.ai_state = 'dormant'
       AND COALESCE(l.sms_dnd, false) = false
       AND ${venueGuard}
+      -- Skip leads that were activated directly by the Booking System workflow
+      -- (start_ai_concierge step). Those are managed by the worker, not this cron.
+      AND COALESCE(l.ai_booking_system_activated, false) = false
       AND (
         -- First-time path: outbound went out 14+ days ago, no inbound yet
         (l.ai_first_activated_at IS NULL
@@ -278,6 +281,7 @@ async function activateLead(
      WHERE id = ${row.id}
        AND ai_state = 'dormant'
        AND COALESCE(sms_dnd, false) = false
+       AND COALESCE(ai_booking_system_activated, false) = false
        AND ${venueGuardSubquery}
        AND (
          (ai_first_activated_at IS NULL
