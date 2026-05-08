@@ -54,7 +54,6 @@ const menuItems: NavItem[] = [
   { label: 'Home', href: '/dashboard', icon: LayoutDashboard, navId: 'nav_main_home' },
   { label: 'Contacts', href: '/dashboard/contacts', icon: Users, navId: 'nav_main_contacts' },
   { label: 'Conversations', href: '/dashboard/conversations', icon: MessageCircle, navId: 'nav_main_conversations' },
-  { label: 'Concierge', href: '/dashboard/concierge', icon: Bell, navId: 'nav_main_concierge' },
   { label: 'Calendar', href: '/dashboard/calendar', icon: Calendar, navId: 'nav_main_calendar' },
   { label: 'Leads', href: '/dashboard/leads', icon: Inbox, navId: 'nav_main_leads' },
   { label: 'Media', href: '/dashboard/media', icon: Images, navId: 'nav_main_media' },
