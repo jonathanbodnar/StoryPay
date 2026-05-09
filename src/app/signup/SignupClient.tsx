@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, Eye, EyeOff } from 'lucide-react';
 import { ModeToggle } from '@/app/login/LoginClient';
+import PasswordStrengthBar from '@/components/PasswordStrengthBar';
+import { checkPassword } from '@/lib/password-policy';
 
 /**
  * Unified signup page with a toggle for venue owners vs. wedding couples.
@@ -78,17 +80,19 @@ function VenueSignupForm() {
   const [error, setError] = useState('');
 
   const passwordsMatch = password === confirmPassword;
+  const pwCheck = checkPassword(password);
   const canSubmit =
     venueName.trim() &&
     firstName.trim() &&
     lastName.trim() &&
     email.trim() &&
-    password.length >= 8 &&
+    pwCheck.valid &&
     passwordsMatch;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
+    if (!pwCheck.valid) { setError(pwCheck.message); return; }
     if (!passwordsMatch) { setError('Passwords do not match.'); return; }
     setLoading(true);
     setError('');
@@ -215,6 +219,7 @@ function VenueSignupForm() {
               {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
           </div>
+          <PasswordStrengthBar password={password} className="mt-2" />
         </div>
 
         <div>
@@ -296,12 +301,14 @@ function CoupleSignupForm() {
   const [error, setError] = useState('');
 
   const passwordsMatch = password === confirmPassword;
+  const couplePwCheck = checkPassword(password);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!firstName.trim()) { setError('First name is required.'); return; }
     if (!lastName.trim()) { setError('Last name is required.'); return; }
     if (!phone.trim()) { setError('Phone number is required.'); return; }
+    if (!couplePwCheck.valid) { setError(couplePwCheck.message); return; }
     if (!passwordsMatch) { setError('Passwords do not match.'); return; }
     setError('');
     setLoading(true);
@@ -427,6 +434,7 @@ function CoupleSignupForm() {
               {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
           </div>
+          <PasswordStrengthBar password={password} className="mt-2" />
         </div>
 
         <div>

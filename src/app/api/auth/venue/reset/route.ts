@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import bcrypt from 'bcryptjs';
 import { verifyResetToken } from '../forgot/route';
 import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
+import { checkPassword } from '@/lib/password-policy';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -38,8 +39,9 @@ export async function POST(req: NextRequest) {
   }
 
   if (!token) return NextResponse.json({ error: 'Missing token.' }, { status: 400 });
-  if (!password || password.length < 8) {
-    return NextResponse.json({ error: 'Password must be at least 8 characters.' }, { status: 400 });
+  const pwCheck = checkPassword(password);
+  if (!pwCheck.valid) {
+    return NextResponse.json({ error: pwCheck.message }, { status: 400 });
   }
 
   const parsed = verifyResetToken(token);

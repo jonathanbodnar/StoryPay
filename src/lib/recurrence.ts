@@ -51,13 +51,39 @@ export function normalizeRule(input: unknown): RecurrenceRule | null {
   return out;
 }
 
-/** Advance `d` by one interval of the given freq. Mutates `d`. */
+/**
+ * Advance `d` by one interval of the given freq. Mutates `d`.
+ *
+ * Monthly/yearly use a clamped algorithm so that dates on the 29th–31st never
+ * overflow into the next month (Jan 31 + 1 month = Feb 28, not Mar 3).
+ */
 function advance(d: Date, freq: RecurrenceFreq, step: number) {
   switch (freq) {
-    case 'daily':   d.setDate(d.getDate() + step); break;
-    case 'weekly':  d.setDate(d.getDate() + 7 * step); break;
-    case 'monthly': d.setMonth(d.getMonth() + step); break;
-    case 'yearly':  d.setFullYear(d.getFullYear() + step); break;
+    case 'daily':
+      d.setDate(d.getDate() + step);
+      break;
+    case 'weekly':
+      d.setDate(d.getDate() + 7 * step);
+      break;
+    case 'monthly': {
+      const origDay = d.getDate();
+      d.setDate(1);                           // anchor to 1st to prevent overflow
+      d.setMonth(d.getMonth() + step);
+      // Clamp to the last day of the target month
+      const maxDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      d.setDate(Math.min(origDay, maxDay));
+      break;
+    }
+    case 'yearly': {
+      const origDay = d.getDate();
+      const origMonth = d.getMonth();
+      d.setDate(1);
+      d.setFullYear(d.getFullYear() + step);
+      d.setMonth(origMonth);
+      const maxDay = new Date(d.getFullYear(), origMonth + 1, 0).getDate();
+      d.setDate(Math.min(origDay, maxDay));
+      break;
+    }
   }
 }
 

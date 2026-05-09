@@ -4,6 +4,8 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { Eye, EyeOff, Loader2, CheckCircle2 } from 'lucide-react';
+import PasswordStrengthBar from '@/components/PasswordStrengthBar';
+import { checkPassword } from '@/lib/password-policy';
 
 function ResetForm() {
   const router = useRouter();
@@ -21,11 +23,13 @@ function ResetForm() {
     if (!token) setError('No reset token found. Please request a new password reset link.');
   }, [token]);
 
+  const pwCheck = checkPassword(password);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters.');
+    if (!pwCheck.valid) {
+      setError(pwCheck.message);
       return;
     }
     if (password !== confirm) {
@@ -99,6 +103,7 @@ function ResetForm() {
                       {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
+                  <PasswordStrengthBar password={password} className="mt-2" />
                 </div>
 
                 <div>
@@ -119,7 +124,7 @@ function ResetForm() {
 
                 <button
                   type="submit"
-                  disabled={loading || !token}
+                  disabled={loading || !token || !pwCheck.valid || !confirm}
                   className="w-full rounded-lg py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-85 inline-flex items-center justify-center gap-2"
                   style={{ backgroundColor: '#1b1b1b' }}
                 >

@@ -157,28 +157,54 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid recurrence_rule' }, { status: 400 });
   }
 
-  // Conflict detection only checks the first occurrence — recurring conflicts
-  // across months are expensive to compute and almost never what the user
-  // actually wants warned about at create time.
   if (space_id && !override_conflict) {
-    const { data: conflicts, error: conflictErr } = await supabaseAdmin
+    // For recurring events, expand all occurrences up to 1 year out and check
+    // each one. For single events this is just one window query.
+    const durationMs = new Date(end_at).getTime() - new Date(start_at).getTime();
+    const occurrences = rule
+      ? expandEvent(
+          { id: '_new', start_at, end_at, recurrence_rule: rule },
+          new Date(start_at),
+          new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        )
+      : [{ start_at, end_at: new Date(new Date(start_at).getTime() + durationMs).toISOString() }];
+
+    // Fetch all existing events for this space within the expanded window.
+    const windowEnd = occurrences.at(-1)?.end_at ?? end_at;
+    const { data: existing, error: conflictErr } = await supabaseAdmin
       .from('calendar_events')
       .select('id, title, start_at, end_at')
       .eq('venue_id', venueId)
       .eq('space_id', space_id)
       .neq('status', 'cancelled')
-      .lt('start_at', end_at)
+      .lt('start_at', windowEnd)
       .gt('end_at', start_at);
     if (conflictErr) {
       console.error('[calendar POST conflict]', conflictErr);
       return NextResponse.json({ error: conflictErr.message }, { status: 500 });
     }
-    if ((conflicts ?? []).length > 0) {
-      return NextResponse.json({
-        error: 'conflict',
-        message: 'This space already has an event during that time.',
-        conflicts,
-      }, { status: 409 });
+
+    if ((existing ?? []).length > 0) {
+      // Check each new occurrence against existing events.
+      const conflicts: typeof existing = [];
+      for (const occ of occurrences) {
+        const occStart = occ.start_at;
+        const occEnd   = occ.end_at;
+        for (const ex of existing ?? []) {
+          if (ex.start_at < occEnd && ex.end_at > occStart) {
+            if (!conflicts.find((c) => c.id === ex.id)) conflicts.push(ex);
+          }
+        }
+      }
+      if (conflicts.length > 0) {
+        return NextResponse.json({
+          error: 'conflict',
+          message: rule
+            ? `This space has ${conflicts.length} conflict${conflicts.length > 1 ? 's' : ''} across the recurring series.`
+            : 'This space already has an event during that time.',
+          conflicts,
+        }, { status: 409 });
+      }
     }
   }
 

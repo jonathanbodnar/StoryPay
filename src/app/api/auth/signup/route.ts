@@ -4,6 +4,7 @@ import { sendEmail } from '@/lib/email';
 import bcrypt from 'bcryptjs';
 import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
 import { issueAndSendVerificationEmail } from '@/lib/email-verification';
+import { checkPassword } from '@/lib/password-policy';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -69,8 +70,9 @@ export async function POST(request: NextRequest) {
   if (!email || !isEmail(email)) {
     return NextResponse.json({ error: 'A valid email address is required.' }, { status: 400 });
   }
-  if (!password || password.length < 8) {
-    return NextResponse.json({ error: 'Password must be at least 8 characters.' }, { status: 400 });
+  const pwCheck = checkPassword(password);
+  if (!pwCheck.valid) {
+    return NextResponse.json({ error: pwCheck.message }, { status: 400 });
   }
 
   const fullName = `${firstName} ${lastName}`.trim();
