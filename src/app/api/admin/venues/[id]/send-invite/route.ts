@@ -39,17 +39,52 @@ export async function POST(
     isLegacy?: boolean;
   };
 
-  const { data: venue, error: vErr } = await supabaseAdmin
-    .from('venues')
-    .select('id, name, email, login_token')
-    .eq('id', venueId)
-    .single();
-
-  if (vErr || !venue) {
+  // Pull every identity field that might be useful for the email — and
+  // gracefully tolerate older schemas missing owner_first_name /
+  // notification_email.
+  let venue:
+    | {
+        id: string;
+        name: string | null;
+        email: string | null;
+        login_token: string | null;
+        owner_first_name?: string | null;
+        notification_email?: string | null;
+      }
+    | null = null;
+  {
+    const { data, error: vErr } = await supabaseAdmin
+      .from('venues')
+      .select('id, name, email, login_token, owner_first_name, notification_email')
+      .eq('id', venueId)
+      .single();
+    if (vErr) {
+      // Retry with the column set guaranteed to exist on every schema.
+      const slim = await supabaseAdmin
+        .from('venues')
+        .select('id, name, email, login_token')
+        .eq('id', venueId)
+        .single();
+      if (slim.error || !slim.data) {
+        return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
+      }
+      venue = slim.data;
+    } else {
+      venue = data;
+    }
+  }
+  if (!venue) {
     return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
   }
 
-  const recipient = (body.to || venue.email || '').trim();
+  // Prefer notification_email (the routing address the owner expects) and
+  // fall back to the account email. An explicit `to` always wins.
+  const recipient = (
+    body.to ||
+    venue.notification_email ||
+    venue.email ||
+    ''
+  ).trim();
   if (!recipient) {
     return NextResponse.json({ error: 'No email on file for this venue. Pass `to` to override.' }, { status: 400 });
   }
@@ -78,7 +113,12 @@ export async function POST(
       .eq('id', venueId);
     if (rot2) {
       console.warn('[admin send-invite] could not rotate login_token, using existing one:', rot2.message);
-      usedToken = venue.login_token as string;
+      if (!venue.login_token) {
+        return NextResponse.json({
+          error: `Could not rotate login token (${rot2.message}) and venue has no existing token. Please re-run after migrations apply.`,
+        }, { status: 500 });
+      }
+      usedToken = venue.login_token;
     }
   }
 
@@ -90,7 +130,10 @@ export async function POST(
       to: recipient,
       subject: `Your StoryVenue login link — ${venue.name || 'your account'}`,
       html: inviteEmailHtml({
-        firstName: (body.firstName || '').trim() || 'there',
+        firstName:
+          (body.firstName || '').trim() ||
+          (venue.owner_first_name || '').trim() ||
+          'there',
         venueName: venue.name || 'your account',
         loginUrl,
         isLegacy:  Boolean(body.isLegacy),

@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { agencyCreateMerchant } from '@/lib/lunarpay';
 import { getLunarPayAdminSummary } from '@/lib/lunarpay-venue-admin';
 import { sendEmail } from '@/lib/email';
+import { normalizePhone } from '@/lib/ghl';
 
 const REDACT_VENUE_KEYS = new Set(['lunarpay_secret_key', 'lunarpay_org_token']);
 
@@ -144,62 +145,73 @@ export async function POST(request: Request) {
     // Identity payload — saved on the venues row so every notification,
     // automation, email signature, contact-card, etc. uses the owner's
     // name/email/phone, not the StoryVenue concierge team's. This mirrors
-    // exactly what /api/auth/signup persists for self-service signups.
-    const identityPayload = {
+    // exactly what /api/auth/signup persists for self-service signups,
+    // PLUS notification_email/notification_phone (which self-service users
+    // configure later in Settings → Notifications) so the owner gets
+    // alerts immediately without having to set them up.
+    //
+    // notification_phone is normalized to E.164 (+1xxxxxxxxxx) where
+    // possible — owner-notifications/SMS providers normalize on read too,
+    // but storing the canonical form keeps debugging simpler.
+    const normalizedPhone = normalizePhone(trimmedPhone) || trimmedPhone;
+    const identityPayload: Record<string, unknown> = {
       name:                trimmedName,
       email:               trimmedEmail,
       phone:               trimmedPhone,
       notification_email:  trimmedEmail,
+      notification_phone:  normalizedPhone,
       owner_first_name:    trimmedFirst,
       owner_last_name:     trimmedLast,
       setup_completed:     true,
       ghl_location_id:     ghlLocationId || null,
       onboarding_status:   'pending',
       ...merchantData,
-    } as Record<string, unknown>;
+    };
+
+    // Columns that may not exist on a legacy production schema. We strip
+    // them one-at-a-time on "column does not exist" errors so we keep as
+    // much owner identity as the deployed schema can accept.
+    const OPTIONAL_COLUMNS = [
+      'notification_phone',
+      'notification_email',
+      'owner_first_name',
+      'owner_last_name',
+      'setup_completed',
+    ];
 
     let venue: Record<string, unknown> | null = null;
-    {
+    const insertPayload = { ...identityPayload };
+    const droppedColumns: string[] = [];
+    for (let attempt = 0; attempt < OPTIONAL_COLUMNS.length + 1; attempt++) {
       const { data, error: venueError } = await supabaseAdmin
         .from('venues')
-        .insert(identityPayload)
+        .insert(insertPayload)
         .select()
         .single();
 
-      if (venueError) {
-        // Fallback: some legacy production schemas don't have one of the
-        // newer columns (notification_email, owner_first_name,
-        // owner_last_name, setup_completed). Retry with just the columns
-        // that have always existed.
-        const looksLikeMissingColumn = /column .* does not exist/i.test(venueError.message);
-        if (looksLikeMissingColumn) {
-          console.warn('[admin venue create] retrying insert with reduced columns:', venueError.message);
-          const { data: data2, error: err2 } = await supabaseAdmin
-            .from('venues')
-            .insert({
-              name:              trimmedName,
-              email:             trimmedEmail,
-              phone:             trimmedPhone,
-              ghl_location_id:   ghlLocationId || null,
-              onboarding_status: 'pending',
-              ...merchantData,
-            })
-            .select()
-            .single();
-          if (err2) {
-            return NextResponse.json({ error: `DB error: ${err2.message}` }, { status: 500 });
-          }
-          venue = data2;
-        } else {
-          return NextResponse.json({ error: `DB error: ${venueError.message}` }, { status: 500 });
-        }
-      } else {
+      if (!venueError) {
         venue = data;
+        break;
       }
+
+      const m = venueError.message.match(/column "?([a-zA-Z_]+)"? .*does not exist/i);
+      const missingCol = m?.[1];
+      if (missingCol && OPTIONAL_COLUMNS.includes(missingCol) && missingCol in insertPayload) {
+        console.warn(`[admin venue create] schema missing "${missingCol}" — dropping and retrying`);
+        delete insertPayload[missingCol];
+        droppedColumns.push(missingCol);
+        continue;
+      }
+
+      // Either a different error, or we've already stripped everything we can.
+      return NextResponse.json({ error: `DB error: ${venueError.message}` }, { status: 500 });
     }
 
     if (!venue) {
-      return NextResponse.json({ error: 'Venue create returned no row' }, { status: 500 });
+      return NextResponse.json({ error: 'Venue create returned no row after retries' }, { status: 500 });
+    }
+    if (droppedColumns.length > 0) {
+      console.warn('[admin venue create] succeeded after dropping columns:', droppedColumns.join(', '));
     }
 
     const appUrl   = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
