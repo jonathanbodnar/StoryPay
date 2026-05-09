@@ -442,14 +442,25 @@ export function AiConciergeHandoffRulesEditor() {
                     <RuleMatchIndicator info={matchInfo} ruleType={r.rule_type} />
                   </td>
 
-                  <td className="px-3 py-3 max-w-md">
-                    <div className="flex items-center gap-2">
+                  <td className="px-3 py-3 max-w-xs">
+                    <div className="flex items-start gap-2 flex-wrap">
                       {r.rule_type === 'keyword'
                         ? <Chip tone="blue">keyword</Chip>
                         : <Chip tone="emerald">intent</Chip>}
-                      <code className="text-[12px] font-mono text-gray-800 break-all">{r.trigger_value}</code>
+                      <span className="text-[13px] text-gray-800 leading-snug">
+                        {r.description || r.trigger_value}
+                      </span>
                     </div>
-                    {r.description && <p className="mt-1 text-[11px] text-gray-500">{r.description}</p>}
+                    {/* For keyword rules, show the raw regex collapsed — useful for debugging but shouldn't dominate the row */}
+                    {r.rule_type === 'keyword' && (
+                      <details className="mt-1 group">
+                        <summary className="cursor-pointer text-[10px] text-gray-400 hover:text-gray-600 select-none list-none flex items-center gap-0.5">
+                          <span className="group-open:hidden">▶ regex</span>
+                          <span className="hidden group-open:inline">▼ regex</span>
+                        </summary>
+                        <code className="mt-1 block text-[11px] font-mono text-gray-400 break-all leading-relaxed">{r.trigger_value}</code>
+                      </details>
+                    )}
                   </td>
 
                   <td className="px-3 py-3"><ActionPill action={r.action} /></td>
