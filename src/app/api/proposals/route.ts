@@ -29,12 +29,14 @@ export async function GET(request: NextRequest) {
   // Select only the columns needed for the proposals list — avoids
   // transferring large JSONB fields (content, signature_fields, line_items,
   // payment_config) for what is typically a 5–20 row table widget.
+  // Sticks to the original public schema; fields like proposal_type,
+  // deposit_pct, override_conflict don't exist on every install.
   let query = supabaseAdmin
     .from('proposals')
     .select(
-      'id, public_token, customer_name, customer_email, status, price, ' +
-      'sent_at, paid_at, signed_at, created_at, updated_at, template_id, ' +
-      'proposal_type, payment_type, deposit_pct, override_conflict',
+      'id, public_token, customer_name, customer_email, customer_lunarpay_id, ' +
+      'status, price, payment_type, sent_at, paid_at, signed_at, ' +
+      'created_at, updated_at, template_id',
     )
     .eq('venue_id', venueId)
     .order('created_at', { ascending: false });
