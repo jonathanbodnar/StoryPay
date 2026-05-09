@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -9,6 +9,7 @@ import {
   Plus, Check, Trash2, Upload, Calendar, ClipboardList,
   FileCheck, Activity, User, Heart, ChevronDown, ChevronUp, Info,
   AlertCircle, Undo2, Smartphone, Building2,
+  Bot, Pause, BotOff, Play, Clock,
 } from 'lucide-react';
 import RefundModal from '@/components/RefundModal';
 import ContactAiControls from '@/components/ai-concierge/ContactAiControls';
@@ -226,6 +227,8 @@ export default function CustomerDetailPage() {
   const [newSpaceCap,      setNewSpaceCap]      = useState('');
   const [savingSpace,      setSavingSpace]      = useState(false);
   const [clearingSmsDnd,   setClearingSmsDnd]   = useState(false);
+  const [syncingGhl,       setSyncingGhl]       = useState(false);
+  const [syncGhlMsg,       setSyncGhlMsg]       = useState<string | null>(null);
 
   // GHL DND
   const [venueGhlConnected, setVenueGhlConnected] = useState(false);
@@ -233,6 +236,19 @@ export default function CustomerDetailPage() {
   const [inboundDndSettings, setInboundDndSettings] = useState<GhlInboundDndSettings | null>(null);
   const [savingDnd,         setSavingDnd]         = useState(false);
   const [dndError,          setDndError]          = useState('');
+
+  // AI Concierge header button
+  interface ContactLeadSnap {
+    id: string;
+    ai_state: string | null;
+    ai_next_send_at: string | null;
+  }
+  const [aiEnabled,         setAiEnabled]         = useState(false);
+  const [headerLead,        setHeaderLead]        = useState<ContactLeadSnap | null>(null);
+  const [aiHeaderMenuOpen,  setAiHeaderMenuOpen]  = useState(false);
+  const [aiHeaderActing,    setAiHeaderActing]    = useState(false);
+  const [aiHeaderMsg,       setAiHeaderMsg]       = useState<string | null>(null);
+  const aiHeaderMenuRef = useRef<HTMLDivElement>(null);
 
   // ── Fetch all data ─────────────────────────────────────────────────────────
   const fetchAll = useCallback(async () => {
@@ -354,6 +370,37 @@ export default function CustomerDetailPage() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
+  // Fetch AI concierge status for the header button
+  useEffect(() => {
+    fetch('/api/dashboard/settings/ai-concierge', { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.enabled || d?.eligibility?.addonPurchased) setAiEnabled(true); })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const email = customer?.email;
+    if (!aiEnabled || !email) { setHeaderLead(null); return; }
+    let cancelled = false;
+    fetch(`/api/listing/ai-concierge/contact-lead?email=${encodeURIComponent(email)}`, { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (!cancelled) setHeaderLead(d?.lead ?? null); })
+      .catch(() => { if (!cancelled) setHeaderLead(null); });
+    return () => { cancelled = true; };
+  }, [aiEnabled, customer?.email]);
+
+  // Close AI header menu on outside click
+  useEffect(() => {
+    if (!aiHeaderMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (aiHeaderMenuRef.current && !aiHeaderMenuRef.current.contains(e.target as Node)) {
+        setAiHeaderMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [aiHeaderMenuOpen]);
+
   // Keep stage in sync with other components open in the same session.
   const vcIdForSync = venueCustomer?.id;
   useEffect(() => {
@@ -368,6 +415,49 @@ export default function CustomerDetailPage() {
       );
     });
   }, [vcIdForSync, pipelines]);
+
+  // ── AI Concierge header actions ─────────────────────────────────────────────
+  async function aiHeaderAction(action: 'resume' | 'handoff') {
+    if (!headerLead) return;
+    setAiHeaderActing(true);
+    try {
+      const r = await fetch(`/api/listing/ai-concierge/leads/${headerLead.id}/state`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) {
+        setHeaderLead((prev) => prev ? { ...prev, ai_state: d.ai_state ?? prev.ai_state } : prev);
+        setAiHeaderMsg(action === 'handoff' ? 'AI handed off.' : 'AI resumed.');
+      } else {
+        setAiHeaderMsg(d?.error ?? 'Action failed.');
+      }
+    } catch { setAiHeaderMsg('Network error.'); }
+    setAiHeaderActing(false);
+    setAiHeaderMenuOpen(false);
+    setTimeout(() => setAiHeaderMsg(null), 4000);
+  }
+
+  async function aiHeaderSnooze(minutes: number) {
+    if (!headerLead) return;
+    setAiHeaderActing(true);
+    try {
+      const r = await fetch(`/api/listing/ai-concierge/leads/${headerLead.id}/snooze`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ minutes }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) {
+        setHeaderLead((prev) => prev ? { ...prev, ai_state: 'paused', ai_next_send_at: d.nextSendAt ?? prev.ai_next_send_at } : prev);
+        setAiHeaderMsg(d.message ?? `AI paused for ${minutes} min.`);
+      } else {
+        setAiHeaderMsg(d?.error ?? 'Snooze failed.');
+      }
+    } catch { setAiHeaderMsg('Network error.'); }
+    setAiHeaderActing(false);
+    setAiHeaderMenuOpen(false);
+    setTimeout(() => setAiHeaderMsg(null), 4000);
+  }
 
   // ── Contact save ────────────────────────────────────────────────────────────
   function startEditContact() {
@@ -480,6 +570,30 @@ export default function CustomerDetailPage() {
       setDndError('Network error saving DND');
     } finally {
       setSavingDnd(false);
+    }
+  }
+
+  async function syncFromGhl() {
+    if (!venueCustomer?.id) return;
+    setSyncingGhl(true);
+    setSyncGhlMsg(null);
+    try {
+      const r = await fetch(`/api/venue-customers/${venueCustomer.id}/sync-ghl`, { method: 'POST' });
+      const d = await r.json() as { ok?: boolean; error?: string; contact?: { sms_dnd?: boolean } };
+      if (r.ok) {
+        setSyncGhlMsg('Synced! Refreshing contact…');
+        // Refresh the full contact to pick up new DND state
+        await fetchAll();
+        setSyncGhlMsg(null);
+      } else {
+        setSyncGhlMsg(d.error ?? 'GHL sync failed');
+        setTimeout(() => setSyncGhlMsg(null), 5000);
+      }
+    } catch {
+      setSyncGhlMsg('Network error');
+      setTimeout(() => setSyncGhlMsg(null), 5000);
+    } finally {
+      setSyncingGhl(false);
     }
   }
 
@@ -987,6 +1101,69 @@ export default function CustomerDetailPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* AI Concierge quick-control (only shown when venue has AI active + contact has a lead) */}
+            {aiEnabled && headerLead && (
+              <div className="relative" ref={aiHeaderMenuRef}>
+                <button
+                  onClick={() => setAiHeaderMenuOpen((o) => !o)}
+                  disabled={aiHeaderActing}
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition disabled:opacity-60 ${
+                    headerLead.ai_state === 'ai_active'
+                      ? 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                      : headerLead.ai_state === 'paused'
+                        ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                        : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  {headerLead.ai_state === 'ai_active' ? (
+                    <Bot size={14} className="text-emerald-600" />
+                  ) : headerLead.ai_state === 'paused' ? (
+                    <Pause size={14} className="text-amber-500" />
+                  ) : (
+                    <BotOff size={14} />
+                  )}
+                  {headerLead.ai_state === 'ai_active' ? 'AI Active' : headerLead.ai_state === 'paused' ? 'AI Paused' : 'AI Off'}
+                  <ChevronDown size={12} />
+                </button>
+
+                {aiHeaderMenuOpen && (
+                  <div className="absolute right-0 top-full z-50 mt-1 w-52 rounded-xl border border-gray-200 bg-white shadow-lg py-1">
+                    {headerLead.ai_state === 'ai_active' && (
+                      <>
+                        <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Pause AI for…</div>
+                        {([
+                          [1, '1 minute'],
+                          [30, '30 minutes'],
+                          [60, '1 hour'],
+                          [240, '4 hours'],
+                          [1440, '1 day'],
+                        ] as [number, string][]).map(([minutes, label]) => (
+                          <button key={minutes} className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                            onClick={() => void aiHeaderSnooze(minutes)}>
+                            <Clock size={13} className="text-gray-400 flex-shrink-0" />{label}
+                          </button>
+                        ))}
+                        <div className="my-1 border-t border-gray-100" />
+                        <button className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                          onClick={() => void aiHeaderAction('handoff')}>
+                          <BotOff size={13} className="flex-shrink-0" />Stop AI (hand off)
+                        </button>
+                      </>
+                    )}
+                    {headerLead.ai_state !== 'ai_active' && (
+                      <button className="flex w-full items-center gap-2 px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50 transition-colors"
+                        onClick={() => void aiHeaderAction('resume')}>
+                        <Play size={13} className="flex-shrink-0" />Resume AI
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+            {aiHeaderMsg && (
+              <span className="text-xs text-gray-500 italic max-w-[160px] truncate">{aiHeaderMsg}</span>
+            )}
+
             <button
               onClick={startEditContact}
               className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
@@ -1420,8 +1597,23 @@ export default function CustomerDetailPage() {
                   <Smartphone size={15} className="text-gray-500" />
                   <h2 className="font-heading text-base text-gray-900">Do Not Disturb</h2>
                 </div>
-                {savingDnd && <Loader2 size={14} className="animate-spin text-gray-400" />}
+                <div className="flex items-center gap-2">
+                  {savingDnd && <Loader2 size={14} className="animate-spin text-gray-400" />}
+                  <button
+                    type="button"
+                    onClick={() => void syncFromGhl()}
+                    disabled={syncingGhl}
+                    title="Pull latest DND status from GHL (use this if contact texted START to re-subscribe)"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition"
+                  >
+                    {syncingGhl ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                    Sync from GHL
+                  </button>
+                </div>
               </div>
+              {syncGhlMsg && (
+                <p className="mb-3 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">{syncGhlMsg}</p>
+              )}
 
               {dndError && (
                 <p className="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{dndError}</p>

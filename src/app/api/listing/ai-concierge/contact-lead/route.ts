@@ -25,7 +25,6 @@ export async function GET(req: NextRequest) {
     .select('id, ai_state, ai_next_send_at, ai_expires_at, ai_attempt_count, ai_first_activated_at')
     .eq('venue_id', venueId)
     .ilike('email', email)
-    .not('ai_state', 'is', null)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();

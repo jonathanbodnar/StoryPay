@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
               // Find the venue_customer by ghl_contact_id
               const { data: vc } = await supabaseAdmin
                 .from('venue_customers')
-                .select('id, sms_dnd')
+                .select('id, sms_dnd, customer_email')
                 .eq('venue_id', venue.id)
                 .eq('ghl_contact_id', contactId)
                 .maybeSingle();
@@ -151,11 +151,26 @@ export async function POST(request: NextRequest) {
                 update.conversation_dnd_calls = flags.conversation_dnd_calls;
                 update.conversation_dnd_inbound_sms = flags.conversation_dnd_inbound_sms;
                 update.conversation_dnd_all = flags.conversation_dnd_all;
-                // sms_dnd: only set to true; never auto-clear from webhook
-                if (flags.sms_dnd && !vc.sms_dnd) {
-                  update.sms_dnd = true;
-                  update.sms_dnd_at = nowIso;
-                  update.sms_dnd_source = 'ghl_webhook';
+
+                if (flags.sms_dnd) {
+                  // GHL is blocking SMS → mirror it to our flag
+                  if (!vc.sms_dnd) {
+                    update.sms_dnd = true;
+                    update.sms_dnd_at = nowIso;
+                    update.sms_dnd_source = 'ghl_webhook';
+                  }
+                } else {
+                  // GHL cleared the SMS block (e.g. contact texted START) → sync
+                  // the opt-in back into our DB so automated messages can resume.
+                  // We intentionally clear even TCPA opt-outs here because the
+                  // only way GHL clears SMS DND is when the contact explicitly
+                  // re-subscribes (START keyword or manual override) — that IS
+                  // the required re-consent under TCPA.
+                  if (vc.sms_dnd) {
+                    update.sms_dnd = false;
+                    update.sms_dnd_at = null;
+                    update.sms_dnd_source = 'ghl_start_resubscribe';
+                  }
                 }
               }
 
@@ -163,6 +178,32 @@ export async function POST(request: NextRequest) {
                 .from('venue_customers')
                 .update(update)
                 .eq('id', vc.id);
+
+              // If SMS DND was just cleared (START re-subscribe), also fix any leads
+              // whose ai_state is 'opted_out' due to the STOP — move them to 'paused'
+              // so the venue team can re-enable AI without being blocked by TCPA lock.
+              // Leads are linked by email since they don't have ghl_contact_id.
+              if (update.sms_dnd === false && vc.customer_email) {
+                const { data: optedOutLeads } = await supabaseAdmin
+                  .from('leads')
+                  .select('id')
+                  .eq('venue_id', venue.id)
+                  .ilike('email', vc.customer_email)
+                  .eq('ai_state', 'opted_out');
+                if (optedOutLeads && optedOutLeads.length > 0) {
+                  await supabaseAdmin
+                    .from('leads')
+                    .update({
+                      sms_dnd: false,
+                      sms_dnd_at: null,
+                      sms_dnd_source: 'ghl_start_resubscribe',
+                      ai_state: 'paused',
+                      updated_at: nowIso,
+                    })
+                    .in('id', optedOutLeads.map((l) => l.id));
+                  console.log(`[ghl webhook] Cleared TCPA lock + moved ${optedOutLeads.length} lead(s) to paused after START re-subscribe`);
+                }
+              }
 
               console.log('[ghl webhook] ContactDndUpdate synced for contact', contactId);
             } catch (err) {

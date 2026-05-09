@@ -378,11 +378,15 @@ export default function ConversationsPage() {
     setMobileShowThread(true);
   }, [loadingList, threads, selectedId]);
 
-  // Fetch AI concierge addon eligibility once on mount
+  // Fetch AI concierge enabled status once on mount.
+  // Use `enabled` (venue has turned AI on) rather than `addonPurchased` so the
+  // button shows for any venue actively running AI Concierge.
   useEffect(() => {
     fetch('/api/dashboard/settings/ai-concierge', { cache: 'no-store' })
       .then((r) => r.ok ? r.json() : null)
-      .then((d) => { if (d?.eligibility?.addonPurchased) setAiAddonEnabled(true); })
+      .then((d) => {
+        if (d?.enabled || d?.eligibility?.addonPurchased) setAiAddonEnabled(true);
+      })
       .catch(() => {});
   }, []);
 
