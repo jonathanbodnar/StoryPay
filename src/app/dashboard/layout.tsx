@@ -21,19 +21,24 @@ export default async function DashboardLayout({
  const cookieStore = await cookies();
  const isImpersonating = cookieStore.get('admin_impersonating')?.value === '1';
 
- const navAccess = await loadDirectoryNavAccess(user.venueId);
-
- const { data: billingRow } = await supabaseAdmin
+ // Single venues query covering all fields needed by the layout so we
+ // don't hit the venues table 3 times per page render.
+ const { data: venueRow } = await supabaseAdmin
    .from('venues')
-   .select('directory_subscription_status, email_verified_at, email')
+   .select('directory_plan_id, directory_subscription_status, email_verified_at, email')
    .eq('id', user.venueId)
    .maybeSingle();
+
+ // Pass pre-fetched plan ID so loadDirectoryNavAccess skips its own venues query.
+ const navAccess = await loadDirectoryNavAccess(
+   user.venueId,
+   (venueRow as { directory_plan_id?: string | null } | null)?.directory_plan_id ?? null,
+ );
+
+ const billingRow = venueRow;
  const directoryBillingPending =
    user.isAdmin && billingRow?.directory_subscription_status === 'pending_payment';
 
- // Email verification banner: only relevant for the venue owner (team
- // members didn't go through signup). The column is added by migration
- // 123; existing venues are grandfathered as already verified.
  const emailVerifiedAt = (billingRow as { email_verified_at?: string | null } | null)?.email_verified_at;
  const showVerifyBanner =
    user.isAdmin && emailVerifiedAt !== undefined && !emailVerifiedAt;

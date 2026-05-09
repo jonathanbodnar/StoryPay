@@ -26,16 +26,19 @@ export async function GET(request: NextRequest) {
   const venueId = await getEffectiveVenueId(request);
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const search = request.nextUrl.searchParams.get('search')?.trim() ?? '';
+  const search   = request.nextUrl.searchParams.get('search')?.trim() ?? '';
+  const limitParam = parseInt(request.nextUrl.searchParams.get('limit') ?? '500', 10);
+  const pageLimit = search ? 80 : Math.min(limitParam, 500);
 
   let query = supabaseAdmin
     .from('venue_customers')
     .select('*, venue_spaces:wedding_space_id(id, name, color)')
     .eq('venue_id', venueId)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(pageLimit);
 
   if (search) {
-    query = query.or(venueCustomerSearchOrFilter(search)).limit(80);
+    query = query.or(venueCustomerSearchOrFilter(search));
   }
 
   const { data, error } = await query;
@@ -46,9 +49,10 @@ export async function GET(request: NextRequest) {
       .from('venue_customers')
       .select('*')
       .eq('venue_id', venueId)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(pageLimit);
     if (search) {
-      plainQuery = plainQuery.or(venueCustomerSearchOrFilter(search)).limit(80);
+      plainQuery = plainQuery.or(venueCustomerSearchOrFilter(search));
     }
     const { data: plain, error: plainErr } = await plainQuery;
     if (plainErr) {

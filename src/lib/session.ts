@@ -16,18 +16,49 @@ export interface SessionUser {
   hideRevenue: boolean;
 }
 
-export async function getVenueFromSession() {
+export type VenueSession = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  slug: string | null;
+  phone: string | null;
+  setup_completed: boolean | null;
+  onboarding_status: string | null;
+  ghl_connected: boolean | null;
+  ghl_access_token: string | null;
+  ghl_location_id: string | null;
+  lunarpay_merchant_id: string | null;
+  lunarpay_secret_key: string | null;
+  lunarpay_public_key: string | null;
+  brand_color: string | null;
+  brand_logo_url: string | null;
+  brand_secondary_color: string | null;
+  resend_from_email: string | null;
+  resend_from_name: string | null;
+  resend_api_key: string | null;
+  directory_plan_id: string | null;
+  directory_subscription_status: string | null;
+};
+
+export async function getVenueFromSession(): Promise<VenueSession | null> {
   const cookieStore = await cookies();
   const venueId = cookieStore.get('venue_id')?.value;
   if (!venueId) return null;
 
   const { data } = await supabaseAdmin
     .from('venues')
-    .select('*')
+    .select(
+      'id, name, email, slug, phone, setup_completed, onboarding_status, ' +
+      'ghl_connected, ghl_access_token, ghl_location_id, ' +
+      'lunarpay_merchant_id, lunarpay_secret_key, lunarpay_public_key, ' +
+      'brand_color, brand_logo_url, brand_secondary_color, ' +
+      'resend_from_email, resend_from_name, resend_api_key, ' +
+      'directory_plan_id, directory_subscription_status',
+    )
     .eq('id', venueId)
     .single();
 
-  return data;
+  return data as VenueSession | null;
 }
 
 /**

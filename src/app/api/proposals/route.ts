@@ -26,9 +26,16 @@ export async function GET(request: NextRequest) {
   const limit = request.nextUrl.searchParams.get('limit');
   const status = request.nextUrl.searchParams.get('status');
 
+  // Select only the columns needed for the proposals list — avoids
+  // transferring large JSONB fields (content, signature_fields, line_items,
+  // payment_config) for what is typically a 5–20 row table widget.
   let query = supabaseAdmin
     .from('proposals')
-    .select('*')
+    .select(
+      'id, public_token, customer_name, customer_email, status, price, ' +
+      'sent_at, paid_at, signed_at, created_at, updated_at, template_id, ' +
+      'proposal_type, payment_type, deposit_pct, override_conflict',
+    )
     .eq('venue_id', venueId)
     .order('created_at', { ascending: false });
 
@@ -114,30 +121,36 @@ export async function POST(request: NextRequest) {
       ? overrideContent
       : null;
 
-  const { data: venue } = await supabaseAdmin
-    .from('venues')
-    .select('lunarpay_secret_key, ghl_connected, ghl_access_token, ghl_location_id, name, email')
-    .eq('id', venueId)
-    .single();
-
-  const { data: template, error: templateError } = await supabaseAdmin
-    .from('proposal_templates')
-    .select('content')
-    .eq('id', templateId)
-    .eq('venue_id', venueId)
-    .single();
+  // Fetch venue, template, and signature fields in parallel — three
+  // independent queries that used to run sequentially.
+  const [
+    { data: venue },
+    { data: template, error: templateError },
+    { data: sigFields },
+  ] = await Promise.all([
+    supabaseAdmin
+      .from('venues')
+      .select('lunarpay_secret_key, ghl_connected, ghl_access_token, ghl_location_id, name, email, brand_color, brand_logo_url')
+      .eq('id', venueId)
+      .single(),
+    supabaseAdmin
+      .from('proposal_templates')
+      .select('content')
+      .eq('id', templateId)
+      .eq('venue_id', venueId)
+      .single(),
+    supabaseAdmin
+      .from('proposal_template_fields')
+      .select('id, field_type, label, sort_order, required, placeholder, options')
+      .eq('template_id', templateId)
+      .order('sort_order', { ascending: true }),
+  ]);
 
   if (templateError || !template) {
     return NextResponse.json({ error: 'Template not found' }, { status: 404 });
   }
 
   const resolvedContent = contentForProposal ?? template.content;
-
-  const { data: sigFields } = await supabaseAdmin
-    .from('proposal_template_fields')
-    .select('*')
-    .eq('template_id', templateId)
-    .order('sort_order', { ascending: true });
 
   const publicToken = generateToken();
 
@@ -329,11 +342,8 @@ export async function POST(request: NextRequest) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
     const proposalUrl = `${appUrl}/proposal/${publicToken}`;
 
-    const { data: venueData } = await supabaseAdmin
-      .from('venues')
-      .select('brand_color, brand_logo_url')
-      .eq('id', venueId)
-      .single();
+    // brand_color / brand_logo_url already fetched in the parallel pre-fetch above.
+    const venueData = venue;
 
     const tmpl = await getVenueEmailTemplate(venueId, 'proposal');
     if (tmpl) {

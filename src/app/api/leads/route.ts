@@ -268,13 +268,19 @@ export async function GET(request: NextRequest) {
 
   const leadIds = leadRows.map((l) => l.id);
 
-  // Count notes per lead so the Kanban cards can show a "3 notes" badge.
+  // Fire venue and notes queries in parallel.
+  const venuePromise = supabaseAdmin
+    .from('venues')
+    .select('slug, name')
+    .eq('id', venueId)
+    .maybeSingle();
+
   let noteCounts: Record<string, number> = {};
   if (leadIds.length > 0) {
-    const { data: notes } = await supabaseAdmin
-      .from('lead_notes')
-      .select('lead_id')
-      .in('lead_id', leadIds);
+    const [{ data: notes }] = await Promise.all([
+      supabaseAdmin.from('lead_notes').select('lead_id').in('lead_id', leadIds),
+      venuePromise,
+    ]);
     if (notes) {
       noteCounts = (notes as Array<{ lead_id: string }>).reduce<Record<string, number>>((acc, n) => {
         acc[n.lead_id] = (acc[n.lead_id] ?? 0) + 1;
@@ -282,13 +288,6 @@ export async function GET(request: NextRequest) {
       }, {});
     }
   }
-
-  // Venue slug/name for the list view's "from X listing" context line.
-  const { data: venue } = await supabaseAdmin
-    .from('venues')
-    .select('slug, name')
-    .eq('id', venueId)
-    .maybeSingle();
 
   // Also search across notes: if the query didn't match a lead column but does
   // match a lead_note.content row, include those leads as well. This keeps
@@ -342,7 +341,15 @@ export async function GET(request: NextRequest) {
     return true;
   });
 
-  const [{ data: allStages }, { data: calEvents }] = await Promise.all([
+  const mergedIds = uniqueMerged.map((l) => l.id);
+
+  const [
+    { data: allStages },
+    { data: calEvents },
+    { data: venueData },
+    tagMap,
+    dupMap,
+  ] = await Promise.all([
     supabaseAdmin
       .from('lead_pipeline_stages')
       .select('id, name, kind')
@@ -356,7 +363,11 @@ export async function GET(request: NextRequest) {
       .gte('start_at', new Date(Date.now() - 30 * 60 * 1000).toISOString())
       .order('start_at', { ascending: true })
       .limit(500),
+    venuePromise,
+    fetchTagsForLeadIds(venueId, mergedIds),
+    fetchOpenDuplicateMatchesForLeads(venueId, mergedIds),
   ]);
+  const venue = venueData;
 
   type StageMini = { name: string; kind: string };
   const stageById = new Map<string, StageMini>(
@@ -390,12 +401,7 @@ export async function GET(request: NextRequest) {
     return null;
   }
 
-  const tagMap = await fetchTagsForLeadIds(
-    venueId,
-    uniqueMerged.map((l) => l.id),
-  );
-
-  const dupMap = await fetchOpenDuplicateMatchesForLeads(venueId, uniqueMerged.map((l) => l.id));
+  // tagMap and dupMap already resolved above via Promise.all.
 
   const memberIds = [
     ...new Set(

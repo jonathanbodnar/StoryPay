@@ -100,21 +100,36 @@ export type DirectoryNavAccess =
   | { mode: 'full'; allowedNavIds: null; isLegacyPlan: boolean }
   | { mode: 'plan'; allowedNavIds: string[]; isLegacyPlan: boolean };
 
-export async function loadDirectoryNavAccess(venueId: string): Promise<DirectoryNavAccess> {
-  const { data: venue } = await supabaseAdmin
-    .from('venues')
-    .select('directory_plan_id')
-    .eq('id', venueId)
-    .maybeSingle();
+/**
+ * Load nav access for a venue.
+ *
+ * If `prefetchedPlanId` is provided (e.g. the layout already queried the
+ * venues table), the inner venues round-trip is skipped, saving one DB hit
+ * on every dashboard page render.
+ */
+export async function loadDirectoryNavAccess(
+  venueId: string,
+  prefetchedPlanId?: string | null,
+): Promise<DirectoryNavAccess> {
+  let directoryPlanId = prefetchedPlanId;
 
-  if (!venue?.directory_plan_id) {
+  if (directoryPlanId === undefined) {
+    const { data: venue } = await supabaseAdmin
+      .from('venues')
+      .select('directory_plan_id')
+      .eq('id', venueId)
+      .maybeSingle();
+    directoryPlanId = venue?.directory_plan_id ?? null;
+  }
+
+  if (!directoryPlanId) {
     return { mode: 'full', allowedNavIds: null, isLegacyPlan: false };
   }
 
   const { data: plan } = await supabaseAdmin
     .from('directory_plans')
     .select('feature_flags, nav_permissions, is_legacy, name, slug')
-    .eq('id', venue.directory_plan_id)
+    .eq('id', directoryPlanId)
     .maybeSingle();
 
   if (!plan) {
