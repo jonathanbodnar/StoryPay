@@ -259,7 +259,7 @@ export default function ConversationsPage() {
 
   // ── AI Concierge quick-control (venue side) ────────────────────────────────
   const [aiAddonEnabled, setAiAddonEnabled]     = useState(false);
-  interface ContactLead { id: string; ai_state: string; ai_next_send_at: string | null }
+  interface ContactLead { id: string; ai_state: string | null; ai_next_send_at: string | null }
   const [contactLead, setContactLead]           = useState<ContactLead | null>(null);
   const [aiMenuOpen, setAiMenuOpen]             = useState(false);
   const [aiActing, setAiActing]                 = useState(false);
@@ -378,29 +378,28 @@ export default function ConversationsPage() {
     setMobileShowThread(true);
   }, [loadingList, threads, selectedId]);
 
-  // Fetch AI concierge enabled status once on mount.
-  // Use `enabled` (venue has turned AI on) rather than `addonPurchased` so the
-  // button shows for any venue actively running AI Concierge.
+  // Fetch lead AI state whenever the active thread contact changes.
+  // The contact-lead endpoint returns BOTH the lead (if any) AND the venue's
+  // AI eligibility — so we drive button visibility from a single source.
   useEffect(() => {
-    fetch('/api/dashboard/settings/ai-concierge', { cache: 'no-store' })
+    const vcId  = threadDetail?.venue_customer_id;
+    const email = threadDetail?.venue_customers?.customer_email;
+    if (!vcId && !email) { setContactLead(null); setAiAddonEnabled(false); return; }
+    let cancelled = false;
+    const params = new URLSearchParams();
+    if (vcId)  params.set('vcId',  vcId);
+    if (email) params.set('email', email);
+    fetch(`/api/listing/ai-concierge/contact-lead?${params.toString()}`, { cache: 'no-store' })
       .then((r) => r.ok ? r.json() : null)
       .then((d) => {
-        if (d?.enabled || d?.eligibility?.addonPurchased) setAiAddonEnabled(true);
+        if (cancelled) return;
+        setContactLead(d?.lead ?? null);
+        // Show the button whenever the venue has the AI Concierge addon
+        setAiAddonEnabled(d?.eligible === true);
       })
-      .catch(() => {});
-  }, []);
-
-  // Fetch lead AI state whenever the active thread contact changes
-  useEffect(() => {
-    const email = threadDetail?.venue_customers?.customer_email;
-    if (!aiAddonEnabled || !email) { setContactLead(null); return; }
-    let cancelled = false;
-    fetch(`/api/listing/ai-concierge/contact-lead?email=${encodeURIComponent(email)}`, { cache: 'no-store' })
-      .then((r) => r.ok ? r.json() : null)
-      .then((d) => { if (!cancelled) setContactLead(d?.lead ?? null); })
-      .catch(() => { if (!cancelled) setContactLead(null); });
+      .catch(() => { if (!cancelled) { setContactLead(null); setAiAddonEnabled(false); } });
     return () => { cancelled = true; };
-  }, [aiAddonEnabled, threadDetail?.venue_customers?.customer_email]);
+  }, [threadDetail?.venue_customer_id, threadDetail?.venue_customers?.customer_email]);
 
   // Close AI menu on outside click
   useEffect(() => {
@@ -810,7 +809,7 @@ export default function ConversationsPage() {
     setAiActing(true); setAiActionMsg(null);
     try {
       const r = await fetch(`/api/listing/ai-concierge/leads/${contactLead.id}/state`, {
-        method: 'POST',
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action }),
       });
@@ -840,6 +839,29 @@ export default function ConversationsPage() {
         setAiActionMsg(d.message ?? 'AI paused.');
       } else {
         setAiActionMsg(d.error ?? 'Snooze failed.');
+      }
+    } catch { setAiActionMsg('Network error.'); }
+    finally { setAiActing(false); setAiMenuOpen(false); }
+  }
+
+  // Start AI for this contact — creates a lead if missing, then activates AI.
+  // Server gates on the venue's AI Concierge addon eligibility.
+  async function aiStart() {
+    const vcId = threadDetail?.venue_customer_id;
+    if (!vcId) return;
+    setAiActing(true); setAiActionMsg(null);
+    try {
+      const r = await fetch('/api/listing/ai-concierge/contact-lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vcId }),
+      });
+      const d = await r.json().catch(() => ({})) as { ok?: boolean; lead?: ContactLead | null; error?: string };
+      if (r.ok && d.ok) {
+        setContactLead(d.lead ?? null);
+        setAiActionMsg('AI activated for this contact.');
+      } else {
+        setAiActionMsg(d.error ?? 'Could not start AI — check that your plan includes the AI Concierge addon.');
       }
     } catch { setAiActionMsg('Network error.'); }
     finally { setAiActing(false); setAiMenuOpen(false); }
@@ -1554,107 +1576,120 @@ export default function ConversationsPage() {
                   </p>
                 </div>
                 <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2">
-                  {/* AI Concierge quick-control — only shown when addon is active and contact has a lead */}
-                  {aiAddonEnabled && contactLead && (
-                    <div className="relative" ref={aiMenuRef}>
-                      <button
-                        type="button"
-                        onClick={() => { setAiMenuOpen((o) => !o); setAiActionMsg(null); }}
-                        disabled={aiActing}
-                        title="AI Concierge controls"
-                        className={classNames(
-                          'inline-flex flex-shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-colors',
-                          contactLead.ai_state === 'ai_active'
-                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                            : contactLead.ai_state === 'paused'
-                              ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
-                              : 'border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100',
-                        )}
-                      >
-                        {aiActing ? (
-                          <Loader2 size={13} className="animate-spin" />
-                        ) : contactLead.ai_state === 'ai_active' ? (
-                          <Sparkles size={13} />
-                        ) : contactLead.ai_state === 'paused' ? (
-                          <Pause size={13} />
-                        ) : (
-                          <BotOff size={13} />
-                        )}
-                        {contactLead.ai_state === 'ai_active' ? 'AI Active' : contactLead.ai_state === 'paused' ? 'AI Paused' : 'AI Off'}
-                        <ChevronDown size={12} className="text-current opacity-60" />
-                      </button>
-
-                      {aiMenuOpen && (
-                        <div className="absolute right-0 top-full z-50 mt-1.5 w-52 rounded-xl border border-gray-200 bg-white shadow-lg">
-                          <div className="px-3 py-2 border-b border-gray-100">
-                            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">AI Concierge</p>
-                          </div>
-
-                          {/* Pause for duration — only when AI is active */}
-                          {contactLead.ai_state === 'ai_active' && (
-                            <>
-                              <div className="px-3 pt-2 pb-1">
-                                <p className="text-[10px] font-medium text-gray-400 flex items-center gap-1"><Clock size={10}/> Pause AI for…</p>
-                              </div>
-                              {([
-                                { label: '1 minute',  minutes: 1    },
-                                { label: '30 minutes', minutes: 30   },
-                                { label: '1 hour',    minutes: 60   },
-                                { label: '4 hours',   minutes: 240  },
-                                { label: '1 day',     minutes: 1440 },
-                              ] as const).map(({ label, minutes }) => (
-                                <button
-                                  key={minutes}
-                                  type="button"
-                                  onClick={() => void aiSnooze(minutes)}
-                                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 text-left"
-                                >
-                                  <Pause size={11} className="text-amber-500 flex-shrink-0" />
-                                  {label}
-                                </button>
-                              ))}
-                              <div className="my-1 border-t border-gray-100" />
-                              <button
-                                type="button"
-                                onClick={() => void aiAction('handoff')}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-xs text-rose-600 hover:bg-rose-50 text-left rounded-b-xl"
-                              >
-                                <BotOff size={11} className="flex-shrink-0" />
-                                Stop AI (hand off)
-                              </button>
-                            </>
-                          )}
-
-                          {/* Resume — when paused or off */}
-                          {contactLead.ai_state !== 'ai_active' && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => void aiAction('resume')}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-xs text-emerald-700 hover:bg-emerald-50 text-left"
-                              >
-                                <Play size={11} className="flex-shrink-0" />
-                                Resume AI
-                              </button>
-                              {contactLead.ai_state === 'paused' && (
-                                <>
-                                  <div className="my-1 border-t border-gray-100" />
-                                  <button
-                                    type="button"
-                                    onClick={() => void aiAction('handoff')}
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-xs text-rose-600 hover:bg-rose-50 text-left rounded-b-xl"
-                                  >
-                                    <BotOff size={11} className="flex-shrink-0" />
-                                    Stop AI (hand off)
-                                  </button>
-                                </>
-                              )}
-                            </>
-                          )}
-                        </div>
+                  {/* AI Concierge quick-control — ALWAYS shown.
+                      Server gates the actual actions on plan/addon eligibility. */}
+                  <div className="relative" ref={aiMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => { setAiMenuOpen((o) => !o); setAiActionMsg(null); }}
+                      disabled={aiActing}
+                      title="AI Concierge controls"
+                      className={classNames(
+                        'inline-flex flex-shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-colors',
+                        contactLead?.ai_state === 'ai_active'
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                          : contactLead?.ai_state === 'paused'
+                            ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                            : 'border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100',
                       )}
-                    </div>
-                  )}
+                    >
+                      {aiActing ? (
+                        <Loader2 size={13} className="animate-spin" />
+                      ) : contactLead?.ai_state === 'ai_active' ? (
+                        <Sparkles size={13} />
+                      ) : contactLead?.ai_state === 'paused' ? (
+                        <Pause size={13} />
+                      ) : (
+                        <BotOff size={13} />
+                      )}
+                      {contactLead?.ai_state === 'ai_active' ? 'AI Active'
+                        : contactLead?.ai_state === 'paused' ? 'AI Paused'
+                        : contactLead ? 'AI Off' : 'Start AI'}
+                      <ChevronDown size={12} className="text-current opacity-60" />
+                    </button>
+
+                    {aiMenuOpen && (
+                      <div className="absolute right-0 top-full z-50 mt-1.5 w-52 rounded-xl border border-gray-200 bg-white shadow-lg">
+                        <div className="px-3 py-2 border-b border-gray-100">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">AI Concierge</p>
+                        </div>
+
+                        {/* No lead yet → offer to start AI for this contact */}
+                        {!contactLead && (
+                          <button
+                            type="button"
+                            onClick={() => void aiStart()}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-xs text-emerald-700 hover:bg-emerald-50 text-left rounded-b-xl"
+                          >
+                            <Play size={11} className="flex-shrink-0" />
+                            Start AI for this contact
+                          </button>
+                        )}
+
+                        {/* Pause for duration — only when AI is active */}
+                        {contactLead?.ai_state === 'ai_active' && (
+                          <>
+                            <div className="px-3 pt-2 pb-1">
+                              <p className="text-[10px] font-medium text-gray-400 flex items-center gap-1"><Clock size={10}/> Pause AI for…</p>
+                            </div>
+                            {([
+                              { label: '1 minute',  minutes: 1    },
+                              { label: '30 minutes', minutes: 30   },
+                              { label: '1 hour',    minutes: 60   },
+                              { label: '4 hours',   minutes: 240  },
+                              { label: '1 day',     minutes: 1440 },
+                            ] as const).map(({ label, minutes }) => (
+                              <button
+                                key={minutes}
+                                type="button"
+                                onClick={() => void aiSnooze(minutes)}
+                                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 text-left"
+                              >
+                                <Pause size={11} className="text-amber-500 flex-shrink-0" />
+                                {label}
+                              </button>
+                            ))}
+                            <div className="my-1 border-t border-gray-100" />
+                            <button
+                              type="button"
+                              onClick={() => void aiAction('handoff')}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-xs text-rose-600 hover:bg-rose-50 text-left rounded-b-xl"
+                            >
+                              <BotOff size={11} className="flex-shrink-0" />
+                              Stop AI (hand off)
+                            </button>
+                          </>
+                        )}
+
+                        {/* Resume — when paused or off */}
+                        {contactLead && contactLead.ai_state !== 'ai_active' && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => void aiAction('resume')}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-xs text-emerald-700 hover:bg-emerald-50 text-left"
+                            >
+                              <Play size={11} className="flex-shrink-0" />
+                              Resume AI
+                            </button>
+                            {contactLead.ai_state === 'paused' && (
+                              <>
+                                <div className="my-1 border-t border-gray-100" />
+                                <button
+                                  type="button"
+                                  onClick={() => void aiAction('handoff')}
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-xs text-rose-600 hover:bg-rose-50 text-left rounded-b-xl"
+                                >
+                                  <BotOff size={11} className="flex-shrink-0" />
+                                  Stop AI (hand off)
+                                </button>
+                              </>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
 
                   {/* Feedback toast */}
                   {aiActionMsg && (

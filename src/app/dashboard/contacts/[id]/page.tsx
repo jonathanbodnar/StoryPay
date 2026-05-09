@@ -370,24 +370,26 @@ export default function CustomerDetailPage() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // Fetch AI concierge status for the header button
+  // Fetch lead state for the header AI button. The button is ALWAYS shown;
+  // server gates the actions on plan/addon eligibility.
   useEffect(() => {
-    fetch('/api/dashboard/settings/ai-concierge', { cache: 'no-store' })
-      .then((r) => r.ok ? r.json() : null)
-      .then((d) => { if (d?.enabled || d?.eligibility?.addonPurchased) setAiEnabled(true); })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
+    const vcId  = venueCustomer?.id;
     const email = customer?.email;
-    if (!aiEnabled || !email) { setHeaderLead(null); return; }
+    if (!vcId && !email) { setHeaderLead(null); return; }
     let cancelled = false;
-    fetch(`/api/listing/ai-concierge/contact-lead?email=${encodeURIComponent(email)}`, { cache: 'no-store' })
+    const params = new URLSearchParams();
+    if (vcId)  params.set('vcId',  vcId);
+    if (email) params.set('email', email);
+    fetch(`/api/listing/ai-concierge/contact-lead?${params.toString()}`, { cache: 'no-store' })
       .then((r) => r.ok ? r.json() : null)
-      .then((d) => { if (!cancelled) setHeaderLead(d?.lead ?? null); })
-      .catch(() => { if (!cancelled) setHeaderLead(null); });
+      .then((d) => {
+        if (cancelled) return;
+        setHeaderLead(d?.lead ?? null);
+        setAiEnabled(true); // always show button
+      })
+      .catch(() => { if (!cancelled) { setHeaderLead(null); setAiEnabled(true); } });
     return () => { cancelled = true; };
-  }, [aiEnabled, customer?.email]);
+  }, [venueCustomer?.id, customer?.email]);
 
   // Close AI header menu on outside click
   useEffect(() => {
@@ -457,6 +459,32 @@ export default function CustomerDetailPage() {
     setAiHeaderActing(false);
     setAiHeaderMenuOpen(false);
     setTimeout(() => setAiHeaderMsg(null), 4000);
+  }
+
+  async function aiHeaderStart() {
+    const vcId = venueCustomer?.id;
+    if (!vcId) {
+      setAiHeaderMsg('Save contact first');
+      setTimeout(() => setAiHeaderMsg(null), 3000);
+      return;
+    }
+    setAiHeaderActing(true);
+    try {
+      const r = await fetch('/api/listing/ai-concierge/contact-lead', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vcId }),
+      });
+      const d = await r.json().catch(() => ({})) as { ok?: boolean; lead?: ContactLeadSnap | null; error?: string };
+      if (r.ok && d.ok) {
+        setHeaderLead(d.lead ?? null);
+        setAiHeaderMsg('AI activated.');
+      } else {
+        setAiHeaderMsg(d.error ?? 'Could not start AI. Check that your plan includes the AI Concierge addon.');
+      }
+    } catch { setAiHeaderMsg('Network error.'); }
+    setAiHeaderActing(false);
+    setAiHeaderMenuOpen(false);
+    setTimeout(() => setAiHeaderMsg(null), 5000);
   }
 
   // ── Contact save ────────────────────────────────────────────────────────────
@@ -1101,67 +1129,76 @@ export default function CustomerDetailPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {/* AI Concierge quick-control (only shown when venue has AI active + contact has a lead) */}
-            {aiEnabled && headerLead && (
-              <div className="relative" ref={aiHeaderMenuRef}>
-                <button
-                  onClick={() => setAiHeaderMenuOpen((o) => !o)}
-                  disabled={aiHeaderActing}
-                  className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition disabled:opacity-60 ${
-                    headerLead.ai_state === 'ai_active'
-                      ? 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                      : headerLead.ai_state === 'paused'
-                        ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
-                        : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  {headerLead.ai_state === 'ai_active' ? (
-                    <Bot size={14} className="text-emerald-600" />
-                  ) : headerLead.ai_state === 'paused' ? (
-                    <Pause size={14} className="text-amber-500" />
-                  ) : (
-                    <BotOff size={14} />
-                  )}
-                  {headerLead.ai_state === 'ai_active' ? 'AI Active' : headerLead.ai_state === 'paused' ? 'AI Paused' : 'AI Off'}
-                  <ChevronDown size={12} />
-                </button>
-
-                {aiHeaderMenuOpen && (
-                  <div className="absolute right-0 top-full z-50 mt-1 w-52 rounded-xl border border-gray-200 bg-white shadow-lg py-1">
-                    {headerLead.ai_state === 'ai_active' && (
-                      <>
-                        <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Pause AI for…</div>
-                        {([
-                          [1, '1 minute'],
-                          [30, '30 minutes'],
-                          [60, '1 hour'],
-                          [240, '4 hours'],
-                          [1440, '1 day'],
-                        ] as [number, string][]).map(([minutes, label]) => (
-                          <button key={minutes} className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                            onClick={() => void aiHeaderSnooze(minutes)}>
-                            <Clock size={13} className="text-gray-400 flex-shrink-0" />{label}
-                          </button>
-                        ))}
-                        <div className="my-1 border-t border-gray-100" />
-                        <button className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                          onClick={() => void aiHeaderAction('handoff')}>
-                          <BotOff size={13} className="flex-shrink-0" />Stop AI (hand off)
-                        </button>
-                      </>
-                    )}
-                    {headerLead.ai_state !== 'ai_active' && (
-                      <button className="flex w-full items-center gap-2 px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50 transition-colors"
-                        onClick={() => void aiHeaderAction('resume')}>
-                        <Play size={13} className="flex-shrink-0" />Resume AI
-                      </button>
-                    )}
-                  </div>
+            {/* AI Concierge quick-control — ALWAYS shown.
+                Server gates the actual actions on plan/addon eligibility. */}
+            <div className="relative" ref={aiHeaderMenuRef}>
+              <button
+                onClick={() => setAiHeaderMenuOpen((o) => !o)}
+                disabled={aiHeaderActing}
+                className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition disabled:opacity-60 ${
+                  headerLead?.ai_state === 'ai_active'
+                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                    : headerLead?.ai_state === 'paused'
+                      ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                      : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {aiHeaderActing ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : headerLead?.ai_state === 'ai_active' ? (
+                  <Bot size={14} className="text-emerald-600" />
+                ) : headerLead?.ai_state === 'paused' ? (
+                  <Pause size={14} className="text-amber-500" />
+                ) : (
+                  <BotOff size={14} />
                 )}
-              </div>
-            )}
+                {headerLead?.ai_state === 'ai_active' ? 'AI Active'
+                  : headerLead?.ai_state === 'paused' ? 'AI Paused'
+                  : headerLead ? 'AI Off' : 'Start AI'}
+                <ChevronDown size={12} />
+              </button>
+
+              {aiHeaderMenuOpen && (
+                <div className="absolute right-0 top-full z-50 mt-1 w-52 rounded-xl border border-gray-200 bg-white shadow-lg py-1">
+                  {!headerLead && (
+                    <button className="flex w-full items-center gap-2 px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50 transition-colors"
+                      onClick={() => void aiHeaderStart()}>
+                      <Play size={13} className="flex-shrink-0" />Start AI for this contact
+                    </button>
+                  )}
+                  {headerLead?.ai_state === 'ai_active' && (
+                    <>
+                      <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Pause AI for…</div>
+                      {([
+                        [1, '1 minute'],
+                        [30, '30 minutes'],
+                        [60, '1 hour'],
+                        [240, '4 hours'],
+                        [1440, '1 day'],
+                      ] as [number, string][]).map(([minutes, label]) => (
+                        <button key={minutes} className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                          onClick={() => void aiHeaderSnooze(minutes)}>
+                          <Clock size={13} className="text-gray-400 flex-shrink-0" />{label}
+                        </button>
+                      ))}
+                      <div className="my-1 border-t border-gray-100" />
+                      <button className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                        onClick={() => void aiHeaderAction('handoff')}>
+                        <BotOff size={13} className="flex-shrink-0" />Stop AI (hand off)
+                      </button>
+                    </>
+                  )}
+                  {headerLead && headerLead.ai_state !== 'ai_active' && (
+                    <button className="flex w-full items-center gap-2 px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50 transition-colors"
+                      onClick={() => void aiHeaderAction('resume')}>
+                      <Play size={13} className="flex-shrink-0" />Resume AI
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
             {aiHeaderMsg && (
-              <span className="text-xs text-gray-500 italic max-w-[160px] truncate">{aiHeaderMsg}</span>
+              <span className="text-xs text-gray-500 italic max-w-[180px] truncate">{aiHeaderMsg}</span>
             )}
 
             <button

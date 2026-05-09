@@ -44,8 +44,10 @@ export async function PATCH(
   if (action === 'pause' && lead.ai_state !== 'ai_active') {
     return NextResponse.json({ error: 'Lead is not currently active.' }, { status: 409 });
   }
-  if (action === 'resume' && lead.ai_state !== 'paused') {
-    return NextResponse.json({ error: 'Lead is not paused.' }, { status: 409 });
+  // 'resume' is permissive — works from paused, handoff, dormant, or null.
+  // It just means: turn AI back on for this contact.
+  if (action === 'resume' && lead.ai_state === 'opted_out') {
+    return NextResponse.json({ error: 'Lead is opted out (TCPA). Use the override on the contact profile.' }, { status: 409 });
   }
 
   const result = await setLeadAiState({
