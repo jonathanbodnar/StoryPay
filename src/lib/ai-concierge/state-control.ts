@@ -44,41 +44,54 @@ export interface SetLeadAiStateResult {
 }
 
 const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000;
-const ONE_HOUR_MS   = 60 * 60 * 1000;
 
 export async function setLeadAiState(
   input: SetLeadAiStateInput,
 ): Promise<SetLeadAiStateResult> {
   const { leadId, venueId, newState, reason, triggeredBy } = input;
 
-  // 1. Read current state (unless caller already has it)
+  // 1. Read current state and next-send-at (unless caller already has the state)
   let fromState: AiState | null = input.knownFromState ?? null;
-  if (fromState === undefined || fromState === null) {
+  let currentNextSendAt: Date | null = null;
+  if (fromState === undefined || fromState === null || fromState === 'ai_active') {
+    // Always read for ai_active so we can detect soft-pause (snoozed leads)
     const { data: lead, error: readErr } = await supabaseAdmin
       .from('leads')
-      .select('ai_state')
+      .select('ai_state, ai_next_send_at')
       .eq('id', leadId)
       .single();
     if (readErr || !lead) {
       return { ok: false, fromState: null, toState: newState, noop: false, error: readErr?.message ?? 'lead not found' };
     }
     fromState = (lead.ai_state as AiState | null) ?? null;
+    currentNextSendAt = lead.ai_next_send_at ? new Date(lead.ai_next_send_at as string) : null;
   }
 
-  // No-op if already at target state
-  if (fromState === newState) {
+  const now = new Date();
+
+  // Detect "soft pause" — lead is technically ai_active but next-send is far
+  // enough in the future that the cron is skipping it (the snooze endpoint
+  // pushes ai_next_send_at without changing ai_state). Asking to "resume"
+  // such a lead should NOT be a no-op — it should yank the next send back
+  // to NOW so the cron picks it up.
+  const isSoftPaused = fromState === 'ai_active'
+    && currentNextSendAt !== null
+    && currentNextSendAt.getTime() > now.getTime() + 60_000;
+
+  // No-op if already at target state AND not soft-paused (a soft-paused
+  // resume needs to actually clear the snooze).
+  if (fromState === newState && !(newState === 'ai_active' && isSoftPaused)) {
     return { ok: true, fromState, toState: newState, noop: true };
   }
 
   // 2. Compute the side-effect columns for this transition
-  const now = new Date();
   const update: Record<string, unknown> = {
     ai_state:   newState,
     updated_at: now.toISOString(),
   };
 
   if (newState === 'ai_active') {
-    if (fromState === 'paused') {
+    if (fromState === 'paused' || isSoftPaused) {
       // Resume — start immediately so the next cron run picks it up
       update.ai_next_send_at = now.toISOString();
     } else if (fromState === null || fromState === 'dormant') {

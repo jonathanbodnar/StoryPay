@@ -429,7 +429,13 @@ export default function CustomerDetailPage() {
       });
       const d = await r.json().catch(() => ({}));
       if (r.ok) {
-        setHeaderLead((prev) => prev ? { ...prev, ai_state: d.ai_state ?? prev.ai_state } : prev);
+        setHeaderLead((prev) => prev ? {
+          ...prev,
+          ai_state: d.toState ?? d.ai_state ?? prev.ai_state,
+          // On resume, server sets ai_next_send_at = NOW. Clear stale future
+          // value locally so the soft-pause label disappears immediately.
+          ai_next_send_at: action === 'resume' ? new Date().toISOString() : null,
+        } : prev);
         setAiHeaderMsg(action === 'handoff' ? 'AI handed off.' : 'AI resumed.');
       } else {
         setAiHeaderMsg(d?.error ?? 'Action failed.');
@@ -1133,45 +1139,57 @@ export default function CustomerDetailPage() {
             {/* AI Concierge quick-control — ALWAYS shown.
                 Server gates the actual actions on plan/addon eligibility. */}
             <div className="relative" ref={aiHeaderMenuRef}>
+              {(() => {
+                // Treat ai_active + future ai_next_send_at as "soft paused"
+                // (server-side snooze keeps state=ai_active and pushes
+                // ai_next_send_at into the future to skip cron sends).
+                const nextSendDate = headerLead?.ai_next_send_at ? new Date(headerLead.ai_next_send_at) : null;
+                const nowDate = new Date();
+                const isPausedSoft = headerLead?.ai_state === 'ai_active'
+                  && nextSendDate !== null
+                  && nextSendDate.getTime() > nowDate.getTime() + 60_000;
+                const isPausedHard = headerLead?.ai_state === 'paused';
+                const isPaused = isPausedHard || isPausedSoft;
+                const resumeLabel = nextSendDate
+                  ? nextSendDate.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                  : null;
+
+                return (<>
               <button
                 onClick={() => setAiHeaderMenuOpen((o) => !o)}
                 disabled={aiHeaderActing}
                 className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition disabled:opacity-60 ${
-                  headerLead?.ai_state === 'ai_active'
-                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                    : headerLead?.ai_state === 'paused'
-                      ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                  isPaused
+                    ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                    : headerLead?.ai_state === 'ai_active'
+                      ? 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
                       : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
                 }`}
               >
                 {aiHeaderActing ? (
                   <Loader2 size={14} className="animate-spin" />
+                ) : isPaused ? (
+                  <Pause size={14} className="text-amber-500" />
                 ) : headerLead?.ai_state === 'ai_active' ? (
                   <Bot size={14} className="text-emerald-600" />
-                ) : headerLead?.ai_state === 'paused' ? (
-                  <Pause size={14} className="text-amber-500" />
                 ) : (
                   <BotOff size={14} />
                 )}
-                {headerLead?.ai_state === 'ai_active' ? 'AI Active'
-                  : headerLead?.ai_state === 'paused'
-                    ? (headerLead.ai_next_send_at && new Date(headerLead.ai_next_send_at) > new Date()
-                        ? `Paused until ${new Date(headerLead.ai_next_send_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
-                        : 'AI Paused')
+                {isPaused
+                  ? (resumeLabel ? `Paused until ${resumeLabel}` : 'AI Paused')
+                  : headerLead?.ai_state === 'ai_active' ? 'AI Active'
                   : headerLead ? 'AI Off' : 'Start AI'}
                 <ChevronDown size={12} />
               </button>
 
               {aiHeaderMenuOpen && (
                 <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-xl border border-gray-200 bg-white shadow-lg py-1">
-                  {/* Show resume time when paused */}
-                  {headerLead?.ai_state === 'paused' && headerLead.ai_next_send_at && (
+                  {/* Show resume time when paused (hard or soft) */}
+                  {isPaused && (
                     <div className="px-3 py-2 border-b border-gray-100">
                       <p className="text-[10px] text-amber-600 flex items-center gap-1">
                         <Clock size={9} />
-                        Resumes {new Date(headerLead.ai_next_send_at) <= new Date()
-                          ? 'next cron run'
-                          : new Date(headerLead.ai_next_send_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                        Resumes {resumeLabel ?? 'next cron run'}
                       </p>
                     </div>
                   )}
@@ -1181,7 +1199,7 @@ export default function CustomerDetailPage() {
                       <Play size={13} className="flex-shrink-0" />Start AI for this contact
                     </button>
                   )}
-                  {headerLead?.ai_state === 'ai_active' && (
+                  {headerLead?.ai_state === 'ai_active' && !isPausedSoft && (
                     <>
                       <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Pause AI for…</div>
                       {([
@@ -1203,14 +1221,23 @@ export default function CustomerDetailPage() {
                       </button>
                     </>
                   )}
-                  {headerLead && headerLead.ai_state !== 'ai_active' && (
-                    <button className="flex w-full items-center gap-2 px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50 transition-colors"
-                      onClick={() => void aiHeaderAction('resume')}>
-                      <Play size={13} className="flex-shrink-0" />Resume AI
-                    </button>
+                  {headerLead && (isPaused || headerLead.ai_state !== 'ai_active') && (
+                    <>
+                      <button className="flex w-full items-center gap-2 px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50 transition-colors"
+                        onClick={() => void aiHeaderAction('resume')}>
+                        <Play size={13} className="flex-shrink-0" />Resume AI now
+                      </button>
+                      <div className="my-1 border-t border-gray-100" />
+                      <button className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                        onClick={() => void aiHeaderAction('handoff')}>
+                        <BotOff size={13} className="flex-shrink-0" />Stop AI (hand off)
+                      </button>
+                    </>
                   )}
                 </div>
               )}
+              </>);
+              })()}
             </div>
             {aiHeaderMsg && (
               <span className="text-xs text-gray-500 italic max-w-[180px] truncate">{aiHeaderMsg}</span>

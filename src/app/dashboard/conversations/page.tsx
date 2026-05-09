@@ -815,7 +815,13 @@ export default function ConversationsPage() {
       });
       const d = await r.json().catch(() => ({})) as { ok?: boolean; error?: string };
       if (r.ok) {
-        setContactLead((prev) => prev ? { ...prev, ai_state: action === 'resume' ? 'ai_active' : 'handoff' } : prev);
+        setContactLead((prev) => prev ? {
+          ...prev,
+          ai_state: action === 'resume' ? 'ai_active' : 'handoff',
+          // On resume, server sets ai_next_send_at = NOW. Clear stale future
+          // value locally so the soft-pause label disappears immediately.
+          ai_next_send_at: action === 'resume' ? new Date().toISOString() : null,
+        } : prev);
         setAiActionMsg(action === 'resume' ? 'AI resumed.' : 'AI stopped — handed off.');
       } else {
         setAiActionMsg(d.error ?? 'Action failed.');
@@ -835,7 +841,11 @@ export default function ConversationsPage() {
       });
       const d = await r.json().catch(() => ({})) as { ok?: boolean; message?: string; error?: string; nextSendAt?: string };
       if (r.ok && d.ok) {
-        setContactLead((prev) => prev ? { ...prev, ai_next_send_at: d.nextSendAt ?? prev.ai_next_send_at } : prev);
+        setContactLead((prev) => prev ? {
+          ...prev,
+          ai_state: 'paused',
+          ai_next_send_at: d.nextSendAt ?? prev.ai_next_send_at,
+        } : prev);
         setAiActionMsg(d.message ?? 'AI paused.');
       } else {
         setAiActionMsg(d.error ?? 'Snooze failed.');
@@ -1579,6 +1589,22 @@ export default function ConversationsPage() {
                   {/* AI Concierge quick-control — ALWAYS shown.
                       Server gates the actual actions on plan/addon eligibility. */}
                   <div className="relative" ref={aiMenuRef}>
+                    {(() => {
+                      // Treat ai_active + future ai_next_send_at as "soft paused"
+                      // (server-side snooze keeps state=ai_active and pushes
+                      // ai_next_send_at into the future to skip cron sends).
+                      const nextSendDate = contactLead?.ai_next_send_at ? new Date(contactLead.ai_next_send_at) : null;
+                      const nowDate = new Date();
+                      const isPausedSoft = contactLead?.ai_state === 'ai_active'
+                        && nextSendDate !== null
+                        && nextSendDate.getTime() > nowDate.getTime() + 60_000; // 1 min buffer
+                      const isPausedHard = contactLead?.ai_state === 'paused';
+                      const isPaused = isPausedHard || isPausedSoft;
+                      const resumeLabel = nextSendDate
+                        ? nextSendDate.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                        : null;
+
+                      return (<>
                     <button
                       type="button"
                       onClick={() => { setAiMenuOpen((o) => !o); setAiActionMsg(null); }}
@@ -1586,27 +1612,25 @@ export default function ConversationsPage() {
                       title="AI Concierge controls"
                       className={classNames(
                         'inline-flex flex-shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-colors',
-                        contactLead?.ai_state === 'ai_active'
-                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                          : contactLead?.ai_state === 'paused'
-                            ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                        isPaused
+                          ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                          : contactLead?.ai_state === 'ai_active'
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
                             : 'border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100',
                       )}
                     >
                       {aiActing ? (
                         <Loader2 size={13} className="animate-spin" />
+                      ) : isPaused ? (
+                        <Pause size={13} />
                       ) : contactLead?.ai_state === 'ai_active' ? (
                         <Sparkles size={13} />
-                      ) : contactLead?.ai_state === 'paused' ? (
-                        <Pause size={13} />
                       ) : (
                         <BotOff size={13} />
                       )}
-                      {contactLead?.ai_state === 'ai_active' ? 'AI Active'
-                        : contactLead?.ai_state === 'paused'
-                          ? (contactLead.ai_next_send_at && new Date(contactLead.ai_next_send_at) > new Date()
-                              ? `Paused until ${new Date(contactLead.ai_next_send_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
-                              : 'AI Paused')
+                      {isPaused
+                        ? (resumeLabel ? `Paused until ${resumeLabel}` : 'AI Paused')
+                        : contactLead?.ai_state === 'ai_active' ? 'AI Active'
                         : contactLead ? 'AI Off' : 'Start AI'}
                       <ChevronDown size={12} className="text-current opacity-60" />
                     </button>
@@ -1615,13 +1639,11 @@ export default function ConversationsPage() {
                       <div className="absolute right-0 top-full z-50 mt-1.5 w-56 rounded-xl border border-gray-200 bg-white shadow-lg">
                         <div className="px-3 py-2 border-b border-gray-100">
                           <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">AI Concierge</p>
-                          {/* Show resume time when paused */}
-                          {contactLead?.ai_state === 'paused' && contactLead.ai_next_send_at && (
+                          {/* Show resume time when paused (hard or soft) */}
+                          {isPaused && (
                             <p className="text-[10px] text-amber-600 mt-0.5 flex items-center gap-1">
                               <Clock size={9} />
-                              Resumes {new Date(contactLead.ai_next_send_at) <= new Date()
-                                ? 'next cron run'
-                                : new Date(contactLead.ai_next_send_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                              Resumes {resumeLabel ?? 'next cron run'}
                             </p>
                           )}
                         </div>
@@ -1638,8 +1660,8 @@ export default function ConversationsPage() {
                           </button>
                         )}
 
-                        {/* Pause for duration — only when AI is active */}
-                        {contactLead?.ai_state === 'ai_active' && (
+                        {/* Pause for duration — only when AI is fully active (not soft-paused) */}
+                        {contactLead?.ai_state === 'ai_active' && !isPausedSoft && (
                           <>
                             <div className="px-3 pt-2 pb-1">
                               <p className="text-[10px] font-medium text-gray-400 flex items-center gap-1"><Clock size={10}/> Pause AI for…</p>
@@ -1673,8 +1695,8 @@ export default function ConversationsPage() {
                           </>
                         )}
 
-                        {/* Resume — when paused or off */}
-                        {contactLead && contactLead.ai_state !== 'ai_active' && (
+                        {/* Resume — when paused (hard or soft) or otherwise off */}
+                        {contactLead && (isPaused || contactLead.ai_state !== 'ai_active') && (
                           <>
                             <button
                               type="button"
@@ -1682,25 +1704,23 @@ export default function ConversationsPage() {
                               className="flex w-full items-center gap-2 px-3 py-2 text-xs text-emerald-700 hover:bg-emerald-50 text-left"
                             >
                               <Play size={11} className="flex-shrink-0" />
-                              Resume AI
+                              Resume AI now
                             </button>
-                            {contactLead.ai_state === 'paused' && (
-                              <>
-                                <div className="my-1 border-t border-gray-100" />
-                                <button
-                                  type="button"
-                                  onClick={() => void aiAction('handoff')}
-                                  className="flex w-full items-center gap-2 px-3 py-2 text-xs text-rose-600 hover:bg-rose-50 text-left rounded-b-xl"
-                                >
-                                  <BotOff size={11} className="flex-shrink-0" />
-                                  Stop AI (hand off)
-                                </button>
-                              </>
-                            )}
+                            <div className="my-1 border-t border-gray-100" />
+                            <button
+                              type="button"
+                              onClick={() => void aiAction('handoff')}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-xs text-rose-600 hover:bg-rose-50 text-left rounded-b-xl"
+                            >
+                              <BotOff size={11} className="flex-shrink-0" />
+                              Stop AI (hand off)
+                            </button>
                           </>
                         )}
                       </div>
                     )}
+                    </>);
+                    })()}
                   </div>
 
                   {/* Feedback toast */}
