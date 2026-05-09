@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 import { rateLimitAny, getClientIp } from '@/lib/rate-limit';
+
+/** Magic-link token lifetime: 24 hours from issue. */
+const LOGIN_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** Generate a fresh URL-safe magic-link token. */
+function newLoginToken(): string {
+  return crypto.randomBytes(24).toString('base64url');
+}
 
 export async function POST(request: NextRequest) {
   const { email } = await request.json();
@@ -48,8 +57,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  if (venue?.login_token) {
-    const loginUrl = `${appUrl}/login/${venue.login_token}`;
+  if (venue) {
+    // Rotate the magic-link token on every request so previously issued
+    // emails (or leaked links) become invalid. Stamp a 24h expiry — see
+    // /api/auth/venue/[token] for redemption + further rotation on use.
+    const freshToken = newLoginToken();
+    const expiresAt  = new Date(Date.now() + LOGIN_TOKEN_TTL_MS).toISOString();
+    const { error: rotErr } = await supabaseAdmin
+      .from('venues')
+      .update({
+        login_token: freshToken,
+        login_token_expires_at: expiresAt,
+        login_token_last_used_at: null,
+      })
+      .eq('id', venue.id);
+    // If the column hasn't been migrated yet, fall back to the existing
+    // (legacy) token rather than blocking login entirely.
+    const tokenForUrl = rotErr ? venue.login_token : freshToken;
+    if (rotErr) {
+      console.warn('[request-login] login_token_expires_at column missing — using legacy token. Run migration 122.');
+    }
+    const loginUrl = `${appUrl}/login/${tokenForUrl}`;
     await sendEmail({
       to: normalized,
       subject: `Your StoryVenue login link for ${venue.name || 'your account'}`,

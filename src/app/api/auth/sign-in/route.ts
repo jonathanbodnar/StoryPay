@@ -54,11 +54,17 @@ export async function POST(request: NextRequest) {
     let valid = false;
 
     if (venue.password_hash) {
-      // New password-based auth
+      // Password-based auth (the only supported path).
       valid = await bcrypt.compare(password.trim(), venue.password_hash);
     } else {
-      // Legacy: login_token as password (for accounts created before password auth)
-      valid = venue.login_token === password.trim();
+      // Legacy accounts that never set a password must request a magic
+      // link via /forgot-password. Accepting the raw login_token as a
+      // password value would defeat magic-link rotation (H14).
+      console.warn('[sign-in] legacy venue without password_hash:', venue.id);
+      return NextResponse.json(
+        { error: 'Please reset your password to continue.' },
+        { status: 401 },
+      );
     }
 
     if (!valid) {
