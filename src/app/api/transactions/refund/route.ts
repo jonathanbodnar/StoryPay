@@ -53,11 +53,12 @@ export async function POST(request: NextRequest) {
       amountCents ?? undefined
     );
 
-    // Only mark fully refunded if full amount or no amount specified
+    // Update proposal status: 'refunded' for full, 'partial_refund' for partial
     const isFullRefund = !amountCents || amountCents >= (proposal.price ?? 0);
-    if (isFullRefund) {
-      await supabaseAdmin.from('proposals').update({ status: 'refunded' }).eq('id', proposalId);
-    }
+    await supabaseAdmin
+      .from('proposals')
+      .update({ status: isFullRefund ? 'refunded' : 'partial_refund' })
+      .eq('id', proposalId);
 
     // Apply refunded system tag (fire-and-forget)
     const refundEmail = (proposal.customer_email as string | null)?.trim();

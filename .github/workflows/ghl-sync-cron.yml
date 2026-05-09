@@ -1,23 +1,24 @@
-# Appointment reminders cron — runs every 15 minutes.
-# Pings /api/cron/appointment-reminders which sends email/SMS reminders
-# for upcoming calendar events based on per-venue timing settings.
+# GHL contacts sync cron — runs once per day at 2:00 AM UTC.
+# Pings /api/cron/ghl-contacts-sync which performs the one-time GHL
+# contact import for venues with a connected GHL sub-account.
+# After initial sync, venues manage contacts natively in StoryVenue.
 #
 # Required GitHub repo secrets (Settings → Secrets → Actions):
 #   MARKETING_CRON_URL    = https://your-app.up.railway.app  (no trailing slash)
 #   MARKETING_CRON_SECRET = same value as MARKETING_CRON_SECRET on Railway
 
-name: Appointment reminders cron
+name: GHL contacts sync cron
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '0 2 * * *'
   workflow_dispatch:
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Hit /api/cron/appointment-reminders
+      - name: Hit /api/cron/ghl-contacts-sync
         env:
           MARKETING_CRON_URL: ${{ secrets.MARKETING_CRON_URL }}
           MARKETING_CRON_SECRET: ${{ secrets.MARKETING_CRON_SECRET }}
@@ -33,7 +34,7 @@ jobs:
           ORIGIN="${ORIGIN%/}"
           SECRET="$(printf '%s' "$MARKETING_CRON_SECRET" | tr -d '\r\n')"
           SECRET="$(printf '%s' "$SECRET" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-          URL="${ORIGIN}/api/cron/appointment-reminders"
+          URL="${ORIGIN}/api/cron/ghl-contacts-sync"
           echo "Requesting (host only): $(echo "$ORIGIN" | sed -E 's#^https?://##')"
           TMP="$(mktemp)"
           HTTP=$(curl -sS -o "$TMP" -w "%{http_code}" -H "Authorization: Bearer ${SECRET}" "$URL")
@@ -49,4 +50,4 @@ jobs:
             echo "::error::Response missing ok:true"
             exit 1
           fi
-          echo "Appointment reminders cron OK."
+          echo "GHL contacts sync cron OK."

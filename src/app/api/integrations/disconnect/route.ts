@@ -13,7 +13,8 @@ export async function POST(request: NextRequest) {
 
   const { provider } = await request.json();
 
-  if (!['quickbooks', 'freshbooks'].includes(provider)) {
+  const DISCONNECTABLE = ['quickbooks', 'freshbooks', 'calendly'];
+  if (!DISCONNECTABLE.includes(provider)) {
     return NextResponse.json({ error: 'Invalid provider' }, { status: 400 });
   }
 

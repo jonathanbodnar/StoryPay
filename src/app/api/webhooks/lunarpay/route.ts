@@ -20,7 +20,7 @@ export const runtime = 'nodejs';
 const WEBHOOK_SECRET = process.env.LUNARPAY_WEBHOOK_SECRET ?? '';
 
 function verify(rawBody: string, signature: string): boolean {
-  if (!WEBHOOK_SECRET) return true; // skip verification if secret not configured (dev)
+  if (!WEBHOOK_SECRET) return false; // reject all requests if secret is not configured
   const expected = crypto
     .createHmac('sha256', WEBHOOK_SECRET)
     .update(rawBody)

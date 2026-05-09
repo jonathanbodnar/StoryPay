@@ -1459,7 +1459,7 @@ async function processOneEnrollment(en: {
 
     const allOk    = emailOk && smsOk;
     const anyOk    = emailOk || smsOk;
-    const status: 'success' | 'failed' | 'skipped' = allOk ? 'success' : (anyOk ? 'success' : 'skipped');
+    const status: 'success' | 'failed' | 'skipped' = allOk ? 'success' : (anyOk ? 'success' : 'failed');
     void logStepExecution({
       automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id,
       step_order: idx, step_type: 'notify_owner', status,
