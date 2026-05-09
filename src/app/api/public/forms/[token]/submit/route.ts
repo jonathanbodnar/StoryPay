@@ -15,12 +15,22 @@ import {
   type AddressFieldKey,
 } from '@/lib/marketing-form-schema';
 import { onMarketingFormSubmitted, sendBookingSystemGuide } from '@/lib/marketing-email-worker';
+import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const BUCKET = 'marketing-form-uploads';
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
+const ALLOWED_FILE_MIMES = new Set([
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/plain', 'text/csv',
+]);
 
 async function ensureBucket() {
   const { data } = await supabaseAdmin.storage.getBucket(BUCKET);
@@ -58,6 +68,26 @@ export async function POST(
   const { token } = await params;
   if (!/^[a-f0-9]{32}$/.test(token)) {
     return NextResponse.json({ error: 'Invalid form' }, { status: 404 });
+  }
+
+  // Rate limit per-IP and per-form to prevent submission spam (each accepted
+  // submission can fan out to email/SMS sends, lead creation, workflow triggers,
+  // and large file uploads). 20 submissions per IP per hour and 60 per form per
+  // hour is generous for real users but blocks naive bots.
+  const ip = getClientIp(request);
+  const rlIp = rateLimit(`form-submit:ip:${ip}`, 20, 60 * 60_000);
+  if (!rlIp.allowed) {
+    return NextResponse.json(
+      { error: `Too many submissions. Try again in ${formatRetryAfter(rlIp.retryAfterMs)}.` },
+      { status: 429, headers: { 'Retry-After': String(Math.ceil(rlIp.retryAfterMs / 1000)) } },
+    );
+  }
+  const rlForm = rateLimit(`form-submit:token:${token}`, 60, 60 * 60_000);
+  if (!rlForm.allowed) {
+    return NextResponse.json(
+      { error: 'This form is temporarily unavailable. Please try again shortly.' },
+      { status: 429, headers: { 'Retry-After': String(Math.ceil(rlForm.retryAfterMs / 1000)) } },
+    );
   }
 
   const { data: formRow, error: loadErr } = await supabaseAdmin
@@ -136,6 +166,13 @@ export async function POST(
       }
       if (file.size > MAX_FILE_BYTES) {
         return NextResponse.json({ error: 'File too large (max 8 MB)' }, { status: 400 });
+      }
+      const fileType = (file.type || '').toLowerCase();
+      if (fileType && !ALLOWED_FILE_MIMES.has(fileType)) {
+        return NextResponse.json(
+          { error: `File type not allowed: ${fileType}. Accepted: images, PDF, Word, Excel, CSV, text.` },
+          { status: 400 },
+        );
       }
       await ensureBucket();
       const sub = `${formRow.venue_id}/${formRow.id}/${randomUUID()}/${safeFileSegment(file.name)}`;

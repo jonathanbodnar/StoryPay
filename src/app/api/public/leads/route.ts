@@ -8,6 +8,7 @@ import { onMarketingFormSubmitted, sendBookingSystemGuide } from '@/lib/marketin
 import { dispatchIntegrationEvent } from '@/lib/integration-events';
 import { syncVenueCustomerFromLeadRow } from '@/lib/venue-customer-pipeline-sync';
 import { applySystemTags, ensureSystemTagsForVenue } from '@/lib/system-tags';
+import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -110,6 +111,19 @@ async function ensureListingForm(venueId: string): Promise<string | null> {
  * On success: inserts lead → "New Lead" stage → fires form workflow trigger.
  */
 export async function POST(request: NextRequest) {
+  // Rate limit per-IP (40/hr) — generous for legitimate directory traffic but
+  // blocks naive lead-injection bots. The HMAC signature already gates this
+  // endpoint to the storyvenue.com directory, but a leaked secret would still
+  // benefit from a rate limit at the network layer.
+  const ip = getClientIp(request);
+  const rl = rateLimit(`public-leads:ip:${ip}`, 40, 60 * 60_000);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: `Too many lead submissions. Try again in ${formatRetryAfter(rl.retryAfterMs)}.` },
+      { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } },
+    );
+  }
+
   const rawBody = await request.text();
   const signature = request.headers.get('x-storypay-signature') ?? '';
 
