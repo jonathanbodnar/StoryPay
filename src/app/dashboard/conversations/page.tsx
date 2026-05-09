@@ -1603,15 +1603,27 @@ export default function ConversationsPage() {
                         <BotOff size={13} />
                       )}
                       {contactLead?.ai_state === 'ai_active' ? 'AI Active'
-                        : contactLead?.ai_state === 'paused' ? 'AI Paused'
+                        : contactLead?.ai_state === 'paused'
+                          ? (contactLead.ai_next_send_at && new Date(contactLead.ai_next_send_at) > new Date()
+                              ? `Paused until ${new Date(contactLead.ai_next_send_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
+                              : 'AI Paused')
                         : contactLead ? 'AI Off' : 'Start AI'}
                       <ChevronDown size={12} className="text-current opacity-60" />
                     </button>
 
                     {aiMenuOpen && (
-                      <div className="absolute right-0 top-full z-50 mt-1.5 w-52 rounded-xl border border-gray-200 bg-white shadow-lg">
+                      <div className="absolute right-0 top-full z-50 mt-1.5 w-56 rounded-xl border border-gray-200 bg-white shadow-lg">
                         <div className="px-3 py-2 border-b border-gray-100">
                           <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">AI Concierge</p>
+                          {/* Show resume time when paused */}
+                          {contactLead?.ai_state === 'paused' && contactLead.ai_next_send_at && (
+                            <p className="text-[10px] text-amber-600 mt-0.5 flex items-center gap-1">
+                              <Clock size={9} />
+                              Resumes {new Date(contactLead.ai_next_send_at) <= new Date()
+                                ? 'next cron run'
+                                : new Date(contactLead.ai_next_send_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                            </p>
+                          )}
                         </div>
 
                         {/* No lead yet → offer to start AI for this contact */}

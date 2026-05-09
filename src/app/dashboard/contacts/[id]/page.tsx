@@ -1154,13 +1154,27 @@ export default function CustomerDetailPage() {
                   <BotOff size={14} />
                 )}
                 {headerLead?.ai_state === 'ai_active' ? 'AI Active'
-                  : headerLead?.ai_state === 'paused' ? 'AI Paused'
+                  : headerLead?.ai_state === 'paused'
+                    ? (headerLead.ai_next_send_at && new Date(headerLead.ai_next_send_at) > new Date()
+                        ? `Paused until ${new Date(headerLead.ai_next_send_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
+                        : 'AI Paused')
                   : headerLead ? 'AI Off' : 'Start AI'}
                 <ChevronDown size={12} />
               </button>
 
               {aiHeaderMenuOpen && (
-                <div className="absolute right-0 top-full z-50 mt-1 w-52 rounded-xl border border-gray-200 bg-white shadow-lg py-1">
+                <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-xl border border-gray-200 bg-white shadow-lg py-1">
+                  {/* Show resume time when paused */}
+                  {headerLead?.ai_state === 'paused' && headerLead.ai_next_send_at && (
+                    <div className="px-3 py-2 border-b border-gray-100">
+                      <p className="text-[10px] text-amber-600 flex items-center gap-1">
+                        <Clock size={9} />
+                        Resumes {new Date(headerLead.ai_next_send_at) <= new Date()
+                          ? 'next cron run'
+                          : new Date(headerLead.ai_next_send_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  )}
                   {!headerLead && (
                     <button className="flex w-full items-center gap-2 px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50 transition-colors"
                       onClick={() => void aiHeaderStart()}>

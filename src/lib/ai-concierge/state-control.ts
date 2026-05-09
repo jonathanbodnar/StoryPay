@@ -79,8 +79,8 @@ export async function setLeadAiState(
 
   if (newState === 'ai_active') {
     if (fromState === 'paused') {
-      // Resume — schedule next send 1h from now so we don't flood
-      update.ai_next_send_at = new Date(now.getTime() + ONE_HOUR_MS).toISOString();
+      // Resume — start immediately so the next cron run picks it up
+      update.ai_next_send_at = now.toISOString();
     } else if (fromState === null || fromState === 'dormant') {
       // First-time activation — start the 60-day clock and queue an immediate send
       update.ai_first_activated_at      = now.toISOString();

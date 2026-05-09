@@ -298,16 +298,16 @@ async function runClearTcpaLock(args: {
     })
     .eq('id', lead.id);
 
-  // 3. Re-enable AI (same logic as runReEnable but skip the TCPA blocker)
-  const cooldownEnd = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  // 3. Re-enable AI — start immediately, no cooldown
+  const now = new Date();
   const { data: updated, error } = await supabaseAdmin
     .from('leads')
     .update({
-      ai_state:           'dormant',
-      ai_re_enabled_at:   new Date().toISOString(),
+      ai_state:           'ai_active',
+      ai_re_enabled_at:   now.toISOString(),
       ai_re_enable_count: (lead.ai_re_enable_count ?? 0) + 1,
-      ai_next_send_at:    cooldownEnd.toISOString(),
-      updated_at:         new Date().toISOString(),
+      ai_next_send_at:    now.toISOString(),
+      updated_at:         now.toISOString(),
     })
     .eq('id', lead.id)
     .select('id')
@@ -321,10 +321,10 @@ async function runClearTcpaLock(args: {
     leadId:      lead.id,
     venueId:     user.venueId,
     fromState:   lead.ai_state,
-    toState:     'dormant',
+    toState:     'ai_active',
     reason:      'tcpa_override_manual',
     triggeredBy: user.memberId ? `user:${user.memberId}` : 'human',
-    metadata:    { note: 'TCPA opt-out cleared manually — staff confirmed re-consent' },
+    metadata:    { note: 'TCPA opt-out cleared manually — staff confirmed re-consent, AI starts immediately' },
   });
 
   // Return the fresh snapshot with TCPA unlocked
@@ -339,25 +339,25 @@ async function runClearTcpaLock(args: {
 
 async function runReEnable(args: { lead: LeadRow; user: { venueId: string; memberId: string | null } }) {
   const { lead, user } = args;
-  const cooldownEnd = new Date(Date.now() + 24 * 60 * 60 * 1000);
-  const fromState   = lead.ai_state;
+  const now = new Date();
+  const fromState = lead.ai_state;
 
-  // Atomic update: only succeed if the state is still one we allow re-enabling
-  // from (defends against a webhook flipping the lead between buildSnapshot
-  // and this UPDATE). Reset the AI state machine to 'dormant'.
+  // Go straight to ai_active with ai_next_send_at = NOW() so the next cron
+  // run fires immediately. No cooldown — the venue team explicitly chose to
+  // re-enable this contact and expects outreach to resume right away.
   const { data: updated, error } = await supabaseAdmin
     .from('leads')
     .update({
-      ai_state:           'dormant',
-      ai_re_enabled_at:   new Date().toISOString(),
+      ai_state:           'ai_active',
+      ai_re_enabled_at:   now.toISOString(),
       ai_re_enable_count: (lead.ai_re_enable_count ?? 0) + 1,
-      ai_next_send_at:    cooldownEnd.toISOString(),
+      ai_next_send_at:    now.toISOString(),
       // ai_first_activated_at and ai_expires_at are LEFT INTACT — 60-day
       // cap is global, no resets per spec.
       // ai_attempt_count and ai_angles_used are LEFT INTACT — useful audit
       // history; the next prompt build will see "11 attempts already, here
       // are the angles already tried" so it doesn't repeat.
-      updated_at:         new Date().toISOString(),
+      updated_at:         now.toISOString(),
     })
     .eq('id', lead.id)
     .eq('venue_id', user.venueId)
@@ -379,20 +379,17 @@ async function runReEnable(args: { lead: LeadRow; user: { venueId: string; membe
     removeAiTag(user.venueId, lead.id, 'ai_needs_human'),
     removeAiTag(user.venueId, lead.id, 'ai_exhausted'),
     removeAiTag(user.venueId, lead.id, 'ai_replied'),
-    // Don't apply ai_active here — that's the activation cron's job once the
-    // 24-hour cooldown lapses.
   ]);
 
   await recordAiStateTransition({
     leadId:      lead.id,
     venueId:     user.venueId,
     fromState,
-    toState:     'dormant',
+    toState:     'ai_active',
     reason:      'manually_re_enabled',
     triggeredBy: user.memberId ? `user:${user.memberId}` : 'user:owner',
     metadata: {
-      cooldown_end:        cooldownEnd.toISOString(),
-      re_enable_count_new: (lead.ai_re_enable_count ?? 0) + 1,
+      re_enable_count_new:          (lead.ai_re_enable_count ?? 0) + 1,
       preserved_first_activated_at: lead.ai_first_activated_at,
       preserved_expires_at:         lead.ai_expires_at,
     },
@@ -406,8 +403,7 @@ async function runReEnable(args: { lead: LeadRow; user: { venueId: string; membe
     input_context: {
       kind:                'manual_re_enable',
       from_state:          fromState,
-      cooldown_hours:      24,
-      next_send_at:        cooldownEnd.toISOString(),
+      next_send_at:        now.toISOString(),
       preserved_attempt_count: lead.ai_attempt_count ?? 0,
     },
     outcome:        'manual_re_enable',
