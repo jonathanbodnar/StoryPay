@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
+import { rateLimitAny, getClientIp } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -29,6 +30,18 @@ export async function POST(req: NextRequest) {
   const email = payload.email?.trim()?.toLowerCase() ?? '';
   if (!email || !email.includes('@')) {
     return NextResponse.json({ error: 'A valid email is required.' }, { status: 400 });
+  }
+
+  // Rate limit to prevent email-bombing: per-IP (5/hr) and per-email (3/hr).
+  // Always return ok:true so attackers can't enumerate accounts.
+  const ip = getClientIp(req);
+  const rl = rateLimitAny([
+    { key: `couple-forgot:ip:${ip}`,       limit: 5, windowMs: 60 * 60_000 },
+    { key: `couple-forgot:email:${email}`, limit: 3, windowMs: 60 * 60_000 },
+  ]);
+  if (!rl.allowed) {
+    console.log('[couple/forgot] rate limited:', email);
+    return NextResponse.json({ ok: true });
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.storyvenue.com';

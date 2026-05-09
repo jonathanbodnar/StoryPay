@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import bcrypt from 'bcryptjs';
+import { rateLimitAny, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
 
 /**
  * Sign-in endpoint — email + password auth for venue owners and team members.
@@ -24,6 +25,20 @@ export async function POST(request: NextRequest) {
   }
 
   const normalized = email.trim().toLowerCase();
+
+  // Rate limit: per-IP (10/min) AND per-email (5/min). Brute-force protection.
+  const ip = getClientIp(request);
+  const rl = rateLimitAny([
+    { key: `signin:ip:${ip}`,        limit: 10, windowMs: 60_000 },
+    { key: `signin:email:${normalized}`, limit: 5,  windowMs: 60_000 },
+  ]);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: `Too many sign-in attempts. Try again in ${formatRetryAfter(rl.retryAfterMs)}.` },
+      { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } },
+    );
+  }
+
   const maxAge = rememberMe ? 60 * 60 * 24 * 365 : 60 * 60 * 24 * 30;
 
   // ── Check venue owner ──────────────────────────────────────────────────────

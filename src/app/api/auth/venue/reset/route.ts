@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import bcrypt from 'bcryptjs';
 import { verifyResetToken } from '../forgot/route';
+import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -16,6 +17,16 @@ export const runtime = 'nodejs';
  * logged in immediately after the reset.
  */
 export async function POST(req: NextRequest) {
+  // Rate limit reset-token submissions per IP (10/hr).
+  const ip = getClientIp(req);
+  const rl = rateLimit(`reset:ip:${ip}`, 10, 60 * 60_000);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: `Too many reset attempts. Try again in ${formatRetryAfter(rl.retryAfterMs)}.` },
+      { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } },
+    );
+  }
+
   let token = '', password = '', rememberMe = false;
   try {
     const body = await req.json();

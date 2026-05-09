@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
+import { rateLimitAny, getClientIp } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
   const { email } = await request.json();
@@ -10,6 +11,17 @@ export async function POST(request: NextRequest) {
   }
 
   const normalized = email.trim().toLowerCase();
+
+  // Rate limit per-IP and per-email to prevent magic-link email-bombing.
+  const ip = getClientIp(request);
+  const rl = rateLimitAny([
+    { key: `request-login:ip:${ip}`,           limit: 5, windowMs: 60 * 60_000 },
+    { key: `request-login:email:${normalized}`, limit: 3, windowMs: 60 * 60_000 },
+  ]);
+  if (!rl.allowed) {
+    console.log('[request-login] rate limited:', normalized);
+    return NextResponse.json({ ok: true });
+  }
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
 
   // Check venue owner accounts (ilike = case-insensitive so Jason@... matches jason@...)

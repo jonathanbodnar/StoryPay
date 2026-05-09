@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 import { agencyCreateMerchant } from '@/lib/lunarpay';
 import bcrypt from 'bcryptjs';
+import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -33,6 +34,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { error: 'StoryPay is currently only available in the United States. Stay tuned — we\'re expanding soon!' },
       { status: 403 }
+    );
+  }
+
+  // Rate limit: 3 signups per IP per hour. Prevents account-creation spam
+  // (which would also fan out to LunarPay merchant onboarding + welcome emails).
+  const ip = getClientIp(request);
+  const rl = rateLimit(`signup:ip:${ip}`, 3, 60 * 60_000);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: `Too many signup attempts. Try again in ${formatRetryAfter(rl.retryAfterMs)}.` },
+      { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } },
     );
   }
 

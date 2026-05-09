@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
+import { rateLimitAny, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
 import crypto from 'crypto';
 
 export const dynamic = 'force-dynamic';
@@ -58,6 +59,18 @@ export async function POST(req: NextRequest) {
   }
 
   if (!email) return NextResponse.json({ ok: true });
+
+  // Rate limit to prevent email-bombing a venue. Per-IP (5/hr) AND
+  // per-email (3/hr). Always return ok:true so attackers can't enumerate.
+  const ip = getClientIp(req);
+  const rl = rateLimitAny([
+    { key: `forgot:ip:${ip}`,       limit: 5, windowMs: 60 * 60_000 },
+    { key: `forgot:email:${email}`, limit: 3, windowMs: 60 * 60_000 },
+  ]);
+  if (!rl.allowed) {
+    console.log('[venue/forgot] rate limited:', email, formatRetryAfter(rl.retryAfterMs));
+    return NextResponse.json({ ok: true });
+  }
 
   console.log('[venue/forgot] request for:', email);
 
