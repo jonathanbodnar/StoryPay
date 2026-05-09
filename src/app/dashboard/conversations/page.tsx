@@ -36,6 +36,10 @@ import {
   Wand2,
   AlertCircle,
   FileText,
+  Pause,
+  BotOff,
+  Play,
+  Clock,
 } from 'lucide-react';
 import { classNames, toTitleCase, dispatchStageChange, onStageChange } from '@/lib/utils';
 import { EmojiPickerPopover } from '@/components/EmojiPickerPopover';
@@ -252,6 +256,15 @@ export default function ConversationsPage() {
   const [dndSaving, setDndSaving] = useState(false);
   const [showDndPanel, setShowDndPanel] = useState(false);
   const [listActionError, setListActionError] = useState('');
+
+  // ── AI Concierge quick-control (venue side) ────────────────────────────────
+  const [aiAddonEnabled, setAiAddonEnabled]     = useState(false);
+  interface ContactLead { id: string; ai_state: string; ai_next_send_at: string | null }
+  const [contactLead, setContactLead]           = useState<ContactLead | null>(null);
+  const [aiMenuOpen, setAiMenuOpen]             = useState(false);
+  const [aiActing, setAiActing]                 = useState(false);
+  const [aiActionMsg, setAiActionMsg]           = useState<string | null>(null);
+  const aiMenuRef                               = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
@@ -364,6 +377,38 @@ export default function ConversationsPage() {
     setSelectedId(threads[0].thread_id);
     setMobileShowThread(true);
   }, [loadingList, threads, selectedId]);
+
+  // Fetch AI concierge addon eligibility once on mount
+  useEffect(() => {
+    fetch('/api/dashboard/settings/ai-concierge', { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.eligibility?.addonPurchased) setAiAddonEnabled(true); })
+      .catch(() => {});
+  }, []);
+
+  // Fetch lead AI state whenever the active thread contact changes
+  useEffect(() => {
+    const email = threadDetail?.venue_customers?.customer_email;
+    if (!aiAddonEnabled || !email) { setContactLead(null); return; }
+    let cancelled = false;
+    fetch(`/api/listing/ai-concierge/contact-lead?email=${encodeURIComponent(email)}`, { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (!cancelled) setContactLead(d?.lead ?? null); })
+      .catch(() => { if (!cancelled) setContactLead(null); });
+    return () => { cancelled = true; };
+  }, [aiAddonEnabled, threadDetail?.venue_customers?.customer_email]);
+
+  // Close AI menu on outside click
+  useEffect(() => {
+    if (!aiMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (aiMenuRef.current && !aiMenuRef.current.contains(e.target as Node)) {
+        setAiMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [aiMenuOpen]);
 
   useEffect(() => {
     fetch('/api/team')
@@ -754,6 +799,47 @@ export default function ConversationsPage() {
     : null;
 
   const [profileDrawerOpen, setProfileDrawerOpen] = useState(false);
+
+  // AI concierge quick-control helpers
+  async function aiAction(action: 'resume' | 'handoff') {
+    if (!contactLead) return;
+    setAiActing(true); setAiActionMsg(null);
+    try {
+      const r = await fetch(`/api/listing/ai-concierge/leads/${contactLead.id}/state`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const d = await r.json().catch(() => ({})) as { ok?: boolean; error?: string };
+      if (r.ok) {
+        setContactLead((prev) => prev ? { ...prev, ai_state: action === 'resume' ? 'ai_active' : 'handoff' } : prev);
+        setAiActionMsg(action === 'resume' ? 'AI resumed.' : 'AI stopped — handed off.');
+      } else {
+        setAiActionMsg(d.error ?? 'Action failed.');
+      }
+    } catch { setAiActionMsg('Network error.'); }
+    finally { setAiActing(false); setAiMenuOpen(false); }
+  }
+
+  async function aiSnooze(minutes: number) {
+    if (!contactLead) return;
+    setAiActing(true); setAiActionMsg(null);
+    try {
+      const r = await fetch(`/api/listing/ai-concierge/leads/${contactLead.id}/snooze`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ minutes }),
+      });
+      const d = await r.json().catch(() => ({})) as { ok?: boolean; message?: string; error?: string; nextSendAt?: string };
+      if (r.ok && d.ok) {
+        setContactLead((prev) => prev ? { ...prev, ai_next_send_at: d.nextSendAt ?? prev.ai_next_send_at } : prev);
+        setAiActionMsg(d.message ?? 'AI paused.');
+      } else {
+        setAiActionMsg(d.error ?? 'Snooze failed.');
+      }
+    } catch { setAiActionMsg('Network error.'); }
+    finally { setAiActing(false); setAiMenuOpen(false); }
+  }
 
   const selectedTriggerMeta = useMemo(
     () => triggerLinkOptions.find((t) => t.id === selectedTriggerLinkId),
@@ -1464,6 +1550,113 @@ export default function ConversationsPage() {
                   </p>
                 </div>
                 <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2">
+                  {/* AI Concierge quick-control — only shown when addon is active and contact has a lead */}
+                  {aiAddonEnabled && contactLead && (
+                    <div className="relative" ref={aiMenuRef}>
+                      <button
+                        type="button"
+                        onClick={() => { setAiMenuOpen((o) => !o); setAiActionMsg(null); }}
+                        disabled={aiActing}
+                        title="AI Concierge controls"
+                        className={classNames(
+                          'inline-flex flex-shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-colors',
+                          contactLead.ai_state === 'ai_active'
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                            : contactLead.ai_state === 'paused'
+                              ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                              : 'border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100',
+                        )}
+                      >
+                        {aiActing ? (
+                          <Loader2 size={13} className="animate-spin" />
+                        ) : contactLead.ai_state === 'ai_active' ? (
+                          <Sparkles size={13} />
+                        ) : contactLead.ai_state === 'paused' ? (
+                          <Pause size={13} />
+                        ) : (
+                          <BotOff size={13} />
+                        )}
+                        {contactLead.ai_state === 'ai_active' ? 'AI Active' : contactLead.ai_state === 'paused' ? 'AI Paused' : 'AI Off'}
+                        <ChevronDown size={12} className="text-current opacity-60" />
+                      </button>
+
+                      {aiMenuOpen && (
+                        <div className="absolute right-0 top-full z-50 mt-1.5 w-52 rounded-xl border border-gray-200 bg-white shadow-lg">
+                          <div className="px-3 py-2 border-b border-gray-100">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">AI Concierge</p>
+                          </div>
+
+                          {/* Pause for duration — only when AI is active */}
+                          {contactLead.ai_state === 'ai_active' && (
+                            <>
+                              <div className="px-3 pt-2 pb-1">
+                                <p className="text-[10px] font-medium text-gray-400 flex items-center gap-1"><Clock size={10}/> Pause AI for…</p>
+                              </div>
+                              {([
+                                { label: '1 minute',  minutes: 1    },
+                                { label: '30 minutes', minutes: 30   },
+                                { label: '1 hour',    minutes: 60   },
+                                { label: '4 hours',   minutes: 240  },
+                                { label: '1 day',     minutes: 1440 },
+                              ] as const).map(({ label, minutes }) => (
+                                <button
+                                  key={minutes}
+                                  type="button"
+                                  onClick={() => void aiSnooze(minutes)}
+                                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 text-left"
+                                >
+                                  <Pause size={11} className="text-amber-500 flex-shrink-0" />
+                                  {label}
+                                </button>
+                              ))}
+                              <div className="my-1 border-t border-gray-100" />
+                              <button
+                                type="button"
+                                onClick={() => void aiAction('handoff')}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-xs text-rose-600 hover:bg-rose-50 text-left rounded-b-xl"
+                              >
+                                <BotOff size={11} className="flex-shrink-0" />
+                                Stop AI (hand off)
+                              </button>
+                            </>
+                          )}
+
+                          {/* Resume — when paused or off */}
+                          {contactLead.ai_state !== 'ai_active' && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => void aiAction('resume')}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-xs text-emerald-700 hover:bg-emerald-50 text-left"
+                              >
+                                <Play size={11} className="flex-shrink-0" />
+                                Resume AI
+                              </button>
+                              {contactLead.ai_state === 'paused' && (
+                                <>
+                                  <div className="my-1 border-t border-gray-100" />
+                                  <button
+                                    type="button"
+                                    onClick={() => void aiAction('handoff')}
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-xs text-rose-600 hover:bg-rose-50 text-left rounded-b-xl"
+                                  >
+                                    <BotOff size={11} className="flex-shrink-0" />
+                                    Stop AI (hand off)
+                                  </button>
+                                </>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Feedback toast */}
+                  {aiActionMsg && (
+                    <span className="text-xs text-gray-500 max-w-[160px] truncate">{aiActionMsg}</span>
+                  )}
+
                   {contactProfileHref ? (
                     <button
                       type="button"

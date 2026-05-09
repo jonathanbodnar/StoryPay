@@ -45,6 +45,9 @@ export interface MonitorLead {
   last_run_outcome:        string | null;
   last_run_at:             string | null;
   last_run_error:          string | null;
+  // Deep-link helpers
+  venue_customer_id:       string | null;
+  thread_id:               string | null;
 }
 
 export interface MonitorPayload {
@@ -235,6 +238,7 @@ export async function GET(req: NextRequest) {
     let result: MonitorLead[] = leads.map(l => {
       const venue   = venueById.get(l.venue_id);
       const threadId = leadToThreadId.get(l.id) ?? null;
+      const vcId    = leadToVcId.get(l.id) ?? null;
       const sent    = threadId ? lastSentByThread.get(threadId) : null;
       const reply   = threadId ? lastReplyByThread.get(threadId) : null;
       const run     = lastRunByLead.get(l.id);
@@ -262,6 +266,8 @@ export async function GET(req: NextRequest) {
         last_run_outcome:      run?.outcome ?? null,
         last_run_at:           run?.at ?? null,
         last_run_error:        run?.error ?? null,
+        venue_customer_id:     vcId,
+        thread_id:             threadId,
       };
     });
 

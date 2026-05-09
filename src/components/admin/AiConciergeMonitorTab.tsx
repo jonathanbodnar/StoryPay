@@ -20,7 +20,7 @@ import {
   MessageSquare, Clock, CalendarClock, Sparkles,
   AlertTriangle, XCircle, Pause, Play, PhoneOff,
   CheckCircle2, Radio, Eye, Zap, Tag, X as XIcon,
-  RotateCcw, Hand, Moon,
+  RotateCcw, Hand, Moon, ExternalLink,
 } from 'lucide-react';
 import type { MonitorLead, MonitorPayload } from '@/app/api/admin/ai-concierge/monitor/route';
 
@@ -396,7 +396,7 @@ function LeadCard({ lead, expanded, onToggle, onMutated }: {
           <TagManager leadId={lead.lead_id} venueId={lead.venue_id} />
 
           {/* Deep-link actions */}
-          <div className="flex items-center gap-2 pt-1 border-t border-gray-100">
+          <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-gray-100">
             <a
               href={`/admin?tab=ai-concierge&runs_lead=${lead.lead_id}`}
               target="_blank"
@@ -415,6 +415,26 @@ function LeadCard({ lead, expanded, onToggle, onMutated }: {
               <MessageSquare size={12} />
               State history
             </a>
+            <a
+              href={`/admin/venues?vid=${lead.venue_id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-700 hover:bg-violet-100"
+            >
+              <ExternalLink size={12} />
+              Venue page
+            </a>
+            {lead.thread_id && (
+              <a
+                href={`/admin?tab=support&thread=${lead.thread_id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
+              >
+                <MessageSquare size={12} />
+                Chat thread
+              </a>
+            )}
           </div>
         </div>
       )}
