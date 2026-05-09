@@ -116,5 +116,7 @@ export async function POST(request: NextRequest) {
     // venue_team_members table missing — fall through
   }
 
-  return NextResponse.json({ error: 'No account found with that email address.' }, { status: 401 });
+  // Same generic error as bad-password to prevent user enumeration.
+  // Without this, an attacker could probe valid venue emails by reading the response.
+  return NextResponse.json({ error: 'Incorrect email or password.' }, { status: 401 });
 }

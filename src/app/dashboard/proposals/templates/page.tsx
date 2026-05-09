@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { Plus, FileText, Pencil, Eye, X, PenLine, User, CalendarDays, Search, Loader2, Star } from 'lucide-react';
+import DOMPurify from 'isomorphic-dompurify';
 import { formatDate } from '@/lib/utils';
 import PaymentGate from '@/components/PaymentGate';
 
@@ -247,7 +248,7 @@ function TemplatesPageInner() {
  .tmpl-preview td{padding:8px 12px;border:1px solid #e5e7eb}
  .tmpl-preview blockquote{border-left:3px solid #1b1b1b;padding-left:1rem;color:#4b5563;font-style:italic;margin:1rem 0}
  `}</style>
- <div className="tmpl-preview"dangerouslySetInnerHTML={{ __html: preview.content }} />
+ <div className="tmpl-preview"dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(preview.content) }} />
  </>
  ) : (
  <div className="py-12 text-center text-gray-400">

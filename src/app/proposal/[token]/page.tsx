@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import DOMPurify from 'isomorphic-dompurify';
 import { formatCents, formatDate } from '@/lib/utils';
 
 interface SigningField {
@@ -420,7 +421,7 @@ export default function ProposalPage() {
                 prose-blockquote:border-brand-400 prose-blockquote:text-gray-500
                 prose-hr:border-gray-200
                 prose-a:text-brand-900 prose-a:no-underline hover:prose-a:underline"
-              dangerouslySetInnerHTML={{ __html: proposal.content }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(proposal.content) }}
             />
           </div>
 

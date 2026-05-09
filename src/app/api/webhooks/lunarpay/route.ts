@@ -72,14 +72,19 @@ export async function POST(request: NextRequest) {
       merchant.businessName.trim().toLowerCase() === 'storypay';
 
     if (isHQByEnvId || isHQByName) {
+      // Redact secret/publishable keys to last 4 chars — full keys must not
+      // land in Railway logs (any engineer with log access could see them).
+      // To retrieve the full keys, use the LunarPay dashboard directly.
+      const skTail = (keys.secretKey || '').slice(-4);
+      const pkTail = (keys.publishableKey || '').slice(-4);
       console.warn('=========================================================');
       console.warn('[webhooks/lunarpay] StoryPay HQ MERCHANT APPROVED');
       console.warn(`  merchantId      = ${merchant.id}`);
       console.warn(`  businessName    = ${merchant.businessName}`);
       console.warn(`  organizationId  = ${merchant.organizationId}`);
-      console.warn('  → Set these in Railway env (and redeploy):');
-      console.warn(`    STORYPAY_HQ_LUNARPAY_SK = ${keys.secretKey}`);
-      console.warn(`    STORYPAY_HQ_LUNARPAY_PK = ${keys.publishableKey}`);
+      console.warn('  → Retrieve keys from LunarPay dashboard and set in Railway env:');
+      console.warn(`    STORYPAY_HQ_LUNARPAY_SK = sk_***${skTail}`);
+      console.warn(`    STORYPAY_HQ_LUNARPAY_PK = pk_***${pkTail}`);
       console.warn(`    STORYPAY_HQ_LUNARPAY_MERCHANT_ID = ${merchant.id}`);
       console.warn('=========================================================');
       return NextResponse.json({ received: true, role: 'hq' });
@@ -88,21 +93,32 @@ export async function POST(request: NextRequest) {
     // Otherwise it's a venue merchant — store its keys on its venue row.
     const { data: venues } = await supabaseAdmin
       .from('venues')
-      .select('id')
+      .select('id, lunarpay_secret_key, lunarpay_publishable_key, onboarding_status')
       .eq('lunarpay_merchant_id', merchant.id)
       .limit(1);
 
-    const venueId = (venues as { id: string }[] | null)?.[0]?.id;
+    const v = (venues as { id: string; lunarpay_secret_key: string | null; lunarpay_publishable_key: string | null; onboarding_status: string | null }[] | null)?.[0];
+    const venueId = v?.id;
     if (venueId) {
-      await supabaseAdmin
-        .from('venues')
-        .update({
-          lunarpay_secret_key:       keys.secretKey,
-          lunarpay_publishable_key:  keys.publishableKey,
-          onboarding_status: 'active',
-        })
-        .eq('id', venueId);
-      console.log('[webhooks/lunarpay] venue activated', venueId);
+      // Idempotency guard: if the venue is already active with the same keys,
+      // skip the write entirely so a webhook replay doesn't overwrite a
+      // post-rotation key with the original one.
+      const sameSk = v?.lunarpay_secret_key === keys.secretKey;
+      const samePk = v?.lunarpay_publishable_key === keys.publishableKey;
+      const alreadyActive = v?.onboarding_status === 'active';
+      if (alreadyActive && sameSk && samePk) {
+        console.log('[webhooks/lunarpay] merchant.approved replay ignored for venue', venueId);
+      } else {
+        await supabaseAdmin
+          .from('venues')
+          .update({
+            lunarpay_secret_key:       keys.secretKey,
+            lunarpay_publishable_key:  keys.publishableKey,
+            onboarding_status: 'active',
+          })
+          .eq('id', venueId);
+        console.log('[webhooks/lunarpay] venue activated', venueId);
+      }
     } else {
       console.warn(
         `[webhooks/lunarpay] merchant.approved for id=${merchant.id} (${merchant.businessName}) but no matching venue — keys NOT stored. If this is StoryPay HQ, set STORYPAY_HQ_LUNARPAY_MERCHANT_ID=${merchant.id} in env so future webhooks recognise it.`,

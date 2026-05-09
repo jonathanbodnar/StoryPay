@@ -21,14 +21,30 @@ export async function lpFetch(path: string, { method = 'GET', body, key }: LPReq
 
   if (!res.ok) {
     const errorText = await res.text();
-    // Verbose log so we can see EXACTLY what we sent and what LP returned.
+    // Log enough to debug, but redact PII fields from the request body.
+    // Customer email/name/phone/amount must not land in production logs.
+    const PII_FIELDS = new Set([
+      'email', 'customer_email', 'customerEmail',
+      'phone', 'customer_phone', 'customerPhone',
+      'firstName', 'lastName', 'name', 'customer_name', 'customerName', 'nameHolder',
+      'password',
+      'amount', 'price',
+      'description', 'success_url', 'cancel_url',
+      'metadata',
+    ]);
+    const safeBody: Record<string, unknown> = {};
+    if (body && typeof body === 'object') {
+      for (const [k, v] of Object.entries(body)) {
+        safeBody[k] = PII_FIELDS.has(k) ? '<redacted>' : v;
+      }
+    }
     console.error('[lpFetch] LunarPay error', {
       url,
       method,
       status: res.status,
       keyPrefix,
-      requestBody: body,
-      responseText: errorText,
+      requestBody: safeBody,
+      responseText: errorText.slice(0, 500),
     });
     throw new Error(`LunarPay API error ${res.status}: ${errorText}`);
   }

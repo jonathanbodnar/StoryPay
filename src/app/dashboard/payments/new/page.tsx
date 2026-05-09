@@ -8,6 +8,7 @@ import {
  FileText, Eye, EyeOff, Loader2, CheckCircle2, Sparkles, ArrowLeft,
  PenLine, Package, Tag, Percent, ChevronRight,
 } from 'lucide-react';
+import DOMPurify from 'isomorphic-dompurify';
 import { formatCents } from '@/lib/utils';
 import PaymentGate from '@/components/PaymentGate';
 import dynamic from 'next/dynamic';
@@ -189,7 +190,7 @@ function LivePreview({
  {/* Contract preview */}
  {(mode === 'proposal') && contractHtml && (
  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3 max-h-32 overflow-hidden relative">
- <div className="text-xs text-gray-600 leading-relaxed"dangerouslySetInnerHTML={{ __html: contractHtml }} />
+ <div className="text-xs text-gray-600 leading-relaxed"dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(contractHtml) }} />
  <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-gray-50"/>
  </div>
  )}
@@ -865,7 +866,7 @@ function NewProposalInvoicePageInner() {
  )}
  {!showEditor && contractHtml && (
  <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 max-h-24 overflow-hidden relative">
- <div className="text-xs text-gray-500 leading-relaxed"dangerouslySetInnerHTML={{__html:contractHtml}}/>
+ <div className="text-xs text-gray-500 leading-relaxed"dangerouslySetInnerHTML={{__html:DOMPurify.sanitize(contractHtml)}}/>
  <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-gray-50"/>
  </div>
  )}
@@ -1336,7 +1337,7 @@ onMouseDown={e => { e.preventDefault(); setItemPickerId(null); setItemPickerMode
  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
  <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-3">Contract Terms</p>
  <div className="text-sm text-gray-700 leading-relaxed prose prose-sm max-w-none"
- dangerouslySetInnerHTML={{__html:contractHtml}}/>
+ dangerouslySetInnerHTML={{__html:DOMPurify.sanitize(contractHtml)}}/>
  </div>
  )}
 

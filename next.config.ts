@@ -27,6 +27,39 @@ const nextConfig: NextConfig = {
 
   async headers() {
     return [
+      // ── Global security headers (apply to every response) ─────────────────
+      // HSTS: force HTTPS for 1 year, including subdomains. Cloudflare may
+      // also set this; defining at the origin protects direct Railway hits.
+      // X-Content-Type-Options: prevents MIME-sniffing.
+      // Referrer-Policy: strip referrer on cross-origin nav.
+      // Permissions-Policy: deny camera/mic/geolocation/payment APIs to
+      // anything we don't explicitly need.
+      {
+        source: "/:path*",
+        headers: [
+          { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains; preload" },
+          { key: "X-Content-Type-Options",   value: "nosniff" },
+          { key: "Referrer-Policy",          value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy",       value: "camera=(), microphone=(), geolocation=(self), payment=(self)" },
+        ],
+      },
+      // ── Authenticated areas — deny iframe embedding ───────────────────────
+      // Prevents clickjacking on /dashboard and /admin. Public pages and
+      // /embed/* must remain iframable so we don't apply this globally.
+      {
+        source: "/dashboard/:path*",
+        headers: [
+          { key: "X-Frame-Options",         value: "DENY" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+        ],
+      },
+      {
+        source: "/admin/:path*",
+        headers: [
+          { key: "X-Frame-Options",         value: "DENY" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+        ],
+      },
       // ── Immutable hashed static assets ────────────────────────────────────
       // Next.js content-hashes every file under /_next/static so a 1-year TTL
       // is safe — a new deploy always produces new URLs.

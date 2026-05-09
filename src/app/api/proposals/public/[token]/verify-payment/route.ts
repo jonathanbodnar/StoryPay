@@ -56,6 +56,30 @@ export async function POST(
     return NextResponse.json({ success: true, already_paid: true });
   }
 
+  // Concurrency guard: stamp verify_session_id on this row so only one
+  // request gets to run the side-effects (subscription create, schedule
+  // create, receipt email, integration events, etc.). If two requests arrive
+  // in parallel (browser refresh + LunarPay webhook, double-click) only the
+  // first one to update the column wins; the others bail with already_paid.
+  // Best-effort: column is added by migration 121 but if it doesn't exist
+  // yet we fall through to existing behavior.
+  try {
+    const { data: claimed } = await supabaseAdmin
+      .from('proposals')
+      .update({ verify_session_id: session_id })
+      .eq('id', proposal.id)
+      .is('verify_session_id', null)
+      .select('id')
+      .maybeSingle();
+    if (!claimed) {
+      // Another concurrent request already claimed this proposal.
+      return NextResponse.json({ success: true, already_paid: true });
+    }
+  } catch {
+    // verify_session_id column missing on older DBs — log and proceed
+    console.warn('[verify-payment] verify_session_id column missing; concurrency guard disabled');
+  }
+
   const { data: venue } = await supabaseAdmin
     .from('venues')
     .select('id, lunarpay_secret_key, name, ghl_access_token, ghl_location_id, service_fee_rate')
@@ -150,7 +174,6 @@ export async function POST(
           console.error('[verify-payment] Cannot create payment schedule: no customer_id from checkout session or proposal');
         } else if (!paymentMethodId) {
           console.error('[verify-payment] Cannot create payment schedule: no payment_method_id from checkout session');
-          console.log('[verify-payment] Full session keys:', Object.keys(session));
         } else {
           try {
             const schedulePayload = {

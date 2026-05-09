@@ -9,7 +9,14 @@ export const runtime = 'nodejs';
 const EXPIRY_MS = 60 * 60 * 1000; // 1 hour
 
 function sign(payload: string): string {
-  const secret = process.env.ADMIN_SECRET ?? process.env.NEXTAUTH_SECRET ?? 'fallback-secret';
+  const secret = process.env.ADMIN_SECRET ?? process.env.NEXTAUTH_SECRET;
+  if (!secret) {
+    // Critical: do not silently fall back to a literal string. A predictable
+    // signing secret would let anyone forge reset tokens for any venue.
+    throw new Error(
+      'ADMIN_SECRET (or NEXTAUTH_SECRET) is not configured. Password reset tokens cannot be signed.',
+    );
+  }
   return crypto.createHmac('sha256', secret).update(payload).digest('hex');
 }
 

@@ -13,7 +13,13 @@ export const runtime = 'nodejs';
 
 function escapeCsv(value: string | number | null | undefined): string {
   if (value === null || value === undefined) return '';
-  const str = String(value);
+  let str = String(value);
+  // CSV formula-injection guard: a cell starting with =, +, -, @, tab, CR
+  // can be evaluated as a formula by Excel/Sheets/Numbers. Prepend a single
+  // quote (the standard mitigation) so the cell is treated as text.
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = `'${str}`;
+  }
   if (str.includes(',') || str.includes('"') || str.includes('\n')) {
     return `"${str.replace(/"/g, '""')}"`;
   }

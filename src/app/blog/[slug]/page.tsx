@@ -2,6 +2,7 @@ import { Metadata, ResolvingMetadata } from 'next';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
+import DOMPurify from 'isomorphic-dompurify';
 import { supabaseAdmin } from '@/lib/supabase';
 import { Calendar, User, Tag, ArrowLeft, ArrowRight } from 'lucide-react';
 
@@ -203,7 +204,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
             {/* Content */}
             <div
               className="prose prose-gray max-w-none prose-headings:font-bold prose-headings:text-gray-900 prose-p:text-gray-700 prose-p:leading-relaxed prose-a:text-[#1b1b1b] prose-a:underline prose-li:text-gray-700 prose-img:rounded-xl"
-              dangerouslySetInnerHTML={{ __html: post.content }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(post.content) }}
             />
 
             {/* Tags */}

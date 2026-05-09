@@ -44,11 +44,11 @@ async function isFreePlan(venueId: string): Promise<boolean> {
 
   const { data: plan } = await supabaseAdmin
     .from('directory_plans')
-    .select('price_cents')
+    .select('price_monthly_cents')
     .eq('id', planId)
     .maybeSingle();
 
-  const price = (plan as { price_cents: number | null } | null)?.price_cents ?? 0;
+  const price = (plan as { price_monthly_cents: number | null } | null)?.price_monthly_cents ?? 0;
   return price <= 0;
 }
 
