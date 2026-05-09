@@ -14,6 +14,7 @@ import {
   X,
   CheckCircle2,
   CalendarClock,
+  Send,
 } from 'lucide-react';
 import { DIRECTORY_BADGE_STATUSES, directoryBadgeLabel } from '@/lib/directory-badges';
 import {
@@ -115,10 +116,28 @@ export function VenueManagementPortal({
     phone: '',
     ghlLocationId: '',
   });
+  // Legacy-migration friendly options
+  const [createOpts, setCreateOpts] = useState({
+    sendInvite:   true,
+    skipLunarPay: false,
+    isLegacy:     true,
+  });
+  const [createSuccess, setCreateSuccess] = useState<{
+    venueName: string;
+    loginUrl:  string | null;
+    inviteSent: boolean;
+    inviteError: string | null;
+    lunarPayWarning: string | null;
+  } | null>(null);
+  const [copiedNewLink, setCopiedNewLink] = useState(false);
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [copiedGhl, setCopiedGhl] = useState(false);
+  // Per-row send-invite state
+  const [invitingId,    setInvitingId]   = useState<string | null>(null);
+  const [inviteToastId, setInviteToastId] = useState<string | null>(null);
+  const [inviteToastMsg, setInviteToastMsg] = useState<string>('');
   const [deleteTarget, setDeleteTarget] = useState<AdminVenueRow | null>(null);
   const [deleteConfirmName, setDeleteConfirmName] = useState('');
   const [deleting, setDeleting] = useState(false);
@@ -160,18 +179,31 @@ export function VenueManagementPortal({
     e.preventDefault();
     setCreating(true);
     setServerError('');
+    setCreateSuccess(null);
     try {
       const res = await fetch('/api/admin/venues', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, ...createOpts }),
       });
+      const d = (await res.json().catch(() => ({}))) as {
+        venue?: { name?: string; login_url?: string | null };
+        error?: string;
+        inviteSent?: boolean;
+        inviteError?: string | null;
+        lunarPayWarning?: string | null;
+      };
       if (res.ok) {
+        setCreateSuccess({
+          venueName:       d.venue?.name || formData.name,
+          loginUrl:        d.venue?.login_url ?? null,
+          inviteSent:      Boolean(d.inviteSent),
+          inviteError:     d.inviteError ?? null,
+          lunarPayWarning: d.lunarPayWarning ?? null,
+        });
         setFormData({ name: '', email: '', firstName: '', lastName: '', phone: '', ghlLocationId: '' });
-        setShowCreateForm(false);
         await onRefresh();
       } else {
-        const d = (await res.json().catch(() => ({}))) as { error?: string };
         setServerError(d.error || 'Create failed');
       }
     } catch (err) {
@@ -300,6 +332,39 @@ export function VenueManagementPortal({
     }
   }
 
+  async function sendInviteToVenue(venueId: string) {
+    setInvitingId(venueId);
+    setInviteToastId(null);
+    setInviteToastMsg('');
+    try {
+      const res = await fetch(`/api/admin/venues/${venueId}/send-invite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isLegacy: true }),
+      });
+      const d = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        sentTo?: string;
+        loginUrl?: string;
+        error?: string;
+      };
+      if (res.ok && d.ok) {
+        setInviteToastId(venueId);
+        setInviteToastMsg(`Invite sent to ${d.sentTo}`);
+        await onRefresh();
+      } else {
+        setInviteToastId(venueId);
+        setInviteToastMsg(d.error || 'Invite failed');
+      }
+    } catch (err) {
+      setInviteToastId(venueId);
+      setInviteToastMsg(err instanceof Error ? err.message : 'Network error');
+    } finally {
+      setInvitingId(null);
+      setTimeout(() => { setInviteToastId(null); setInviteToastMsg(''); }, 4000);
+    }
+  }
+
   async function viewAsVenue(venueId: string) {
     const res = await fetch('/api/admin/impersonate', {
       method: 'POST',
@@ -414,21 +479,117 @@ export function VenueManagementPortal({
               <input
                 value={formData.ghlLocationId}
                 onChange={(e) => setFormData({ ...formData, ghlLocationId: e.target.value })}
+                placeholder="optional — paste their GHL/legacy location ID"
                 className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm outline-none"
               />
             </div>
           </div>
-          <div className="mt-4 flex justify-end">
+
+          {/* Legacy-migration / invite options */}
+          <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3 rounded-xl bg-gray-50 border border-gray-200 p-4">
+            <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={createOpts.sendInvite}
+                onChange={(e) => setCreateOpts({ ...createOpts, sendInvite: e.target.checked })}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="font-medium block">Send invite email</span>
+                <span className="text-xs text-gray-500">Magic-link login goes straight to the owner&apos;s inbox.</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={createOpts.skipLunarPay}
+                onChange={(e) => setCreateOpts({ ...createOpts, skipLunarPay: e.target.checked })}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="font-medium block">Skip LunarPay setup</span>
+                <span className="text-xs text-gray-500">Use for legacy clients on a different processor — provision later.</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={createOpts.isLegacy}
+                onChange={(e) => setCreateOpts({ ...createOpts, isLegacy: e.target.checked })}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="font-medium block">Legacy migration</span>
+                <span className="text-xs text-gray-500">Tweaks the welcome email wording for migrating clients.</span>
+              </span>
+            </label>
+          </div>
+
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <p className="text-xs text-gray-500">
+              The owner will receive a unique magic-link to sign in. No password is needed.
+            </p>
             <button
               type="submit"
               disabled={creating}
               className="text-white font-medium px-5 py-2 rounded-xl hover:opacity-90 disabled:opacity-50"
               style={{ backgroundColor: BRAND }}
             >
-              {creating ? 'Creating…' : 'Create venue'}
+              {creating ? 'Creating…' : 'Create venue & invite'}
             </button>
           </div>
         </form>
+      )}
+
+      {/* Success state — shows the magic login link + invite status */}
+      {createSuccess && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="font-heading text-base text-emerald-900 mb-1">
+                Subaccount created — {createSuccess.venueName}
+              </h3>
+              <p className="text-sm text-emerald-800">
+                {createSuccess.inviteSent
+                  ? 'Invite email sent to the owner with their magic-link login.'
+                  : createSuccess.inviteError
+                    ? createSuccess.inviteError
+                    : 'No invite was emailed. Copy the link below and send it manually.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCreateSuccess(null)}
+              className="text-emerald-700 hover:text-emerald-900 text-xs font-medium"
+            >
+              Dismiss
+            </button>
+          </div>
+          {createSuccess.loginUrl && (
+            <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-2">
+              <code className="flex-1 block bg-white border border-emerald-200 rounded-lg px-3 py-2 text-xs text-gray-800 break-all">
+                {createSuccess.loginUrl}
+              </code>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!createSuccess.loginUrl) return;
+                  void navigator.clipboard.writeText(createSuccess.loginUrl);
+                  setCopiedNewLink(true);
+                  setTimeout(() => setCopiedNewLink(false), 2000);
+                }}
+                className="rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs font-medium text-emerald-800 hover:bg-emerald-100 whitespace-nowrap"
+              >
+                {copiedNewLink ? 'Copied!' : 'Copy login link'}
+              </button>
+            </div>
+          )}
+          {createSuccess.lunarPayWarning && (
+            <p className="mt-3 text-xs rounded-lg bg-amber-100 border border-amber-200 text-amber-900 px-3 py-2">
+              <strong>Heads up:</strong> {createSuccess.lunarPayWarning}
+            </p>
+          )}
+        </div>
       )}
 
       <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
@@ -530,12 +691,16 @@ export function VenueManagementPortal({
               planLabelText={planLabel(venue)}
               savingKey={savingKey}
               copiedId={copiedId}
+              invitingId={invitingId}
+              inviteToastId={inviteToastId}
+              inviteToastMsg={inviteToastMsg}
               onPatch={patchVenue}
               onCopyLogin={(url, id) => {
                 void navigator.clipboard.writeText(url);
                 setCopiedId(id);
                 setTimeout(() => setCopiedId(null), 2000);
               }}
+              onSendInvite={() => void sendInviteToVenue(venue.id)}
               onViewAs={() => void viewAsVenue(venue.id)}
               onCopyBillingLink={() => void copyDirectoryBillingLink(venue.id)}
               onDelete={() => { setDeleteTarget(venue); setDeleteConfirmName(''); }}
@@ -683,6 +848,23 @@ export function VenueManagementPortal({
                             <Copy size={12} />
                             {copiedId === venue.id ? 'Copied' : 'Copy login'}
                           </button>
+                          <button
+                            type="button"
+                            disabled={invitingId === venue.id || !venue.email}
+                            onClick={() => void sendInviteToVenue(venue.id)}
+                            title={venue.email ? `Send a fresh magic-link login to ${venue.email}` : 'No email on file'}
+                            className="inline-flex items-center justify-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                          >
+                            <Send size={12} />
+                            {invitingId === venue.id
+                              ? 'Sending…'
+                              : inviteToastId === venue.id
+                                ? 'Sent ✓'
+                                : 'Send invite'}
+                          </button>
+                          {inviteToastId === venue.id && inviteToastMsg && (
+                            <p className="text-[10px] text-emerald-700 px-1">{inviteToastMsg}</p>
+                          )}
                           <button
                             type="button"
                             onClick={() => void viewAsVenue(venue.id)}
@@ -948,8 +1130,12 @@ function VenueMobileCard({
   planLabelText,
   savingKey,
   copiedId,
+  invitingId,
+  inviteToastId,
+  inviteToastMsg,
   onPatch,
   onCopyLogin,
+  onSendInvite,
   onViewAs,
   onCopyBillingLink,
   onDelete,
@@ -961,8 +1147,12 @@ function VenueMobileCard({
   planLabelText: string;
   savingKey: string | null;
   copiedId: string | null;
+  invitingId: string | null;
+  inviteToastId: string | null;
+  inviteToastMsg: string;
   onPatch: (id: string, b: Record<string, unknown>) => void;
   onCopyLogin: (url: string, id: string) => void;
+  onSendInvite: () => void;
   onViewAs: () => void;
   onCopyBillingLink: () => void;
   onDelete: () => void;
@@ -1039,26 +1229,35 @@ function VenueMobileCard({
           </select>
         </div>
       </div>
-      <div className="flex gap-2 pt-1">
+      <div className="flex flex-wrap gap-2 pt-1">
         <button
           type="button"
           disabled={!venue.login_url}
           onClick={() => venue.login_url && onCopyLogin(venue.login_url, venue.id)}
-          className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg border border-gray-200 py-2 text-xs font-medium disabled:opacity-40"
+          className="flex-1 min-w-[100px] inline-flex items-center justify-center gap-1 rounded-lg border border-gray-200 py-2 text-xs font-medium disabled:opacity-40"
         >
           <Copy size={12} /> {copiedId === venue.id ? 'Copied' : 'Login link'}
         </button>
         <button
           type="button"
+          disabled={invitingId === venue.id || !venue.email}
+          onClick={onSendInvite}
+          className="flex-1 min-w-[100px] inline-flex items-center justify-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 py-2 text-xs font-semibold text-emerald-700 disabled:opacity-50"
+        >
+          <Send size={12} />
+          {invitingId === venue.id ? 'Sending…' : inviteToastId === venue.id ? 'Sent ✓' : 'Send invite'}
+        </button>
+        <button
+          type="button"
           onClick={onViewAs}
-          className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg border border-pink-200 bg-pink-50 py-2 text-xs font-semibold text-pink-900"
+          className="flex-1 min-w-[100px] inline-flex items-center justify-center gap-1 rounded-lg border border-pink-200 bg-pink-50 py-2 text-xs font-semibold text-pink-900"
         >
           <Eye size={12} /> View as
         </button>
         <button
           type="button"
           onClick={onExtendTrial}
-          className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg border border-violet-200 bg-violet-50 py-2 text-xs font-semibold text-violet-700"
+          className="flex-1 min-w-[100px] inline-flex items-center justify-center gap-1 rounded-lg border border-violet-200 bg-violet-50 py-2 text-xs font-semibold text-violet-700"
         >
           <CalendarClock size={12} /> Trial
         </button>
@@ -1070,6 +1269,9 @@ function VenueMobileCard({
           <Trash2 size={12} /> Delete
         </button>
       </div>
+      {inviteToastId === venue.id && inviteToastMsg && (
+        <p className="text-[11px] text-emerald-700 mt-1">{inviteToastMsg}</p>
+      )}
     </div>
   );
 }
