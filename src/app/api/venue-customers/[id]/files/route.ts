@@ -8,6 +8,28 @@ export const runtime = 'nodejs';
 
 const BUCKET = 'customer-files';
 
+// Allowlist of MIME types accepted for customer file uploads.
+// Deliberately excludes executables, scripts, office macros, and archives
+// to prevent malware staging in customer records.
+const ALLOWED_MIME_TYPES = new Set([
+  // Images
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+  'image/heic', 'image/heif', 'image/svg+xml', 'image/tiff',
+  // Documents
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  // Text
+  'text/plain', 'text/csv',
+  // Audio/video (venue recordings, walkthroughs)
+  'audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/ogg',
+  'video/mp4', 'video/quicktime', 'video/webm',
+]);
+
 // Lazily ensure the customer-files bucket exists so the first upload on a
 // fresh project doesn't 500 with "Bucket not found".
 async function ensureBucket() {
@@ -64,6 +86,14 @@ export async function POST(
 
   if (file.size > PER_FILE_MAX_BYTES) {
     return NextResponse.json({ error: 'File exceeds the 10 MB per-file limit.' }, { status: 413 });
+  }
+
+  const mimeType = (file.type || '').toLowerCase().split(';')[0].trim();
+  if (mimeType && !ALLOWED_MIME_TYPES.has(mimeType)) {
+    return NextResponse.json(
+      { error: `File type not allowed (${mimeType}). Accepted: images, PDF, Word, Excel, PowerPoint, CSV, text, audio, video.` },
+      { status: 400 },
+    );
   }
 
   // 5-file limit per lead/customer

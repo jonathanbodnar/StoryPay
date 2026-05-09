@@ -112,10 +112,11 @@ export default function ProfilePage() {
   const [showConfPass, setShowConfPass]     = useState(false);
 
   // Delete account state
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteConfirm, setDeleteConfirm]     = useState('');
-  const [deleting, setDeleting]               = useState(false);
-  const [deleteError, setDeleteError]         = useState('');
+  const [showDeleteModal, setShowDeleteModal]     = useState(false);
+  const [deleteConfirm, setDeleteConfirm]         = useState('');
+  const [deletePassword, setDeletePassword]       = useState('');
+  const [deleting, setDeleting]                   = useState(false);
+  const [deleteError, setDeleteError]             = useState('');
   const [exporting, setExporting]             = useState(false);
   const router = useRouter();
 
@@ -249,7 +250,7 @@ export default function ProfilePage() {
       const res = await fetch('/api/venues/me/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ confirmName: deleteConfirm }),
+        body: JSON.stringify({ confirmName: deleteConfirm, confirmPassword: deletePassword }),
       });
       const data = await res.json() as { error?: string };
       if (!res.ok) { setDeleteError(data.error || 'Deletion failed'); return; }
@@ -603,7 +604,7 @@ export default function ProfilePage() {
               </div>
               <button
                 type="button"
-                onClick={() => { setShowDeleteModal(true); setDeleteConfirm(''); setDeleteError(''); }}
+                onClick={() => { setShowDeleteModal(true); setDeleteConfirm(''); setDeletePassword(''); setDeleteError(''); }}
                 className="shrink-0 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 transition-colors"
               >
                 <Trash2 size={14} /> Delete Account
@@ -639,6 +640,14 @@ export default function ProfilePage() {
                 placeholder={venueName}
                 className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm mb-3 focus:border-red-400 focus:outline-none focus:ring-1 focus:ring-red-200"
               />
+              <p className="text-sm text-gray-700 mb-2">Enter your current password to confirm:</p>
+              <input
+                type="password"
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
+                placeholder="Current password"
+                className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm mb-3 focus:border-red-400 focus:outline-none focus:ring-1 focus:ring-red-200"
+              />
               {deleteError && (
                 <p className="mb-3 text-xs text-red-600 flex items-center gap-1">
                   <AlertCircle size={13} /> {deleteError}
@@ -655,7 +664,7 @@ export default function ProfilePage() {
                 </button>
                 <button
                   type="button"
-                  disabled={deleteConfirm !== venueName || deleting}
+                  disabled={deleteConfirm !== venueName || !deletePassword.trim() || deleting}
                   onClick={() => void deleteAccount()}
                   className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >

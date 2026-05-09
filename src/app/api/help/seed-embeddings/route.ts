@@ -5,23 +5,23 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { HELP_CATEGORIES } from '@/lib/help-articles';
 
 // One-time route to generate and store OpenAI embeddings for every help article.
-// Accepts either:
-//   - a valid venue_id session cookie (normal logged-in user), OR
-//   - an Authorization: Bearer <ADMIN_SECRET> header (for server-side seeding)
+// Admin-only: requires either:
+//   - admin session cookie (role=admin in the super-admin panel), OR
+//   - Authorization: Bearer <ADMIN_SECRET> header (for CI / server-side seeding)
+// NOT available to venue users — each call burns hundreds of OpenAI tokens.
 
 export async function POST(request: NextRequest) {
-  // Auth: cookie session OR admin bearer token
   const cookieStore = await cookies();
-  const venueId     = cookieStore.get('venue_id')?.value;
   const authHeader  = request.headers.get('authorization') ?? '';
   const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
   const adminSecret = process.env.ADMIN_SECRET;
 
-  const isAdmin  = adminSecret && bearerToken === adminSecret;
-  const isVenue  = !!venueId;
+  // Accept the admin bearer token OR the admin session cookie.
+  const isBearerAdmin = !!(adminSecret && bearerToken === adminSecret);
+  const isSessionAdmin = cookieStore.get('admin_session')?.value === '1';
 
-  if (!isAdmin && !isVenue) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!isBearerAdmin && !isSessionAdmin) {
+    return NextResponse.json({ error: 'Admin access required.' }, { status: 403 });
   }
 
   if (!process.env.OPENAI_API_KEY) {
