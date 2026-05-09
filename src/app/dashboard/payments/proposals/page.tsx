@@ -28,21 +28,16 @@ function PaymentsProposalsPageInner() {
  const [deletingId, setDeletingId] = useState<string | null>(null);
  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
- useEffect(() => { fetchProposals(); }, []);
-
- async function fetchProposals() {
- try {
- const res = await fetch('/api/proposals');
- if (res.ok) setProposals(Array.isArray(await res.json().then(d => d)) ? await fetch('/api/proposals').then(r=>r.json()) : []);
- } catch { /* silent */ }
- finally { setLoading(false); }
+ function fetchProposals() {
+   setLoading(true);
+   fetch('/api/proposals', { cache: 'no-store' })
+     .then(r => r.ok ? r.json() : [])
+     .then(d => setProposals(Array.isArray(d) ? d : []))
+     .catch(() => setProposals([]))
+     .finally(() => setLoading(false));
  }
 
- // Simpler fetch
- useEffect(() => {
- setLoading(true);
- fetch('/api/proposals').then(r=>r.json()).then(d=>setProposals(Array.isArray(d)?d:[])).finally(()=>setLoading(false));
- }, []);
+ useEffect(() => { fetchProposals(); }, []);
 
  function copyLink(p: Proposal) {
  navigator.clipboard.writeText(`${window.location.origin}/proposal/${p.public_token}`);

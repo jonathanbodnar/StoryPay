@@ -611,18 +611,20 @@ function NewProposalInvoicePageInner() {
  paymentConfig = { amount: Math.round(parseFloat(subAmount||'0')*100), frequency: subFrequency, start_date: subStartDate };
  }
 
- // If proposal/both — use proposal API with template
- if (mode==='proposal' && selectedTemplate) {
+ // Proposal mode: use proposals API (with or without template)
+ if (mode==='proposal') {
  const res = await fetch('/api/proposals', {
  method: 'POST',
  headers: {'Content-Type':'application/json'},
  body: JSON.stringify({
- templateId: selectedTemplate.id,
+ templateId: selectedTemplate?.id || undefined,
  customerName: clientName, customerEmail: clientEmail, customerPhone: clientPhone,
  lineItems: lineItemsPayload,
  appliedCouponId: appliedCouponId || undefined,
  price: totalCents, paymentType, paymentConfig, asDraft,
- overrideContent: contractHtml !== selectedTemplate.content ? contractHtml : undefined,
+ // Always send the current contract content so AI-generated / freeform
+ // contracts are captured even when no template is selected from the dropdown.
+ overrideContent: contractHtml || undefined,
  }),
  });
  if (!res.ok) { const d=await res.json(); setError(d.error||'Failed'); return; }
@@ -639,6 +641,8 @@ function NewProposalInvoicePageInner() {
  }),
  });
  if (!res.ok) { const d=await res.json(); setError(d.error||'Failed'); return; }
+ router.push('/dashboard/payments/invoices');
+ return;
  }
 
  router.push('/dashboard/payments/proposals');

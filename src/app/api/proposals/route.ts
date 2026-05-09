@@ -76,8 +76,9 @@ export async function POST(request: NextRequest) {
     overrideContent,
   } = body;
 
-  if (!templateId) {
-    return NextResponse.json({ error: 'templateId is required' }, { status: 400 });
+  // templateId is optional when overrideContent is provided (AI-generated or freeform contract)
+  if (!templateId && !body.overrideContent) {
+    return NextResponse.json({ error: 'templateId is required (or provide overrideContent for a freeform contract)' }, { status: 400 });
   }
 
   const isDraft = !!asDraft;
@@ -123,34 +124,43 @@ export async function POST(request: NextRequest) {
 
   // Fetch venue, template, and signature fields in parallel — three
   // independent queries that used to run sequentially.
-  const [
-    { data: venue },
-    { data: template, error: templateError },
-    { data: sigFields },
-  ] = await Promise.all([
-    supabaseAdmin
-      .from('venues')
-      .select('lunarpay_secret_key, ghl_connected, ghl_access_token, ghl_location_id, name, email, brand_color, brand_logo_url')
-      .eq('id', venueId)
-      .single(),
-    supabaseAdmin
-      .from('proposal_templates')
-      .select('content')
-      .eq('id', templateId)
-      .eq('venue_id', venueId)
-      .single(),
-    supabaseAdmin
-      .from('proposal_template_fields')
-      .select('id, field_type, label, sort_order, required, placeholder, options')
-      .eq('template_id', templateId)
-      .order('sort_order', { ascending: true }),
-  ]);
+  const venueQuery = supabaseAdmin
+    .from('venues')
+    .select('lunarpay_secret_key, ghl_connected, ghl_access_token, ghl_location_id, name, email, brand_color, brand_logo_url')
+    .eq('id', venueId)
+    .single();
 
-  if (templateError || !template) {
-    return NextResponse.json({ error: 'Template not found' }, { status: 404 });
+  let template: { content: string } | null = null;
+  let sigFields: unknown[] = [];
+
+  if (templateId) {
+    const [
+      { data: tmplData, error: templateError },
+      { data: sigData },
+    ] = await Promise.all([
+      supabaseAdmin
+        .from('proposal_templates')
+        .select('content')
+        .eq('id', templateId)
+        .eq('venue_id', venueId)
+        .single(),
+      supabaseAdmin
+        .from('proposal_template_fields')
+        .select('id, field_type, label, sort_order, required, placeholder, options')
+        .eq('template_id', templateId)
+        .order('sort_order', { ascending: true }),
+    ]);
+
+    if (templateError || !tmplData) {
+      return NextResponse.json({ error: 'Template not found' }, { status: 404 });
+    }
+    template = tmplData;
+    sigFields = sigData ?? [];
   }
 
-  const resolvedContent = contentForProposal ?? template.content;
+  const { data: venue } = await venueQuery;
+
+  const resolvedContent = contentForProposal ?? template?.content ?? '';
 
   const publicToken = generateToken();
 
