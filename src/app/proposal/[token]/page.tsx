@@ -5,6 +5,12 @@ import { useParams, useRouter } from 'next/navigation';
 import DOMPurify from 'isomorphic-dompurify';
 import { formatCents, formatDate } from '@/lib/utils';
 
+const ESIGN_CONSENT_TEXT =
+  'By signing electronically below, I consent to do business electronically with the venue, ' +
+  'agree that this electronic signature is the legal equivalent of a handwritten signature, ' +
+  'and accept the terms outlined in this proposal. I understand I can request a paper copy ' +
+  'or withdraw electronic consent by contacting the venue.';
+
 interface SigningField {
   field_type: 'signature' | 'name' | 'date';
   label: string;
@@ -208,6 +214,7 @@ export default function ProposalPage() {
   const [error, setError] = useState<string | null>(null);
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [signing, setSigning] = useState(false);
+  const [consentAccepted, setConsentAccepted] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -253,6 +260,10 @@ export default function ProposalPage() {
         return;
       }
     }
+    if (!consentAccepted) {
+      setError('Please confirm your electronic-signature consent below.');
+      return;
+    }
 
     setSigning(true);
     setError(null);
@@ -260,7 +271,11 @@ export default function ProposalPage() {
       const res = await fetch(`/api/proposals/public/${token}/sign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signatureData: fieldValues }),
+        body: JSON.stringify({
+          signatureData: fieldValues,
+          consentAccepted: true,
+          consentText: ESIGN_CONSENT_TEXT,
+        }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -518,16 +533,29 @@ export default function ProposalPage() {
                 })}
               </div>
 
+              <label className="mt-8 flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50/60 p-4 cursor-pointer hover:bg-gray-50 transition">
+                <input
+                  type="checkbox"
+                  checked={consentAccepted}
+                  onChange={(e) => setConsentAccepted(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-gray-300 text-brand-900 focus:ring-2 focus:ring-brand-900/20"
+                />
+                <span className="text-xs text-gray-600 leading-relaxed">
+                  {ESIGN_CONSENT_TEXT}
+                </span>
+              </label>
+
               <button
                 onClick={handleSign}
-                disabled={signing}
-                className="mt-8 w-full rounded-xl bg-gradient-to-r from-brand-900 to-brand-700 px-6 py-4 text-sm font-semibold text-white hover:from-brand-700 hover:to-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-900 focus:ring-offset-2 disabled:opacity-50 transition-all"
+                disabled={signing || !consentAccepted}
+                className="mt-4 w-full rounded-xl bg-gradient-to-r from-brand-900 to-brand-700 px-6 py-4 text-sm font-semibold text-white hover:from-brand-700 hover:to-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-900 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 {signing ? 'Signing…' : 'Sign Proposal'}
               </button>
 
               <p className="mt-3 text-center text-xs text-gray-400">
-                By signing, you agree to the terms outlined in this proposal.
+                Your IP address, browser, and the proposal contents are recorded
+                with your signature for legal record-keeping (ESIGN/UETA).
               </p>
             </div>
           )}

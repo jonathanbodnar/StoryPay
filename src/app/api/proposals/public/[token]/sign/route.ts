@@ -1,24 +1,60 @@
 import { NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase';
 import { syncPaymentRemindersForProposal } from '@/lib/payment-reminders';
 import { notifyOwner, formatAmount } from '@/lib/owner-notifications';
 import { dispatchIntegrationEvent } from '@/lib/integration-events';
 import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
 
+/**
+ * Default ESIGN/UETA consent disclosure shown on the public proposal
+ * page. Surfaced in the API too so we always have a single canonical
+ * string of record to store on each signature.
+ */
+export const ESIGN_CONSENT_TEXT =
+  'By signing electronically below, I consent to do business electronically with the venue, ' +
+  'agree that this electronic signature is the legal equivalent of a handwritten signature, ' +
+  'and accept the terms outlined in this proposal. I understand I can request a paper copy ' +
+  'or withdraw electronic consent by contacting the venue.';
+
+function getClientIp(request: Request): string {
+  const xff = request.headers.get('x-forwarded-for');
+  if (xff) {
+    const first = xff.split(',')[0]?.trim();
+    if (first) return first;
+  }
+  return request.headers.get('x-real-ip')?.trim()
+    || request.headers.get('cf-connecting-ip')?.trim()
+    || 'unknown';
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params;
-  const { signatureData } = await request.json();
+  const body = await request.json() as {
+    signatureData?: unknown;
+    consentAccepted?: boolean;
+    consentText?: string;
+  };
+  const { signatureData, consentAccepted, consentText } = body;
 
   if (!signatureData) {
     return NextResponse.json({ error: 'Signature data required' }, { status: 400 });
   }
+  if (consentAccepted !== true) {
+    // ESIGN/UETA requires explicit affirmative consent. Without it, the
+    // signature would not be enforceable, so we refuse to record one.
+    return NextResponse.json(
+      { error: 'You must agree to sign electronically to continue.' },
+      { status: 400 },
+    );
+  }
 
   const { data: proposal, error } = await supabaseAdmin
     .from('proposals')
-    .select('id, status, venue_id, customer_name, customer_email, customer_phone, price, payment_type')
+    .select('id, status, venue_id, customer_name, customer_email, customer_phone, price, payment_type, content')
     .eq('public_token', token)
     .single();
 
@@ -38,14 +74,60 @@ export async function POST(
     return NextResponse.json({ error: 'Proposal cannot be signed in current state' }, { status: 400 });
   }
 
-  const { error: updateError } = await supabaseAdmin
-    .from('proposals')
-    .update({
-      status: 'signed',
-      signature_data: signatureData,
-      signed_at: new Date().toISOString(),
-    })
-    .eq('id', proposal.id);
+  // Compute a tamper-evident hash of WHAT was signed so we can prove the
+  // contract content didn't change after signing. Includes the rendered
+  // content, the price, the payment type, and the customer identity.
+  const hashInput = JSON.stringify({
+    content:        (proposal.content as string | null) ?? '',
+    price:          (proposal.price as number | null) ?? 0,
+    payment_type:   (proposal.payment_type as string | null) ?? 'full',
+    customer_name:  (proposal.customer_name as string | null) ?? '',
+    customer_email: (proposal.customer_email as string | null) ?? '',
+  });
+  const signedContentHash = crypto.createHash('sha256').update(hashInput).digest('hex');
+
+  const signerIp        = getClientIp(request);
+  const signerUserAgent = request.headers.get('user-agent') ?? '';
+  const recordedConsent = (typeof consentText === 'string' && consentText.trim())
+    ? consentText.trim()
+    : ESIGN_CONSENT_TEXT;
+  const signedAt = new Date().toISOString();
+
+  // Audit-trail columns are best-effort: if migration 124 hasn't run
+  // yet, we drop them and persist just the legacy signature fields.
+  const auditUpdate = {
+    status: 'signed',
+    signature_data: signatureData,
+    signed_at: signedAt,
+    signer_ip: signerIp,
+    signer_user_agent: signerUserAgent,
+    signer_consent_text: recordedConsent,
+    signer_consent_accepted: true,
+    signed_content_hash: signedContentHash,
+    signed_payment_type: (proposal.payment_type as string | null) ?? null,
+    signed_price: (proposal.price as number | null) ?? null,
+  };
+
+  let updateError: { message: string } | null = null;
+  {
+    const { error: e } = await supabaseAdmin
+      .from('proposals')
+      .update(auditUpdate)
+      .eq('id', proposal.id);
+    updateError = e ? { message: e.message } : null;
+  }
+  if (updateError && /column .* does not exist|Could not find the .* column/i.test(updateError.message)) {
+    console.warn('[proposal-sign] audit columns missing — falling back. Run migration 124.');
+    const { error: e2 } = await supabaseAdmin
+      .from('proposals')
+      .update({
+        status: 'signed',
+        signature_data: signatureData,
+        signed_at: signedAt,
+      })
+      .eq('id', proposal.id);
+    updateError = e2 ? { message: e2.message } : null;
+  }
 
   if (updateError) {
     return NextResponse.json({ error: 'Failed to save signature' }, { status: 500 });
