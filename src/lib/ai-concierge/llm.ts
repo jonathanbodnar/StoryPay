@@ -16,7 +16,7 @@
  */
 
 import { getDeepSeekClient, DEEPSEEK_MODEL } from '@/lib/ai-client';
-import { stripEmDashes } from '@/lib/ai-text-cleanup';
+import { sanitizeSmsText } from '@/lib/ai-text-cleanup';
 import { type AiAngleKey, isAiAngleKey } from './types';
 
 // ── Public types ───────────────────────────────────────────────────────────
@@ -79,7 +79,15 @@ export async function generateSmsWithDeepSeek(
       'IMPORTANT — OUTPUT FORMAT (must follow exactly, nothing else):\n' +
       '<<angle>>angle_key_here<</angle>>\n' +
       '<<sms>>The actual SMS text here.<</sms>>\n' +
-      'Do NOT include any other text, explanations, prefaces, or sign-offs outside these two tags.';
+      '\n' +
+      'SMS TEXT RULES (strictly enforced — your message will be rejected if broken):\n' +
+      '- Plain text ONLY. No emojis, no emoji-like symbols (✓ ★ → • etc.).\n' +
+      '- No em-dashes (—), en-dashes (–), or any other unicode punctuation.\n' +
+      '- No markdown: no **bold**, no *italic*, no `code`, no bullet lists, no headers.\n' +
+      '- No smart/curly quotes (\u2018 \u2019 \u201C \u201D). Use straight apostrophes and quotes only.\n' +
+      '- No sign-off lines like "Best," or "Thanks," — just the message itself.\n' +
+      '- Write exactly as you would type a casual, personal text message.\n' +
+      'Do NOT include any other text outside the two tags above.';
 
     const completion = await client.chat.completions.create({
       model: DEEPSEEK_MODEL,
@@ -176,7 +184,7 @@ export function parseStructuredOutput(raw: string): GenerateSmsResult {
     };
   }
 
-  const smsText = stripEmDashes(smsContent);
+  const smsText = sanitizeSmsText(smsContent);
   if (!smsText) {
     return {
       ok: false,
