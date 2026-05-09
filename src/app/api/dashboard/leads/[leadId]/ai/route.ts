@@ -50,6 +50,7 @@ export const dynamic = 'force-dynamic';
 interface LeadRow {
   id:                       string;
   venue_id:                 string;
+  email:                    string | null;
   ai_state:                 AiState;
   ai_first_activated_at:    string | null;
   ai_expires_at:            string | null;
@@ -107,7 +108,7 @@ async function loadLead(leadId: string, venueId: string): Promise<LeadRow | null
   const { data } = await supabaseAdmin
     .from('leads')
     .select(
-      'id, venue_id, ai_state, ai_first_activated_at, ai_expires_at, ai_next_send_at, ai_attempt_count, ai_re_enabled_at, ai_re_enable_count, ai_angles_used, last_inbound_at, last_outbound_at, sms_dnd, sms_dnd_source, sms_dnd_at',
+      'id, venue_id, email, ai_state, ai_first_activated_at, ai_expires_at, ai_next_send_at, ai_attempt_count, ai_re_enabled_at, ai_re_enable_count, ai_angles_used, last_inbound_at, last_outbound_at, sms_dnd, sms_dnd_source, sms_dnd_at',
     )
     .eq('id', leadId)
     .eq('venue_id', venueId)
@@ -205,7 +206,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ leadId: st
 
 // ── POST ───────────────────────────────────────────────────────────────────
 
-interface ActionBody { action?: 're_enable' | 'pause' }
+interface ActionBody { action?: 're_enable' | 'pause' | 'clear_tcpa_lock' }
 
 export async function POST(request: NextRequest, ctx: { params: Promise<{ leadId: string }> }) {
   const user = await getSessionUser();
@@ -222,8 +223,8 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ leadId
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
   const action = body.action;
-  if (action !== 're_enable' && action !== 'pause') {
-    return NextResponse.json({ error: 'action must be "re_enable" or "pause"' }, { status: 400 });
+  if (action !== 're_enable' && action !== 'pause' && action !== 'clear_tcpa_lock') {
+    return NextResponse.json({ error: 'action must be "re_enable", "pause", or "clear_tcpa_lock"' }, { status: 400 });
   }
 
   const [lead, venue] = await Promise.all([
@@ -233,6 +234,15 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ leadId
   if (!lead) return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
 
   const snap = buildSnapshot(lead, venue);
+
+  // Manual TCPA override — for genuine mistakes (e.g. bride replied STOP by accident).
+  // This clears the opt-out flag on the linked venue_customer and re-enables AI.
+  if (action === 'clear_tcpa_lock') {
+    if (!snap.isTcpaLocked) {
+      return NextResponse.json({ error: 'Lead is not TCPA-locked' }, { status: 422 });
+    }
+    return await runClearTcpaLock({ lead, user, venue });
+  }
 
   if (action === 're_enable') {
     if (!snap.canReEnable) {
@@ -251,6 +261,78 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ leadId
     }, { status: 422 });
   }
   return await runPause({ lead, user });
+}
+
+// ── Action: clear TCPA lock (manual override for mistakes) ────────────────
+
+async function runClearTcpaLock(args: {
+  lead:  LeadRow;
+  user:  { venueId: string; memberId: string | null };
+  venue: VenueAiRow | null;
+}) {
+  const { lead, user } = args;
+
+  // 1. Clear sms_dnd on the linked venue_customer (look up by email)
+  const email = lead.email ?? null;
+  if (email) {
+    await supabaseAdmin
+      .from('venue_customers')
+      .update({
+        sms_dnd:        false,
+        sms_dnd_at:     null,
+        sms_dnd_source: 'tcpa_override_manual',
+        updated_at:     new Date().toISOString(),
+      })
+      .eq('venue_id', user.venueId)
+      .ilike('customer_email', email);
+  }
+
+  // 2. Clear sms_dnd on the lead itself
+  await supabaseAdmin
+    .from('leads')
+    .update({
+      sms_dnd:        false,
+      sms_dnd_at:     null,
+      sms_dnd_source: 'tcpa_override_manual',
+      updated_at:     new Date().toISOString(),
+    })
+    .eq('id', lead.id);
+
+  // 3. Re-enable AI (same logic as runReEnable but skip the TCPA blocker)
+  const cooldownEnd = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const { data: updated, error } = await supabaseAdmin
+    .from('leads')
+    .update({
+      ai_state:           'dormant',
+      ai_re_enabled_at:   new Date().toISOString(),
+      ai_re_enable_count: (lead.ai_re_enable_count ?? 0) + 1,
+      ai_next_send_at:    cooldownEnd.toISOString(),
+      updated_at:         new Date().toISOString(),
+    })
+    .eq('id', lead.id)
+    .select('id')
+    .maybeSingle();
+
+  if (error || !updated) {
+    return NextResponse.json({ error: error?.message ?? 'Update failed' }, { status: 409 });
+  }
+
+  await recordAiStateTransition({
+    leadId:      lead.id,
+    venueId:     user.venueId,
+    fromState:   lead.ai_state,
+    toState:     'dormant',
+    reason:      'tcpa_override_manual',
+    triggeredBy: user.memberId ? `user:${user.memberId}` : 'human',
+    metadata:    { note: 'TCPA opt-out cleared manually — staff confirmed re-consent' },
+  });
+
+  // Return the fresh snapshot with TCPA unlocked
+  const [freshLead, freshVenue] = await Promise.all([
+    loadLead(lead.id, user.venueId),
+    loadVenueAi(user.venueId),
+  ]);
+  return NextResponse.json(buildSnapshot(freshLead!, freshVenue));
 }
 
 // ── Action: re-enable ──────────────────────────────────────────────────────

@@ -1427,6 +1427,30 @@ export default function CustomerDetailPage() {
                 <p className="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{dndError}</p>
               )}
 
+              {/* Native SMS opt-out banner — shown whenever sms_dnd is true regardless of GHL state */}
+              {venueCustomer.sms_dnd && (
+                <div className="mb-4 flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                  <div className="flex items-start gap-2">
+                    <Smartphone size={14} className="mt-0.5 shrink-0 text-amber-700" />
+                    <div>
+                      <p className="text-xs font-semibold text-amber-900">SMS blocked</p>
+                      <p className="text-xs text-amber-800/90">
+                        Automated texts are paused.
+                        {venueCustomer.sms_dnd_at ? ` Set ${formatDateTime(venueCustomer.sms_dnd_at)}${venueCustomer.sms_dnd_source === 'inbound_stop_keyword' ? ' · contact replied STOP' : venueCustomer.sms_dnd_source === 'manual' ? ' · set manually' : ''}.` : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={clearingSmsDnd}
+                    onClick={() => void clearSmsDndPreference()}
+                    className="self-start rounded-lg bg-amber-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-950 disabled:opacity-50"
+                  >
+                    {clearingSmsDnd ? 'Updating…' : 'Allow SMS again'}
+                  </button>
+                </div>
+              )}
+
               <div className="divide-y divide-gray-100">
                 <label className="flex items-center justify-between py-3 cursor-pointer select-none">
                   <span className="text-sm font-medium text-gray-900">DND All Channels</span>
@@ -1481,27 +1505,30 @@ export default function CustomerDetailPage() {
 
               <p className="mt-3 text-xs text-gray-400">StoryVenue Legacy sync · checking a box blocks outbound messages on that channel</p>
             </div>
-          ) : venueCustomer?.sms_dnd ? (
-            <div className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-5 lg:col-span-2">
-              <div className="flex items-start gap-3">
-                <Smartphone size={20} className="mt-0.5 shrink-0 text-amber-700" />
-                <div>
-                  <p className="font-medium text-amber-950">SMS marketing paused (DND)</p>
-                  <p className="mt-1 text-sm text-amber-900/90">This contact opted out of automated SMS (for example by replying STOP). Automated SMS workflows will not message them until you turn this off.</p>
+          ) : venueCustomer ? (
+            /* Non-GHL contacts: always show native SMS DND controls */
+            <div className={`rounded-2xl border p-5 lg:col-span-2 ${venueCustomer.sms_dnd ? 'border-amber-200 bg-amber-50' : 'border-gray-200 bg-white'}`}>
+              <div className="flex items-center gap-2 mb-3">
+                <Smartphone size={15} className={venueCustomer.sms_dnd ? 'text-amber-700' : 'text-gray-500'} />
+                <h2 className="font-heading text-base text-gray-900">Do Not Disturb</h2>
+              </div>
+              {venueCustomer.sms_dnd ? (
+                <>
+                  <p className="text-sm text-amber-900/90 mb-1">Automated texts are paused for this contact.</p>
                   {venueCustomer.sms_dnd_at ? (
-                    <p className="mt-2 text-xs text-amber-800/80">
+                    <p className="text-xs text-amber-800/80 mb-3">
                       Since {formatDateTime(venueCustomer.sms_dnd_at)}
-                      {venueCustomer.sms_dnd_source === 'inbound_stop_keyword' ? ' · from their message' : venueCustomer.sms_dnd_source === 'manual' ? ' · set manually' : venueCustomer.sms_dnd_source ? ` · ${venueCustomer.sms_dnd_source}` : ''}
+                      {venueCustomer.sms_dnd_source === 'inbound_stop_keyword' ? ' · replied STOP' : venueCustomer.sms_dnd_source === 'manual' ? ' · set manually' : ''}
                     </p>
                   ) : null}
-                </div>
-              </div>
-              <div>
-                <button type="button" disabled={clearingSmsDnd} onClick={() => void clearSmsDndPreference()} className="rounded-lg bg-amber-900 px-4 py-2 text-sm font-medium text-white hover:bg-amber-950 disabled:opacity-50">
-                  {clearingSmsDnd ? 'Updating…' : 'Allow SMS again'}
-                </button>
-                <p className="mt-2 text-xs text-amber-800/80">Only use if they have agreed to receive texts again (written consent recommended).</p>
-              </div>
+                  <button type="button" disabled={clearingSmsDnd} onClick={() => void clearSmsDndPreference()} className="rounded-lg bg-amber-900 px-4 py-2 text-sm font-medium text-white hover:bg-amber-950 disabled:opacity-50">
+                    {clearingSmsDnd ? 'Updating…' : 'Allow SMS again'}
+                  </button>
+                  <p className="mt-2 text-xs text-amber-800/80">Only use if they have agreed to receive texts again (written consent recommended).</p>
+                </>
+              ) : (
+                <p className="text-sm text-gray-500">No active blocks. This contact can receive automated texts and emails.</p>
+              )}
             </div>
           ) : null}
 

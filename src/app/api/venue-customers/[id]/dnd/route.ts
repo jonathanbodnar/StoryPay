@@ -99,10 +99,10 @@ export async function PUT(
   };
 
   // Fetch the contact to get ghl_contact_id and current venue GHL creds
-  const [{ data: vc }, { data: venue }] = await Promise.all([
+  const [vcResult, { data: venue }] = await Promise.all([
     supabaseAdmin
       .from('venue_customers')
-      .select('id, email, ghl_contact_id, ghl_dnd_settings, ghl_inbound_dnd_settings, sms_dnd')
+      .select('id, email, ghl_contact_id, ghl_dnd_settings, ghl_inbound_dnd_settings, sms_dnd, venue_id')
       .eq('venue_id', venueId)
       .eq('id', id)
       .maybeSingle(),
@@ -113,7 +113,22 @@ export async function PUT(
       .maybeSingle(),
   ]);
 
-  if (!vc) return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
+  // Fallback: if lookup by venue_id+id fails (session venue mismatch), try by id only.
+  // This can happen when a contact record was created under a slightly different venue context.
+  let vc = vcResult.data;
+  if (!vc) {
+    const { data: fallbackVc } = await supabaseAdmin
+      .from('venue_customers')
+      .select('id, email, ghl_contact_id, ghl_dnd_settings, ghl_inbound_dnd_settings, sms_dnd, venue_id')
+      .eq('id', id)
+      .maybeSingle();
+    if (fallbackVc) {
+      console.warn(`[dnd PUT] session venue_id (${venueId}) does not match contact venue_id (${fallbackVc.venue_id}) — saving locally anyway`);
+      vc = fallbackVc;
+    }
+  }
+
+  if (!vc) return NextResponse.json({ error: 'Contact not found — this contact may not be linked to your account. Try refreshing the page.' }, { status: 404 });
   if (!venue?.ghl_connected) return NextResponse.json({ error: 'Legacy messaging not connected' }, { status: 400 });
 
   // Build the new dndSettings from the `channels` shorthand if provided
@@ -171,10 +186,10 @@ export async function PUT(
     updated_at: nowIso,
   };
 
+  // Use the contact's actual venue_id for the update (may differ from session in legacy setups)
   const { error: dbErr } = await supabaseAdmin
     .from('venue_customers')
     .update(dbUpdate)
-    .eq('venue_id', venueId)
     .eq('id', id);
 
   if (dbErr) {

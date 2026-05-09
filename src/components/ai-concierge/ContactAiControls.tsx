@@ -160,11 +160,12 @@ interface Props {
 }
 
 export function ContactAiControls({ leadId, className }: Props) {
-  const [snap, setSnap]         = useState<AiContactSnapshot | null>(null);
-  const [loading, setLoading]   = useState(false);
-  const [acting, setActing]     = useState<null | 're_enable' | 'pause'>(null);
-  const [error, setError]       = useState<string>('');
-  const [hidden, setHidden]     = useState(false); // 404 / venue not eligible
+  const [snap, setSnap]               = useState<AiContactSnapshot | null>(null);
+  const [loading, setLoading]         = useState(false);
+  const [acting, setActing]           = useState<null | 're_enable' | 'pause' | 'clear_tcpa_lock'>(null);
+  const [error, setError]             = useState<string>('');
+  const [hidden, setHidden]           = useState(false); // 404 / venue not eligible
+  const [showTcpaConfirm, setShowTcpaConfirm] = useState(false);
 
   const load = useCallback(async () => {
     if (!leadId) return;
@@ -188,9 +189,9 @@ export function ContactAiControls({ leadId, className }: Props) {
 
   useEffect(() => { void load(); }, [load]);
 
-  const act = useCallback(async (action: 're_enable' | 'pause') => {
+  const act = useCallback(async (action: 're_enable' | 'pause' | 'clear_tcpa_lock') => {
     if (!leadId || acting) return;
-    setActing(action); setError('');
+    setActing(action); setError(''); setShowTcpaConfirm(false);
     try {
       const res = await fetch(`/api/dashboard/leads/${leadId}/ai`, {
         method:  'POST',
@@ -310,6 +311,38 @@ export function ContactAiControls({ leadId, className }: Props) {
       {/* State-specific explainer */}
       <StateExplainer snap={snap} />
 
+      {/* TCPA override confirmation dialog */}
+      {showTcpaConfirm && (
+        <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 space-y-3">
+          <p className="text-sm font-semibold text-rose-900">Confirm manual override</p>
+          <p className="text-xs text-rose-800">
+            This contact replied STOP, which is a legal opt-out under TCPA. You should only override
+            if this was a genuine mistake (e.g. wrong reply, accidental STOP).
+            <br /><br />
+            <strong>By proceeding you confirm</strong> the contact has re-consented in writing to receive
+            automated texts. This action is logged and cannot be undone.
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={acting !== null}
+              onClick={() => void act('clear_tcpa_lock')}
+              className="inline-flex items-center gap-2 rounded-lg bg-rose-700 px-4 py-2 text-sm font-medium text-white hover:bg-rose-800 disabled:opacity-50"
+            >
+              {acting === 'clear_tcpa_lock' ? <Loader2 size={14} className="animate-spin" /> : <RotateCw size={14} />}
+              Yes, clear opt-out &amp; re-enable AI
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowTcpaConfirm(false)}
+              className="rounded-lg border border-rose-200 bg-white px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Action buttons */}
       <div className="mt-4 flex flex-wrap items-center gap-2">
         {showReEnableButton && (
@@ -330,6 +363,20 @@ export function ContactAiControls({ leadId, className }: Props) {
                 ? <Lock size={14} />
                 : <RotateCw size={14} />}
             Re-enable AI
+          </button>
+        )}
+
+        {/* TCPA override button — only for STOP opt-outs */}
+        {snap.isTcpaLocked && !showTcpaConfirm && (
+          <button
+            type="button"
+            disabled={acting !== null}
+            onClick={() => setShowTcpaConfirm(true)}
+            title="Use only if the contact replied STOP by mistake and has re-consented in writing"
+            className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-40"
+          >
+            <RotateCw size={14} />
+            Override — was a mistake
           </button>
         )}
 
