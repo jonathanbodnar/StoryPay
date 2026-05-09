@@ -81,11 +81,28 @@ export async function POST(request: Request) {
       skipLunarPay?: boolean; sendInvite?: boolean; isLegacy?: boolean;
     };
 
-    if (!name || !email || !firstName || !lastName) {
+    // All five owner-identity fields are required so this venue is
+    // indistinguishable from one the owner self-served. Skipping any of
+    // them risks notifications/automations going to the StoryVenue
+    // concierge inbox instead of the owner.
+    if (!name || !email || !firstName || !lastName || !phone) {
       return NextResponse.json(
-        { error: 'name, email, firstName, and lastName are required' },
+        { error: 'name, email, firstName, lastName, and phone are required' },
         { status: 400 }
       );
+    }
+    const trimmedEmail = String(email).trim().toLowerCase();
+    const trimmedPhone = String(phone).trim();
+    const trimmedFirst = String(firstName).trim();
+    const trimmedLast  = String(lastName).trim();
+    const trimmedName  = String(name).trim();
+    if (!/^.+@.+\..+$/.test(trimmedEmail)) {
+      return NextResponse.json({ error: 'Email looks invalid' }, { status: 400 });
+    }
+    // Loose phone check — accept anything with at least 7 digits so
+    // international formats still work.
+    if (trimmedPhone.replace(/\D+/g, '').length < 7) {
+      return NextResponse.json({ error: 'Phone looks invalid (need at least 7 digits)' }, { status: 400 });
     }
 
     let merchantData: Record<string, unknown> = {};
@@ -96,12 +113,12 @@ export async function POST(request: Request) {
         const password = `SP_${crypto.randomUUID().slice(0, 12)}`;
 
         const lpResult = await agencyCreateMerchant({
-          email,
+          email:        trimmedEmail,
           password,
-          firstName,
-          lastName,
-          phone: phone || '',
-          businessName: name,
+          firstName:    trimmedFirst,
+          lastName:     trimmedLast,
+          phone:        trimmedPhone,
+          businessName: trimmedName,
         });
 
         const merchant = lpResult.data || lpResult;
@@ -124,25 +141,70 @@ export async function POST(request: Request) {
       }
     }
 
-    const { data: venue, error: venueError } = await supabaseAdmin
-      .from('venues')
-      .insert({
-        name,
-        email,
-        phone: phone || null,
-        ghl_location_id: ghlLocationId || null,
-        onboarding_status: 'pending',
-        ...merchantData,
-      })
-      .select()
-      .single();
+    // Identity payload — saved on the venues row so every notification,
+    // automation, email signature, contact-card, etc. uses the owner's
+    // name/email/phone, not the StoryVenue concierge team's. This mirrors
+    // exactly what /api/auth/signup persists for self-service signups.
+    const identityPayload = {
+      name:                trimmedName,
+      email:               trimmedEmail,
+      phone:               trimmedPhone,
+      notification_email:  trimmedEmail,
+      owner_first_name:    trimmedFirst,
+      owner_last_name:     trimmedLast,
+      setup_completed:     true,
+      ghl_location_id:     ghlLocationId || null,
+      onboarding_status:   'pending',
+      ...merchantData,
+    } as Record<string, unknown>;
 
-    if (venueError) {
-      return NextResponse.json({ error: `DB error: ${venueError.message}` }, { status: 500 });
+    let venue: Record<string, unknown> | null = null;
+    {
+      const { data, error: venueError } = await supabaseAdmin
+        .from('venues')
+        .insert(identityPayload)
+        .select()
+        .single();
+
+      if (venueError) {
+        // Fallback: some legacy production schemas don't have one of the
+        // newer columns (notification_email, owner_first_name,
+        // owner_last_name, setup_completed). Retry with just the columns
+        // that have always existed.
+        const looksLikeMissingColumn = /column .* does not exist/i.test(venueError.message);
+        if (looksLikeMissingColumn) {
+          console.warn('[admin venue create] retrying insert with reduced columns:', venueError.message);
+          const { data: data2, error: err2 } = await supabaseAdmin
+            .from('venues')
+            .insert({
+              name:              trimmedName,
+              email:             trimmedEmail,
+              phone:             trimmedPhone,
+              ghl_location_id:   ghlLocationId || null,
+              onboarding_status: 'pending',
+              ...merchantData,
+            })
+            .select()
+            .single();
+          if (err2) {
+            return NextResponse.json({ error: `DB error: ${err2.message}` }, { status: 500 });
+          }
+          venue = data2;
+        } else {
+          return NextResponse.json({ error: `DB error: ${venueError.message}` }, { status: 500 });
+        }
+      } else {
+        venue = data;
+      }
     }
 
-    const appUrl  = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
-    const loginUrl = venue.login_token ? `${appUrl}/login/${venue.login_token}` : null;
+    if (!venue) {
+      return NextResponse.json({ error: 'Venue create returned no row' }, { status: 500 });
+    }
+
+    const appUrl   = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
+    const loginToken = (venue as Record<string, unknown>).login_token as string | null | undefined;
+    const loginUrl   = loginToken ? `${appUrl}/login/${loginToken}` : null;
 
     // Optionally send the owner a welcome email with the magic login link.
     let inviteSent = false;
@@ -150,11 +212,11 @@ export async function POST(request: Request) {
     if (sendInvite && loginUrl) {
       try {
         await sendEmail({
-          to: email,
-          subject: `Welcome to StoryVenue — ${name}`,
+          to: trimmedEmail,
+          subject: `Welcome to StoryVenue — ${trimmedName}`,
           html: legacyInviteEmailHtml({
-            firstName,
-            venueName: name,
+            firstName: trimmedFirst,
+            venueName: trimmedName,
             loginUrl,
             isLegacy,
           }),

@@ -506,11 +506,14 @@ export function VenueManagementPortal({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Phone *</label>
               <input
+                type="tel"
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                placeholder="e.g. (555) 123-4567"
                 className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm outline-none"
+                required
               />
             </div>
             <div className="md:col-span-2">
@@ -522,6 +525,10 @@ export function VenueManagementPortal({
                 className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm outline-none"
               />
             </div>
+            <p className="md:col-span-2 -mt-1 text-xs text-gray-500">
+              These details become the venue&apos;s account-holder identity — every notification,
+              automation email, and SMS will be sent to/from them, not us.
+            </p>
           </div>
 
           {/* Legacy-migration / invite options */}
