@@ -607,12 +607,13 @@ export default function CustomerDetailPage() {
     setSyncGhlMsg(null);
     try {
       const r = await fetch(`/api/venue-customers/${venueCustomer.id}/sync-ghl`, { method: 'POST' });
-      const d = await r.json() as { ok?: boolean; error?: string; contact?: { sms_dnd?: boolean } };
+      const d = await r.json() as { ok?: boolean; error?: string; notes?: string[]; backfillKeyword?: 'stop' | 'start' | null };
       if (r.ok) {
-        setSyncGhlMsg('Synced! Refreshing contact…');
+        const summary = (d.notes ?? []).join(' • ') || 'Synced';
+        setSyncGhlMsg(summary);
         // Refresh the full contact to pick up new DND state
         await fetchAll();
-        setSyncGhlMsg(null);
+        setTimeout(() => setSyncGhlMsg(null), 4500);
       } else {
         setSyncGhlMsg(d.error ?? 'GHL sync failed');
         setTimeout(() => setSyncGhlMsg(null), 5000);

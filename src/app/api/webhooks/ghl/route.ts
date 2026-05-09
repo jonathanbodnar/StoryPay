@@ -6,7 +6,7 @@ import {
   isGhlInboundMessageWebhookPayload,
   parseGhlInboundSmsPayload,
 } from '@/lib/ghl-sms-conversations';
-import { applySmsDndForVenueCustomer, isSmsOptOutKeyword } from '@/lib/sms-compliance';
+import { applySmsDndForVenueCustomer, applySmsOptInForVenueCustomer, isSmsOptOutKeyword, isSmsOptInKeyword } from '@/lib/sms-compliance';
 import { syncSingleGhlContact } from '@/lib/ghl-contacts-sync';
 import { ghlDndToConversationFlags } from '@/app/api/venue-customers/[id]/dnd/route';
 import { handleInboundAiMessage } from '@/lib/ai-concierge/inbound-handler';
@@ -51,14 +51,24 @@ export async function POST(request: NextRequest) {
         if (!r.ok) {
           console.error('[ghl webhook] inbound SMS ingest failed:', r.error);
         } else {
-          // TCPA: STOP keyword → set sms_dnd on venue_customer + matching leads.
-          // Runs FIRST so the AI inbound handler sees the dnd state correctly.
-          if (r.venueCustomerId && isSmsOptOutKeyword(inboundSms.body)) {
-            await applySmsDndForVenueCustomer({
-              venueId: venue.id as string,
-              venueCustomerId: r.venueCustomerId,
-              source: 'inbound_stop_keyword',
-            });
+          // TCPA keyword routing — runs FIRST so the AI inbound handler sees
+          // the correct dnd state. Both STOP and START sync bidirectionally
+          // with GHL so the venue/concierge team only ever has to manage the
+          // contact in the SaaS (DND boxes mirror automatically).
+          if (r.venueCustomerId) {
+            if (isSmsOptOutKeyword(inboundSms.body)) {
+              await applySmsDndForVenueCustomer({
+                venueId: venue.id as string,
+                venueCustomerId: r.venueCustomerId,
+                source: 'inbound_stop_keyword',
+              });
+            } else if (isSmsOptInKeyword(inboundSms.body)) {
+              await applySmsOptInForVenueCustomer({
+                venueId: venue.id as string,
+                venueCustomerId: r.venueCustomerId,
+                source: 'inbound_start_keyword',
+              });
+            }
           }
 
           // AI Concierge: classify the reply + drive the lead's AI state machine.
