@@ -50,10 +50,11 @@ export async function GET(request: NextRequest) {
   const { data, error } = await query;
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('[proposals GET] supabase error', { venueId, code: error.code, message: error.message, details: error.details });
+    return NextResponse.json({ error: error.message, code: error.code }, { status: 500 });
   }
 
-  return NextResponse.json(data);
+  return NextResponse.json(data ?? []);
 }
 
 export async function POST(request: NextRequest) {
@@ -172,7 +173,7 @@ export async function POST(request: NextRequest) {
       .from('proposals')
       .insert({
         venue_id: venueId,
-        template_id: templateId,
+        template_id: templateId ?? null,
         customer_name: customerName || null,
         customer_email: customerEmail || null,
         customer_phone: customerPhone || null,
@@ -191,7 +192,8 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (insertError) {
-      return NextResponse.json({ error: insertError.message }, { status: 500 });
+      console.error('[proposals POST draft] insert failed', { venueId, code: insertError.code, message: insertError.message, details: insertError.details, hint: insertError.hint });
+      return NextResponse.json({ error: insertError.message, code: insertError.code, hint: insertError.hint }, { status: 500 });
     }
 
     return NextResponse.json(proposal, { status: 201 });
@@ -223,7 +225,7 @@ export async function POST(request: NextRequest) {
     .from('proposals')
     .insert({
       venue_id: venueId,
-      template_id: templateId,
+      template_id: templateId ?? null,
       customer_name: customerName,
       customer_email: customerEmail,
       customer_phone: customerPhone || null,
@@ -244,7 +246,8 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (insertError) {
-    return NextResponse.json({ error: insertError.message }, { status: 500 });
+    console.error('[proposals POST send] insert failed', { venueId, code: insertError.code, message: insertError.message, details: insertError.details, hint: insertError.hint });
+    return NextResponse.json({ error: insertError.message, code: insertError.code, hint: insertError.hint }, { status: 500 });
   }
 
   if (appliedCouponPayload && proposal?.id) {

@@ -22,22 +22,38 @@ interface Proposal {
 function PaymentsProposalsPageInner() {
  const [proposals, setProposals] = useState<Proposal[]>([]);
  const [loading, setLoading] = useState(true);
+ const [loadError, setLoadError] = useState<string | null>(null);
  const [search, setSearch] = useState('');
  const [copiedId, setCopiedId] = useState<string | null>(null);
  const [sendingId, setSendingId] = useState<string | null>(null);
  const [deletingId, setDeletingId] = useState<string | null>(null);
  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
- function fetchProposals() {
+ async function fetchProposals() {
    setLoading(true);
-   fetch('/api/proposals', { cache: 'no-store' })
-     .then(r => r.ok ? r.json() : [])
-     .then(d => setProposals(Array.isArray(d) ? d : []))
-     .catch(() => setProposals([]))
-     .finally(() => setLoading(false));
+   setLoadError(null);
+   try {
+     const res = await fetch('/api/proposals', { cache: 'no-store' });
+     const data = await res.json().catch(() => null);
+     if (!res.ok) {
+       setLoadError(
+         (data && typeof data === 'object' && 'error' in data && typeof data.error === 'string')
+           ? data.error
+           : `Failed to load proposals (HTTP ${res.status})`
+       );
+       setProposals([]);
+       return;
+     }
+     setProposals(Array.isArray(data) ? data : []);
+   } catch (e) {
+     setLoadError(e instanceof Error ? e.message : 'Network error');
+     setProposals([]);
+   } finally {
+     setLoading(false);
+   }
  }
 
- useEffect(() => { fetchProposals(); }, []);
+ useEffect(() => { void fetchProposals(); }, []);
 
  function copyLink(p: Proposal) {
  navigator.clipboard.writeText(`${window.location.origin}/proposal/${p.public_token}`);
@@ -103,10 +119,19 @@ function PaymentsProposalsPageInner() {
  {search && <button onClick={()=>setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"><X size={14}/></button>}
  </div>
 
- {loading ? (
- <div className="flex justify-center py-16"><Loader2 size={22} className="animate-spin text-gray-400"/></div>
- ) : (
- <div className="space-y-6">
+{loadError && (
+  <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+    <p className="font-semibold mb-0.5">Couldn&apos;t load proposals</p>
+    <p className="text-red-600/90 font-mono text-xs break-all">{loadError}</p>
+    <button onClick={() => void fetchProposals()} className="mt-2 inline-flex items-center gap-1 rounded-md bg-red-100 px-2.5 py-1 text-xs font-medium text-red-800 hover:bg-red-200">
+      Retry
+    </button>
+  </div>
+)}
+{loading ? (
+<div className="flex justify-center py-16"><Loader2 size={22} className="animate-spin text-gray-400"/></div>
+) : (
+<div className="space-y-6">
  {/* Drafts */}
  {drafts.length > 0 && (
  <div>
