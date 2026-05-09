@@ -8,7 +8,7 @@ import {
   TrendingUp, Send, Inbox, UserCheck, UserX, Activity,
   Pause as PauseIcon, AlertOctagon, Gauge, Bot, RefreshCw,
   Search, Pause, Play, Clock, ChevronDown, ChevronUp,
-  CheckCircle2,
+  CheckCircle2, Eye, AlarmClock,
 } from 'lucide-react';
 
 // ── Shared types ───────────────────────────────────────────────────────────
@@ -42,6 +42,7 @@ interface MonitorLead {
   ai_next_send_at:       string | null;
   ai_expires_at:         string | null;
   ai_first_activated_at: string | null;
+  ai_angles_used:        string[];
   last_inbound_at:       string | null;
   last_sent_at:          string | null;
   last_sent_text:        string | null;
@@ -50,6 +51,7 @@ interface MonitorLead {
   last_run_outcome:      string | null;
   last_run_at:           string | null;
   last_run_error:        string | null;
+  tags:                  Array<{ id: string; name: string; color: string | null }>;
 }
 
 interface MonitorSummary {
@@ -313,7 +315,6 @@ function ActiveLeadsPanel() {
   const [search, setSearch]   = useState('');
   const [stateFilter, setStateFilter] = useState('');
   const [updatedAt, setUpdatedAt]     = useState<Date | null>(null);
-  const [toggling, setToggling]       = useState<string | null>(null);
   const [error, setError]     = useState('');
 
   const load = useCallback(async (silent = false) => {
@@ -338,29 +339,7 @@ function ActiveLeadsPanel() {
 
   useEffect(() => { void load(); }, [load]);
 
-  async function toggleState(lead: MonitorLead) {
-    setToggling(lead.lead_id);
-    const action = lead.ai_state === 'ai_active' ? 'pause' : 'resume';
-    try {
-      const res = await fetch(`/api/listing/ai-concierge/leads/${lead.lead_id}/state`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
-      });
-      if (!res.ok) {
-        const d = await res.json() as { error?: string };
-        setError(d.error ?? 'Failed to update');
-        return;
-      }
-      setLeads(prev => prev.map(l =>
-        l.lead_id === lead.lead_id
-          ? { ...l, ai_state: action === 'pause' ? 'paused' : 'ai_active' }
-          : l,
-      ));
-    } finally {
-      setToggling(null);
-    }
-  }
+  const refresh = useCallback(() => void load(true), [load]);
 
   const statCards = summary ? [
     { key: 'ai_active', label: 'Active',    value: summary.ai_active, color: 'text-emerald-600' },
@@ -468,8 +447,7 @@ function ActiveLeadsPanel() {
             <LeadRow
               key={lead.lead_id}
               lead={lead}
-              onToggle={toggleState}
-              toggling={toggling === lead.lead_id}
+              onRefresh={refresh}
             />
           ))}
         </div>
@@ -491,20 +469,74 @@ function ActiveLeadsPanel() {
 // ── Lead row ───────────────────────────────────────────────────────────────
 
 function LeadRow({
-  lead, onToggle, toggling,
+  lead,
+  onRefresh,
 }: {
-  lead:     MonitorLead;
-  onToggle: (lead: MonitorLead) => void;
-  toggling: boolean;
+  lead:      MonitorLead;
+  onRefresh: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const state = STATE_STYLES[lead.ai_state] ?? { label: lead.ai_state, cls: 'bg-gray-100 text-gray-600 border-gray-200' };
-  const name  = [lead.first_name, lead.last_name].filter(Boolean).join(' ') || lead.email || 'Unknown';
-  const canToggle = lead.ai_state === 'ai_active' || lead.ai_state === 'paused';
+  const [expanded, setExpanded]     = useState(false);
+  const [busy, setBusy]             = useState<string | null>(null); // action key
+  const [toast, setToast]           = useState('');
+  const [preview, setPreview]       = useState<{ text: string; angle: string } | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  const state    = STATE_STYLES[lead.ai_state] ?? { label: lead.ai_state, cls: 'bg-gray-100 text-gray-600 border-gray-200' };
+  const name     = [lead.first_name, lead.last_name].filter(Boolean).join(' ') || lead.email || 'Unknown';
+  const isActive = lead.ai_state === 'ai_active';
+  const isPaused = lead.ai_state === 'paused';
+
+  // Days until expiry
+  const expiresIn = lead.ai_expires_at
+    ? Math.max(0, Math.ceil((new Date(lead.ai_expires_at).getTime() - Date.now()) / 86_400_000))
+    : null;
+
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(''), 4000);
+  }
+
+  async function doAction(action: string, body?: Record<string, unknown>) {
+    setBusy(action);
+    try {
+      let url = `/api/listing/ai-concierge/leads/${lead.lead_id}`;
+      let method = 'PATCH';
+
+      if (action === 'send_now') { url += '/force-send'; method = 'POST'; }
+      else if (action === 'snooze') { url += '/snooze'; }
+      else { url += '/state'; body = { action }; }
+
+      const res  = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(body ?? {}),
+      });
+      const data = await res.json() as { ok?: boolean; message?: string; error?: string };
+      if (!res.ok) { showToast(data.error ?? 'Action failed'); return; }
+      showToast(data.message ?? 'Done');
+      onRefresh();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function doPreview() {
+    setPreviewLoading(true);
+    setPreview(null);
+    try {
+      const res  = await fetch(`/api/listing/ai-concierge/leads/${lead.lead_id}/preview`, { method: 'POST' });
+      const data = await res.json() as { ok?: boolean; draftSms?: string; angle?: string; error?: string };
+      if (!res.ok || !data.ok) { showToast(data.error ?? 'Preview failed'); return; }
+      setPreview({ text: data.draftSms ?? '', angle: data.angle ?? '' });
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
 
   return (
     <div className="border border-gray-200 rounded-xl overflow-hidden">
-      <div className="flex items-center gap-3 px-4 py-3 bg-white hover:bg-gray-50/60 transition-colors">
+      {/* Header row */}
+      <div className="flex items-center gap-3 px-4 py-3 bg-white">
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-gray-900 truncate">{name}</p>
           {lead.email && <p className="text-xs text-gray-400 truncate">{lead.email}</p>}
@@ -513,113 +545,217 @@ function LeadRow({
         <span className={`shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${state.cls}`}>
           {state.label}
         </span>
-
-        <span className="shrink-0 text-xs text-gray-400 hidden sm:block">
-          {lead.ai_attempt_count} sent
-        </span>
-
-        {lead.ai_state === 'ai_active' && (
+        <span className="shrink-0 text-xs text-gray-400 hidden sm:block">{lead.ai_attempt_count} sent</span>
+        {isActive && (
           <span className="shrink-0 text-xs text-gray-500 hidden md:block">
-            <Clock size={11} className="inline mr-0.5" />
-            {futureRelative(lead.ai_next_send_at)}
+            <Clock size={11} className="inline mr-0.5" />{futureRelative(lead.ai_next_send_at)}
           </span>
         )}
 
         <div className="flex items-center gap-1.5 shrink-0">
-          {canToggle && (
-            <button
-              onClick={() => onToggle(lead)}
-              disabled={toggling}
-              title={lead.ai_state === 'ai_active' ? 'Pause AI' : 'Resume AI'}
-              className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold border transition-colors disabled:opacity-50 ${
-                lead.ai_state === 'ai_active'
-                  ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
-                  : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-              }`}
-            >
-              {toggling
-                ? <Loader2 size={11} className="animate-spin" />
-                : lead.ai_state === 'ai_active'
-                  ? <><Pause size={11} /> Pause</>
-                  : <><Play size={11} /> Resume</>
-              }
-            </button>
-          )}
-
           <Link
             href={`/dashboard/leads?search=${encodeURIComponent(lead.email ?? lead.first_name ?? '')}`}
-            className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+            className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:bg-gray-50"
             title="View in leads"
           >
-            <ExternalLink size={11} />
+            <ExternalLink size={12} />
           </Link>
-
           <button
             onClick={() => setExpanded(v => !v)}
-            className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:bg-gray-50 transition-colors"
+            className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:bg-gray-50"
           >
             {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
           </button>
         </div>
       </div>
 
+      {/* Expanded panel */}
       {expanded && (
-        <div className="border-t border-gray-100 bg-gray-50/60 px-4 py-3 space-y-3 text-xs text-gray-600">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <div>
-              <p className="font-medium text-gray-400 mb-0.5">Started</p>
-              <p>{relativeTime(lead.ai_first_activated_at)}</p>
+        <div className="border-t border-gray-100 bg-gray-50/50 px-4 py-4 space-y-4">
+
+          {/* Toast */}
+          {toast && (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+              {toast}
             </div>
-            <div>
-              <p className="font-medium text-gray-400 mb-0.5">Last reply from lead</p>
-              <p>{relativeTime(lead.last_reply_at)}</p>
-            </div>
-            <div>
-              <p className="font-medium text-gray-400 mb-0.5">Next send</p>
-              <p>{lead.ai_state === 'ai_active' ? futureRelative(lead.ai_next_send_at) : '—'}</p>
-            </div>
-            <div>
-              <p className="font-medium text-gray-400 mb-0.5">Last run</p>
-              <p className={`font-medium ${
-                lead.last_run_outcome === 'sent'    ? 'text-emerald-600' :
-                lead.last_run_outcome === 'skipped' ? 'text-gray-500' :
-                lead.last_run_outcome === 'error'   ? 'text-red-500' : ''
-              }`}>
-                {lead.last_run_outcome ?? '—'} {lead.last_run_at ? `· ${relativeTime(lead.last_run_at)}` : ''}
-              </p>
-            </div>
-            <div>
-              <p className="font-medium text-gray-400 mb-0.5">Attempts</p>
-              <p>{lead.ai_attempt_count}</p>
-            </div>
+          )}
+
+          {/* Stats grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <Stat label="Attempts"  value={String(lead.ai_attempt_count)} />
+            <Stat label="Next send" value={isActive ? futureRelative(lead.ai_next_send_at) : '—'} />
+            <Stat label="Activated" value={relativeTime(lead.ai_first_activated_at)} />
+            <Stat label="Expires"   value={expiresIn !== null ? `${expiresIn}d left` : '—'} />
+            <Stat label="Last sent"    value={relativeTime(lead.last_sent_at)} />
+            <Stat label="Last reply"   value={lead.last_reply_at ? relativeTime(lead.last_reply_at) : 'No reply yet'} />
+            <Stat label="Last outcome" value={lead.last_run_outcome ?? '—'}
+              tone={lead.last_run_outcome === 'sent' ? 'green' : lead.last_run_outcome === 'error' ? 'red' : 'gray'} />
+            <Stat label="Email"     value={lead.email ?? '—'} />
           </div>
 
-          {lead.last_run_error && (
-            <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2">
-              <AlertTriangle size={12} className="text-red-500 mt-0.5 shrink-0" />
-              <p className="text-red-700">{lead.last_run_error}</p>
-            </div>
-          )}
-
+          {/* Last AI message */}
           {lead.last_sent_text && (
             <div>
-              <p className="font-medium text-gray-400 mb-1">Last AI message sent</p>
-              <p className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-gray-700 leading-relaxed">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Last AI message</p>
+              <div className="bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-700 leading-relaxed">
                 {lead.last_sent_text}
-              </p>
+              </div>
+              {lead.last_sent_at && <p className="mt-1 text-[10px] text-gray-400">{new Date(lead.last_sent_at).toLocaleString()}</p>}
             </div>
           )}
 
+          {/* Last reply */}
           {lead.last_reply_body && (
             <div>
-              <p className="font-medium text-gray-400 mb-1">Last reply from lead</p>
-              <p className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-gray-700 leading-relaxed">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Last reply from lead</p>
+              <div className="bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-700 leading-relaxed">
                 {lead.last_reply_body}
-              </p>
+              </div>
             </div>
           )}
+
+          {/* Error */}
+          {lead.last_run_error && (
+            <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              <AlertTriangle size={12} className="mt-0.5 shrink-0" /> {lead.last_run_error}
+            </div>
+          )}
+
+          {/* Angles used */}
+          {lead.ai_angles_used?.length > 0 && (
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Angles used</p>
+              <div className="flex flex-wrap gap-1.5">
+                {lead.ai_angles_used.map(a => (
+                  <span key={a} className="rounded-full border border-purple-200 bg-purple-50 px-2 py-0.5 text-[11px] text-purple-700">
+                    {a.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Tags */}
+          {lead.tags.length > 0 && (
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Tags</p>
+              <div className="flex flex-wrap gap-1.5">
+                {lead.tags.map(t => (
+                  <span key={t.id}
+                    style={t.color ? { backgroundColor: `${t.color}18`, borderColor: `${t.color}50`, color: t.color } : undefined}
+                    className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] text-gray-600"
+                  >
+                    {t.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Preview draft */}
+          {preview && (
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
+                Preview draft <span className="normal-case font-normal text-purple-600">— angle: {preview.angle}</span>
+              </p>
+              <div className="bg-white border-2 border-dashed border-purple-200 rounded-lg px-3 py-2.5 text-sm text-gray-700 leading-relaxed">
+                {preview.text}
+              </div>
+              <p className="mt-1 text-[10px] text-gray-400">This is a draft — it has not been sent.</p>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">Actions</p>
+            <div className="flex flex-wrap gap-2">
+
+              {/* Send Now */}
+              {isActive && (
+                <button
+                  onClick={() => void doAction('send_now')}
+                  disabled={!!busy}
+                  className="flex items-center gap-1.5 rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-gray-700 disabled:opacity-50"
+                >
+                  {busy === 'send_now' ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}
+                  Send Now
+                </button>
+              )}
+
+              {/* Preview Draft */}
+              <button
+                onClick={() => void doPreview()}
+                disabled={previewLoading || !!busy}
+                className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                {previewLoading ? <Loader2 size={11} className="animate-spin" /> : <Eye size={11} />}
+                Preview Draft
+              </button>
+
+              {/* Pause / Resume */}
+              {isActive && (
+                <button
+                  onClick={() => void doAction('pause')}
+                  disabled={!!busy}
+                  className="flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                >
+                  {busy === 'pause' ? <Loader2 size={11} className="animate-spin" /> : <Pause size={11} />}
+                  Pause AI
+                </button>
+              )}
+              {isPaused && (
+                <button
+                  onClick={() => void doAction('resume')}
+                  disabled={!!busy}
+                  className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                >
+                  {busy === 'resume' ? <Loader2 size={11} className="animate-spin" /> : <Play size={11} />}
+                  Resume AI
+                </button>
+              )}
+
+              {/* Mark Handoff */}
+              {(isActive || isPaused) && (
+                <button
+                  onClick={() => void doAction('handoff')}
+                  disabled={!!busy}
+                  className="flex items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs font-medium text-orange-700 hover:bg-orange-100 disabled:opacity-50"
+                >
+                  {busy === 'handoff' ? <Loader2 size={11} className="animate-spin" /> : <UserCheck size={11} />}
+                  Mark Handoff
+                </button>
+              )}
+
+              {/* Snooze */}
+              {(isActive || isPaused) && (
+                <>
+                  <span className="flex items-center text-xs text-gray-400 gap-1"><AlarmClock size={11} /> Snooze:</span>
+                  {[1, 2, 3].map(d => (
+                    <button key={d}
+                      onClick={() => void doAction('snooze', { days: d })}
+                      disabled={!!busy}
+                      className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      {busy === `snooze_${d}` ? <Loader2 size={10} className="animate-spin inline" /> : null}
+                      +{d}d
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+          </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function Stat({ label, value, tone }: { label: string; value: string; tone?: 'green' | 'red' | 'gray' }) {
+  const colorCls = tone === 'green' ? 'text-emerald-600' : tone === 'red' ? 'text-red-500' : 'text-gray-800';
+  return (
+    <div>
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-0.5">{label}</p>
+      <p className={`text-xs font-medium ${colorCls}`}>{value}</p>
     </div>
   );
 }

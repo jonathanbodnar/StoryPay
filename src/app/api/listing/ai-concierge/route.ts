@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
 
     const { data: leadsRaw, error: leadsErr } = await supabaseAdmin
       .from('leads')
-      .select('id, venue_id, first_name, last_name, name, email, phone, ai_state, ai_attempt_count, ai_next_send_at, ai_expires_at, ai_first_activated_at, ai_angles_used, last_inbound_at')
+      .select('id, venue_id, first_name, last_name, name, email, phone, ai_state, ai_attempt_count, ai_next_send_at, ai_expires_at, ai_first_activated_at, ai_angles_used, last_inbound_at, ai_booking_system_activated')
       .eq('venue_id', venueId)
       .in('ai_state', targetStates)
       .order('ai_next_send_at', { ascending: true, nullsFirst: false })
@@ -62,8 +62,8 @@ export async function GET(req: NextRequest) {
 
     const leadIds = leads.map(l => l.id);
 
-    // Resolve venue_customers → threads → messages in parallel
-    const [vcRes, runRes] = await Promise.all([
+    // Resolve venue_customers → threads → messages, runs, and tags in parallel
+    const [vcRes, runRes, tagAssignRes] = await Promise.all([
       supabaseAdmin
         .from('venue_customers')
         .select('id, customer_email')
@@ -73,6 +73,10 @@ export async function GET(req: NextRequest) {
         .select('lead_id, outcome, error_detail, created_at, final_sent_text')
         .in('lead_id', leadIds)
         .order('created_at', { ascending: false }),
+      supabaseAdmin
+        .from('lead_tag_assignments')
+        .select('lead_id, marketing_tags(id, name, color)')
+        .in('lead_id', leadIds),
     ]);
 
     const vcByEmail = new Map<string, string>();
@@ -139,6 +143,17 @@ export async function GET(req: NextRequest) {
       if (!lastRunByLead.has(r.lead_id)) lastRunByLead.set(r.lead_id, { outcome: r.outcome, error: r.error_detail, at: r.created_at, text: r.final_sent_text });
     }
 
+    // Build tags per lead
+    type TagRow = { lead_id: string; marketing_tags: { id: string; name: string; color: string | null } | { id: string; name: string; color: string | null }[] | null };
+    const tagsByLead = new Map<string, Array<{ id: string; name: string; color: string | null }>>();
+    for (const row of (tagAssignRes.data ?? []) as unknown as TagRow[]) {
+      const tag = Array.isArray(row.marketing_tags) ? row.marketing_tags[0] : row.marketing_tags;
+      if (!tag) continue;
+      const list = tagsByLead.get(row.lead_id) ?? [];
+      list.push(tag);
+      tagsByLead.set(row.lead_id, list);
+    }
+
     let result = leads.map(l => {
       const threadId = leadToThreadId.get(l.id) ?? null;
       const sent  = threadId ? lastSentByThread.get(threadId)  : null;
@@ -164,6 +179,7 @@ export async function GET(req: NextRequest) {
         last_run_outcome:      run?.outcome ?? null,
         last_run_at:           run?.at ?? null,
         last_run_error:        run?.error ?? null,
+        tags:                  tagsByLead.get(l.id) ?? [],
       };
     });
 
