@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { rateLimitAny, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
 import { signPendingToken, TWO_FA_PENDING_COOKIE } from '@/lib/twofa-pending';
 import { buildVenueAuthSuccessResponse } from '@/lib/auth-success';
+import { TWOFA_ENABLED } from '@/lib/feature-flags';
 
 /**
  * Sign-in endpoint — email + password auth for venue owners and team members.
@@ -44,13 +45,32 @@ export async function POST(request: NextRequest) {
   const maxAge = rememberMe ? 60 * 60 * 24 * 365 : 60 * 60 * 24 * 30;
 
   // ── Check venue owner ──────────────────────────────────────────────────────
+  // The totp_enabled_at column is only selected when the 2FA feature flag is on.
+  // This keeps sign-in working even on databases where migration 125 hasn't run.
+  type VenueRow = {
+    id: string;
+    name: string | null;
+    email: string | null;
+    setup_completed: boolean | null;
+    onboarding_status: string | null;
+    login_token: string | null;
+    password_hash: string | null;
+    directory_plan_id: string | null;
+    directory_subscription_status: string | null;
+    totp_enabled_at?: string | null;
+  };
+  const venueColumns = [
+    'id', 'name', 'email', 'setup_completed', 'onboarding_status',
+    'login_token', 'password_hash', 'directory_plan_id',
+    'directory_subscription_status',
+    ...(TWOFA_ENABLED ? ['totp_enabled_at'] : []),
+  ].join(', ');
+
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select(
-      'id, name, email, setup_completed, onboarding_status, login_token, password_hash, directory_plan_id, directory_subscription_status, totp_enabled_at',
-    )
+    .select(venueColumns)
     .ilike('email', normalized)
-    .maybeSingle();
+    .maybeSingle() as { data: VenueRow | null };
 
   if (venue) {
     let valid = false;
@@ -74,10 +94,11 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 2FA gate ─────────────────────────────────────────────────────────────
-    // Password is correct. If 2FA is enabled, hold the session in a short-lived
-    // signed cookie and let the client redirect to the code-prompt screen.
-    // We do NOT set venue_id here — that only happens after the TOTP verifies.
-    if (venue.totp_enabled_at) {
+    // Password is correct. If 2FA is enabled (feature flag on AND user has
+    // enrolled), hold the session in a short-lived signed cookie and let the
+    // client redirect to the code-prompt screen. We do NOT set venue_id here
+    // — that only happens after the TOTP verifies.
+    if (TWOFA_ENABLED && venue.totp_enabled_at) {
       try {
         const pending = signPendingToken({
           venueId:    venue.id,

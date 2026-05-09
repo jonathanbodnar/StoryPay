@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 
 interface StatusResponse {
+  available?:            boolean;
   enabled:               boolean;
   enabledAt?:            string | null;
   backupCodesRemaining?: number;
@@ -56,6 +57,13 @@ export default function TwoFactorSection() {
     }
   }
   useEffect(() => { void refresh(); }, []);
+
+  // Hide the entire section when 2FA is disabled at the platform level.
+  // The status endpoint returns available:false when TWOFA_ENABLED is off.
+  // We also render nothing while loading to avoid a flash of the section
+  // for users on a platform where 2FA is gated off.
+  if (loading) return null;
+  if (status?.available === false) return null;
 
   async function startSetup() {
     setSetupBusy(true);
@@ -129,11 +137,7 @@ export default function TwoFactorSection() {
       </div>
 
       <div className="px-6 py-5">
-        {loading ? (
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <Loader2 size={14} className="animate-spin" /> Loading…
-          </div>
-        ) : status?.enabled ? (
+        {status?.enabled ? (
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="flex items-center gap-2">

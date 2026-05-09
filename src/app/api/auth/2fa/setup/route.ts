@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { generateTotpSecret, buildOtpAuthUri } from '@/lib/totp';
+import { TWOFA_ENABLED } from '@/lib/feature-flags';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -24,6 +25,9 @@ export const runtime = 'nodejs';
  * must disable 2FA first (which requires their current TOTP).
  */
 export async function POST() {
+  if (!TWOFA_ENABLED) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
   const c = await cookies();
   const venueId = c.get('venue_id')?.value;
   // Only the owner — not a team member impersonating via member_id — can

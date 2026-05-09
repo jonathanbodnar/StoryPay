@@ -9,6 +9,7 @@ import {
 } from '@/lib/twofa-pending';
 import { buildVenueAuthSuccessResponse } from '@/lib/auth-success';
 import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
+import { TWOFA_ENABLED } from '@/lib/feature-flags';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -27,6 +28,9 @@ export const runtime = 'nodejs';
  * (removed from the array) — they're single-use by design.
  */
 export async function POST(req: NextRequest) {
+  if (!TWOFA_ENABLED) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
   const ip = getClientIp(req);
   const rl = rateLimit(`2fa-verify:ip:${ip}`, 15, 5 * 60_000);
   if (!rl.allowed) {

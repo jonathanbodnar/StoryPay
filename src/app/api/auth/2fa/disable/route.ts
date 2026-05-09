@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import bcrypt from 'bcryptjs';
 import { verifyTotp, normalizeBackupCode } from '@/lib/totp';
+import { TWOFA_ENABLED } from '@/lib/feature-flags';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -19,6 +20,9 @@ export const runtime = 'nodejs';
  * Both columns are cleared on success so a future enrolment starts fresh.
  */
 export async function POST(req: NextRequest) {
+  if (!TWOFA_ENABLED) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
   const c = await cookies();
   const venueId = c.get('venue_id')?.value;
   const memberId = c.get('member_id')?.value;
