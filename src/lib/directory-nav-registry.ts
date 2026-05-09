@@ -74,7 +74,6 @@ export const DIRECTORY_NAV_REGISTRY: DirectoryNavRegistryEntry[] = [
   { id: 'nav_marketing_email_root', label: 'Marketing — Email (index)', pathPrefix: '/dashboard/marketing/email', group: 'marketing' },
   { id: 'nav_marketing_trigger_links', label: 'Marketing — Trigger links & tags', pathPrefix: '/dashboard/marketing/trigger-links', group: 'marketing' },
   { id: 'nav_marketing_ai_concierge', label: 'Marketing — AI Concierge', pathPrefix: '/dashboard/marketing/ai-concierge', group: 'marketing' },
-  { id: 'nav_marketing_ai_concierge_monitor', label: 'AI Concierge — Monitor', pathPrefix: '/dashboard/ai-concierge', group: 'marketing' },
   { id: 'nav_marketing_email_settings', label: 'Marketing — Email sending settings', pathPrefix: '/dashboard/marketing/email/settings', group: 'marketing' },
 
   { id: 'nav_settings_general', label: 'Settings — General', pathPrefix: '/dashboard/settings', group: 'settings' },

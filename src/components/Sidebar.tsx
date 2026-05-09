@@ -20,7 +20,6 @@ import {
   UserCircle,
   Zap,
   Lock,
-  Bot,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
 import LunarPayOnboarding from '@/components/settings/LunarPayOnboarding';
@@ -57,7 +56,6 @@ const menuItems: NavItem[] = [
   { label: 'Conversations', href: '/dashboard/conversations', icon: MessageCircle, navId: 'nav_main_conversations' },
   { label: 'Calendar', href: '/dashboard/calendar', icon: Calendar, navId: 'nav_main_calendar' },
   { label: 'Leads', href: '/dashboard/leads', icon: Inbox, navId: 'nav_main_leads' },
-  { label: 'AI Concierge', href: '/dashboard/ai-concierge', icon: Bot, navId: 'nav_marketing_ai_concierge_monitor' },
   { label: 'Media', href: '/dashboard/media', icon: Images, navId: 'nav_main_media' },
   { label: 'Reports', href: '/dashboard/reports', icon: BarChart2, navId: 'nav_main_reports' },
   { label: "What's New", href: '/dashboard/updates', icon: Megaphone, navId: 'nav_main_updates' },
