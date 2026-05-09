@@ -123,13 +123,17 @@ export function VenueManagementPortal({
     isLegacy:     true,
   });
   const [createSuccess, setCreateSuccess] = useState<{
-    venueName: string;
-    loginUrl:  string | null;
-    inviteSent: boolean;
+    venueId:     string;
+    venueName:   string;
+    venueEmail:  string | null;
+    loginUrl:    string | null;
+    inviteSent:  boolean;
     inviteError: string | null;
     lunarPayWarning: string | null;
   } | null>(null);
   const [copiedNewLink, setCopiedNewLink] = useState(false);
+  const [postCreateInviting, setPostCreateInviting] = useState(false);
+  const [postCreateInviteMsg, setPostCreateInviteMsg] = useState<string>('');
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -187,7 +191,7 @@ export function VenueManagementPortal({
         body: JSON.stringify({ ...formData, ...createOpts }),
       });
       const d = (await res.json().catch(() => ({}))) as {
-        venue?: { name?: string; login_url?: string | null };
+        venue?: { id?: string; name?: string; email?: string | null; login_url?: string | null };
         error?: string;
         inviteSent?: boolean;
         inviteError?: string | null;
@@ -195,12 +199,15 @@ export function VenueManagementPortal({
       };
       if (res.ok) {
         setCreateSuccess({
+          venueId:         d.venue?.id || '',
           venueName:       d.venue?.name || formData.name,
+          venueEmail:      d.venue?.email ?? formData.email,
           loginUrl:        d.venue?.login_url ?? null,
           inviteSent:      Boolean(d.inviteSent),
           inviteError:     d.inviteError ?? null,
           lunarPayWarning: d.lunarPayWarning ?? null,
         });
+        setPostCreateInviteMsg('');
         setFormData({ name: '', email: '', firstName: '', lastName: '', phone: '', ghlLocationId: '' });
         await onRefresh();
       } else {
@@ -329,6 +336,38 @@ export function VenueManagementPortal({
       setTrialError('Network error');
     } finally {
       setTrialSaving(false);
+    }
+  }
+
+  async function sendInviteFromSuccessPanel() {
+    if (!createSuccess?.venueId) return;
+    setPostCreateInviting(true);
+    setPostCreateInviteMsg('');
+    try {
+      const res = await fetch(`/api/admin/venues/${createSuccess.venueId}/send-invite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isLegacy: true }),
+      });
+      const d = (await res.json().catch(() => ({}))) as {
+        ok?: boolean; sentTo?: string; loginUrl?: string; error?: string;
+      };
+      if (res.ok && d.ok) {
+        setPostCreateInviteMsg(`Invite sent to ${d.sentTo}`);
+        setCreateSuccess((prev) => prev ? {
+          ...prev,
+          inviteSent: true,
+          inviteError: null,
+          loginUrl: d.loginUrl ?? prev.loginUrl,
+        } : prev);
+        await onRefresh();
+      } else {
+        setPostCreateInviteMsg(d.error || 'Invite failed');
+      }
+    } catch (err) {
+      setPostCreateInviteMsg(err instanceof Error ? err.message : 'Network error');
+    } finally {
+      setPostCreateInviting(false);
     }
   }
 
@@ -527,47 +566,67 @@ export function VenueManagementPortal({
 
           <div className="mt-4 flex items-center justify-between gap-3">
             <p className="text-xs text-gray-500">
-              The owner will receive a unique magic-link to sign in. No password is needed.
+              {createOpts.sendInvite
+                ? 'The owner will receive a unique magic-link login as soon as you submit.'
+                : 'No invite email will be sent. The venue is created with a magic-link you can copy and send later.'}
             </p>
             <button
               type="submit"
               disabled={creating}
-              className="text-white font-medium px-5 py-2 rounded-xl hover:opacity-90 disabled:opacity-50"
+              className="text-white font-medium px-5 py-2 rounded-xl hover:opacity-90 disabled:opacity-50 whitespace-nowrap"
               style={{ backgroundColor: BRAND }}
             >
-              {creating ? 'Creating…' : 'Create venue & invite'}
+              {creating
+                ? 'Creating…'
+                : createOpts.sendInvite ? 'Create venue & invite' : 'Create venue (no invite yet)'}
             </button>
           </div>
         </form>
       )}
 
       {/* Success state — shows the magic login link + invite status */}
-      {createSuccess && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
+      {createSuccess && (() => {
+        // Visual style: emerald when invite went out (or was deliberately
+        // skipped without error), amber when something needs attention.
+        const needsAttention = Boolean(createSuccess.inviteError);
+        const skipped        = !createSuccess.inviteSent && !createSuccess.inviteError;
+        const tone = needsAttention
+          ? { border: 'border-amber-300', bg: 'bg-amber-50', text: 'text-amber-900', sub: 'text-amber-800', btnBorder: 'border-amber-300', btnHover: 'hover:bg-amber-100' }
+          : skipped
+            ? { border: 'border-blue-200',    bg: 'bg-blue-50',    text: 'text-blue-900',    sub: 'text-blue-800',    btnBorder: 'border-blue-300',    btnHover: 'hover:bg-blue-100' }
+            : { border: 'border-emerald-200', bg: 'bg-emerald-50', text: 'text-emerald-900', sub: 'text-emerald-800', btnBorder: 'border-emerald-300', btnHover: 'hover:bg-emerald-100' };
+
+        const headline = createSuccess.inviteSent
+          ? `Subaccount created and invite sent — ${createSuccess.venueName}`
+          : skipped
+            ? `Subaccount created (invite not sent yet) — ${createSuccess.venueName}`
+            : `Subaccount created — ${createSuccess.venueName}`;
+
+        const subtitle = createSuccess.inviteSent
+          ? `Invite email sent to ${createSuccess.venueEmail || 'the owner'} with a magic-link login.`
+          : createSuccess.inviteError
+            ? createSuccess.inviteError
+            : 'The owner has NOT been emailed yet. Copy the magic-link below to share when you\u2019re ready, or click "Send invite now."';
+
+        return (
+        <div className={`rounded-xl border ${tone.border} ${tone.bg} p-5`}>
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h3 className="font-heading text-base text-emerald-900 mb-1">
-                Subaccount created — {createSuccess.venueName}
-              </h3>
-              <p className="text-sm text-emerald-800">
-                {createSuccess.inviteSent
-                  ? 'Invite email sent to the owner with their magic-link login.'
-                  : createSuccess.inviteError
-                    ? createSuccess.inviteError
-                    : 'No invite was emailed. Copy the link below and send it manually.'}
-              </p>
+              <h3 className={`font-heading text-base ${tone.text} mb-1`}>{headline}</h3>
+              <p className={`text-sm ${tone.sub}`}>{subtitle}</p>
             </div>
             <button
               type="button"
-              onClick={() => setCreateSuccess(null)}
-              className="text-emerald-700 hover:text-emerald-900 text-xs font-medium"
+              onClick={() => { setCreateSuccess(null); setPostCreateInviteMsg(''); }}
+              className={`${tone.text} hover:opacity-80 text-xs font-medium`}
             >
               Dismiss
             </button>
           </div>
+
           {createSuccess.loginUrl && (
             <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-2">
-              <code className="flex-1 block bg-white border border-emerald-200 rounded-lg px-3 py-2 text-xs text-gray-800 break-all">
+              <code className={`flex-1 block bg-white ${tone.border} border rounded-lg px-3 py-2 text-xs text-gray-800 break-all`}>
                 {createSuccess.loginUrl}
               </code>
               <button
@@ -578,19 +637,43 @@ export function VenueManagementPortal({
                   setCopiedNewLink(true);
                   setTimeout(() => setCopiedNewLink(false), 2000);
                 }}
-                className="rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs font-medium text-emerald-800 hover:bg-emerald-100 whitespace-nowrap"
+                className={`rounded-lg ${tone.btnBorder} bg-white px-3 py-2 text-xs font-medium ${tone.text} ${tone.btnHover} whitespace-nowrap border`}
               >
                 {copiedNewLink ? 'Copied!' : 'Copy login link'}
               </button>
             </div>
           )}
+
+          {/* Send invite later — only show when no invite was sent yet */}
+          {!createSuccess.inviteSent && createSuccess.venueId && (
+            <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-2">
+              <p className={`text-xs ${tone.sub} flex-1`}>
+                Ready to invite them now? This rotates the magic-link and emails it to {createSuccess.venueEmail || 'the venue'}.
+              </p>
+              <button
+                type="button"
+                disabled={postCreateInviting || !createSuccess.venueEmail}
+                onClick={() => void sendInviteFromSuccessPanel()}
+                className="rounded-lg bg-emerald-600 text-white px-3 py-2 text-xs font-semibold hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center justify-center gap-1.5 whitespace-nowrap"
+              >
+                <Send size={12} />
+                {postCreateInviting ? 'Sending…' : 'Send invite now'}
+              </button>
+            </div>
+          )}
+
+          {postCreateInviteMsg && (
+            <p className={`mt-2 text-xs ${tone.sub}`}>{postCreateInviteMsg}</p>
+          )}
+
           {createSuccess.lunarPayWarning && (
             <p className="mt-3 text-xs rounded-lg bg-amber-100 border border-amber-200 text-amber-900 px-3 py-2">
               <strong>Heads up:</strong> {createSuccess.lunarPayWarning}
             </p>
           )}
         </div>
-      )}
+        );
+      })()}
 
       <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
         <div className="flex flex-col lg:flex-row lg:items-end gap-3">
