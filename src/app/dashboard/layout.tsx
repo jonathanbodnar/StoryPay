@@ -25,11 +25,19 @@ export default async function DashboardLayout({
 
  const { data: billingRow } = await supabaseAdmin
    .from('venues')
-   .select('directory_subscription_status')
+   .select('directory_subscription_status, email_verified_at, email')
    .eq('id', user.venueId)
    .maybeSingle();
  const directoryBillingPending =
    user.isAdmin && billingRow?.directory_subscription_status === 'pending_payment';
+
+ // Email verification banner: only relevant for the venue owner (team
+ // members didn't go through signup). The column is added by migration
+ // 123; existing venues are grandfathered as already verified.
+ const emailVerifiedAt = (billingRow as { email_verified_at?: string | null } | null)?.email_verified_at;
+ const showVerifyBanner =
+   user.isAdmin && emailVerifiedAt !== undefined && !emailVerifiedAt;
+ const ownerEmail = (billingRow as { email?: string | null } | null)?.email ?? '';
 
  // Venues can access the dashboard (directory listing, leads, etc.) without
  // having finished LunarPay payment onboarding. If they want to take payments
@@ -46,6 +54,8 @@ export default async function DashboardLayout({
  allowedNavIds={navAccess.allowedNavIds}
  isLegacyPlan={navAccess.isLegacyPlan}
  directoryBillingPending={directoryBillingPending}
+ emailVerificationPending={showVerifyBanner}
+ ownerEmail={ownerEmail}
  >
  {children}
  </DashboardShell>

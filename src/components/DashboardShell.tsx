@@ -27,6 +27,8 @@ export default function DashboardShell({
   allowedNavIds = null,
   isLegacyPlan = false,
   directoryBillingPending = false,
+  emailVerificationPending = false,
+  ownerEmail = '',
   children,
 }: {
   venue: Venue;
@@ -39,10 +41,25 @@ export default function DashboardShell({
   isLegacyPlan?: boolean;
   /** Directory SaaS: priced plan assigned, payment still required. */
   directoryBillingPending?: boolean;
+  /** True when the venue's email address has not yet been verified. */
+  emailVerificationPending?: boolean;
+  /** Owner email address (shown in the verification banner). */
+  ownerEmail?: string;
   children: React.ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [paymentsActive, setPaymentsActive] = useState<boolean | null>(null);
+  const [verifyResent, setVerifyResent] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+
+  const resendVerification = useCallback(async () => {
+    setVerifyResent('sending');
+    try {
+      const res = await fetch('/api/auth/resend-verification', { method: 'POST' });
+      setVerifyResent(res.ok ? 'sent' : 'error');
+    } catch {
+      setVerifyResent('error');
+    }
+  }, []);
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -133,6 +150,31 @@ export default function DashboardShell({
                 Add a card and start your subscription
               </Link>
               .
+            </div>
+          ) : null}
+
+          {emailVerificationPending ? (
+            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+              <div className="flex-1">
+                <span className="font-semibold">Verify your email address to activate payment processing.</span>{' '}
+                We sent a verification link to{' '}
+                <span className="font-medium">{ownerEmail || 'your email'}</span>.
+                Until then, you can&apos;t send proposals or take payments.
+              </div>
+              <button
+                type="button"
+                onClick={resendVerification}
+                disabled={verifyResent === 'sending' || verifyResent === 'sent'}
+                className="self-start sm:self-auto whitespace-nowrap rounded-lg border border-amber-700 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 transition disabled:opacity-60"
+              >
+                {verifyResent === 'sent'
+                  ? 'Email sent'
+                  : verifyResent === 'sending'
+                    ? 'Sending…'
+                    : verifyResent === 'error'
+                      ? 'Try again'
+                      : 'Resend email'}
+              </button>
             </div>
           ) : null}
 

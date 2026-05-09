@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
-import { agencyCreateMerchant } from '@/lib/lunarpay';
 import bcrypt from 'bcryptjs';
 import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
+import { issueAndSendVerificationEmail } from '@/lib/email-verification';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -238,48 +238,31 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Auto-create the LunarPay merchant under our agency key so this venue can
-  // start taking proposal payments under their own MID. The agency endpoint
-  // returns merchantId/orgId/orgToken and a fresh lp_sk_/lp_pk_ pair
-  // immediately, even though the merchant's onboarding status starts at
-  // PENDING — it flips to ACTIVE later via the merchant.approved webhook
-  // (handled in /api/webhooks/lunarpay) once Fortis approves the MPA.
+  // Email verification gate (H10): we no longer auto-provision the
+  // LunarPay merchant during signup. Provisioning runs after the user
+  // proves they own the email address by clicking the verification
+  // link, which lives in /api/auth/verify-email/<token>. The user can
+  // still sign in, browse the dashboard, and pick a plan during this
+  // window — only payment-processing actions are gated until then.
   //
-  // Best-effort only: if LP_AGENCY_KEY is unset (local dev) or the call
-  // fails, we still let the user finish signup. They (or an admin) can
-  // re-run agency provisioning later via /api/venues/onboard.
-  if (process.env.LP_AGENCY_KEY) {
-    try {
-      const lpResult = await agencyCreateMerchant({
-        email,
-        password,
-        firstName,
-        lastName,
-        phone: phone || '',
-        businessName: venueName,
-      });
-      const merchant = (lpResult as { data?: Record<string, unknown> }).data
-        || (lpResult as Record<string, unknown>);
-      const onboardStatus = String(
-        (merchant.onboardingStatus as string | undefined) ?? 'pending',
-      ).toLowerCase();
-      await supabaseAdmin
-        .from('venues')
-        .update({
-          lunarpay_merchant_id:     (merchant.merchantId as number | string) ?? null,
-          lunarpay_organization_id: (merchant.organizationId as number | string) ?? null,
-          lunarpay_secret_key:      (merchant.secretKey as string) ?? null,
-          lunarpay_publishable_key: (merchant.publishableKey as string) ?? null,
-          lunarpay_org_token:       (merchant.orgToken as string) ?? null,
-          onboarding_status:        onboardStatus,
-        })
-        .eq('id', venue.id);
-    } catch (e) {
-      console.error('[signup] LunarPay merchant create failed (non-fatal):', e);
-    }
+  // For graceful schema rollout: if migration 123 hasn't run yet the
+  // best-effort `issueAndSendVerificationEmail` will fail to persist
+  // the token (column missing). We log a warning and fall through, so
+  // dev environments without the migration still work end-to-end.
+  try {
+    await issueAndSendVerificationEmail({
+      venueId:   venue.id,
+      email,
+      firstName,
+      venueName,
+    });
+  } catch (e) {
+    console.warn('[signup] verification email failed (non-fatal):', e);
   }
 
-  // Send welcome email (best-effort, non-blocking)
+  // Send welcome email (best-effort, non-blocking). Distinct from the
+  // verification email — the welcome email is informational and OK to
+  // hit anyone, the verification email is the one that gates LunarPay.
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com';
   try {
     await sendEmail({
