@@ -62,9 +62,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         ? null
         : Math.max(0, Math.round(Number(body.price_monthly_cents)));
   }
-  if (body.stripe_price_id !== undefined) {
-    updates.stripe_price_id = body.stripe_price_id === null ? null : String(body.stripe_price_id).trim();
-  }
   if (body.fortis_merchant_id !== undefined) {
     updates.fortis_merchant_id =
       body.fortis_merchant_id === null || String(body.fortis_merchant_id).trim() === ''

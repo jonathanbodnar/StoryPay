@@ -46,7 +46,6 @@ export async function POST(request: NextRequest) {
     sort_order?: number;
     is_default?: boolean;
     price_monthly_cents?: number | null;
-    stripe_price_id?: string | null;
     fortis_merchant_id?: string | null;
     feature_flags?: Record<string, boolean>;
     nav_permissions?: Record<string, boolean>;
@@ -96,7 +95,6 @@ export async function POST(request: NextRequest) {
       typeof body.price_monthly_cents === 'number' && body.price_monthly_cents >= 0
         ? Math.round(body.price_monthly_cents)
         : null,
-    stripe_price_id: body.stripe_price_id?.trim() || null,
     fortis_merchant_id: body.fortis_merchant_id?.trim() || null,
     nav_permissions,
     feature_flags,

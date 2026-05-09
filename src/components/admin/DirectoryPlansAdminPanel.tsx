@@ -34,7 +34,6 @@ type PlanRow = {
   is_legacy?: boolean;
   highlight_label?: string | null;
   price_monthly_cents: number | null;
-  stripe_price_id: string | null;
   fortis_merchant_id?: string | null;
   feature_flags: Record<string, boolean>;
   nav_permissions?: Record<string, boolean> | null;
