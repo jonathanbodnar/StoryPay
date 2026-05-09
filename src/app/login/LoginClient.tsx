@@ -132,6 +132,12 @@ function VenueLoginForm() {
   const [forgotSent, setForgotSent] = useState(false);
   const [forgotError, setForgotError] = useState('');
 
+  // 2FA prompt state — shown when /api/auth/sign-in returns { requires2FA: true }
+  const [twoFA, setTwoFA] = useState(false);
+  const [twoFACode, setTwoFACode] = useState('');
+  const [twoFAError, setTwoFAError] = useState('');
+  const [twoFALoading, setTwoFALoading] = useState(false);
+
   async function handleSignIn(e: React.FormEvent) {
     e.preventDefault();
     if (!email.trim()) return;
@@ -148,11 +154,38 @@ function VenueLoginForm() {
         setError(data.error || 'Invalid email or password.');
         return;
       }
+      if (data.requires2FA) {
+        setTwoFA(true);
+        return;
+      }
       window.location.href = data.redirect || '/dashboard';
     } catch {
       setError('Network error. Please try again.');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handle2FA(e: React.FormEvent) {
+    e.preventDefault();
+    setTwoFAError('');
+    setTwoFALoading(true);
+    try {
+      const res = await fetch('/api/auth/2fa/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: twoFACode.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setTwoFAError(data.error || 'Code is incorrect.');
+        return;
+      }
+      window.location.href = data.redirect || '/dashboard';
+    } catch {
+      setTwoFAError('Network error. Please try again.');
+    } finally {
+      setTwoFALoading(false);
     }
   }
 
@@ -177,6 +210,59 @@ function VenueLoginForm() {
     } finally {
       setForgotLoading(false);
     }
+  }
+
+  // 2FA prompt — shown after a successful password sign-in if the account
+  // has 2FA enabled. Email/password are already verified server-side; we
+  // just need the second factor before issuing the venue_id cookie.
+  if (twoFA) {
+    return (
+      <>
+        <h1 className="text-xl font-bold text-gray-900 mb-1 text-center">Two-factor authentication</h1>
+        <p className="text-sm text-gray-500 mb-6 text-center">
+          Open your authenticator app and enter the 6-digit code.
+        </p>
+        <form onSubmit={handle2FA} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Verification code</label>
+            <input
+              type="text"
+              required
+              autoFocus
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={9}
+              value={twoFACode}
+              onChange={(e) => setTwoFACode(e.target.value)}
+              placeholder="123 456"
+              className={`${INPUT} text-center text-lg tracking-widest font-mono`}
+            />
+            <p className="text-xs text-gray-400 mt-1.5">
+              Lost access to your app? Enter one of your backup codes instead.
+            </p>
+          </div>
+          {twoFAError && (
+            <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{twoFAError}</p>
+          )}
+          <button
+            type="submit"
+            disabled={twoFALoading || !twoFACode.trim()}
+            className="w-full flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-60"
+            style={{ backgroundColor: '#1b1b1b' }}
+          >
+            {twoFALoading ? <Loader2 size={15} className="animate-spin" /> : null}
+            {twoFALoading ? 'Verifying...' : 'Verify and Sign In'}
+          </button>
+          <button
+            type="button"
+            onClick={() => { setTwoFA(false); setTwoFACode(''); setTwoFAError(''); }}
+            className="w-full text-xs text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            ← Cancel and start over
+          </button>
+        </form>
+      </>
+    );
   }
 
   if (forgotMode) {

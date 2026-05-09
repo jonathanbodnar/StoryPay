@@ -9,6 +9,7 @@ import {
   BadgeCheck, AlertCircle, Download, Trash2, AlertTriangle,
   KeyRound, Eye, EyeOff, AtSign,
 } from 'lucide-react';
+import TwoFactorSection from '@/components/profile/TwoFactorSection';
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const INPUT = 'w-full rounded-2xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors';
@@ -570,6 +571,9 @@ export default function ProfilePage() {
             </form>
           </div>
         </div>
+
+        {/* ── Two-Factor Authentication ─────────────────────────────────── */}
+        <TwoFactorSection />
 
         {/* ── Danger Zone ───────────────────────────────────────────────── */}
         <div className="rounded-2xl border border-red-200 bg-white overflow-hidden mb-5">

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import bcrypt from 'bcryptjs';
 import { rateLimitAny, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
+import { signPendingToken, TWO_FA_PENDING_COOKIE } from '@/lib/twofa-pending';
+import { buildVenueAuthSuccessResponse } from '@/lib/auth-success';
 
 /**
  * Sign-in endpoint — email + password auth for venue owners and team members.
@@ -45,7 +47,7 @@ export async function POST(request: NextRequest) {
   const { data: venue } = await supabaseAdmin
     .from('venues')
     .select(
-      'id, name, email, setup_completed, onboarding_status, login_token, password_hash, directory_plan_id, directory_subscription_status',
+      'id, name, email, setup_completed, onboarding_status, login_token, password_hash, directory_plan_id, directory_subscription_status, totp_enabled_at',
     )
     .ilike('email', normalized)
     .maybeSingle();
@@ -71,39 +73,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Incorrect email or password.' }, { status: 401 });
     }
 
-    // Signup-plan gate: a venue owner is only "fully onboarded" once they've
-    // picked a plan AND completed (or trial-activated) the subscription.
-    // Legacy-plan venues bypass this entirely — they are billed externally
-    // and never go through the self-serve subscription flow.
-    let isLegacy = false;
-    if (venue.directory_plan_id) {
-      const { data: planRow } = await supabaseAdmin
-        .from('directory_plans')
-        .select('is_legacy, name, slug')
-        .eq('id', venue.directory_plan_id)
-        .maybeSingle();
-      const p = planRow as { is_legacy?: boolean; name?: string | null; slug?: string | null } | null;
-      // Primary check: is_legacy column. Fall back to name/slug containing "legacy"
-      // in case migration 105 hasn't been run yet on this database.
-      isLegacy =
-        p?.is_legacy === true ||
-        /legacy/i.test(p?.name ?? '') ||
-        /legacy/i.test(p?.slug ?? '');
+    // ── 2FA gate ─────────────────────────────────────────────────────────────
+    // Password is correct. If 2FA is enabled, hold the session in a short-lived
+    // signed cookie and let the client redirect to the code-prompt screen.
+    // We do NOT set venue_id here — that only happens after the TOTP verifies.
+    if (venue.totp_enabled_at) {
+      try {
+        const pending = signPendingToken({
+          venueId:    venue.id,
+          issuedAt:   Date.now(),
+          rememberMe: Boolean(rememberMe),
+        });
+        const response = NextResponse.json({ requires2FA: true });
+        response.cookies.set(TWO_FA_PENDING_COOKIE, pending, {
+          path: '/', httpOnly: true, secure: true, sameSite: 'lax',
+          maxAge: 5 * 60,
+        });
+        return response;
+      } catch (err) {
+        console.error('[sign-in] 2FA pending-token failed:', err);
+        return NextResponse.json(
+          { error: 'Sign-in temporarily unavailable. Please try again.' },
+          { status: 500 },
+        );
+      }
     }
-    const subStatus = String(venue.directory_subscription_status ?? 'none');
-    const needsPlan =
-      !isLegacy && (
-        !venue.directory_plan_id ||
-        subStatus === 'none' ||
-        subStatus === 'pending'
-      );
-    const redirect = needsPlan ? '/signup/plan' : '/dashboard';
 
-    const response = NextResponse.json({ redirect });
-    response.cookies.set('venue_id', venue.id, {
-      path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge,
+    return buildVenueAuthSuccessResponse({
+      venueId:    venue.id,
+      rememberMe: Boolean(rememberMe),
+      prefetched: {
+        directory_plan_id:             (venue.directory_plan_id as string | null) ?? null,
+        directory_subscription_status: (venue.directory_subscription_status as string | null) ?? null,
+      },
     });
-    return response;
   }
 
   // ── Check team member ──────────────────────────────────────────────────────
