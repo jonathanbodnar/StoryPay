@@ -47,6 +47,11 @@ export interface VenueInfo {
   name:           string | null;
   location_city:  string | null;
   location_state: string | null;
+  phone:          string | null;
+  email:          string | null;
+  address_full:   string | null;
+  lat:            number | null;
+  lng:            number | null;
   logo_url:       string | null;
 }
 
@@ -844,74 +849,91 @@ export async function generatePricingGuidePdfServer(
     });
   }
 
-  // ── Page 9: Availability ──────────────────────────────────────────────
-  if (guide.availability_text?.trim()) {
-    doc.addPage(); drawPageBorder(doc);
-    let y = MARGIN;
+  // ── Save the Date (always shown — venue contact info + map) ──────────
+  {
+    // Format phone: +1xxxxxxxxxx → (xxx) xxx-xxxx
+    const rawPhone = venue.phone ?? '';
+    const digits   = rawPhone.replace(/\D+/g, '');
+    const phoneStr = digits.length === 11 && digits[0] === '1'
+      ? `(${digits.slice(1,4)}) ${digits.slice(4,7)}-${digits.slice(7)}`
+      : digits.length === 10
+        ? `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`
+        : rawPhone;
 
-    doc.setTextColor(160, 160, 160);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.text('\u25FB  AVAILABILITY', MARGIN, y + 4); y += 14;
+    const emailStr   = venue.email          ?? '';
+    const addressStr = venue.address_full   ?? [venue.location_city, venue.location_state].filter(Boolean).join(', ');
 
-    doc.setTextColor(DARK);
-    doc.setFont('times', 'bold');
-    doc.setFontSize(20);
-    doc.text('Find your date', MARGIN, y + 6); y += 16;
-
-    if (availabilityResult) {
-      const imgW = CONTENT_W;
-      const imgH = imgW * 9 / 16;
-      try { doc.addImage(availabilityResult.dataUrl, 'JPEG', MARGIN, y, imgW, imgH); } catch { /* skip */ }
-      y += imgH + 8;
+    // Try to fetch a Google Maps static image (optional — skipped if no API key or lat/lng)
+    const mapsApiKey = process.env.GOOGLE_MAPS_API_KEY ?? '';
+    let mapImgResult: { dataUrl: string; w: number; h: number } | null = null;
+    if (mapsApiKey && venue.lat && venue.lng) {
+      const staticUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${venue.lat},${venue.lng}&zoom=14&size=640x320&scale=2&markers=color:0x1b1b1b|${venue.lat},${venue.lng}&style=feature:poi|visibility:off&key=${mapsApiKey}`;
+      mapImgResult = await getImage(staticUrl);
     }
 
-    doc.setTextColor(55, 65, 81);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(11);
-    const availLines = wrapText(doc, guide.availability_text, CONTENT_W, 11);
-    doc.text(availLines, MARGIN, y);
-  }
+    // Pre-measure the content block for vertical centering
+    const MAP_H   = 60;  // mm height for the map image slot
+    const LABEL_H = 10;
+    const NAME_H  = 20;  // Playfair 32pt
+    const RULE_H  = 10;
+    const LINE_H  = 8;
+    const lineCount = [phoneStr, emailStr, addressStr].filter(Boolean).length;
+    const INFO_H  = lineCount * LINE_H;
+    const MAP_GAP = mapImgResult ? 12 : 0;
+    const MAP_SLOT = mapImgResult ? MAP_H + MAP_GAP : 0;
+    const TOTAL_H = LABEL_H + NAME_H + RULE_H + INFO_H + MAP_SLOT;
+    let y = Math.max(MARGIN, (PAGE_H - TOTAL_H) / 2);
 
-  // ── Page 10: CTA ─────────────────────────────────────────────────────
-  if (guide.cta_headline?.trim() || guide.cta_body?.trim()) {
     doc.addPage(); drawPageBorder(doc);
-    let y = 80;
 
+    // "SAVE THE DATE" label
     doc.setTextColor(160, 160, 160);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    doc.text('SAVE THE DATE', centerX, y, { align: 'center' }); y += 16;
+    doc.text('SAVE THE DATE', centerX, y + 4, { align: 'center' }); y += LABEL_H;
 
+    // Venue name — Playfair Display, centered
     doc.setTextColor(DARK);
-    doc.setFont('times', 'bold');
-    doc.setFontSize(24);
-    const headline = guide.cta_headline ?? 'Ready to walk the property?';
-    const headlineLines = wrapText(doc, headline, CONTENT_W - 40, 24);
-    doc.text(headlineLines, centerX, y, { align: 'center' }); y += headlineLines.length * 10 + 10;
+    doc.setFont(playfairFamily, 'normal');
+    doc.setFontSize(32);
+    doc.text(venueName, centerX, y + 9, { align: 'center' }); y += NAME_H;
 
-    if (guide.cta_body) {
+    // Thin rule centered
+    const ruleW = Math.min(60, doc.getTextWidth(venueName) + 10);
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.3);
+    doc.line(centerX - ruleW / 2, y, centerX + ruleW / 2, y); y += RULE_H;
+
+    // Contact info lines — centered, Open Sans
+    doc.setFont(openSansFamily, 'normal');
+    doc.setFontSize(11);
+    for (const line of [phoneStr, emailStr, addressStr].filter(Boolean)) {
       doc.setTextColor(55, 65, 81);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(11);
-      const bodyLines = wrapText(doc, guide.cta_body, CONTENT_W - 40, 11);
-      doc.text(bodyLines, centerX, y, { align: 'center' }); y += bodyLines.length * 5 + 12;
+      doc.text(line, centerX, y, { align: 'center' }); y += LINE_H;
     }
 
-    const btnLabel = guide.cta_button_label || 'Schedule a tour';
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    const btnW = doc.getTextWidth(btnLabel) + 20;
-    const btnX = centerX - btnW / 2;
-    doc.setFillColor(27, 27, 27);
-    doc.roundedRect(btnX, y, btnW, 10, 5, 5, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.text(btnLabel, centerX, y + 6.5, { align: 'center' }); y += 20;
-
-    doc.setTextColor(160, 160, 160);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.text(venueName, centerX, y, { align: 'center' });
+    // Map image (full-width, 2px border edge, clickable to Google Maps)
+    if (mapImgResult) {
+      y += 6;
+      const imgX = PAGE_BORDER;
+      const imgW = PAGE_W - 2 * PAGE_BORDER;
+      drawClippedImage(doc, mapImgResult.dataUrl, imgX, y, imgW, MAP_H, mapImgResult.w, mapImgResult.h);
+      // Invisible click-area → opens Google Maps
+      const mapsUrl = `https://www.google.com/maps?q=${venue.lat},${venue.lng}`;
+      doc.link(imgX, y, imgW, MAP_H, { url: mapsUrl });
+      y += MAP_H;
+    } else if (addressStr) {
+      // Fallback: styled address link
+      y += 6;
+      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressStr)}`;
+      doc.setFillColor(245, 245, 245);
+      doc.roundedRect(MARGIN, y, CONTENT_W, 12, 2, 2, 'F');
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(100, 100, 100);
+      doc.text('Get directions \u2197', centerX, y + 7, { align: 'center' });
+      doc.link(MARGIN, y, CONTENT_W, 12, { url: mapsUrl });
+    }
   }
 
   // ── Footer on every page except cover and gallery ────────────────────

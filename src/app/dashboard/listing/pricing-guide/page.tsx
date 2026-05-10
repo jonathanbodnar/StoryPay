@@ -131,12 +131,23 @@ type SeedShape = {
   venue?: VenueMeta;
 };
 
+type VenueContact = {
+  name: string | null;
+  brand_email: string | null;
+  brand_phone: string | null;
+  location_full: string | null;
+  location_city: string | null;
+  location_state: string | null;
+};
+
 export default function PricingGuidePage() {
   const [guide, setGuide] = useState<Guide | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [error, setError] = useState<string>('');
+  const [venueContact, setVenueContact] = useState<VenueContact | null>(null);
+  const contactSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [schemaMissing, setSchemaMissing] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -168,7 +179,7 @@ export default function PricingGuidePage() {
     | { kind: 'gallery' }
     | { kind: 'about-photo' }
     | { kind: 'accommodations-photo' }
-    | { kind: 'field'; field: 'accommodations_image_url' | 'availability_image_url' }
+    | { kind: 'field'; field: 'accommodations_image_url' }
     | { kind: 'space'; spaceId: string }
     | { kind: 'accommodation'; accommodationId: string }
     | null
@@ -226,20 +237,23 @@ export default function PricingGuidePage() {
     let cancelled = false;
     (async () => {
       try {
-        const [guideRes, seedRes] = await Promise.all([
+        const [guideRes, seedRes, contactRes] = await Promise.all([
           fetch('/api/listing/pricing-guide', { cache: 'no-store' }),
           fetch('/api/listing/pricing-guide/seed', { cache: 'no-store' }),
+          fetch('/api/listing/me', { cache: 'no-store' }),
         ]);
         if (!guideRes.ok) {
           const j = await guideRes.json().catch(() => ({}));
           throw new Error((j as { error?: string }).error ?? 'Failed to load guide');
         }
         const guideJson = (await guideRes.json()) as { guide: Guide; schemaMissing?: boolean };
-        const seedJson = seedRes.ok ? ((await seedRes.json()) as SeedShape) : null;
+        const seedJson  = seedRes.ok ? ((await seedRes.json()) as SeedShape) : null;
+        const contactJson = contactRes.ok ? ((await contactRes.json()) as { listing: VenueContact }) : null;
         if (!cancelled) {
           setGuide(guideJson.guide);
           if (guideJson.schemaMissing) setSchemaMissing(true);
           if (seedJson) setSeedData(seedJson);
+          if (contactJson?.listing) setVenueContact(contactJson.listing);
         }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Load failed');
@@ -249,6 +263,19 @@ export default function PricingGuidePage() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // ── Venue contact debounced save (writes to venue listing table) ──────
+  function updateContact<K extends keyof VenueContact>(key: K, value: VenueContact[K]) {
+    setVenueContact((c) => c ? { ...c, [key]: value } : c);
+    if (contactSaveTimer.current) clearTimeout(contactSaveTimer.current);
+    contactSaveTimer.current = setTimeout(async () => {
+      await fetch('/api/listing/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [key]: value }),
+      });
+    }, 600);
+  }
 
   // ── Debounced parent-row save ─────────────────────────────────────────
   const saveTimer = useRef<NodeJS.Timeout | null>(null);
@@ -1126,102 +1153,71 @@ export default function PricingGuidePage() {
         </div>
       </Section>
 
-      {/* ── Availability ───────────────────────────────────────────── */}
+      {/* ── Save the Date — synced with venue listing ───────────────── */}
       <Section
-        title="Availability"
-        hint="A note about how far out you book and what dates are typically open. Add a screenshot of your calendar if helpful."
-        icon={<ImageIcon size={18} />}
-      >
-        <div className="space-y-4">
-          <AIField
-            section="availability_text"
-            value={guide.availability_text ?? ''}
-            onChange={(v) => updateParent('availability_text', v)}
-            render={({ value, onChange }) => (
-              <textarea
-                rows={5}
-                className={`${TEXTAREA} pr-28`}
-                placeholder="We typically book 12 to 18 months in advance. Spring weekends fill first; fall has the strongest availability through October."
-                value={value}
-                onChange={onChange}
-              />
-            )}
-          />
-          <div className="flex items-start gap-4">
-            <button
-              type="button"
-              onClick={() => openMediaPicker({ kind: 'field', field: 'availability_image_url' })}
-              className="block aspect-[4/3] w-40 flex-shrink-0 cursor-pointer overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 text-left"
-            >
-              {guide.availability_image_url ? (
-                <img src={guide.availability_image_url} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <span className="flex h-full w-full items-center justify-center text-xs text-gray-400">Add image</span>
-              )}
-            </button>
-            {guide.availability_image_url && (
-              <button
-                type="button"
-                onClick={() => updateParent('availability_image_url', null)}
-                className="text-xs text-gray-500 hover:text-red-600"
-              >
-                Remove image
-              </button>
-            )}
-          </div>
-        </div>
-      </Section>
-
-      {/* ── Save the date / CTA ────────────────────────────────────── */}
-      <Section
-        title="Save the date"
-        hint="The closing call-to-action that invites brides to schedule a tour or book a call."
+        title="Save the Date"
+        hint="The closing page of your guide. These fields sync both ways with your venue listing page — edit here or there, they stay in sync automatically."
         icon={<Sparkles size={18} />}
       >
-        <div className="space-y-4">
-          <div>
-            <label className={LABEL}>Headline</label>
-            <AIField
-              section="cta_headline"
-              value={guide.cta_headline ?? ''}
-              onChange={(v) => updateParent('cta_headline', v)}
-              render={({ value, onChange }) => (
+        {venueContact ? (
+          <div className="space-y-4">
+            <p className="flex items-center gap-1.5 text-xs text-emerald-600">
+              <CheckCircle2 size={12} /> Auto-synced with your venue listing
+            </p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className={LABEL}>Venue name</label>
                 <input
-                  className={`${INPUT} pr-28`}
-                  placeholder="Ready to walk the property?"
-                  value={value}
-                  onChange={onChange}
+                  className={INPUT}
+                  placeholder="Your venue name"
+                  value={venueContact.name ?? ''}
+                  onChange={(e) => updateContact('name', e.target.value || null)}
                 />
-              )}
-            />
-          </div>
-          <div>
-            <label className={LABEL}>Body</label>
-            <AIField
-              section="cta_body"
-              value={guide.cta_body ?? ''}
-              onChange={(v) => updateParent('cta_body', v)}
-              render={({ value, onChange }) => (
-                <textarea
-                  rows={4}
-                  className={`${TEXTAREA} pr-28`}
-                  placeholder="We'd love to show you around. Tap the button below to book a private tour with our team."
-                  value={value}
-                  onChange={onChange}
+              </div>
+              <div>
+                <label className={LABEL}>Contact email</label>
+                <input
+                  type="email"
+                  className={INPUT}
+                  placeholder="hello@yourvenue.com"
+                  value={venueContact.brand_email ?? ''}
+                  onChange={(e) => updateContact('brand_email', e.target.value || null)}
                 />
-              )}
-            />
+              </div>
+              <div>
+                <label className={LABEL}>Contact phone</label>
+                <input
+                  type="tel"
+                  className={INPUT}
+                  placeholder="(614) 555-1234"
+                  value={venueContact.brand_phone ?? ''}
+                  onChange={(e) => updateContact('brand_phone', e.target.value || null)}
+                />
+              </div>
+              <div>
+                <label className={LABEL}>City</label>
+                <input
+                  className={INPUT}
+                  placeholder="Columbus"
+                  value={venueContact.location_city ?? ''}
+                  onChange={(e) => updateContact('location_city', e.target.value || null)}
+                />
+              </div>
+            </div>
+            <div>
+              <label className={LABEL}>Full address (used for map)</label>
+              <input
+                className={INPUT}
+                placeholder="123 Main St, Columbus, OH 43215"
+                value={venueContact.location_full ?? ''}
+                onChange={(e) => updateContact('location_full', e.target.value || null)}
+              />
+              <p className="mt-1 text-xs text-gray-400">This generates the map on the last page of your guide. Updating it also updates your listing page.</p>
+            </div>
           </div>
-          <div>
-            <label className={LABEL}>Button label</label>
-            <input
-              className={INPUT}
-              placeholder="Schedule a tour"
-              value={guide.cta_button_label}
-              onChange={(e) => updateParent('cta_button_label', e.target.value)}
-            />
-          </div>
-        </div>
+        ) : (
+          <div className="py-6 text-center text-sm text-gray-400">Loading contact info…</div>
+        )}
       </Section>
 
       {/* ── Bottom save indicator ──────────────────────────────────── */}

@@ -40,7 +40,7 @@ export async function GET(
   // below picks whichever is populated.
   const { data: venue, error: venueErr } = await supabaseAdmin
     .from('venues')
-    .select('name, location_city, location_state, logo_url, brand_logo_url')
+    .select('name, location_city, location_state, location_full, lat, lng, brand_phone, brand_email, logo_url, brand_logo_url')
     .eq('id', venueId)
     .maybeSingle();
 
@@ -110,9 +110,14 @@ export async function GET(
   };
 
   const venueInfo: VenueInfo = {
-    name:           venue.name           ?? null,
-    location_city:  venue.location_city  ?? null,
-    location_state: venue.location_state ?? null,
+    name:           venue.name              ?? null,
+    location_city:  venue.location_city     ?? null,
+    location_state: venue.location_state    ?? null,
+    phone:          venue.brand_phone       ?? null,
+    email:          venue.brand_email       ?? null,
+    address_full:   venue.location_full     ?? null,
+    lat:            (venue.lat as number)   ?? null,
+    lng:            (venue.lng as number)   ?? null,
     // Prefer the dashboard-uploaded brand logo; fall back to the legacy column.
     logo_url:
       (venue as { brand_logo_url?: string | null }).brand_logo_url ??
