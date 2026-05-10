@@ -144,10 +144,17 @@ function wrapText(doc: JsPDF, text: string, maxWidth: number, fontSize: number):
   return doc.splitTextToSize(text, maxWidth) as string[];
 }
 
+const PAGE_BORDER_INSET = 2.5; // mm — thin refined border used on every page
+
 function drawPageBorder(doc: JsPDF) {
-  doc.setDrawColor(240, 240, 240);
-  doc.setLineWidth(0.2);
-  doc.rect(MARGIN - 2, MARGIN - 2, PAGE_W - (MARGIN - 2) * 2, PAGE_H - (MARGIN - 2) * 2);
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.4);
+  doc.rect(
+    PAGE_BORDER_INSET,
+    PAGE_BORDER_INSET,
+    PAGE_W - PAGE_BORDER_INSET * 2,
+    PAGE_H - PAGE_BORDER_INSET * 2,
+  );
 }
 
 /**
@@ -251,66 +258,68 @@ export async function generatePricingGuidePdfServer(
   ]);
 
   // ── Page 1: Cover ─────────────────────────────────────────────────────
-  // Layout mirrors the public listing frontend: full-bleed photo with a
-  // 5 mm white magazine border, uniform semi-transparent overlay, title
-  // perfectly centered, venue name as small-caps subheadline below a rule.
+  // Full-bleed photo, uniform dark overlay, refined 2px-style border,
+  // then centered: logo → title → rule → venue name.
 
-  const COVER_BORDER = 5;
-
-  // White page background forms the border.
-  doc.setFillColor(255, 255, 255);
-  doc.rect(0, 0, PAGE_W, PAGE_H, 'F');
-
-  const imgX = COVER_BORDER;
-  const imgY = COVER_BORDER;
-  const imgAreaW = PAGE_W - COVER_BORDER * 2;
-  const imgAreaH = PAGE_H - COVER_BORDER * 2;
-
+  // Photo fills the whole page.
   if (coverResult) {
     const { dataUrl, w, h } = coverResult;
     const imgRatio  = w / h;
-    const areaRatio = imgAreaW / imgAreaH;
-    let sw = imgAreaW, sh = imgAreaH, sx = imgX, sy = imgY;
-    if (imgRatio > areaRatio) {
-      sh = imgAreaH; sw = imgAreaH * imgRatio; sx = imgX + (imgAreaW - sw) / 2;
+    const pageRatio = PAGE_W / PAGE_H;
+    let sw = PAGE_W, sh = PAGE_H, sx = 0, sy = 0;
+    if (imgRatio > pageRatio) {
+      sh = PAGE_H; sw = PAGE_H * imgRatio; sx = (PAGE_W - sw) / 2;
     } else {
-      sw = imgAreaW; sh = imgAreaW / imgRatio; sy = imgY + (imgAreaH - sh) / 2;
+      sw = PAGE_W; sh = PAGE_W / imgRatio; sy = (PAGE_H - sh) / 2;
     }
     try { doc.addImage(dataUrl, 'JPEG', sx, sy, sw, sh); } catch { /* skip */ }
   } else {
     doc.setFillColor(245, 243, 240);
-    doc.rect(imgX, imgY, imgAreaW, imgAreaH, 'F');
+    doc.rect(0, 0, PAGE_W, PAGE_H, 'F');
   }
 
-  // Uniform semi-transparent overlay (matches frontend bg-black/25).
+  // Uniform semi-transparent overlay.
   doc.setFillColor(0, 0, 0);
   (doc as unknown as { setGState?: (g: unknown) => void }).setGState?.(
     new (doc as unknown as { GState: new (o: unknown) => unknown }).GState({ opacity: 0.28 }),
   );
-  doc.rect(imgX, imgY, imgAreaW, imgAreaH, 'F');
+  doc.rect(0, 0, PAGE_W, PAGE_H, 'F');
   (doc as unknown as { setGState?: (g: unknown) => void }).setGState?.(
     new (doc as unknown as { GState: new (o: unknown) => unknown }).GState({ opacity: 1 }),
   );
 
-  // Redraw the white border on top so it's crisp over any image bleed.
-  doc.setFillColor(255, 255, 255);
-  doc.rect(0, 0, PAGE_W, COVER_BORDER, 'F');
-  doc.rect(0, PAGE_H - COVER_BORDER, PAGE_W, COVER_BORDER, 'F');
-  doc.rect(0, 0, COVER_BORDER, PAGE_H, 'F');
-  doc.rect(PAGE_W - COVER_BORDER, 0, COVER_BORDER, PAGE_H, 'F');
+  // Refined thin border (same weight as inner pages) drawn on top.
+  drawPageBorder(doc);
 
-  // ── Measure and center the title block ────────────────────────────────
+  // ── Measure text for vertical centering ──────────────────────────────
   doc.setFont(playfairFamily, 'normal');
   doc.setFontSize(26);
   const titleLines = wrapText(doc, 'Pricing & Availability Guide', PAGE_W - 50, 26);
-  const titleLineH = 10;
+  const titleLineH = 10; // mm per line at 26 pt
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   const subLines = wrapText(doc, venueName.toUpperCase(), PAGE_W - 60, 8);
 
-  const blockH = titleLines.length * titleLineH + 14 + subLines.length * 5;
-  let ty = PAGE_H / 2 - blockH / 2 + titleLineH;
+  // Logo height ≈ half the heading's visual size.
+  const LOGO_H = 13; // mm
+  const LOGO_GAP = 6; // mm between logo and title
+
+  const logoResult = logoDataUrl ? await getImage(venue.logo_url) : null;
+  const hasLogo = !!(logoDataUrl && logoResult);
+
+  const logoBlock  = hasLogo ? LOGO_H + LOGO_GAP : 0;
+  const blockH     = logoBlock + titleLines.length * titleLineH + 14 + subLines.length * 5;
+  let ty           = PAGE_H / 2 - blockH / 2 + (hasLogo ? LOGO_H : titleLineH);
+
+  // ── Logo ──────────────────────────────────────────────────────────────
+  if (hasLogo && logoDataUrl && logoResult) {
+    const logoW = (logoResult.w / logoResult.h) * LOGO_H;
+    try {
+      doc.addImage(logoDataUrl, 'PNG', centerX - logoW / 2, ty - LOGO_H, logoW, LOGO_H);
+    } catch { /* skip bad logo */ }
+    ty += LOGO_GAP;
+  }
 
   // ── Title (Playfair Display) ──────────────────────────────────────────
   doc.setFont(playfairFamily, 'normal');
@@ -330,9 +339,6 @@ export async function generatePricingGuidePdfServer(
   doc.setFontSize(8);
   doc.setTextColor(240, 240, 240);
   doc.text(subLines, centerX, ty, { align: 'center' });
-
-  // Avoid an "unused logo" dead-code path – we no longer render it on cover.
-  void logoDataUrl;
 
   // ── Page 2: Welcome ───────────────────────────────────────────────────
   if (guide.congratulatory_message?.trim()) {
