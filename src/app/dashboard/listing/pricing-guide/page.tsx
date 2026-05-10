@@ -10,7 +10,6 @@ import {
 import { AIField } from '@/components/pricing-guide/AIField';
 import PreviewGuideModal from '@/components/pricing-guide/PreviewGuideModal';
 import { VenueMediaPickerModal } from '@/components/venue-media/VenueMediaPickerModal';
-import { generatePricingGuidePdf } from '@/lib/pricing-guide-pdf';
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -154,16 +153,21 @@ export default function PricingGuidePage() {
   const [downloadProgress, setDownloadProgress] = useState('');
 
   async function handleDownloadPdf() {
-    if (!guide) return;
     setDownloading(true);
-    setDownloadProgress('Preparing…');
+    setDownloadProgress('Generating PDF…');
     try {
-      await generatePricingGuidePdf(guide, {
-        name: seedData?.venue?.name ?? null,
-        location_city: seedData?.venue?.location_city ?? null,
-        location_state: seedData?.venue?.location_state ?? null,
-        logo_url: seedData?.venue?.logo_url ?? null,
-      }, setDownloadProgress);
+      const res = await fetch('/api/listing/pricing-guide/download', { cache: 'no-store' });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error((j as { error?: string }).error ?? `HTTP ${res.status}`);
+      }
+      const bytes = await res.arrayBuffer();
+      const url   = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+      const a     = document.createElement('a');
+      a.href      = url;
+      a.download  = 'pricing-guide.pdf';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'PDF generation failed');
     } finally {
@@ -1234,13 +1238,6 @@ export default function PricingGuidePage() {
       {/* ── Live preview modal ─────────────────────────────────────── */}
       <PreviewGuideModal
         open={showPreview}
-        guide={guide}
-        venue={{
-          name: seedData?.venue?.name ?? null,
-          location_city: seedData?.venue?.location_city ?? null,
-          location_state: seedData?.venue?.location_state ?? null,
-          logo_url: seedData?.venue?.logo_url ?? null,
-        }}
         onClose={() => setShowPreview(false)}
       />
 
