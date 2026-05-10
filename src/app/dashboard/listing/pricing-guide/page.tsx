@@ -612,7 +612,7 @@ export default function PricingGuidePage() {
       {/* ── Photo gallery ──────────────────────────────────────────── */}
       <Section
         title="Photo gallery"
-        hint="A curated set of photos that show off the venue. Drag in landscape and portrait shots; we'll lay them out across the gallery page(s)."
+        hint="Upload exactly 9 photos for the best layout. The gallery page uses a pinterest-style grid: rows alternate wide/narrow and equal-thirds columns. Mix landscape and portrait shots — each image is automatically cropped to fill its cell."
         icon={<ImageIcon size={18} />}
       >
         {seedData?.seed?.gallery && seedData.seed.gallery.length > 0 && guide.gallery.length === 0 && (
@@ -629,6 +629,24 @@ export default function PricingGuidePage() {
             </button>
           </div>
         )}
+        {/* Photo count guidance */}
+        <div className={`mb-3 flex items-center gap-2 rounded-xl px-3 py-2 text-sm ${
+          guide.gallery.length === 9
+            ? 'bg-green-50 text-green-800 border border-green-200'
+            : guide.gallery.length > 9
+            ? 'bg-amber-50 text-amber-800 border border-amber-200'
+            : 'bg-blue-50 text-blue-800 border border-blue-200'
+        }`}>
+          <span className="font-semibold tabular-nums">{guide.gallery.length}/9 photos</span>
+          <span className="text-xs opacity-80">
+            {guide.gallery.length === 9
+              ? '— perfect! Your gallery page will fill the grid beautifully.'
+              : guide.gallery.length > 9
+              ? `— only the first 9 will appear in the PDF grid. Remove ${guide.gallery.length - 9} to keep the best selection.`
+              : `— upload ${9 - guide.gallery.length} more for a complete 4-row pinterest grid.`}
+          </span>
+        </div>
+
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {guide.gallery.map((g) => (
             <div key={g.url} className="group relative aspect-[4/3] overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">

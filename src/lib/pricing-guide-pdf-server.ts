@@ -232,6 +232,43 @@ async function loadOpenSansServer(doc: JsPDF): Promise<string> {
   }
 }
 
+/**
+ * Draw an image cropped to fill a cell exactly (CSS object-fit: cover).
+ * Uses a raw PDF clipping rectangle so nothing bleeds outside the cell.
+ */
+function drawClippedImage(
+  doc: JsPDF,
+  dataUrl: string,
+  cellX: number, cellY: number, cellW: number, cellH: number,
+  imgW: number, imgH: number,
+) {
+  // Cover-scale: enlarge until both dimensions fill the cell, then centre.
+  const scale = Math.max(cellW / imgW, cellH / imgH);
+  const drawW = imgW * scale;
+  const drawH = imgH * scale;
+  const dx    = cellX - (drawW - cellW) / 2;
+  const dy    = cellY - (drawH - cellH) / 2;
+
+  // Raw PDF clipping rect.  jsPDF works in mm but internal PDF uses pt
+  // with a bottom-up y-axis, so we convert manually.
+  const k   = (doc as unknown as { internal: { scaleFactor: number } }).internal.scaleFactor;
+  const pgH = PAGE_H * k;
+  const xp  = (cellX * k).toFixed(3);
+  const yp  = (pgH - (cellY + cellH) * k).toFixed(3);
+  const wp  = (cellW * k).toFixed(3);
+  const hp  = (cellH * k).toFixed(3);
+
+  const out = (doc as unknown as { internal: { out: (s: string) => void } }).internal.out;
+  out(`q ${xp} ${yp} ${wp} ${hp} re W n`);
+
+  const fmt = dataUrl.startsWith('data:image/png') ? 'PNG'
+            : dataUrl.startsWith('data:image/webp') ? 'WEBP'
+            : 'JPEG';
+  try { doc.addImage(dataUrl, fmt, dx, dy, drawW, drawH); } catch { /* skip */ }
+
+  out('Q');
+}
+
 // ─── Main server generator ───────────────────────────────────────────────
 
 export async function generatePricingGuidePdfServer(
@@ -330,7 +367,7 @@ export async function generatePricingGuidePdfServer(
   const titleLineH = 10;
 
   const LOGO_H = 13; // mm — ≈ half the visual height of the 26pt heading
-  const LOGO_GAP = 6; // mm gap between logo bottom and title baseline
+  const LOGO_GAP = 16; // mm gap between logo bottom and title baseline
 
   const logoResult = logoDataUrl ? await getImage(venue.logo_url) : null;
   const hasLogo = !!(logoDataUrl && logoResult);
@@ -403,33 +440,49 @@ export async function generatePricingGuidePdfServer(
     drawPageBorder(doc);
   }
 
-  // ── Page 3: Photo Gallery ─────────────────────────────────────────────
+  // ── Page 3: Gallery (pinterest grid — no title, no footer) ───────────
+  // Ideal photo count: 9. Layout: 4 rows, mixed wide/narrow columns.
+  // Row 1: [2/3 wide | 1/3]   Row 2: [1/3 | 2/3 wide]
+  // Row 3: [1/3 | 1/3 | 1/3] Row 4: [1/2 | 1/2]
+  let galleryPageNum = -1;
   if (galleryItems.length > 0) {
-    doc.addPage(); drawPageBorder(doc);
-    let y = MARGIN;
+    doc.addPage();
+    galleryPageNum = doc.getNumberOfPages();
 
-    doc.setTextColor(DARK);
-    doc.setFont('times', 'bold');
-    doc.setFontSize(20);
-    doc.text('The Property', MARGIN, y + 6);
-    y += 20;
+    const GM  = PAGE_BORDER;            // images bleed to the border edge
+    const G   = 3;                      // gutter between photos (mm)
+    const uW  = PAGE_W - 2 * GM;       // usable width
+    const uH  = PAGE_H - 2 * GM;       // usable height
+    const TW  = (uW - 2 * G) / 3;     // 1/3-column width
+    const FW  = 2 * TW + G;            // 2/3-column width (incl. one gutter)
+    const HW  = (uW - G) / 2;         // half-column width
+    const RH  = (uH - 3 * G) / 4;     // row height (equal for all 4 rows)
 
-    const gap = 4;
-    if (galleryItems[0]) {
-      const imgW = CONTENT_W;
-      const imgH = imgW * 9 / 16;
-      try { doc.addImage(galleryItems[0].dataUrl, 'JPEG', MARGIN, y, imgW, imgH); } catch { /* skip */ }
-      y += imgH + gap;
-    }
+    // 9 predefined cells: [x, y, w, h]
+    const cells: Array<[number, number, number, number]> = [
+      // Row 1
+      [GM,              GM,                  FW, RH],
+      [GM + FW + G,     GM,                  TW, RH],
+      // Row 2
+      [GM,              GM + RH + G,         TW, RH],
+      [GM + TW + G,     GM + RH + G,         FW, RH],
+      // Row 3
+      [GM,              GM + 2*(RH+G),       TW, RH],
+      [GM + TW + G,     GM + 2*(RH+G),       TW, RH],
+      [GM + 2*(TW+G),   GM + 2*(RH+G),       TW, RH],
+      // Row 4
+      [GM,              GM + 3*(RH+G),       HW, RH],
+      [GM + HW + G,     GM + 3*(RH+G),       HW, RH],
+    ];
 
-    const colW = (CONTENT_W - gap) / 2;
-    const colH = colW * 3 / 4;
-    let col = 0;
-    for (let i = 1; i < galleryItems.length && y + colH < PAGE_H - MARGIN; i++) {
-      try { doc.addImage(galleryItems[i].dataUrl, 'JPEG', MARGIN + col * (colW + gap), y, colW, colH); } catch { /* skip */ }
-      col++;
-      if (col >= 2) { col = 0; y += colH + gap; }
-    }
+    cells.forEach(([cx, cy, cw, ch], idx) => {
+      const item = galleryItems[idx];
+      if (!item) return;
+      drawClippedImage(doc, item.dataUrl, cx, cy, cw, ch, item.w, item.h);
+    });
+
+    // Thin white border on top of photos
+    drawPageBorder(doc);
   }
 
   // ── Page 4: About ─────────────────────────────────────────────────────
@@ -699,9 +752,10 @@ export async function generatePricingGuidePdfServer(
     doc.text(venueName, centerX, y, { align: 'center' });
   }
 
-  // ── Footer on every page except cover ────────────────────────────────
+  // ── Footer on every page except cover and gallery ────────────────────
   const totalPages = doc.getNumberOfPages();
   for (let i = 2; i <= totalPages; i++) {
+    if (i === galleryPageNum) continue; // gallery page: images only, no footer
     doc.setPage(i);
     doc.setTextColor(180, 180, 180);
     doc.setFont('helvetica', 'normal');
