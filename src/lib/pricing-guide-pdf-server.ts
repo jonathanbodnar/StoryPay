@@ -150,6 +150,35 @@ function drawPageBorder(doc: JsPDF) {
   doc.rect(MARGIN - 2, MARGIN - 2, PAGE_W - (MARGIN - 2) * 2, PAGE_H - (MARGIN - 2) * 2);
 }
 
+/**
+ * Embed Playfair Display Regular into a jsPDF document (server-side).
+ * Falls back silently to the built-in "times" font if the fetch fails.
+ * Returns the font family name to use in setFont() calls.
+ */
+async function loadPlayfairDisplayServer(doc: JsPDF): Promise<string> {
+  try {
+    const res = await fetch(
+      'https://cdn.jsdelivr.net/npm/@fontsource/playfair-display@5.1.1/files/playfair-display-latin-400-normal.woff2',
+      { signal: AbortSignal.timeout(8000) },
+    );
+    if (!res.ok) return 'times';
+    const buf = Buffer.from(await res.arrayBuffer());
+    const b64 = buf.toString('base64');
+    (doc as unknown as { addFileToVFS: (n: string, d: string) => void }).addFileToVFS(
+      'PlayfairDisplay-Regular.woff2',
+      b64,
+    );
+    (doc as unknown as { addFont: (f: string, n: string, s: string) => void }).addFont(
+      'PlayfairDisplay-Regular.woff2',
+      'PlayfairDisplay',
+      'normal',
+    );
+    return 'PlayfairDisplay';
+  } catch {
+    return 'times';
+  }
+}
+
 // ─── Main server generator ───────────────────────────────────────────────
 
 export async function generatePricingGuidePdfServer(
@@ -160,8 +189,10 @@ export async function generatePricingGuidePdfServer(
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
   const venueName     = venue.name ?? 'Our Venue';
-  const venueLocation = [venue.location_city, venue.location_state].filter(Boolean).join(', ');
   const centerX       = PAGE_W / 2;
+
+  // ── Embed Playfair Display (with graceful fallback) ──────────────────
+  const playfairFamily = await loadPlayfairDisplayServer(doc);
 
   // ── Pre-fetch all images ──────────────────────────────────────────────
   const imageCache = new Map<string, { dataUrl: string; w: number; h: number } | null>();
@@ -203,69 +234,88 @@ export async function generatePricingGuidePdfServer(
   ]);
 
   // ── Page 1: Cover ─────────────────────────────────────────────────────
+  // Layout mirrors the public listing frontend: full-bleed photo with a
+  // 5 mm white magazine border, uniform semi-transparent overlay, title
+  // perfectly centered, venue name as small-caps subheadline below a rule.
+
+  const COVER_BORDER = 5;
+
+  // White page background forms the border.
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, 0, PAGE_W, PAGE_H, 'F');
+
+  const imgX = COVER_BORDER;
+  const imgY = COVER_BORDER;
+  const imgAreaW = PAGE_W - COVER_BORDER * 2;
+  const imgAreaH = PAGE_H - COVER_BORDER * 2;
+
   if (coverResult) {
     const { dataUrl, w, h } = coverResult;
     const imgRatio  = w / h;
-    const pageRatio = PAGE_W / PAGE_H;
-    let sw = PAGE_W, sh = PAGE_H, sx = 0, sy = 0;
-    if (imgRatio > pageRatio) {
-      sh = PAGE_H; sw = PAGE_H * imgRatio; sx = (PAGE_W - sw) / 2;
+    const areaRatio = imgAreaW / imgAreaH;
+    let sw = imgAreaW, sh = imgAreaH, sx = imgX, sy = imgY;
+    if (imgRatio > areaRatio) {
+      sh = imgAreaH; sw = imgAreaH * imgRatio; sx = imgX + (imgAreaW - sw) / 2;
     } else {
-      sw = PAGE_W; sh = PAGE_W / imgRatio; sy = (PAGE_H - sh) / 2;
+      sw = imgAreaW; sh = imgAreaW / imgRatio; sy = imgY + (imgAreaH - sh) / 2;
     }
     try { doc.addImage(dataUrl, 'JPEG', sx, sy, sw, sh); } catch { /* skip */ }
   } else {
-    doc.setFillColor(200, 200, 200);
-    doc.rect(0, 0, PAGE_W, PAGE_H, 'F');
+    doc.setFillColor(245, 243, 240);
+    doc.rect(imgX, imgY, imgAreaW, imgAreaH, 'F');
   }
 
-  // Gradient overlay
-  for (let i = 0; i < 60; i++) {
-    const alpha = i / 60;
-    doc.setFillColor(0, 0, 0);
-    (doc as unknown as { setGState?: (g: unknown) => void }).setGState?.(
-      new (doc as unknown as { GState: new (o: unknown) => unknown }).GState({ opacity: alpha * 0.7 }),
-    );
-    doc.rect(0, PAGE_H - 60 + i, PAGE_W, 1, 'F');
-  }
+  // Uniform semi-transparent overlay (matches frontend bg-black/25).
+  doc.setFillColor(0, 0, 0);
+  (doc as unknown as { setGState?: (g: unknown) => void }).setGState?.(
+    new (doc as unknown as { GState: new (o: unknown) => unknown }).GState({ opacity: 0.28 }),
+  );
+  doc.rect(imgX, imgY, imgAreaW, imgAreaH, 'F');
+  (doc as unknown as { setGState?: (g: unknown) => void }).setGState?.(
+    new (doc as unknown as { GState: new (o: unknown) => unknown }).GState({ opacity: 1 }),
+  );
 
-  let textY = PAGE_H - 120;
+  // Redraw the white border on top so it's crisp over any image bleed.
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, 0, PAGE_W, COVER_BORDER, 'F');
+  doc.rect(0, PAGE_H - COVER_BORDER, PAGE_W, COVER_BORDER, 'F');
+  doc.rect(0, 0, COVER_BORDER, PAGE_H, 'F');
+  doc.rect(PAGE_W - COVER_BORDER, 0, COVER_BORDER, PAGE_H, 'F');
 
-  if (logoDataUrl) {
-    try {
-      const logoResult = await getImage(venue.logo_url);
-      if (logoResult) {
-        const logoW = 30;
-        const logoH = (logoResult.h / logoResult.w) * logoW;
-        doc.addImage(logoDataUrl, 'PNG', centerX - logoW / 2, textY, logoW, logoH);
-        textY += logoH + 8;
-      }
-    } catch { /* skip */ }
-  }
-
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('times', 'bold');
-  doc.setFontSize(32);
-  doc.text(venueName, centerX, textY, { align: 'center' });
-  textY += 10;
-
-  if (venueLocation) {
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(255, 255, 255);
-    doc.text(venueLocation.toUpperCase(), centerX, textY, { align: 'center' });
-    textY += 12;
-  }
-
-  doc.setDrawColor(255, 255, 255);
-  doc.setLineWidth(0.3);
-  doc.line(centerX - 12, textY, centerX + 12, textY);
-  textY += 10;
+  // ── Measure and center the title block ────────────────────────────────
+  doc.setFont(playfairFamily, 'normal');
+  doc.setFontSize(26);
+  const titleLines = wrapText(doc, 'Pricing & Availability Guide', PAGE_W - 50, 26);
+  const titleLineH = 10;
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
+  doc.setFontSize(8);
+  const subLines = wrapText(doc, venueName.toUpperCase(), PAGE_W - 60, 8);
+
+  const blockH = titleLines.length * titleLineH + 14 + subLines.length * 5;
+  let ty = PAGE_H / 2 - blockH / 2 + titleLineH;
+
+  // ── Title (Playfair Display) ──────────────────────────────────────────
+  doc.setFont(playfairFamily, 'normal');
+  doc.setFontSize(26);
   doc.setTextColor(255, 255, 255);
-  doc.text('PRICING & AVAILABILITY GUIDE', centerX, textY, { align: 'center' });
+  doc.text(titleLines, centerX, ty, { align: 'center' });
+  ty += (titleLines.length - 1) * titleLineH + 10;
+
+  // ── Thin rule ─────────────────────────────────────────────────────────
+  doc.setDrawColor(255, 255, 255);
+  doc.setLineWidth(0.25);
+  doc.line(centerX - 10, ty, centerX + 10, ty);
+  ty += 8;
+
+  // ── Venue name subheadline ────────────────────────────────────────────
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(240, 240, 240);
+  doc.text(subLines, centerX, ty, { align: 'center' });
+
+  // Avoid an "unused logo" dead-code path – we no longer render it on cover.
+  void logoDataUrl;
 
   // ── Page 2: Welcome ───────────────────────────────────────────────────
   if (guide.congratulatory_message?.trim()) {
