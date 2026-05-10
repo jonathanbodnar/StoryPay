@@ -152,29 +152,46 @@ function drawPageBorder(doc: JsPDF) {
 
 /**
  * Embed Playfair Display Regular into a jsPDF document (server-side).
- * Falls back silently to the built-in "times" font if the fetch fails.
- * Returns the font family name to use in setFont() calls.
+ *
+ * jsPDF can ONLY parse TTF (not WOFF/WOFF2), so we pull the static TTF
+ * directly from the official Google Fonts repo via jsDelivr's GitHub mirror.
+ * Falls back to the built-in "times" font on any failure (network, parse,
+ * or text-rendering test).
  */
 async function loadPlayfairDisplayServer(doc: JsPDF): Promise<string> {
+  const TTF_URL =
+    'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/playfairdisplay/static/PlayfairDisplay-Regular.ttf';
   try {
-    const res = await fetch(
-      'https://cdn.jsdelivr.net/npm/@fontsource/playfair-display@5.1.1/files/playfair-display-latin-400-normal.woff2',
-      { signal: AbortSignal.timeout(8000) },
-    );
-    if (!res.ok) return 'times';
+    const res = await fetch(TTF_URL, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) {
+      console.warn('[pricing-guide-pdf] Playfair TTF fetch returned', res.status);
+      return 'times';
+    }
     const buf = Buffer.from(await res.arrayBuffer());
     const b64 = buf.toString('base64');
     (doc as unknown as { addFileToVFS: (n: string, d: string) => void }).addFileToVFS(
-      'PlayfairDisplay-Regular.woff2',
+      'PlayfairDisplay-Regular.ttf',
       b64,
     );
     (doc as unknown as { addFont: (f: string, n: string, s: string) => void }).addFont(
-      'PlayfairDisplay-Regular.woff2',
+      'PlayfairDisplay-Regular.ttf',
       'PlayfairDisplay',
       'normal',
     );
+    // Smoke-test: jsPDF only fails on a bad font when text() is actually called,
+    // so do a no-op render to verify the font is usable. Any throw here forces
+    // us to fall back to the safe built-in "times".
+    try {
+      doc.setFont('PlayfairDisplay', 'normal');
+      doc.setFontSize(12);
+      doc.getTextWidth('test');
+    } catch (testErr) {
+      console.warn('[pricing-guide-pdf] Playfair font failed validation', testErr);
+      return 'times';
+    }
     return 'PlayfairDisplay';
-  } catch {
+  } catch (err) {
+    console.warn('[pricing-guide-pdf] Playfair font load failed', err);
     return 'times';
   }
 }
