@@ -45,6 +45,7 @@ interface Guide {
   congratulatory_message: string | null;
   gallery: GalleryItem[];
   about_photos: GalleryItem[];
+  accommodations_photos: GalleryItem[];
   about_venue: string | null;
   accommodations_text: string | null;
   accommodations_image_url: string | null;
@@ -157,6 +158,7 @@ export default function PricingGuidePage() {
     | { kind: 'cover' }
     | { kind: 'gallery' }
     | { kind: 'about-photo' }
+    | { kind: 'accommodations-photo' }
     | { kind: 'field'; field: 'accommodations_image_url' | 'availability_image_url' }
     | { kind: 'space'; spaceId: string }
     | null
@@ -182,6 +184,13 @@ export default function PricingGuidePage() {
         const current = guide.about_photos ?? [];
         if (!current.some((g) => g.url === url) && current.length < ABOUT_PHOTO_MAX) {
           updateParent('about_photos', [...current, { url }]);
+        }
+        break;
+      }
+      case 'accommodations-photo': {
+        const current = guide.accommodations_photos ?? [];
+        if (!current.some((g) => g.url === url) && current.length < ABOUT_PHOTO_MAX) {
+          updateParent('accommodations_photos', [...current, { url }]);
         }
         break;
       }
@@ -307,6 +316,11 @@ export default function PricingGuidePage() {
   function removeFromAboutPhotos(url: string) {
     if (!guide) return;
     updateParent('about_photos', (guide.about_photos ?? []).filter((g) => g.url !== url));
+  }
+
+  function removeFromAccommodationsPhotos(url: string) {
+    if (!guide) return;
+    updateParent('accommodations_photos', (guide.accommodations_photos ?? []).filter((g) => g.url !== url));
   }
 
   // ── Auto-fill from listing ─────────────────────────────────────────────
@@ -759,7 +773,7 @@ export default function PricingGuidePage() {
       {/* ── Spaces (CRUD) ──────────────────────────────────────────── */}
       <Section
         title="Spaces"
-        hint="Highlight the different rooms, lawns, or buildings the venue offers. Each one becomes its own page in the guide."
+        hint="Each space gets its own dedicated page in the PDF — full-bleed photo, name, and description. Keep descriptions to 500 characters so everything fits perfectly."
         icon={<GripVertical size={18} />}
       >
         <div className="space-y-4">
@@ -800,13 +814,23 @@ export default function PricingGuidePage() {
                     onChange={(v) => patchSpace(space.id, { description: v })}
                     extras={{ space_name: space.name ?? '', capacity: space.capacity ?? '' }}
                     render={({ value, onChange }) => (
-                      <textarea
-                        rows={3}
-                        className={`${TEXTAREA} pr-28`}
-                        placeholder="A short description of this space and how it's used."
-                        value={value}
-                        onChange={onChange}
-                      />
+                      <div className="relative">
+                        <textarea
+                          rows={3}
+                          maxLength={500}
+                          className={`${TEXTAREA} pr-28`}
+                          placeholder="A short description of this space and how it's used."
+                          value={value}
+                          onChange={onChange}
+                        />
+                        <div className={`absolute bottom-3 right-3 text-xs font-mono tabular-nums ${
+                          (value?.length ?? 0) >= 500 ? 'text-red-500'
+                          : (value?.length ?? 0) >= 400 ? 'text-amber-500'
+                          : 'text-gray-400'
+                        }`}>
+                          {value?.length ?? 0}/500
+                        </div>
+                      </div>
                     )}
                   />
                 </div>
@@ -836,43 +860,62 @@ export default function PricingGuidePage() {
       {/* ── Accommodations ─────────────────────────────────────────── */}
       <Section
         title="Accommodations"
-        hint="Lodging on or near the property — getting-ready suites, bridal cottages, partner hotels."
+        hint="Same layout as the About page — paragraph (700 chars) then a 2×2 photo grid. Keep text within the limit so everything fits on one page."
         icon={<ImageIcon size={18} />}
       >
-        <div className="space-y-4">
-          <AIField
-            section="accommodations"
-            value={guide.accommodations_text ?? ''}
-            onChange={(v) => updateParent('accommodations_text', v)}
-            render={({ value, onChange }) => (
+        <AIField
+          section="accommodations"
+          value={guide.accommodations_text ?? ''}
+          onChange={(v) => updateParent('accommodations_text', v)}
+          render={({ value, onChange }) => (
+            <div className="relative">
               <textarea
                 rows={6}
+                maxLength={700}
                 className={`${TEXTAREA} pr-28`}
                 placeholder="Our guest cottage sleeps 8, and we partner with three hotels within 10 minutes…"
                 value={value}
                 onChange={onChange}
               />
-            )}
-          />
-          <div className="flex items-start gap-4">
-            <button
-              type="button"
-              onClick={() => openMediaPicker({ kind: 'field', field: 'accommodations_image_url' })}
-              className="block aspect-[4/3] w-40 flex-shrink-0 cursor-pointer overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 text-left"
-            >
-              {guide.accommodations_image_url ? (
-                <img src={guide.accommodations_image_url} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <span className="flex h-full w-full items-center justify-center text-xs text-gray-400">Add photo</span>
-              )}
-            </button>
-            {guide.accommodations_image_url && (
+              <div className={`absolute bottom-3 right-3 text-xs font-mono tabular-nums ${
+                (value?.length ?? 0) >= 700 ? 'text-red-500'
+                : (value?.length ?? 0) >= 600 ? 'text-amber-500'
+                : 'text-gray-400'
+              }`}>
+                {value?.length ?? 0}/700
+              </div>
+            </div>
+          )}
+        />
+        {/* 4-photo 2×2 grid */}
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-medium text-gray-500 uppercase tracking-wide">
+            Accommodations photos <span className="normal-case font-normal text-gray-400">(4 photos — 2×2 grid below your text in the PDF)</span>
+          </p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {(guide.accommodations_photos ?? []).map((g) => (
+              <div key={g.url} className="group relative aspect-[4/3] overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
+                <img src={g.url} alt="" className="h-full w-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => removeFromAccommodationsPhotos(g.url)}
+                  className="absolute right-2 top-2 hidden h-7 w-7 items-center justify-center rounded-full bg-white text-gray-700 shadow group-hover:inline-flex hover:text-red-600"
+                  title="Remove"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+            {(guide.accommodations_photos ?? []).length < ABOUT_PHOTO_MAX && (
               <button
                 type="button"
-                onClick={() => updateParent('accommodations_image_url', null)}
-                className="text-xs text-gray-500 hover:text-red-600"
+                onClick={() => openMediaPicker({ kind: 'accommodations-photo' })}
+                className="flex aspect-[4/3] cursor-pointer items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 text-sm text-gray-500 hover:border-gray-300 hover:bg-white"
               >
-                Remove image
+                <span className="flex flex-col items-center gap-1">
+                  <Upload size={16} />
+                  <span className="text-xs">Add ({ABOUT_PHOTO_MAX - (guide.accommodations_photos ?? []).length} left)</span>
+                </span>
               </button>
             )}
           </div>

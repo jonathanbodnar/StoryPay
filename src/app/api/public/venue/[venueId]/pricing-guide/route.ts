@@ -88,6 +88,7 @@ export async function GET(
     about_photos:             (guide?.about_photos as { url: string; caption?: string }[]) ?? [],
     about_venue:              guide?.about_venue              ?? null,
     accommodations_text:      guide?.accommodations_text      ?? null,
+    accommodations_photos:    (guide?.accommodations_photos as { url: string; caption?: string }[]) ?? [],
     accommodations_image_url: guide?.accommodations_image_url ?? null,
     pricing_intro:            guide?.pricing_intro            ?? null,
     reviews:                  (guide?.reviews as { author?: string; location?: string; body?: string; rating?: number }[]) ?? [],

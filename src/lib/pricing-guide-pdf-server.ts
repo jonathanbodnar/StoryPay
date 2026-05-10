@@ -28,6 +28,7 @@ export interface GuideData {
   about_photos:             GalleryItem[];
   about_venue:              string | null;
   accommodations_text:      string | null;
+  accommodations_photos:    GalleryItem[];
   accommodations_image_url: string | null;
   pricing_intro:            string | null;
   reviews:                  ReviewItem[];
@@ -327,11 +328,13 @@ export async function generatePricingGuidePdfServer(
     getImage(guide.availability_image_url),
   ]);
 
-  // Fetch about-page photos (separate from gallery, max 4)
-  const aboutPhotoResults = await Promise.all(
-    (guide.about_photos ?? []).slice(0, 4).map(g => getImage(g.url))
-  );
+  // Fetch about-page photos and accommodations photos (separate from gallery, max 4 each)
+  const [aboutPhotoResults, accPhotoResults] = await Promise.all([
+    Promise.all((guide.about_photos ?? []).slice(0, 4).map(g => getImage(g.url))),
+    Promise.all((guide.accommodations_photos ?? []).slice(0, 4).map(g => getImage(g.url))),
+  ]);
   const aboutPhotoItems = aboutPhotoResults.filter((r): r is NonNullable<typeof r> => r !== null);
+  const accPhotoItems   = accPhotoResults.filter((r): r is NonNullable<typeof r> => r !== null);
 
   // ── Page 1: Cover ─────────────────────────────────────────────────────
   // Full-bleed photo, uniform dark overlay, refined 2px-style border,
@@ -556,74 +559,107 @@ export async function generatePricingGuidePdfServer(
     }
   }
 
-  // ── Page 5: Spaces ────────────────────────────────────────────────────
-  if (guide.spaces.length > 0) {
-    doc.addPage(); drawPageBorder(doc);
+  // ── Page 5+: Spaces — one dedicated page per space ───────────────────
+  // Layout: space name (Playfair) → full-bleed image → paragraph (Open Sans)
+  // Max 500 chars per description so text + image always fit on one page.
+  const SPACE_IMG_H = 120; // mm — full-bleed, cover-cropped
+
+  for (const space of guide.spaces) {
+    doc.addPage(); // fresh page — border drawn LAST so it sits on top of image
+
     let y = MARGIN;
 
+    // Space name — Playfair Display
     doc.setTextColor(DARK);
-    doc.setFont('times', 'bold');
-    doc.setFontSize(20);
-    doc.text('Our Spaces', MARGIN, y + 6); y += 18;
+    doc.setFont(playfairFamily, 'normal');
+    doc.setFontSize(26);
+    doc.text(space.name ?? 'Untitled Space', MARGIN, y + 9); y += 15;
 
-    for (const space of guide.spaces) {
-      if (y > PAGE_H - MARGIN - 40) { doc.addPage(); drawPageBorder(doc); y = MARGIN; }
-
-      const imgW = 35;
-      const imgH = imgW * 3 / 4;
-      const spaceImg = spaceResults.get(space.id);
-      const textX = spaceImg ? MARGIN + imgW + 6 : MARGIN;
-      const textW = spaceImg ? CONTENT_W - imgW - 6 : CONTENT_W;
-
-      if (spaceImg) {
-        try { doc.addImage(spaceImg.dataUrl, 'JPEG', MARGIN, y, imgW, imgH); } catch { /* skip */ }
-      }
-
-      doc.setTextColor(DARK);
-      doc.setFont('times', 'bold');
-      doc.setFontSize(13);
-      doc.text(space.name ?? 'Untitled space', textX, y + 5);
-
-      let ty = y + 10;
-      if (space.capacity) {
-        doc.setTextColor(107, 114, 128);
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8);
-        doc.text(space.capacity.toUpperCase(), textX, ty); ty += 6;
-      }
-      if (space.description) {
-        doc.setTextColor(55, 65, 81);
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(10);
-        const descLines = wrapText(doc, space.description, textW, 10);
-        doc.text(descLines, textX, ty); ty += descLines.length * 4.5;
-      }
-      y = Math.max(y + imgH, ty) + 8;
+    // Capacity — small grey label beneath name
+    if (space.capacity) {
+      doc.setTextColor(160, 160, 160);
+      doc.setFont(openSansFamily, 'normal');
+      doc.setFontSize(8);
+      doc.text(space.capacity.toUpperCase(), MARGIN, y); y += 7;
     }
+
+    // Full-bleed image (bleeds left/right to border, border drawn on top)
+    const spaceImg = spaceResults.get(space.id);
+    if (spaceImg) {
+      drawClippedImage(
+        doc, spaceImg.dataUrl,
+        PAGE_BORDER, y,
+        PAGE_W - 2 * PAGE_BORDER, SPACE_IMG_H,
+        spaceImg.w, spaceImg.h,
+      );
+    }
+    y += SPACE_IMG_H + 10;
+
+    // Description paragraph — Open Sans
+    if (space.description) {
+      doc.setTextColor(55, 65, 81);
+      doc.setFont(openSansFamily, 'normal');
+      doc.setFontSize(11);
+      const descLines = wrapText(doc, space.description, CONTENT_W, 11);
+      doc.text(descLines, MARGIN, y);
+    }
+
+    // Border drawn last so it overlays the full-bleed image edges
+    drawPageBorder(doc);
   }
 
-  // ── Page 6: Accommodations ────────────────────────────────────────────
+  // ── Accommodations page — same framework as About ─────────────────────
+  // Label → Playfair heading → rule → Open Sans body → 2×2 photo grid
   if (guide.accommodations_text?.trim()) {
     doc.addPage(); drawPageBorder(doc);
-    let y = MARGIN;
+    let y = MARGIN + 10;
 
-    doc.setTextColor(DARK);
-    doc.setFont('times', 'bold');
-    doc.setFontSize(20);
-    doc.text('Accommodations', MARGIN, y + 6); y += 16;
-
-    if (accommodationsResult) {
-      const imgW = CONTENT_W;
-      const imgH = imgW * 9 / 16;
-      try { doc.addImage(accommodationsResult.dataUrl, 'JPEG', MARGIN, y, imgW, imgH); } catch { /* skip */ }
-      y += imgH + 8;
-    }
-
-    doc.setTextColor(55, 65, 81);
+    // "ACCOMMODATIONS" label
+    doc.setTextColor(160, 160, 160);
     doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text('ACCOMMODATIONS', MARGIN, y); y += 10;
+
+    // Heading — Playfair Display
+    doc.setTextColor(DARK);
+    doc.setFont(playfairFamily, 'normal');
+    doc.setFontSize(26);
+    doc.text('Accommodations', MARGIN, y); y += 8;
+
+    // Thin rule
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.3);
+    doc.line(MARGIN, y, MARGIN + 16, y); y += 12;
+
+    // Body text — Open Sans
+    doc.setTextColor(55, 65, 81);
+    doc.setFont(openSansFamily, 'normal');
     doc.setFontSize(11);
     const accLines = wrapText(doc, guide.accommodations_text, CONTENT_W, 11);
     doc.text(accLines, MARGIN, y);
+
+    // 2×2 photo grid — identical math as About page
+    const ACC_PHOTO_GAP = 4;
+    const ACC_PHOTO_W   = (CONTENT_W - ACC_PHOTO_GAP) / 2;
+    const ACC_PHOTO_H   = ACC_PHOTO_W * 0.75;
+    const textBlockH    = accLines.length * 4.7;
+    const gridStartY    = y + textBlockH + 10;
+    const gridEndY      = gridStartY + 2 * ACC_PHOTO_H + ACC_PHOTO_GAP;
+    const pageBottom    = PAGE_H - MARGIN - 10;
+
+    if (gridEndY <= pageBottom && accPhotoItems.length >= 1) {
+      const photos = accPhotoItems.slice(0, 4);
+      const positions: Array<[number, number]> = [
+        [MARGIN,                        gridStartY],
+        [MARGIN + ACC_PHOTO_W + ACC_PHOTO_GAP, gridStartY],
+        [MARGIN,                        gridStartY + ACC_PHOTO_H + ACC_PHOTO_GAP],
+        [MARGIN + ACC_PHOTO_W + ACC_PHOTO_GAP, gridStartY + ACC_PHOTO_H + ACC_PHOTO_GAP],
+      ];
+      photos.forEach((item, i) => {
+        const [px, py] = positions[i];
+        drawClippedImage(doc, item.dataUrl, px, py, ACC_PHOTO_W, ACC_PHOTO_H, item.w, item.h);
+      });
+    }
   }
 
   // ── Page 7: Pricing & Packages ────────────────────────────────────────
