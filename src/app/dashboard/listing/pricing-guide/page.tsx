@@ -838,7 +838,7 @@ export default function PricingGuidePage() {
       {/* ── Spaces (CRUD) ──────────────────────────────────────────── */}
       <Section
         title="Spaces"
-        hint="Each space gets its own dedicated page in the PDF — full-bleed photo, name, and description. Up to 900 characters fills the page beautifully."
+        hint="Each space gets its own dedicated page in the PDF — full-bleed photo, name, and description. Up to 1,400 characters fills the page while keeping equal white space at the top and bottom."
         icon={<GripVertical size={18} />}
       >
         <div className="space-y-4">
@@ -881,19 +881,19 @@ export default function PricingGuidePage() {
                     render={({ value, onChange }) => (
                       <div className="relative">
                         <textarea
-                          rows={5}
-                          maxLength={900}
+                          rows={7}
+                          maxLength={1400}
                           className={`${TEXTAREA} pr-28`}
-                          placeholder="A short description of this space and how it's used."
+                          placeholder="A description of this space and how it's used."
                           value={value}
                           onChange={onChange}
                         />
                         <div className={`absolute bottom-3 right-3 text-xs font-mono tabular-nums ${
-                          (value?.length ?? 0) >= 900 ? 'text-red-500'
-                          : (value?.length ?? 0) >= 750 ? 'text-amber-500'
+                          (value?.length ?? 0) >= 1400 ? 'text-red-500'
+                          : (value?.length ?? 0) >= 1200 ? 'text-amber-500'
                           : 'text-gray-400'
                         }`}>
-                          {value?.length ?? 0}/900
+                          {value?.length ?? 0}/1400
                         </div>
                       </div>
                     )}
@@ -925,7 +925,7 @@ export default function PricingGuidePage() {
       {/* ── Accommodations (CRUD — one page per entry like Spaces) ─── */}
       <Section
         title="Accommodations"
-        hint="Each accommodation gets its own dedicated page — full-bleed photo, name, and description. Up to 900 characters fills the page beautifully."
+        hint="Each accommodation gets its own dedicated page — full-bleed photo, name, and description. Up to 1,400 characters fills the page while keeping equal white space at the top and bottom."
         icon={<ImageIcon size={18} />}
       >
         <div className="space-y-4">
@@ -960,19 +960,19 @@ export default function PricingGuidePage() {
                     render={({ value, onChange }) => (
                       <div className="relative">
                         <textarea
-                          rows={5}
-                          maxLength={900}
+                          rows={7}
+                          maxLength={1400}
                           className={`${TEXTAREA} pr-28`}
                           placeholder="A description of this accommodation option."
                           value={value}
                           onChange={onChange}
                         />
                         <div className={`absolute bottom-3 right-3 text-xs font-mono tabular-nums ${
-                          (value?.length ?? 0) >= 900 ? 'text-red-500'
-                          : (value?.length ?? 0) >= 750 ? 'text-amber-500'
+                          (value?.length ?? 0) >= 1400 ? 'text-red-500'
+                          : (value?.length ?? 0) >= 1200 ? 'text-amber-500'
                           : 'text-gray-400'
                         }`}>
-                          {value?.length ?? 0}/900
+                          {value?.length ?? 0}/1400
                         </div>
                       </div>
                     )}

@@ -597,8 +597,9 @@ export async function generatePricingGuidePdfServer(
 
   // ── Page 5+: Spaces — one dedicated page per space ───────────────────
   // Layout: space name (Playfair) → full-bleed image → paragraph (Open Sans)
-  // Max 500 chars per description so text + image always fit on one page.
+  // Text is clamped so the bottom whitespace mirrors the top (~MARGIN mm).
   const SPACE_IMG_H = 120; // mm — full-bleed, cover-cropped
+  const DESC_LINE_H = 5.1; // mm per line at 11pt Open Sans
 
   for (const space of guide.spaces) {
     doc.addPage(); // fresh page — border drawn LAST so it sits on top of image
@@ -631,13 +632,14 @@ export async function generatePricingGuidePdfServer(
     }
     y += SPACE_IMG_H + 10;
 
-    // Description paragraph — Open Sans
+    // Description paragraph — clamped so bottom air ≈ top air (MARGIN)
     if (space.description) {
       doc.setTextColor(55, 65, 81);
       doc.setFont(openSansFamily, 'normal');
       doc.setFontSize(11);
-      const descLines = wrapText(doc, space.description, CONTENT_W, 11);
-      doc.text(descLines, MARGIN, y);
+      const allLines  = wrapText(doc, space.description, CONTENT_W, 11);
+      const maxLines  = Math.floor((PAGE_H - MARGIN - y) / DESC_LINE_H);
+      doc.text(allLines.slice(0, maxLines), MARGIN, y);
     }
 
     // Border drawn last so it overlays the full-bleed image edges
@@ -669,13 +671,14 @@ export async function generatePricingGuidePdfServer(
     }
     y += ACC_IMG_H + 10;
 
-    // Description — Open Sans
+    // Description — clamped so bottom air ≈ top air (MARGIN)
     if (acc.description) {
       doc.setTextColor(55, 65, 81);
       doc.setFont(openSansFamily, 'normal');
       doc.setFontSize(11);
-      const descLines = wrapText(doc, acc.description, CONTENT_W, 11);
-      doc.text(descLines, MARGIN, y);
+      const allLines = wrapText(doc, acc.description, CONTENT_W, 11);
+      const maxLines = Math.floor((PAGE_H - MARGIN - y) / DESC_LINE_H);
+      doc.text(allLines.slice(0, maxLines), MARGIN, y);
     }
 
     drawPageBorder(doc);
