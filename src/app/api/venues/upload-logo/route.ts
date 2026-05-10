@@ -64,10 +64,15 @@ export async function POST(request: NextRequest) {
   const { data: urlData } = supabaseAdmin.storage.from(LOGO_BUCKET).getPublicUrl(path);
   const publicUrl = urlData.publicUrl;
 
-  await supabaseAdmin
+  const { error: dbError } = await supabaseAdmin
     .from('venues')
     .update({ brand_logo_url: publicUrl })
     .eq('id', venueId);
+
+  if (dbError) {
+    console.error('[upload-logo] Failed to save brand_logo_url to DB:', dbError);
+    // Still return the URL — the image is uploaded, the caller can persist it.
+  }
 
   // Register the logo in the shared media library so it's reusable from the
   // Media page (and from emails/forms via the picker). Re-uploads with a
