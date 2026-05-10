@@ -27,6 +27,14 @@ type Space = {
   position: number;
 };
 
+type Accommodation = {
+  id: string;
+  name: string | null;
+  description: string | null;
+  image_url: string | null;
+  position: number;
+};
+
 type Package = {
   id: string;
   name: string | null;
@@ -47,6 +55,7 @@ interface Guide {
   about_photos: GalleryItem[];
   accommodations_photos: GalleryItem[];
   about_venue: string | null;
+  accommodations: Accommodation[];
   accommodations_text: string | null;
   accommodations_image_url: string | null;
   pricing_intro: string | null;
@@ -161,6 +170,7 @@ export default function PricingGuidePage() {
     | { kind: 'accommodations-photo' }
     | { kind: 'field'; field: 'accommodations_image_url' | 'availability_image_url' }
     | { kind: 'space'; spaceId: string }
+    | { kind: 'accommodation'; accommodationId: string }
     | null
   >(null);
 
@@ -199,6 +209,9 @@ export default function PricingGuidePage() {
         break;
       case 'space':
         void patchSpace(mediaPickerTarget.spaceId, { image_url: url });
+        break;
+      case 'accommodation':
+        void patchAccommodation(mediaPickerTarget.accommodationId, { image_url: url });
         break;
     }
   }
@@ -284,6 +297,27 @@ export default function PricingGuidePage() {
     if (!confirm('Remove this space?')) return;
     setGuide((g) => g ? { ...g, spaces: g.spaces.filter((s) => s.id !== id) } : g);
     await fetch(`/api/listing/pricing-guide/spaces/${id}`, { method: 'DELETE' });
+  }
+
+  // ── Accommodations CRUD ───────────────────────────────────────────────
+  async function addAccommodation() {
+    const res = await fetch('/api/listing/pricing-guide/accommodations', { method: 'POST', body: JSON.stringify({}) });
+    if (!res.ok) { setError('Failed to add accommodation'); return; }
+    const { accommodation } = (await res.json()) as { accommodation: Accommodation };
+    setGuide((g) => g ? { ...g, accommodations: [...(g.accommodations ?? []), accommodation] } : g);
+  }
+  async function patchAccommodation(id: string, patch: Partial<Accommodation>) {
+    setGuide((g) => g ? { ...g, accommodations: (g.accommodations ?? []).map((a) => a.id === id ? { ...a, ...patch } : a) } : g);
+    await fetch(`/api/listing/pricing-guide/accommodations/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+  }
+  async function deleteAccommodation(id: string) {
+    if (!confirm('Remove this accommodation?')) return;
+    setGuide((g) => g ? { ...g, accommodations: (g.accommodations ?? []).filter((a) => a.id !== id) } : g);
+    await fetch(`/api/listing/pricing-guide/accommodations/${id}`, { method: 'DELETE' });
   }
 
   // ── Packages CRUD ─────────────────────────────────────────────────────
@@ -857,68 +891,74 @@ export default function PricingGuidePage() {
         </div>
       </Section>
 
-      {/* ── Accommodations ─────────────────────────────────────────── */}
+      {/* ── Accommodations (CRUD — one page per entry like Spaces) ─── */}
       <Section
         title="Accommodations"
-        hint="Same layout as the About page — paragraph (700 chars) then a 2×2 photo grid. Keep text within the limit so everything fits on one page."
+        hint="Each accommodation gets its own dedicated page — full-bleed photo, name, and description. Keep descriptions to 500 characters. Add as many entries as you need."
         icon={<ImageIcon size={18} />}
       >
-        <AIField
-          section="accommodations"
-          value={guide.accommodations_text ?? ''}
-          onChange={(v) => updateParent('accommodations_text', v)}
-          render={({ value, onChange }) => (
-            <div className="relative">
-              <textarea
-                rows={6}
-                maxLength={700}
-                className={`${TEXTAREA} pr-28`}
-                placeholder="Our guest cottage sleeps 8, and we partner with three hotels within 10 minutes…"
-                value={value}
-                onChange={onChange}
-              />
-              <div className={`absolute bottom-3 right-3 text-xs font-mono tabular-nums ${
-                (value?.length ?? 0) >= 700 ? 'text-red-500'
-                : (value?.length ?? 0) >= 600 ? 'text-amber-500'
-                : 'text-gray-400'
-              }`}>
-                {value?.length ?? 0}/700
-              </div>
-            </div>
-          )}
-        />
-        {/* 4-photo 2×2 grid */}
-        <div className="mt-4">
-          <p className="mb-2 text-xs font-medium text-gray-500 uppercase tracking-wide">
-            Accommodations photos <span className="normal-case font-normal text-gray-400">(4 photos — 2×2 grid below your text in the PDF)</span>
-          </p>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {(guide.accommodations_photos ?? []).map((g) => (
-              <div key={g.url} className="group relative aspect-[4/3] overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
-                <img src={g.url} alt="" className="h-full w-full object-cover" />
+        <div className="space-y-4">
+          {(guide.accommodations ?? []).map((acc) => (
+            <div key={acc.id} className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <div className="flex items-start gap-4">
+                {/* Image */}
                 <button
                   type="button"
-                  onClick={() => removeFromAccommodationsPhotos(g.url)}
-                  className="absolute right-2 top-2 hidden h-7 w-7 items-center justify-center rounded-full bg-white text-gray-700 shadow group-hover:inline-flex hover:text-red-600"
-                  title="Remove"
+                  onClick={() => openMediaPicker({ kind: 'accommodation', accommodationId: acc.id })}
+                  className="block aspect-[4/3] w-32 flex-shrink-0 cursor-pointer overflow-hidden rounded-xl border border-gray-200 bg-white text-left"
                 >
-                  <Trash2 size={14} />
+                  {acc.image_url ? (
+                    <img src={acc.image_url} alt={acc.name ?? ''} className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center text-[11px] text-gray-400">Add photo</span>
+                  )}
+                </button>
+
+                <div className="flex-1 space-y-3">
+                  <input
+                    className={INPUT}
+                    placeholder="Name (e.g. Bridal Suite, Guest Cottage, AirBnb)"
+                    value={acc.name ?? ''}
+                    onChange={(e) => patchAccommodation(acc.id, { name: e.target.value })}
+                  />
+                  <div className="relative">
+                    <textarea
+                      rows={3}
+                      maxLength={500}
+                      className={`${TEXTAREA} pr-20`}
+                      placeholder="A short description of this accommodation."
+                      value={acc.description ?? ''}
+                      onChange={(e) => patchAccommodation(acc.id, { description: e.target.value })}
+                    />
+                    <div className={`absolute bottom-3 right-3 text-xs font-mono tabular-nums ${
+                      (acc.description?.length ?? 0) >= 500 ? 'text-red-500'
+                      : (acc.description?.length ?? 0) >= 400 ? 'text-amber-500'
+                      : 'text-gray-400'
+                    }`}>
+                      {acc.description?.length ?? 0}/500
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => deleteAccommodation(acc.id)}
+                  className="flex-shrink-0 rounded-xl p-2 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                  title="Remove accommodation"
+                >
+                  <Trash2 size={16} />
                 </button>
               </div>
-            ))}
-            {(guide.accommodations_photos ?? []).length < ABOUT_PHOTO_MAX && (
-              <button
-                type="button"
-                onClick={() => openMediaPicker({ kind: 'accommodations-photo' })}
-                className="flex aspect-[4/3] cursor-pointer items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 text-sm text-gray-500 hover:border-gray-300 hover:bg-white"
-              >
-                <span className="flex flex-col items-center gap-1">
-                  <Upload size={16} />
-                  <span className="text-xs">Add ({ABOUT_PHOTO_MAX - (guide.accommodations_photos ?? []).length} left)</span>
-                </span>
-              </button>
-            )}
-          </div>
+            </div>
+          ))}
+
+          <button
+            type="button"
+            onClick={addAccommodation}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 py-4 text-sm font-medium text-gray-600 hover:border-gray-300 hover:bg-white"
+          >
+            <Plus size={16} /> Add accommodation
+          </button>
         </div>
       </Section>
 
@@ -967,11 +1007,28 @@ export default function PricingGuidePage() {
 
       {/* ── Reviews ────────────────────────────────────────────────── */}
       <Section
-        title="Reviews"
-        hint="A few of your favorite testimonials. We recommend 3–6 short, punchy quotes."
+        title="Stories"
+        hint="Upload 4–6 reviews. This creates a single dedicated 'Stories' page in the PDF — keeping it between 4 and 6 ensures it always formats perfectly."
         icon={<Star size={18} />}
       >
         <div className="space-y-4">
+          {/* Count badge */}
+          <div className="flex items-center gap-2">
+            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+              guide.reviews.length >= 4 && guide.reviews.length <= 6 ? 'bg-green-50 text-green-700'
+              : guide.reviews.length > 6 ? 'bg-red-50 text-red-700'
+              : 'bg-blue-50 text-blue-700'
+            }`}>
+              {guide.reviews.length}/6
+            </span>
+            <span className="text-xs text-gray-400">
+              {guide.reviews.length === 0 ? 'Add 4–6 reviews for a perfect single page'
+              : guide.reviews.length < 4 ? `${4 - guide.reviews.length} more recommended`
+              : guide.reviews.length <= 6 ? 'Perfect — single page'
+              : 'Over 6 — only first 6 shown in PDF'}
+            </span>
+          </div>
+
           {guide.reviews.map((r, idx) => (
             <div key={idx} className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1039,13 +1096,15 @@ export default function PricingGuidePage() {
               </div>
             </div>
           ))}
-          <button
-            type="button"
-            onClick={() => updateParent('reviews', [...guide.reviews, { rating: 5 }])}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 py-4 text-sm font-medium text-gray-600 hover:border-gray-300 hover:bg-white"
-          >
-            <Plus size={16} /> Add review
-          </button>
+          {guide.reviews.length < 6 && (
+            <button
+              type="button"
+              onClick={() => updateParent('reviews', [...guide.reviews, { rating: 5 }])}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 py-4 text-sm font-medium text-gray-600 hover:border-gray-300 hover:bg-white"
+            >
+              <Plus size={16} /> Add review ({6 - guide.reviews.length} left)
+            </button>
+          )}
         </div>
       </Section>
 

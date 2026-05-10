@@ -18,6 +18,7 @@
 type GalleryItem  = { url: string; caption?: string };
 type ReviewItem   = { author?: string; location?: string; body?: string; rating?: number };
 type Space        = { id: string; name: string | null; description: string | null; capacity: string | null; image_url: string | null };
+type Accommodation = { id: string; name: string | null; description: string | null; image_url: string | null };
 type Package      = { id: string; name: string | null; price_label: string | null; description: string | null; included_items: string[] };
 
 export interface GuideData {
@@ -38,6 +39,7 @@ export interface GuideData {
   cta_body:                 string | null;
   cta_button_label:         string;
   spaces:                   Space[];
+  accommodations:           Accommodation[];
   packages:                 Package[];
 }
 
@@ -316,25 +318,32 @@ export async function generatePricingGuidePdfServer(
   const galleryItems   = galleryResults.filter((r): r is NonNullable<typeof r> => r !== null);
 
   const spaceResults = new Map<string, { dataUrl: string; w: number; h: number }>();
-  await Promise.all(guide.spaces.map(async (s) => {
-    if (s.image_url) {
-      const r = await getImage(s.image_url);
-      if (r) spaceResults.set(s.id, r);
-    }
-  }));
+  const accommodationResults = new Map<string, { dataUrl: string; w: number; h: number }>();
+  await Promise.all([
+    ...guide.spaces.map(async (s) => {
+      if (s.image_url) {
+        const r = await getImage(s.image_url);
+        if (r) spaceResults.set(s.id, r);
+      }
+    }),
+    ...(guide.accommodations ?? []).map(async (a) => {
+      if (a.image_url) {
+        const r = await getImage(a.image_url);
+        if (r) accommodationResults.set(a.id, r);
+      }
+    }),
+  ]);
 
   const [accommodationsResult, availabilityResult] = await Promise.all([
     getImage(guide.accommodations_image_url),
     getImage(guide.availability_image_url),
   ]);
 
-  // Fetch about-page photos and accommodations photos (separate from gallery, max 4 each)
-  const [aboutPhotoResults, accPhotoResults] = await Promise.all([
-    Promise.all((guide.about_photos ?? []).slice(0, 4).map(g => getImage(g.url))),
-    Promise.all((guide.accommodations_photos ?? []).slice(0, 4).map(g => getImage(g.url))),
-  ]);
+  // Fetch about-page photos (separate from gallery, max 4)
+  const aboutPhotoResults = await Promise.all(
+    (guide.about_photos ?? []).slice(0, 4).map(g => getImage(g.url))
+  );
   const aboutPhotoItems = aboutPhotoResults.filter((r): r is NonNullable<typeof r> => r !== null);
-  const accPhotoItems   = accPhotoResults.filter((r): r is NonNullable<typeof r> => r !== null);
 
   // ── Page 1: Cover ─────────────────────────────────────────────────────
   // Full-bleed photo, uniform dark overlay, refined 2px-style border,
@@ -496,16 +505,11 @@ export async function generatePricingGuidePdfServer(
   }
 
   // ── Page 4: About ─────────────────────────────────────────────────────
-  // Layout budget (A4, mm):
-  //   heading block  ≈ 38mm
-  //   gap            ≈  8mm
-  //   2×2 photo grid ≈ 136mm  (two 66mm-tall rows + 4mm gutter)
-  //   footer area    ≈ 15mm
-  //   ──────────────────────
-  //   available for text ≈ 100mm  →  ~700 chars max for a perfect single page
-  const ABOUT_PHOTO_GAP = 4;  // mm between photo cells
-  const ABOUT_PHOTO_W   = (CONTENT_W - ABOUT_PHOTO_GAP) / 2;
-  const ABOUT_PHOTO_H   = ABOUT_PHOTO_W * 0.75;  // 4:3
+  // Photo grid: full-bleed (PAGE_BORDER gap on all sides + between cells)
+  // → visually matches the gallery page style guide-wide.
+  const APG           = PAGE_BORDER;
+  const ABOUT_PHOTO_W = (PAGE_W - 2 * APG - APG) / 2; // border-to-border, split 2 cols
+  const ABOUT_PHOTO_H = ABOUT_PHOTO_W * 0.75;          // 4:3
 
   if (guide.about_venue?.trim()) {
     doc.addPage(); drawPageBorder(doc);
@@ -537,7 +541,7 @@ export async function generatePricingGuidePdfServer(
 
     // Approximate how many mm the text block occupies (≈4.7mm per line at 11pt)
     const textBlockH = aboutLines.length * 4.7;
-    const photoGridH = 2 * ABOUT_PHOTO_H + ABOUT_PHOTO_GAP;
+    const photoGridH = 2 * ABOUT_PHOTO_H + APG;
     const gridStartY = y + textBlockH + 10; // 10mm breathing gap after text
 
     // Only render the 2×2 photo grid if it fits on this page
@@ -547,10 +551,10 @@ export async function generatePricingGuidePdfServer(
     if (gridEndY <= pageBottom && aboutPhotoItems.length >= 1) {
       const photos = aboutPhotoItems.slice(0, 4);
       const positions: Array<[number, number]> = [
-        [MARGIN,                        gridStartY],
-        [MARGIN + ABOUT_PHOTO_W + ABOUT_PHOTO_GAP, gridStartY],
-        [MARGIN,                        gridStartY + ABOUT_PHOTO_H + ABOUT_PHOTO_GAP],
-        [MARGIN + ABOUT_PHOTO_W + ABOUT_PHOTO_GAP, gridStartY + ABOUT_PHOTO_H + ABOUT_PHOTO_GAP],
+        [APG,                    gridStartY],
+        [APG + ABOUT_PHOTO_W + APG, gridStartY],
+        [APG,                    gridStartY + ABOUT_PHOTO_H + APG],
+        [APG + ABOUT_PHOTO_W + APG, gridStartY + ABOUT_PHOTO_H + APG],
       ];
       photos.forEach((item, i) => {
         const [px, py] = positions[i];
@@ -608,58 +612,41 @@ export async function generatePricingGuidePdfServer(
     drawPageBorder(doc);
   }
 
-  // ── Accommodations page — same framework as About ─────────────────────
-  // Label → Playfair heading → rule → Open Sans body → 2×2 photo grid
-  if (guide.accommodations_text?.trim()) {
-    doc.addPage(); drawPageBorder(doc);
-    let y = MARGIN + 10;
+  // ── Accommodations — one dedicated page per entry (same layout as Spaces) ─
+  const ACC_IMG_H = 120; // mm, full-bleed cover-cropped
 
-    // "ACCOMMODATIONS" label
-    doc.setTextColor(160, 160, 160);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.text('ACCOMMODATIONS', MARGIN, y); y += 10;
+  for (const acc of (guide.accommodations ?? [])) {
+    doc.addPage();
+    let y = MARGIN;
 
-    // Heading — Playfair Display
+    // Name — Playfair Display
     doc.setTextColor(DARK);
     doc.setFont(playfairFamily, 'normal');
     doc.setFontSize(26);
-    doc.text('Accommodations', MARGIN, y); y += 8;
+    doc.text(acc.name ?? 'Accommodations', MARGIN, y + 9); y += 15;
 
-    // Thin rule
-    doc.setDrawColor(200, 200, 200);
-    doc.setLineWidth(0.3);
-    doc.line(MARGIN, y, MARGIN + 16, y); y += 12;
-
-    // Body text — Open Sans
-    doc.setTextColor(55, 65, 81);
-    doc.setFont(openSansFamily, 'normal');
-    doc.setFontSize(11);
-    const accLines = wrapText(doc, guide.accommodations_text, CONTENT_W, 11);
-    doc.text(accLines, MARGIN, y);
-
-    // 2×2 photo grid — identical math as About page
-    const ACC_PHOTO_GAP = 4;
-    const ACC_PHOTO_W   = (CONTENT_W - ACC_PHOTO_GAP) / 2;
-    const ACC_PHOTO_H   = ACC_PHOTO_W * 0.75;
-    const textBlockH    = accLines.length * 4.7;
-    const gridStartY    = y + textBlockH + 10;
-    const gridEndY      = gridStartY + 2 * ACC_PHOTO_H + ACC_PHOTO_GAP;
-    const pageBottom    = PAGE_H - MARGIN - 10;
-
-    if (gridEndY <= pageBottom && accPhotoItems.length >= 1) {
-      const photos = accPhotoItems.slice(0, 4);
-      const positions: Array<[number, number]> = [
-        [MARGIN,                        gridStartY],
-        [MARGIN + ACC_PHOTO_W + ACC_PHOTO_GAP, gridStartY],
-        [MARGIN,                        gridStartY + ACC_PHOTO_H + ACC_PHOTO_GAP],
-        [MARGIN + ACC_PHOTO_W + ACC_PHOTO_GAP, gridStartY + ACC_PHOTO_H + ACC_PHOTO_GAP],
-      ];
-      photos.forEach((item, i) => {
-        const [px, py] = positions[i];
-        drawClippedImage(doc, item.dataUrl, px, py, ACC_PHOTO_W, ACC_PHOTO_H, item.w, item.h);
-      });
+    // Full-bleed image (border drawn on top)
+    const accImg = accommodationResults.get(acc.id);
+    if (accImg) {
+      drawClippedImage(
+        doc, accImg.dataUrl,
+        PAGE_BORDER, y,
+        PAGE_W - 2 * PAGE_BORDER, ACC_IMG_H,
+        accImg.w, accImg.h,
+      );
     }
+    y += ACC_IMG_H + 10;
+
+    // Description — Open Sans
+    if (acc.description) {
+      doc.setTextColor(55, 65, 81);
+      doc.setFont(openSansFamily, 'normal');
+      doc.setFontSize(11);
+      const descLines = wrapText(doc, acc.description, CONTENT_W, 11);
+      doc.text(descLines, MARGIN, y);
+    }
+
+    drawPageBorder(doc);
   }
 
   // ── Page 7: Pricing & Packages ────────────────────────────────────────
@@ -722,34 +709,36 @@ export async function generatePricingGuidePdfServer(
     }
   }
 
-  // ── Page 8: Reviews ───────────────────────────────────────────────────
-  if (guide.reviews.length > 0) {
+  // ── Stories (Reviews) — max 6, single page, Playfair heading ────────
+  const storiesReviews = guide.reviews.slice(0, 6);
+  if (storiesReviews.length > 0) {
     doc.addPage(); drawPageBorder(doc);
     let y = MARGIN;
 
+    // "Stories" heading — Playfair Display
     doc.setTextColor(DARK);
-    doc.setFont('times', 'bold');
-    doc.setFontSize(20);
-    doc.text('From Our Couples', MARGIN, y + 6); y += 18;
+    doc.setFont(playfairFamily, 'normal');
+    doc.setFontSize(26);
+    doc.text('Stories', MARGIN, y + 9); y += 20;
 
-    for (const review of guide.reviews) {
-      if (y > PAGE_H - MARGIN - 40) { doc.addPage(); drawPageBorder(doc); y = MARGIN; }
-
-      if ((review.rating ?? 0) > 0) {
+    for (const review of storiesReviews) {
+      // Stars — use exact backend rating (0–5)
+      const stars = Math.max(0, Math.min(5, review.rating ?? 0));
+      if (stars > 0) {
         doc.setFontSize(10);
         doc.setTextColor(217, 169, 26);
-        doc.text('\u2605'.repeat(review.rating ?? 5), MARGIN, y); y += 7;
+        doc.text('\u2605'.repeat(stars), MARGIN, y); y += 7;
       }
 
       if (review.body) {
         doc.setTextColor(31, 41, 55);
-        doc.setFont('helvetica', 'italic');
+        doc.setFont(openSansFamily, 'normal');
         doc.setFontSize(11);
         const bodyLines = wrapText(doc, `\u201C${review.body}\u201D`, CONTENT_W, 11);
         doc.text(bodyLines, MARGIN, y); y += bodyLines.length * 5 + 3;
       }
 
-      const authorLine = [review.author, review.author && review.location ? ' · ' : '', review.location].filter(Boolean).join('');
+      const authorLine = [review.author, review.author && review.location ? ' \u00B7 ' : '', review.location].filter(Boolean).join('');
       if (authorLine) {
         doc.setTextColor(107, 114, 128);
         doc.setFont('helvetica', 'normal');

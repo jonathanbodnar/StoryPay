@@ -39,6 +39,13 @@ function emptyGuide(venueId: string) {
       image_url: string | null;
       position: number;
     }>,
+    accommodations: [] as Array<{
+      id: string;
+      name: string | null;
+      description: string | null;
+      image_url: string | null;
+      position: number;
+    }>,
     packages: [] as Array<{
       id: string;
       name: string | null;
@@ -88,7 +95,7 @@ export async function GET() {
   }
 
   // Pull child rows in parallel
-  const [spacesRes, packagesRes] = await Promise.all([
+  const [spacesRes, packagesRes, accommodationsRes] = await Promise.all([
     supabaseAdmin
       .from('venue_pricing_guide_spaces')
       .select('*')
@@ -99,6 +106,11 @@ export async function GET() {
       .select('*')
       .eq('pricing_guide_id', guide.id)
       .order('position', { ascending: true }),
+    supabaseAdmin
+      .from('venue_pricing_guide_accommodations')
+      .select('*')
+      .eq('pricing_guide_id', guide.id)
+      .order('position', { ascending: true }),
   ]);
 
   return NextResponse.json({
@@ -106,6 +118,7 @@ export async function GET() {
       ...guide,
       spaces: spacesRes.data ?? [],
       packages: packagesRes.data ?? [],
+      accommodations: accommodationsRes.data ?? [],
     },
   });
 }

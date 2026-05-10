@@ -32,7 +32,7 @@ export async function getOrCreatePricingGuideId(venueId: string): Promise<string
  * gate before mutation.
  */
 export async function childBelongsToVenue(
-  table: 'venue_pricing_guide_spaces' | 'venue_pricing_guide_packages',
+  table: 'venue_pricing_guide_spaces' | 'venue_pricing_guide_packages' | 'venue_pricing_guide_accommodations',
   childId: string,
   venueId: string,
 ): Promise<boolean> {

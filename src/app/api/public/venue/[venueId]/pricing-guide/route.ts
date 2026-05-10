@@ -60,9 +60,9 @@ export async function GET(
     return NextResponse.json({ error: 'Failed to load guide' }, { status: 500 });
   }
 
-  // Load child rows (spaces + packages)
+  // Load child rows (spaces + packages + accommodations)
   const guideId = guide?.id ?? null;
-  const [spacesRes, packagesRes] = await Promise.all([
+  const [spacesRes, packagesRes, accommodationsRes] = await Promise.all([
     guideId
       ? supabaseAdmin
           .from('venue_pricing_guide_spaces')
@@ -73,6 +73,13 @@ export async function GET(
     guideId
       ? supabaseAdmin
           .from('venue_pricing_guide_packages')
+          .select('*')
+          .eq('pricing_guide_id', guideId)
+          .order('position', { ascending: true })
+      : Promise.resolve({ data: [] }),
+    guideId
+      ? supabaseAdmin
+          .from('venue_pricing_guide_accommodations')
           .select('*')
           .eq('pricing_guide_id', guideId)
           .order('position', { ascending: true })
@@ -97,8 +104,9 @@ export async function GET(
     cta_headline:             guide?.cta_headline             ?? null,
     cta_body:                 guide?.cta_body                 ?? null,
     cta_button_label:         (guide?.cta_button_label as string) ?? 'Schedule a tour',
-    spaces:  (spacesRes.data ?? []) as GuideData['spaces'],
-    packages: (packagesRes.data ?? []) as GuideData['packages'],
+    spaces:          (spacesRes.data ?? []) as GuideData['spaces'],
+    packages:        (packagesRes.data ?? []) as GuideData['packages'],
+    accommodations:  (accommodationsRes.data ?? []) as GuideData['accommodations'],
   };
 
   const venueInfo: VenueInfo = {
