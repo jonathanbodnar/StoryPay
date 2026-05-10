@@ -144,17 +144,18 @@ function wrapText(doc: JsPDF, text: string, maxWidth: number, fontSize: number):
   return doc.splitTextToSize(text, maxWidth) as string[];
 }
 
-const PAGE_BORDER_INSET = 2.5; // mm — thin refined border used on every page
+// Solid white "magazine" frame applied to every page. Width is a touch under
+// 1 mm — at A4/72 dpi this reads as roughly 2 px on screen, which is what the
+// design ask was for.
+const PAGE_BORDER = 0.8; // mm
 
 function drawPageBorder(doc: JsPDF) {
-  doc.setDrawColor(200, 200, 200);
-  doc.setLineWidth(0.4);
-  doc.rect(
-    PAGE_BORDER_INSET,
-    PAGE_BORDER_INSET,
-    PAGE_W - PAGE_BORDER_INSET * 2,
-    PAGE_H - PAGE_BORDER_INSET * 2,
-  );
+  doc.setFillColor(255, 255, 255);
+  // Top, bottom, left, right strips drawn over whatever is on the page.
+  doc.rect(0, 0, PAGE_W, PAGE_BORDER, 'F');
+  doc.rect(0, PAGE_H - PAGE_BORDER, PAGE_W, PAGE_BORDER, 'F');
+  doc.rect(0, 0, PAGE_BORDER, PAGE_H, 'F');
+  doc.rect(PAGE_W - PAGE_BORDER, 0, PAGE_BORDER, PAGE_H, 'F');
 }
 
 /**
@@ -315,10 +316,26 @@ export async function generatePricingGuidePdfServer(
   // ── Logo ──────────────────────────────────────────────────────────────
   if (hasLogo && logoDataUrl && logoResult) {
     const logoW = (logoResult.w / logoResult.h) * LOGO_H;
-    try {
-      doc.addImage(logoDataUrl, 'PNG', centerX - logoW / 2, ty - LOGO_H, logoW, LOGO_H);
-    } catch { /* skip bad logo */ }
-    ty += LOGO_GAP;
+    // Detect format from the data-URL prefix so PNG/JPG/JPEG logos all load.
+    const formatMatch = logoDataUrl.match(/^data:image\/(png|jpeg|jpg|webp)/i);
+    const formats = formatMatch ? [formatMatch[1].toUpperCase()] : ['PNG', 'JPEG'];
+    let drawn = false;
+    for (const fmt of formats) {
+      try {
+        doc.addImage(logoDataUrl, fmt, centerX - logoW / 2, ty - LOGO_H, logoW, LOGO_H);
+        drawn = true;
+        break;
+      } catch (err) {
+        console.warn('[pricing-guide-pdf] logo addImage failed', fmt, err);
+      }
+    }
+    if (drawn) {
+      ty += LOGO_GAP;
+    } else {
+      // Logo failed to render — collapse the reserved space so nothing else shifts.
+      ty -= LOGO_H;
+      ty += LOGO_GAP;
+    }
   }
 
   // ── Title (Playfair Display) ──────────────────────────────────────────

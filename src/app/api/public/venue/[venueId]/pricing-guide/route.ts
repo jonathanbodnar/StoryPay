@@ -35,9 +35,12 @@ export async function GET(
   }
 
   // ── Load venue info ────────────────────────────────────────────────────
+  // The branding page saves the uploaded logo to `brand_logo_url`, with
+  // `logo_url` kept as a legacy fallback. We grab both and the assembler
+  // below picks whichever is populated.
   const { data: venue, error: venueErr } = await supabaseAdmin
     .from('venues')
-    .select('name, location_city, location_state, logo_url')
+    .select('name, location_city, location_state, logo_url, brand_logo_url')
     .eq('id', venueId)
     .maybeSingle();
 
@@ -100,7 +103,11 @@ export async function GET(
     name:           venue.name           ?? null,
     location_city:  venue.location_city  ?? null,
     location_state: venue.location_state ?? null,
-    logo_url:       venue.logo_url       ?? null,
+    // Prefer the dashboard-uploaded brand logo; fall back to the legacy column.
+    logo_url:
+      (venue as { brand_logo_url?: string | null }).brand_logo_url ??
+      venue.logo_url ??
+      null,
   };
 
   // ── Generate PDF ───────────────────────────────────────────────────────
