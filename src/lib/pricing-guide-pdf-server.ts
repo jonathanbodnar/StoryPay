@@ -25,6 +25,7 @@ export interface GuideData {
   cover_source_image_url:   string | null;
   congratulatory_message:   string | null;
   gallery:                  GalleryItem[];
+  about_photos:             GalleryItem[];
   about_venue:              string | null;
   accommodations_text:      string | null;
   accommodations_image_url: string | null;
@@ -326,6 +327,12 @@ export async function generatePricingGuidePdfServer(
     getImage(guide.availability_image_url),
   ]);
 
+  // Fetch about-page photos (separate from gallery, max 4)
+  const aboutPhotoResults = await Promise.all(
+    (guide.about_photos ?? []).slice(0, 4).map(g => getImage(g.url))
+  );
+  const aboutPhotoItems = aboutPhotoResults.filter((r): r is NonNullable<typeof r> => r !== null);
+
   // ── Page 1: Cover ─────────────────────────────────────────────────────
   // Full-bleed photo, uniform dark overlay, refined 2px-style border,
   // then centered: logo → title → rule → venue name.
@@ -534,8 +541,8 @@ export async function generatePricingGuidePdfServer(
     const gridEndY = gridStartY + photoGridH;
     const pageBottom = PAGE_H - MARGIN - 10; // leave room for footer
 
-    if (gridEndY <= pageBottom && galleryItems.length >= 4) {
-      const photos = galleryItems.slice(0, 4);
+    if (gridEndY <= pageBottom && aboutPhotoItems.length >= 1) {
+      const photos = aboutPhotoItems.slice(0, 4);
       const positions: Array<[number, number]> = [
         [MARGIN,                        gridStartY],
         [MARGIN + ABOUT_PHOTO_W + ABOUT_PHOTO_GAP, gridStartY],

@@ -85,6 +85,7 @@ export async function GET(
     cover_source_image_url:   guide?.cover_source_image_url   ?? null,
     congratulatory_message:   guide?.congratulatory_message   ?? null,
     gallery:                  (guide?.gallery as { url: string; caption?: string }[]) ?? [],
+    about_photos:             (guide?.about_photos as { url: string; caption?: string }[]) ?? [],
     about_venue:              guide?.about_venue              ?? null,
     accommodations_text:      guide?.accommodations_text      ?? null,
     accommodations_image_url: guide?.accommodations_image_url ?? null,

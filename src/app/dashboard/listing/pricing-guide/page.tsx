@@ -15,6 +15,7 @@ import { generatePricingGuidePdf } from '@/lib/pricing-guide-pdf';
 // ─── Types ───────────────────────────────────────────────────────────────
 
 type GalleryItem = { url: string; caption?: string };
+const ABOUT_PHOTO_MAX = 4;
 type ReviewItem = { author?: string; location?: string; body?: string; rating?: number };
 
 type Space = {
@@ -43,6 +44,7 @@ interface Guide {
   cover_source_image_url: string | null;
   congratulatory_message: string | null;
   gallery: GalleryItem[];
+  about_photos: GalleryItem[];
   about_venue: string | null;
   accommodations_text: string | null;
   accommodations_image_url: string | null;
@@ -154,6 +156,7 @@ export default function PricingGuidePage() {
   const [mediaPickerTarget, setMediaPickerTarget] = useState<
     | { kind: 'cover' }
     | { kind: 'gallery' }
+    | { kind: 'about-photo' }
     | { kind: 'field'; field: 'accommodations_image_url' | 'availability_image_url' }
     | { kind: 'space'; spaceId: string }
     | null
@@ -175,6 +178,13 @@ export default function PricingGuidePage() {
           updateParent('gallery', [...guide.gallery, { url }]);
         }
         break;
+      case 'about-photo': {
+        const current = guide.about_photos ?? [];
+        if (!current.some((g) => g.url === url) && current.length < ABOUT_PHOTO_MAX) {
+          updateParent('about_photos', [...current, { url }]);
+        }
+        break;
+      }
       case 'field':
         updateParent(mediaPickerTarget.field, url);
         break;
@@ -292,6 +302,11 @@ export default function PricingGuidePage() {
   function removeFromGallery(url: string) {
     if (!guide) return;
     updateParent('gallery', guide.gallery.filter((g) => g.url !== url));
+  }
+
+  function removeFromAboutPhotos(url: string) {
+    if (!guide) return;
+    updateParent('about_photos', (guide.about_photos ?? []).filter((g) => g.url !== url));
   }
 
   // ── Auto-fill from listing ─────────────────────────────────────────────
@@ -706,11 +721,39 @@ export default function PricingGuidePage() {
             </div>
           )}
         />
-        {(guide.about_venue?.length ?? 0) > 0 && guide.gallery.length < 4 && (
-          <p className="mt-2 text-xs text-amber-600">
-            Add at least 4 photos to the gallery above to unlock the 2×2 photo grid on the about page.
+        {/* 2×2 photo grid for the about page */}
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-medium text-gray-500 uppercase tracking-wide">
+            About page photos <span className="normal-case font-normal text-gray-400">(4 photos — appear as a 2×2 grid below your text in the PDF)</span>
           </p>
-        )}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {(guide.about_photos ?? []).map((g) => (
+              <div key={g.url} className="group relative aspect-[4/3] overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
+                <img src={g.url} alt="" className="h-full w-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => removeFromAboutPhotos(g.url)}
+                  className="absolute right-2 top-2 hidden h-7 w-7 items-center justify-center rounded-full bg-white text-gray-700 shadow group-hover:inline-flex hover:text-red-600"
+                  title="Remove"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+            {(guide.about_photos ?? []).length < ABOUT_PHOTO_MAX && (
+              <button
+                type="button"
+                onClick={() => openMediaPicker({ kind: 'about-photo' })}
+                className="flex aspect-[4/3] cursor-pointer items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 text-sm text-gray-500 hover:border-gray-300 hover:bg-white"
+              >
+                <span className="flex flex-col items-center gap-1">
+                  <Upload size={16} />
+                  <span className="text-xs">Add ({ABOUT_PHOTO_MAX - (guide.about_photos ?? []).length} left)</span>
+                </span>
+              </button>
+            )}
+          </div>
+        </div>
       </Section>
 
       {/* ── Spaces (CRUD) ──────────────────────────────────────────── */}
