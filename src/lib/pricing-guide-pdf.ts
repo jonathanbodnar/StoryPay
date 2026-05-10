@@ -166,56 +166,78 @@ export async function generatePricingGuidePdf(
   const availabilityImg = guide.availability_image_url ? await getCachedImage(guide.availability_image_url) : null;
 
   // ─── Page 1: Cover ──────────────────────────────────────────────────
-  // Layout mirrors the public listing frontend: full-bleed photo,
-  // uniform semi-transparent overlay, title centered exactly in the
-  // middle, venue name as the subheadline beneath a thin rule.
+  // Layout mirrors the public listing frontend: full-bleed photo with a
+  // 5 mm white magazine border, uniform semi-transparent overlay, title
+  // centered exactly in the middle, venue name as the subheadline.
   onProgress?.('Rendering cover…');
+
+  const COVER_BORDER = 5; // mm — white magazine-style inset border
+
+  // White page background (forms the border).
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, 0, PAGE_W, PAGE_H, 'F');
+
+  // Photo fills the area inside the border.
+  const imgX = COVER_BORDER;
+  const imgY = COVER_BORDER;
+  const imgAreaW = PAGE_W - COVER_BORDER * 2;
+  const imgAreaH = PAGE_H - COVER_BORDER * 2;
 
   if (coverImg) {
     const dims = await loadImageDimensions(coverImg);
     const imgRatio = dims.w / dims.h;
-    const pageRatio = PAGE_W / PAGE_H;
-    let sw = PAGE_W, sh = PAGE_H, sx = 0, sy = 0;
-    if (imgRatio > pageRatio) {
-      sh = PAGE_H;
-      sw = PAGE_H * imgRatio;
-      sx = (PAGE_W - sw) / 2;
+    const areaRatio = imgAreaW / imgAreaH;
+    let sw = imgAreaW, sh = imgAreaH, sx = imgX, sy = imgY;
+    if (imgRatio > areaRatio) {
+      sh = imgAreaH;
+      sw = imgAreaH * imgRatio;
+      sx = imgX + (imgAreaW - sw) / 2;
     } else {
-      sw = PAGE_W;
-      sh = PAGE_W / imgRatio;
-      sy = (PAGE_H - sh) / 2;
+      sw = imgAreaW;
+      sh = imgAreaW / imgRatio;
+      sy = imgY + (imgAreaH - sh) / 2;
     }
+    // Clip to the bordered area before drawing.
+    doc.saveGraphicsState?.();
+    doc.rect(imgX, imgY, imgAreaW, imgAreaH, 'S'); // clip path hint (visual only)
     doc.addImage(coverImg, 'JPEG', sx, sy, sw, sh);
+    doc.restoreGraphicsState?.();
   } else {
-    // Warm off-white placeholder when no cover image exists.
     doc.setFillColor(245, 243, 240);
-    doc.rect(0, 0, PAGE_W, PAGE_H, 'F');
+    doc.rect(imgX, imgY, imgAreaW, imgAreaH, 'F');
   }
 
-  // Uniform semi-transparent overlay (matches frontend bg-black/25).
+  // Uniform semi-transparent overlay inside the border (matches frontend bg-black/25).
   doc.setFillColor(0, 0, 0);
   (doc as any).setGState?.(new (doc as any).GState({ opacity: 0.28 }));
-  doc.rect(0, 0, PAGE_W, PAGE_H, 'F');
+  doc.rect(imgX, imgY, imgAreaW, imgAreaH, 'F');
   (doc as any).setGState?.(new (doc as any).GState({ opacity: 1 }));
+
+  // Redraw the white border on top so it's crisp over any image bleed.
+  doc.setFillColor(255, 255, 255);
+  // Top strip
+  doc.rect(0, 0, PAGE_W, COVER_BORDER, 'F');
+  // Bottom strip
+  doc.rect(0, PAGE_H - COVER_BORDER, PAGE_W, COVER_BORDER, 'F');
+  // Left strip
+  doc.rect(0, 0, COVER_BORDER, PAGE_H, 'F');
+  // Right strip
+  doc.rect(PAGE_W - COVER_BORDER, 0, COVER_BORDER, PAGE_H, 'F');
 
   const centerX = PAGE_W / 2;
 
   // ── Measure text block so we can center it perfectly ──────────────
-  // Title: "Pricing & Availability Guide"
   doc.setFont(playfairFamily, 'normal');
   doc.setFontSize(26);
   const titleLines = wrapText(doc, 'Pricing & Availability Guide', PAGE_W - 50, 26);
-  const titleLineH = 10; // mm per line at 26 pt
+  const titleLineH = 10;
 
-  // Subheadline: venue name (letter-spaced caps)
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   const subLines = wrapText(doc, venueName.toUpperCase(), PAGE_W - 60, 8);
-  const subLineH = 5;
 
-  // Layout: title block + 14 mm gap (divider + spacing) + sub block
-  const blockH = titleLines.length * titleLineH + 14 + subLines.length * subLineH;
-  let ty = PAGE_H / 2 - blockH / 2 + titleLineH; // start at vertical centre
+  const blockH = titleLines.length * titleLineH + 14 + subLines.length * 5;
+  let ty = PAGE_H / 2 - blockH / 2 + titleLineH;
 
   // ── Title ─────────────────────────────────────────────────────────
   doc.setFont(playfairFamily, 'normal');
