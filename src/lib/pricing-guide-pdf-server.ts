@@ -736,49 +736,112 @@ export async function generatePricingGuidePdfServer(
     }
   }
 
-  // ── Stories (Reviews) — max 6, single page, Playfair heading ────────
+  // ── Stories (Reviews) — max 6, vertically centered, single page ─────
+  // Per-review body is capped at MAX_BODY chars so block height is predictable.
+  // Heights are pre-measured so the entire block (heading + reviews) is
+  // positioned with equal whitespace above and below → looks identical
+  // whether there are 4, 5, or 6 reviews.
   let storiesPageNum = -1;
   const storiesReviews = guide.reviews.slice(0, 6);
   if (storiesReviews.length > 0) {
     doc.addPage(); drawPageBorder(doc);
     storiesPageNum = doc.getNumberOfPages();
-    let y = MARGIN;
 
-    // "Stories" heading — Playfair Display
+    const MAX_BODY_CHARS = 220;  // truncate long reviews here
+    const BODY_FS        = 11;
+    const BODY_LH        = 5.1; // mm per line at 11pt
+    const STAR_SLOT      = 8;   // mm for the star row
+    const AUTHOR_SLOT    = 7;   // mm for attribution line
+    const DIVIDER_SLOT   = 9;   // mm for separator + gap between reviews
+    const HEADING_H      = 22;  // "Stories" block height
+
+    // ── Pass 1: measure every review block (font must be set before wrapText)
+    type Block = {
+      stars: number;
+      starsH: number;
+      bodyText: string;
+      bodyLines: string[];
+      bodyH: number;
+      authorLine: string;
+      authorH: number;
+      totalH: number;
+    };
+
+    const blocks: Block[] = storiesReviews.map((review) => {
+      const stars  = Math.max(0, Math.min(5, review.rating ?? 0));
+      const starsH = stars > 0 ? STAR_SLOT : 0;
+
+      let bodyText  = '';
+      let bodyLines: string[] = [];
+      let bodyH = 0;
+      if (review.body) {
+        const raw     = review.body.length > MAX_BODY_CHARS
+          ? review.body.slice(0, MAX_BODY_CHARS).trimEnd() + '\u2026'
+          : review.body;
+        bodyText  = `\u201C${raw}\u201D`;
+        doc.setFont(openSansFamily, 'normal');
+        doc.setFontSize(BODY_FS);
+        bodyLines = wrapText(doc, bodyText, CONTENT_W, BODY_FS);
+        bodyH = bodyLines.length * BODY_LH + 3;
+      }
+
+      const authorLine = [
+        review.author,
+        review.author && review.location ? ' \u00B7 ' : '',
+        review.location,
+      ].filter(Boolean).join('');
+
+      const authorH = authorLine ? AUTHOR_SLOT : 0;
+      return {
+        stars, starsH, bodyText, bodyLines, bodyH,
+        authorLine, authorH,
+        totalH: starsH + bodyH + authorH,
+      };
+    });
+
+    // ── Pass 2: total content height → center on page
+    const totalReviewsH =
+      blocks.reduce((sum, b) => sum + b.totalH, 0) +
+      (blocks.length - 1) * DIVIDER_SLOT;
+    const totalH   = HEADING_H + totalReviewsH;
+    const yStart   = Math.max(MARGIN, (PAGE_H - totalH) / 2);
+    let y          = yStart;
+
+    // ── Heading
     doc.setTextColor(DARK);
     doc.setFont(playfairFamily, 'normal');
     doc.setFontSize(26);
-    doc.text('Stories', MARGIN, y + 9); y += 20;
+    doc.text('Stories', MARGIN, y + 9); y += HEADING_H;
 
-    for (const review of storiesReviews) {
-      // Stars — drawn as real 5-pointed star shapes; exact count from backend
-      const stars = Math.max(0, Math.min(5, review.rating ?? 0));
-      if (stars > 0) {
+    // ── Render each review
+    blocks.forEach((block, idx) => {
+      if (block.stars > 0) {
         doc.setFillColor(217, 169, 26);
-        drawStars(doc, MARGIN, y - 1, stars);
-        y += 8;
+        drawStars(doc, MARGIN, y + block.starsH / 2 - 2, block.stars);
+        y += block.starsH;
       }
 
-      if (review.body) {
+      if (block.bodyText) {
         doc.setTextColor(31, 41, 55);
         doc.setFont(openSansFamily, 'normal');
-        doc.setFontSize(11);
-        const bodyLines = wrapText(doc, `\u201C${review.body}\u201D`, CONTENT_W, 11);
-        doc.text(bodyLines, MARGIN, y); y += bodyLines.length * 5 + 3;
+        doc.setFontSize(BODY_FS);
+        doc.text(block.bodyLines, MARGIN, y); y += block.bodyH;
       }
 
-      const authorLine = [review.author, review.author && review.location ? ' \u00B7 ' : '', review.location].filter(Boolean).join('');
-      if (authorLine) {
+      if (block.authorLine) {
         doc.setTextColor(107, 114, 128);
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(8);
-        doc.text(authorLine.toUpperCase(), MARGIN, y); y += 6;
+        doc.text(block.authorLine.toUpperCase(), MARGIN, y); y += block.authorH;
       }
 
-      doc.setDrawColor(229, 229, 229);
-      doc.setLineWidth(0.2);
-      doc.line(MARGIN, y, PAGE_W - MARGIN, y); y += 8;
-    }
+      // Divider between reviews (skip after last)
+      if (idx < blocks.length - 1) {
+        doc.setDrawColor(229, 229, 229);
+        doc.setLineWidth(0.2);
+        doc.line(MARGIN, y, PAGE_W - MARGIN, y); y += DIVIDER_SLOT;
+      }
+    });
   }
 
   // ── Page 9: Availability ──────────────────────────────────────────────

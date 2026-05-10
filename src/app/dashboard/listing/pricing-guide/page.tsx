@@ -1016,7 +1016,7 @@ export default function PricingGuidePage() {
       {/* ── Reviews ────────────────────────────────────────────────── */}
       <Section
         title="Stories"
-        hint="Upload 4–6 reviews. This creates a single dedicated 'Stories' page in the PDF — keeping it between 4 and 6 ensures it always formats perfectly."
+        hint="Upload 4–6 reviews (220 chars each). The page auto-centers so top and bottom spacing always look identical, no matter how many reviews you add."
         icon={<Star size={18} />}
       >
         <div className="space-y-4">
@@ -1068,13 +1068,23 @@ export default function PricingGuidePage() {
                     updateParent('reviews', next);
                   }}
                   render={({ value, onChange }) => (
-                    <textarea
-                      rows={3}
-                      className={`${TEXTAREA} pr-28`}
-                      placeholder="The team made every detail feel effortless…"
-                      value={value}
-                      onChange={onChange}
-                    />
+                    <div className="relative">
+                      <textarea
+                        rows={3}
+                        maxLength={220}
+                        className={`${TEXTAREA} pr-28`}
+                        placeholder="The team made every detail feel effortless…"
+                        value={value}
+                        onChange={onChange}
+                      />
+                      <div className={`absolute bottom-3 right-3 text-xs font-mono tabular-nums ${
+                        (value?.length ?? 0) >= 220 ? 'text-red-500'
+                        : (value?.length ?? 0) >= 180 ? 'text-amber-500'
+                        : 'text-gray-400'
+                      }`}>
+                        {value?.length ?? 0}/220
+                      </div>
+                    </div>
                   )}
                 />
               </div>
