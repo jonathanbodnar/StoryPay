@@ -86,6 +86,37 @@ function wrapText(doc: jsPDF, text: string, maxWidth: number, fontSize: number):
   return doc.splitTextToSize(text, maxWidth) as string[];
 }
 
+// ─── Font loader ────────────────────────────────────────────────────────
+
+/**
+ * Attempt to embed Playfair Display Regular (400) into a jsPDF document.
+ * Falls back silently to the built-in "times" font if the fetch fails.
+ * Returns the font family name to use in setFont() calls.
+ */
+async function loadPlayfairDisplay(doc: import('jspdf').jsPDF): Promise<string> {
+  try {
+    // jsDelivr mirrors @fontsource packages which ship plain TTF files.
+    const res = await fetch(
+      'https://cdn.jsdelivr.net/npm/@fontsource/playfair-display@5.1.1/files/playfair-display-latin-400-normal.woff2',
+      { cache: 'force-cache' },
+    );
+    if (!res.ok) return 'times';
+    const buffer = await res.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    // Convert in chunks to avoid stack-overflow on large fonts.
+    for (let i = 0; i < bytes.byteLength; i += 8192) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+    }
+    const b64 = btoa(binary);
+    (doc as any).addFileToVFS('PlayfairDisplay-Regular.woff2', b64);
+    (doc as any).addFont('PlayfairDisplay-Regular.woff2', 'PlayfairDisplay', 'normal');
+    return 'PlayfairDisplay';
+  } catch {
+    return 'times';
+  }
+}
+
 // ─── Main generator ─────────────────────────────────────────────────────
 
 export async function generatePricingGuidePdf(
@@ -98,6 +129,10 @@ export async function generatePricingGuidePdf(
 
   const venueName = venue.name ?? 'Our Venue';
   const venueLocation = [venue.location_city, venue.location_state].filter(Boolean).join(', ');
+
+  // Attempt to embed Playfair Display for the cover page title.
+  onProgress?.('Loading fonts…');
+  const playfairFamily = await loadPlayfairDisplay(doc);
 
   // Pre-fetch all images we'll need
   onProgress?.('Loading images…');
@@ -131,6 +166,9 @@ export async function generatePricingGuidePdf(
   const availabilityImg = guide.availability_image_url ? await getCachedImage(guide.availability_image_url) : null;
 
   // ─── Page 1: Cover ──────────────────────────────────────────────────
+  // Layout mirrors the public listing frontend: full-bleed photo,
+  // uniform semi-transparent overlay, title centered exactly in the
+  // middle, venue name as the subheadline beneath a thin rule.
   onProgress?.('Rendering cover…');
 
   if (coverImg) {
@@ -139,76 +177,64 @@ export async function generatePricingGuidePdf(
     const pageRatio = PAGE_W / PAGE_H;
     let sw = PAGE_W, sh = PAGE_H, sx = 0, sy = 0;
     if (imgRatio > pageRatio) {
-      // image is wider — crop sides
       sh = PAGE_H;
       sw = PAGE_H * imgRatio;
       sx = (PAGE_W - sw) / 2;
     } else {
-      // image is taller — crop top/bottom
       sw = PAGE_W;
       sh = PAGE_W / imgRatio;
       sy = (PAGE_H - sh) / 2;
     }
     doc.addImage(coverImg, 'JPEG', sx, sy, sw, sh);
   } else {
-    doc.setFillColor(200, 200, 200);
+    // Warm off-white placeholder when no cover image exists.
+    doc.setFillColor(245, 243, 240);
     doc.rect(0, 0, PAGE_W, PAGE_H, 'F');
   }
 
-  // Dark overlay for text readability
+  // Uniform semi-transparent overlay (matches frontend bg-black/25).
   doc.setFillColor(0, 0, 0);
-  doc.saveGraphicsState?.();
-  // Gradient overlay approximation — draw a semi-transparent rect at the bottom
-  for (let i = 0; i < 60; i++) {
-    const alpha = i / 60;
-    doc.setFillColor(0, 0, 0);
-    (doc as any).setGState?.(new (doc as any).GState({ opacity: alpha * 0.7 }));
-    const yStart = PAGE_H - 60 + i;
-    doc.rect(0, yStart, PAGE_W, 1, 'F');
-  }
-  doc.restoreGraphicsState?.();
+  (doc as any).setGState?.(new (doc as any).GState({ opacity: 0.28 }));
+  doc.rect(0, 0, PAGE_W, PAGE_H, 'F');
+  (doc as any).setGState?.(new (doc as any).GState({ opacity: 1 }));
 
-  // Logo
   const centerX = PAGE_W / 2;
-  let textY = PAGE_H - 120;
 
-  if (logoSrc) {
-    try {
-      const logoDims = await loadImageDimensions(logoSrc);
-      const logoW = 30;
-      const logoH = (logoDims.h / logoDims.w) * logoW;
-      doc.addImage(logoSrc, 'PNG', centerX - logoW / 2, textY, logoW, logoH);
-      textY += logoH + 8;
-    } catch { /* skip logo if it fails */ }
-  }
+  // ── Measure text block so we can center it perfectly ──────────────
+  // Title: "Pricing & Availability Guide"
+  doc.setFont(playfairFamily, 'normal');
+  doc.setFontSize(26);
+  const titleLines = wrapText(doc, 'Pricing & Availability Guide', PAGE_W - 50, 26);
+  const titleLineH = 10; // mm per line at 26 pt
 
-  // Venue name
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('times', 'bold');
-  doc.setFontSize(32);
-  doc.text(venueName, centerX, textY, { align: 'center' });
-  textY += 10;
-
-  // Location
-  if (venueLocation) {
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(255, 255, 255);
-    doc.text(venueLocation.toUpperCase(), centerX, textY, { align: 'center' });
-    textY += 12;
-  }
-
-  // Divider
-  doc.setDrawColor(255, 255, 255);
-  doc.setLineWidth(0.3);
-  doc.line(centerX - 12, textY, centerX + 12, textY);
-  textY += 10;
-
-  // Subtitle
+  // Subheadline: venue name (letter-spaced caps)
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
+  doc.setFontSize(8);
+  const subLines = wrapText(doc, venueName.toUpperCase(), PAGE_W - 60, 8);
+  const subLineH = 5;
+
+  // Layout: title block + 14 mm gap (divider + spacing) + sub block
+  const blockH = titleLines.length * titleLineH + 14 + subLines.length * subLineH;
+  let ty = PAGE_H / 2 - blockH / 2 + titleLineH; // start at vertical centre
+
+  // ── Title ─────────────────────────────────────────────────────────
+  doc.setFont(playfairFamily, 'normal');
+  doc.setFontSize(26);
   doc.setTextColor(255, 255, 255);
-  doc.text('PRICING & AVAILABILITY GUIDE', centerX, textY, { align: 'center' });
+  doc.text(titleLines, centerX, ty, { align: 'center' });
+  ty += (titleLines.length - 1) * titleLineH + 10;
+
+  // ── Thin rule ─────────────────────────────────────────────────────
+  doc.setDrawColor(255, 255, 255);
+  doc.setLineWidth(0.25);
+  doc.line(centerX - 10, ty, centerX + 10, ty);
+  ty += 8;
+
+  // ── Venue name subheadline ─────────────────────────────────────────
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(240, 240, 240);
+  doc.text(subLines, centerX, ty, { align: 'center' });
 
   // ─── Page 2: Welcome ───────────────────────────────────────────────
   if (guide.congratulatory_message?.trim()) {
