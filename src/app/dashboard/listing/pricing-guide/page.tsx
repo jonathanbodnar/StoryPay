@@ -171,7 +171,7 @@ export default function PricingGuidePage() {
         updateParent('cover_image_url', url);
         break;
       case 'gallery':
-        if (!guide.gallery.some((g) => g.url === url)) {
+        if (!guide.gallery.some((g) => g.url === url) && guide.gallery.length < 9) {
           updateParent('gallery', [...guide.gallery, { url }]);
         }
         break;
@@ -633,17 +633,13 @@ export default function PricingGuidePage() {
         <div className={`mb-3 flex items-center gap-2 rounded-xl px-3 py-2 text-sm ${
           guide.gallery.length === 9
             ? 'bg-green-50 text-green-800 border border-green-200'
-            : guide.gallery.length > 9
-            ? 'bg-amber-50 text-amber-800 border border-amber-200'
             : 'bg-blue-50 text-blue-800 border border-blue-200'
         }`}>
           <span className="font-semibold tabular-nums">{guide.gallery.length}/9 photos</span>
           <span className="text-xs opacity-80">
             {guide.gallery.length === 9
-              ? '— perfect! Your gallery page will fill the grid beautifully.'
-              : guide.gallery.length > 9
-              ? `— only the first 9 will appear in the PDF grid. Remove ${guide.gallery.length - 9} to keep the best selection.`
-              : `— upload ${9 - guide.gallery.length} more for a complete 4-row pinterest grid.`}
+              ? '— perfect! Your gallery fills the full-page pinterest grid.'
+              : `— add ${9 - guide.gallery.length} more to complete the 4-row grid with no white space.`}
           </span>
         </div>
 
@@ -661,16 +657,18 @@ export default function PricingGuidePage() {
               </button>
             </div>
           ))}
-          <button
-            type="button"
-            onClick={() => openMediaPicker({ kind: 'gallery' })}
-            className="flex aspect-[4/3] cursor-pointer items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 text-sm text-gray-500 hover:border-gray-300 hover:bg-white"
-          >
-            <span className="flex flex-col items-center gap-1">
-              <Upload size={18} />
-              <span>Add photos</span>
-            </span>
-          </button>
+          {guide.gallery.length < 9 && (
+            <button
+              type="button"
+              onClick={() => openMediaPicker({ kind: 'gallery' })}
+              className="flex aspect-[4/3] cursor-pointer items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 text-sm text-gray-500 hover:border-gray-300 hover:bg-white"
+            >
+              <span className="flex flex-col items-center gap-1">
+                <Upload size={18} />
+                <span>Add photo ({9 - guide.gallery.length} left)</span>
+              </span>
+            </button>
+          )}
         </div>
       </Section>
 

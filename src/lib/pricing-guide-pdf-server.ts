@@ -310,7 +310,7 @@ export async function generatePricingGuidePdfServer(
     getImageDataUrl(venue.logo_url),
   ]);
 
-  const galleryResults = await Promise.all(guide.gallery.slice(0, 6).map(g => getImage(g.url)));
+  const galleryResults = await Promise.all(guide.gallery.slice(0, 9).map(g => getImage(g.url)));
   const galleryItems   = galleryResults.filter((r): r is NonNullable<typeof r> => r !== null);
 
   const spaceResults = new Map<string, { dataUrl: string; w: number; h: number }>();
@@ -450,7 +450,7 @@ export async function generatePricingGuidePdfServer(
     galleryPageNum = doc.getNumberOfPages();
 
     const GM  = PAGE_BORDER;            // images bleed to the border edge
-    const G   = 3;                      // gutter between photos (mm)
+    const G   = PAGE_BORDER;           // gutter = border width so all gaps look identical (~2px)
     const uW  = PAGE_W - 2 * GM;       // usable width
     const uH  = PAGE_H - 2 * GM;       // usable height
     const TW  = (uW - 2 * G) / 3;     // 1/3-column width
