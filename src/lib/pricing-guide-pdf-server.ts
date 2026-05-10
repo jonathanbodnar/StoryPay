@@ -204,6 +204,34 @@ async function loadPlayfairDisplayServer(doc: JsPDF): Promise<string> {
   }
 }
 
+/** Embed Open Sans Regular for body text. Falls back to 'helvetica'. */
+async function loadOpenSansServer(doc: JsPDF): Promise<string> {
+  const TTF_URL =
+    'https://cdn.jsdelivr.net/gh/google/fonts@main/apache/opensans/static/OpenSans-Regular.ttf';
+  try {
+    const res = await fetch(TTF_URL, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return 'helvetica';
+    const buf = Buffer.from(await res.arrayBuffer());
+    const b64 = buf.toString('base64');
+    (doc as unknown as { addFileToVFS: (n: string, d: string) => void }).addFileToVFS(
+      'OpenSans-Regular.ttf', b64,
+    );
+    (doc as unknown as { addFont: (f: string, n: string, s: string) => void }).addFont(
+      'OpenSans-Regular.ttf', 'OpenSans', 'normal',
+    );
+    try {
+      doc.setFont('OpenSans', 'normal');
+      doc.setFontSize(12);
+      doc.getTextWidth('test');
+    } catch {
+      return 'helvetica';
+    }
+    return 'OpenSans';
+  } catch {
+    return 'helvetica';
+  }
+}
+
 // ─── Main server generator ───────────────────────────────────────────────
 
 export async function generatePricingGuidePdfServer(
@@ -216,8 +244,11 @@ export async function generatePricingGuidePdfServer(
   const venueName     = venue.name ?? 'Our Venue';
   const centerX       = PAGE_W / 2;
 
-  // ── Embed Playfair Display (with graceful fallback) ──────────────────
-  const playfairFamily = await loadPlayfairDisplayServer(doc);
+  // ── Embed fonts in parallel (Playfair + Open Sans) ───────────────────
+  const [playfairFamily, openSansFamily] = await Promise.all([
+    loadPlayfairDisplayServer(doc),
+    loadOpenSansServer(doc),
+  ]);
 
   // ── Pre-fetch all images ──────────────────────────────────────────────
   const imageCache = new Map<string, { dataUrl: string; w: number; h: number } | null>();
@@ -335,30 +366,41 @@ export async function generatePricingGuidePdfServer(
   // ── Page 2: Welcome ───────────────────────────────────────────────────
   if (guide.congratulatory_message?.trim()) {
     doc.addPage(); drawPageBorder(doc);
-    let y = 50;
 
-    doc.setTextColor(160, 160, 160);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.text('A NOTE FROM', centerX, y, { align: 'center' });
-    y += 12;
+    // Heading: "Congratulations on your engagement." — Playfair Display
+    const HEADING_FONT_SIZE = 24;
+    const HEADING_LINE_H    = 9;  // mm per line at 24pt
+    const BODY_FONT_SIZE    = 11;
+    const BODY_LINE_H       = 6;  // mm per line at 11pt
+    const GAP               = 10; // mm between heading and body
+    const TEXT_W            = CONTENT_W - 20; // comfortable reading width
 
-    doc.setTextColor(DARK);
-    doc.setFont('times', 'bold');
-    doc.setFontSize(26);
-    doc.text(venueName, centerX, y, { align: 'center' });
-    y += 8;
+    doc.setFont(playfairFamily, 'normal');
+    doc.setFontSize(HEADING_FONT_SIZE);
+    const headingLines = wrapText(doc, 'Congratulations on your engagement.', TEXT_W, HEADING_FONT_SIZE);
 
-    doc.setDrawColor(200, 200, 200);
-    doc.setLineWidth(0.3);
-    doc.line(centerX - 8, y, centerX + 8, y);
-    y += 14;
+    doc.setFont(openSansFamily, 'normal');
+    doc.setFontSize(BODY_FONT_SIZE);
+    const bodyLines = wrapText(doc, guide.congratulatory_message, TEXT_W, BODY_FONT_SIZE);
 
-    doc.setTextColor(55, 65, 81);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(11);
-    const msgLines = wrapText(doc, guide.congratulatory_message, CONTENT_W - 20, 11);
-    doc.text(msgLines, centerX, y, { align: 'center', maxWidth: CONTENT_W - 20 });
+    // Calculate total block height and centre it vertically.
+    const blockH = headingLines.length * HEADING_LINE_H + GAP + bodyLines.length * BODY_LINE_H;
+    let y = PAGE_H / 2 - blockH / 2 + HEADING_LINE_H;
+
+    // Heading
+    doc.setFont(playfairFamily, 'normal');
+    doc.setFontSize(HEADING_FONT_SIZE);
+    doc.setTextColor(27, 27, 27);
+    doc.text(headingLines, centerX, y, { align: 'center' });
+    y += (headingLines.length - 1) * HEADING_LINE_H + GAP;
+
+    // Body text
+    doc.setFont(openSansFamily, 'normal');
+    doc.setFontSize(BODY_FONT_SIZE);
+    doc.setTextColor(80, 80, 80);
+    doc.text(bodyLines, centerX, y, { align: 'center', maxWidth: TEXT_W });
+
+    drawPageBorder(doc);
   }
 
   // ── Page 3: Photo Gallery ─────────────────────────────────────────────
